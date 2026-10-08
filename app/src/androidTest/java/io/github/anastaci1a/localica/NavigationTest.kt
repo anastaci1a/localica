@@ -1,5 +1,9 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -14,6 +18,20 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class NavigationTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun emptyLibraryActionsRemainReachableInShortWindow() {
+        var opened = false
+        compose.setContent {
+            LocalicaTheme {
+                Box(Modifier.requiredSize(360.dp, 220.dp)) {
+                    LibraryScreen(LibraryUiState(loading = false), null, true, {}, { opened = true })
+                }
+            }
+        }
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Open settings"))
+        compose.onNodeWithText("Open settings").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertTrue(opened) }
+    }
 
     @Test fun tabsSelectScrollableLibraryAndSettingsOpenFolderConfiguration() {
         val tracks = (1..40).map { Track("track:$it", "Track $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
