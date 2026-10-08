@@ -16,6 +16,13 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    signingConfigs {
+        getByName("debug") {
+            System.getenv("LOCALICA_DEBUG_KEYSTORE")?.takeIf { it.isNotBlank() }?.let {
+                storeFile = file(it)
+            }
+        }
+    }
     buildTypes {
         debug { applicationIdSuffix = ".debug" }
         release {

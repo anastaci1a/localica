@@ -29,13 +29,20 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+          KEYSTORE_PATH: ${{ runner.temp }}/localica-debug.keystore
         run: |
           test -n "$DEBUG_KEYSTORE"
-          mkdir -p "$HOME/.android"
-          printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$HOME/.android/debug.keystore"
-          chmod 600 "$HOME/.android/debug.keystore"
+          printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
       - name: Build and check
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon
+      - name: Verify development signing certificate
+        if: github.event_name != 'pull_request'
+        run: |
+          expected=$(keytool -exportcert -alias androiddebugkey -keystore "$LOCALICA_DEBUG_KEYSTORE" -storepass android | sha256sum | cut -d ' ' -f 1)
+          actual=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          test "$expected" = "$actual"
       - name: Check release version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
