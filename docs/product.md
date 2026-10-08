@@ -14,6 +14,8 @@ Build a dependable Android player for audio files already on the device. It shou
 
 ## Capability targets
 
+The [v0.1.0 scope](roadmap.md) is a single-folder library and single-track player. The table below describes longer-term possibilities; queues and extra listening controls are outside this MVP.
+
 | Area | Target behavior |
 | --- | --- |
 | Library | Browse and search local tracks by song, album, artist, playlist, and folder; handle metadata and artwork. |
