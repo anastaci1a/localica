@@ -22,3 +22,7 @@ These instructions govern how to work on localica. Product goals and plans belon
 
 - Use `vX.X.X` tags for releases and the corresponding `X.X.X` app version name. Increase major for breaking changes, minor for features, and patch for fixes.
 - Add APK build and release automation only after a buildable Android project and signing/distribution choices exist. A workflow must have a real build command and a verifiable artifact before it is treated as release automation.
+
+## Current repository state
+
+The private GitHub repository was initialized separately with an MIT license. This workspace's `main` and GitHub's `main` contain the same files but have different commit ancestry because the local shell lacks GitHub credentials and publication used the GitHub connector. Before the next Git push, arrange Git authentication, fetch `origin/main`, and reconcile the histories without discarding the remote license or commits. Remove this note once the branches are aligned.
