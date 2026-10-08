@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current scope: v0.1.0
+## Current scope: v0.1.1
 
 One selected folder, scanned recursively into a persistent library. A bottom bar has centered Player (left) and Library (right) tabs, with Settings at the far right. Selecting a library item plays that track. The player shows track details, play/pause, elapsed and total time, and seeking. Playback stops at the end; queues, repeat, shuffle, and automatic advancement are deferred.
 
