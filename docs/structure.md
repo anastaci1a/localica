@@ -1,6 +1,6 @@
 # Structure and decisions
 
-Start with one `app` module and ordinary constructor injection. Extract modules only when a real boundary needs it; avoid committing to a framework for dependency injection or navigation at this size.
+Use one `app` module and ordinary constructor injection. Extract modules only when a real boundary needs it; avoid committing to a framework for dependency injection or navigation at this size.
 
 | Location | Responsibility |
 | --- | --- |
