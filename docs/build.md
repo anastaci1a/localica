@@ -1,0 +1,16 @@
+# Build and verification
+
+Use JDK 17 and an Android SDK with platform 36 and build tools 35.0.0. Set `ANDROID_HOME` or an untracked `local.properties` containing `sdk.dir=/path/to/sdk`. The checked-in wrapper downloads the pinned Gradle version and verifies its checksum.
+
+```sh
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
+./gradlew connectedDebugAndroidTest  # running emulator or connected device
+```
+
+The installable development APK is `app/build/outputs/apk/debug/app-debug.apk`. The release variant is intentionally unsigned until production distribution is configured. `androidTest` contains original synthetic audio and a test-only document provider for real folder-picker and codec tests; neither is included in the app.
+
+## Automation and versions
+
+The Android workflow checks each main push and pull request, uploads a development APK, and runs device tests on API 26 and 36. Actions are pinned to commit hashes. A `vX.X.X` tag must match `versionName` in `app/build.gradle.kts`; increase `versionCode` for each new build distributed as an update. Once all tag checks pass, the workflow publishes a development prerelease with an APK and checksum.
+
+The repository secret `ANDROID_DEBUG_KEYSTORE` holds the base64-encoded development keystore so successive CI APKs can update one another. Keep a backup outside Git. Pull requests use a disposable debug key; release signing is never exposed to pull requests. Production signing requires a separate key and distribution decision.
