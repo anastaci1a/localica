@@ -1,0 +1,15 @@
+# Local tools and operating systems
+.idea/
+.gradle/
+.kotlin/
+local.properties
+.DS_Store
+
+# Android build outputs
+**/build/
+*.apk
+*.aab
+
+# Signing material
+*.keystore
+*.jks
