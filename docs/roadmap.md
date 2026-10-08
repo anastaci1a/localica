@@ -1,6 +1,6 @@
 # Roadmap
 
-Each milestone names an observable result. Detailed work and bugs belong in GitHub Issues after the remote repository exists.
+Each milestone names an observable result. Detailed work and bugs belong in [GitHub Issues](https://github.com/anastaci1a/localica/issues).
 
 1. **Foundation:** Choose Android baseline and core libraries; create a buildable project with a basic, accessible shell and working verification command.
 2. **First listening slice:** Discover local audio, browse tracks, play in background, and control playback from the app and system media surface. Restore the current queue after restart.
