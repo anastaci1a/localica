@@ -6,4 +6,4 @@ This directory holds the current plan for localica. It is intentionally small:
 - [Structure](structure.md): proposed project layout and technical boundaries.
 - [Roadmap](roadmap.md): milestone outcomes and decisions needed next.
 
-Update these pages in place as decisions change. Bugs and actionable tasks belong in GitHub Issues, not here. Working rules for agents are in [`agents/README.md`](../agents/README.md).
+Update these pages in place as decisions change. Bugs and actionable tasks belong in [GitHub Issues](https://github.com/anastaci1a/localica/issues), not here. Working rules for agents are in [`agents/README.md`](../agents/README.md).
