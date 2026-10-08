@@ -1,11 +1,13 @@
 # Roadmap
 
-Each milestone names an observable result. Detailed work and bugs belong in [GitHub Issues](https://github.com/anastaci1a/localica/issues).
+## First usable release: v0.1.0
 
-1. **Foundation:** Choose Android baseline and core libraries; create a buildable project with a basic, accessible shell and working verification command.
-2. **First listening slice:** Discover local audio, browse tracks, play in background, and control playback from the app and system media surface. Restore the current queue after restart.
-3. **Library control:** Add albums, artists, folders, search, playlists, queue editing, and reliable library refresh. Verify behavior with large and imperfect media libraries.
-4. **Depth and polish:** Add persistent multiple queues, customization, and selected listening tools from the product targets. Prioritize from usage and issue feedback.
-5. **Release readiness:** Complete device checks, accessibility review, release signing and versioning, and automated APK artifacts. Publish a `vX.X.X` release only from a reproducible build.
+One selected folder, scanned recursively into a persistent library. A bottom bar has centered Player (left) and Library (right) tabs, with Settings at the far right. Selecting a library item plays that track. The player shows track details, play/pause, elapsed and total time, and seeking. Playback stops at the end; queues, repeat, shuffle, and automatic advancement are deferred.
 
-The next decision is the Android baseline and implementation stack. No app implementation has started.
+The foundation separates document access, scanning, persistence, playback, and presentation inside one Android module. Verification covers scan rules, failed/cancelled scans, persistence, navigation, playback, and end-of-track behavior. Work is tracked in [issue #1](https://github.com/anastaci1a/localica/issues/1).
+
+After a working build, add CI APK artifacts and `vX.X.X` release automation. Public distribution signing remains a separate decision; the first APK is for development testing.
+
+## Later direction
+
+Expand library navigation and listening controls from actual use. The broader [product targets](product.md) remain candidates rather than commitments for this release.
