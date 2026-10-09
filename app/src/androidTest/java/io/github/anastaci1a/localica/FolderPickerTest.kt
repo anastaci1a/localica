@@ -64,8 +64,14 @@ class FolderPickerTest {
 private fun UiDevice.clickWhenReady(selector: BySelector) {
     waitForIdle()
     try {
-        await {
+        await(timeoutMs = 30000) {
             try {
+                // The API 36 emulator can show a first-boot System UI ANR over DocumentsUI.
+                // Keep the system process alive and continue testing the real picker flow.
+                if (findObject(By.text("System UI isn't responding")) != null) {
+                    findObject(By.text("Wait"))?.click()
+                    return@await false
+                }
                 val node = findObject(selector)
                 if (node != null && node.isEnabled) { node.click(); true } else false
             } catch (_: StaleObjectException) { false }
