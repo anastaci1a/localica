@@ -93,9 +93,10 @@ jobs:
           target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
+          # Let first-boot System UI and document providers finish initializing.
+          script: sleep 60 && ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
