@@ -89,7 +89,8 @@ jobs:
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api }}
-          target: google_apis
+          # The app needs no Google services; avoid their first-boot setup on API 36.
+          target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
