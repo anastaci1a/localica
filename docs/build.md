@@ -7,7 +7,9 @@ Use JDK 17 and an Android SDK with platform 36 and build tools 35.0.0. Set `ANDR
 ./gradlew connectedDebugAndroidTest  # running emulator or connected device
 ```
 
-The installable development APK is `app/build/outputs/apk/debug/app-debug.apk`. The release variant is intentionally unsigned until production distribution is configured. `androidTest` contains original synthetic audio and a test-only document provider for real folder-picker and codec tests; neither is included in the app. Boundary tests compare decoded PCM samples and buffering across transitions; the FLAC case runs only when a device exposes a FLAC decoder (stock Android supplies it from API 27).
+The installable development APK is `app/build/outputs/apk/debug/app-debug.apk`. The release variant is intentionally unsigned until production distribution is configured. `androidTest` contains original synthetic audio and a test-only document provider for real folder-picker and codec tests; neither is included in the app. Boundary tests compare decoded samples, MP3 waveform alignment, and buffering across transitions. The FLAC case runs only when a device exposes a FLAC decoder (stock Android supplies it from API 27). The precise Android 8 MP3 padding failure is reported as a known-failure skip after checking playback/transitions; see [#30](https://github.com/anastaci1a/localica/issues/30). Other MP3 sample counts or decoder failures still fail the test.
+
+Media3 is pinned to 1.10.1 until a stable release includes the fix for its [MP3 trimming regression](https://github.com/androidx/media/issues/3425). Boundary length alone cannot detect that regression; the waveform checks must pass before upgrading.
 
 Jaudiotagger 3.0.1 supplies tag writing under LGPL 2.1 or later. Its notice/license are bundled in the app's open-source licenses screen; releases include the unmodified library's source archive. To use a modified version, build that source with Maven, replace `implementation(libs.jaudiotagger)` with a local JAR dependency, and rebuild using the commands above. A rebuilt APK uses your own development signing key. Localica's own code remains MIT licensed.
 
