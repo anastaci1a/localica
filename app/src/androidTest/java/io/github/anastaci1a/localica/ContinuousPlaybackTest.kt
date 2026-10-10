@@ -7,6 +7,7 @@ import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -39,9 +40,10 @@ class ContinuousPlaybackTest {
             } }
         val expected = ByteBuffer.allocate(samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
         samples.forEach(expected::putShort)
-        play(files) { assertArrayEquals("Decoded audio must retain every sample across the split", expected.array(), it) }
+        play(files) { decoded, _ -> assertArrayEquals("Decoded audio must retain every sample across the split", expected.array(), decoded) }
     }
-    @Test fun encodedTracksRespectGaplessTrimmingAtTheBoundary() = checkEncoded(listOf("mp3", "m4a"))
+    @Test fun mp3RespectsGaplessTrimmingAtTheBoundary() = checkEncoded(listOf("mp3"))
+    @Test fun aacRespectsGaplessTrimmingAtTheBoundary() = checkEncoded(listOf("m4a"))
     @Test fun flacRetainsEveryDecodedSampleWhenDeviceProvidesDecoder() {
         // FLAC MediaCodec is not supplied by stock Android before API 27.
         org.junit.Assume.assumeTrue("Device has no FLAC decoder", android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS)
@@ -60,8 +62,27 @@ class ContinuousPlaybackTest {
                 .putInt(16).putShort(1).putShort(1).putInt(44100).putInt(88200).putShort(2).putShort(16)
                 .put("data".toByteArray()).putInt(88200)
             repeat(44100) { pcm.putShort(((it % 441 - 220) * 80).toShort()) }; tail.writeBytes(pcm.array())
-            play(listOf(file, file, tail)) { decoded ->
+            play(listOf(file, file, tail)) { decoded, decoder ->
+                // Keep the exact assertion below. Only this measured legacy failure is a known
+                // exception (#30); other sample counts/decoders must still fail. Playback and
+                // no-rebuffer assertions run before this assumption, even on the affected device.
+                org.junit.Assume.assumeFalse("Known Android 8 MP3 padding tail: issue #30",
+                    extension == "mp3" && android.os.Build.VERSION.SDK_INT == 26 &&
+                        decoder == "OMX.google.mp3.decoder" && decoded.size == 268100)
                 assertEquals(extension + " must trim encoder delay/padding", 44100 * 3 * 2, decoded.size)
+                if (extension == "mp3") {
+                    // Equal counts alone missed Media3 1.11's 529-frame phase shift (#3425).
+                    // Compare each side of both boundaries to the original signal. Lossy ringing
+                    // is allowed (reference decode RMS ~1,062); a shifted seam exceeds 13,000.
+                    val samples = ByteBuffer.wrap(decoded).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                    for (start in listOf(2048, 40000, 44100 + 2048, 44100 + 40000)) {
+                        val rms = kotlin.math.sqrt((start until start + 2048).sumOf { i ->
+                            val error = samples[i].toDouble() - ((i % 441) - 220) * 80
+                            error * error
+                        } / 2048)
+                        assertTrue("MP3 waveform shifted near sample $start (RMS $rms)", rms < 2500)
+                    }
+                }
                 if (extension == "flac") {
                     val expected = ByteBuffer.allocate(44100 * 3 * 2).order(ByteOrder.LITTLE_ENDIAN)
                     repeat(44100 * 3) { expected.putShort(((it % 441 - 220) * 80).toShort()) }
@@ -70,13 +91,14 @@ class ContinuousPlaybackTest {
             }
         }
     }
-    private fun play(files: List<File>, check: (ByteArray) -> Unit) {
+    private fun play(files: List<File>, check: (ByteArray, String?) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val captured = ByteArrayOutputStream()
         val ended = AtomicBoolean(false)
         val rebuffered = AtomicBoolean(false)
         var transitions = 0
+        var decoder: String? = null
         lateinit var player: ExoPlayer
         instrumentation.runOnMainSync {
             val processor = object : BaseAudioProcessor() {
@@ -93,6 +115,12 @@ class ContinuousPlaybackTest {
                     .setAudioProcessors(arrayOf(processor)).build()
             }
             player = ExoPlayer.Builder(context, renderers).build()
+            player.addAnalyticsListener(object : AnalyticsListener {
+                override fun onAudioDecoderInitialized(eventTime: AnalyticsListener.EventTime,
+                    decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+                    decoder = decoderName
+                }
+            })
             player.setPreloadConfiguration(ExoPlayer.PreloadConfiguration(5_000_000L))
             player.addListener(object : Player.Listener {
                 var ready = false
@@ -112,7 +140,7 @@ class ContinuousPlaybackTest {
             await { ended.get() }
             assertFalse("Natural transition rebuffered", rebuffered.get())
             assertEquals(files.size - 1, transitions)
-            check(synchronized(captured) { captured.toByteArray() })
+            check(synchronized(captured) { captured.toByteArray() }, decoder)
         } finally {
             instrumentation.runOnMainSync { player.release() }
             files.forEach(File::delete)
