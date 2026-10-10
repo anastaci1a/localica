@@ -15,6 +15,7 @@ data class Track(
     val discNumber: Int? = null,
     val year: Int? = null,
     val genre: String? = null,
+    val comment: String? = null,
     val locations: List<TrackLocation> = emptyList(),
 )
 
@@ -32,6 +33,7 @@ data class AudioMetadata(
     val discNumber: Int? = null,
     val year: Int? = null,
     val genre: String? = null,
+    val comment: String? = null,
 )
 
 data class ScanDocument(
@@ -46,7 +48,7 @@ data class ScanDocument(
 interface DocumentSource {
     fun root(treeUri: String): ScanDocument
     fun children(treeUri: String, documentId: String): List<ScanDocument>
-    fun metadata(uri: String): AudioMetadata
+    suspend fun metadata(uri: String): AudioMetadata
 }
 
 data class ScanResult(val folder: FolderSelection, val tracks: List<Track>, val metadataFailures: Int)
