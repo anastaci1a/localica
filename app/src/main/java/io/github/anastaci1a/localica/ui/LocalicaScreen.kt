@@ -173,7 +173,9 @@ fun LocalicaScreen(
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
-            holder.SaveableStateProvider(route.key) {
+            // Routes retain saved state, but must not recycle live drawing/focus nodes from
+            // a different grid or text field through SaveableStateProvider's ReusableContent.
+            key(route.key) { holder.SaveableStateProvider(route.key) {
                 if (route.tab == MainTab.Queues && !route.search) QueueScreen(queues, queueController, library,
                     playlist, playlistController, playback.connected, pins, ::pin, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage)
                 else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
@@ -194,7 +196,7 @@ fun LocalicaScreen(
                     sortingRoute == route.key, { sortingRoute = null }, playingTrackId = playback.trackId, presentationOnly = viewOptions, selectionVisible = page == pager.settledPage,
                     onSearchEdit = { navigation = navigation.editSearch(it) }, onSearchCommit = { navigation = navigation.commitSearch() },
                     scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion)
-            }
+            } }
             }
         }
         Surface(Modifier.align(Alignment.BottomCenter).offset(y = (64.dp + inset) * progress.value)

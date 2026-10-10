@@ -45,7 +45,7 @@ class TabResetTest {
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.onNodeWithContentDescription("Library").performClick()
             compose.onNodeWithText("Album 000").assertIsDisplayed()
-            compose.onNode(hasSetTextAction()).assertTextContains("Search Library")
+            compose.onNode(hasSetTextAction()).assertDoesNotExist()
             compose.onNodeWithContentDescription("Back").assertDoesNotExist()
         } finally {
             compose.mainClock.autoAdvance = true

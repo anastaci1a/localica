@@ -41,11 +41,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val editTags = LocalTagEdit.current
     val preferences = remember(context) { BrowsePreferences(context) }
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
-    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val focus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
     LaunchedEffect(route.key) {
-        if (route.search && !focusedOnce) { focus.requestFocus(); keyboard?.show(); focusedOnce = true }
+        if (route.search && !focusedOnce) {
+            withFrameNanos { } // Wait until the newly keyed field is attached.
+            focus.requestFocus(); keyboard?.show(); focusedOnce = true
+        }
     }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
@@ -89,7 +92,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 TextButton(onClick = { deleting = true }) { Text("Delete") }
         }
         header()
-        OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true,
+        if (route.search || route.collection != null || route.tab != MainTab.Library) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); keyboard?.hide() }),
             trailingIcon = { ActionIcon(R.drawable.ic_search, "Submit search") { onSearchCommit(); keyboard?.hide() } },
@@ -105,13 +108,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         Box(Modifier.weight(1f).onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
             .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion, moveSongs)) {
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth())
-            else LazyVerticalGrid(state = gridState, columns = when (style.presentation) {
-                Presentation.List -> GridCells.Fixed(1)
-                Presentation.Compact -> GridCells.Adaptive(100.dp)
-                Presentation.Standard -> GridCells.Adaptive(150.dp)
-                Presentation.Large -> GridCells.Adaptive(220.dp)
-            }, modifier = Modifier.fillMaxSize().testTag("browser-list"), contentPadding = PaddingValues(bottom = 80.dp)) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+            else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(galleryColumns(style.presentation,
+                with(androidx.compose.ui.platform.LocalDensity.current) { reorder.viewportWidth.toDp().value } - if (result.items.size >= 40) 48f else 0f)), modifier = Modifier.fillMaxSize().padding(end = if (result.items.size >= 40) 48.dp else 0.dp).testTag("browser-list"), contentPadding = PaddingValues(bottom = 80.dp)) {
+                item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         LibraryNotice(library)
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -120,7 +119,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         if (result.items.isEmpty() && !library.loading) Text(if (route.search) "No matching items" else "Nothing here yet")
                     }
                 }
-                items(reorder.rendered(result.items), key = { it?.key ?: DropGapKey }) { entry ->
+                items(reorder.rendered(result.items), key = { it?.key ?: DropGapKey },
+                    contentType = { if (it == null) "gap" else "${style.presentation}:${it.ref.kind}" }) { entry ->
                     if (entry == null) {
                         val height = with(androidx.compose.ui.platform.LocalDensity.current) { (reorder.drag?.cardSize?.height ?: 0f).toDp() }
                         Box(Modifier.fillMaxWidth().height(height).testTag("drop-gap"))
@@ -131,8 +131,49 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val selectedCount = if (item.row != null) { if (session.contains(route.collection, item.row.id)) 1 else 0 }
                         else item.songs.count { it.track.id in selectedTracks }
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
-                    Box(Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null)
+                    Box(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer { alpha = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) 0f else 1f }) {
+                        val itemMenu: @Composable () -> Unit = {
+                            Box {
+                                ActionIcon(R.drawable.ic_more, "Actions for " + item.title) { contextMenu = item.key }
+                                DropdownMenu(contextMenu == item.key, { contextMenu = null }) {
+                                    if (item.row != null) {
+                                        ActionMenuItem("Information", onClick = { contextMenu = null; info = item.row.track })
+                                        if (editTags != null) ActionMenuItem("Edit tags", onClick = { contextMenu = null; editTags(listOf(item.row.track)) {} })
+                                        ActionMenuItem("Add to playlist", onClick = { contextMenu = null; addingSong = item.row.track })
+                                        SongTap.entries.forEach { action -> ActionMenuItem(action.label(), onClick = {
+                                            contextMenu = null; queues?.act(listOf(item.row.track), action)
+                                        }) }
+                                    }
+                                    if (item.row == null) ActionMenuItem("Select all songs", onClick = {
+                                        val contents = route.copy(collection = item.ref, globalSearch = false, search = false, text = "")
+                                        val songs = BrowseQueries.evaluate(library.snapshot, playlists.playlists, contents,
+                                            preferences.read(contents).query(), queueState.library.queues).rows
+                                        session.select(item.ref, songs); contextMenu = null
+                                    })
+                                    if (item.ref.kind in PinEdits.supported) DropdownMenuItem(text = { Text(if (item.ref in pins) "Unpin" else "Pin to Home") },
+                                        onClick = { onPin(item.ref); contextMenu = null })
+                                    if (route.collection?.kind == MediaKind.Playlist) {
+                                        val index = result.rows.indexOfFirst { it.id == item.key }
+                                        val manual = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank()
+                                        ActionMenuItem("Move up", enabled = manual && index > 0, onClick = {
+                                            playlistController?.move(route.collection.id, item.key, -1) { Unit }; contextMenu = null
+                                        })
+                                        ActionMenuItem("Move down", enabled = manual && index < result.rows.lastIndex, onClick = {
+                                            playlistController?.move(route.collection.id, item.key, 1) { if (it) session.clear() }; contextMenu = null
+                                        })
+                                    }
+                                    if (route.collection?.kind == MediaKind.Queue) {
+                                        val index = result.rows.indexOfFirst { it.id == item.key }
+                                        val manual = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank()
+                                        ActionMenuItem("Move up", enabled = manual && index > 0,
+                                            onClick = { queues?.moveEntry(item.key, -1, route.collection?.id) { if (it) session.clear() }; contextMenu = null })
+                                        ActionMenuItem("Move down", enabled = manual && index < result.rows.lastIndex,
+                                            onClick = { queues?.moveEntry(item.key, 1, route.collection?.id) { if (it) session.clear() }; contextMenu = null })
+                                    }
+                                }
+                            }
+                        }
                         Column(Modifier.fillMaxWidth().padding(4.dp).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
                             enabled = item.row == null || enabled,
                             onClick = {
@@ -144,57 +185,26 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 if (item.row != null) session.select(route.collection, listOf(item.row))
                                 else contextMenu = item.key
                             }
-                        ).padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        ).padding(horizontal = if (style.presentation == Presentation.Compact) 4.dp else 12.dp, vertical = 8.dp)) {
                             if (style.presentation != Presentation.List) {
-                                MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
+                                Box {
+                                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
+                                    Surface(Modifier.align(Alignment.BottomEnd).padding(2.dp), shape = androidx.compose.foundation.shape.CircleShape,
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) { itemMenu() }
+                                }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (style.presentation == Presentation.List) MediaArtwork(item.coverUris, Modifier.size(48.dp))
                                 Column(Modifier.weight(1f).padding(start = if (style.presentation == Presentation.List) 12.dp else 0.dp)) {
-                                    Text((if (current) "▶ " else "") + item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2,
+                                    Text((if (current) "▶ " else "") + item.title, style = if (style.presentation == Presentation.Compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     item.information(style)?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
                                 }
-                                ActionIcon(R.drawable.ic_more, "Actions for " + item.title) { contextMenu = item.key }
+                                if (style.presentation == Presentation.List) itemMenu()
                             }
                         }
-                        DropdownMenu(contextMenu == item.key, { contextMenu = null }) {
-                            if (item.row != null) {
-                                ActionMenuItem("Information", onClick = { contextMenu = null; info = item.row.track })
-                                if (editTags != null) ActionMenuItem("Edit tags", onClick = { contextMenu = null; editTags(listOf(item.row.track)) {} })
-                                ActionMenuItem("Add to playlist", onClick = { contextMenu = null; addingSong = item.row.track })
-                                SongTap.entries.forEach { action -> ActionMenuItem(action.label(), onClick = {
-                                    contextMenu = null; queues?.act(listOf(item.row.track), action)
-                                }) }
-                            }
-                            if (item.row == null) ActionMenuItem("Select all songs", onClick = {
-                                val contents = route.copy(collection = item.ref, globalSearch = false, search = false, text = "")
-                                val songs = BrowseQueries.evaluate(library.snapshot, playlists.playlists, contents,
-                                    preferences.read(contents).query(), queueState.library.queues).rows
-                                session.select(item.ref, songs); contextMenu = null
-                            })
-                            if (item.ref.kind in PinEdits.supported) DropdownMenuItem(text = { Text(if (item.ref in pins) "Unpin" else "Pin to Home") },
-                                onClick = { onPin(item.ref); contextMenu = null })
-                            if (route.collection?.kind == MediaKind.Playlist) {
-                                val index = result.rows.indexOfFirst { it.id == item.key }
-                                val manual = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank()
-                                ActionMenuItem("Move up", enabled = manual && index > 0, onClick = {
-                                    playlistController?.move(route.collection.id, item.key, -1) { Unit }; contextMenu = null
-                                })
-                                ActionMenuItem("Move down", enabled = manual && index < result.rows.lastIndex, onClick = {
-                                    playlistController?.move(route.collection.id, item.key, 1) { if (it) session.clear() }; contextMenu = null
-                                })
-                            }
-                            if (route.collection?.kind == MediaKind.Queue) {
-                                val index = result.rows.indexOfFirst { it.id == item.key }
-                                val manual = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank()
-                                ActionMenuItem("Move up", enabled = manual && index > 0,
-                                    onClick = { queues?.moveEntry(item.key, -1, route.collection?.id) { if (it) session.clear() }; contextMenu = null })
-                                ActionMenuItem("Move down", enabled = manual && index < result.rows.lastIndex,
-                                    onClick = { queues?.moveEntry(item.key, 1, route.collection?.id) { if (it) session.clear() }; contextMenu = null })
-                            }
-                        }
+
                     }
                 }
             }
