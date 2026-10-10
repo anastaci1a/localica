@@ -18,9 +18,11 @@ The v0.10.1 player adds aligned floating navigation/utility/mini-player pills, f
 
 The v0.11.3 organization checkpoint adds scanner/background operation, dedicated folder/error pages, structured settings/list options, and reviewed playlist import. It also restores light browsing and full-width galleries, lets lists extend beneath floating controls, and replaces restarted drag-card springs with frame-driven placement in the foreground.
 
+Library filters and All’s collection types are configurable. Songs retain first-added dates; playlists retain edit dates; qualified local listening supports song/collection sorting and a Most played tab with durable playlist-origin attribution. See [Interface](interface.md#personalized-home-and-statistics) for date/count semantics.
+
 ## Device review
 
-Review the v0.11.5 APK on the user's device before advancing, particularly drag smoothness/layering, light-theme contrast, floating controls, artwork fading, and scanning. Address regressions in small verified releases before applying glass materials.
+Review the v0.12.0 APK on the user's device before advancing, particularly filter customization, mixed collection sorting, and playback counts, alongside the existing gesture/artwork/scanner feedback. Address regressions in small verified releases before applying glass materials.
 
 ## Visual design system
 
@@ -30,7 +32,7 @@ Apply the Apple Music-inspired liquid-glass presentation to the established layo
 
 These capabilities remain planned but do not gate the start of visual work:
 
-- **Personalized Home and local playback statistics:** configurable carousels, first-added dates, and qualified listening counts with album totals and playlist attribution. Preserve independent queue/playlist identities and offline operation. Local statistics take priority over Last.fm integration.
+- **Personalized Home:** configurable carousels using the existing first-added dates, qualified play counts, and pins. Support mixed sources, manual carousel order, sorting, presentation, and preview counts while preserving offline operation.
 - **Optional Last.fm integration:** account connection, track/artist equivalency matching with review for ambiguous results, and opt-in scrobbling with durable pending submissions. Implement after local statistics; keep local counts independent of matching and service availability. See [Product](product.md#optional-lastfm-integration).
 - **Later playback and presentation:** configurable crossfades, advanced repeat behavior, sleep timer, equalizer, and multilingual UI.
 - **Visualizers:** a player destination compatible with Poweramp presets. First review MilkDrop v1/v2 files, shader conversion, textures, Poweramp extensions/packaging, licensing, and device performance with compatibility fixtures. [Primary specification](https://github.com/maxmpz/powerampapi/blob/master/poweramp_vis_presets_example/readme.md).
