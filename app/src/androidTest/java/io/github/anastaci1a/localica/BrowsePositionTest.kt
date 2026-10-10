@@ -43,7 +43,7 @@ class BrowsePositionTest {
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
                     if (hardware) UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
                     else compose.onNodeWithContentDescription("Back").performClick()
-                    compose.waitUntil(5000) { compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
+                    compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for $title").fetchSemanticsNodes().isNotEmpty() }
                     compose.onNodeWithText(title).assertIsDisplayed()
                     assertEquals("$filter / hardware=$hardware", before, compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot)
                 }
