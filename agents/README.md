@@ -14,6 +14,7 @@ These instructions govern how to work on localica. Product goals and plans belon
 ## Work and issues
 
 - [GitHub Issues](https://github.com/anastaci1a/localica/issues) are the source of truth for bugs and actionable work. Create or update an issue with reproduction, expected behavior, and acceptance criteria as relevant; refer to its number in commits or pull requests. Do not maintain a bug list or issue tracker in `docs/`.
+- Keep submitted issues and replies short and to the point. For bugs, state the observed effect, how to reproduce it, and the cause if known. For features, state the requested change directly. Link to supporting details instead of repeating plans, implementation narratives, or test logs.
 - `docs/roadmap.md` tracks milestone outcomes and their order, not individual tickets. Remove a milestone when its outcome is delivered, or rewrite it to reflect the next decision.
 - Keep commits focused on one coherent change so each can be reviewed or reverted safely. Separate planning changes, implementation, and release automation when practical. Never mix an unrelated cleanup into a bug fix. Use descriptive imperative commit subjects and the repository-local `anastaci1a` identity.
 - Check the working tree and relevant verification before each commit. Document material limitations in the final report or the relevant issue, rather than burying them in a new project log.
