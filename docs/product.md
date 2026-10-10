@@ -12,7 +12,7 @@ Combine multiple user-selected folder trees. Browse songs, albums, artists, albu
 
 Group albums by title and album artist, falling back to track artist when album artist is absent. Match names without case or surrounding whitespace; missing names have distinct unknown groups. Artist views use track artists. Folder views show each root and relative parent directory, retaining alternate access paths for overlapping roots. Group names are alphabetical; query sorting controls songs within each group.
 
-Manual playlists support creation, naming, ordering, adding/removing tracks, and deletion. Smart playlists are a later possibility. Playlists describe saved collections; queues preserve listening sessions independently of subsequent playlist or library changes.
+Manual playlists support creation, naming, ordering, adding/removing tracks, deletion, and reviewed local M3U/M3U8/PLS imports. Imports preserve duplicate occurrences, skip unresolved entries only after review, and never fetch remote audio. Smart playlists are a later possibility. Playlists describe saved collections; queues preserve listening sessions independently of subsequent playlist or library changes.
 
 Each playlist occurrence has its own identity, including repeated songs. Available songs reflect rescanned library metadata; unavailable songs retain their last saved metadata and file reference. Removing a library folder never removes playlist entries. Playlist order is the default; search and other sorts change the displayed result without rewriting that order. Reordering controls apply when the complete saved order is displayed.
 
