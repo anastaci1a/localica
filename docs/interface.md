@@ -12,7 +12,7 @@ Use the Apple Music Bottom Navbar&Miniplayer reference: three separated floating
 
 Tapping the mini-player body or swiping upward expands it; transport buttons do not. One expansion progress drives the player surface, the downward exit of the main tabs, and appearance of the player's floating shelf. Full player order is artwork, seek bar/times, metadata, compact actions, transport, and Localica’s destination shelf; omit volume controls. Upward swipes across the player open Queue from that shelf; one gesture changes one surface level. The complete Queue button, including its label, opens the same destination. Swipe down or Back collapses the player without losing underlying query, filter, route, or scroll position. Song taps that start playback expand by default, with a stay-browsing setting; append/add-next do not expand.
 
-Use simple surfaces for the initial implementation. Shared visual-material boundaries will later provide floating translucency and the expanded player's more opaque, artwork-tinted blurred gradient. Preserve older-device and reduced-motion fallbacks.
+Keep the established light browsing/settings surfaces regardless of Android appearance while the layout is being refined. Provide the matching inherited text/icon color; configurable dark styling belongs to later theme work. Use simple surfaces for the initial implementation. Shared visual-material boundaries will later provide floating translucency and the expanded player's more opaque, artwork-tinted blurred gradient. Preserve older-device and reduced-motion fallbacks.
 
 ## Browsing, search, and selection
 
