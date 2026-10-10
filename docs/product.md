@@ -20,7 +20,7 @@ Each playlist occurrence has its own identity, including repeated songs. Availab
 
 Every song list follows the same configurable behavior, including album, artist, album artist, folder, playlist, and search results. The default song tap creates a new queue containing the complete displayed list in its current filtered/sorted order and starts at the tapped song. Earlier songs remain in the queue and can be revisited. The queue is a snapshot, not a live query; a later sort, filter, or collection edit does not rewrite it.
 
-A queue screen shows its songs with a queue selector at the top. Queues can be renamed, reordered, appended to, and deleted; individual entries can be inserted or removed. Allow repeated occurrences of a song. Preserve each queue's order, current entry, and playback position across restarts. Switching queues restores the chosen queue paused by default. Never start audio merely because the app launches.
+A queue screen shows its songs with a queue selector at the top. Queues can be renamed, reordered, appended to, and deleted; individual entries can be inserted or removed. Allow repeated occurrences of a song. Preserve each queue's order, current entry, and playback position across restarts. Selecting a queue browses it without changing playback by default; selecting a song activates that queue. New names come from the originating list. Deleting the active queue restores the most recently active remaining queue and its saved cursor; resume only if the deleted queue was playing. Never start audio merely because the app launches.
 
 Queues remain until deleted and the default count is unlimited. A user can set a maximum. Creating a queue at that limit opens a dialog proposing the oldest inactive queue for removal, naming it before confirmation. The user can choose another queue or multi-select queues instead. Protect the active queue from this cleanup. Provide "Remove all except current". Cancelling cleanup cancels creation and leaves playback intact.
 
@@ -33,7 +33,7 @@ Maintain this inventory as capabilities are added; these are target settings, no
 | Song tap | New queue from displayed list; alternatives: insert selected song after current and play it, add next, or append at end. |
 | Tap setting scope | App-wide default with optional overrides for song, album, artist, album artist, folder, playlist, and search lists. |
 | Queue retention | Unlimited; optional maximum with the cleanup dialog described above. |
-| Queue switching | Restore paused; make immediate resume and preservation of playback state selectable alternatives. |
+| Queue switching | Browse without affecting playback; alternatives restore paused, resume immediately, or preserve playback state. |
 | Sort and presentation | Defaults by list type with optional collection overrides; explicit reset/inherit. |
 | Navigation and player | Custom tabs, tab history, exit confirmation, automatic player expansion, and secondary metadata; defaults in [Interface](interface.md). |
 | Player artwork gestures | Tap toggles the integrated lyrics panel; hold opens artwork actions. Both are independently configurable in Settings. |

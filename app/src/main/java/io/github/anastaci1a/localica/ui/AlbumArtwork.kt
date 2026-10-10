@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -32,15 +33,15 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     var pixels by remember { mutableIntStateOf(0) }
     val request = Triple(uris, pixels, revision)
     val loaded by produceState<Pair<Triple<List<String>, Int, Long>?, ImageBitmap?>>(null to null, request, provider) {
-        value = request to null
+        if (value.first?.first != uris || value.first?.third != revision) value = request to null
         if (pixels > 0) value = request to provider.load(context, uris, pixels)?.asImageBitmap()
     }
-    val artwork = loaded.second.takeIf { loaded.first == request }
-    val measured = modifier.onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
+    val artwork = loaded.second.takeIf { loaded.first?.first == uris && loaded.first?.third == revision }
+    val measured = modifier.clip(Corners.artwork).onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
     if (artwork != null) {
         Image(artwork, stringResource(R.string.album_artwork), measured, contentScale = ContentScale.Crop)
     } else {
-        Surface(measured, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+        Surface(measured, shape = Corners.artwork, color = MaterialTheme.colorScheme.surfaceContainer) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(0.4f), tint = MaterialTheme.colorScheme.primary)
             }

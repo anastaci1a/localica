@@ -14,11 +14,12 @@ data class ListeningQueue(
     val positionMs: Long = 0,
     val shuffle: Boolean = false,
     val repeat: QueueRepeat = QueueRepeat.Off,
+    val lastActivatedAt: Long = createdAt,
 )
 enum class QueueRepeat { Off, All, One }
 enum class SongTap { NewQueue, PlayNow, PlayNext, Append }
-enum class QueueSwitch { Paused, Resume, KeepPlaybackState }
-data class QueueSettings(val songTap: SongTap = SongTap.NewQueue, val switching: QueueSwitch = QueueSwitch.Paused,
+enum class QueueSwitch { Browse, Paused, Resume, KeepPlaybackState }
+data class QueueSettings(val songTap: SongTap = SongTap.NewQueue, val switching: QueueSwitch = QueueSwitch.Browse,
     val maximum: Int? = null, val tapOverrides: Map<SongListView, SongTap> = emptyMap(),
     val preloadNext: Boolean = true) {
     fun tapFor(view: SongListView) = tapOverrides[view] ?: songTap
@@ -27,9 +28,9 @@ data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val acti
     val active: ListeningQueue? get() = queues.firstOrNull { it.id == activeId }
     fun update(queue: ListeningQueue) = copy(queues = queues.map { if (it.id == queue.id) queue else it })
 }
-data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true)
+data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true, val sourceName: String = "All Songs")
 data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading: Boolean = true,
-    val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0)
+    val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0, val browsedId: String? = null)
 
 /** Pure queue edits keep occurrence identity separate from the song's library identity. */
 object QueueEdits {

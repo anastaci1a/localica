@@ -18,10 +18,10 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
-internal fun MarqueeTitle(title: String, reducedMotion: Boolean) {
-    val style = MaterialTheme.typography.titleSmall
+internal fun MarqueeTitle(title: String, reducedMotion: Boolean, modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleSmall) {
     val measurer = rememberTextMeasurer()
-    BoxWithConstraints {
+    BoxWithConstraints(modifier) {
         val overflows = measurer.measure(AnnotatedString(title), style, maxLines = 1, softWrap = false).size.width >
             with(LocalDensity.current) { maxWidth.toPx() }
         val motion = if (!reducedMotion && overflows) Modifier

@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.SongRow
@@ -19,7 +20,7 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins: List<MediaRef>,
     onSettings: () -> Unit, onBrowse: () -> Unit, onOpen: (BrowserItem, List<SongRow>) -> Unit,
-    onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit) {
+    onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false) {
     val items by produceState(emptyList<BrowserItem>(), library.snapshot, playlists.playlists, pins) {
         value = withContext(Dispatchers.Default) {
             val catalog = BrowseQueries.evaluate(library.snapshot, playlists.playlists,
@@ -28,7 +29,15 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         }
     }
     var menu by remember { mutableStateOf<MediaRef?>(null) }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 16.dp)) {
+    val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+    var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(scrollToTopRequest) {
+        if (consumedScrollRequest != scrollToTopRequest) {
+            consumedScrollRequest = scrollToTopRequest
+            scroll.easeToItem(0, reducedMotion, 500)
+        }
+    }
+    LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(vertical = 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
@@ -37,7 +46,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (items.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
-        item { LazyRow(contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { LazyRow(modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
                 Column(Modifier.width(160.dp).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {
@@ -46,11 +55,11 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
                 DropdownMenu(menu == item.ref, { menu = null }) {
-                    DropdownMenuItem(text = { Text("Move earlier") }, enabled = pins.indexOf(item.ref) > 0,
+                    ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
-                    DropdownMenuItem(text = { Text("Move later") }, enabled = pins.indexOf(item.ref) < pins.lastIndex,
+                    ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,
                         onClick = { onMove(item.ref, 1); menu = null })
-                    DropdownMenuItem(text = { Text("Unpin") }, onClick = { onPin(item.ref); menu = null })
+                    ActionMenuItem("Unpin", onClick = { onPin(item.ref); menu = null })
                 }
             } }
         } }

@@ -22,19 +22,19 @@ class QueueBrowsingTest {
         val state = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
         try {
             compose.setContent { LocalicaTheme { QueueScreen(state, null) } }
-            compose.onNodeWithContentDescription("Search queue").performClick()
             compose.onNode(hasSetTextAction()).performTextInput("First")
             compose.onNodeWithTag("media-${queue.entries[1].id}").assertIsDisplayed()
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertDoesNotExist()
             val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
             device.pressBack() // keyboard
             compose.waitForIdle()
-            device.pressBack() // search route
-            compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+            compose.onNode(hasSetTextAction()).performTextClearance()
+            compose.onNode(hasSetTextAction()).performImeAction()
+            compose.onNodeWithTag("media-${queue.entries[0].id}").assertIsDisplayed()
             compose.onNodeWithContentDescription("Sort queue").performClick()
             compose.onNodeWithText("Title").performClick()
             compose.onNodeWithText("Save").performClick()
-            compose.onNodeWithTag("media-${queue.entries[0].id}").performTouchInput { longClick() }
+            compose.onNodeWithContentDescription("Actions for Second").performClick()
             compose.onNodeWithText("Move up").assertIsNotEnabled()
             compose.onNodeWithText("Move down").assertIsNotEnabled()
             assertEquals(listOf("Second", "First"), queue.entries.map { it.track.title })

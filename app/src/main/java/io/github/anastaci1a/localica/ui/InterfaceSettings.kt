@@ -19,6 +19,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, onChange: (Inte
     BooleanPreference("Expand player when a song starts", value.expandOnPlay) { onChange(value.copy(expandOnPlay = it)) }
     BooleanPreference("Show album artist first", value.albumArtistFirst) { onChange(value.copy(albumArtistFirst = it)) }
     BooleanPreference("Reduce motion", value.reducedMotion) { onChange(value.copy(reducedMotion = it)) }
+    BooleanPreference("Faster animations", value.fasterMotion) { onChange(value.copy(fasterMotion = it)) }
     ArtworkActionPreference("Artwork tap", value.artworkTap) { onChange(value.copy(artworkTap = it)) }
     ArtworkActionPreference("Artwork hold", value.artworkHold) { onChange(value.copy(artworkHold = it)) }
     Text("Main tabs", style = MaterialTheme.typography.titleMedium)
@@ -43,7 +44,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, onChange: (Inte
         TextButton(onClick = { adding = true }, enabled = value.tabs.size < MainTab.entries.size) { Text("Add main tab") }
         DropdownMenu(adding, { adding = false }) {
             MainTab.entries.filterNot { it in value.tabs }.forEach { tab ->
-                DropdownMenuItem(text = { Text(tab.label) }, onClick = { onChange(value.copy(tabs = value.tabs + tab)); adding = false })
+                ActionMenuItem(tab.label, onClick = { onChange(value.copy(tabs = value.tabs + tab)); adding = false })
             }
         }
     }
@@ -56,7 +57,7 @@ internal fun ArtworkActionPreference(label: String, value: ArtworkAction, onChan
     Box {
         TextButton(onClick = { open = true }) { Text("$label: ${value.label}") }
         DropdownMenu(open, { open = false }) { ArtworkAction.entries.forEach { action ->
-            DropdownMenuItem(text = { Text(action.label) }, onClick = { onChange(action); open = false })
+            ActionMenuItem(action.label, onClick = { onChange(action); open = false })
         } }
     }
 }

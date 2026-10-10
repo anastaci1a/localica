@@ -13,6 +13,35 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class QueueDatabaseTest {
+    @Test fun releasedQueueSchemaMigratesOrderAndActivationHistoryWithoutLosingCursor() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "queue-migration.db"
+        context.deleteDatabase(name)
+        val track = Track("uri", "Song", fileName = "song.mp3", relativePath = "song.mp3")
+        context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { old ->
+            old.execSQL("CREATE TABLE queues (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, createdAt INTEGER NOT NULL, currentEntryId TEXT, positionMs INTEGER NOT NULL, shuffle INTEGER NOT NULL, repeat TEXT NOT NULL)")
+            old.execSQL("CREATE TABLE queue_entries (id TEXT NOT NULL PRIMARY KEY, queueId TEXT NOT NULL, ordinal INTEGER NOT NULL, track TEXT NOT NULL, FOREIGN KEY(queueId) REFERENCES queues(id) ON DELETE CASCADE)")
+            old.execSQL("CREATE INDEX index_queue_entries_queueId ON queue_entries(queueId)")
+            old.execSQL("CREATE TABLE queue_state (id INTEGER NOT NULL PRIMARY KEY, queueId TEXT)")
+            old.execSQL("INSERT INTO queues VALUES ('old','Old',100,'entry',2345,1,'All')")
+            old.execSQL("INSERT INTO queues VALUES ('new','New',200,NULL,0,0,'Off')")
+            old.execSQL("INSERT INTO queue_entries VALUES ('entry','old',0,?)", arrayOf(TrackSnapshot.encode(track)))
+            old.execSQL("INSERT INTO queue_state VALUES (1,'old')")
+            old.version = 1
+        }
+        val db = Room.databaseBuilder(context, QueueDatabase::class.java, name)
+            .addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3).build()
+        try {
+            val restored = db.queues().read()
+            assertEquals(listOf("old", "new"), restored.queues.map { it.id })
+            assertEquals("old", restored.activeId)
+            assertEquals(2345L, restored.active!!.positionMs)
+            assertEquals("entry", restored.active!!.currentEntryId)
+            assertEquals(track, restored.active!!.entries.single().track)
+            assertTrue(restored.active!!.lastActivatedAt > restored.queues.last().lastActivatedAt)
+        } finally { db.close(); context.deleteDatabase(name) }
+    }
+
     @Test fun snapshotsDuplicateEntriesAndCursorsSurviveReopenAndFailedEdits() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val name = "queue-test.db"

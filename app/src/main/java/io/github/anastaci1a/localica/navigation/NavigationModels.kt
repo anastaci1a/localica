@@ -19,6 +19,9 @@ data class BrowseRoute(
     val text: String = "",
     val filter: MediaKind? = null,
     val key: String = UUID.randomUUID().toString(),
+    val queryCommitted: Boolean = false,
+    val querySort: io.github.anastaci1a.localica.library.TrackSort? = null,
+    val queryAscending: Boolean? = null,
 )
 data class NavigationState(
     val active: MainTab = MainTab.Home,
@@ -28,8 +31,16 @@ data class NavigationState(
     val route: BrowseRoute get() = stacks.getValue(active).last()
     fun switch(tab: MainTab): NavigationState = if (tab == active) this else copy(active = tab,
         stacks = if (tab in stacks) stacks else stacks + (tab to listOf(BrowseRoute(tab))), history = history + active)
+    fun resetTab(tab: MainTab): NavigationState = copy(stacks = stacks +
+        (tab to listOf(stacks[tab]?.firstOrNull() ?: BrowseRoute(tab))))
     fun open(route: BrowseRoute) = copy(stacks = stacks + (active to (stacks.getValue(active) + route)))
     fun update(route: BrowseRoute) = copy(stacks = stacks + (active to (stacks.getValue(active).dropLast(1) + route)))
+    fun editSearch(next: BrowseRoute): NavigationState {
+        val draft = next.copy(search = true, queryCommitted = false)
+        return if (route.search && !route.queryCommitted) update(draft.copy(key = route.key))
+            else open(draft.copy(key = UUID.randomUUID().toString()))
+    }
+    fun commitSearch(): NavigationState = if (route.search) update(route.copy(queryCommitted = true)) else this
     fun back(tabHistory: Boolean): NavigationState? {
         val stack = stacks.getValue(active)
         if (stack.size > 1) return copy(stacks = stacks + (active to stack.dropLast(1)))
@@ -39,13 +50,13 @@ data class NavigationState(
         require(tabs.isNotEmpty())
         val selected = active.takeIf { it in tabs } ?: tabs.first()
         val kept = stacks.filterKeys { it in tabs }.toMutableMap()
-        kept.putIfAbsent(selected, listOf(BrowseRoute(selected)))
+        tabs.forEach { kept.putIfAbsent(it, listOf(BrowseRoute(it))) }
         return copy(active = selected, stacks = kept, history = history.filter { it in tabs })
     }
     companion object {
         fun fresh(tabs: List<MainTab>): NavigationState {
             val first = if (MainTab.Home in tabs) MainTab.Home else tabs.first()
-            return NavigationState(first, mapOf(first to listOf(BrowseRoute(first))))
+            return NavigationState(first, tabs.associateWith { listOf(BrowseRoute(it)) })
         }
     }
 }
@@ -58,6 +69,7 @@ data class InterfaceSettings(
     val reducedMotion: Boolean = false,
     val artworkTap: ArtworkAction = ArtworkAction.Lyrics,
     val artworkHold: ArtworkAction = ArtworkAction.Menu,
+    val fasterMotion: Boolean = false,
 )
 
 enum class ArtworkAction(val label: String) {

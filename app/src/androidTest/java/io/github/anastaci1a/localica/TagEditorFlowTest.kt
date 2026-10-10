@@ -27,14 +27,16 @@ class TagEditorFlowTest {
             device.clickWhenReady(By.text(Pattern.compile("use this folder|select", Pattern.CASE_INSENSITIVE)))
             device.wait(Until.findObject(By.text(Pattern.compile("allow", Pattern.CASE_INSENSITIVE))), 2000)?.click()
         }
-        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Settings").performClick()
+        compose.onNodeWithText("Library and tags").performClick()
         compose.onNode(hasText("Choose folder") or hasText("Add folder")).performScrollTo().performClick()
         selectFolder()
         compose.waitUntil(15000) { app.library.hasAccess(io.github.anastaci1a.localica.library.FolderSelection(tree, "Test")) }
         device.wait(Until.hasObject(By.pkg(context.packageName)), 10000)
         device.waitForIdle()
         compose.waitForIdle()
-        device.pressBack()
+        compose.onNodeWithContentDescription("Close settings").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Retrace tab history").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
@@ -43,7 +45,7 @@ class TagEditorFlowTest {
         try {
             compose.onNodeWithText("Morning tone").performTouchInput { longClick() }
             compose.onNodeWithText("Edit tags").performClick()
-            compose.onNode(hasSetTextAction() and hasText("Morning tone")).performTextReplacement("Retagged tone")
+            compose.onNode(hasSetTextAction() and hasText("Morning tone")).performScrollTo().performTextReplacement("Retagged tone")
             compose.onNodeWithText("Grant write access: root").performScrollTo().performClick()
             selectFolder()
             compose.onNodeWithText("Review changes").performClick()
