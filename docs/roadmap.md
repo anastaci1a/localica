@@ -10,9 +10,11 @@ Shared browsing, scoped/global search, sorting overrides, contextual selection, 
 
 Recoverable individual/bulk tag and artwork editing, image selection, and zoomable artwork viewing shipped in v0.7.1. Local embedded/sidecar lyrics, configurable artwork gestures, synced following, tap-to-seek, and fading viewport edges shipped in v0.8.1. Unsupported write formats/providers remain read-only.
 
-## Current stopping point
+## Next release: v0.9.0
 
-The three authorized checkpoints—v0.6.0, v0.7.1, and v0.8.1—are released and verified on Android 8 and 16. Stop here for review of the usable layouts before starting liquid-glass implementation.
+Build the lasting reference-based layout before liquid-glass rendering using all 19 supplied screenshots. Deliver continuous mini-player/player/Queue gestures, reusable rounded menus, tab swiping, persistent local search, configurable player actions, session-wide ordered selection, richer metadata, queue organization, and next-track preloading. The behavioral contract is in [Interface](interface.md).
+
+Verify migrations, tag recovery, audio boundaries, accessibility, small/landscape screens, and Android 8/16 before publishing an APK. Review this structural release before starting glass. Keep focused commits pushed and update real screenshots with finished layouts.
 
 ## Visual design system
 
@@ -24,6 +26,8 @@ These capabilities remain planned but do not gate the start of visual work:
 
 - **Personalized Home and local playback statistics:** configurable carousels, first-added dates, and qualified listening counts with album totals and playlist attribution. Preserve independent queue/playlist identities and offline operation. Local statistics take priority over Last.fm integration.
 - **Optional Last.fm integration:** account connection, track/artist equivalency matching with review for ambiguous results, and opt-in scrobbling with durable pending submissions. Implement after local statistics; keep local counts independent of matching and service availability. See [Product](product.md#optional-lastfm-integration).
+- **Later playback and presentation:** configurable crossfades, advanced repeat behavior, sleep timer, equalizer, and multilingual UI.
+- **Visualizers:** a player destination compatible with Poweramp presets. First review MilkDrop v1/v2 files, shader conversion, textures, Poweramp extensions/packaging, licensing, and device performance with compatibility fixtures. [Primary specification](https://github.com/maxmpz/powerampapi/blob/master/poweramp_vis_presets_example/readme.md).
 - **Lyric editing:** a manual `.lrc` text editor and a playback-assisted mode that timestamps a line when the user taps it. Include correction, preview, and safe save/export; follow the local lyric reader and tag-write foundations.
 
 Each milestone needs a usable, verified release. Track actionable acceptance criteria in [GitHub Issues](https://github.com/anastaci1a/localica/issues), update this document when outcomes ship, and avoid accumulating a parallel ticket list here.
