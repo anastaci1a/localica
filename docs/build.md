@@ -17,6 +17,6 @@ The repository secret `ANDROID_DEBUG_KEYSTORE` holds the base64-encoded developm
 
 ### Release descriptions
 
-Before pushing a release tag, copy the [template](../.github/RELEASE_TEMPLATE.md) over [the current release notes](../.github/RELEASE_NOTES.md), fill every placeholder, and commit and push the result with the version change. Review issues resolved since the preceding release so the linked list is complete; references in commits alone do not mean an issue is resolved. Keep the summary and installation steps short, following the [release writing rules](../agents/README.md#versioning-and-releases).
+Before pushing a release tag, copy the [template](../.github/RELEASE_TEMPLATE.md) over [the current release notes](../.github/RELEASE_NOTES.md), fill every placeholder, and commit and push the result with the version change. Review issues resolved since the preceding release so the linked list is complete; references in commits alone do not mean an issue is resolved. Keep the change bullets and installation steps short, following the [release writing rules](../agents/README.md#versioning-and-releases).
 
 The workflow checks the version marker and rejects unfilled placeholders, then publishes this file as the release body. Replace the file for each release; Git and GitHub Releases retain previous descriptions. This format starts with v0.5.0; earlier release descriptions stay as published.
