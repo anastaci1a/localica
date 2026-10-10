@@ -2,7 +2,7 @@
 
 ## Goal and principles
 
-Build a dependable, offline Android player for audio already on the device. Take functional inspiration from [Musicolet](https://play.google.com/store/apps/details?id=in.krosbits.musicolet) and visual inspiration from Apple Music, with Localica's own interface. No account, streaming, discovery service, or network permission is required.
+Build a dependable, offline Android player for audio already on the device. Take functional inspiration from [Musicolet](https://play.google.com/store/apps/details?id=in.krosbits.musicolet) and visual inspiration from Apple Music, with Localica's own interface. Core playback, organization, editing, lyrics, and local statistics require no account or network access. The current app has no network permission; future optional Last.fm integration will add networking only for the connected feature, disabled by default.
 
 Finding music, starting playback, and changing the current queue should take few steps. Accessibility, large libraries, and background playback are core requirements. Provide sensible defaults and meaningful settings: listening behavior should be personalizable. File access and edits must be explicit and recoverable where possible.
 
@@ -36,7 +36,10 @@ Maintain this inventory as capabilities are added; these are target settings, no
 | Queue switching | Restore paused; make immediate resume and preservation of playback state selectable alternatives. |
 | Sort and presentation | Defaults by list type with optional collection overrides; explicit reset/inherit. |
 | Navigation and player | Custom tabs, tab history, exit confirmation, automatic player expansion, and secondary metadata; defaults in [Interface](interface.md). |
+| Player artwork gestures | Tap toggles the integrated lyrics panel; hold opens artwork actions. Both are independently configurable in Settings. |
+| Lyrics | Prefer synced lyrics; within the same sync type prefer a matching `.lrc` sidecar to embedded lyrics. Allow source selection when both exist; keep reduced-motion behavior. |
 | Home | Configurable carousel sources, order, sorting, presentation, and preview counts. |
+| Last.fm | Disconnected/off by default; explicit connection, scrobbling controls, and matching review. Local statistics work independently. |
 | Playback | Shuffle and repeat controls arrive with queue playback; defaults off. |
 | Appearance | System/light/dark themes, reduced motion/transparency, and a legible solid-material fallback. |
 
@@ -50,8 +53,26 @@ Read and edit these audio-file tags: name (song title), album, artist, album art
 
 Aim for write support across all playback formats. Editability depends on the actual container and storage provider: a file that cannot safely accept the requested change remains playable and read-only, with an explanation. Obtain write permission explicitly, retain recovery information, verify the result, and report per-file outcomes for batches. No silent app-only metadata fallback.
 
+Artwork replacement accepts user-selected images from files/gallery and a compact recent-image chooser. Show recent device images available under the user's image-access grants, plus previously chosen images still readable; always provide a full picker option. Handle limited or revoked access without requiring broad gallery access to change artwork. Preview before applying. The player artwork action edits only the current song's file; changing an entire album requires explicit bulk selection. Artwork reading exists; image selection and writing are planned for the tag-editing checkpoint.
+
+## Lyrics
+
+Read synced and unsynced embedded lyrics where supported by the container, and local `.lrc` files alongside the audio with the same basename (`Song.flac` and `Song.lrc`). Resolve sidecars through the granted document tree and the song's actual folder. Keep available sources separate and selectable; prefer usable synced lyrics, then sidecars over embedded lyrics of the same sync type. Missing, malformed, inaccessible, or untimed lyrics must not interrupt playback or fabricate timing.
+
+The player presents lyrics within its existing layout, with synced line tracking, smooth following, and fading top/bottom edges. Use [Better Lyrics](https://github.com/better-lyrics/better-lyrics) as a strong presentation reference; detailed interactions live in [Interface](interface.md#artwork-and-lyrics). Plain lyrics remain readable without synchronized highlighting. Local lyric viewing requires no online lookup.
+
+A later lyric editor supports direct `.lrc` text editing and listening while tapping a line to assign its timestamp. Allow timestamp correction, undo, playback preview, and explicit save/export with recoverable file writes. Editing is separate from the initial reader release.
+
+## Optional Last.fm integration
+
+Implement local playback statistics first. Later, offer explicit Last.fm connection and opt-in scrobbling, with a durable pending-submission queue, disconnect controls, and clear submission status. Do not upload previous local history automatically. Core functionality remains usable offline and without an account.
+
+Find the equivalent Last.fm track/artist using structured metadata, with review for ambiguous or missing matches, a selectable correction, and a remembered mapping that can be reset. A match or service correction must not silently rewrite local file tags. Verify the lookup and matching flow before implementation; local counting must never wait for a remote match.
+
+Scrobbling eligibility is separate from the local play-count rule: [Last.fm's protocol](https://www.last.fm/api/scrobbling) requires a track longer than 30 seconds and listening for half its duration or four minutes, whichever comes first. Retain actual listening duration and playback-start timestamps so a local qualified play is not automatically treated as an eligible scrobble.
+
 ## Visual direction and later capabilities
 
 The next releases establish the lasting layout and interaction structure described in [Interface](interface.md). Polish that structure before applying glass graphics. Create reusable Compose components inside Localica, with glass-like materials concentrated on navigation and playback controls. Follow [Apple's material guidance](https://developer.apple.com/design/human-interface-guidelines/materials) on hierarchy and legibility. Extract a separate graphics package only when real reuse justifies it. Older devices retain a usable solid-material presentation.
 
-Gapless playback, sleep timers, lyrics, equalizers, bookmarks, favorites, widgets, Android Auto, and backup/export remain later candidates. They do not delay the [ordered roadmap](roadmap.md).
+Gapless playback, sleep timers, equalizers, bookmarks, favorites, widgets, Android Auto, and backup/export remain later candidates. They do not delay the [ordered roadmap](roadmap.md).

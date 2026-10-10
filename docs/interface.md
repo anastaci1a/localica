@@ -26,7 +26,19 @@ Every applicable list has an unobtrusive sort icon. Changing sort normally chang
 
 Hide checkboxes and bulk controls normally. Long-press a song to select it and open an anchored context popup. Dismissing the popup retains selection mode; subsequent song taps toggle selection. Show checkboxes and a compact count/select-all/cancel/Actions toolbar in that mode. Successful actions exit; canceled dialogs preserve selection. Deselecting the final song, leaving the list, or changing its query exits selection. Provide equivalent screen-reader actions. Queue/playlist actions work now; add bulk tag actions only when functional. Collection context menus support pin/unpin, but mixed song/collection bulk selection is outside this milestone.
 
+## Artwork and lyrics
+
+In the expanded player, tapping artwork toggles a lyrics panel by default. Fade it into the player's own layout and background so it feels part of the screen; retain transport access. Use [Better Lyrics](https://github.com/better-lyrics/better-lyrics) as strong visual inspiration for readable active-line emphasis and fluid following. Fade text at the top and bottom viewport edges as lines enter and leave. Respect reduced motion and keep accessibility focus stable.
+
+Synced lyrics follow the real playback position, including seeks and queue changes. Highlight the current line and allow tapping a timed line to seek. Manual scrolling temporarily releases automatic following; provide a return-to-current-line action. Unsynced lyrics use ordinary scrolling without invented timestamps. Standard LRC supports line timing; richer word timing may be used only when present in a supported source. Show honest empty/error states and expose available source choices from the [local source policy](product.md#lyrics).
+
+Holding artwork opens an anchored popup by default with **View artwork**, **Change artwork**, and **Configure tap action**. View artwork opens a dedicated viewer with pinch zoom/pan and an accessible reset; Back returns to the same player state. Change artwork opens the shared image chooser and edits the current song only through the verified tag-write path. The chooser offers quick recent-image thumbnails and a full files/gallery picker, handling partial access and cancellation. Bulk artwork editing remains an explicit selection action.
+
+Configure tap and hold independently in Settings: toggle lyrics, show the artwork menu, view artwork, change artwork, or do nothing. The default menu provides the tap shortcut; Settings and accessible player actions remain available even when gestures are remapped. Back closes menus/pickers/viewer first, then the visible lyrics panel, then collapses the player. Preserve the underlying browse state and prevent artwork gestures from unintentionally expanding/collapsing the player.
+
 ## Personalized Home and statistics
+
+This remains the target after tag/artwork editing and lyrics; local statistics precede optional Last.fm integration. These later capabilities do not block starting liquid-glass work on the established layouts.
 
 Default carousels are pinned mixed items, frequently played mixed items, recently added albums, and recently added songs. Titles with chevrons open the full collection. Allow add/remove/reorder, source, sorting, presentation, and preview-count customization (ten items initially). Carousel choices override view-type defaults. Pins support songs/albums/playlists with manual order.
 
@@ -38,4 +50,4 @@ A qualified play requires actual listening for 30 seconds or half the track dura
 
 Use typed restorable destinations, typed media references, per-type preferences/collection overrides, occurrence-aware queue commands with optional source attribution, shared expansion state, and replaceable material components. Preserve existing libraries, playlists, queues, and listening preferences.
 
-Verify Back precedence/settings, tab overflow, player gestures and transport, restored queries/positions, selection dismissal/cancellation/accessibility, sorting inheritance, duplicate occurrences, complete queue snapshots, artwork reuse/invalidation, pins/dates/play counts, migrations, small/landscape windows, large fonts, reduced motion, and Android 8/16. Each milestone produces a verified development APK.
+Verify Back precedence/settings, tab overflow, player gestures and transport, restored queries/positions, selection dismissal/cancellation/accessibility, sorting inheritance, duplicate occurrences, complete queue snapshots, artwork reuse/invalidation, pins/dates/play counts, migrations, small/landscape windows, large fonts, reduced motion, and Android 8/16. Editing and lyrics checkpoints also cover safe tag writes and partial failures, single-song artwork scope, recent-image access/cancellation, zoom and gesture remapping, embedded/sidecar precedence, malformed lyrics, and synchronization after seeking or changing songs. Each milestone produces a verified development APK.
