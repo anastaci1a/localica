@@ -20,6 +20,25 @@ These instructions govern how to work on localica. Product goals and plans belon
 - Push every commit to the remote; do not leave completed commits only on the local machine.
 - Check the working tree and relevant verification before each commit. Document material limitations in the final report or the relevant issue, rather than burying them in a new project log.
 
+### Issue labels
+
+Label issues when creating or triaging them. Use one type and the relevant area labels; usually one or two areas are enough. Keep workflow labels current as work proceeds, and remove them when closing an issue. Use GitHub's open/closed state for completion.
+
+| Purpose | Labels and usage |
+| --- | --- |
+| Type | `bug`: broken behavior; `enhancement`: a feature or improvement; `documentation`: documentation changes; `maintenance`: internal refactoring, tooling, or upkeep. |
+| Library | `area: library`: indexing, metadata, artwork, organization, and queries. |
+| Playback | `area: playback`: audio, transport, queues, and listening statistics. |
+| Interface | `area: interface`: navigation, browsing, layout, interaction, and visuals. |
+| Storage | `area: storage`: document access, persistence, migrations, and recovery. |
+| Build | `area: build`: builds, automated tests, CI, signing, and releases. |
+| Workflow | `in progress`: active implementation or release verification; `blocked`: a named dependency prevents progress; `question`: an answer is needed to proceed. State the blocker or question briefly, linking dependencies where relevant. |
+| Accessibility | `accessibility`: a barrier affecting people with disabilities; combine with the appropriate type and area. |
+| Contributions | `help wanted`: outside help is welcome; `good first issue`: the work is small, bounded, and has clear acceptance criteria. |
+| Closure reason | `duplicate`, `invalid`, or `wontfix`: use only when closing for that reason, with a short explanation or link to the original issue. |
+
+Reuse these labels. Add another only for a recurring gap, and update this table when doing so. Do not use labels to duplicate roadmap milestones or invent priorities that have not been agreed.
+
 ## Versioning and releases
 
 - Use `vX.X.X` tags for releases and the corresponding `X.X.X` app version name. Increase major for breaking changes, minor for features, and patch for fixes.
