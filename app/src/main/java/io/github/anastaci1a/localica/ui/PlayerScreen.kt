@@ -2,12 +2,17 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import io.github.anastaci1a.localica.navigation.*
+import io.github.anastaci1a.localica.library.Track
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -23,21 +28,37 @@ import java.util.Locale
 @Composable
 fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> Unit, onOpenLibrary: () -> Unit,
                  onPrevious: () -> Unit = {}, onNext: () -> Unit = {}, albumArtistFirst: Boolean = true,
-                 onEditTags: (() -> Unit)? = null) {
+                 onEditTags: (() -> Unit)? = null, settings: InterfaceSettings = InterfaceSettings(),
+                 lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {}, track: Track? = null,
+                 onSettings: (InterfaceSettings) -> Unit = {}) {
     var viewing by remember { mutableStateOf(false) }
     var artworkMenu by remember { mutableStateOf(false) }
+    var configureTap by remember { mutableStateOf(false) }
+    fun action(value: ArtworkAction) { when (value) {
+        ArtworkAction.Lyrics -> onLyrics(!lyricsOpen)
+        ArtworkAction.Menu -> artworkMenu = true
+        ArtworkAction.View -> viewing = true
+        ArtworkAction.Change -> onEditTags?.invoke()
+        ArtworkAction.None -> Unit
+    } }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val artworkSize = (maxHeight * 0.3f).coerceIn(80.dp, 240.dp)
+    val lyricsHeight = (maxHeight * 0.45f).coerceAtLeast(120.dp)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Box {
-            AlbumArtwork(state.trackUri, Modifier.size(artworkSize).combinedClickable(enabled = state.trackUri != null,
-                onClickLabel = "View artwork", onClick = { viewing = true },
-                onLongClickLabel = "Artwork actions", onLongClick = { artworkMenu = true }))
+        Crossfade(lyricsOpen, animationSpec = tween(if (settings.reducedMotion) 0 else 250), label = "Artwork and lyrics") { showLyrics ->
+        if (showLyrics) LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
+            Modifier.fillMaxWidth().height(lyricsHeight))
+        else Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            AlbumArtwork(state.trackUri, Modifier.size(artworkSize).then(Modifier.testTag("player-artwork")).combinedClickable(enabled = state.trackUri != null,
+                onClickLabel = settings.artworkTap.label, onClick = { action(settings.artworkTap) },
+                onLongClickLabel = settings.artworkHold.label, onLongClick = { action(settings.artworkHold) }))
             DropdownMenu(artworkMenu, { artworkMenu = false }) {
                 DropdownMenuItem(text = { Text("View artwork") }, onClick = { artworkMenu = false; viewing = true })
                 if (onEditTags != null) DropdownMenuItem(text = { Text("Change artwork") }, onClick = { artworkMenu = false; onEditTags() })
+                DropdownMenuItem(text = { Text("Configure tap action") }, onClick = { artworkMenu = false; configureTap = true })
             }
+        }
         }
         Spacer(Modifier.height(12.dp))
         Text(state.title.ifEmpty { stringResource(R.string.nothing_playing) }, style = MaterialTheme.typography.headlineSmall,
@@ -100,6 +121,10 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
     }
     }
     if (viewing && state.trackUri != null) ArtworkViewer(state.trackUri) { viewing = false }
+    if (configureTap) AlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
+        text = { Column { ArtworkAction.entries.forEach { value -> TextButton(onClick = {
+            onSettings(settings.copy(artworkTap = value)); configureTap = false
+        }) { Text(value.label) } } } }, confirmButton = { TextButton(onClick = { configureTap = false }) { Text("Cancel") } })
 }
 
 internal fun formatTime(milliseconds: Long?): String {

@@ -56,4 +56,10 @@ data class InterfaceSettings(
     val expandOnPlay: Boolean = true,
     val albumArtistFirst: Boolean = true,
     val reducedMotion: Boolean = false,
+    val artworkTap: ArtworkAction = ArtworkAction.Lyrics,
+    val artworkHold: ArtworkAction = ArtworkAction.Menu,
 )
+
+enum class ArtworkAction(val label: String) {
+    Lyrics("Toggle lyrics"), Menu("Show artwork menu"), View("View artwork"), Change("Change artwork"), None("Do nothing")
+}

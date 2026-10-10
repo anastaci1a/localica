@@ -36,7 +36,7 @@ public class TestDocumentsProvider extends DocumentsProvider {
     @Override public Cursor queryChildDocuments(String parent, String[] projection, String sortOrder) {
         MatrixCursor cursor = new MatrixCursor(projection == null ? DOCUMENTS : projection);
         if (parent.equals("root")) {
-            addDocument(cursor, "tone.mp3"); addDocument(cursor, "nested"); addDocument(cursor, "notes.txt");
+            addDocument(cursor, "tone.mp3"); addDocument(cursor, "nested"); addDocument(cursor, "notes.txt"); addDocument(cursor, "tone.lrc");
         } else if (parent.equals("nested")) addDocument(cursor, "tone.m4a");
         return cursor;
     }
@@ -46,7 +46,7 @@ public class TestDocumentsProvider extends DocumentsProvider {
     }
 
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
-        if (!(id.equals("tone.mp3") || id.equals("tone.m4a"))) throw new FileNotFoundException(id);
+        if (!(id.equals("tone.mp3") || id.equals("tone.m4a") || (id.equals("tone.lrc") && mode.equals("r")))) throw new FileNotFoundException(id);
         File file = new File(getContext().getCacheDir(), id);
         if (!file.exists()) {
             try (InputStream input = getContext().getAssets().open(id); OutputStream output = new FileOutputStream(file)) {

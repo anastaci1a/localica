@@ -26,7 +26,8 @@ import kotlinx.coroutines.launch
 internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expanded: Boolean, onExpanded: (Boolean) -> Unit,
     settings: InterfaceSettings, progress: Animatable<Float, *>, onToggle: () -> Unit, onSeek: (Long) -> Unit,
     onPrevious: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit, onLibrary: () -> Unit,
-    onEditTags: (() -> Unit)? = null) {
+    onEditTags: (() -> Unit)? = null, lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {},
+    track: io.github.anastaci1a.localica.library.Track? = null, onSettings: (InterfaceSettings) -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -73,12 +74,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         } else Column(Modifier.fillMaxSize().padding(top = statusInset, bottom = navigationInset)) {
             Row(Modifier.fillMaxWidth().then(drag), verticalAlignment = Alignment.CenterVertically) {
                 ActionIcon(R.drawable.ic_down, "Collapse player") { onExpanded(false) }
-                Text("Now playing", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.weight(1f))
+                Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                ActionIcon(R.drawable.ic_lyrics, if (lyricsOpen) "Hide lyrics" else "Show lyrics") { onLyrics(!lyricsOpen) }
                 if (onEditTags != null) TextButton(onClick = onEditTags) { Text("Edit tags") }
             }
-            Box(Modifier.weight(1f).then(drag)) {
-                PlayerScreen(state, onToggle, onSeek, onLibrary, onPrevious, onNext, settings.albumArtistFirst, onEditTags)
+            Box(Modifier.weight(1f).then(if (lyricsOpen) Modifier else drag)) {
+                PlayerScreen(state, onToggle, onSeek, onLibrary, onPrevious, onNext, settings.albumArtistFirst, onEditTags,
+                    settings, lyricsOpen, onLyrics, track, onSettings)
             }
             Surface(Modifier.padding(8.dp).fillMaxWidth().height(64.dp), shape = RoundedCornerShape(16.dp), tonalElevation = 3.dp) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
