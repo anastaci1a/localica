@@ -40,6 +40,11 @@ class BrowsePositionTest {
                     compose.scrollToUncoveredItem(hasText(title))
                     val before = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
                     compose.onNodeWithText(title).performClick()
+                    // Browse queries run on Dispatchers.Default, outside Compose's idle clock.
+                    // Await their first laid-out result before testing navigation and position.
+                    compose.waitUntil(5000) {
+                        runCatching { compose.onNodeWithText("Song 060").assertIsDisplayed() }.isSuccess
+                    }
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
                     if (hardware) UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
                     else compose.onNodeWithContentDescription("Back").performClick()
