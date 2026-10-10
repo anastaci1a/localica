@@ -8,13 +8,11 @@ Configurable Home/Library navigation, saved per-tab routes and Back history, an 
 
 Shared browsing, scoped/global search, sorting overrides, contextual selection, cached artwork, and basic manually ordered pins shipped in v0.6.0.
 
-## Release checkpoint
+Recoverable individual/bulk tag and artwork editing, image selection, and zoomable artwork viewing shipped in v0.7.1. Local embedded/sidecar lyrics, configurable artwork gestures, synced following, tap-to-seek, and fading viewport edges shipped in v0.8.1. Unsupported write formats/providers remain read-only.
 
-Tag and artwork editing are implemented for v0.7.1, including verified writes, recovery, bulk changes, image selection, and a zoomable artwork viewer. v0.7.0 remains an unpublished tag after Android 16 automation failures; v0.7.1 includes the corrected folder-picker selection test.
+## Current stopping point
 
-Local embedded/sidecar lyrics and configurable artwork gestures are implemented for v0.8.1. The player includes selectable sources, synced following, tap-to-seek, fading viewport edges, and reduced-motion behavior.
-
-Finish release verification for v0.7.1 and v0.8.1, then stop for review before liquid-glass implementation. Together with v0.6.0, these are the three authorized released checkpoints.
+The three authorized checkpoints—v0.6.0, v0.7.1, and v0.8.1—are released and verified on Android 8 and 16. Stop here for review of the usable layouts before starting liquid-glass implementation.
 
 ## Visual design system
 
