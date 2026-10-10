@@ -1,0 +1,6 @@
+Localica uses Jaudiotagger 3.0.1 by Paul Taylor and contributors.
+Jaudiotagger is licensed under LGPL 2.1 or later; see jaudiotagger-LGPL-2.1.txt.
+The library is used unmodified. Its source archive is included with Localica releases.
+Source: https://repo.maven.apache.org/maven2/net/jthink/jaudiotagger/3.0.1/jaudiotagger-3.0.1-sources.jar
+Localica source and rebuild instructions: https://github.com/anastaci1a/localica
+You may replace/modify the library and rebuild Localica; see docs/build.md.

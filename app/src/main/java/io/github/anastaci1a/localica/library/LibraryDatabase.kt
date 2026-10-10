@@ -56,6 +56,7 @@ abstract class LibraryDao {
 
     @Upsert protected abstract suspend fun upsertFolder(folder: FolderRecord)
     @Upsert protected abstract suspend fun upsertTracks(tracks: List<TrackRecord>)
+    @Update abstract suspend fun updateMetadata(track: TrackRecord)
     @Insert protected abstract suspend fun insertLocations(locations: List<FolderTrackRecord>)
     @Query("DELETE FROM folder_tracks WHERE folderUri = :uri") protected abstract suspend fun clearLocations(uri: String)
     @Query("DELETE FROM folders WHERE uri = :uri") protected abstract suspend fun deleteFolder(uri: String)
@@ -127,6 +128,7 @@ interface LibraryStore {
     suspend fun current(): LibrarySnapshot
     suspend fun replaceRoot(result: ScanResult)
     suspend fun removeRoot(uri: String)
+    suspend fun updateMetadata(track: Track)
 }
 
 class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
@@ -139,6 +141,9 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
         }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath) })
     }
     override suspend fun removeRoot(uri: String) = dao.removeRoot(uri)
+    override suspend fun updateMetadata(track: Track) = dao.updateMetadata(TrackRecord(track.id, track.title,
+        track.artist, track.album, track.durationMs, track.fileName, track.albumArtist, track.trackNumber,
+        track.discNumber, track.year, track.genre, track.comment))
 }
 
 private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {

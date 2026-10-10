@@ -28,7 +28,7 @@ class TreeScanner(private val source: DocumentSource) {
                     pending.add(document to relativePath)
                 } else if (AudioFiles.accepts(document.name, document.mimeType) && document.identity !in tracks) {
                     val metadata = try {
-                        source.metadata(document.uri)
+                        source.metadata(document.uri, document.name)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {

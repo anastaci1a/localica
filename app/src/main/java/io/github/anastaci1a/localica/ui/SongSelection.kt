@@ -23,6 +23,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     queues: QueueController?, playlists: PlaylistController?, playlistState: PlaylistState,
     onRemove: (((Boolean) -> Unit) -> Unit)? = null, removeLabel: String = "Remove from playlist") {
     var menu by remember { mutableStateOf(false) }
+    val editTags = LocalTagEdit.current
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val chosen = rows.filter { it.id in selected }
     Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
@@ -32,6 +33,9 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
         Box {
             TextButton(enabled = chosen.isNotEmpty(), onClick = { menu = true }) { Text("Actions") }
             DropdownMenu(menu, { menu = false }) {
+                if (editTags != null) DropdownMenuItem(text = { Text("Edit tags") }, onClick = {
+                    editTags(chosen.map { it.track }) { if (it) onSelection(emptySet()) }; menu = false
+                })
                 SongTap.entries.forEach { action ->
                     DropdownMenuItem(text = { Text(action.label()) }, onClick = {
                         queues?.act(chosen.map { it.track }, action) { if (it) onSelection(emptySet()) }; menu = false

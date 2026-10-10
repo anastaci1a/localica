@@ -211,6 +211,31 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun previous() = submit { player?.seekToPreviousMediaItem(); capture() }
 
     fun dismissProblem() { mutable.update { it.copy(problem = null) } }
+    data class EditPlayback(val entryId: String, val resume: Boolean)
+    fun beginFileEdit(trackId: String, complete: (EditPlayback?) -> Unit) = submit {
+        capture()
+        val source = player
+        val entry = state.value.library.active?.let { q -> q.entries.firstOrNull { it.id == q.currentEntryId } }
+        if (source != null && entry?.track?.id == trackId) {
+            val token = EditPlayback(entry.id, source.playWhenReady)
+            source.pause(); source.stop(); complete(token)
+        } else complete(null)
+    }
+    fun endFileEdit(token: EditPlayback?, complete: (Boolean) -> Unit) = submit {
+        try {
+            if (token != null && state.value.library.active?.currentEntryId == token.entryId) activate(token.resume, seek = true)
+            complete(true)
+        } catch (failure: Exception) { complete(false); throw failure }
+    }
+    fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = submit {
+        try {
+            capture()
+            save(state.value.library.copy(queues = state.value.library.queues.map { queue ->
+                queue.copy(entries = queue.entries.map { entry -> if (entry.track.id == track.id) entry.copy(track = track) else entry })
+            }))
+            activate(null); complete(true)
+        } catch (failure: Exception) { complete(false); throw failure }
+    }
 
     /** Used by the existing clear action; retained queues are intentionally kept. */
     fun clearPlayback() = submit {
@@ -265,7 +290,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 if (existing == null) attached.addMediaItem(desiredIndex, item)
                 else {
                     if (existing != desiredIndex) attached.moveMediaItem(existing, desiredIndex)
-                    if (attached.getMediaItemAt(desiredIndex).localConfiguration?.uri != item.localConfiguration?.uri) {
+                    if (attached.getMediaItemAt(desiredIndex).localConfiguration?.uri != item.localConfiguration?.uri ||
+                        attached.getMediaItemAt(desiredIndex).mediaMetadata != item.mediaMetadata) {
                         attached.replaceMediaItem(desiredIndex, item)
                     }
                 }

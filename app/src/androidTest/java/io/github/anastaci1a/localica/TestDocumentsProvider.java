@@ -46,7 +46,7 @@ public class TestDocumentsProvider extends DocumentsProvider {
     }
 
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
-        if (!mode.equals("r") || !(id.equals("tone.mp3") || id.equals("tone.m4a"))) throw new FileNotFoundException(id);
+        if (!(id.equals("tone.mp3") || id.equals("tone.m4a"))) throw new FileNotFoundException(id);
         File file = new File(getContext().getCacheDir(), id);
         if (!file.exists()) {
             try (InputStream input = getContext().getAssets().open(id); OutputStream output = new FileOutputStream(file)) {
@@ -55,7 +55,7 @@ public class TestDocumentsProvider extends DocumentsProvider {
                 while ((size = input.read(buffer)) != -1) output.write(buffer, 0, size);
             } catch (IOException error) { throw new FileNotFoundException(error.getMessage()); }
         }
-        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.parseMode(mode));
     }
 
     private void addDocument(MatrixCursor cursor, String id) {
@@ -64,7 +64,7 @@ public class TestDocumentsProvider extends DocumentsProvider {
             id.equals("tone.m4a") ? "audio/mp4" : "text/plain";
         cursor.newRow().add(Document.COLUMN_DOCUMENT_ID, id)
             .add(Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "Test tones" : id)
-            .add(Document.COLUMN_MIME_TYPE, mime).add(Document.COLUMN_FLAGS, 0)
+            .add(Document.COLUMN_MIME_TYPE, mime).add(Document.COLUMN_FLAGS, directory ? 0 : Document.FLAG_SUPPORTS_WRITE)
             .add(Document.COLUMN_SIZE, directory ? null : 1024);
     }
 }

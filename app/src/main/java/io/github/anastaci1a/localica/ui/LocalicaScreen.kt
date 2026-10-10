@@ -43,6 +43,7 @@ fun LocalicaScreen(
     playlistController: PlaylistController? = null,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val editTags = LocalTagEdit.current
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
     var settings by remember { mutableStateOf(preferences.read()) }
     val pinPreferences = remember(context) { PinPreferences(context) }
@@ -148,7 +149,8 @@ fun LocalicaScreen(
             }
         }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
-            onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false })
+            onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
+            if (currentTrack != null && editTags != null) ({ editTags(listOf(library.snapshot.tracks.firstOrNull { it.id == currentTrack.id } ?: currentTrack)) {} }) else null)
     }
     androidx.activity.compose.BackHandler(expanded) { expanded = false }
     if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -158,10 +160,12 @@ fun LocalicaScreen(
     if (settingsOpen) FolderSettings(library,
         onDismiss = { settingsOpen = false }, onChooseFolder, onRescan, onCancelScan, onRemoveFolder,
         extraContent = {
+            (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let { TagRecoverySettings(it.tagEditing) }
             InterfaceSettingsControls(settings) {
                 settings = it; preferences.write(it); navigation = navigation.reconcile(it.tabs)
             }
             QueueSettingsControls(queues.settings) { queueController?.settings(it) }
+            LibraryLicenses()
         })
     if (exitPrompt) AlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
         text = { Text("Playback will continue.") }, confirmButton = { TextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },

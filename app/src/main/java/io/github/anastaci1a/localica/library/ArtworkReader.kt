@@ -13,11 +13,16 @@ import kotlinx.coroutines.withContext
 class ArtworkReader(private val context: Context) {
     suspend fun read(uri: String, edge: Int = 768): Bitmap? = withContext(Dispatchers.IO) {
         try {
-            val bytes = platformPicture(uri) ?: embeddedTags(context, uri).metadata.artworkData
+            val bytes = platformPicture(uri) ?: supplementalPicture(uri)
+                ?: runCatching { ContainerTags.read(context, uri)?.firstArtwork?.binaryData }.getOrNull()
             bytes?.let { decodeArtwork(it, edge) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { null }
     }
+
+    private suspend fun supplementalPicture(uri: String): ByteArray? = try { embeddedTags(context, uri).metadata.artworkData }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { null }
 
     private fun platformPicture(uri: String): ByteArray? {
         val retriever = MediaMetadataRetriever()
@@ -35,7 +40,7 @@ internal fun decodeArtwork(bytes: ByteArray, edge: Int = 768): Bitmap? {
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
     var sample = 1
-    val bound = edge.coerceIn(32, 768)
+    val bound = edge.coerceIn(32, 2048)
     while (bounds.outWidth / sample > bound || bounds.outHeight / sample > bound) sample *= 2
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
 }
