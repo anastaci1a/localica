@@ -22,7 +22,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
+import kotlin.math.exp
 
 @Composable
 internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boolean) {
@@ -31,7 +33,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
     val view = LocalView.current
     SideEffect {
         state.cancelRadius = with(density) { 30.dp.toPx() }
-        state.cancelBottom = with(density) { 20.dp.toPx() }
+        state.cancelBottom = with(density) { 20.dp.toPx() } + state.obscuredBottom
         state.onCancelHover = { entering -> view.performHapticFeedback(if (entering)
             android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
     }
@@ -42,43 +44,72 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
     val height = with(density) { drag.cardSize.height.toDp() }
     var lifted by remember(drag) { mutableStateOf(false) }
     LaunchedEffect(drag) { delay(if (reducedMotion) 0 else 240); lifted = true }
-    val rawHome = drag.pointer - drag.grab
-    val home = rawHome.copy(x = rawHome.x.coerceIn(margin,
-        (state.viewportWidth - stackWidth - offset * 2 - margin).coerceAtLeast(margin)))
+    fun homePosition(): Offset {
+        val raw = drag.pointer - drag.grab
+        return raw.copy(x = raw.x.coerceIn(margin,
+            (state.viewportWidth - stackWidth - offset * 2 - margin).coerceAtLeast(margin)))
+    }
     val shadowAlpha by animateFloatAsState(if (drag.dropping) 0f else 1f, tween(if (reducedMotion) 0 else 240), label = "Stack shadow")
     // One shared shadow reads as a single lifted bundle, even while its lower cards trail the pointer.
-    Box(Modifier.zIndex(2f).offset { IntOffset(home.x.roundToInt(), home.y.roundToInt()) }
+    Box(Modifier.zIndex(2f).offset { homePosition().let { IntOffset(it.x.roundToInt(), it.y.roundToInt()) } }
         .size(width + if (drag.moving.size > 1) 14.dp else 0.dp, height + if (drag.moving.size > 1) 14.dp else 0.dp)
         .graphicsLayer { alpha = shadowAlpha }.shadow(24.dp, Corners.card, clip = false))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||
         (!lifted && item.key in drag.initialBounds) || (drag.dropping && item.key in drag.destinations.orEmpty()) } }
     cards.reversed().forEach { (index, item) -> key(drag, item.key) {
         val destination = drag.destinations?.get(item.key)
-        val stackTarget = home + Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2))
-        val target = destination?.topLeft ?: stackTarget
-        val position = remember { Animatable(drag.initialBounds[item.key]?.topLeft ?: home, Offset.VectorConverter) }
-        val liftOffset = remember { Animatable((drag.initialBounds[item.key]?.topLeft ?: home) - home, Offset.VectorConverter) }
+        fun stackTarget() = homePosition() + Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2))
+        val position = remember { Animatable(drag.initialBounds[item.key]?.topLeft ?: homePosition(), Offset.VectorConverter) }
+        val liftOffset = remember { Animatable((drag.initialBounds[item.key]?.topLeft ?: stackTarget()) - stackTarget(), Offset.VectorConverter) }
         LaunchedEffect(drag, reducedMotion) {
             if (reducedMotion) liftOffset.snapTo(Offset.Zero) else liftOffset.animateTo(Offset.Zero, tween(240))
         }
-        // The held card follows the pointer at layout time. Only the initial gathering offset
-        // decays; restarting a spring for every pointer event causes visible input latency.
-        val displayed = if (index == 0 && !drag.dropping) home + liftOffset.value else position.value
+        // One frame-clock follower per card. Pointer updates change its target without
+        // canceling/restarting an animation. Bound the trail so fast moves cannot leave cards behind.
+        var trail by remember { mutableStateOf(Offset.Zero) }
+        LaunchedEffect(drag, index, reducedMotion) {
+            if (index == 0 || reducedMotion) { trail = Offset.Zero; return@LaunchedEffect }
+            var previous = withFrameNanos { it }
+            var follower = homePosition()
+            while (!drag.dropping) {
+                if ((homePosition() - follower).getDistance() < 0.1f) {
+                    trail = Offset.Zero
+                    snapshotFlow { homePosition() to drag.dropping }.first { it.second || (it.first - follower).getDistance() >= 0.1f }
+                    if (drag.dropping) break
+                }
+                val now = withFrameNanos { it }
+                val seconds = ((now - previous) / 1_000_000_000f).coerceIn(0f, 0.064f)
+                previous = now
+                val current = homePosition()
+                val weight = 1f - exp(-seconds / (0.018f + 0.01f * index.coerceAtMost(2)))
+                follower += (current - follower) * weight
+                val difference = follower - current
+                val maximum = offset * index.coerceAtMost(2) * 1.5f
+                val distance = difference.getDistance()
+                trail = if (distance > maximum) difference * (maximum / distance) else difference
+                follower = current + trail
+            }
+        }
+        // Read motion in placement, not composition: neither pointer movement nor trailing
+        // frames should rebuild artwork/text or measure the card tree.
+        fun heldPosition() = stackTarget() + liftOffset.value + trail
+        fun displayed() = if (!drag.dropping) heldPosition() else position.value
         val cardWidth = remember { Animatable(drag.initialBounds[item.key]?.width ?: stackWidth) }
         LaunchedEffect(destination?.width, reducedMotion) {
             val targetWidth = destination?.width ?: stackWidth
             if (reducedMotion) cardWidth.snapTo(targetWidth) else cardWidth.animateTo(targetWidth, tween(350))
         }
-        LaunchedEffect(if (index == 0 && !drag.dropping) null else target, drag.dropping, reducedMotion) {
-            if (index == 0 && !drag.dropping) return@LaunchedEffect
-            if (index == 0) position.snapTo(home + liftOffset.value)
-            if (reducedMotion) position.snapTo(target)
-            else position.animateTo(target, if (drag.dropping) tween(350) else spring(dampingRatio = 0.9f, stiffness = 950f / (index.coerceAtMost(2) + 1)))
+        LaunchedEffect(drag.dropping, reducedMotion) {
+            if (drag.dropping) position.snapTo(heldPosition())
+        }
+        LaunchedEffect(destination, reducedMotion) {
+            if (destination == null) return@LaunchedEffect
+            if (reducedMotion) position.snapTo(destination.topLeft) else position.animateTo(destination.topLeft, tween(350))
         }
         val alpha by animateFloatAsState(if (drag.destinations != null && destination == null) 0f else 1f,
             tween(if (reducedMotion) 0 else 300), label = "Song landing")
         Surface(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
-            .offset { IntOffset(displayed.x.roundToInt(), displayed.y.roundToInt()) }
+            .offset { displayed().let { IntOffset(it.x.roundToInt(), it.y.roundToInt()) } }
             .width(with(density) { cardWidth.value.toDp() }).height(height).graphicsLayer { this.alpha = alpha }
             .testTag(if (index == 0) "drag-stack" else "drag-card-${item.key}"),
             shape = Corners.card, color = if (index == 0) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.secondaryContainer,
@@ -92,8 +123,8 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
             }
         }
         if (index == 0 && drag.moving.size > 1 && !drag.dropping) Surface(
-            Modifier.zIndex(5f).offset { IntOffset((displayed.x + stackWidth - with(density) { 28.dp.toPx() }).roundToInt(),
-                (displayed.y - with(density) { 10.dp.toPx() }).roundToInt()) }
+            Modifier.zIndex(5f).offset { IntOffset((displayed().x + stackWidth - with(density) { 28.dp.toPx() }).roundToInt(),
+                (displayed().y - with(density) { 10.dp.toPx() }).roundToInt()) }
                 .defaultMinSize(28.dp, 28.dp).semantics { contentDescription = "Dragging ${drag.moving.size} songs" },
             color = MaterialTheme.colorScheme.primary, shape = CircleShape) {
             Box(Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
@@ -104,7 +135,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
     if (!drag.dropping) {
         val color by animateColorAsState(if (drag.overCancel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceContainerHigh,
             tween(if (reducedMotion) 0 else 160), label = "Cancel target")
-        Surface(Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp).size(60.dp).zIndex(10f)
+        Surface(Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() }).size(60.dp).zIndex(10f)
             .testTag("cancel-drag").semantics { contentDescription = "Release to cancel move"; stateDescription = if (drag.overCancel) "Cancel move" else "Drag here to cancel" },
             shape = CircleShape, color = color, shadowElevation = 12.dp) {
             Box(contentAlignment = Alignment.Center) {

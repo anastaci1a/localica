@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material3.*
@@ -37,6 +39,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     playingTrackId: String? = null, playingEntryId: String? = null,
     header: @Composable () -> Unit = {}, presentationOnly: Boolean = false, selectionVisible: Boolean = true,
     onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false) {
+    val obscuredInset = LocalBrowseObscuredInset.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val editTags = LocalTagEdit.current
     val preferences = remember(context) { BrowsePreferences(context) }
@@ -74,9 +78,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val selectedTracks = session.entries.map { it.row.track.id }.toSet()
     SideEffect { if (selectionVisible) { session.visible = result.rows; session.source = route.collection } }
     val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
+    val dragHost = LocalSongDragHost.current
+    SideEffect {
+        if (reorder.drag != null) { dragHost?.state = reorder; dragHost?.reducedMotion = reducedMotion }
+        else if (dragHost?.state === reorder) dragHost.state = null
+    }
+    DisposableEffect(reorder, dragHost) { onDispose { if (dragHost?.state === reorder) dragHost.state = null } }
     val editableOrder = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank() &&
         route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)
-    SideEffect { reorder.reconcile(result.items) }
+    SideEffect { reorder.reconcile(result.items); reorder.obscuredBottom = with(density) { obscuredInset.toPx() } }
     val edge = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
     LaunchedEffect(reorder.drag) { if (reorder.drag != null) reorder.autoScroll(edge) }
     val moveSongs: (Set<String>, String?, (Boolean) -> Unit) -> Unit = { ids, before, done ->
@@ -108,11 +118,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     { onRoute(route.copy(filter = kind)) }, { Text(kind.label) }) }
             }
         }
-        Box(Modifier.weight(1f).onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
-            .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion, moveSongs)) {
+        Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
+            .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion, style.presentation == Presentation.List, moveSongs)) {
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth())
             else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(galleryColumns(style.presentation,
-                with(androidx.compose.ui.platform.LocalDensity.current) { reorder.viewportWidth.toDp().value })), modifier = Modifier.fillMaxSize().testTag("browser-list"), contentPadding = PaddingValues(bottom = 80.dp)) {
+                with(androidx.compose.ui.platform.LocalDensity.current) { reorder.viewportWidth.toDp().value })), modifier = Modifier.fillMaxSize().testTag("browser-list"), contentPadding = PaddingValues(bottom = maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         LibraryNotice(library)
@@ -212,12 +222,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
             }
-            SongDragOverlay(reorder, reducedMotion)
+            if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
             val playingIndex = result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
             val showCurrent by remember(playingIndex) { derivedStateOf {
                 playingIndex != null && gridState.layoutInfo.visibleItemsInfo.none { it.index == playingIndex }
             } }
-            androidx.compose.animation.AnimatedVisibility(showCurrent && !session.active && reorder.drag == null, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+            androidx.compose.animation.AnimatedVisibility(showCurrent && !session.active && reorder.drag == null, Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + 16.dp),
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
                 exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
@@ -226,9 +236,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     Spacer(Modifier.width(8.dp)); Text("Current song")
                 }
             }
-            if (loadedResult != null) BrowseScrollbar(gridState, result.items, style.sort, Modifier.align(Alignment.CenterEnd))
+            if (loadedResult != null) BrowseScrollbar(gridState, result.items, style.sort, Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset))
             if (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
-                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = obscuredInset + 16.dp))
         }
         if (LocalSessionSelection.current == null) SessionSelectionPanel(session, queues, playlistController, playlists)
     }

@@ -1,6 +1,16 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -19,7 +29,7 @@ import org.junit.Test
 class DragReorderTest {
     @get:Rule val compose = createComposeRule()
     private val selection = SessionSelection()
-    private fun fixture(failWrites: Boolean = false, count: Int = 8, test: (PlaylistController, ManualPlaylist) -> Unit) {
+    private fun fixture(failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         val db = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
@@ -37,10 +47,16 @@ class DragReorderTest {
                 "CREATE TRIGGER reject_move BEFORE INSERT ON playlist_entries BEGIN SELECT RAISE(ABORT, 'Injected failure'); END")
             compose.setContent { LocalicaTheme {
                 val state by controller.state.collectAsState()
-                CompositionLocalProvider(LocalSessionSelection provides selection) {
+                val host = remember { SongDragHost() }
+                Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter) 80.dp else 0.dp).clipToBounds()) {
+                CompositionLocalProvider(LocalSessionSelection provides selection, LocalSongDragHost provides host) {
                     BrowserScreen(LibraryUiState(loading = false), state,
                         BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)), {}, {}, {},
                         { _, _, _ -> fail("A held song must not play") }, null, controller, true, false, selectionVisible = false)
+                } }
+                if (foregroundFooter) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(80.dp).background(Color.Magenta).testTag("fixture-footer"))
+                ForegroundSongDragOverlay(host)
                 }
             } }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty() }
@@ -85,6 +101,52 @@ class DragReorderTest {
             assertEquals("Top card must follow the pointer without spring lag", 120f, after - before, 2f)
             compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
         } finally { compose.mainClock.autoAdvance = true }
+    }
+    @Test fun trailingCardsStayCloseAndStackDrawsOverBottomActions() = fixture(foregroundFooter = true) { _, playlist ->
+        val ids = playlist.entries.map { it.id }
+        compose.onNodeWithTag("media-${ids[1]}").performTouchInput { longClick() }
+        compose.onNodeWithTag("media-${ids[2]}").performClick()
+        compose.onNodeWithTag("media-${ids[3]}").performClick()
+        compose.onNodeWithTag("media-${ids[1]}").performTouchInput {
+            down(center); advanceEventTime(650); moveBy(Offset(0f, 70f)); advanceEventTime(32)
+        }
+        val lower = compose.onNodeWithTag("drag-card-${ids[2]}")
+        val before = lower.fetchSemanticsNode().boundsInRoot.top
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithTag("browser-list").performTouchInput { moveBy(Offset(0f, 120f)) }
+            compose.mainClock.advanceTimeByFrame()
+            val moved = lower.fetchSemanticsNode().boundsInRoot.top - before
+            assertTrue("Lower card must stay near the pointer, moved $moved", moved in 75f..145f)
+            compose.mainClock.advanceTimeBy(180)
+            val top = compose.onNodeWithTag("drag-stack")
+            val bottom = compose.onNodeWithTag("drag-card-${ids[3]}")
+            val initialTop = top.fetchSemanticsNode().boundsInRoot.top
+            val homes = listOf(lower, bottom).map { it.fetchSemanticsNode().boundsInRoot.top - initialTop }
+            // Continuous motion and reversals must update both trailing cards every frame.
+            for (direction in listOf(1f, -1f, 1f)) repeat(5) {
+                val beforeCards = listOf(lower, bottom).map { it.fetchSemanticsNode().boundsInRoot.top }
+                compose.onNodeWithTag("browser-list").performTouchInput { moveBy(Offset(0f, direction * 24f)) }
+                compose.mainClock.advanceTimeByFrame()
+                val topY = top.fetchSemanticsNode().boundsInRoot.top
+                listOf(lower, bottom).forEachIndexed { index, card ->
+                    val y = card.fetchSemanticsNode().boundsInRoot.top
+                    assertTrue("Card must update on every moving frame", kotlin.math.abs(y - beforeCards[index]) > 1f)
+                    assertTrue("Trail must remain bounded after reversing", kotlin.math.abs(y - topY - homes[index]) < 70f)
+                }
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+        val list = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
+        val footer = compose.onNodeWithTag("fixture-footer").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("browser-list").performTouchInput { moveTo(footer.center - list.topLeft); advanceEventTime(32) }
+        val stack = compose.onNodeWithTag("drag-stack")
+        stack.assert(hasAnyAncestor(hasTestTag("drag-foreground")))
+        val card = stack.fetchSemanticsNode().boundsInRoot
+        assertTrue("Card must extend beyond the clipped list into the footer", card.bottom > footer.top)
+        val image = compose.onRoot().captureToImage().toPixelMap()
+        assertNotEquals("Selection footer must not paint over the card", Color.Magenta.toArgb(),
+            image[(card.right - 16).toInt(), footer.center.y.toInt()].toArgb())
+        compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
     }
     @Test fun releasingOnForegroundCancelTargetRestoresOrder() = fixture { controller, playlist ->
         val id = playlist.entries[1].id

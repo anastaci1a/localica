@@ -38,8 +38,10 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
     var optimistic by mutableStateOf<List<BrowserItem>?>(null)
         private set
     private var optimisticBase: List<String>? = null
+    var viewportOrigin by mutableStateOf(Offset.Zero)
     var viewportHeight by mutableIntStateOf(0)
     var viewportWidth by mutableIntStateOf(0)
+    var obscuredBottom by mutableFloatStateOf(0f)
     var cancelRadius = 0f
     var cancelBottom = 0f
     var onCancelHover: (Boolean) -> Unit = {}
@@ -92,7 +94,7 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
             val speed = when {
                 d.overCancel -> 0f
                 d.pointer.y < edge -> -((edge - d.pointer.y) / edge).coerceIn(0f, 1f)
-                d.pointer.y > viewportHeight - edge -> ((d.pointer.y - viewportHeight + edge) / edge).coerceIn(0f, 1f)
+                d.pointer.y > viewportHeight - obscuredBottom - edge -> ((d.pointer.y - viewportHeight + obscuredBottom + edge) / edge).coerceIn(0f, 1f)
                 else -> 0f
             }
             if (speed != 0f) { grid.scrollBy(speed * edge / 5); updateInsertion(d) }
@@ -128,14 +130,14 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
 
 /** Own the held pointer at Initial pass so item clicks/scrolling cannot take over mid-drag. */
 internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: MediaRef?, selection: SessionSelection,
-    reducedMotion: Boolean, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier = if (!enabled) this else pointerInput(state, source, reducedMotion) {
+    reducedMotion: Boolean, trailingActions: Boolean, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier = if (!enabled) this else pointerInput(state, source, reducedMotion, trailingActions) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val item = state.hit(down.position) ?: return@awaitEachGesture
         val row = item.row ?: return@awaitEachGesture
         // The trailing action button keeps its own press/hold interaction.
         val bounds = state.bounds()[item.key] ?: return@awaitEachGesture
-        if (down.position.x > bounds.right - 48 * density) return@awaitEachGesture
+        if (trailingActions && down.position.x > bounds.right - 48 * density) return@awaitEachGesture
         val held = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
