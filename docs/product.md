@@ -38,12 +38,12 @@ In selection mode, tapping changes the selection instead of executing the song-t
 
 ## Tag editing
 
-Change the audio files themselves, including artwork and basic title, artist, album, album artist, track, and disc metadata. Batch editing is a priority: long press begins multi-selection, visible selection controls support accessibility, and a contextual action menu offers batch tag editing. Unchanged and mixed values must not be silently overwritten.
+Read and edit these audio-file tags: name (song title), album, artist, album artist, year, disc number, track number, and comment. Read embedded artwork for playback; support replacing and removing it in both individual and bulk editing. Batch editing is a priority: long press begins multi-selection, visible selection controls support accessibility, and a contextual action menu offers batch tag editing. Unchanged and mixed values must not be silently overwritten.
 
 Aim for write support across all playback formats. Editability depends on the actual container and storage provider: a file that cannot safely accept the requested change remains playable and read-only, with an explanation. Obtain write permission explicitly, retain recovery information, verify the result, and report per-file outcomes for batches. No silent app-only metadata fallback.
 
 ## Visual direction and later capabilities
 
-Build and verify functionality before the glass graphics work. Create reusable Compose components inside Localica, with glass-like materials concentrated on navigation and playback controls. Follow [Apple's material guidance](https://developer.apple.com/design/human-interface-guidelines/materials) on hierarchy and legibility. Extract a separate graphics package only when real reuse justifies it. Older devices retain a usable solid-material presentation.
+The current UI is disposable testing scaffolding. Spend only enough effort to expose and verify behavior; add a plain bottom-bar button for each new section, including queues. Build and verify functionality before the glass graphics work. Create reusable Compose components inside Localica, with glass-like materials concentrated on navigation and playback controls. Follow [Apple's material guidance](https://developer.apple.com/design/human-interface-guidelines/materials) on hierarchy and legibility. Extract a separate graphics package only when real reuse justifies it. Older devices retain a usable solid-material presentation.
 
 Gapless playback, sleep timers, lyrics, equalizers, bookmarks, favorites, widgets, Android Auto, and backup/export remain later candidates. They do not delay the [ordered roadmap](roadmap.md).

@@ -14,10 +14,10 @@ Build album, artist, album artist, folder, and playlist navigation on the shared
 
 ## Safe file tag editing
 
-Prioritize batch editing and artwork alongside ordinary metadata fields. Validate writes and recovery for supported formats and provider capabilities; keep unsupported combinations read-only. Changes must flow back into grouping, searching, queues, and playlists without destroying their identities.
+Prioritize bulk editing of all fields and embedded artwork listed in [Product](product.md). Validate writes and recovery for supported formats and provider capabilities; keep unsupported combinations read-only. Changes must flow back into grouping, searching, queues, and playlists without destroying their identities.
 
 ## Visual design system
 
-Develop the Apple Music-inspired presentation and glass-like Compose components after the functional foundation is proven. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
+Replace the disposable testing UI with the Apple Music-inspired liquid-glass presentation after the functional foundation is proven. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
 
 Each milestone needs a usable, verified release. Track actionable acceptance criteria in [GitHub Issues](https://github.com/anastaci1a/localica/issues), update this document when outcomes ship, and avoid accumulating a parallel ticket list here.
