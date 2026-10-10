@@ -14,6 +14,14 @@ import org.junit.Test
 
 class TabResetTest {
     @get:Rule val compose = createComposeRule()
+    private fun awaitFirstAlbum() {
+        try {
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
+        } catch (failure: Throwable) {
+            android.util.Log.e("TabReset", compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 20))
+            throw failure
+        }
+    }
     @Test fun tabTapLeavesSearchAndDetailsAndEasesToTop() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
@@ -33,18 +41,18 @@ class TabResetTest {
             val during = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
             assertTrue("Must move without teleporting: $before -> $during", during > 0 && during < before)
             compose.mainClock.autoAdvance = true
-            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
+            awaitFirstAlbum()
             compose.scrollToUncoveredItem(hasText("Album 060"))
             compose.onNodeWithText("Album 060").performClick()
             compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Song 60").assertIsDisplayed() }.isSuccess }
             compose.onNodeWithContentDescription("Library").performClick()
-            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
+            awaitFirstAlbum()
             compose.onNodeWithContentDescription("Back").assertDoesNotExist()
             compose.onNodeWithContentDescription("Search library").performClick()
             compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("060")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.onNodeWithContentDescription("Library").performClick()
-            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
+            awaitFirstAlbum()
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
             compose.onNodeWithContentDescription("Back").assertDoesNotExist()
         } finally {
