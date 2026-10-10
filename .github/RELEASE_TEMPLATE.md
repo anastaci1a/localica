@@ -1,6 +1,11 @@
 <!-- Release: v{{VERSION}} -->
 
-{{Two or three short sentences describing the user-facing changes at a high level.}}
+Development APK for Android 8 or newer. Signed with the project development key; uses a separate `.debug` application ID. Production distribution signing is not configured.
+
+## Changes
+
+- {{Short high-level change, including changes not covered by resolved issues}}
+- {{Another short high-level change}}
 
 ## Resolved issues
 
