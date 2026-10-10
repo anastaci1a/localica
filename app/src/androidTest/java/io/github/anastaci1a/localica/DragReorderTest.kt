@@ -70,6 +70,22 @@ class DragReorderTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { assertEquals(setOf(ids[0], ids[2]), selection.entries.map { it.row.id }.toSet()) }
     }
+    @Test fun heldCardTracksTheFingerWithinOneFrame() = fixture { _, playlist ->
+        val id = playlist.entries[1].id
+        compose.onNodeWithTag("media-$id").performTouchInput {
+            down(center); advanceEventTime(650); moveBy(Offset(0f, 70f)); advanceEventTime(32)
+        }
+        val stack = compose.onNodeWithTag("drag-stack")
+        val before = stack.fetchSemanticsNode().boundsInRoot.top
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithTag("browser-list").performTouchInput { moveBy(Offset(0f, 120f)) }
+            compose.mainClock.advanceTimeByFrame()
+            val after = stack.fetchSemanticsNode().boundsInRoot.top
+            assertEquals("Top card must follow the pointer without spring lag", 120f, after - before, 2f)
+            compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
     @Test fun releasingOnForegroundCancelTargetRestoresOrder() = fixture { controller, playlist ->
         val id = playlist.entries[1].id
         compose.onNodeWithTag("media-$id").performTouchInput {
