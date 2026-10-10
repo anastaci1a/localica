@@ -26,7 +26,7 @@ class TreeScanner(private val source: DocumentSource) {
                 val relativePath = if (path.isEmpty()) document.name else "$path/${document.name}"
                 if (document.isDirectory) {
                     pending.add(document to relativePath)
-                } else if (AudioFiles.accepts(document.name, document.mimeType) && document.uri !in tracks) {
+                } else if (AudioFiles.accepts(document.name, document.mimeType) && document.identity !in tracks) {
                     val metadata = try {
                         source.metadata(document.uri)
                     } catch (cancelled: CancellationException) {
@@ -35,11 +35,17 @@ class TreeScanner(private val source: DocumentSource) {
                         metadataFailures++
                         AudioMetadata()
                     }
-                    tracks[document.uri] = Track(
+                    tracks[document.identity] = Track(
                         uri = document.uri,
+                        id = document.identity,
                         title = metadata.title.clean() ?: document.name.substringBeforeLast('.').ifBlank { document.name },
                         artist = metadata.artist.clean(),
                         album = metadata.album.clean(),
+                        albumArtist = metadata.albumArtist.clean(),
+                        trackNumber = metadata.trackNumber?.takeIf { it > 0 },
+                        discNumber = metadata.discNumber?.takeIf { it > 0 },
+                        year = metadata.year?.takeIf { it > 0 },
+                        genre = metadata.genre.clean(),
                         durationMs = metadata.durationMs?.takeIf { it >= 0 },
                         fileName = document.name,
                         relativePath = relativePath,

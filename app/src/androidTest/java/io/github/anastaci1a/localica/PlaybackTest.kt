@@ -26,7 +26,7 @@ class PlaybackTest {
                 for (extension in listOf("mp3", "m4a", "wav")) {
                     val file = File(context.cacheDir, "test-tone.$extension")
                     instrumentation.context.assets.open("tone.$extension").use { input -> file.outputStream().use(input::copyTo) }
-                    val track = Track(Uri.fromFile(file).toString(), "Tone $extension", fileName = file.name, relativePath = file.name)
+                    val track = Track(Uri.fromFile(file).toString(), "Tone $extension", fileName = file.name, relativePath = file.name, id = "stable:$extension")
                     instrumentation.runOnMainSync { playback.play(track) }
                     await { playback.state.value.isPlaying && playback.state.value.durationMs != null }
                     assertNull(playback.state.value.problem)
@@ -42,6 +42,7 @@ class PlaybackTest {
                     await { playback.state.value.ended }
                     assertFalse(playback.state.value.isPlaying)
                     assertEquals(track.uri, playback.state.value.trackUri)
+                    assertEquals(track.id, playback.state.value.trackId)
                     SystemClock.sleep(250)
                     assertTrue(playback.state.value.ended)
                     scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)

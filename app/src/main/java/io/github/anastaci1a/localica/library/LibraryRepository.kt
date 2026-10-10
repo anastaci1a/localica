@@ -20,24 +20,36 @@ class LibraryRepository(
 
     fun hasAccess(folder: FolderSelection) = permissions.hasReadAccess(folder.uri)
 
+    fun playableTrack(track: Track): Track {
+        val location = track.locations.firstOrNull { it.uri == track.uri && permissions.hasReadAccess(it.folderUri) }
+            ?: track.locations.firstOrNull { permissions.hasReadAccess(it.folderUri) }
+        return location?.let { track.copy(uri = it.uri, relativePath = it.relativePath) } ?: track
+    }
+
     suspend fun scan(uri: String, onProgress: (Int) -> Unit = {}): ScanResult = withContext(io) {
         scanLock.withLock {
-            val previous = store.current().folder
             val alreadyGranted = permissions.hasReadAccess(uri)
             var committed = false
             try {
                 permissions.acquire(uri)
                 val result = scanner.scan(uri, onProgress)
                 currentCoroutineContext().ensureActive()
-                // Once commit begins, finish the short transaction and grant handoff together.
                 withContext(NonCancellable) {
-                    store.replace(LibrarySnapshot(result.folder, result.tracks))
+                    store.replaceRoot(result)
                     committed = true
-                    if (previous != null && previous.uri != uri) permissions.release(previous.uri)
                 }
                 result
             } finally {
                 if (!committed && !alreadyGranted) permissions.release(uri)
+            }
+        }
+    }
+
+    suspend fun removeFolder(uri: String) = withContext(io) {
+        scanLock.withLock {
+            withContext(NonCancellable) {
+                store.removeRoot(uri)
+                permissions.release(uri)
             }
         }
     }

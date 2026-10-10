@@ -28,6 +28,7 @@ enum class PlaybackProblem { Connection, Unreadable, Unsupported, Failed }
 data class PlaybackState(
     val connected: Boolean = false,
     val trackUri: String? = null,
+    val trackId: String? = null,
     val title: String = "",
     val artist: String? = null,
     val album: String? = null,
@@ -92,10 +93,11 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
             shuffleModeEnabled = false
             val extras = Bundle().apply {
                 putString("fileName", track.fileName)
+                putString("trackUri", track.uri)
                 track.durationMs?.let { putLong("durationMs", it) }
             }
             // Replaces the timeline; there is never an implicit queue or automatic next track.
-            setMediaItem(MediaItem.Builder().setMediaId(track.uri).setUri(track.uri)
+            setMediaItem(MediaItem.Builder().setMediaId(track.id).setUri(track.uri)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist)
                     .setAlbumTitle(track.album).setExtras(extras).build()).build())
             prepare()
@@ -138,7 +140,8 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
             ?: metadata.extras?.takeIf { it.containsKey("durationMs") }?.getLong("durationMs")
         mutableState.value = PlaybackState(
             connected = player.isConnected,
-            trackUri = player.currentMediaItem?.mediaId,
+            trackUri = metadata.extras?.getString("trackUri"),
+            trackId = player.currentMediaItem?.mediaId,
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString(),
             album = metadata.albumTitle?.toString(),

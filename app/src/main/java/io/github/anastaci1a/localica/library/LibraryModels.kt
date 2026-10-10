@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.library
 
+/** The document identity is independent of the tree through which it was granted. */
 data class Track(
     val uri: String,
     val title: String,
@@ -8,16 +9,29 @@ data class Track(
     val durationMs: Long? = null,
     val fileName: String,
     val relativePath: String,
+    val id: String = uri,
+    val albumArtist: String? = null,
+    val trackNumber: Int? = null,
+    val discNumber: Int? = null,
+    val year: Int? = null,
+    val genre: String? = null,
+    val locations: List<TrackLocation> = emptyList(),
 )
 
+data class TrackLocation(val folderUri: String, val uri: String, val relativePath: String)
 data class FolderSelection(val uri: String, val name: String)
-data class LibrarySnapshot(val folder: FolderSelection? = null, val tracks: List<Track> = emptyList())
+data class LibrarySnapshot(val folders: List<FolderSelection> = emptyList(), val tracks: List<Track> = emptyList())
 
 data class AudioMetadata(
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
     val durationMs: Long? = null,
+    val albumArtist: String? = null,
+    val trackNumber: Int? = null,
+    val discNumber: Int? = null,
+    val year: Int? = null,
+    val genre: String? = null,
 )
 
 data class ScanDocument(
@@ -26,6 +40,7 @@ data class ScanDocument(
     val name: String,
     val mimeType: String,
     val isDirectory: Boolean,
+    val identity: String = uri,
 )
 
 interface DocumentSource {

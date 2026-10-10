@@ -30,10 +30,10 @@ class FolderPickerTest {
         val device = UiDevice.getInstance(instrumentation)
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.waitUntil(10000) {
-            compose.onAllNodes(hasText("Choose folder") or hasText("Change folder"))
+            compose.onAllNodes(hasText("Choose folder") or hasText("Add folder"))
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNode(hasText("Choose folder") or hasText("Change folder")).performClick()
+        compose.onNode(hasText("Choose folder") or hasText("Add folder")).performClick()
         // DocumentsUI can use either the Android or Google package depending on the image.
         if (!device.wait(Until.hasObject(By.text("Localica test library")), 2000)) {
             device.clickWhenReady(By.desc("Show roots"))
@@ -47,9 +47,12 @@ class FolderPickerTest {
         device.pressBack() // close settings
         compose.onNodeWithText("Library").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Morning tone").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Quiet interval").assertIsDisplayed()
+        compose.onNodeWithTag("library-list").performScrollToNode(hasText("2 songs · Test tones"))
         compose.onNodeWithText("2 songs · Test tones").assertIsDisplayed()
+        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Quiet interval"))
+        compose.onNodeWithText("Quiet interval").assertIsDisplayed()
         compose.activityRule.scenario.recreate()
+        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Morning tone"))
         compose.onNodeWithText("Morning tone").assertIsDisplayed()
         val scan = runBlocking { TreeScanner(AndroidDocuments(context)).scan(tree) }
         assertEquals(2, scan.tracks.size)

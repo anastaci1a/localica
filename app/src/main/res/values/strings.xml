@@ -18,7 +18,7 @@
     <string name="library_empty">Your music, in one place.</string>
     <string name="choose_folder_hint">Choose a folder in Settings. Songs in its subfolders will be included.</string>
     <string name="empty_folder">No audio found</string>
-    <string name="empty_folder_hint">Add music to this folder and scan again, or choose a different folder in Settings.</string>
+    <string name="empty_folder_hint">Add music to your folders and scan again, or add another folder in Settings.</string>
     <string name="open_settings">Open settings</string>
     <string name="music_folder">Music folder</string>
     <string name="no_folder">No folder selected</string>
@@ -30,7 +30,7 @@
     <string name="scanning">Scanning · %1$d songs found</string>
     <string name="song_count">%1$d songs</string>
     <string name="one_song">1 song</string>
-    <string name="access_lost">Folder access is unavailable. Select the folder again in Settings.</string>
+    <string name="access_lost">Some folder access is unavailable. Add the affected folder again in Settings to restore access.</string>
     <string name="scan_failed">Couldn’t finish scanning this folder. Your previous library has been kept. Check that the folder is available and try again.</string>
     <string name="load_failed">Couldn’t load the library. Close and reopen the app to try again.</string>
     <string name="metadata_missing">Some tags couldn’t be read. Those songs use their filenames.</string>
@@ -40,4 +40,26 @@
     <string name="playback_failed">This song couldn’t be played. Try again or choose another song.</string>
     <string name="connecting">Connecting to player…</string>
     <string name="local_audio">LOCAL AUDIO</string>
+    <string name="music_folders">Music folders</string>
+    <string name="add_folder">Add folder</string>
+    <string name="folder_count">%1$d folders</string>
+    <string name="remove">Remove</string>
+    <string name="cancel">Cancel</string>
+    <string name="remove_folder">Remove folder?</string>
+    <string name="remove_folder_message">Remove %1$s from your library? Your audio files stay on the device. Songs also included by another folder stay in the library.</string>
+    <string name="remove_failed">Couldn’t remove this folder. Your library has been kept.</string>
+    <string name="search_library">Search songs, tags, or paths</string>
+    <string name="all_folders">All folders</string>
+    <string name="no_matches">No matching songs</string>
+    <string name="reset_filters">Reset view</string>
+    <string name="sort_by">Sort: %1$s</string>
+    <string name="ascending">Ascending</string>
+    <string name="descending">Descending</string>
+    <string name="sort_title">Title</string>
+    <string name="sort_artist">Artist</string>
+    <string name="sort_album">Album</string>
+    <string name="sort_album_artist">Album artist</string>
+    <string name="sort_path">Path</string>
+    <string name="sort_year">Year</string>
+    <string name="sort_duration">Duration</string>
 </resources>
