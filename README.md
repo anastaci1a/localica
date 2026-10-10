@@ -4,9 +4,9 @@ An Android player for music stored on your device. Browse folders, albums and ar
 
 Saved queues, configurable navigation and listening behavior, embedded album artwork, and background playback. No account or internet access. The lasting layout is taking shape with simple materials; liquid-glass styling comes later.
 
-<img src="docs/images/player.png" width="250" alt="Expanded player with playback controls and queue overlay button"> <img src="docs/images/library.png" width="250" alt="Library with filters, floating mini-player, and navigation shelf">
+<img src="docs/images/player.png" width="250" alt="Expanded player with playback controls and queue overlay button">
 
-Screenshots show the app with generated sample tones.
+Screenshot shows the app with generated sample tones.
 
 Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus where the device provides a decoder. Songs advance through the active queue.
 
