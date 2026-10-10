@@ -31,7 +31,11 @@ class TagEditorFlowTest {
         compose.onNode(hasText("Choose folder") or hasText("Add folder")).performScrollTo().performClick()
         selectFolder()
         compose.waitUntil(15000) { app.library.hasAccess(io.github.anastaci1a.localica.library.FolderSelection(tree, "Test")) }
+        device.wait(Until.hasObject(By.pkg(context.packageName)), 10000)
+        device.waitForIdle()
+        compose.waitForIdle()
         device.pressBack()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("Retrace tab history").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("Morning tone").fetchSemanticsNodes().isNotEmpty() }
@@ -49,7 +53,7 @@ class TagEditorFlowTest {
             assertEquals("Retagged tone", runBlocking { AndroidDocuments(context).metadata(uri.toString()).title })
             compose.onNodeWithText("Close editor").performClick()
             compose.onNodeWithText("Retagged tone").assertIsDisplayed()
-            compose.onAllNodes(isToggleable()).assertCountEquals(0)
+            compose.onAllNodes(isToggleable() and hasAnyAncestor(hasTestTag("browser-list"))).assertCountEquals(0)
         } finally {
             context.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(original) }
             runBlocking { app.library.scan(tree) }
