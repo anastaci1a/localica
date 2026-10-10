@@ -46,6 +46,11 @@ class ListControlsTest {
             BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id)), {}, {}, {}, { _, _, _ -> }, null, null, true, false,
             queueState = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false), playingEntryId = current) } }
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Z song 070"))
+        compose.onNodeWithText("Current song").assertIsDisplayed()
+        compose.onNodeWithText("Z song 070").performTouchInput { longClick() }
+        compose.onNodeWithText("Current song").assertDoesNotExist()
+        compose.onNodeWithText("1 selected").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close selection").performClick()
         compose.onNodeWithText("Current song").assertIsDisplayed().performClick()
         compose.onNodeWithText("▶ Z song 004").assertIsDisplayed()
         compose.onNodeWithText("Current song").assertDoesNotExist()
