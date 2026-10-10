@@ -41,6 +41,7 @@ class GalleryNavigationTest {
                     throw error
                 }
                 androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+                compose.waitUntil(5000) { compose.onAllNodesWithText("Select all songs").fetchSemanticsNodes().isEmpty() }
                 compose.onNodeWithText("Album $n").performTouchInput { click() }
                 compose.waitUntil(5000) { compose.onAllNodesWithText("Visible song $n").fetchSemanticsNodes().isNotEmpty() }
                 val song = compose.onNodeWithText("Visible song $n")
@@ -54,6 +55,7 @@ class GalleryNavigationTest {
                 compose.onNodeWithContentDescription("Search library").performTouchInput { click() }
                 compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(n)
                 compose.onNode(hasSetTextAction()).assertTextContains(n).performImeAction()
+                compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Visible song $n"))
                 compose.onNodeWithText("Visible song $n").assertIsDisplayed()
                 compose.onNodeWithContentDescription("Library").performTouchInput { click() }
             }
