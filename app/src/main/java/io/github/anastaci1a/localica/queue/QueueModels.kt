@@ -71,6 +71,8 @@ object QueueEdits {
         val entries = queue.entries.toMutableList().apply { add(to, removeAt(from)) }
         return queue.copy(entries = entries)
     }
+    fun moveBefore(queue: ListeningQueue, ids: Set<String>, beforeId: String?) = queue.copy(
+        entries = io.github.anastaci1a.localica.library.OccurrenceMoves.before(queue.entries, ids, beforeId) { it.id })
     fun oldestInactive(library: QueueLibrary): String? = library.queues.filterNot { it.id == library.activeId }
         .minWithOrNull(compareBy<ListeningQueue> { it.createdAt }.thenBy { it.id })?.id
     fun canCreate(library: QueueLibrary, maximum: Int?, removals: Set<String>): Boolean =

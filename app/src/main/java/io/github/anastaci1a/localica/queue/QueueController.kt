@@ -195,6 +195,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         } catch (failure: Exception) { complete(false); throw failure }
     }
     fun moveEntry(id: String, offset: Int, queueId: String? = null, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { QueueEdits.move(it, id, offset) }
+    fun moveBefore(queueId: String, entries: Set<String>, beforeId: String?, complete: (Boolean) -> Unit = {}) =
+        editQueue(queueId, complete) { QueueEdits.moveBefore(it, entries, beforeId) }
     fun shuffle(queueId: String? = null) = editQueue(queueId) { it.copy(shuffle = !it.shuffle) }
     fun repeat(queueId: String? = null) = editQueue(queueId) { it.copy(repeat = QueueRepeat.entries[(it.repeat.ordinal + 1) % QueueRepeat.entries.size]) }
     private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: (ListeningQueue) -> ListeningQueue) = submit {
