@@ -142,16 +142,24 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         shape = RoundedCornerShape((32 * (1f - p)).dp), color = Color(0xFFF2F0EC), contentColor = foreground, shadowElevation = 3.dp) {
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()) {
-            if (p > 0f) PlayerBackdrop(palette, Modifier.fillMaxSize().graphicsLayer { alpha = p }, backgroundProgress * (1f - lyricProgress))
+            if (p > 0f) PlayerBackdrop(palette, Modifier.fillMaxSize().graphicsLayer { alpha = p },
+                backgroundProgress * (1f - lyricProgress), with(density) { artY.toPx() }, with(density) { artHeight.toPx() })
             if (p < 1f) Box(Modifier.fillMaxSize().clickable(onClickLabel = "Expand player") { settle(true) })
             Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer { alpha = 1f - lyricProgress }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
-                AlbumArtwork(state.trackUri, Modifier.fillMaxSize().testTag("player-artwork").drawWithContent {
+                AlbumArtwork(state.trackUri, Modifier.fillMaxSize().testTag("player-artwork").graphicsLayer {
+                    compositingStrategy = if (p * backgroundProgress > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                }.drawWithContent {
                     drawContent()
-                    if (p > 0f && backgroundProgress > 0f) drawRect(Brush.verticalGradient(
-                        0f to palette.bottom.copy(alpha = p * backgroundProgress),
-                        0.15f to Color.Transparent, 0.56f to Color.Transparent,
-                        1f to palette.bottom.copy(alpha = p * backgroundProgress)))
+                    if (p > 0f && backgroundProgress > 0f) {
+                        val stops = Array(33) { index ->
+                            val y = index / 32f
+                            val edge = if (y < 0.14f) (0.14f - y) / 0.14f else (y - 0.48f) / 0.52f
+                            val t = edge.coerceIn(0f, 1f)
+                            y to Color.Black.copy(alpha = 1f - t * t * (3f - 2f * t) * p * backgroundProgress)
+                        }
+                        drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
+                    }
                 }.combinedClickable(enabled = !lyricsOpen,
                     onClickLabel = if (expanded) settings.artworkTap.label else "Expand player",
                     onClick = { if (expanded) artworkAction(settings.artworkTap) else settle(true) },
