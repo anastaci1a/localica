@@ -50,6 +50,8 @@ fun LocalicaScreen(
     onNext: () -> Unit = {},
     playlist: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(),
     playlistController: PlaylistController? = null,
+    onScanAll: () -> Unit = { library.snapshot.folders.forEach { onRescan(it.uri) } },
+    scannerRequest: Int = 0,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val session: SessionSelection = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -94,6 +96,9 @@ fun LocalicaScreen(
     var viewOptions by remember { mutableStateOf(false) }
     var settingsCategory by remember { mutableStateOf<String?>(null) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var scannerOpen by rememberSaveable { mutableStateOf(false) }
+    var returnToScanner by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(scannerRequest) { if (scannerRequest > 0) scannerOpen = true }
     var sortingRoute by rememberSaveable { mutableStateOf<String?>(null) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
@@ -195,7 +200,7 @@ fun LocalicaScreen(
                 if (route.tab == MainTab.Queues && !route.search) QueueScreen(queues, queueController, library,
                     playlist, playlistController, playback.connected, pins, ::pin, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage)
                 else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
-                    PinnedHome(library, playlist, pins, { settingsCategory = "Library and tags"; settingsOpen = true },
+                    PinnedHome(library, playlist, pins, { settingsCategory = "Folders to scan"; settingsOpen = true },
                         { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) },
                         { item, songs ->
                             if (item.row != null) queueController?.tap(songs.map { it.track }, songs.indexOfFirst { it.id == item.row.id }, sourceName = "Pinned songs")
@@ -203,7 +208,7 @@ fun LocalicaScreen(
                         }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) }, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion)
                 } else BrowserScreen(library, playlist, route, { navigation = navigation.update(it) },
                     { item -> navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title)) },
-                    { settingsCategory = "Library and tags"; settingsOpen = true }, { rows, index, scope ->
+                    { settingsCategory = "Folders to scan"; settingsOpen = true }, { rows, index, scope ->
                         if (index >= 0) {
                             if (queueController != null) queueController.tap(rows.map { it.track }, index, scope, io.github.anastaci1a.localica.browse.queueSourceName(route, rows.map { it.track }))
                             else onPlay(rows[index].track)
@@ -256,8 +261,8 @@ fun LocalicaScreen(
                 Box {
                     ActionIcon(R.drawable.ic_more, "More") { moreOpen = true }
                     DropdownMenu(moreOpen, { moreOpen = false }) {
-                        ActionMenuItem("Scan music", enabled = !library.scanning, onClick = {
-                            moreOpen = false; library.snapshot.folders.forEach { onRescan(it.uri) }
+                        ActionMenuItem("Scan music", onClick = {
+                            moreOpen = false; scannerOpen = true
                         })
                         ActionMenuItem("Settings", onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
                         ActionMenuItem("About and licenses", onClick = { moreOpen = false; settingsCategory = "About and licenses"; settingsOpen = true })
@@ -296,21 +301,24 @@ fun LocalicaScreen(
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
     androidx.activity.compose.BackHandler(queueOpen || queueProgress.value > 0f) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
     if (settingsOpen) FolderSettings(library,
-        onDismiss = { settingsOpen = false }, onChooseFolder, onRescan, onCancelScan, onRemoveFolder,
+        onDismiss = { settingsOpen = false; if (returnToScanner) { scannerOpen = true; returnToScanner = false } }, onChooseFolder, onRemoveFolder,
         extraContent = {
             (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let { TagRecoverySettings(it.tagEditing) }
-        }, interfaceContent = {
-            TextButton(onClick = { customizeActions = true }) { Text("Customize player actions") }
-            InterfaceSettingsControls(settings) {
+        }, interfaceContent = { section ->
+            if (section == "Player") SettingsLink("Customize player actions", "Choose controls and their order") { customizeActions = true }
+            InterfaceSettingsControls(settings, section) {
                 settings = it; preferences.write(it); navigation = navigation.reconcile(it.tabs)
             }
-        }, playbackContent = {
-            QueueSettingsControls(queues.settings) { queueController?.settings(it) }
+        }, playbackContent = { section ->
+            QueueSettingsControls(queues.settings, section) { queueController?.settings(it) }
         }, aboutContent = {
             Text("Localica", style = MaterialTheme.typography.headlineSmall)
             Text("Offline music, organized your way.")
             LibraryLicenses()
         }, initialCategory = settingsCategory)
+    if (scannerOpen) ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan) { destination ->
+        scannerOpen = false; returnToScanner = true; settingsCategory = destination; settingsOpen = true
+    }
     if (exitPrompt) AlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
         text = { Text("Playback will continue.") }, confirmButton = { TextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
         dismissButton = { TextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
@@ -332,10 +340,10 @@ fun LocalicaScreen(
 internal fun LibraryNotice(state: LibraryUiState) {
     val message = when (state.problem) {
         LibraryProblem.RemoveFailed -> R.string.remove_failed
+        LibraryProblem.AddFailed -> R.string.add_folder_failed
         LibraryProblem.ScanFailed -> R.string.scan_failed
         LibraryProblem.LoadFailed -> R.string.load_failed
-        null -> if (state.unavailableFolders.isNotEmpty()) R.string.access_lost
-            else if (state.metadataFailures > 0) R.string.metadata_missing else null
+        null -> if (state.unavailableFolders.isNotEmpty()) R.string.access_lost else null
     }
     message?.let {
         Text(stringResource(it), color = if (state.problem != null) MaterialTheme.colorScheme.error

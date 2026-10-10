@@ -53,7 +53,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     val loadedResult by produceState<BrowseResult?>(null, library.snapshot, playlists.playlists, route, style, queueState.library) {
-        value = withContext(Dispatchers.Default) { BrowseQueries.evaluate(library.snapshot, playlists.playlists, route, style.query(), queueState.library.queues) }
+        value = withContext(Dispatchers.Default) {
+            BrowseQueries.evaluate(library.snapshot, playlists.playlists, route, style.query(), queueState.library.queues).let {
+                if (route.collection?.kind == MediaKind.Album) it.groupAlbumSongs(style.songGrouping) else it
+            }
+        }
     }
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
@@ -85,14 +89,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var contextMenu by remember { mutableStateOf<String?>(null) }
     var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<Track?>(null) }
-    var naming by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         if (route.collection?.kind == MediaKind.Playlist) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { renaming = true }) { Text("Rename") }
                 TextButton(onClick = { deleting = true }) { Text("Delete") }
         }
         header()
-        if (route.search || route.collection != null || route.tab != MainTab.Library) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
+        if (route.search || style.quickSearch && (route.collection != null || route.tab != MainTab.Library)) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); keyboard?.hide() }),
             trailingIcon = { ActionIcon(R.drawable.ic_search, "Submit search") { onSearchCommit(); keyboard?.hide() } },
@@ -131,7 +134,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val selectedCount = if (item.row != null) { if (session.contains(route.collection, item.row.id)) 1 else 0 }
                         else item.songs.count { it.track.id in selectedTracks }
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
-                    Box(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
+                    Column(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer { alpha = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) 0f else 1f }) {
                         val itemMenu: @Composable () -> Unit = {
                             Box {
@@ -174,6 +177,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 }
                             }
                         }
+                        item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
                         Column(Modifier.fillMaxWidth().padding(4.dp).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
                             enabled = item.row == null || enabled,
                             onClick = {
@@ -223,10 +228,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 }
             }
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, style.sort, Modifier.align(Alignment.CenterEnd))
-            if (route.tab == MainTab.Library && route.collection == null && !route.search) FloatingActionButton(
-                onClick = { naming = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-                androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), "Create playlist", Modifier.size(24.dp))
-            }
+            if (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
+                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(16.dp))
         }
         if (LocalSessionSelection.current == null) SessionSelectionPanel(session, queues, playlistController, playlists)
     }
@@ -256,11 +259,4 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             route.collection?.let { playlistController?.delete(it.id) }; deleting = false
             onRoute(route.copy(collection = null, title = null))
         }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } })
-    if (naming) {
-        var name by remember { mutableStateOf("") }
-        AlertDialog(onDismissRequest = { naming = false }, title = { Text("New playlist") }, text = {
-            OutlinedTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true)
-        }, confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { playlistController?.create(name); naming = false }) { Text("Create") } },
-            dismissButton = { TextButton(onClick = { naming = false }) { Text("Cancel") } })
-    }
 }

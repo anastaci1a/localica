@@ -43,13 +43,29 @@ class LibraryRepository(
         return location?.let { track.copy(uri = it.uri, relativePath = it.relativePath) } ?: track
     }
 
-    suspend fun scan(uri: String, onProgress: (Int) -> Unit = {}): ScanResult = withContext(io) {
+    suspend fun addFolder(uri: String) = withContext(io) {
         scanLock.withLock {
             val alreadyGranted = permissions.hasReadAccess(uri)
             var committed = false
             try {
                 permissions.acquire(uri)
-                val result = scanner.scan(uri, onProgress)
+                val folder = scanner.folder(uri)
+                currentCoroutineContext().ensureActive()
+                withContext(NonCancellable) {
+                    if (store.current().folders.none { it.uri == uri }) store.replaceRoot(ScanResult(folder, emptyList(), 0))
+                    committed = true
+                }
+            } finally { if (!committed && !alreadyGranted) permissions.release(uri) }
+        }
+    }
+
+    suspend fun scan(uri: String, options: ScanOptions = ScanOptions(), onProgress: (Int) -> Unit = {}): ScanResult = withContext(io) {
+        scanLock.withLock {
+            val alreadyGranted = permissions.hasReadAccess(uri)
+            var committed = false
+            try {
+                permissions.acquire(uri)
+                val result = scanner.scan(uri, options, onProgress)
                 currentCoroutineContext().ensureActive()
                 withContext(NonCancellable) {
                     store.replaceRoot(result)

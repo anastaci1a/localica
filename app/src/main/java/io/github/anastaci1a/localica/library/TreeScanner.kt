@@ -7,14 +7,20 @@ import java.util.Locale
 
 /** Pure scan rules. The caller supplies an IO dispatcher for blocking document providers. */
 class TreeScanner(private val source: DocumentSource) {
-    suspend fun scan(treeUri: String, onProgress: (Int) -> Unit = {}): ScanResult {
+    fun folder(treeUri: String): FolderSelection {
+        val root = source.root(treeUri)
+        require(root.isDirectory) { "The selected document is not a folder." }
+        return FolderSelection(treeUri, root.name)
+    }
+    suspend fun scan(treeUri: String, options: ScanOptions = ScanOptions(), onProgress: (Int) -> Unit = {}): ScanResult {
         val root = source.root(treeUri)
         require(root.isDirectory) { "The selected document is not a folder." }
         val pending = ArrayDeque<Pair<ScanDocument, String>>()
         pending.add(root to "")
         val visited = mutableSetOf<String>()
         val tracks = linkedMapOf<String, Track>()
-        var metadataFailures = 0
+        val failedMetadataIds = mutableSetOf<String>()
+        var inspected = 0
         onProgress(0)
         while (pending.isNotEmpty()) {
             currentCoroutineContext().ensureActive()
@@ -24,17 +30,21 @@ class TreeScanner(private val source: DocumentSource) {
             for (document in source.children(treeUri, directory.id)) {
                 currentCoroutineContext().ensureActive()
                 val relativePath = if (path.isEmpty()) document.name else "$path/${document.name}"
+                if (options.excludes(relativePath)) continue
                 if (document.isDirectory) {
-                    pending.add(document to relativePath)
+                    if (options.includeSubfolders) pending.add(document to relativePath)
                 } else if (AudioFiles.accepts(document.name, document.mimeType) && document.identity !in tracks) {
                     val metadata = try {
                         source.metadata(document.uri, document.name)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        metadataFailures++
+                        failedMetadataIds += document.identity
                         AudioMetadata()
                     }
+                    inspected++
+                    if (inspected % 25 == 0) onProgress(inspected)
+                    if (metadata.durationMs?.let { it >= 0 && it < options.minimumDurationSeconds * 1000L } == true) continue
                     tracks[document.identity] = Track(
                         uri = document.uri,
                         id = document.identity,
@@ -53,13 +63,12 @@ class TreeScanner(private val source: DocumentSource) {
                         fileName = document.name,
                         relativePath = relativePath,
                     )
-                    if (tracks.size % 25 == 0) onProgress(tracks.size)
                 }
             }
         }
         currentCoroutineContext().ensureActive()
-        onProgress(tracks.size)
-        return ScanResult(FolderSelection(treeUri, root.name), tracks.values.sortedWith(trackOrder), metadataFailures)
+        onProgress(inspected)
+        return ScanResult(FolderSelection(treeUri, root.name), tracks.values.sortedWith(trackOrder), failedMetadataIds.size, failedMetadataIds)
     }
 }
 
@@ -70,5 +79,7 @@ object AudioFiles {
     private val extensions = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "oga", "opus")
     fun accepts(name: String, mimeType: String): Boolean =
         !mimeType.startsWith("video/") &&
+            name.substringAfterLast('.', "").lowercase(Locale.ROOT) !in setOf("m3u", "m3u8", "pls", "xspf") &&
+            mimeType.lowercase(Locale.ROOT) !in setOf("audio/x-mpegurl", "audio/mpegurl", "audio/x-scpls") &&
             (mimeType.startsWith("audio/") || name.substringAfterLast('.', "").lowercase(Locale.ROOT) in extensions)
 }

@@ -1,4 +1,5 @@
 <resources>
+    <string name="add_folder_failed">Could not add this folder. Select it again and allow access.</string>
     <string name="app_name">localica</string>
     <string name="player">Player</string>
     <string name="library">Library</string>
