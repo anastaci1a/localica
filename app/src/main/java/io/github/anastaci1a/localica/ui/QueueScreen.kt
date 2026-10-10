@@ -131,6 +131,10 @@ internal fun QueueSettingsControls(settings: QueueSettings, onChange: (QueueSett
     var limitOpen by remember { mutableStateOf(false) }
     HorizontalDivider()
     Text("Listening behavior", style = MaterialTheme.typography.titleMedium)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text("Preload next track", Modifier.weight(1f))
+        Switch(settings.preloadNext, { onChange(settings.copy(preloadNext = it)) })
+    }
     Box {
         TextButton(onClick = { tapOpen = true }) { Text("Song tap: ${settings.songTap.label()}") }
         DropdownMenu(expanded = tapOpen, onDismissRequest = { tapOpen = false }) {

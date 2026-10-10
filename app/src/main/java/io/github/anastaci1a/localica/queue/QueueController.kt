@@ -5,6 +5,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import io.github.anastaci1a.localica.library.LibraryRepository
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.SongListView
@@ -13,6 +14,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 
 /** In-process command gateway. Only the service attaches a player; every mutation is serialized here. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueController(private val dao: QueueDao, private val preferences: QueuePreferences,
                       private val library: LibraryRepository,
                       private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) {
@@ -24,6 +26,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var generation = 0
     private var restored = false
     private var pendingComplete: ((Boolean) -> Unit)? = null
+    private var editing: EditPlayback? = null
+    private var editPlayRequest: Boolean? = null
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { submit { capture() } }
     }
@@ -53,6 +57,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         player = attached
         loadedQueueId = null
         attached.addListener(listener)
+        configurePreloading()
         activate(play = false)
         }
     }
@@ -190,6 +195,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         require(value.maximum == null || value.maximum > 0)
         preferences.write(value)
         mutable.update { it.copy(settings = value, problem = null) }
+        configurePreloading()
+    }
+    private fun configurePreloading() {
+        (player as? ExoPlayer)?.setPreloadConfiguration(if (state.value.settings.preloadNext)
+            ExoPlayer.PreloadConfiguration(5_000_000L) else ExoPlayer.PreloadConfiguration.DEFAULT)
     }
     fun togglePlayback() = submit {
         player?.run {
@@ -211,19 +221,31 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun previous() = submit { player?.seekToPreviousMediaItem(); capture() }
 
     fun dismissProblem() { mutable.update { it.copy(problem = null) } }
-    data class EditPlayback(val entryId: String, val resume: Boolean)
+    data class EditPlayback(val entryId: String, val resume: Boolean, val queueId: String)
     fun beginFileEdit(trackId: String, complete: (EditPlayback?) -> Unit) = submit {
         capture()
         val source = player
-        val entry = state.value.library.active?.let { q -> q.entries.firstOrNull { it.id == q.currentEntryId } }
-        if (source != null && entry?.track?.id == trackId) {
-            val token = EditPlayback(entry.id, source.playWhenReady)
-            source.pause(); source.stop(); complete(token)
+        val queue = state.value.library.active
+        val entry = queue?.entries?.firstOrNull { it.id == queue.currentEntryId }
+        if (source != null && entry != null && queue.entries.any { it.track.id == trackId }) {
+            val token = EditPlayback(entry.id, source.playWhenReady, queue.id)
+            editing = token
+            editPlayRequest = null
+            // stop releases periods; clearing prevents a metadata refresh from reusing stale bytes.
+            source.pause(); source.stop(); source.clearMediaItems(); loadedQueueId = null
+            complete(token)
         } else complete(null)
     }
     fun endFileEdit(token: EditPlayback?, complete: (Boolean) -> Unit) = submit {
         try {
-            if (token != null && state.value.library.active?.currentEntryId == token.entryId) activate(token.resume, seek = true)
+            if (token != null && editing == token) {
+                editing = null
+                val unchanged = state.value.library.activeId == token.queueId &&
+                    state.value.library.active?.currentEntryId == token.entryId
+                val resume = editPlayRequest ?: (unchanged && token.resume)
+                editPlayRequest = null
+                activate(resume, seek = true)
+            }
             complete(true)
         } catch (failure: Exception) { complete(false); throw failure }
     }
@@ -263,6 +285,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         mutable.update { it.copy(library = next, problem = null) }
     }
     private suspend fun activate(play: Boolean?, seek: Boolean = false) {
+        if (editing != null) {
+            if (play != null) editPlayRequest = play
+            return
+        }
         val attached = player ?: return
         val queue = state.value.library.active
         if (queue == null || queue.entries.isEmpty()) {

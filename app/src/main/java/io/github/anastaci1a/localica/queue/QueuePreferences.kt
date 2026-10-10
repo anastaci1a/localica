@@ -12,11 +12,12 @@ class QueuePreferences(context: Context) {
             SongTap.entries.firstOrNull { it.name == preferences.getString("tap.${view.name}", null) }?.let { view to it }
         }.toMap(),
         maximum = preferences.getInt("maximum", 0).takeIf { it > 0 },
+        preloadNext = preferences.getBoolean("preload-next", true),
     )
     fun write(settings: QueueSettings) {
         val edit = preferences.edit()
         SongListView.entries.forEach { edit.putString("tap.${it.name}", settings.tapOverrides[it]?.name) }
         edit.putString("tap", settings.songTap.name).putString("switch", settings.switching.name)
-            .putInt("maximum", settings.maximum ?: 0).apply()
+            .putInt("maximum", settings.maximum ?: 0).putBoolean("preload-next", settings.preloadNext).apply()
     }
 }
