@@ -20,7 +20,8 @@ import io.github.anastaci1a.localica.playback.PlaybackState
 import java.util.Locale
 
 @Composable
-fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> Unit, onOpenLibrary: () -> Unit) {
+fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> Unit, onOpenLibrary: () -> Unit,
+                 onPrevious: () -> Unit = {}, onNext: () -> Unit = {}) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium,
@@ -63,10 +64,14 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
             }
             Spacer(Modifier.height(24.dp))
             val pause = state.isPlaying || state.isBuffering
+            Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onPrevious, enabled = state.connected) { Text("Previous") }
             FilledIconButton(onClick = onToggle, enabled = state.connected, modifier = Modifier.size(72.dp)) {
                 Icon(painterResource(if (pause) R.drawable.ic_pause else R.drawable.ic_play),
                     stringResource(if (pause) R.string.pause else if (state.ended) R.string.replay else R.string.play),
                     Modifier.size(36.dp))
+            }
+            TextButton(onClick = onNext, enabled = state.connected) { Text("Next") }
             }
             Spacer(Modifier.height(12.dp))
             if (state.isBuffering) Text(stringResource(R.string.loading_audio), style = MaterialTheme.typography.bodySmall)

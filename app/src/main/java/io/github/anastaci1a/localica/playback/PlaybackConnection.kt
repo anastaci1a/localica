@@ -2,16 +2,14 @@ package io.github.anastaci1a.localica.playback
 
 import android.content.ComponentName
 import android.content.Context
-import android.os.Bundle
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.LocalicaApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,6 +49,7 @@ interface PlaybackActions {
 
 /** Main-thread controller. The service retains playback when this UI connection is released. */
 class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
+    val queues = (context.applicationContext as LocalicaApplication).queues
     private val mutableState = MutableStateFlow(PlaybackState())
     override val state = mutableState.asStateFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -87,51 +86,15 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
         }
     }
 
-    override fun play(track: Track) {
-        controller?.run {
-            repeatMode = Player.REPEAT_MODE_OFF
-            shuffleModeEnabled = false
-            val extras = Bundle().apply {
-                putString("fileName", track.fileName)
-                putString("trackUri", track.uri)
-                track.durationMs?.let { putLong("durationMs", it) }
-            }
-            // Replaces the timeline; there is never an implicit queue or automatic next track.
-            setMediaItem(MediaItem.Builder().setMediaId(track.id).setUri(track.uri)
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist)
-                    .setAlbumTitle(track.album).setExtras(extras).build()).build())
-            prepare()
-            play()
-        }
-        publish()
-    }
+    override fun play(track: Track) { queues.tap(listOf(track), track.id) }
+    fun playFromList(tracks: List<Track>, selectedId: String) { queues.tap(tracks, selectedId) }
+    fun previous() { queues.previous() }
+    fun next() { queues.next() }
 
-    override fun toggle() {
-        controller?.run {
-            if (currentMediaItem == null) return
-            if (playWhenReady && playbackState != Player.STATE_ENDED && playerError == null) {
-                pause()
-            } else {
-                if (playbackState == Player.STATE_ENDED) seekTo(0)
-                if (playbackState == Player.STATE_IDLE || playerError != null) prepare()
-                play()
-            }
-        }
-        publish()
-    }
+    override fun toggle() { queues.togglePlayback() }
+    override fun seekTo(positionMs: Long) { queues.seek(positionMs) }
 
-    override fun seekTo(positionMs: Long) {
-        controller?.let { player ->
-            val duration = state.value.durationMs ?: return
-            player.seekTo(positionMs.coerceIn(0, duration))
-        }
-        publish()
-    }
-
-    override fun clear() {
-        controller?.run { stop(); clearMediaItems() }
-        publish()
-    }
+    override fun clear() { queues.clearPlayback() }
 
     private fun publish() {
         val player = controller ?: return
@@ -141,7 +104,7 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
         mutableState.value = PlaybackState(
             connected = player.isConnected,
             trackUri = metadata.extras?.getString("trackUri"),
-            trackId = player.currentMediaItem?.mediaId,
+            trackId = metadata.extras?.getString("trackId"),
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString(),
             album = metadata.albumTitle?.toString(),

@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val library by model.library.collectAsStateWithLifecycle()
             val playback by model.playback.state.collectAsStateWithLifecycle()
+            val queues by model.playback.queues.state.collectAsStateWithLifecycle()
             val picker = rememberLauncherForActivityResult(LocalFolderPicker()) { uri ->
                 uri?.let { model.scan(it.toString()) }
             }
@@ -40,7 +41,9 @@ class MainActivity : ComponentActivity() {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,
                     onChooseFolder = { picker.launch(library.snapshot.folders.firstOrNull()?.uri?.let(Uri::parse)) },
                     onRescan = model::scan, onCancelScan = model::cancelScan,
-                    onRemoveFolder = model::removeFolder, onQuery = model::setQuery)
+                    onRemoveFolder = model::removeFolder, onQuery = model::setQuery,
+                    queues = queues, queueController = model.playback.queues,
+                    onPrevious = model.playback::previous, onNext = model.playback::next)
             }
         }
     }
