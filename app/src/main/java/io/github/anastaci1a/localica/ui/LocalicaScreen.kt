@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -94,8 +96,21 @@ fun LocalicaScreen(
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var sortingRoute by rememberSaveable { mutableStateOf<String?>(null) }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(expanded) { if (expanded) { focusManager.clearFocus(); keyboard?.hide() } }
+    val view = androidx.compose.ui.platform.LocalView.current
+    val darkSystem = androidx.compose.foundation.isSystemInDarkTheme()
+    SideEffect {
+        var owner: android.content.Context? = context
+        while (owner is android.content.ContextWrapper && owner !is android.app.Activity) owner = owner.baseContext
+        (owner as? android.app.Activity)?.let { activity ->
+            androidx.core.view.WindowCompat.getInsetsController(activity.window, view).apply {
+                isAppearanceLightStatusBars = (!expanded || queueOpen) && !darkSystem
+                isAppearanceLightNavigationBars = (!expanded || queueOpen) && !darkSystem
+            }
+        }
+    }
+    var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var exitPrompt by remember { mutableStateOf(false) }
     var consumedRequest by rememberSaveable { mutableLongStateOf(queues.playerRequest) }
     val queueProgress = remember { androidx.compose.animation.core.Animatable(if (queueOpen) 1f else 0f) }
@@ -154,10 +169,11 @@ fun LocalicaScreen(
     val hasPlayer = currentTrack != null || playback.trackUri != null
     LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }
     CompositionLocalProvider(LocalSessionSelection provides session) {
-    BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(if (expanded && !queueOpen) androidx.compose.ui.graphics.Color(0xFF242B34)
+        else MaterialTheme.colorScheme.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = inset + (if (hasPlayer) 144.dp else 64.dp) + if (session.active) selectionHeight else 0.dp)
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = inset + (if (hasPlayer) 152.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
             val route = navigation.route
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -199,10 +215,14 @@ fun LocalicaScreen(
             } }
             }
         }
-        Surface(Modifier.align(Alignment.BottomCenter).offset(y = (64.dp + inset) * progress.value)
-            .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier), tonalElevation = 2.dp) {
-            Row(Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
-                BoxWithConstraints(Modifier.weight(1f)) {
+        Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
+            .padding(bottom = inset + 8.dp).height(64.dp).fillMaxWidth()
+            .offset(y = (80.dp + inset) * progress.value)
+            .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill"), shape = androidx.compose.foundation.shape.CircleShape,
+                tonalElevation = 3.dp, shadowElevation = 2.dp) {
+                BoxWithConstraints(Modifier.fillMaxSize()) {
                     val fits = maxWidth >= 56.dp * settings.tabs.size
                     Row(if (fits) Modifier.fillMaxWidth() else Modifier.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState())) {
                         settings.tabs.forEach { tab ->
@@ -225,6 +245,11 @@ fun LocalicaScreen(
                         }
                     }
                 }
+
+            }
+            Surface(Modifier.width(104.dp).fillMaxHeight().testTag("utility-pill"), shape = androidx.compose.foundation.shape.CircleShape,
+                tonalElevation = 3.dp, shadowElevation = 2.dp) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 ActionIcon(R.drawable.ic_search, "Search library") {
                     navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true))
                 }
@@ -239,11 +264,11 @@ fun LocalicaScreen(
                         ActionMenuItem("Close Localica", onClick = { moreOpen = false; if (settings.confirmExit) exitPrompt = true else exit() })
                     }
                 }
-
+                }
             }
         }
         if (session.active && !expanded) Surface(Modifier.align(Alignment.BottomCenter)
-            .padding(horizontal = 8.dp).padding(bottom = inset + if (hasPlayer) 144.dp else 72.dp)
+            .padding(horizontal = 8.dp).padding(bottom = inset + if (hasPlayer) 152.dp else 80.dp)
             .fillMaxWidth().heightIn(max = maxHeight / 2).onSizeChanged { selectionHeight = with(density) { it.height.toDp() } },
             shape = Corners.panel, tonalElevation = 6.dp) {
             Column(Modifier.verticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }
