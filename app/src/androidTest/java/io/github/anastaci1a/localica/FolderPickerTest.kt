@@ -33,7 +33,9 @@ class FolderPickerTest {
         // Real picker tests must also be repeatable after manual library checks on this device.
         val repository = (context.applicationContext as LocalicaApplication).library
         runBlocking { repository.snapshots.first().folders.forEach { repository.removeFolder(it.uri) } }
-        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Settings").performClick()
+        compose.onNodeWithText("Library and tags").performClick()
         compose.waitUntil(10000) {
             compose.onAllNodes(hasText("Choose folder") or hasText("Add folder"))
                 .fetchSemanticsNodes().isNotEmpty()
@@ -49,7 +51,7 @@ class FolderPickerTest {
         device.wait(Until.findObject(By.text(Pattern.compile("allow", Pattern.CASE_INSENSITIVE))), 2000)?.click()
         val tree = "content://io.github.anastaci1a.localica.test.documents/tree/root"
         await { context.contentResolver.persistedUriPermissions.any { it.uri.toString() == tree && it.isReadPermission } }
-        device.pressBack() // close settings
+        compose.onNodeWithContentDescription("Close settings").performClick()
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Morning tone").fetchSemanticsNodes().isNotEmpty() }

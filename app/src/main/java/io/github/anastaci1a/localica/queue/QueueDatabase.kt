@@ -5,7 +5,7 @@ import io.github.anastaci1a.localica.library.TrackSnapshot
 
 @Entity(tableName = "queues")
 data class QueueRecord(@PrimaryKey val id: String, val name: String, val createdAt: Long,
-    val currentEntryId: String?, val positionMs: Long, val shuffle: Boolean, val repeat: String, @ColumnInfo(defaultValue = "0") val ordinal: Int = 0)
+    val currentEntryId: String?, val positionMs: Long, val shuffle: Boolean, val repeat: String, @ColumnInfo(defaultValue = "0") val ordinal: Int = 0, @ColumnInfo(defaultValue = "0") val lastActivatedAt: Long = 0)
 @Entity(tableName = "queue_entries", foreignKeys = [ForeignKey(entity = QueueRecord::class,
     parentColumns = ["id"], childColumns = ["queueId"], onDelete = ForeignKey.CASCADE)], indices = [Index("queueId")])
 data class EntryRecord(@PrimaryKey val id: String, val queueId: String, val ordinal: Int, val track: String)
@@ -28,7 +28,7 @@ abstract class QueueDao {
         val queues = readQueues().map { stored -> stored.queue.let { q ->
             ListeningQueue(q.id, q.name, q.createdAt, stored.entries.sortedBy { it.ordinal }.map {
                 QueueEntry(it.id, TrackSnapshot.decode(it.track)) }, q.currentEntryId, q.positionMs, q.shuffle,
-                QueueRepeat.entries.firstOrNull { it.name == q.repeat } ?: QueueRepeat.Off)
+                QueueRepeat.entries.firstOrNull { it.name == q.repeat } ?: QueueRepeat.Off, q.lastActivatedAt)
         } }
         return QueueLibrary(queues, readActive()?.queueId?.takeIf { id -> queues.any { it.id == id } })
     }
@@ -40,7 +40,7 @@ abstract class QueueDao {
             val previous = before.queues.firstOrNull { it.id == queue.id }
             if (previous == queue && before.queues.indexOf(previous) == ordinal) continue
             upsertQueue(QueueRecord(queue.id, queue.name, queue.createdAt, queue.currentEntryId,
-                queue.positionMs, queue.shuffle, queue.repeat.name, ordinal))
+                queue.positionMs, queue.shuffle, queue.repeat.name, ordinal, queue.lastActivatedAt))
             if (previous?.entries != queue.entries) {
                 clearEntries(queue.id)
                 insertEntries(queue.entries.mapIndexed { index, entry ->
@@ -51,10 +51,17 @@ abstract class QueueDao {
     }
 }
 
-@Database(entities = [QueueRecord::class, EntryRecord::class, ActiveQueueRecord::class], version = 2, exportSchema = true)
+@Database(entities = [QueueRecord::class, EntryRecord::class, ActiveQueueRecord::class], version = 3, exportSchema = true)
 abstract class QueueDatabase : RoomDatabase() {
     abstract fun queues(): QueueDao
     companion object {
+        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE queues ADD COLUMN lastActivatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE queues SET lastActivatedAt = createdAt")
+                db.execSQL("UPDATE queues SET lastActivatedAt = (SELECT COALESCE(MAX(createdAt), 0) + 1 FROM queues) WHERE id IN (SELECT queueId FROM queue_state)")
+            }
+        }
         val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE queues ADD COLUMN ordinal INTEGER NOT NULL DEFAULT 0")

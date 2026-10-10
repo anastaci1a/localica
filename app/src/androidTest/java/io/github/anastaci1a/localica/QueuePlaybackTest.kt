@@ -16,6 +16,63 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class QueuePlaybackTest {
+    @Test fun browsingLeavesPlaybackAloneAndDeletionRestoresMostRecentlyActivatedCursor() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val file = File(context.cacheDir, "queue-tone.mp3")
+        instrumentation.context.assets.open(file.name).use { input -> file.outputStream().use(input::copyTo) }
+        val tracks = listOf("One", "Two", "Three").map { Track(Uri.fromFile(file).toString(), it, fileName = file.name, relativePath = file.name, id = it) }
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use {
+            lateinit var playback: PlaybackConnection
+            instrumentation.runOnMainSync { playback = PlaybackConnection(context) }
+            val queues = playback.queues
+            try {
+                await { playback.state.value.connected && !queues.state.value.loading }
+                queues.settings(QueueSettings())
+                queues.removeQueues(queues.state.value.library.queues.map { it.id }.toSet())
+                await { queues.state.value.library.queues.isEmpty() }
+                queues.tap(listOf(tracks[0]), 0, sourceName = "Album ◀ Artist")
+                await { playback.state.value.isPlaying && playback.state.value.trackId == "One" }
+                val first = queues.state.value.library.active!!
+                assertEquals("Album ◀ Artist", first.name)
+                queues.seek(1500); queues.togglePlayback()
+                await { !playback.state.value.isPlaying && playback.state.value.positionMs >= 1400 }
+                queues.tap(listOf(tracks[1]), 0)
+                await { playback.state.value.isPlaying && playback.state.value.trackId == "Two" }
+                val second = queues.state.value.library.active!!
+                queues.seek(2500); queues.togglePlayback()
+                await { !playback.state.value.isPlaying && playback.state.value.positionMs >= 2400 }
+                queues.tap(listOf(tracks[2]), 0)
+                await { playback.state.value.isPlaying && playback.state.value.trackId == "Three" }
+                val third = queues.state.value.library.active!!
+                queues.switchTo(first.id)
+                await { queues.state.value.browsedId == first.id }
+                assertEquals(third.id, queues.state.value.library.activeId)
+                assertEquals("Three", playback.state.value.trackId)
+                assertTrue(playback.state.value.isPlaying)
+                queues.rename(first.id, "Renamed")
+                queues.moveQueue(first.id, 2)
+                await { queues.state.value.library.queues.last().id == first.id }
+                queues.removeQueues(setOf(third.id))
+                await { playback.state.value.isPlaying && playback.state.value.trackId == "Two" }
+                assertTrue(playback.state.value.positionMs >= 2400)
+                queues.togglePlayback()
+                await { !playback.state.value.isPlaying }
+                queues.removeQueues(setOf(second.id))
+                await { queues.state.value.library.activeId == first.id && playback.state.value.trackId == "One" }
+                assertFalse(playback.state.value.isPlaying)
+                assertTrue(playback.state.value.positionMs >= 1400)
+                assertEquals("Renamed", queues.state.value.library.active!!.name)
+                queues.selectEntry(first.entries.single().id)
+                await { playback.state.value.isPlaying && playback.state.value.positionMs < 1400 }
+            } finally {
+                queues.settings(QueueSettings())
+                queues.removeQueues(queues.state.value.library.queues.map { it.id }.toSet())
+                await { queues.state.value.library.queues.isEmpty() }
+                instrumentation.runOnMainSync { playback.close() }; file.delete()
+            }
+        }
+    }
     @Test fun queuesCaptureListsSwitchPausedAndKeepPlaybackDuringEditsAndCancelledCleanup() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -29,7 +86,7 @@ class QueuePlaybackTest {
             val queues = playback.queues
             try {
                 await { playback.state.value.connected && !queues.state.value.loading }
-                queues.settings(QueueSettings())
+                queues.settings(QueueSettings(switching = QueueSwitch.Paused))
                 queues.removeQueues(queues.state.value.library.queues.map { it.id }.toSet())
                 await { queues.state.value.library.queues.isEmpty() }
                 playback.playFromList(tracks, "Second")
@@ -42,7 +99,7 @@ class QueuePlaybackTest {
                 await { playback.state.value.isPlaying && queues.state.value.library.queues.size == 2 }
                 queues.switchTo(firstQueue.id)
                 await { playback.state.value.trackId == "Second" && !playback.state.value.isPlaying && playback.state.value.positionMs >= 1400 }
-                queues.settings(QueueSettings(songTap = SongTap.Append))
+                queues.settings(QueueSettings(switching = QueueSwitch.Paused, songTap = SongTap.Append))
                 playback.play(tracks[1])
                 await { queues.state.value.library.active!!.entries.size == 4 }
                 assertFalse(playback.state.value.isPlaying)
@@ -80,7 +137,7 @@ class QueuePlaybackTest {
                 queues.settings(queues.state.value.settings.copy(preloadNext = false))
                 await { !queues.state.value.settings.preloadNext }
                 assertFalse(QueuePreferences(context).read().preloadNext)
-                queues.settings(QueueSettings(maximum = 2))
+                queues.settings(QueueSettings(switching = QueueSwitch.Paused, maximum = 2))
                 playback.play(tracks[0])
                 await { queues.state.value.pending != null }
                 val activeBeforeCancel = queues.state.value.library.activeId
@@ -101,7 +158,7 @@ class QueuePlaybackTest {
                 instrumentation.runOnMainSync { playback.next() }
                 await { queues.state.value.library.active!!.currentEntryId == queues.state.value.library.active!!.entries.last().id }
                 assertEquals("Second", playback.state.value.trackId) // duplicate, different entry
-                queues.settings(QueueSettings(songTap = SongTap.Append,
+                queues.settings(QueueSettings(switching = QueueSwitch.Paused, songTap = SongTap.Append,
                     tapOverrides = mapOf(SongListView.Playlists to SongTap.NewQueue)))
                 queues.tap(listOf(tracks[0], tracks[1], tracks[0]), 2, SongListView.Playlists)
                 await { queues.state.value.library.queues.size == 3 && playback.state.value.trackId == "First" }
@@ -113,7 +170,7 @@ class QueuePlaybackTest {
                     queues.state.value.library.active!!.entries.map { it.track.id })
                 assertEquals(duplicateQueue.entries[2].id, queues.state.value.library.active!!.currentEntryId)
             } finally {
-                queues.settings(QueueSettings())
+                queues.settings(QueueSettings(switching = QueueSwitch.Paused))
                 queues.removeQueues(queues.state.value.library.queues.map { it.id }.toSet())
                 await { queues.state.value.library.queues.isEmpty() }
                 instrumentation.runOnMainSync { playback.close() }

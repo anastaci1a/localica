@@ -91,17 +91,6 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    EditField.entries.forEach { field ->
-                        val common = state.tracks.map(field::value).distinct().size == 1
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name }, enabled = !state.busy)
-                            OutlinedTextField(JSONObject(values).getString(field.name), { text ->
-                                values = JSONObject(values).put(field.name, text).toString()
-                                if (field.name !in changed) changed = changed + field.name
-                            }, enabled = !state.busy, label = { Text(field.label) }, placeholder = { if (!common) Text("Mixed values — unchanged") },
-                                modifier = Modifier.weight(1f), singleLine = field != EditField.Comment)
-                        }
-                    }
                     Text("Artwork", style = MaterialTheme.typography.titleMedium)
                     cover?.let { image ->
                         val bitmap = remember(image) { BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size) }
@@ -118,6 +107,18 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                     }
                     if (imageUri != null || removeImage) TextButton(enabled = !state.busy,
                         onClick = { imageUri = null; removeImage = false }) { Text("Keep existing artwork") }
+                    AlbumArtwork(state.tracks.first().uri, Modifier.size(128.dp))
+                    EditField.entries.forEach { field ->
+                        val common = state.tracks.map(field::value).distinct().size == 1
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name }, enabled = !state.busy)
+                            OutlinedTextField(JSONObject(values).getString(field.name), { text ->
+                                values = JSONObject(values).put(field.name, text).toString()
+                                if (field.name !in changed) changed = changed + field.name
+                            }, enabled = !state.busy, label = { Text(field.label) }, placeholder = { if (!common) Text("Mixed values — unchanged") },
+                                modifier = Modifier.weight(1f), singleLine = field != EditField.Comment)
+                        }
+                    }
                     state.tracks.flatMap { it.locations }.distinctBy { it.folderUri }.forEach { location ->
                         TextButton(enabled = !state.busy, onClick = { grant.launch(Uri.parse(location.folderUri)) }) {
                             Text("Grant write access: ${Uri.parse(location.folderUri).lastPathSegment.orEmpty().substringAfterLast(':').substringAfterLast('/').ifBlank { "music folder" }}")
@@ -143,7 +144,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
     if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Save changes to ${state.tracks.size} files?") },
         text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }
             if (removeImage) Text("Remove artwork") else if (cover != null) Text("Replace artwork")
-            Text("Changes are written to the audio files. Playback of a file being edited pauses until it is verified.") } },
+            Text("Changes are written to the audio files. Playback pauses while editing a file in the active queue, then resumes after verification.") } },
         confirmButton = { TextButton(onClick = { confirming = false; controller.save(patch()) }) { Text("Save changes") } },
         dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }
