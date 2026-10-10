@@ -89,7 +89,7 @@ internal class FakeDocuments : DocumentSource {
         directoryFailure?.let { throw it }
         return entries[documentId].orEmpty()
     }
-    override fun metadata(uri: String): AudioMetadata {
+    override suspend fun metadata(uri: String): AudioMetadata {
         metadataReads++
         if (uri == failureUri) metadataFailure?.let { throw it }
         return tags[uri] ?: AudioMetadata()

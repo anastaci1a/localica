@@ -62,4 +62,5 @@
     <string name="sort_path">Path</string>
     <string name="sort_year">Year</string>
     <string name="sort_duration">Duration</string>
+    <string name="album_artwork">Embedded album artwork</string>
 </resources>

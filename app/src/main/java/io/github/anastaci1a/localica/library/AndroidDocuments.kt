@@ -7,6 +7,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 
 class AndroidDocuments(private val context: Context) : DocumentSource {
     private val resolver = context.contentResolver
@@ -44,19 +45,23 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
         }
     }
 
-    override fun metadata(uri: String): AudioMetadata {
+    override suspend fun metadata(uri: String): AudioMetadata {
+        val extra = try { embeddedTags(context, uri) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, Uri.parse(uri))
             return AudioMetadata(
-                title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
-                artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
-                album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM),
-                albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
-                trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER).tagNumber(),
-                discNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER).tagNumber(),
-                year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR).tagNumber(),
-                genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE),
+                title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: extra?.metadata?.title?.toString(),
+                artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: extra?.metadata?.artist?.toString(),
+                album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: extra?.metadata?.albumTitle?.toString(),
+                albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST) ?: extra?.metadata?.albumArtist?.toString(),
+                trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER).tagNumber() ?: extra?.metadata?.trackNumber,
+                discNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER).tagNumber() ?: extra?.metadata?.discNumber,
+                year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR).tagNumber() ?: extra?.metadata?.recordingYear ?: extra?.metadata?.releaseYear,
+                genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE) ?: extra?.metadata?.genre?.toString(),
+                comment = extra?.comment,
                 durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull(),
             )
         } finally {

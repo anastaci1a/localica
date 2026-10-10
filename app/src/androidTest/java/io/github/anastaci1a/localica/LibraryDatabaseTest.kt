@@ -74,7 +74,7 @@ class LibraryDatabaseTest {
             old.version = 1
         }
         val database = Room.databaseBuilder(context, LibraryDatabase::class.java, name)
-            .addMigrations(LibraryDatabase.MIGRATION_1_2).build()
+            .addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3).build()
         try {
             val store = RoomLibraryStore(database.libraryDao())
             val snapshot = store.current()
@@ -85,9 +85,10 @@ class LibraryDatabaseTest {
             assertEquals(1234L, song.durationMs)
             assertEquals("nested/song.mp3", song.relativePath)
             assertNull(song.albumArtist)
-            store.replaceRoot(ScanResult(snapshot.folders.single(), listOf(song.copy(title = "Updated", albumArtist = "Band")), 0))
+            store.replaceRoot(ScanResult(snapshot.folders.single(), listOf(song.copy(title = "Updated", albumArtist = "Band", comment = "A comment")), 0))
             assertEquals(song.id, store.current().tracks.single().id)
             assertEquals("Band", store.current().tracks.single().albumArtist)
+            assertEquals("A comment", store.current().tracks.single().comment)
         } finally { database.close(); context.deleteDatabase(name) }
     }
 }

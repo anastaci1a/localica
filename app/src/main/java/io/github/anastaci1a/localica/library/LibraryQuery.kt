@@ -49,7 +49,7 @@ object LibraryQueries {
             if (terms.isEmpty()) true else {
                 val paths = if (query.folderUri == null) track.locations.map { it.relativePath } else listOf(track.relativePath)
                 val searchable = (listOfNotNull(track.title, track.artist, track.album, track.albumArtist,
-                    track.genre, track.year?.toString(), track.fileName) + paths).joinToString("\n").lowercase(Locale.ROOT)
+                    track.genre, track.comment, track.year?.toString(), track.fileName) + paths).joinToString("\n").lowercase(Locale.ROOT)
                 terms.all { it in searchable }
             }
         }.sortedWith(order).toList()

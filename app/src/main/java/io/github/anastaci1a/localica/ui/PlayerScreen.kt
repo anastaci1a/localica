@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,15 +26,7 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(36.dp))
-        Surface(Modifier.size(160.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-            Box(contentAlignment = Alignment.Center) {
-                Surface(Modifier.size(96.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(painterResource(R.drawable.ic_music), null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
-        }
+        AlbumArtwork(state.trackUri)
         Spacer(Modifier.height(32.dp))
         Text(stringResource(R.string.now_playing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(12.dp))

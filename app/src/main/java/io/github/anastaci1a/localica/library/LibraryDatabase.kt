@@ -26,6 +26,7 @@ data class TrackRecord(
     val discNumber: Int?,
     val year: Int?,
     val genre: String?,
+    val comment: String?,
 )
 
 @Entity(tableName = "folder_tracks", primaryKeys = ["folderUri", "trackId"], foreignKeys = [
@@ -77,11 +78,14 @@ abstract class LibraryDao {
     }
 }
 
-@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 2, exportSchema = true)
+@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 3, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     companion object {
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE tracks ADD COLUMN comment TEXT") }
+        }
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE folders_new (uri TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL)")
@@ -131,7 +135,7 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
     override suspend fun replaceRoot(result: ScanResult) {
         dao.replaceRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
             TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
-                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre)
+                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment)
         }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath) })
     }
     override suspend fun removeRoot(uri: String) = dao.removeRoot(uri)
@@ -144,7 +148,7 @@ private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {
         val location = locations.first()
         Track(location.uri, record.title, record.artist, record.album, record.durationMs, record.fileName,
             location.relativePath, record.id, record.albumArtist, record.trackNumber, record.discNumber, record.year,
-            record.genre, locations)
+            record.genre, record.comment, locations)
     }.sortedWith(trackOrder)
     return LibrarySnapshot(map { FolderSelection(it.folder.uri, it.folder.name) }, tracks)
 }
