@@ -12,11 +12,12 @@ Recoverable individual/bulk tag and artwork editing, image selection, and zoomab
 
 Reference-based layouts, continuous player/Queue gestures, tab swiping, restored search/list history, configurable player actions, outlined session selection, cancelable multi-song drag stacks, richer metadata, independent queue browsing, and next-track preloading shipped in v0.9.0. The behavioral contract is in [Interface](interface.md).
 
+The v0.9.1 patch isolates live route rendering/focus, prevents scrollbar/menu overlap, distinguishes gallery densities, expands compact titles, and makes the top drag card follow the finger directly.
+
 ## Reviewable release checkpoints
 
-1. **v0.9.1 — browsing reliability:** correct invisible detail/search rendering, collection menu targets, distinct gallery sizes/compact typography, and responsive drag tracking.
-2. **v0.10.0 — player and navigation layout:** aligned floating tab/utility/mini-player pills, filled transport icons, artwork background choice, and one blended lyrics layout with animated controls.
-3. **v0.11.0 — organization and settings:** reference-based settings/list options, scanner dialog and background operation, dedicated folder/error pages, and playlist creation/import menus.
+1. **v0.10.0 — player and navigation layout:** aligned floating tab/utility/mini-player pills, filled transport icons, artwork background choice, and one blended lyrics layout with animated controls.
+2. **v0.11.0 — organization and settings:** reference-based settings/list options, scanner dialog and background operation, dedicated folder/error pages, and playlist creation/import menus.
 
 Publish a verified APK at each checkpoint for device feedback; address regressions before advancing. These steps precede glass rendering.
 
