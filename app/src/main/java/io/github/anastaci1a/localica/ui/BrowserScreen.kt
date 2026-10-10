@@ -44,8 +44,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val focus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
-    LaunchedEffect(route.key) {
-        if (route.search && !focusedOnce) {
+    LaunchedEffect(route.key, playerOpen) {
+        if (route.search && !focusedOnce && !playerOpen) {
             withFrameNanos { } // Wait until the newly keyed field is attached.
             focus.requestFocus(); keyboard?.show(); focusedOnce = true
         }
@@ -92,7 +92,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 TextButton(onClick = { deleting = true }) { Text("Delete") }
         }
         header()
-        if (route.search || route.collection != null || route.tab != MainTab.Library) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true,
+        if (route.search || route.collection != null || route.tab != MainTab.Library) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); keyboard?.hide() }),
             trailingIcon = { ActionIcon(R.drawable.ic_search, "Submit search") { onSearchCommit(); keyboard?.hide() } },
