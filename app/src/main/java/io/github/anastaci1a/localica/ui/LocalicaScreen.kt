@@ -13,6 +13,8 @@ import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.LibraryQuery
+import io.github.anastaci1a.localica.library.SongListView
+import io.github.anastaci1a.localica.playlist.PlaylistController
 import io.github.anastaci1a.localica.playback.PlaybackState
 
 @Composable
@@ -31,6 +33,13 @@ fun LocalicaScreen(
     queueController: QueueController? = null,
     onPrevious: () -> Unit = {},
     onNext: () -> Unit = {},
+    onView: (SongListView) -> Unit = {},
+    onGroup: (String?) -> Unit = {},
+    playlist: PlaylistUiState = PlaylistUiState(),
+    playlistController: PlaylistController? = null,
+    onOpenPlaylist: (String?) -> Unit = {},
+    onPlaylistQuery: (LibraryQuery) -> Unit = {},
+    onPlaylistPlay: (String) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -47,6 +56,8 @@ fun LocalicaScreen(
                             label = { Text(stringResource(R.string.library)) })
                         NavigationBarItem(selected = tab == 2, onClick = { tab = 2 },
                             icon = { Text("≡") }, label = { Text("Queues") })
+                        NavigationBarItem(selected = tab == 3, onClick = { tab = 3 },
+                            icon = { Text("♫") }, label = { Text("Playlists") })
                     }
                     IconButton(onClick = { settingsOpen = true }, modifier = Modifier.align(Alignment.CenterEnd).size(48.dp)) {
                         Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings))
@@ -58,8 +69,12 @@ fun LocalicaScreen(
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (tab == 0) PlayerScreen(playback, onToggle, onSeek, onOpenLibrary = { tab = 1 }, onPrevious = onPrevious, onNext = onNext)
             else if (tab == 2) QueueScreen(queues, queueController)
+            else if (tab == 3) PlaylistScreen(playlist, library.snapshot.folders, playlistController,
+                queueController, onOpenPlaylist, onPlaylistQuery, onPlaylistPlay, playback.trackId, playback.connected)
             else LibraryScreen(library, playback.trackId, enabled = playback.connected,
-                onTrack = { onPlay(it); tab = 0 }, onSettings = { settingsOpen = true }, onQuery = onQuery)
+                onTrack = { onPlay(it); tab = 0 }, onSettings = { settingsOpen = true }, onQuery = onQuery,
+                onView = onView, onGroup = onGroup, queues = queueController,
+                playlists = playlistController, playlistState = playlist.saved)
         }
     }
     if (settingsOpen) FolderSettings(library,

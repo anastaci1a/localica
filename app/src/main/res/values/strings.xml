@@ -63,4 +63,5 @@
     <string name="sort_year">Year</string>
     <string name="sort_duration">Duration</string>
     <string name="album_artwork">Embedded album artwork</string>
+    <string name="sort_manual">Playlist order</string>
 </resources>
