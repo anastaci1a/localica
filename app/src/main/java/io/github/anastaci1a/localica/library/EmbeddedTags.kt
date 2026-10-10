@@ -21,6 +21,7 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
         val groups = retriever.retrieveTrackGroups().awaitResult()
         val builder = MediaMetadata.Builder()
         var comment: String? = null
+        val lyrics = mutableListOf<String>()
         for (groupIndex in 0 until groups.length) {
             val group = groups[groupIndex]
             for (formatIndex in 0 until group.length) {
@@ -29,6 +30,7 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
                 for (entryIndex in 0 until metadata.length()) {
                     val entry = metadata[entryIndex]
                     if (entry is VorbisComment) {
+                        if (entry.key.uppercase(java.util.Locale.ROOT) in setOf("LYRICS", "UNSYNCEDLYRICS", "SYNCEDLYRICS", "SYNCHRONIZEDLYRICS")) lyrics += entry.value
                         val number = entry.value.substringBefore('/').toIntOrNull()?.takeIf { it > 0 }
                         when (entry.key.uppercase(java.util.Locale.ROOT)) {
                             "DATE", "YEAR" -> entry.value.take(4).toIntOrNull()?.let { builder.setRecordingYear(it) }
@@ -47,11 +49,11 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
                 }
             }
         }
-        EmbeddedTags(builder.build(), comment)
+        EmbeddedTags(builder.build(), comment, lyrics.distinct())
     }
 } ?: EmbeddedTags(MediaMetadata.EMPTY, null)
 
-internal data class EmbeddedTags(val metadata: MediaMetadata, val comment: String?)
+internal data class EmbeddedTags(val metadata: MediaMetadata, val comment: String?, val lyrics: List<String> = emptyList())
 
 private suspend fun <T> ListenableFuture<T>.awaitResult(): T = suspendCancellableCoroutine { continuation ->
     continuation.invokeOnCancellation { cancel(true) }
