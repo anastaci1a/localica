@@ -83,7 +83,7 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
     LaunchedEffect(active, following, document) {
         if (following && active >= 0) {
             // The top content padding already places the active line one third down.
-            if (reducedMotion) list.scrollToItem(active) else list.animateScrollToItem(active)
+            list.easeToItem(active, reducedMotion)
         }
     }
     Column(modifier) {
@@ -99,7 +99,7 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                 itemsIndexed(document.lines) { index, line ->
                     val selected = !document.synced || index == active
                     val color by animateColorAsState(if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                        tween(if (reducedMotion) 0 else 250), label = "Lyric emphasis")
+                        tween(if (reducedMotion) 0 else 350), label = "Lyric emphasis")
                     Text(line.text.ifEmpty { "♪" }, color = color,
                         style = MaterialTheme.typography.headlineSmall, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         modifier = Modifier.fillMaxWidth().semantics { this.selected = document.synced && index == active }

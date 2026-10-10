@@ -44,6 +44,7 @@ class NavigationTest {
                     onDismiss = {}, onChooseFolder = {}, onRescan = {}, onCancel = {}, onRemove = { removed = it })
             }
         }
+        compose.onNodeWithText("Library and tags").performClick()
         compose.onNodeWithText("Remove").performClick()
         compose.onNodeWithText("Remove folder?").assertIsDisplayed()
         compose.runOnIdle { assertNull(removed) }
@@ -71,7 +72,9 @@ class NavigationTest {
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Track 40"))
         compose.onNodeWithText("Track 40").performClick()
         compose.runOnIdle { assertEquals(tracks.last(), selected) }
-        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Settings").performClick()
+        compose.onNodeWithText("Library and tags").performClick()
         compose.onNodeWithText("Music folders").assertIsDisplayed()
         compose.onNodeWithText("Add folder").performClick()
         compose.runOnIdle { assertTrue(requestedFolder) }

@@ -46,7 +46,7 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
     val lyricsHeight = (maxHeight * 0.45f).coerceAtLeast(120.dp)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Crossfade(lyricsOpen, animationSpec = tween(if (settings.reducedMotion) 0 else 250), label = "Artwork and lyrics") { showLyrics ->
+        Crossfade(lyricsOpen, animationSpec = tween(settings.motionDuration(350)), label = "Artwork and lyrics") { showLyrics ->
         if (showLyrics) LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
             Modifier.fillMaxWidth().height(lyricsHeight))
         else Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -54,9 +54,9 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
                 onClickLabel = settings.artworkTap.label, onClick = { action(settings.artworkTap) },
                 onLongClickLabel = settings.artworkHold.label, onLongClick = { action(settings.artworkHold) }))
             DropdownMenu(artworkMenu, { artworkMenu = false }) {
-                DropdownMenuItem(text = { Text("View artwork") }, onClick = { artworkMenu = false; viewing = true })
-                if (onEditTags != null) DropdownMenuItem(text = { Text("Change artwork") }, onClick = { artworkMenu = false; onEditTags() })
-                DropdownMenuItem(text = { Text("Configure tap action") }, onClick = { artworkMenu = false; configureTap = true })
+                ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
+                if (onEditTags != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; onEditTags() })
+                ActionMenuItem("Configure tap action", onClick = { artworkMenu = false; configureTap = true })
             }
         }
         }

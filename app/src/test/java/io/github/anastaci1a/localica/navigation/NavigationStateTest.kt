@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NavigationStateTest {
+    @Test fun tabResetKeepsRootIdentityAndPreferencesWithoutTouchingOtherTabsOrHistory() {
+        val initial = NavigationState.fresh(listOf(MainTab.Home, MainTab.Library)).switch(MainTab.Library)
+        val root = initial.route.copy(filter = MediaKind.Artist)
+        val state = initial.update(root).open(BrowseRoute(MainTab.Library, search = true, text = "Artist"))
+        val reset = state.resetTab(MainTab.Library)
+        assertEquals(root, reset.route)
+        assertEquals(initial.history, reset.history)
+        assertEquals(state.stacks[MainTab.Home], reset.stacks[MainTab.Home])
+    }
+
     @Test fun freshLaunchPrefersHomeAndTabRevisitsRetainDetails() {
         val fresh = NavigationState.fresh(listOf(MainTab.Library, MainTab.Home))
         assertEquals(MainTab.Home, fresh.active)

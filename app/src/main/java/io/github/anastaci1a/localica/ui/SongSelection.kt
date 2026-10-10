@@ -21,31 +21,31 @@ import io.github.anastaci1a.localica.queue.*
 @Composable
 internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSelection: (Set<String>) -> Unit,
     queues: QueueController?, playlists: PlaylistController?, playlistState: PlaylistState,
-    onRemove: (((Boolean) -> Unit) -> Unit)? = null, removeLabel: String = "Remove from playlist") {
+    onRemove: (((Boolean) -> Unit) -> Unit)? = null, removeLabel: String = "Remove from playlist",
+    onAll: (() -> Unit)? = null, onRange: (() -> Unit)? = null, onCollapse: (() -> Unit)? = null) {
     var menu by remember { mutableStateOf(false) }
     val editTags = LocalTagEdit.current
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val chosen = rows.filter { it.id in selected }
-    Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-        Text("${chosen.size} selected")
-        TextButton(onClick = { onSelection(rows.map { it.id }.toSet()) }) { Text("Select all") }
-        TextButton(onClick = { onSelection(emptySet()) }) { Text("Clear") }
-        Box {
-            TextButton(enabled = chosen.isNotEmpty(), onClick = { menu = true }) { Text("Actions") }
-            DropdownMenu(menu, { menu = false }) {
-                if (editTags != null) DropdownMenuItem(text = { Text("Edit tags") }, onClick = {
-                    editTags(chosen.map { it.track }) { if (it) onSelection(emptySet()) }; menu = false
-                })
-                SongTap.entries.forEach { action ->
-                    DropdownMenuItem(text = { Text(action.label()) }, onClick = {
-                        queues?.act(chosen.map { it.track }, action) { if (it) onSelection(emptySet()) }; menu = false
-                    })
-                }
-                DropdownMenuItem(text = { Text("Add to playlist") }, onClick = { adding = chosen.map { it.track }; menu = false })
-                if (onRemove != null) DropdownMenuItem(text = { Text(removeLabel) }, onClick = {
-                    onRemove { if (it) onSelection(emptySet()) }; menu = false
-                })
-            }
+    Column(Modifier.fillMaxWidth().padding(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("${chosen.size} selected", Modifier.weight(1f))
+            TextButton(onClick = { onAll?.invoke() ?: onSelection(rows.map { it.id }.toSet()) }) { Text("All") }
+            if (onRange != null) TextButton(onClick = onRange) { Text("Range") }
+            if (onCollapse != null) ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_down, "Collapse selection", onClick = onCollapse)
+            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Close selection") { onSelection(emptySet()) }
+        }
+        FlowRow(Modifier.fillMaxWidth(), maxItemsInEachRow = 3) {
+            if (editTags != null) TextButton(enabled = chosen.isNotEmpty(), onClick = {
+                editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }
+            }) { Text("Edit tags") }
+            SongTap.entries.forEach { action -> TextButton(enabled = chosen.isNotEmpty() && queues != null, onClick = {
+                queues?.act(chosen.map { it.track }, action) { if (it) onSelection(emptySet()) }
+            }) { Text(when (action) { SongTap.NewQueue -> "New queue"; SongTap.PlayNow -> "Play now"; SongTap.PlayNext -> "Play next"; SongTap.Append -> "Append" }) } }
+            TextButton(enabled = chosen.isNotEmpty(), onClick = { adding = chosen.map { it.track } }) { Text("Add to playlist") }
+            if (onRemove != null) TextButton(enabled = chosen.isNotEmpty(), onClick = {
+                onRemove { if (it) onSelection(emptySet()) }
+            }) { Text(removeLabel) }
         }
     }
     adding?.let { tracks -> AddToPlaylistDialog(tracks, playlistState, playlists,
@@ -53,7 +53,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
 }
 
 @Composable
-private fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, controller: PlaylistController?,
+internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, controller: PlaylistController?,
     onDismiss: () -> Unit, onAdded: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var chosen by remember { mutableStateOf<String?>(null) }
@@ -64,7 +64,11 @@ private fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, contr
                 TextButton(onClick = { expanded = true }) { Text(state.playlists.firstOrNull { it.id == chosen }?.name ?: "New playlist") }
                 DropdownMenu(expanded, { expanded = false }) {
                     DropdownMenuItem(text = { Text("New playlist") }, onClick = { chosen = null; expanded = false })
-                    state.playlists.forEach { list -> DropdownMenuItem(text = { Text(list.name) },
+                    state.playlists.forEach { list ->
+                        val contains = tracks.size == 1 && list.entries.any { it.track.id == tracks.single().id }
+                        DropdownMenuItem(text = { Text(list.name,
+                            fontWeight = if (contains) androidx.compose.ui.text.font.FontWeight.Bold else null,
+                            modifier = Modifier.semantics { if (contains) contentDescription = list.name + ", already contains this song" }) },
                         onClick = { chosen = list.id; expanded = false }) }
                 }
             }

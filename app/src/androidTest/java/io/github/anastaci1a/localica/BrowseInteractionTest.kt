@@ -31,17 +31,14 @@ class BrowseInteractionTest {
         compose.onNodeWithTag(last).performClick()
         compose.runOnIdle { assertEquals(1, played); played = null }
         compose.onNodeWithTag(last).performTouchInput { longClick() }
-        compose.onNodeWithText("Continue selecting").assertIsDisplayed()
-        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
         compose.onNodeWithText("1 selected").assertIsDisplayed()
         compose.onNodeWithTag(first).performClick()
         compose.runOnIdle { assertNull(played) }
         compose.onNodeWithText("2 selected").assertIsDisplayed()
-        compose.onNodeWithText("Actions").performClick()
         compose.onNodeWithText("Add to playlist").performClick()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("2 selected").assertIsDisplayed()
-        compose.onNodeWithText("Clear").performClick()
+        compose.onNodeWithContentDescription("Close selection").performClick()
         compose.onAllNodes(isToggleable()).assertCountEquals(0)
     }
     @Test fun collectionOverridesInheritIndependentlyFromCatalogAndSearch() {

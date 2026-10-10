@@ -45,7 +45,7 @@ class InterfaceNavigationTest {
         compose.onNodeWithContentDescription("Previous").assertIsDisplayed()
         compose.onNodeWithContentDescription("Next").assertIsDisplayed()
         compose.onNodeWithContentDescription("Open queue").performClick()
-        compose.onNodeWithText("Rename").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Queue actions").assertIsDisplayed()
         back()
         compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
         restore.emulateSavedInstanceStateRestore()

@@ -77,8 +77,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     fun tap(tracks: List<Track>, selectedId: String) = tap(tracks, tracks.indexOfFirst { it.id == selectedId })
-    fun tap(tracks: List<Track>, selectedIndex: Int, view: SongListView = SongListView.Songs) = submit {
-        perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false)
+    fun tap(tracks: List<Track>, selectedIndex: Int, view: SongListView = SongListView.Songs, sourceName: String = "All Songs") = submit {
+        perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false, sourceName = sourceName)
     }
     /** Explicit selection actions bypass all tap preferences and preserve displayed occurrence order. */
     fun act(tracks: List<Track>, action: SongTap, complete: (Boolean) -> Unit = {}) = submit {
@@ -88,7 +88,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         } catch (failure: Exception) { complete(false); throw failure }
     }
 
-    private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean): Boolean {
+    private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean, sourceName: String = "Selected songs"): Boolean {
         val selected = tracks.getOrNull(selectedIndex) ?: return false
         pendingComplete?.invoke(false); pendingComplete = null
         if (state.value.pending != null) mutable.update { it.copy(pending = null) }
@@ -97,9 +97,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val expand = action == SongTap.NewQueue || action == SongTap.PlayNow
         if (action == SongTap.NewQueue || current == null) {
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
-                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand)) }
+                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName)) }
                 return false
-            } else create(tracks, selectedIndex, emptySet(), expand)
+            } else create(tracks, selectedIndex, emptySet(), expand, sourceName)
         } else {
             save(state.value.library.update(QueueEdits.insert(current, if (batch) tracks else listOf(selected), action)))
             activate(if (action == SongTap.PlayNow) true else null)
@@ -115,22 +115,21 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             mutable.update { it.copy(problem = "Select enough inactive queues to make room. The current queue is protected.") }
             return@submit
         }
-        create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer)
+        create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer, pending.sourceName)
         pendingComplete?.invoke(true); pendingComplete = null
     }
     fun cancelCreation() = submit {
         mutable.update { it.copy(pending = null, problem = null) }
         pendingComplete?.invoke(false); pendingComplete = null
     }
-    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean) {
-        val selected = tracks[selectedIndex]
+    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String) {
         val names = state.value.library.queues.filterNot { it.id in removals }.map { it.name }.toSet()
-        var name = selected.title
+        var name = sourceName
         var suffix = 2
-        while (name in names) name = "${selected.title} (${suffix++})"
-        val queue = QueueEdits.create(tracks, selectedIndex, name)
+        while (name in names) name = "$sourceName (${suffix++})"
+        val queue = QueueEdits.create(tracks, selectedIndex, name).copy(lastActivatedAt = nextActivation())
         save(QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id))
-        mutable.update { it.copy(pending = null) }
+        mutable.update { it.copy(pending = null, browsedId = queue.id) }
         activate(play = true)
         if (expandPlayer) requestPlayer()
     }
@@ -139,10 +138,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
 
     fun switchTo(id: String) = submit {
         if (state.value.library.queues.none { it.id == id }) return@submit
-        val wasPlaying = player?.playWhenReady == true
+        mutable.update { it.copy(browsedId = id) }
+        if (state.value.settings.switching == QueueSwitch.Browse) return@submit
+        val wasPlaying = player?.isPlaying == true
         capture()
-        save(state.value.library.copy(activeId = id))
+        val queue = state.value.library.queues.first { it.id == id }
+        save(state.value.library.update(queue.copy(lastActivatedAt = nextActivation())).copy(activeId = id))
         val play = when (state.value.settings.switching) {
+            QueueSwitch.Browse -> return@submit
             QueueSwitch.Paused -> false
             QueueSwitch.Resume -> true
             QueueSwitch.KeepPlaybackState -> wasPlaying
@@ -151,12 +154,13 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     fun selectEntry(id: String) = submit {
         capture()
-        val active = state.value.library.active ?: return@submit
-        if (active.entries.none { it.id == id }) return@submit
-        save(state.value.library.update(active.copy(currentEntryId = id, positionMs = 0)))
+        val active = state.value.library.queues.firstOrNull { queue -> queue.entries.any { it.id == id } } ?: return@submit
+        save(state.value.library.update(active.copy(currentEntryId = id, positionMs = 0, lastActivatedAt = nextActivation())).copy(activeId = active.id))
+        mutable.update { it.copy(browsedId = active.id) }
         activate(play = true, seek = true)
         requestPlayer()
     }
+    private fun nextActivation() = maxOf(System.currentTimeMillis(), (state.value.library.queues.maxOfOrNull { it.lastActivatedAt } ?: 0) + 1)
     fun rename(id: String, name: String) = submit {
         val queue = state.value.library.queues.firstOrNull { it.id == id } ?: return@submit
         name.trim().takeIf { it.isNotEmpty() }?.let { save(state.value.library.update(queue.copy(name = it))) }
@@ -170,32 +174,35 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     fun removeQueues(ids: Set<String>, protectActive: Boolean = false) = submit {
+        val wasPlaying = player?.isPlaying == true
         capture()
         val before = state.value.library
         val removed = if (protectActive) ids - setOfNotNull(before.activeId) else ids
         val queues = before.queues.filterNot { it.id in removed }
         val activeRemoved = before.activeId in removed
-        save(QueueLibrary(queues, if (activeRemoved) queues.firstOrNull()?.id else before.activeId))
-        if (activeRemoved) activate(play = false)
+        val recent = queues.maxWithOrNull(compareBy<ListeningQueue> { it.lastActivatedAt }.thenBy { it.createdAt }.thenBy { it.id })
+        save(QueueLibrary(queues, if (activeRemoved) recent?.id else before.activeId))
+        mutable.update { it.copy(browsedId = recent?.id) }
+        if (activeRemoved) activate(play = wasPlaying)
     }
-    fun removeEntry(id: String) = editActive { QueueEdits.remove(it, id) }
-    fun removeEntries(ids: Set<String>, complete: (Boolean) -> Unit = {}) = submit {
+    fun removeEntry(id: String) = editQueue(null) { QueueEdits.remove(it, id) }
+    fun removeEntries(ids: Set<String>, queueId: String? = null, complete: (Boolean) -> Unit = {}) = submit {
         try {
             capture()
-            val active = state.value.library.active ?: return@submit complete(false)
+            val active = state.value.library.queues.firstOrNull { it.id == (queueId ?: state.value.library.activeId) } ?: return@submit complete(false)
             val edited = active.entries.filter { it.id in ids }.fold(active) { queue, entry -> QueueEdits.remove(queue, entry.id) }
-            save(state.value.library.update(edited)); activate(null); complete(true)
+            save(state.value.library.update(edited)); if (active.id == state.value.library.activeId) activate(null); complete(true)
         } catch (failure: Exception) { complete(false); throw failure }
     }
-    fun moveEntry(id: String, offset: Int, complete: (Boolean) -> Unit = {}) = editActive(complete) { QueueEdits.move(it, id, offset) }
-    fun shuffle() = editActive { it.copy(shuffle = !it.shuffle) }
-    fun repeat() = editActive { it.copy(repeat = QueueRepeat.entries[(it.repeat.ordinal + 1) % QueueRepeat.entries.size]) }
-    private fun editActive(complete: (Boolean) -> Unit = {}, edit: (ListeningQueue) -> ListeningQueue) = submit {
+    fun moveEntry(id: String, offset: Int, queueId: String? = null, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { QueueEdits.move(it, id, offset) }
+    fun shuffle(queueId: String? = null) = editQueue(queueId) { it.copy(shuffle = !it.shuffle) }
+    fun repeat(queueId: String? = null) = editQueue(queueId) { it.copy(repeat = QueueRepeat.entries[(it.repeat.ordinal + 1) % QueueRepeat.entries.size]) }
+    private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: (ListeningQueue) -> ListeningQueue) = submit {
         try {
         capture()
-        val active = state.value.library.active ?: return@submit complete(false)
+        val active = state.value.library.queues.firstOrNull { it.id == (queueId ?: state.value.library.activeId) } ?: return@submit complete(false)
         save(state.value.library.update(edit(active)))
-        activate(null)
+        if (active.id == state.value.library.activeId) activate(null)
         complete(true)
         } catch (failure: Exception) { complete(false); throw failure }
     }

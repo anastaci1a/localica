@@ -14,12 +14,38 @@ import io.github.anastaci1a.localica.library.FolderSelection
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder: () -> Unit,
-                   onRescan: (String) -> Unit, onCancel: () -> Unit, onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {}) {
+                   onRescan: (String) -> Unit, onCancel: () -> Unit, onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {},
+                   interfaceContent: @Composable () -> Unit = {}, playbackContent: @Composable () -> Unit = {},
+                   aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null) {
     var removing by remember { mutableStateOf<FolderSelection?>(null) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    var category by remember { mutableStateOf(initialCategory) }
+    var search by remember { mutableStateOf("") }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        androidx.activity.compose.BackHandler(category != null) { category = null }
+        Surface(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                ActionIcon(R.drawable.ic_back, "Back from settings") { if (category == null) onDismiss() else category = null }
+                Text(category ?: "Settings", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                ActionIcon(R.drawable.ic_close, "Close settings", onClick = onDismiss)
+            }
+            OutlinedTextField(search, { search = it; category = null }, label = { Text("Search settings") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+            if (category == null) {
+                val categories = mapOf("Interface and gestures" to "tabs back navigation animation motion artwork player actions",
+                    "Playback and queues" to "preload listening song tap switch maximum",
+                    "Library and tags" to "folders rescan permissions metadata recovery artwork", "About and licenses" to "help version source licenses")
+                categories.filter { (name, keywords) -> (name + " " + keywords).contains(search, true) }.keys.forEach { name ->
+                    TextButton(onClick = { category = name }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(name) }
+                }
+            } else {
+
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(stringResource(R.string.settings), style = MaterialTheme.typography.headlineSmall)
+            if (category == "Interface and gestures") interfaceContent()
+            if (category == "Playback and queues") playbackContent()
+            if (category == "About and licenses") aboutContent()
+            if (category == "Library and tags") {
             Text(stringResource(R.string.music_folders), style = MaterialTheme.typography.titleMedium)
             Text(stringResource(R.string.includes_subfolders), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -49,6 +75,10 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                 }
             }
             extraContent()
+            }
+        }
+            }
+        }
         }
     }
     removing?.let { folder ->

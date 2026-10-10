@@ -11,6 +11,11 @@ class BrowseQueriesTest {
         Track("one", "First", album = "Album", albumArtist = "Group", trackNumber = 2, fileName = "one.mp3", relativePath = "one.mp3"),
         Track("two", "Second", album = "Album", albumArtist = "Group", trackNumber = 1, fileName = "two.mp3", relativePath = "two.mp3"))
     private val library = LibrarySnapshot(tracks = tracks)
+    @Test fun queueNamesDescribeSourceAndAvoidMislabelingMixedArtists() {
+        assertEquals("Album ◀ Group", queueSourceName(BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "a"), "Album"), tracks))
+        assertEquals("All Songs ◀ Group", queueSourceName(BrowseRoute(MainTab.Artists, MediaRef(MediaKind.Artist, "a"), "Group"), tracks))
+        assertEquals("All Songs", queueSourceName(BrowseRoute(MainTab.Songs), tracks + tracks.first().copy(albumArtist = "Other")))
+    }
     @Test fun mixedSearchIncludesCollectionsButQueueSnapshotContainsOnlyDisplayedSongs() {
         val route = BrowseRoute(MainTab.Library, search = true, globalSearch = true, text = "Album")
         val result = BrowseQueries.evaluate(library, emptyList(), route)

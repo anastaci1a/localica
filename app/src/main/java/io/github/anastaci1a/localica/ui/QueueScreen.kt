@@ -16,81 +16,97 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.library.SongListView
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueScreen(state: QueueUiState, controller: QueueController?, library: LibraryUiState = LibraryUiState(loading = false),
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
-    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}) {
+    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true) {
     var selector by remember { mutableStateOf(false) }
-    var renaming by remember { mutableStateOf(false) }
+    var renameId by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Set<String>?>(null) }
-    val active = state.library.active
-    var searching by rememberSaveable(active?.id) { mutableStateOf(false) }
-    var text by rememberSaveable(active?.id) { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
-    val routeKey = rememberSaveable(active?.id) { java.util.UUID.randomUUID().toString() }
-    val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, active?.id.orEmpty()), active?.name ?: "Queue",
-        search = searching, text = text, key = "$routeKey:$searching")
-    BackHandler(searching) { searching = false; text = "" }
+    var presentation by remember { mutableStateOf(false) }
+    val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
+    var browsing by rememberSaveable(active?.id, stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
+        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
+        mutableStateOf(NavigationState(MainTab.Queues, mapOf(MainTab.Queues to listOf(BrowseRoute(MainTab.Queues,
+            MediaRef(MediaKind.Queue, active?.id.orEmpty()), active?.name ?: "Queue")))))
+    }
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest > 0) browsing = browsing.resetTab(MainTab.Queues)
+    }
+    val route = browsing.route
+    BackHandler(browsing.stacks.getValue(MainTab.Queues).size > 1) { browsing.back(false)?.let { browsing = it } }
     rememberSaveableStateHolder().SaveableStateProvider(route.key) {
-    BrowserScreen(library, playlists, route, { text = it.text }, {}, {}, { rows, index, _ ->
-        rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
-    }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
-        playingEntryId = active?.currentEntryId, header = {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Queues", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-                if (active != null) {
-                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_sort, "Sort queue") { sorting = true }
-                    if (!searching) ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_search, "Search queue") { searching = true }
-                }
-            }
-            if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Box {
-                TextButton(onClick = { selector = true }, enabled = state.library.queues.isNotEmpty()) {
-                    Text(active?.name ?: "Select a queue")
-                }
-                DropdownMenu(expanded = selector, onDismissRequest = { selector = false }) {
-                    state.library.queues.forEach { queue ->
-                        DropdownMenuItem(text = { Text("${queue.name} · ${queue.entries.size} songs") },
-                            onClick = { controller?.switchTo(queue.id); selector = false })
+        BrowserScreen(library, playlists, route, { browsing = browsing.update(it) }, {}, {}, { rows, index, _ ->
+            rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
+        }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
+            playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId, header = {
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { selector = true }, enabled = state.library.queues.isNotEmpty(), modifier = Modifier.weight(1f)) {
+                            Text(active?.name ?: "Queues", style = MaterialTheme.typography.titleLarge)
+                        }
+                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_sort, "Sort queue") { presentation = false; sorting = true }
+                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_settings, "Queue view options") { presentation = true; sorting = true }
+                        Box {
+                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_more, "Queue actions") { menu = true }
+                            DropdownMenu(menu, { menu = false }) {
+                                ActionMenuItem("Save as playlist", enabled = active?.entries?.isNotEmpty() == true, onClick = { menu = false; saving = true })
+                                ActionMenuItem("Rename", enabled = active != null, onClick = { menu = false; renameId = active?.id })
+                                ActionMenuItem("Delete", enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
+                                ActionMenuItem("Remove others", enabled = state.library.queues.size > 1,
+                                    onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
+                            }
+                        }
                     }
+                    if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if (active != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${active.entries.indexOfFirst { it.id == active.currentEntryId } + 1} / ${active.entries.size} · " +
+                            formatTime(active.entries.mapNotNull { it.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()), Modifier.weight(1f))
+                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_shuffle, "Shuffle: ${active.shuffle}") { controller?.shuffle(active.id) }
+                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_repeat, "Repeat: ${active.repeat.name}") { controller?.repeat(active.id) }
+                    } else Text("Tap a song in Library to start a queue.")
                 }
-            }
-            if (state.library.queues.isEmpty()) Text("Tap a song in Library to start a queue.")
-            if (active != null) {
-                Row(Modifier.horizontalScroll(rememberScrollState())) {
-                    TextButton(onClick = { renaming = true }) { Text("Rename") }
-                    TextButton(onClick = { deleting = setOf(active.id) }) { Text("Delete") }
-                    TextButton(onClick = { deleting = state.library.queues.filterNot { it.id == active.id }.map { it.id }.toSet() },
-                        enabled = state.library.queues.size > 1) { Text("Remove others") }
-                }
-                Row(Modifier.horizontalScroll(rememberScrollState())) {
-                    TextButton(onClick = { controller?.shuffle() }) { Text("Shuffle: ${if (active.shuffle) "on" else "off"}") }
-                    TextButton(onClick = { controller?.repeat() }) { Text("Repeat: ${active.repeat.name.lowercase()}") }
-                }
-                Text("${active.entries.size} songs", style = MaterialTheme.typography.bodySmall)
-            }
-        })
+            }, presentationOnly = presentation, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() })
     }
-    if (renaming && active != null) {
-        var name by remember(active.id) { mutableStateOf(active.name) }
-        AlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename queue") },
+    if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
+    if (selector) ModalBottomSheet(onDismissRequest = { selector = false }, shape = Corners.panel) {
+        LazyColumn(Modifier.fillMaxWidth().padding(16.dp)) {
+            item { Text("Listening queues", style = MaterialTheme.typography.titleLarge) }
+            itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { _, queue ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ReorderHandle("Reorder " + queue.name) { controller?.moveQueue(queue.id, it) }
+                    TextButton(onClick = { controller?.switchTo(queue.id); selector = false }, modifier = Modifier.weight(1f)) {
+                        Text((if (queue.id == active?.id) "✓ " else "") + queue.name + " · " + queue.entries.size)
+                    }
+                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_settings, "Rename " + queue.name) { renameId = queue.id }
+                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Delete " + queue.name) { deleting = setOf(queue.id) }
+                }
+            }
+        }
+    }
+    state.library.queues.firstOrNull { it.id == renameId }?.let { queue ->
+        var name by remember(queue.id) { mutableStateOf(queue.name) }
+        AlertDialog(onDismissRequest = { renameId = null }, title = { Text("Rename queue") },
             text = { OutlinedTextField(name, { name = it }, label = { Text("Queue name") }) },
-            confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(active.id, name); renaming = false }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } })
+            confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renameId = null }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { renameId = null }) { Text("Cancel") } })
     }
-    deleting?.let { ids ->
-        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete queues?") },
-            text = { Text(state.library.queues.filter { it.id in ids }.joinToString("\n") { it.name }) },
-            confirmButton = { TextButton(onClick = { controller?.removeQueues(ids); deleting = null }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } })
-    }
+    deleting?.let { ids -> AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete queues?") },
+        text = { Text(state.library.queues.filter { it.id in ids }.joinToString("\n") { it.name }) },
+        confirmButton = { TextButton(onClick = { controller?.removeQueues(ids); deleting = null }) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }) }
 }
 
 @Composable
@@ -138,14 +154,14 @@ internal fun QueueSettingsControls(settings: QueueSettings, onChange: (QueueSett
     Box {
         TextButton(onClick = { tapOpen = true }) { Text("Song tap: ${settings.songTap.label()}") }
         DropdownMenu(expanded = tapOpen, onDismissRequest = { tapOpen = false }) {
-            SongTap.entries.forEach { action -> DropdownMenuItem(text = { Text(action.label()) },
+            SongTap.entries.forEach { action -> ActionMenuItem(action.label(),
                 onClick = { onChange(settings.copy(songTap = action)); tapOpen = false }) }
         }
     }
     Box {
         TextButton(onClick = { switchOpen = true }) { Text("Switch queue: ${settings.switching.label()}") }
         DropdownMenu(expanded = switchOpen, onDismissRequest = { switchOpen = false }) {
-            QueueSwitch.entries.forEach { action -> DropdownMenuItem(text = { Text(action.label()) },
+            QueueSwitch.entries.forEach { action -> ActionMenuItem(action.label(),
                 onClick = { onChange(settings.copy(switching = action)); switchOpen = false }) }
         }
     }
@@ -154,10 +170,10 @@ internal fun QueueSettingsControls(settings: QueueSettings, onChange: (QueueSett
         Box {
             TextButton(onClick = { open = true }) { Text(view.label+": "+(settings.tapOverrides[view]?.label() ?: "Inherit app default")) }
             DropdownMenu(open, { open = false }) {
-                DropdownMenuItem(text = { Text("Inherit app default") }, onClick = {
+                ActionMenuItem("Inherit app default", onClick = {
                     onChange(settings.copy(tapOverrides = settings.tapOverrides - view)); open = false
                 })
-                SongTap.entries.forEach { action -> DropdownMenuItem(text = { Text(action.label()) }, onClick = {
+                SongTap.entries.forEach { action -> ActionMenuItem(action.label(), onClick = {
                     onChange(settings.copy(tapOverrides = settings.tapOverrides + (view to action))); open = false
                 }) }
             }
@@ -180,5 +196,5 @@ internal fun QueueSettingsControls(settings: QueueSettings, onChange: (QueueSett
 }
 internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"
     SongTap.PlayNow -> "Insert after current and play"; SongTap.PlayNext -> "Add next"; SongTap.Append -> "Append to current" }
-private fun QueueSwitch.label() = when (this) { QueueSwitch.Paused -> "Restore paused"
+private fun QueueSwitch.label() = when (this) { QueueSwitch.Browse -> "Browse without changing playback"; QueueSwitch.Paused -> "Restore paused"
     QueueSwitch.Resume -> "Resume immediately"; QueueSwitch.KeepPlaybackState -> "Keep playing or paused" }

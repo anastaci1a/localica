@@ -7,7 +7,7 @@ class QueuePreferences(context: Context) {
     private val preferences = context.getSharedPreferences("queue-settings", Context.MODE_PRIVATE)
     fun read() = QueueSettings(
         songTap = SongTap.entries.firstOrNull { it.name == preferences.getString("tap", null) } ?: SongTap.NewQueue,
-        switching = QueueSwitch.entries.firstOrNull { it.name == preferences.getString("switch", null) } ?: QueueSwitch.Paused,
+        switching = QueueSwitch.entries.firstOrNull { it.name == preferences.getString("switch-browse", null) } ?: QueueSwitch.Browse,
         tapOverrides = SongListView.entries.mapNotNull { view ->
             SongTap.entries.firstOrNull { it.name == preferences.getString("tap.${view.name}", null) }?.let { view to it }
         }.toMap(),
@@ -17,7 +17,7 @@ class QueuePreferences(context: Context) {
     fun write(settings: QueueSettings) {
         val edit = preferences.edit()
         SongListView.entries.forEach { edit.putString("tap.${it.name}", settings.tapOverrides[it]?.name) }
-        edit.putString("tap", settings.songTap.name).putString("switch", settings.switching.name)
+        edit.putString("tap", settings.songTap.name).putString("switch-browse", settings.switching.name)
             .putInt("maximum", settings.maximum ?: 0).putBoolean("preload-next", settings.preloadNext).apply()
     }
 }

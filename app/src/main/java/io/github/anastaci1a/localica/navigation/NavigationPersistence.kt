@@ -13,13 +13,15 @@ class InterfacePreferences(context: Context) {
             preferences.getBoolean("expand-on-play", true), preferences.getBoolean("album-artist", true),
             preferences.getBoolean("reduced-motion", false),
             ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-tap", null) } ?: ArtworkAction.Lyrics,
-            ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-hold", null) } ?: ArtworkAction.Menu)
+            ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-hold", null) } ?: ArtworkAction.Menu,
+            fasterMotion = preferences.getBoolean("faster-motion", false))
     }
     fun write(value: InterfaceSettings) {
         require(value.tabs.isNotEmpty() && value.tabs.distinct() == value.tabs)
         preferences.edit().putString("tabs", value.tabs.joinToString(",") { it.name }).putBoolean("history", value.tabHistory)
             .putBoolean("confirm-exit", value.confirmExit).putBoolean("expand-on-play", value.expandOnPlay)
             .putBoolean("album-artist", value.albumArtistFirst).putBoolean("reduced-motion", value.reducedMotion)
+            .putBoolean("faster-motion", value.fasterMotion)
             .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()
     }
 }
@@ -33,6 +35,7 @@ object NavigationCodec {
             put(tab.name, JSONArray().apply { routes.forEach { route -> put(JSONObject().apply {
                 put("tab", route.tab.name); put("key", route.key); put("title", route.title)
                 put("search", route.search); put("global", route.globalSearch); put("text", route.text)
+                put("committed", route.queryCommitted); put("sort", route.querySort?.name); put("ascending", route.queryAscending)
                 put("filter", route.filter?.name); put("kind", route.collection?.kind?.name); put("id", route.collection?.id)
             }) } })
         } })
@@ -45,7 +48,10 @@ object NavigationCodec {
                 BrowseRoute(MainTab.valueOf(getString("tab")),
                     if (isNull("id")) null else MediaRef(MediaKind.valueOf(getString("kind")), getString("id")),
                     if (isNull("title")) null else getString("title"), getBoolean("search"), getBoolean("global"), getString("text"),
-                    if (isNull("filter")) null else MediaKind.valueOf(getString("filter")), getString("key"))
+                    if (isNull("filter")) null else MediaKind.valueOf(getString("filter")), getString("key"),
+                    queryCommitted = optBoolean("committed", getString("text").isNotEmpty()),
+                    querySort = optString("sort").let { name -> io.github.anastaci1a.localica.library.TrackSort.entries.firstOrNull { it.name == name } },
+                    queryAscending = if (isNull("ascending")) null else getBoolean("ascending"))
             } }
         }
         val history = getJSONArray("history")
