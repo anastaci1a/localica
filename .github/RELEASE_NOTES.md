@@ -1,4 +1,4 @@
-<!-- Release: v0.7.0 -->
+<!-- Release: v0.7.1 -->
 
 Development APK for Android 8 or newer. Signed with the project development key; uses a separate `.debug` application ID. Production distribution signing is not configured.
 
@@ -13,8 +13,10 @@ Development APK for Android 8 or newer. Signed with the project development key;
 
 - https://github.com/anastaci1a/localica/issues/12 - Recoverable tag and artwork editing
 
+- https://github.com/anastaci1a/localica/issues/22 - Reliable selection checks after folder picking
+
 ## Install
 
-1. Download `localica-v0.7.0-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.7.1-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted.
 3. Open Localica and choose your music folder in Settings.
