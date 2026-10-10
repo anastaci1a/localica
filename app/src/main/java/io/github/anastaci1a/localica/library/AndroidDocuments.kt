@@ -45,7 +45,10 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
         }
     }
 
-    override suspend fun metadata(uri: String): AudioMetadata {
+    override suspend fun metadata(uri: String): AudioMetadata = metadata(uri, Uri.parse(uri).lastPathSegment.orEmpty())
+    override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
+        val wav = if (fileName.endsWith(".wav", ignoreCase = true)) runCatching { ContainerTags.read(context, uri, fileName) }.getOrNull() else null
+        fun wavText(key: org.jaudiotagger.tag.FieldKey) = wav?.getFirst(key)?.trimEnd('\u0000')?.takeIf { it.isNotEmpty() }
         val extra = try { embeddedTags(context, uri) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null }
@@ -53,15 +56,15 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
         try {
             retriever.setDataSource(context, Uri.parse(uri))
             return AudioMetadata(
-                title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: extra?.metadata?.title?.toString(),
-                artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: extra?.metadata?.artist?.toString(),
-                album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: extra?.metadata?.albumTitle?.toString(),
-                albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST) ?: extra?.metadata?.albumArtist?.toString(),
-                trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER).tagNumber() ?: extra?.metadata?.trackNumber,
-                discNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER).tagNumber() ?: extra?.metadata?.discNumber,
-                year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR).tagNumber() ?: extra?.metadata?.recordingYear ?: extra?.metadata?.releaseYear,
-                genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE) ?: extra?.metadata?.genre?.toString(),
-                comment = extra?.comment,
+                title = wavText(org.jaudiotagger.tag.FieldKey.TITLE) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: extra?.metadata?.title?.toString(),
+                artist = wavText(org.jaudiotagger.tag.FieldKey.ARTIST) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: extra?.metadata?.artist?.toString(),
+                album = wavText(org.jaudiotagger.tag.FieldKey.ALBUM) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: extra?.metadata?.albumTitle?.toString(),
+                albumArtist = wavText(org.jaudiotagger.tag.FieldKey.ALBUM_ARTIST) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST) ?: extra?.metadata?.albumArtist?.toString(),
+                trackNumber = wavText(org.jaudiotagger.tag.FieldKey.TRACK).tagNumber() ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER).tagNumber() ?: extra?.metadata?.trackNumber,
+                discNumber = wavText(org.jaudiotagger.tag.FieldKey.DISC_NO).tagNumber() ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER).tagNumber() ?: extra?.metadata?.discNumber,
+                year = wavText(org.jaudiotagger.tag.FieldKey.YEAR).tagNumber() ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR).tagNumber() ?: extra?.metadata?.recordingYear ?: extra?.metadata?.releaseYear,
+                genre = wavText(org.jaudiotagger.tag.FieldKey.GENRE) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE) ?: extra?.metadata?.genre?.toString(),
+                comment = wavText(org.jaudiotagger.tag.FieldKey.COMMENT) ?: extra?.comment,
                 durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull(),
             )
         } finally {
@@ -88,7 +91,10 @@ class PersistedFolderPermissions(private val resolver: ContentResolver) : Folder
 
     override fun release(uri: String) {
         try {
-            resolver.releasePersistableUriPermission(Uri.parse(uri), Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val grant = resolver.persistedUriPermissions.firstOrNull { it.uri.toString() == uri } ?: return
+            val flags = (if (grant.isReadPermission) Intent.FLAG_GRANT_READ_URI_PERMISSION else 0) or
+                (if (grant.isWritePermission) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
+            resolver.releasePersistableUriPermission(Uri.parse(uri), flags)
         } catch (_: SecurityException) {
             // The user or provider may already have revoked this grant.
         }

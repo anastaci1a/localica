@@ -69,7 +69,7 @@ class FolderPickerTest {
     }
 }
 
-private fun UiDevice.clickWhenReady(selector: BySelector) {
+internal fun UiDevice.clickWhenReady(selector: BySelector) {
     waitForIdle()
     try {
         await(timeoutMs = 30000) {

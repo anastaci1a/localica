@@ -53,7 +53,7 @@ Read and edit these audio-file tags: name (song title), album, artist, album art
 
 Aim for write support across all playback formats. Editability depends on the actual container and storage provider: a file that cannot safely accept the requested change remains playable and read-only, with an explanation. Obtain write permission explicitly, retain recovery information, verify the result, and report per-file outcomes for batches. No silent app-only metadata fallback.
 
-Artwork replacement accepts user-selected images from files/gallery and a compact recent-image chooser. Show recent device images available under the user's image-access grants, plus previously chosen images still readable; always provide a full picker option. Handle limited or revoked access without requiring broad gallery access to change artwork. Preview before applying. The player artwork action edits only the current song's file; changing an entire album requires explicit bulk selection. Artwork reading exists; image selection and writing are planned for the tag-editing checkpoint.
+Artwork replacement accepts user-selected images from files/gallery and a compact recent-image chooser. Show recent device images available under the user's image-access grants, plus previously chosen images still readable; always provide a full picker option. Handle limited or revoked access without requiring broad gallery access to change artwork. Preview before applying. The player artwork action edits only the current song's file; changing an entire album requires explicit bulk selection.
 
 ## Lyrics
 

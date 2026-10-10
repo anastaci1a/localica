@@ -31,6 +31,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     playingTrackId: String? = null, playingEntryId: String? = null,
     header: @Composable () -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val editTags = LocalTagEdit.current
     val preferences = remember(context) { BrowsePreferences(context) }
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route)) }
     var renaming by remember { mutableStateOf(false) }
@@ -111,6 +112,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                         DropdownMenu(contextMenu == item.key, { contextMenu = null }) {
                             if (item.row != null) {
+                            if (editTags != null) DropdownMenuItem(text = { Text("Edit tags") }, onClick = {
+                                editTags(result.rows.filter { it.id in selection }.map { it.track }) { if (it) selection = emptySet() }
+                                contextMenu = null
+                            })
                             SongTap.entries.forEach { action -> DropdownMenuItem(text = { Text(action.label()) }, onClick = {
                                 queues?.act(result.rows.filter { it.id in selection }.map { it.track }, action) { if (it) selection = emptySet() }
                                 contextMenu = null
