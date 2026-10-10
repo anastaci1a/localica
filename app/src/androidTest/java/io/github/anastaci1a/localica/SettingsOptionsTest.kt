@@ -38,7 +38,7 @@ class SettingsOptionsTest {
                 prefs.write(route, style, override); saved = style
             }, {}) } }
             compose.onNodeWithText("Extra information").performClick()
-            compose.onNodeWithText("Album artist").performClick()
+            compose.onNodeWithText("Album Artist").performClick()
             compose.onNodeWithText("Group album songs").performClick()
             compose.onNodeWithText("Artist").performClick()
             compose.onNodeWithText("Quick-search box").performScrollTo().performClick()

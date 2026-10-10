@@ -52,7 +52,9 @@ internal fun ListViewOptions(route: BrowseRoute, value: BrowseStyle, overridden:
 private fun extraInfoLabel(info: ExtraInfo) = when (info) {
     ExtraInfo.Automatic -> "Follow sort order"
     ExtraInfo.Count -> "Number of songs"
+    ExtraInfo.Added -> "Date added"
+    ExtraInfo.MostPlayed -> "Play count"
     ExtraInfo.Modified -> "Date modified"
-    ExtraInfo.AlbumArtist -> "Album artist"
+    ExtraInfo.AlbumArtist -> "Album Artist"
     else -> info.name
 }

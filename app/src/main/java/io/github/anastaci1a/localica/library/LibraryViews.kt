@@ -4,10 +4,10 @@ import java.util.Locale
 
 /** Typed scopes are shared by queries and listening preferences. */
 enum class SongListView(val label: String) {
-    Songs("Songs"), Albums("Albums"), Artists("Artists"), AlbumArtists("Album artists"),
+    Songs("Songs"), Albums("Albums"), Artists("Artists"), AlbumArtists("Album Artists"),
     Folders("Folders"), Playlists("Playlists"), Search("Search")
 }
-data class SongRow(val id: String, val track: Track)
+data class SongRow(val id: String, val track: Track, val sourcePlaylistId: String? = null)
 data class LibraryGroup(val id: String, val title: String, val subtitle: String?, val tracks: List<Track>)
 
 object LibraryViews {
@@ -31,12 +31,12 @@ object LibraryViews {
             SongListView.Albums -> {
                 val artist = track.albumArtist?.takeIf { it.isNotBlank() } ?: track.artist
                 add(listOf(key(track.album), key(artist)), track.album?.trim()?.takeIf { it.isNotBlank() } ?: "Unknown album",
-                    artist?.trim()?.takeIf { it.isNotBlank() } ?: "Unknown album artist", track)
+                    artist?.trim()?.takeIf { it.isNotBlank() } ?: "Unknown Album Artist", track)
             }
             SongListView.Artists -> add(listOf(key(track.artist)), track.artist?.takeIf { it.isNotBlank() } ?: "Unknown artist", null, track)
             SongListView.AlbumArtists -> {
                 val artist = track.albumArtist?.takeIf { it.isNotBlank() } ?: track.artist
-                add(listOf(key(artist)), artist?.takeIf { it.isNotBlank() } ?: "Unknown album artist", null, track)
+                add(listOf(key(artist)), artist?.takeIf { it.isNotBlank() } ?: "Unknown Album Artist", null, track)
             }
             SongListView.Folders -> track.locations.filter { query.folderUri == null || it.folderUri == query.folderUri }.forEach { place ->
                 val parent = place.relativePath.substringBeforeLast('/', "")

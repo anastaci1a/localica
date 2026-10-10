@@ -60,7 +60,10 @@ class PlaylistController(private val dao: PlaylistDao,
     private fun edit(id: String, complete: (Boolean) -> Unit, change: (ManualPlaylist) -> ManualPlaylist) {
         submit(complete) { playlists ->
             check(playlists.any { it.id == id })
-            playlists.map { if (it.id == id) change(it) else it }
+            playlists.map { old -> if (old.id == id) {
+                val next = change(old)
+                if (next == old) old else next.copy(modifiedAt = System.currentTimeMillis())
+            } else old }
         }
     }
 }

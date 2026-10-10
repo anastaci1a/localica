@@ -7,7 +7,10 @@ import io.github.anastaci1a.localica.queue.ListeningQueue
 import java.util.Locale
 
 data class BrowserItem(val ref: MediaRef, val title: String, val subtitle: String?, val songs: List<SongRow>,
-    val row: SongRow? = null, val groupHeading: String? = null) {
+    val row: SongRow? = null, val groupHeading: String? = null,
+    val addedAt: Long? = songs.mapNotNull { it.track.addedAt }.minOrNull(),
+    val modifiedAt: Long? = songs.mapNotNull { it.track.modifiedAt }.maxOrNull(),
+    val playCount: Long = songs.distinctBy { it.track.id }.sumOf { it.track.playCount }) {
     val key: String get() = row?.id ?: "${ref.kind}:${ref.id}"
     val coverUris: List<String> = songs.sortedBy { it.track.id }.map { it.track.uri }.distinct()
 }
@@ -19,7 +22,7 @@ internal fun BrowseResult.groupAlbumSongs(grouping: SongGrouping): BrowseResult 
         SongGrouping.AlbumArtist -> track.albumArtist ?: track.artist
         SongGrouping.Composer -> track.composer
         SongGrouping.None -> null
-    } }?.takeIf { it.isNotBlank() } ?: "Unknown ${grouping.label.lowercase(Locale.ROOT)}"
+    } }?.takeIf { it.isNotBlank() } ?: "Unknown ${if (grouping == SongGrouping.AlbumArtist) grouping.label else grouping.label.lowercase(Locale.ROOT)}"
     val grouped = items.groupBy(::label).toSortedMap(compareBy<String> { it.lowercase(Locale.ROOT) }.thenBy { it })
     return copy(items = grouped.flatMap { (name, songs) -> songs.mapIndexed { index, item -> item.copy(groupHeading = name.takeIf { index == 0 }) } })
 }
@@ -45,13 +48,14 @@ object BrowseQueries {
             else -> SongListView.Songs
         }
     }
-    fun defaultQuery(route: BrowseRoute): LibraryQuery = if (route.search) LibraryQuery() else when (route.collection?.kind) {
+    fun defaultQuery(route: BrowseRoute): LibraryQuery = if (route.search) LibraryQuery() else if (route.tab == MainTab.MostPlayed && route.collection == null)
+        LibraryQuery(sort = TrackSort.MostPlayed, ascending = false) else when (route.collection?.kind) {
         MediaKind.Album -> LibraryQuery(sort = TrackSort.Album)
         MediaKind.Playlist, MediaKind.Queue -> LibraryQuery(sort = TrackSort.Manual)
         else -> LibraryQuery()
     }
     fun evaluate(snapshot: LibrarySnapshot, playlists: List<ManualPlaylist>, route: BrowseRoute,
-        query: LibraryQuery = defaultQuery(route), queues: List<ListeningQueue> = emptyList()): BrowseResult {
+        query: LibraryQuery = defaultQuery(route), queues: List<ListeningQueue> = emptyList(), allCollections: Set<MediaKind> = LibraryFilters().allCollections): BrowseResult {
         val effective = query.copy(text = route.text)
         fun songItems(rows: List<SongRow>) = rows.map { BrowserItem(MediaRef(MediaKind.Song, it.track.id),
             it.track.title, it.track.artist ?: it.track.albumArtist, listOf(it), it) }
@@ -69,14 +73,15 @@ object BrowseQueries {
             }
         }
         fun playlistItems() = playlists.map { playlist -> BrowserItem(MediaRef(MediaKind.Playlist, playlist.id), playlist.name,
-            "${playlist.entries.size} songs", PlaylistEdits.rows(playlist, snapshot, LibraryViews.defaults(SongListView.Playlists))) }
+            "${playlist.entries.size} songs", PlaylistEdits.rows(playlist, snapshot, LibraryViews.defaults(SongListView.Playlists)),
+            addedAt = playlist.createdAt, modifiedAt = playlist.modifiedAt, playCount = snapshot.playlistPlays[playlist.id] ?: 0) }
         fun catalog(kind: MediaKind): List<BrowserItem> = when (kind) {
             MediaKind.Song -> songItems(LibraryQueries.rows(snapshot.tracks.map { SongRow(it.id, it) }, effective))
             MediaKind.Playlist -> playlistItems()
             MediaKind.Queue -> {
                 val current = snapshot.tracks.associateBy { it.id }
                 queues.map { queue -> BrowserItem(MediaRef(MediaKind.Queue, queue.id), queue.name,
-                    "${queue.entries.size} songs", queue.entries.map { SongRow(it.id, current[it.track.id] ?: it.track) }) }
+                    "${queue.entries.size} songs", queue.entries.map { SongRow(it.id, current[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), it.sourcePlaylistId) }) }
             }
             else -> groups(kind)
         }
@@ -86,8 +91,8 @@ object BrowseQueries {
             return BrowseResult(songItems(LibraryQueries.rows(source, effective)), scope(route))
         }
         val kinds = if (route.globalSearch) route.filter?.let(::listOf) ?: libraryKinds else when (route.tab) {
-            MainTab.Library -> route.filter?.let(::listOf) ?: listOf(MediaKind.Album, MediaKind.Playlist)
-            MainTab.Songs -> listOf(MediaKind.Song)
+            MainTab.Library -> route.filter?.let(::listOf) ?: libraryKinds.filter { it in allCollections && it != MediaKind.Song }
+            MainTab.Songs, MainTab.MostPlayed -> listOf(MediaKind.Song)
             MainTab.Albums -> listOf(MediaKind.Album)
             MainTab.Artists -> listOf(MediaKind.Artist)
             MainTab.AlbumArtists -> listOf(MediaKind.AlbumArtist)
@@ -97,7 +102,8 @@ object BrowseQueries {
         }
         val terms = effective.text.lowercase(Locale.ROOT).split(Regex("\\s+")).filter { it.isNotBlank() }
         val items = kinds.flatMap(::catalog).filter { item ->
-            if (item.row != null) true
+            if (route.tab == MainTab.MostPlayed && !route.globalSearch && item.playCount == 0L) false
+            else if (item.row != null) true
             else terms.all { it in (item.title + "\n" + item.subtitle.orEmpty()).lowercase(Locale.ROOT) }
         }
         if (kinds == listOf(MediaKind.Song)) return BrowseResult(items, scope(route))
@@ -111,7 +117,9 @@ object BrowseQueries {
                 TrackSort.Count -> compare(a.songs.size, b.songs.size)
                 TrackSort.Duration -> compare(a.duration(), b.duration())
                 TrackSort.Year -> compare(a.songs.mapNotNull { it.track.year }.minOrNull(), b.songs.mapNotNull { it.track.year }.minOrNull())
-                TrackSort.Modified -> compare(a.songs.mapNotNull { it.track.modifiedAt }.maxOrNull(), b.songs.mapNotNull { it.track.modifiedAt }.maxOrNull())
+                TrackSort.Modified -> compare(a.modifiedAt, b.modifiedAt)
+                TrackSort.Added -> compare(a.addedAt, b.addedAt)
+                TrackSort.MostPlayed -> compare(a.playCount, b.playCount)
                 TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre ->
                     compare(a.metadataText(effective.sort)?.lowercase(Locale.ROOT), b.metadataText(effective.sort)?.lowercase(Locale.ROOT))
                 else -> compare(a.title.lowercase(Locale.ROOT), b.title.lowercase(Locale.ROOT))
@@ -138,7 +146,9 @@ internal fun BrowserItem.information(style: BrowseStyle): String? {
         ExtraInfo.Count -> "${songs.size} songs"
         ExtraInfo.Duration -> duration()?.let { "${it / 60000}:${(it / 1000 % 60).toString().padStart(2, '0')}${if (songs.any { row -> row.track.durationMs == null }) " (partial)" else ""}" }
         ExtraInfo.Year -> songs.mapNotNull { it.track.year }.minOrNull()?.toString()
-        ExtraInfo.Modified -> songs.mapNotNull { it.track.modifiedAt }.maxOrNull()?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
+        ExtraInfo.MostPlayed -> "$playCount ${if (playCount == 1L) "play" else "plays"}"
+        ExtraInfo.Added -> addedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
+        ExtraInfo.Modified -> modifiedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Artist, ExtraInfo.AlbumArtist, ExtraInfo.Composer, ExtraInfo.Genre -> metadataText(TrackSort.valueOf(info.name))
         ExtraInfo.Automatic -> subtitle
     }

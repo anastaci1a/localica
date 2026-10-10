@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica.library
 
 import java.util.Locale
 
-enum class TrackSort { Manual, Title, Artist, Album, AlbumArtist, Folder, Year, Duration, Composer, Genre, Modified, Count }
+enum class TrackSort { Manual, Title, Artist, Album, AlbumArtist, Folder, Year, Duration, Composer, Genre, Modified, Added, MostPlayed, Count }
 
 data class LibraryQuery(
     val text: String = "",
@@ -42,6 +42,8 @@ object LibraryQueries {
                 TrackSort.Composer -> compare(key(a.composer), key(b.composer))
                 TrackSort.Genre -> compare(key(a.genre), key(b.genre))
                 TrackSort.Modified -> compare(a.modifiedAt, b.modifiedAt)
+                TrackSort.Added -> compare(a.addedAt, b.addedAt)
+                TrackSort.MostPlayed -> compare(a.playCount, b.playCount)
                 TrackSort.Count -> 0
             }
             if (query.sort == TrackSort.Manual) 0 else primary.takeIf { it != 0 } ?: a.title.lowercase(Locale.ROOT).compareTo(b.title.lowercase(Locale.ROOT)).takeIf { it != 0 }

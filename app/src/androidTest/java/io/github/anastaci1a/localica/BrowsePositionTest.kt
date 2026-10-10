@@ -32,7 +32,7 @@ class BrowsePositionTest {
                 LocalicaScreen(LibraryUiState(LibrarySnapshot(folders, tracks), loading = false), PlaybackState(connected = true),
                     {}, {}, {}, {}, {}, {}, playlist = PlaylistState(playlists, false))
             } }
-            val types = listOf("Albums" to "Album", "Artists" to "Artist", "Album artists" to "Album artist", "Folders" to "Folder", "Playlists" to "Playlist")
+            val types = listOf("Albums" to "Album", "Artists" to "Artist", "Album Artists" to "Album artist", "Folders" to "Folder", "Playlists" to "Playlist")
             for ((filter, prefix) in types) {
                 compose.onNodeWithText(filter, useUnmergedTree = true).performScrollTo().performClick()
                 for (hardware in listOf(false, true)) {
