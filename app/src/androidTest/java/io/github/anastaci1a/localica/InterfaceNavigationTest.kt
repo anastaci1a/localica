@@ -47,6 +47,7 @@ class InterfaceNavigationTest {
         compose.onNodeWithContentDescription("Open queue").performClick()
         compose.onNodeWithContentDescription("Queue actions").assertIsDisplayed()
         back()
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
         restore.emulateSavedInstanceStateRestore()
         compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
