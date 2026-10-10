@@ -10,6 +10,7 @@ internal object TrackSnapshot {
         put("album", track.album); put("albumArtist", track.albumArtist); put("duration", track.durationMs)
         put("file", track.fileName); put("path", track.relativePath); put("track", track.trackNumber)
         put("disc", track.discNumber); put("year", track.year); put("genre", track.genre); put("comment", track.comment)
+        put("composer", track.composer); put("lyricist", track.lyricist); put("modified", track.modifiedAt)
         put("locations", JSONArray().apply { track.locations.forEach { place -> put(JSONObject().apply {
             put("root", place.folderUri); put("uri", place.uri); put("path", place.relativePath)
         }) } })
@@ -21,7 +22,8 @@ internal object TrackSnapshot {
             album = optional("album"), albumArtist = optional("albumArtist"), durationMs = optional("duration")?.toLong(),
             fileName = getString("file"), relativePath = getString("path"), trackNumber = optional("track")?.toInt(),
             discNumber = optional("disc")?.toInt(), year = optional("year")?.toInt(), genre = optional("genre"),
-            comment = optional("comment"), locations = (0 until places.length()).map { places.getJSONObject(it).run {
+            comment = optional("comment"), composer = optional("composer"), lyricist = optional("lyricist"),
+            modifiedAt = optional("modified")?.toLongOrNull(), locations = (0 until places.length()).map { places.getJSONObject(it).run {
                 TrackLocation(getString("root"), getString("uri"), getString("path")) } })
     }
 }

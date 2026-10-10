@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica.library
 
 import java.util.Locale
 
-enum class TrackSort { Manual, Title, Artist, Album, AlbumArtist, Folder, Year, Duration }
+enum class TrackSort { Manual, Title, Artist, Album, AlbumArtist, Folder, Year, Duration, Composer, Genre, Modified, Count }
 
 data class LibraryQuery(
     val text: String = "",
@@ -39,6 +39,10 @@ object LibraryQueries {
                 TrackSort.Folder -> compare(key(a.relativePath), key(b.relativePath))
                 TrackSort.Year -> compare(a.year, b.year)
                 TrackSort.Duration -> compare(a.durationMs, b.durationMs)
+                TrackSort.Composer -> compare(key(a.composer), key(b.composer))
+                TrackSort.Genre -> compare(key(a.genre), key(b.genre))
+                TrackSort.Modified -> compare(a.modifiedAt, b.modifiedAt)
+                TrackSort.Count -> 0
             }
             if (query.sort == TrackSort.Manual) 0 else primary.takeIf { it != 0 } ?: a.title.lowercase(Locale.ROOT).compareTo(b.title.lowercase(Locale.ROOT)).takeIf { it != 0 }
                 ?: a.id.compareTo(b.id)
@@ -55,7 +59,7 @@ object LibraryQueries {
             if (terms.isEmpty()) true else {
                 val paths = if (query.folderUri == null) track.locations.map { it.relativePath } + track.relativePath else listOf(track.relativePath)
                 val searchable = (listOfNotNull(track.title, track.artist, track.album, track.albumArtist,
-                    track.genre, track.comment, track.year?.toString(), track.fileName) + paths).joinToString("\n").lowercase(Locale.ROOT)
+                    track.genre, track.comment, track.composer, track.lyricist, track.year?.toString(), track.fileName) + paths).joinToString("\n").lowercase(Locale.ROOT)
                 terms.all { it in searchable }
             }
         }.sortedWith { a, b -> order.compare(a.track, b.track) }.toList()

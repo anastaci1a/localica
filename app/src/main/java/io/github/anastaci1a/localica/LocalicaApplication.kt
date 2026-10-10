@@ -18,11 +18,11 @@ class LocalicaApplication : Application() {
         PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").build().playlists())
     }
     val queues by lazy {
-        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").build().queues(),
+        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2).build().queues(),
             QueuePreferences(this), library)
     }
     val library by lazy {
-        val database = Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3).build()
+        val database = Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4).build()
         LibraryRepository(RoomLibraryStore(database.libraryDao()), TreeScanner(AndroidDocuments(this)),
             PersistedFolderPermissions(contentResolver))
     }

@@ -17,6 +17,9 @@ data class Track(
     val genre: String? = null,
     val comment: String? = null,
     val locations: List<TrackLocation> = emptyList(),
+    val composer: String? = null,
+    val lyricist: String? = null,
+    val modifiedAt: Long? = null,
 )
 
 data class TrackLocation(val folderUri: String, val uri: String, val relativePath: String)
@@ -24,6 +27,9 @@ data class FolderSelection(val uri: String, val name: String)
 data class LibrarySnapshot(val folders: List<FolderSelection> = emptyList(), val tracks: List<Track> = emptyList())
 
 data class AudioMetadata(
+    val composer: String? = null,
+    val lyricist: String? = null,
+    val modifiedAt: Long? = null,
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
@@ -43,6 +49,7 @@ data class ScanDocument(
     val mimeType: String,
     val isDirectory: Boolean,
     val identity: String = uri,
+    val modifiedAt: Long? = null,
 )
 
 interface DocumentSource {

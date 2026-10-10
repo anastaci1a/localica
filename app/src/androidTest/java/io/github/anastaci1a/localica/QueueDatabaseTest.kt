@@ -40,4 +40,19 @@ class QueueDatabaseTest {
             assertEquals(QueueLibrary(), database.queues().read())
         } finally { database.close(); context.deleteDatabase(name) }
     }
+
+    @Test fun queueOrderChangesPersistWithoutReplacingEntriesOrCursor() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+        try {
+            val track = Track("song", "Song", fileName = "song.mp3", relativePath = "song.mp3", composer = "Composer", lyricist = "Lyricist", modifiedAt = 1234L)
+            val first = QueueEdits.create(listOf(track, track), 1, "First").copy(positionMs = 2400)
+            val second = QueueEdits.create(listOf(track), 0, "Second")
+            val original = QueueLibrary(listOf(first, second), first.id)
+            db.queues().save(QueueLibrary(), original)
+            val reordered = original.copy(queues = original.queues.reversed())
+            db.queues().save(original, reordered)
+            assertEquals(reordered, db.queues().read())
+        } finally { db.close() }
+    }
 }

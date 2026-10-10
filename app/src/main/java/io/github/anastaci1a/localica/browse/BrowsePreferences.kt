@@ -5,8 +5,9 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 
 enum class Presentation(val label: String) { List("List"), Compact("Compact gallery"), Standard("Standard gallery"), Large("Large gallery") }
+enum class ExtraInfo { Automatic, None, Count, Duration, Year, Modified, Artist, AlbumArtist, Composer, Genre }
 data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boolean = true,
-    val presentation: Presentation = Presentation.List) {
+    val presentation: Presentation = Presentation.List, val extraInfo: ExtraInfo = ExtraInfo.Automatic) {
     fun query() = LibraryQuery(sort = sort, ascending = ascending)
 }
 
@@ -39,16 +40,17 @@ class BrowsePreferences(context: Context) {
         val default = if (compatible && legacyStore.contains(legacyKey)) legacy.read(view) else BrowseQueries.defaultQuery(route)
         return BrowseStyle(TrackSort.entries.firstOrNull { it.name == store.getString("$key.sort", null) } ?: default.sort,
             store.getBoolean("$key.ascending", default.ascending),
-            Presentation.entries.firstOrNull { it.name == store.getString("$key.presentation", null) } ?: Presentation.List)
+            Presentation.entries.firstOrNull { it.name == store.getString("$key.presentation", null) } ?: Presentation.List,
+            ExtraInfo.entries.firstOrNull { it.name == store.getString("$key.info", null) } ?: ExtraInfo.Automatic)
     }
     fun write(route: BrowseRoute, value: BrowseStyle, override: Boolean) {
         val key = if (override) requireNotNull(collectionKey(route)) else type(route)
         store.edit().putString("$key.sort", value.sort.name).putBoolean("$key.ascending", value.ascending)
-            .putString("$key.presentation", value.presentation.name).apply()
+            .putString("$key.presentation", value.presentation.name).putString("$key.info", value.extraInfo.name).apply()
         if (!override) reset(route)
     }
     fun reset(route: BrowseRoute) {
         val key = collectionKey(route) ?: return
-        store.edit().remove("$key.sort").remove("$key.ascending").remove("$key.presentation").apply()
+        store.edit().remove("$key.sort").remove("$key.ascending").remove("$key.presentation").remove("$key.info").apply()
     }
 }

@@ -27,6 +27,9 @@ data class TrackRecord(
     val year: Int?,
     val genre: String?,
     val comment: String?,
+    val composer: String? = null,
+    val lyricist: String? = null,
+    val modifiedAt: Long? = null,
 )
 
 @Entity(tableName = "folder_tracks", primaryKeys = ["folderUri", "trackId"], foreignKeys = [
@@ -79,11 +82,18 @@ abstract class LibraryDao {
     }
 }
 
-@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 3, exportSchema = true)
+@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 4, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     companion object {
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tracks ADD COLUMN composer TEXT")
+                db.execSQL("ALTER TABLE tracks ADD COLUMN lyricist TEXT")
+                db.execSQL("ALTER TABLE tracks ADD COLUMN modifiedAt INTEGER")
+            }
+        }
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE tracks ADD COLUMN comment TEXT") }
         }
@@ -137,13 +147,13 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
     override suspend fun replaceRoot(result: ScanResult) {
         dao.replaceRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
             TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
-                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment)
+                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt)
         }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath) })
     }
     override suspend fun removeRoot(uri: String) = dao.removeRoot(uri)
     override suspend fun updateMetadata(track: Track) = dao.updateMetadata(TrackRecord(track.id, track.title,
         track.artist, track.album, track.durationMs, track.fileName, track.albumArtist, track.trackNumber,
-        track.discNumber, track.year, track.genre, track.comment))
+        track.discNumber, track.year, track.genre, track.comment, track.composer, track.lyricist, track.modifiedAt))
 }
 
 private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {
@@ -153,7 +163,7 @@ private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {
         val location = locations.first()
         Track(location.uri, record.title, record.artist, record.album, record.durationMs, record.fileName,
             location.relativePath, record.id, record.albumArtist, record.trackNumber, record.discNumber, record.year,
-            record.genre, record.comment, locations)
+            record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt)
     }.sortedWith(trackOrder)
     return LibrarySnapshot(map { FolderSelection(it.folder.uri, it.folder.name) }, tracks)
 }
