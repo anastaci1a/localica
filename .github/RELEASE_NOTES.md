@@ -1,4 +1,4 @@
-<!-- Release: v0.11.2 -->
+<!-- Release: v0.11.3 -->
 
 Development APK for Android 8 or newer. Signed with the project development key; updates the existing `.debug` app in place. Production distribution signing is not configured.
 
@@ -18,12 +18,11 @@ Development APK for Android 8 or newer. Signed with the project development key;
 - https://github.com/anastaci1a/localica/issues/37 - List content under floating controls and mini-player artwork alignment
 - https://github.com/anastaci1a/localica/issues/38 - Full-width galleries with long-press album menus
 - https://github.com/anastaci1a/localica/issues/39 - Restored light browsing and readable text/icons
-
-- https://github.com/anastaci1a/localica/issues/40 - Android 16 device checks with normal system transitions
+- https://github.com/anastaci1a/localica/issues/40 - Device checks for loaded collections and normal system transitions
 
 ## Install
 
-1. Download `localica-v0.11.2-debug.apk` from **Assets** below.
+1. Download `localica-v0.11.3-debug.apk` from **Assets** below.
 2. Open it and allow installation from your browser or file manager if prompted.
 3. Install over your existing development app to keep its data.
 

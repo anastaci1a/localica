@@ -16,11 +16,11 @@ The v0.9.1 patch isolates live route rendering/focus, prevents scrollbar/menu ov
 
 The v0.10.1 player adds aligned floating navigation/utility/mini-player pills, filled transport icons, uncropped artwork backgrounds or floating covers over a matte gradient, and a shared blended lyrics layout with controls that ease downward.
 
-The v0.11.2 organization checkpoint adds scanner/background operation, dedicated folder/error pages, structured settings/list options, and reviewed playlist import. It also restores light browsing and full-width galleries, lets lists extend beneath floating controls, and replaces restarted drag-card springs with frame-driven placement in the foreground.
+The v0.11.3 organization checkpoint adds scanner/background operation, dedicated folder/error pages, structured settings/list options, and reviewed playlist import. It also restores light browsing and full-width galleries, lets lists extend beneath floating controls, and replaces restarted drag-card springs with frame-driven placement in the foreground.
 
 ## Device review
 
-Review the v0.11.2 APK on the user's device before advancing, particularly drag smoothness/layering, light-theme contrast, floating controls, and scanning. Address regressions in small verified releases before applying glass materials.
+Review the v0.11.3 APK on the user's device before advancing, particularly drag smoothness/layering, light-theme contrast, floating controls, and scanning. Address regressions in small verified releases before applying glass materials.
 
 ## Visual design system
 
