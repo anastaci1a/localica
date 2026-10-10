@@ -77,10 +77,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val gridState = rememberLazyGridState()
     val scrollScope = rememberCoroutineScope()
     var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(scrollToTopRequest, loadedResult != null) {
-        if (loadedResult != null && consumedScrollRequest != scrollToTopRequest) {
+    LaunchedEffect(scrollToTopRequest) {
+        if (consumedScrollRequest != scrollToTopRequest) {
+            // Keep one job through query publication and the first layout. A readiness key can
+            // restart this effect after it consumed the request but before scrolling could begin.
+            snapshotFlow { loadedResult != null && gridState.layoutInfo.totalItemsCount > 0 }.first { it }
             consumedScrollRequest = scrollToTopRequest
-            snapshotFlow { gridState.layoutInfo.totalItemsCount }.first { it > 0 }
             gridState.easeToTop(reducedMotion)
         }
     }
