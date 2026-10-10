@@ -43,4 +43,5 @@ Reuse these labels. Add another only for a recurring gap, and update this table 
 ## Versioning and releases
 
 - Use `vX.X.X` tags for releases and the corresponding `X.X.X` app version name. Increase major for breaking changes, minor for features, and patch for fixes.
+- Prepare every release description using the [release template](../.github/RELEASE_TEMPLATE.md): 2–3 short high-level summary sentences, then a short bullet list of **all issues resolved in that release**, then brief installation steps. Each issue bullet uses its full GitHub URL for an embedded reference, a dash, and a description shorter than a sentence. Include only completed issues; if none were resolved, say so briefly. Follow the [release preparation steps](../docs/build.md#release-descriptions).
 - Add APK build and release automation only after a buildable Android project and signing/distribution choices exist. A workflow must have a real build command and a verifiable artifact before it is treated as release automation.
