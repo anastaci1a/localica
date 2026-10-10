@@ -16,15 +16,15 @@ The v0.9.1 patch isolates live route rendering/focus, prevents scrollbar/menu ov
 
 The v0.10.1 player adds aligned floating navigation/utility/mini-player pills, filled transport icons, uncropped artwork backgrounds or floating covers over a matte gradient, and a shared blended lyrics layout with controls that ease downward.
 
-## Reviewable release checkpoints
+The v0.11.0 organization checkpoint adds scanner/background operation, dedicated folder/error pages, structured settings/list options, and reviewed playlist import. It also restores light browsing and full-width galleries, lets lists extend beneath floating controls, and replaces restarted drag-card springs with frame-driven placement in the foreground.
 
-1. **v0.11.0 — organization and settings:** reference-based settings/list options, scanner dialog and background operation, dedicated folder/error pages, and playlist creation/import menus.
+## Device review
 
-Publish a verified APK at each checkpoint for device feedback; address regressions before advancing. These steps precede glass rendering.
+Review the v0.11.0 APK on the user's device before advancing, particularly drag smoothness/layering, light-theme contrast, floating controls, and scanning. Address regressions in small verified releases before applying glass materials.
 
 ## Visual design system
 
-Review the v0.9.0 layout and interactions on real devices, including drag haptics, before starting the glass layer. Apply the Apple Music-inspired liquid-glass presentation to the established layout and interactions after the functional foundation is proven. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
+Apply the Apple Music-inspired liquid-glass presentation to the established layout and interactions after the functional foundation is proven. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
 
 ## Subsequent functionality
 
