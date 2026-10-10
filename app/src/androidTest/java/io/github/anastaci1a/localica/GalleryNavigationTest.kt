@@ -31,6 +31,7 @@ class GalleryNavigationTest {
                     PlaybackState(connected = true), {}, {}, {}, {}, {}, {})
             } }
             for (n in listOf("000", "005", "030", "061")) {
+                compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
                 compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Album $n"))
                 compose.onNodeWithContentDescription("Actions for Album $n").performScrollTo().performTouchInput { click() }
                 compose.waitUntil(3000) { runCatching { compose.onNodeWithText("Select all songs").assertIsDisplayed() }.isSuccess }
