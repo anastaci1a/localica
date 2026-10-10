@@ -10,6 +10,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.LibraryQuery
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -26,6 +27,10 @@ fun LocalicaScreen(
     onCancelScan: () -> Unit,
     onRemoveFolder: (String) -> Unit = {},
     onQuery: (LibraryQuery) -> Unit = {},
+    queues: QueueUiState = QueueUiState(loading = false),
+    queueController: QueueController? = null,
+    onPrevious: () -> Unit = {},
+    onNext: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -33,13 +38,15 @@ fun LocalicaScreen(
         bottomBar = {
             Surface(tonalElevation = 2.dp) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding().height(80.dp).padding(horizontal = 8.dp)) {
-                    Row(Modifier.align(Alignment.Center).width(192.dp)) {
+                    Row(Modifier.align(Alignment.CenterStart).fillMaxWidth().padding(end = 48.dp)) {
                         NavigationBarItem(selected = tab == 0, onClick = { tab = 0 },
                             icon = { Icon(painterResource(R.drawable.ic_play), null) },
                             label = { Text(stringResource(R.string.player)) })
                         NavigationBarItem(selected = tab == 1, onClick = { tab = 1 },
                             icon = { Icon(painterResource(R.drawable.ic_library), null) },
                             label = { Text(stringResource(R.string.library)) })
+                        NavigationBarItem(selected = tab == 2, onClick = { tab = 2 },
+                            icon = { Text("≡") }, label = { Text("Queues") })
                     }
                     IconButton(onClick = { settingsOpen = true }, modifier = Modifier.align(Alignment.CenterEnd).size(48.dp)) {
                         Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings))
@@ -49,13 +56,16 @@ fun LocalicaScreen(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            if (tab == 0) PlayerScreen(playback, onToggle, onSeek, onOpenLibrary = { tab = 1 })
+            if (tab == 0) PlayerScreen(playback, onToggle, onSeek, onOpenLibrary = { tab = 1 }, onPrevious = onPrevious, onNext = onNext)
+            else if (tab == 2) QueueScreen(queues, queueController)
             else LibraryScreen(library, playback.trackId, enabled = playback.connected,
                 onTrack = { onPlay(it); tab = 0 }, onSettings = { settingsOpen = true }, onQuery = onQuery)
         }
     }
     if (settingsOpen) FolderSettings(library,
-        onDismiss = { settingsOpen = false }, onChooseFolder, onRescan, onCancelScan, onRemoveFolder)
+        onDismiss = { settingsOpen = false }, onChooseFolder, onRescan, onCancelScan, onRemoveFolder,
+        extraContent = { QueueSettingsControls(queues.settings) { queueController?.settings(it) } })
+    QueueDialogs(queues, queueController)
 }
 
 @Composable

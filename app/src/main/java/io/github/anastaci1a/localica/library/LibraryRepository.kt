@@ -20,9 +20,16 @@ class LibraryRepository(
 
     fun hasAccess(folder: FolderSelection) = permissions.hasReadAccess(folder.uri)
 
-    fun playableTrack(track: Track): Track {
-        val location = track.locations.firstOrNull { it.uri == track.uri && permissions.hasReadAccess(it.folderUri) }
-            ?: track.locations.firstOrNull { permissions.hasReadAccess(it.folderUri) }
+    fun playableTrack(track: Track): Track = playableTrack(track, permissions::hasReadAccess)
+
+    fun playableTracks(tracks: List<Track>): List<Track> {
+        val grants = mutableMapOf<String, Boolean>()
+        return tracks.map { track -> playableTrack(track) { root -> grants.getOrPut(root) { permissions.hasReadAccess(root) } } }
+    }
+
+    private fun playableTrack(track: Track, hasAccess: (String) -> Boolean): Track {
+        val location = track.locations.firstOrNull { it.uri == track.uri && hasAccess(it.folderUri) }
+            ?: track.locations.firstOrNull { hasAccess(it.folderUri) }
         return location?.let { track.copy(uri = it.uri, relativePath = it.relativePath) } ?: track
     }
 
