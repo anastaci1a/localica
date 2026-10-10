@@ -20,6 +20,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, onChange: (Inte
     BooleanPreference("Show album artist first", value.albumArtistFirst) { onChange(value.copy(albumArtistFirst = it)) }
     BooleanPreference("Reduce motion", value.reducedMotion) { onChange(value.copy(reducedMotion = it)) }
     BooleanPreference("Faster animations", value.fasterMotion) { onChange(value.copy(fasterMotion = it)) }
+    ArtworkLayoutPreference(value.artworkLayout) { onChange(value.copy(artworkLayout = it)) }
     ArtworkActionPreference("Artwork tap", value.artworkTap) { onChange(value.copy(artworkTap = it)) }
     ArtworkActionPreference("Artwork hold", value.artworkHold) { onChange(value.copy(artworkHold = it)) }
     Text("Main tabs", style = MaterialTheme.typography.titleMedium)
@@ -69,4 +70,18 @@ internal fun BooleanPreference(label: String, value: Boolean, onChange: (Boolean
         Text(label, Modifier.weight(1f))
         Switch(value, null)
     }
+}
+
+@Composable
+internal fun ArtworkLayoutPreference(value: ArtworkLayout, onChange: (ArtworkLayout) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    TextButton(onClick = { open = true }) { Text("Player artwork: " + value.label) }
+    if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text("Player artwork") }, text = {
+        Column { ArtworkLayout.entries.forEach { layout ->
+            Row(Modifier.fillMaxWidth().toggleable(value == layout, role = Role.RadioButton,
+                onValueChange = { onChange(layout); open = false }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(value == layout, null); Text(layout.label, Modifier.weight(1f))
+            }
+        } }
+    }, confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } })
 }

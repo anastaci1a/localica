@@ -22,12 +22,14 @@ import io.github.anastaci1a.localica.library.EmbeddedCoverProvider
 import androidx.compose.ui.layout.onSizeChanged
 
 @Composable
-internal fun AlbumArtwork(uri: String?, modifier: Modifier = Modifier.size(200.dp)) {
-    MediaArtwork(listOfNotNull(uri), modifier)
+internal fun AlbumArtwork(uri: String?, modifier: Modifier = Modifier.size(200.dp),
+    shape: androidx.compose.ui.graphics.Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop) {
+    MediaArtwork(listOfNotNull(uri), modifier, shape = shape, contentScale = contentScale)
 }
 
 @Composable
-internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: CoverProvider = EmbeddedCoverProvider) {
+internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: CoverProvider = EmbeddedCoverProvider,
+    shape: androidx.compose.ui.graphics.Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop) {
     val context = LocalContext.current.applicationContext
     val revision by ArtworkCache.revision.collectAsState()
     var pixels by remember { mutableIntStateOf(0) }
@@ -37,11 +39,11 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
         if (pixels > 0) value = request to provider.load(context, uris, pixels)?.asImageBitmap()
     }
     val artwork = loaded.second.takeIf { loaded.first?.first == uris && loaded.first?.third == revision }
-    val measured = modifier.clip(Corners.artwork).onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
+    val measured = modifier.clip(shape).onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
     if (artwork != null) {
-        Image(artwork, stringResource(R.string.album_artwork), measured, contentScale = ContentScale.Crop)
+        Image(artwork, stringResource(R.string.album_artwork), measured, contentScale = contentScale)
     } else {
-        Surface(measured, shape = Corners.artwork, color = MaterialTheme.colorScheme.surfaceContainer) {
+        Surface(measured, shape = shape, color = MaterialTheme.colorScheme.surfaceContainer) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(0.4f), tint = MaterialTheme.colorScheme.primary)
             }
