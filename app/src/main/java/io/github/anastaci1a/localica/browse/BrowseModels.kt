@@ -40,7 +40,7 @@ object BrowseQueries {
     }
     fun evaluate(snapshot: LibrarySnapshot, playlists: List<ManualPlaylist>, route: BrowseRoute,
         query: LibraryQuery = defaultQuery(route), queues: List<ListeningQueue> = emptyList()): BrowseResult {
-        val effective = query.copy(text = if (route.search) route.text else "")
+        val effective = query.copy(text = route.text)
         fun songItems(rows: List<SongRow>) = rows.map { BrowserItem(MediaRef(MediaKind.Song, it.track.id),
             it.track.title, it.track.artist ?: it.track.albumArtist, listOf(it), it) }
         fun groups(kind: MediaKind): List<BrowserItem> {
@@ -89,7 +89,45 @@ object BrowseQueries {
             else terms.all { it in (item.title + "\n" + item.subtitle.orEmpty()).lowercase(Locale.ROOT) }
         }
         if (kinds == listOf(MediaKind.Song)) return BrowseResult(items, scope(route))
-        val ordered = items.sortedWith(compareBy<BrowserItem> { it.title.lowercase(Locale.ROOT) }.thenBy { it.key })
-        return BrowseResult(if (effective.ascending) ordered else ordered.reversed(), scope(route))
+        val direction = if (effective.ascending) 1 else -1
+        fun <T : Comparable<T>> compare(a: T?, b: T?): Int = when {
+            a == null && b == null -> 0; a == null -> 1; b == null -> -1
+            else -> a.compareTo(b) * direction
+        }
+        val ordered = items.sortedWith { a, b ->
+            val primary = when (effective.sort) {
+                TrackSort.Count -> compare(a.songs.size, b.songs.size)
+                TrackSort.Duration -> compare(a.duration(), b.duration())
+                TrackSort.Year -> compare(a.songs.mapNotNull { it.track.year }.minOrNull(), b.songs.mapNotNull { it.track.year }.minOrNull())
+                TrackSort.Modified -> compare(a.songs.mapNotNull { it.track.modifiedAt }.maxOrNull(), b.songs.mapNotNull { it.track.modifiedAt }.maxOrNull())
+                TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre ->
+                    compare(a.metadataText(effective.sort)?.lowercase(Locale.ROOT), b.metadataText(effective.sort)?.lowercase(Locale.ROOT))
+                else -> compare(a.title.lowercase(Locale.ROOT), b.title.lowercase(Locale.ROOT))
+            }
+            primary.takeIf { it != 0 } ?: a.title.lowercase(Locale.ROOT).compareTo(b.title.lowercase(Locale.ROOT)).takeIf { it != 0 } ?: a.key.compareTo(b.key)
+        }
+        return BrowseResult(ordered, scope(route))
+    }
+}
+
+internal fun BrowserItem.duration(): Long? = songs.mapNotNull { it.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()
+internal fun BrowserItem.metadataText(sort: TrackSort): String? = songs.mapNotNull {
+    when (sort) {
+        TrackSort.Artist -> it.track.artist; TrackSort.AlbumArtist -> it.track.albumArtist ?: it.track.artist
+        TrackSort.Composer -> it.track.composer; TrackSort.Genre -> it.track.genre; else -> null
+    }
+}.distinct().sorted().takeIf { it.isNotEmpty() }?.joinToString(", ")
+
+internal fun BrowserItem.information(style: BrowseStyle): String? {
+    val info = if (style.extraInfo != ExtraInfo.Automatic) style.extraInfo else
+        ExtraInfo.entries.firstOrNull { it.name == style.sort.name } ?: return subtitle
+    return when (info) {
+        ExtraInfo.None -> null
+        ExtraInfo.Count -> "${songs.size} songs"
+        ExtraInfo.Duration -> duration()?.let { "${it / 60000}:${(it / 1000 % 60).toString().padStart(2, '0')}${if (songs.any { row -> row.track.durationMs == null }) " (partial)" else ""}" }
+        ExtraInfo.Year -> songs.mapNotNull { it.track.year }.minOrNull()?.toString()
+        ExtraInfo.Modified -> songs.mapNotNull { it.track.modifiedAt }.maxOrNull()?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
+        ExtraInfo.Artist, ExtraInfo.AlbumArtist, ExtraInfo.Composer, ExtraInfo.Genre -> metadataText(TrackSort.valueOf(info.name))
+        ExtraInfo.Automatic -> subtitle
     }
 }

@@ -7,11 +7,13 @@ enum class EditField(val label: String, val key: FieldKey, val numeric: Boolean 
     Title("Name", FieldKey.TITLE), Album("Album", FieldKey.ALBUM), Artist("Artist", FieldKey.ARTIST),
     AlbumArtist("Album artist", FieldKey.ALBUM_ARTIST), Year("Year", FieldKey.YEAR, true),
     Disc("Disc number", FieldKey.DISC_NO, true), TrackNumber("Track number", FieldKey.TRACK, true),
-    Comment("Comment", FieldKey.COMMENT);
+    Comment("Comment", FieldKey.COMMENT), Genre("Genre", FieldKey.GENRE),
+    Composer("Composer", FieldKey.COMPOSER), Lyricist("Lyricist", FieldKey.LYRICIST);
     fun value(track: Track): String = when (this) {
         Title -> track.title; Album -> track.album; Artist -> track.artist; AlbumArtist -> track.albumArtist
         Year -> track.year?.toString(); Disc -> track.discNumber?.toString()
         TrackNumber -> track.trackNumber?.toString(); Comment -> track.comment
+        Genre -> track.genre; Composer -> track.composer; Lyricist -> track.lyricist
     }.orEmpty()
 }
 

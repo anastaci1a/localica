@@ -161,6 +161,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val queue = state.value.library.queues.firstOrNull { it.id == id } ?: return@submit
         name.trim().takeIf { it.isNotEmpty() }?.let { save(state.value.library.update(queue.copy(name = it))) }
     }
+    fun moveQueue(id: String, offset: Int) = submit {
+        val queues = state.value.library.queues.toMutableList()
+        val from = queues.indexOfFirst { it.id == id }
+        if (from >= 0) {
+            queues.add((from + offset).coerceIn(0, queues.lastIndex), queues.removeAt(from))
+            save(state.value.library.copy(queues = queues))
+        }
+    }
     fun removeQueues(ids: Set<String>, protectActive: Boolean = false) = submit {
         capture()
         val before = state.value.library

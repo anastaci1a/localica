@@ -74,7 +74,7 @@ class LibraryDatabaseTest {
             old.version = 1
         }
         val database = Room.databaseBuilder(context, LibraryDatabase::class.java, name)
-            .addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3).build()
+            .addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4).build()
         try {
             val store = RoomLibraryStore(database.libraryDao())
             val snapshot = store.current()

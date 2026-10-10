@@ -15,6 +15,7 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
         DocumentsContract.Document.COLUMN_DOCUMENT_ID,
         DocumentsContract.Document.COLUMN_DISPLAY_NAME,
         DocumentsContract.Document.COLUMN_MIME_TYPE,
+        DocumentsContract.Document.COLUMN_LAST_MODIFIED,
     )
 
     override fun root(treeUri: String): ScanDocument {
@@ -39,7 +40,7 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
                     val mime = it.getString(2).orEmpty()
                     add(ScanDocument(id, DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(), name,
                         mime, mime == DocumentsContract.Document.MIME_TYPE_DIR,
-                        DocumentsContract.buildDocumentUri(requireNotNull(tree.authority), id).toString()))
+                        DocumentsContract.buildDocumentUri(requireNotNull(tree.authority), id).toString(), if (it.columnCount > 3 && !it.isNull(3)) it.getLong(3).takeIf { value -> value > 0 } else null))
                 }
             }
         }
@@ -47,7 +48,7 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
 
     override suspend fun metadata(uri: String): AudioMetadata = metadata(uri, Uri.parse(uri).lastPathSegment.orEmpty())
     override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
-        val wav = if (fileName.endsWith(".wav", ignoreCase = true)) runCatching { ContainerTags.read(context, uri, fileName) }.getOrNull() else null
+        val wav = runCatching { ContainerTags.read(context, uri, fileName) }.getOrNull()
         fun wavText(key: org.jaudiotagger.tag.FieldKey) = wav?.getFirst(key)?.trimEnd('\u0000')?.takeIf { it.isNotEmpty() }
         val extra = try { embeddedTags(context, uri) }
             catch (cancelled: CancellationException) { throw cancelled }
@@ -56,6 +57,15 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
         try {
             retriever.setDataSource(context, Uri.parse(uri))
             return AudioMetadata(
+                composer = wavText(org.jaudiotagger.tag.FieldKey.COMPOSER) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER) ?: extra?.metadata?.composer?.toString(),
+                lyricist = wavText(org.jaudiotagger.tag.FieldKey.LYRICIST),
+                modifiedAt = runCatching {
+                    val parsed = Uri.parse(uri)
+                    if (parsed.scheme == "file") java.io.File(requireNotNull(parsed.path)).lastModified().takeIf { it > 0 }
+                    else resolver.query(parsed, arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use {
+                        if (it.moveToFirst() && !it.isNull(0)) it.getLong(0).takeIf { value -> value > 0 } else null
+                    }
+                }.getOrNull(),
                 title = wavText(org.jaudiotagger.tag.FieldKey.TITLE) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: extra?.metadata?.title?.toString(),
                 artist = wavText(org.jaudiotagger.tag.FieldKey.ARTIST) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: extra?.metadata?.artist?.toString(),
                 album = wavText(org.jaudiotagger.tag.FieldKey.ALBUM) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: extra?.metadata?.albumTitle?.toString(),

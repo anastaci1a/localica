@@ -47,6 +47,8 @@ class TreeScanner(private val source: DocumentSource) {
                         year = metadata.year?.takeIf { it > 0 },
                         genre = metadata.genre.clean(),
                         comment = metadata.comment.clean(),
+                        composer = metadata.composer.clean(), lyricist = metadata.lyricist.clean(),
+                        modifiedAt = document.modifiedAt ?: metadata.modifiedAt,
                         durationMs = metadata.durationMs?.takeIf { it >= 0 },
                         fileName = document.name,
                         relativePath = relativePath,

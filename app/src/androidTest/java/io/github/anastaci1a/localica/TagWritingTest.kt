@@ -29,7 +29,7 @@ class TagWritingTest {
     @Test fun wavEditsVerifyAudioAndUnchangedTags() = edits("tone.wav")
     private fun edits(name: String) = fixture(name) { file ->
         val fields = mapOf(EditField.Title to "Edited café", EditField.Album to "Album", EditField.Artist to "Artist",
-            EditField.AlbumArtist to "Album artist", EditField.Year to "2025", EditField.Disc to "2", EditField.TrackNumber to "3", EditField.Comment to "Keep my comment")
+            EditField.AlbumArtist to "Album artist", EditField.Year to "2025", EditField.Disc to "2", EditField.TrackNumber to "3", EditField.Comment to "Keep my comment", EditField.Composer to "Composer", EditField.Lyricist to "Lyricist", EditField.Genre to "Ambient")
         TagCodec.edit(file, TagPatch(fields))
         fields.forEach { (field, value) -> assertEquals(name + field.name, value, AudioFileIO.read(file).tag.getFirst(field.key)) }
         val metadata = runBlocking { io.github.anastaci1a.localica.library.AndroidDocuments(context).metadata(android.net.Uri.fromFile(file).toString(), file.name) }
@@ -37,6 +37,10 @@ class TagWritingTest {
         assertEquals(name, "Album artist", metadata.albumArtist)
         assertEquals(name, 2, metadata.discNumber)
         assertEquals(name, "Keep my comment", metadata.comment)
+        assertEquals(name, "Composer", metadata.composer)
+        assertEquals(name, "Lyricist", metadata.lyricist)
+        assertEquals(name, "Ambient", metadata.genre)
+        assertNotNull(metadata.modifiedAt)
         val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.MAGENTA) }
         val output = ByteArrayOutputStream().apply { bitmap.compress(Bitmap.CompressFormat.PNG, 100, this) }
         TagCodec.edit(file, TagPatch(artwork = ArtworkChange.Replace(CoverImage(output.toByteArray(), "image/png", 32, 32))))
