@@ -11,10 +11,10 @@ import kotlinx.coroutines.withContext
 
 /** Artwork stays out of Room. Decode only the current cover at a bounded display size. */
 class ArtworkReader(private val context: Context) {
-    suspend fun read(uri: String): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun read(uri: String, edge: Int = 768): Bitmap? = withContext(Dispatchers.IO) {
         try {
             val bytes = platformPicture(uri) ?: embeddedTags(context, uri).metadata.artworkData
-            bytes?.let(::decodeArtwork)
+            bytes?.let { decodeArtwork(it, edge) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { null }
     }
@@ -29,12 +29,13 @@ class ArtworkReader(private val context: Context) {
     }
 }
 
-internal fun decodeArtwork(bytes: ByteArray): Bitmap? {
+internal fun decodeArtwork(bytes: ByteArray, edge: Int = 768): Bitmap? {
     if (bytes.size > 16 * 1024 * 1024) return null
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
     var sample = 1
-    while (bounds.outWidth / sample > 768 || bounds.outHeight / sample > 768) sample *= 2
+    val bound = edge.coerceIn(32, 768)
+    while (bounds.outWidth / sample > bound || bounds.outHeight / sample > bound) sample *= 2
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
 }

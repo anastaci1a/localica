@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import io.github.anastaci1a.localica.navigation.*
+import io.github.anastaci1a.localica.home.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,28 +35,26 @@ fun LocalicaScreen(
     onRescan: (String) -> Unit,
     onCancelScan: () -> Unit,
     onRemoveFolder: (String) -> Unit = {},
-    onQuery: (LibraryQuery) -> Unit = {},
     queues: QueueUiState = QueueUiState(loading = false),
     queueController: QueueController? = null,
     onPrevious: () -> Unit = {},
     onNext: () -> Unit = {},
-    onView: (SongListView) -> Unit = {},
-    onGroup: (String?) -> Unit = {},
-    playlist: PlaylistUiState = PlaylistUiState(),
+    playlist: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(),
     playlistController: PlaylistController? = null,
-    onOpenPlaylist: (String?) -> Unit = {},
-    onPlaylistQuery: (LibraryQuery) -> Unit = {},
-    onPlaylistPlay: (String) -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
     var settings by remember { mutableStateOf(preferences.read()) }
+    val pinPreferences = remember(context) { PinPreferences(context) }
+    var pins by remember { mutableStateOf(pinPreferences.read()) }
+    fun pin(ref: MediaRef) { pins = PinEdits.toggle(pins, ref); pinPreferences.write(pins) }
     var navigation by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
         save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
         mutableStateOf(NavigationState.fresh(settings.tabs))
     }
     val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var sortingRoute by rememberSaveable { mutableStateOf<String?>(null) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
     var exitPrompt by remember { mutableStateOf(false) }
@@ -95,28 +94,33 @@ fun LocalicaScreen(
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (navigation.stacks.getValue(navigation.active).size > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
                 Text(if (route.search) "Search" else route.title ?: route.tab.label, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                if (route.tab != MainTab.Queues && (route.tab != MainTab.Home || route.search || route.collection != null))
+                    ActionIcon(R.drawable.ic_sort, "Sort and presentation") { sortingRoute = route.key }
                 if (!route.search && route.tab != MainTab.Queues) ActionIcon(R.drawable.ic_search, "Search this view") {
-                    navigation = navigation.open(route.copy(search = true, text = "", key = java.util.UUID.randomUUID().toString()))
+                    navigation = navigation.open(route.copy(search = true, globalSearch = route.tab == MainTab.Home,
+                        text = "", key = java.util.UUID.randomUUID().toString()))
                 }
                 ActionIcon(R.drawable.ic_settings, "Settings") { settingsOpen = true }
             }
             holder.SaveableStateProvider(route.key) {
-                if (route.tab == MainTab.Queues && !route.search) QueueScreen(queues, queueController)
+                if (route.tab == MainTab.Queues && !route.search) QueueScreen(queues, queueController, library,
+                    playlist, playlistController, playback.connected, pins, ::pin)
                 else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
-                    Column(Modifier.padding(24.dp)) {
-                        Text("Your music", style = MaterialTheme.typography.headlineMedium)
-                        Text("${library.snapshot.tracks.size} songs in your library")
-                        TextButton(onClick = { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) }) { Text("Browse all music") }
-                        if (library.snapshot.folders.isEmpty()) TextButton(onClick = { settingsOpen = true }) { Text("Add music folders") }
-                    }
-                } else BrowserScreen(library, playlist.saved, route, { navigation = navigation.update(it) },
+                    PinnedHome(library, playlist, pins, { settingsOpen = true },
+                        { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) },
+                        { item, songs ->
+                            if (item.row != null) queueController?.tap(songs.map { it.track }, songs.indexOfFirst { it.id == item.row.id })
+                            else navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title))
+                        }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) })
+                } else BrowserScreen(library, playlist, route, { navigation = navigation.update(it) },
                     { item -> navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title)) },
                     { settingsOpen = true }, { rows, index, scope ->
                         if (index >= 0) {
                             if (queueController != null) queueController.tap(rows.map { it.track }, index, scope)
                             else onPlay(rows[index].track)
                         }
-                    }, queueController, playlistController, playback.connected, expanded)
+                    }, queueController, playlistController, playback.connected, expanded, pins, ::pin,
+                    sortingRoute == route.key, { sortingRoute = null }, playingTrackId = playback.trackId)
             }
         }
         Surface(Modifier.align(Alignment.BottomCenter).offset(y = (64.dp + inset) * progress.value)
@@ -148,7 +152,8 @@ fun LocalicaScreen(
     }
     androidx.activity.compose.BackHandler(expanded) { expanded = false }
     if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Box(Modifier.fillMaxHeight(0.9f)) { QueueScreen(queues, queueController) }
+        Box(Modifier.fillMaxHeight(0.9f)) { QueueScreen(queues, queueController, library,
+            playlist, playlistController, playback.connected, pins, ::pin) }
     }
     if (settingsOpen) FolderSettings(library,
         onDismiss = { settingsOpen = false }, onChooseFolder, onRescan, onCancelScan, onRemoveFolder,
