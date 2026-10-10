@@ -57,19 +57,28 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         val stackTarget = home + Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2))
         val target = destination?.topLeft ?: stackTarget
         val position = remember { Animatable(drag.initialBounds[item.key]?.topLeft ?: home, Offset.VectorConverter) }
+        val liftOffset = remember { Animatable((drag.initialBounds[item.key]?.topLeft ?: home) - home, Offset.VectorConverter) }
+        LaunchedEffect(drag, reducedMotion) {
+            if (reducedMotion) liftOffset.snapTo(Offset.Zero) else liftOffset.animateTo(Offset.Zero, tween(240))
+        }
+        // The held card follows the pointer at layout time. Only the initial gathering offset
+        // decays; restarting a spring for every pointer event causes visible input latency.
+        val displayed = if (index == 0 && !drag.dropping) home + liftOffset.value else position.value
         val cardWidth = remember { Animatable(drag.initialBounds[item.key]?.width ?: stackWidth) }
         LaunchedEffect(destination?.width, reducedMotion) {
             val targetWidth = destination?.width ?: stackWidth
             if (reducedMotion) cardWidth.snapTo(targetWidth) else cardWidth.animateTo(targetWidth, tween(350))
         }
-        LaunchedEffect(target, drag.dropping, reducedMotion) {
+        LaunchedEffect(if (index == 0 && !drag.dropping) null else target, drag.dropping, reducedMotion) {
+            if (index == 0 && !drag.dropping) return@LaunchedEffect
+            if (index == 0) position.snapTo(home + liftOffset.value)
             if (reducedMotion) position.snapTo(target)
             else position.animateTo(target, if (drag.dropping) tween(350) else spring(dampingRatio = 0.9f, stiffness = 950f / (index.coerceAtMost(2) + 1)))
         }
         val alpha by animateFloatAsState(if (drag.destinations != null && destination == null) 0f else 1f,
             tween(if (reducedMotion) 0 else 300), label = "Song landing")
         Surface(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
-            .offset { IntOffset(position.value.x.roundToInt(), position.value.y.roundToInt()) }
+            .offset { IntOffset(displayed.x.roundToInt(), displayed.y.roundToInt()) }
             .width(with(density) { cardWidth.value.toDp() }).height(height).graphicsLayer { this.alpha = alpha }
             .testTag(if (index == 0) "drag-stack" else "drag-card-${item.key}"),
             shape = Corners.card, color = if (index == 0) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.secondaryContainer,
@@ -83,8 +92,8 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
             }
         }
         if (index == 0 && drag.moving.size > 1 && !drag.dropping) Surface(
-            Modifier.zIndex(5f).offset { IntOffset((position.value.x + stackWidth - with(density) { 28.dp.toPx() }).roundToInt(),
-                (position.value.y - with(density) { 10.dp.toPx() }).roundToInt()) }
+            Modifier.zIndex(5f).offset { IntOffset((displayed.x + stackWidth - with(density) { 28.dp.toPx() }).roundToInt(),
+                (displayed.y - with(density) { 10.dp.toPx() }).roundToInt()) }
                 .defaultMinSize(28.dp, 28.dp).semantics { contentDescription = "Dragging ${drag.moving.size} songs" },
             color = MaterialTheme.colorScheme.primary, shape = CircleShape) {
             Box(Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
