@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,36 +18,14 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun SongItem(row: SongRow, playing: Boolean, enabled: Boolean, selectionMode: Boolean, checked: Boolean,
-    onSelect: () -> Unit, onPlay: () -> Unit, extra: @Composable () -> Unit = {}) {
-    Column(Modifier.fillMaxWidth().testTag("song-" + row.id).combinedClickable(enabled = enabled, role = Role.Button,
-        onClick = { if (selectionMode) onSelect() else onPlay() }, onLongClick = onSelect,
-        onLongClickLabel = "Select song").padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked, { onSelect() }, enabled = enabled,
-                modifier = Modifier.semantics { contentDescription = "Select ${row.track.title}" })
-            Column(Modifier.weight(1f)) {
-                Text(row.track.title, color = if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium)
-                Text(row.track.artist ?: row.track.fileName, style = MaterialTheme.typography.bodySmall)
-            }
-            Text(formatTime(row.track.durationMs), style = MaterialTheme.typography.labelSmall)
-        }
-        extra()
-    }
-    HorizontalDivider()
-}
-
 @Composable
 internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSelection: (Set<String>) -> Unit,
     queues: QueueController?, playlists: PlaylistController?, playlistState: PlaylistState,
-    onRemove: (() -> Unit)? = null) {
+    onRemove: (((Boolean) -> Unit) -> Unit)? = null, removeLabel: String = "Remove from playlist") {
     var menu by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val chosen = rows.filter { it.id in selected }
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
         Text("${chosen.size} selected")
         TextButton(onClick = { onSelection(rows.map { it.id }.toSet()) }) { Text("Select all") }
         TextButton(onClick = { onSelection(emptySet()) }) { Text("Clear") }
@@ -54,12 +34,12 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
             DropdownMenu(menu, { menu = false }) {
                 SongTap.entries.forEach { action ->
                     DropdownMenuItem(text = { Text(action.label()) }, onClick = {
-                        queues?.act(chosen.map { it.track }, action); menu = false; onSelection(emptySet())
+                        queues?.act(chosen.map { it.track }, action) { if (it) onSelection(emptySet()) }; menu = false
                     })
                 }
                 DropdownMenuItem(text = { Text("Add to playlist") }, onClick = { adding = chosen.map { it.track }; menu = false })
-                if (onRemove != null) DropdownMenuItem(text = { Text("Remove from playlist") }, onClick = {
-                    onRemove(); menu = false; onSelection(emptySet())
+                if (onRemove != null) DropdownMenuItem(text = { Text(removeLabel) }, onClick = {
+                    onRemove { if (it) onSelection(emptySet()) }; menu = false
                 })
             }
         }
@@ -88,7 +68,7 @@ private fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, contr
             state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = { TextButton(enabled = !state.loading && (chosen != null || name.isNotBlank()), onClick = {
-        chosen?.let { controller?.append(it, tracks) } ?: controller?.create(name, tracks)
-        onAdded()
+        val complete: (Boolean) -> Unit = { if (it) onAdded() }
+        chosen?.let { controller?.append(it, tracks, complete) } ?: controller?.create(name, tracks, complete)
     }) { Text("Add") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
