@@ -112,7 +112,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion, moveSongs)) {
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth())
             else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(galleryColumns(style.presentation,
-                with(androidx.compose.ui.platform.LocalDensity.current) { reorder.viewportWidth.toDp().value } - if (result.items.size >= 40) 48f else 0f)), modifier = Modifier.fillMaxSize().padding(end = if (result.items.size >= 40) 48.dp else 0.dp).testTag("browser-list"), contentPadding = PaddingValues(bottom = 80.dp)) {
+                with(androidx.compose.ui.platform.LocalDensity.current) { reorder.viewportWidth.toDp().value })), modifier = Modifier.fillMaxSize().testTag("browser-list"), contentPadding = PaddingValues(bottom = 80.dp)) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         LibraryNotice(library)
@@ -136,9 +136,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
                     Column(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer { alpha = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) 0f else 1f }) {
-                        val itemMenu: @Composable () -> Unit = {
+                        val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
-                                ActionIcon(R.drawable.ic_more, "Actions for " + item.title) { contextMenu = item.key }
+                                if (showButton) ActionIcon(R.drawable.ic_more, "Actions for " + item.title) { contextMenu = item.key }
                                 DropdownMenu(contextMenu == item.key, { contextMenu = null }) {
                                     if (item.row != null) {
                                         ActionMenuItem("Information", onClick = { contextMenu = null; info = item.row.track })
@@ -194,8 +194,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             if (style.presentation != Presentation.List) {
                                 Box {
                                     MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
-                                    Surface(Modifier.align(Alignment.BottomEnd).padding(2.dp), shape = androidx.compose.foundation.shape.CircleShape,
-                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) { itemMenu() }
+                                    itemMenu(false)
                                 }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -206,7 +205,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     item.information(style)?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
                                 }
-                                if (style.presentation == Presentation.List) itemMenu()
+                                if (style.presentation == Presentation.List) itemMenu(true)
                             }
                         }
 
