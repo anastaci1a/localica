@@ -172,12 +172,15 @@ fun LocalicaScreen(
         durationMs = currentTrack.durationMs, positionMs = 0) else playback
     val hasPlayer = currentTrack != null || playback.trackUri != null
     LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }
-    CompositionLocalProvider(LocalSessionSelection provides session) {
+    val dragHost = remember { SongDragHost() }
+    CompositionLocalProvider(LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+        LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+            (if (hasPlayer) 152.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {
     BoxWithConstraints(Modifier.fillMaxSize().background(if (expanded && !queueOpen) androidx.compose.ui.graphics.Color(0xFF242B34)
         else MaterialTheme.colorScheme.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = inset + (if (hasPlayer) 152.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)
+        Column(Modifier.fillMaxSize().statusBarsPadding()
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
             val route = navigation.route
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -290,12 +293,13 @@ fun LocalicaScreen(
             } }, ::playerAction, { customizeActions = true })
         }
         if (queueProgress.value > 0f) QueueSurface(queueProgress, settings, { queueOpen = it }) {
-            Box(Modifier.weight(1f)) { QueueScreen(queues, queueController, library,
-                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion) }
+            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
+                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion) } }
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).verticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)
             }
         }
+        ForegroundSongDragOverlay(dragHost)
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
     androidx.activity.compose.BackHandler(queueOpen || queueProgress.value > 0f) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }

@@ -25,7 +25,8 @@ class PlayerLayoutTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
         val queue = QueueEdits.create(listOf(track), 0, "Morning")
-        compose.setContent { LocalicaTheme { LocalicaScreen(LibraryUiState(loading = false), playback,
+        val songs = (0..99).map { Track("song:$it", "Library song " + it.toString().padStart(3, '0'), fileName = "$it.mp3", relativePath = "$it.mp3") }
+        compose.setContent { LocalicaTheme { LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = songs), loading = false), playback,
             {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) } }
         val mini = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
         val tabs = compose.onNodeWithTag("tab-pill").fetchSemanticsNode().boundsInRoot
@@ -37,6 +38,19 @@ class PlayerLayoutTest {
         compose.onNodeWithContentDescription("Previous").assertIsDisplayed()
         compose.onNodeWithContentDescription("Play").assertIsDisplayed()
         compose.onNodeWithContentDescription("Next").assertIsDisplayed()
+        val artwork = compose.onNodeWithTag("player-artwork").fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText(track.title).fetchSemanticsNode().boundsInRoot
+        assertEquals("Artwork clears the curved leading edge", artwork.width / 4, artwork.left - mini.left, 1f)
+        assertEquals("Title keeps its gap from artwork", artwork.width / 6, title.left - artwork.right, 1f)
+        compose.onNodeWithContentDescription("Library").performClick()
+        compose.onNodeWithText("Songs").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
+        val list = compose.onNodeWithTag("browser-list")
+        assertTrue("List must continue behind floating controls", list.fetchSemanticsNode().boundsInRoot.bottom > tabs.bottom)
+        list.performScrollToNode(hasText("Library song 099"))
+        list.performTouchInput { swipe(androidx.compose.ui.geometry.Offset(centerX, height * 0.55f), androidx.compose.ui.geometry.Offset(centerX, height * 0.15f)) }
+        val last = compose.onNodeWithText("Library song 099").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("Last row $last can scroll clear of the mini-player $mini", last.bottom <= mini.top)
     }
     @Test fun artworkModesConvergeOnOneLyricsLayoutWithLowerControls() {
         var settings by mutableStateOf(InterfaceSettings())
