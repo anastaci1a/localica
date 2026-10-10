@@ -10,6 +10,7 @@ Development APK for Android 8 or newer. Signed with the project development key;
 
 ## Resolved issues
 
+- https://github.com/anastaci1a/localica/issues/42 - Reliable return-to-top after restoring a collection
 - https://github.com/anastaci1a/localica/issues/43 - Configurable mixed collections and date/play-count sorting
 
 ## Install

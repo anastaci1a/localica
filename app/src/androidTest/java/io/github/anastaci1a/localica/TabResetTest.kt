@@ -18,7 +18,7 @@ class TabResetTest {
         try {
             compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
         } catch (failure: Throwable) {
-            android.util.Log.e("TabReset", compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 20))
+            compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 20).chunked(2500).forEach { android.util.Log.e("TabReset", it) }
             throw failure
         }
     }
@@ -42,12 +42,14 @@ class TabResetTest {
             assertTrue("Must move without teleporting: $before -> $during", during > 0 && during < before)
             compose.mainClock.autoAdvance = true
             awaitFirstAlbum()
-            compose.scrollToUncoveredItem(hasText("Album 060"))
-            compose.onNodeWithText("Album 060").performClick()
-            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Song 60").assertIsDisplayed() }.isSuccess }
-            compose.onNodeWithContentDescription("Library").performClick()
-            awaitFirstAlbum()
-            compose.onNodeWithContentDescription("Back").assertDoesNotExist()
+            repeat(5) {
+                compose.scrollToUncoveredItem(hasText("Album 060"))
+                compose.onNodeWithText("Album 060").performClick()
+                compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Song 60").assertIsDisplayed() }.isSuccess }
+                compose.onNodeWithContentDescription("Library").performClick()
+                awaitFirstAlbum()
+                compose.onNodeWithContentDescription("Back").assertDoesNotExist()
+            }
             compose.onNodeWithContentDescription("Search library").performClick()
             compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("060")
             compose.onNode(hasSetTextAction()).performImeAction()
