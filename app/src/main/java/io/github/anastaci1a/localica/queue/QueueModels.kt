@@ -26,9 +26,9 @@ data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val acti
     val active: ListeningQueue? get() = queues.firstOrNull { it.id == activeId }
     fun update(queue: ListeningQueue) = copy(queues = queues.map { if (it.id == queue.id) queue else it })
 }
-data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?)
+data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true)
 data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading: Boolean = true,
-    val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null)
+    val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0)
 
 /** Pure queue edits keep occurrence identity separate from the song's library identity. */
 object QueueEdits {

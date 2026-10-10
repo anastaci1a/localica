@@ -62,16 +62,12 @@ class NavigationTest {
                     onChooseFolder = { requestedFolder = true }, onRescan = {}, onCancelScan = {})
             }
         }
-        compose.onNodeWithText("Nothing playing").assertIsDisplayed()
-        val playerCenter = compose.onNodeWithText("Player").fetchSemanticsNode().boundsInRoot.center.x
-        val libraryCenter = compose.onNodeWithText("Library").fetchSemanticsNode().boundsInRoot.center.x
-        val settingsCenter = compose.onNodeWithContentDescription("Settings").fetchSemanticsNode().boundsInRoot.center.x
-        assertTrue(playerCenter < libraryCenter && libraryCenter < settingsCenter)
-        compose.onNodeWithText("Library").performClick()
-        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Track 40"))
+        compose.onNodeWithText("Your music").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Library").performClick()
+        compose.onNodeWithText("Songs").performClick()
+        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Track 40"))
         compose.onNodeWithText("Track 40").performClick()
         compose.runOnIdle { assertEquals(tracks.last(), selected) }
-        compose.onNodeWithText("Nothing playing").assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("Music folders").assertIsDisplayed()
         compose.onNodeWithText("Add folder").performClick()

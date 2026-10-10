@@ -1,6 +1,11 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import io.github.anastaci1a.localica.navigation.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -17,6 +22,7 @@ import io.github.anastaci1a.localica.library.SongListView
 import io.github.anastaci1a.localica.playlist.PlaylistController
 import io.github.anastaci1a.localica.playback.PlaybackState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalicaScreen(
     library: LibraryUiState,
@@ -41,45 +47,120 @@ fun LocalicaScreen(
     onPlaylistQuery: (LibraryQuery) -> Unit = {},
     onPlaylistPlay: (String) -> Unit = {},
 ) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
+    var settings by remember { mutableStateOf(preferences.read()) }
+    var navigation by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
+        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
+        mutableStateOf(NavigationState.fresh(settings.tabs))
+    }
+    val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    Scaffold(
-        bottomBar = {
-            Surface(tonalElevation = 2.dp) {
-                Box(Modifier.fillMaxWidth().navigationBarsPadding().height(80.dp).padding(horizontal = 8.dp)) {
-                    Row(Modifier.align(Alignment.CenterStart).fillMaxWidth().padding(end = 48.dp)) {
-                        NavigationBarItem(selected = tab == 0, onClick = { tab = 0 },
-                            icon = { Icon(painterResource(R.drawable.ic_play), null) },
-                            label = { Text(stringResource(R.string.player)) })
-                        NavigationBarItem(selected = tab == 1, onClick = { tab = 1 },
-                            icon = { Icon(painterResource(R.drawable.ic_library), null) },
-                            label = { Text(stringResource(R.string.library)) })
-                        NavigationBarItem(selected = tab == 2, onClick = { tab = 2 },
-                            icon = { Text("≡") }, label = { Text("Queues") })
-                        NavigationBarItem(selected = tab == 3, onClick = { tab = 3 },
-                            icon = { Text("♫") }, label = { Text("Playlists") })
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var queueOpen by rememberSaveable { mutableStateOf(false) }
+    var exitPrompt by remember { mutableStateOf(false) }
+    var consumedRequest by rememberSaveable { mutableLongStateOf(queues.playerRequest) }
+    val progress = remember { androidx.compose.animation.core.Animatable(if (expanded) 1f else 0f) }
+    LaunchedEffect(queues.playerRequest) {
+        if (queues.playerRequest != consumedRequest) {
+            consumedRequest = queues.playerRequest
+            if (settings.expandOnPlay) expanded = true
+        }
+    }
+    fun exit() {
+        var owner: android.content.Context? = context
+        while (owner is android.content.ContextWrapper && owner !is android.app.Activity) owner = owner.baseContext
+        (owner as? android.app.Activity)?.finish()
+    }
+    fun back() {
+        val previous = navigation.back(settings.tabHistory)
+        if (previous != null) navigation = previous
+        else if (settings.confirmExit) exitPrompt = true else exit()
+    }
+    androidx.activity.compose.BackHandler { back() }
+    val currentTrack = queues.library.active?.let { queue ->
+        queue.entries.firstOrNull { it.id == queue.currentEntryId }?.track
+    }
+    val player = if (currentTrack != null && currentTrack.id != playback.trackId) playback.copy(
+        trackId = currentTrack.id, trackUri = currentTrack.uri, title = currentTrack.title, artist = currentTrack.artist,
+        albumArtist = currentTrack.albumArtist, album = currentTrack.album, fileName = currentTrack.fileName,
+        durationMs = currentTrack.durationMs, positionMs = 0) else playback
+    val hasPlayer = currentTrack != null || playback.trackUri != null
+    LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = inset + if (hasPlayer) 144.dp else 64.dp)
+            .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
+            val route = navigation.route
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (navigation.stacks.getValue(navigation.active).size > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
+                Text(if (route.search) "Search" else route.title ?: route.tab.label, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                if (!route.search && route.tab != MainTab.Queues) ActionIcon(R.drawable.ic_search, "Search this view") {
+                    navigation = navigation.open(route.copy(search = true, text = "", key = java.util.UUID.randomUUID().toString()))
+                }
+                ActionIcon(R.drawable.ic_settings, "Settings") { settingsOpen = true }
+            }
+            holder.SaveableStateProvider(route.key) {
+                if (route.tab == MainTab.Queues && !route.search) QueueScreen(queues, queueController)
+                else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
+                    Column(Modifier.padding(24.dp)) {
+                        Text("Your music", style = MaterialTheme.typography.headlineMedium)
+                        Text("${library.snapshot.tracks.size} songs in your library")
+                        TextButton(onClick = { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) }) { Text("Browse all music") }
+                        if (library.snapshot.folders.isEmpty()) TextButton(onClick = { settingsOpen = true }) { Text("Add music folders") }
                     }
-                    IconButton(onClick = { settingsOpen = true }, modifier = Modifier.align(Alignment.CenterEnd).size(48.dp)) {
-                        Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings))
+                } else BrowserScreen(library, playlist.saved, route, { navigation = navigation.update(it) },
+                    { item -> navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title)) },
+                    { settingsOpen = true }, { rows, index, scope ->
+                        if (index >= 0) {
+                            if (queueController != null) queueController.tap(rows.map { it.track }, index, scope)
+                            else onPlay(rows[index].track)
+                        }
+                    }, queueController, playlistController, playback.connected, expanded)
+            }
+        }
+        Surface(Modifier.align(Alignment.BottomCenter).offset(y = (64.dp + inset) * progress.value)
+            .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier), tonalElevation = 2.dp) {
+            Row(Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+                BoxWithConstraints(Modifier.weight(1f)) {
+                    val fits = maxWidth >= 56.dp * settings.tabs.size
+                    Row(if (fits) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState())) {
+                        settings.tabs.forEach { tab ->
+                            Column((if (fits) Modifier.weight(1f) else Modifier.width(56.dp)).fillMaxHeight()
+                                .selectable(navigation.active == tab, role = androidx.compose.ui.semantics.Role.Tab,
+                                    onClick = { navigation = navigation.switch(tab) }),
+                                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Icon(painterResource(tab.icon()), tab.label, Modifier.size(24.dp),
+                                    tint = if (navigation.active == tab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelSmall,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            }
+                        }
                     }
                 }
+                ActionIcon(R.drawable.ic_search, "Search library") {
+                    navigation = navigation.open(BrowseRoute(navigation.active, search = true, globalSearch = true))
+                }
             }
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            if (tab == 0) PlayerScreen(playback, onToggle, onSeek, onOpenLibrary = { tab = 1 }, onPrevious = onPrevious, onNext = onNext)
-            else if (tab == 2) QueueScreen(queues, queueController)
-            else if (tab == 3) PlaylistScreen(playlist, library.snapshot.folders, playlistController,
-                queueController, onOpenPlaylist, onPlaylistQuery, onPlaylistPlay, playback.trackId, playback.connected)
-            else LibraryScreen(library, playback.trackId, enabled = playback.connected,
-                onTrack = { onPlay(it); tab = 0 }, onSettings = { settingsOpen = true }, onQuery = onQuery,
-                onView = onView, onGroup = onGroup, queues = queueController,
-                playlists = playlistController, playlistState = playlist.saved)
         }
+        if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
+            onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false })
+    }
+    androidx.activity.compose.BackHandler(expanded) { expanded = false }
+    if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Box(Modifier.fillMaxHeight(0.9f)) { QueueScreen(queues, queueController) }
     }
     if (settingsOpen) FolderSettings(library,
         onDismiss = { settingsOpen = false }, onChooseFolder, onRescan, onCancelScan, onRemoveFolder,
-        extraContent = { QueueSettingsControls(queues.settings) { queueController?.settings(it) } })
+        extraContent = {
+            InterfaceSettingsControls(settings) {
+                settings = it; preferences.write(it); navigation = navigation.reconcile(it.tabs)
+            }
+            QueueSettingsControls(queues.settings) { queueController?.settings(it) }
+        })
+    if (exitPrompt) AlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
+        text = { Text("Playback will continue.") }, confirmButton = { TextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
+        dismissButton = { TextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
     QueueDialogs(queues, queueController)
 }
 
