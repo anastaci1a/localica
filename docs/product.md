@@ -10,7 +10,11 @@ Finding music, starting playback, and changing the current queue should take few
 
 Combine multiple user-selected folder trees. Browse songs, albums, artists, album artists, folders, and playlists using shared search, filter, and sort rules. Retain view preferences. Album and album-artist metadata must remain distinct from individual track artists, including compilations.
 
+Group albums by title and album artist, falling back to track artist when album artist is absent. Match names without case or surrounding whitespace; missing names have distinct unknown groups. Artist views use track artists. Folder views show each root and relative parent directory, retaining alternate access paths for overlapping roots. Group names are alphabetical; query sorting controls songs within each group.
+
 Manual playlists support creation, naming, ordering, adding/removing tracks, and deletion. Smart playlists are a later possibility. Playlists describe saved collections; queues preserve listening sessions independently of subsequent playlist or library changes.
+
+Each playlist occurrence has its own identity, including repeated songs. Available songs reflect rescanned library metadata; unavailable songs retain their last saved metadata and file reference. Removing a library folder never removes playlist entries. Playlist order is the default; search and other sorts change the displayed result without rewriting that order. Reordering controls apply when the complete saved order is displayed.
 
 ## Queue behavior
 
@@ -35,6 +39,8 @@ Maintain this inventory as capabilities are added; these are target settings, no
 | Appearance | System/light/dark themes, reduced motion/transparency, and a legible solid-material fallback. |
 
 In selection mode, tapping changes the selection instead of executing the song-tap preference. Explicit contextual actions remain available regardless of the tap default.
+
+Search results use the search tap override when a text query is present. Each view retains its own text, folder filter, and song sort; reset restores that view's defaults. Removing a tap override restores inheritance from the app default.
 
 ## Tag editing
 
