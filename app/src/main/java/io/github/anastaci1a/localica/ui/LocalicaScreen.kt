@@ -156,6 +156,7 @@ fun LocalicaScreen(
     CompositionLocalProvider(LocalSessionSelection provides session) {
     BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val queueSelectionMaxHeight = maxHeight / 3
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = inset + (if (hasPlayer) 144.dp else 64.dp) + if (session.active) selectionHeight else 0.dp)
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
             val route = navigation.route
@@ -260,7 +261,9 @@ fun LocalicaScreen(
         if (queueProgress.value > 0f) QueueSurface(queueProgress, settings, { queueOpen = it }) {
             Box(Modifier.weight(1f)) { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion) }
-            SessionSelectionPanel(session, queueController, playlistController, playlist)
+            Column(Modifier.heightIn(max = queueSelectionMaxHeight).verticalScroll(rememberScrollState())) {
+                SessionSelectionPanel(session, queueController, playlistController, playlist)
+            }
         }
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }

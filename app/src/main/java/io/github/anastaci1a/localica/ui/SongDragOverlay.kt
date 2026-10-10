@@ -36,11 +36,15 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
             android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
     }
     val offset = with(density) { 7.dp.toPx() }
-    val width = with(density) { drag.cardSize.width.toDp() }
+    val margin = with(density) { 8.dp.toPx() }
+    val stackWidth = minOf(drag.cardSize.width, state.viewportWidth - margin * 6).coerceAtLeast(margin)
+    val width = with(density) { stackWidth.toDp() }
     val height = with(density) { drag.cardSize.height.toDp() }
     var lifted by remember(drag) { mutableStateOf(false) }
     LaunchedEffect(drag) { delay(if (reducedMotion) 0 else 240); lifted = true }
-    val home = drag.pointer - drag.grab
+    val rawHome = drag.pointer - drag.grab
+    val home = rawHome.copy(x = rawHome.x.coerceIn(margin,
+        (state.viewportWidth - stackWidth - offset * 2 - margin).coerceAtLeast(margin)))
     val shadowAlpha by animateFloatAsState(if (drag.dropping) 0f else 1f, tween(if (reducedMotion) 0 else 240), label = "Stack shadow")
     // One shared shadow reads as a single lifted bundle, even while its lower cards trail the pointer.
     Box(Modifier.zIndex(2f).offset { IntOffset(home.x.roundToInt(), home.y.roundToInt()) }
@@ -53,6 +57,11 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         val stackTarget = home + Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2))
         val target = destination?.topLeft ?: stackTarget
         val position = remember { Animatable(drag.initialBounds[item.key]?.topLeft ?: home, Offset.VectorConverter) }
+        val cardWidth = remember { Animatable(drag.initialBounds[item.key]?.width ?: stackWidth) }
+        LaunchedEffect(destination?.width, reducedMotion) {
+            val targetWidth = destination?.width ?: stackWidth
+            if (reducedMotion) cardWidth.snapTo(targetWidth) else cardWidth.animateTo(targetWidth, tween(350))
+        }
         LaunchedEffect(target, drag.dropping, reducedMotion) {
             if (reducedMotion) position.snapTo(target)
             else position.animateTo(target, if (drag.dropping) tween(350) else spring(dampingRatio = 0.9f, stiffness = 950f / (index.coerceAtMost(2) + 1)))
@@ -61,7 +70,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
             tween(if (reducedMotion) 0 else 300), label = "Song landing")
         Surface(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
             .offset { IntOffset(position.value.x.roundToInt(), position.value.y.roundToInt()) }
-            .width(width).height(height).graphicsLayer { this.alpha = alpha }
+            .width(with(density) { cardWidth.value.toDp() }).height(height).graphicsLayer { this.alpha = alpha }
             .testTag(if (index == 0) "drag-stack" else "drag-card-${item.key}"),
             shape = Corners.card, color = if (index == 0) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.secondaryContainer,
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))) {
@@ -74,7 +83,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
             }
         }
         if (index == 0 && drag.moving.size > 1 && !drag.dropping) Surface(
-            Modifier.zIndex(5f).offset { IntOffset((position.value.x + drag.cardSize.width - with(density) { 28.dp.toPx() }).roundToInt(),
+            Modifier.zIndex(5f).offset { IntOffset((position.value.x + stackWidth - with(density) { 28.dp.toPx() }).roundToInt(),
                 (position.value.y - with(density) { 10.dp.toPx() }).roundToInt()) }
                 .defaultMinSize(28.dp, 28.dp).semantics { contentDescription = "Dragging ${drag.moving.size} songs" },
             color = MaterialTheme.colorScheme.primary, shape = CircleShape) {
