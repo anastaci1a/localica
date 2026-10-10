@@ -18,6 +18,7 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.home.PinEdits
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -25,28 +26,26 @@ import kotlinx.coroutines.withContext
 internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, route: BrowseRoute,
     onRoute: (BrowseRoute) -> Unit, onOpen: (BrowserItem) -> Unit, onSettings: () -> Unit,
     onPlay: (List<SongRow>, Int, SongListView) -> Unit, queues: QueueController?, playlistController: PlaylistController?,
-    enabled: Boolean, playerOpen: Boolean) {
+    enabled: Boolean, playerOpen: Boolean, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {},
+    sorting: Boolean = false, onSortDismiss: () -> Unit = {}, queueState: QueueUiState = QueueUiState(),
+    playingTrackId: String? = null, playingEntryId: String? = null,
+    header: @Composable () -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember(context) { BrowsePreferences(context) }
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route)) }
-    var sorting by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    val result by produceState(BrowseResult(), library.snapshot, playlists.playlists, route, style) {
-        value = withContext(Dispatchers.Default) { BrowseQueries.evaluate(library.snapshot, playlists.playlists, route, style.query()) }
+    val result by produceState(BrowseResult(), library.snapshot, playlists.playlists, route, style, queueState.library) {
+        value = withContext(Dispatchers.Default) { BrowseQueries.evaluate(library.snapshot, playlists.playlists, route, style.query(), queueState.library.queues) }
     }
     var selection by remember(route.key, route.text, route.filter) { mutableStateOf(emptySet<String>()) }
     var contextMenu by remember { mutableStateOf<String?>(null) }
     var naming by remember { mutableStateOf(false) }
     BackHandler(selection.isNotEmpty() && !playerOpen) { selection = emptySet(); contextMenu = null }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.weight(1f))
-            if (route.collection?.kind == MediaKind.Playlist) {
+        if (route.collection?.kind == MediaKind.Playlist) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { renaming = true }) { Text("Rename") }
                 TextButton(onClick = { deleting = true }) { Text("Delete") }
-            }
-            ActionIcon(R.drawable.ic_sort, "Sort and presentation") { sorting = true }
         }
         if (route.search) OutlinedTextField(route.text, { onRoute(route.copy(text = it)) }, singleLine = true,
             label = { Text(if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}") },
@@ -54,14 +53,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (route.collection == null && (route.tab == MainTab.Library || route.globalSearch)) {
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(route.filter == null, { onRoute(route.copy(filter = null)) }, { Text("All") })
-                MediaKind.entries.forEach { kind -> FilterChip(route.filter == kind,
+                BrowseQueries.libraryKinds.forEach { kind -> FilterChip(route.filter == kind,
                     { onRoute(route.copy(filter = kind)) }, { Text(kind.label) }) }
             }
         }
         if (selection.isNotEmpty()) SelectionActions(result.rows, selection, { selection = it }, queues, playlistController, playlists,
-            onRemove = if (route.collection?.kind == MediaKind.Playlist) ({
-                playlistController?.removeEntries(route.collection.id, selection)
-            }) else null)
+            onRemove = if (route.collection?.kind == MediaKind.Playlist) ({ complete ->
+                playlistController?.removeEntries(route.collection.id, selection, complete)
+            }) else if (route.collection?.kind == MediaKind.Queue) ({ complete -> queues?.removeEntries(selection, complete) }) else null,
+            removeLabel = if (route.collection?.kind == MediaKind.Queue) "Remove from queue" else "Remove from playlist")
         Box(Modifier.weight(1f)) {
             LazyVerticalGrid(columns = when (style.presentation) {
                 Presentation.List -> GridCells.Fixed(1)
@@ -71,13 +71,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }, modifier = Modifier.fillMaxSize().testTag("browser-list"), contentPadding = PaddingValues(bottom = 80.dp)) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
+                        header()
                         LibraryNotice(library)
+                        playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        if (library.snapshot.folders.isEmpty()) TextButton(onClick = onSettings) { Text("Add music folders") }
+                        if (library.snapshot.folders.isEmpty() && route.collection?.kind != MediaKind.Queue) TextButton(onClick = onSettings) { Text("Add music folders") }
                         if (result.items.isEmpty() && !library.loading) Text(if (route.search) "No matching items" else "Nothing here yet")
                     }
                 }
                 items(result.items, key = { it.key }) { item ->
+                    val current = item.row != null && if (playingEntryId != null) item.row.id == playingEntryId else item.row.track.id == playingTrackId
                     Box {
                         Column(Modifier.fillMaxWidth().testTag("media-${item.key}").combinedClickable(
                             enabled = item.row == null || enabled,
@@ -85,18 +88,21 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 if (item.row == null) onOpen(item)
                                 else if (selection.isNotEmpty()) selection = if (item.key in selection) selection - item.key else selection + item.key
                                 else onPlay(result.rows, result.rows.indexOfFirst { it.id == item.row.id }, result.scope)
-                            }, onLongClickLabel = if (item.row != null) "Select song and show actions" else null,
-                            onLongClick = if (item.row != null) ({ selection = selection + item.key; contextMenu = item.key }) else null
+                            }, onLongClickLabel = if (item.row != null) "Select song and show actions" else "Collection actions",
+                            onLongClick = if (item.ref.kind in PinEdits.supported) ({
+                                if (item.row != null) selection = selection + item.key
+                                contextMenu = item.key
+                            }) else null
                         ).padding(horizontal = 12.dp, vertical = 8.dp)) {
                             if (style.presentation != Presentation.List) {
-                                AlbumArtwork(item.songs.firstOrNull()?.track?.uri, Modifier.fillMaxWidth().aspectRatio(1f))
+                                MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (item.row != null && selection.isNotEmpty()) Checkbox(item.key in selection,
                                     { selection = if (item.key in selection) selection - item.key else selection + item.key })
-                                if (style.presentation == Presentation.List) AlbumArtwork(item.songs.firstOrNull()?.track?.uri, Modifier.size(48.dp))
+                                if (style.presentation == Presentation.List) MediaArtwork(item.coverUris, Modifier.size(48.dp))
                                 Column(Modifier.weight(1f).padding(start = if (style.presentation == Presentation.List) 12.dp else 0.dp)) {
-                                    Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2,
+                                    Text((if (current) "▶ " else "") + item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     item.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
@@ -104,20 +110,32 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             }
                         }
                         DropdownMenu(contextMenu == item.key, { contextMenu = null }) {
+                            if (item.row != null) {
                             SongTap.entries.forEach { action -> DropdownMenuItem(text = { Text(action.label()) }, onClick = {
-                                queues?.act(result.rows.filter { it.id in selection }.map { it.track }, action)
-                                contextMenu = null; selection = emptySet()
+                                queues?.act(result.rows.filter { it.id in selection }.map { it.track }, action) { if (it) selection = emptySet() }
+                                contextMenu = null
                             }) }
                             DropdownMenuItem(text = { Text("Continue selecting") }, onClick = { contextMenu = null })
+                            }
+                            if (item.ref.kind in PinEdits.supported) DropdownMenuItem(text = { Text(if (item.ref in pins) "Unpin" else "Pin to Home") },
+                                onClick = { onPin(item.ref); contextMenu = null; selection = emptySet() })
                             if (route.collection?.kind == MediaKind.Playlist) {
                                 val index = result.rows.indexOfFirst { it.id == item.key }
                                 val manual = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank()
                                 DropdownMenuItem(text = { Text("Move up") }, enabled = manual && index > 0, onClick = {
-                                    playlistController?.move(route.collection.id, item.key, -1); contextMenu = null; selection = emptySet()
+                                    playlistController?.move(route.collection.id, item.key, -1) { if (it) selection = emptySet() }; contextMenu = null
                                 })
                                 DropdownMenuItem(text = { Text("Move down") }, enabled = manual && index < result.rows.lastIndex, onClick = {
-                                    playlistController?.move(route.collection.id, item.key, 1); contextMenu = null; selection = emptySet()
+                                    playlistController?.move(route.collection.id, item.key, 1) { if (it) selection = emptySet() }; contextMenu = null
                                 })
+                            }
+                            if (route.collection?.kind == MediaKind.Queue) {
+                                val index = result.rows.indexOfFirst { it.id == item.key }
+                                val manual = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank()
+                                DropdownMenuItem(text = { Text("Move up") }, enabled = manual && index > 0,
+                                    onClick = { queues?.moveEntry(item.key, -1) { if (it) selection = emptySet() }; contextMenu = null })
+                                DropdownMenuItem(text = { Text("Move down") }, enabled = manual && index < result.rows.lastIndex,
+                                    onClick = { queues?.moveEntry(item.key, 1) { if (it) selection = emptySet() }; contextMenu = null })
                             }
                         }
                     }
@@ -129,9 +147,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
     }
-    if (sorting) BrowseSortDialog(route, style, preferences.overridden(route), { sorting = false }, { value, override ->
-        preferences.write(route, value, override); style = value; sorting = false; selection = emptySet()
-    }, { preferences.reset(route); style = preferences.read(route); sorting = false })
+    if (sorting) BrowseSortDialog(route, style, preferences.overridden(route), onSortDismiss, { value, override ->
+        preferences.write(route, value, override); style = value; onSortDismiss(); selection = emptySet()
+    }, { preferences.reset(route); style = preferences.read(route); onSortDismiss() })
     if (renaming) {
         var name by remember { mutableStateOf(playlists.playlists.firstOrNull { it.id == route.collection?.id }?.name.orEmpty()) }
         AlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename playlist") }, text = {

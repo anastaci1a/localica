@@ -8,6 +8,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.navigation.*
+import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -24,12 +26,13 @@ class NavigationTest {
         compose.setContent {
             LocalicaTheme {
                 Box(Modifier.requiredSize(360.dp, 220.dp)) {
-                    LibraryScreen(LibraryUiState(loading = false), null, true, {}, { opened = true })
+                    BrowserScreen(LibraryUiState(loading = false), PlaylistState(loading = false), BrowseRoute(MainTab.Songs),
+                        {}, {}, { opened = true }, { _, _, _ -> }, null, null, true, false)
                 }
             }
         }
-        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Open settings"))
-        compose.onNodeWithText("Open settings").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Add music folders"))
+        compose.onNodeWithText("Add music folders").assertIsDisplayed().performClick()
         compose.runOnIdle { assertTrue(opened) }
     }
 

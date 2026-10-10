@@ -16,7 +16,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     var edited by remember { mutableStateOf(value) }
     var override by remember { mutableStateOf(overridden) }
     val songs = route.collection != null || route.tab == MainTab.Songs || route.filter == MediaKind.Song
-    val fields = if (songs) TrackSort.entries.filter { it != TrackSort.Manual || route.collection?.kind == MediaKind.Playlist }
+    val fields = if (songs) TrackSort.entries.filter { it != TrackSort.Manual || route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue) }
         else listOf(TrackSort.Title)
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Sort and presentation") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {

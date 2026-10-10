@@ -15,22 +15,32 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
-import io.github.anastaci1a.localica.library.ArtworkReader
+import io.github.anastaci1a.localica.library.ArtworkCache
+import io.github.anastaci1a.localica.library.CoverProvider
+import io.github.anastaci1a.localica.library.EmbeddedCoverProvider
+import androidx.compose.ui.layout.onSizeChanged
 
 @Composable
 internal fun AlbumArtwork(uri: String?, modifier: Modifier = Modifier.size(200.dp)) {
+    MediaArtwork(listOfNotNull(uri), modifier)
+}
+
+@Composable
+internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: CoverProvider = EmbeddedCoverProvider) {
     val context = LocalContext.current.applicationContext
-    val reader = remember(context) { ArtworkReader(context) }
-    val loaded by produceState<Pair<String?, ImageBitmap?>>(null to null, uri) {
-        value = uri to null
-        value = uri to uri?.let { reader.read(it)?.asImageBitmap() }
+    val revision by ArtworkCache.revision.collectAsState()
+    var pixels by remember { mutableIntStateOf(0) }
+    val request = Triple(uris, pixels, revision)
+    val loaded by produceState<Pair<Triple<List<String>, Int, Long>?, ImageBitmap?>>(null to null, request, provider) {
+        value = request to null
+        if (pixels > 0) value = request to provider.load(context, uris, pixels)?.asImageBitmap()
     }
-    // produceState keeps its prior value until the new effect runs; never show stale artwork.
-    val artwork = loaded.second.takeIf { loaded.first == uri }
+    val artwork = loaded.second.takeIf { loaded.first == request }
+    val measured = modifier.onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
     if (artwork != null) {
-        Image(artwork, stringResource(R.string.album_artwork), modifier, contentScale = ContentScale.Crop)
+        Image(artwork, stringResource(R.string.album_artwork), measured, contentScale = ContentScale.Crop)
     } else {
-        Surface(modifier, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+        Surface(measured, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainer) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(0.4f), tint = MaterialTheme.colorScheme.primary)
             }

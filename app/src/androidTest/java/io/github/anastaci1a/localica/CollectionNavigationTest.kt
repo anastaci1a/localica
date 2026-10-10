@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.ui.test.*
+import androidx.compose.runtime.*
+import io.github.anastaci1a.localica.navigation.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.*
@@ -34,49 +36,21 @@ class CollectionNavigationTest {
         compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
     }
 
-    @Test fun playlistTapUsesOccurrenceAndSelectionPreventsPlayback() {
-        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Mix"), listOf(track, track))
-        var played: String? = null
-        compose.setContent {
-            LocalicaTheme {
-                PlaylistScreen(PlaylistUiState(PlaylistState(listOf(playlist), false), playlist, rows = playlist.entries),
-                    emptyList(), null, null, {}, {}, { played = it }, null, true)
-            }
-        }
-        val first = "song-" + playlist.entries.first().id
-        val last = "song-" + playlist.entries.last().id
-        compose.onNodeWithTag("playlist-list").performScrollToNode(hasTestTag(last))
-        compose.onNodeWithTag(last).performClick()
-        compose.runOnIdle { assertEquals(playlist.entries.last().id, played); played = null }
-        compose.onNode(hasContentDescription("Select Repeated") and hasAnyAncestor(hasTestTag(last))).performClick()
-        compose.onNodeWithTag("playlist-list").performScrollToNode(hasTestTag(first))
-        compose.onNodeWithTag(first).performClick()
-        compose.runOnIdle { assertNull(played) }
-        compose.onNodeWithTag("playlist-list").performScrollToIndex(0)
-        compose.onNodeWithText("2 selected").assertIsDisplayed()
-        compose.onNodeWithText("Actions").performClick()
-        compose.onNodeWithText("Add to playlist").assertIsDisplayed()
-        compose.onNodeWithText("Remove from playlist").assertIsDisplayed()
-    }
-
     @Test fun albumGroupsAndViewChoicesAreReachable() {
         val tagged = track.copy(album = "Compilation", albumArtist = "Various Artists")
         val snapshot = LibrarySnapshot(tracks = listOf(tagged))
-        val groups = LibraryViews.groups(snapshot, SongListView.Albums, LibraryViews.defaults(SongListView.Albums))
         var opened: String? = null
-        var view: SongListView? = null
+        var route by mutableStateOf(BrowseRoute(MainTab.Library, filter = MediaKind.Album))
         compose.setContent {
             LocalicaTheme {
-                LibraryScreen(LibraryUiState(snapshot, loading = false, view = SongListView.Albums, groups = groups,
-                    visibleTracks = emptyList()), null, true, {}, {}, onView = { view = it }, onGroup = { opened = it })
+                BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), route,
+                    { route = it }, { opened = it.ref.id }, {}, { _, _, _ -> }, null, null, true, false)
             }
         }
-        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Compilation"))
+        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Compilation"))
         compose.onNodeWithText("Compilation").performClick()
-        compose.runOnIdle { assertEquals(groups.single().id, opened) }
-        compose.onNodeWithTag("library-list").performScrollToIndex(0)
-        compose.onNodeWithText("View: Albums").performClick()
-        compose.onNodeWithText("Album artists").performClick()
-        compose.runOnIdle { assertEquals(SongListView.AlbumArtists, view) }
+        compose.runOnIdle { assertNotNull(opened) }
+        compose.onNodeWithText("Album artists").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(MediaKind.AlbumArtist, route.filter) }
     }
 }

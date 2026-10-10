@@ -1,6 +1,11 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.activity.compose.BackHandler
+import io.github.anastaci1a.localica.navigation.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,14 +23,33 @@ import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.library.SongListView
 
 @Composable
-fun QueueScreen(state: QueueUiState, controller: QueueController?) {
+fun QueueScreen(state: QueueUiState, controller: QueueController?, library: LibraryUiState = LibraryUiState(loading = false),
+    playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
+    playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
+    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}) {
     var selector by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<Set<String>?>(null) }
     val active = state.library.active
-    LazyColumn(Modifier.fillMaxSize().testTag("queue-list"), contentPadding = PaddingValues(16.dp)) {
-        item {
-            Text("Queues", style = MaterialTheme.typography.headlineMedium)
+    var searching by rememberSaveable(active?.id) { mutableStateOf(false) }
+    var text by rememberSaveable(active?.id) { mutableStateOf("") }
+    var sorting by remember { mutableStateOf(false) }
+    val routeKey = rememberSaveable(active?.id) { java.util.UUID.randomUUID().toString() }
+    val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, active?.id.orEmpty()), active?.name ?: "Queue",
+        search = searching, text = text, key = "$routeKey:$searching")
+    BackHandler(searching) { searching = false; text = "" }
+    rememberSaveableStateHolder().SaveableStateProvider(route.key) {
+    BrowserScreen(library, playlists, route, { text = it.text }, {}, {}, { rows, index, _ ->
+        rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
+    }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
+        playingEntryId = active?.currentEntryId, header = {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Queues", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
+                if (active != null) {
+                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_sort, "Sort queue") { sorting = true }
+                    if (!searching) ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_search, "Search queue") { searching = true }
+                }
+            }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             Box {
                 TextButton(onClick = { selector = true }, enabled = state.library.queues.isNotEmpty()) {
@@ -40,34 +64,19 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?) {
             }
             if (state.library.queues.isEmpty()) Text("Tap a song in Library to start a queue.")
             if (active != null) {
-                Row {
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
                     TextButton(onClick = { renaming = true }) { Text("Rename") }
                     TextButton(onClick = { deleting = setOf(active.id) }) { Text("Delete") }
                     TextButton(onClick = { deleting = state.library.queues.filterNot { it.id == active.id }.map { it.id }.toSet() },
                         enabled = state.library.queues.size > 1) { Text("Remove others") }
                 }
-                Row {
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
                     TextButton(onClick = { controller?.shuffle() }) { Text("Shuffle: ${if (active.shuffle) "on" else "off"}") }
                     TextButton(onClick = { controller?.repeat() }) { Text("Repeat: ${active.repeat.name.lowercase()}") }
                 }
                 Text("${active.entries.size} songs", style = MaterialTheme.typography.bodySmall)
-                if (active.entries.isEmpty()) Text("This queue is empty. Add songs from Library using a song-tap setting in Settings.")
             }
-        }
-        itemsIndexed(active?.entries.orEmpty(), key = { _, entry -> entry.id }) { index, entry ->
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Text((if (entry.id == active?.currentEntryId) "▶ " else "") + entry.track.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { controller?.selectEntry(entry.id) }.padding(vertical = 8.dp))
-                Text(entry.track.artist ?: entry.track.fileName, style = MaterialTheme.typography.bodySmall)
-                Row {
-                    TextButton(onClick = { controller?.moveEntry(entry.id, -1) }, enabled = index > 0) { Text("Up") }
-                    TextButton(onClick = { controller?.moveEntry(entry.id, 1) }, enabled = index < (active?.entries?.lastIndex ?: 0)) { Text("Down") }
-                    TextButton(onClick = { controller?.removeEntry(entry.id) }) { Text("Remove") }
-                }
-                HorizontalDivider()
-            }
-        }
+        })
     }
     if (renaming && active != null) {
         var name by remember(active.id) { mutableStateOf(active.name) }
