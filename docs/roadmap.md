@@ -20,7 +20,7 @@ The v0.11.3 organization checkpoint adds scanner/background operation, dedicated
 
 ## Device review
 
-Review the v0.11.4 APK on the user's device before advancing, particularly drag smoothness/layering, light-theme contrast, floating controls, artwork fading, and scanning. Address regressions in small verified releases before applying glass materials.
+Review the v0.11.5 APK on the user's device before advancing, particularly drag smoothness/layering, light-theme contrast, floating controls, artwork fading, and scanning. Address regressions in small verified releases before applying glass materials.
 
 ## Visual design system
 
