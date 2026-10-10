@@ -119,7 +119,7 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
 internal fun QueueSettingsControls(settings: QueueSettings, onChange: (QueueSettings) -> Unit) {
     var tapOpen by remember { mutableStateOf(false) }
     var switchOpen by remember { mutableStateOf(false) }
-    var limit by remember(settings.maximum) { mutableStateOf(settings.maximum?.toString().orEmpty()) }
+    var limitOpen by remember { mutableStateOf(false) }
     HorizontalDivider()
     Text("Listening behavior", style = MaterialTheme.typography.titleMedium)
     Box {
@@ -151,11 +151,19 @@ internal fun QueueSettingsControls(settings: QueueSettings, onChange: (QueueSett
         }
     }
     TextButton(onClick = { onChange(settings.copy(tapOverrides = emptyMap())) }) { Text("Reset all tap overrides") }
-    OutlinedTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
-        isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
-    TextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0,
-        onClick = { onChange(settings.copy(maximum = limit.toIntOrNull())) }) { Text("Save queue limit") }
+    TextButton(onClick = { limitOpen = true }) { Text("Maximum queues: ${settings.maximum ?: "unlimited"}") }
     Text("A limit never deletes existing queues automatically.", style = MaterialTheme.typography.bodySmall)
+    if (limitOpen) {
+        var limit by remember(settings.maximum) { mutableStateOf(settings.maximum?.toString().orEmpty()) }
+        AlertDialog(onDismissRequest = { limitOpen = false }, title = { Text("Queue limit") }, text = {
+            OutlinedTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
+                isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
+        }, confirmButton = { TextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0, onClick = {
+            onChange(settings.copy(maximum = limit.toIntOrNull())); limitOpen = false
+        }) { Text("Save queue limit") } }, dismissButton = {
+            TextButton(onClick = { limitOpen = false }) { Text("Cancel") }
+        })
+    }
 }
 internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"
     SongTap.PlayNow -> "Insert after current and play"; SongTap.PlayNext -> "Add next"; SongTap.Append -> "Append to current" }
