@@ -12,9 +12,9 @@ Shared browsing, scoped/global search, sorting overrides, contextual selection, 
 
 Tag and artwork editing are implemented for v0.7.1, including verified writes, recovery, bulk changes, image selection, and a zoomable artwork viewer. v0.7.0 remains an unpublished tag after Android 16 automation failures; v0.7.1 includes the corrected folder-picker selection test.
 
-Local embedded/sidecar lyrics and configurable artwork gestures are implemented for v0.8.0. The player includes selectable sources, synced following, tap-to-seek, fading viewport edges, and reduced-motion behavior.
+Local embedded/sidecar lyrics and configurable artwork gestures are implemented for v0.8.1. The player includes selectable sources, synced following, tap-to-seek, fading viewport edges, and reduced-motion behavior.
 
-Finish release verification for v0.7.1 and v0.8.0, then stop for review before liquid-glass implementation. Together with v0.6.0, these are the three authorized released checkpoints.
+Finish release verification for v0.7.1 and v0.8.1, then stop for review before liquid-glass implementation. Together with v0.6.0, these are the three authorized released checkpoints.
 
 ## Visual design system
 
