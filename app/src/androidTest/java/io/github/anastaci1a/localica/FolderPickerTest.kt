@@ -79,9 +79,10 @@ private fun UiDevice.clickWhenReady(selector: BySelector) {
     try {
         await(timeoutMs = 30000) {
             try {
-                // The API 36 emulator can show a first-boot System UI ANR over DocumentsUI.
+                // The API 36 emulator can show either system-process ANR over DocumentsUI.
                 // Keep the system process alive and continue testing the real picker flow.
-                if (findObject(By.text("System UI isn't responding")) != null) {
+                if (findObject(By.text("System UI isn't responding")) != null ||
+                    findObject(By.text("Process system isn't responding")) != null) {
                     findObject(By.text("Wait"))?.click()
                     return@await false
                 }
