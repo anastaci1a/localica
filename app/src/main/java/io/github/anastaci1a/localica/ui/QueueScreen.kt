@@ -37,6 +37,16 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     var sorting by remember { mutableStateOf(false) }
     var presentation by remember { mutableStateOf(false) }
     val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val compactHeader = configuration.screenHeightDp < 480 && configuration.screenWidthDp > 600
+    val summary = active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size} · " +
+        formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { durations -> durations.isNotEmpty() }?.sum()) }
+    @Composable fun playbackOptions() {
+        if (active != null) {
+            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_shuffle, "Shuffle: ${active.shuffle}") { controller?.shuffle(active.id) }
+            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_repeat, "Repeat: ${active.repeat.name}") { controller?.repeat(active.id) }
+        }
+    }
     var browsing by rememberSaveable(active?.id, stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
         save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
         mutableStateOf(NavigationState(MainTab.Queues, mapOf(MainTab.Queues to listOf(BrowseRoute(MainTab.Queues,
@@ -55,7 +65,11 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { selector = true }, enabled = state.library.queues.isNotEmpty(), modifier = Modifier.weight(1f)) {
-                            Text(active?.name ?: "Queues", style = MaterialTheme.typography.titleLarge)
+                            Column {
+                                Text(active?.name ?: "Queues", style = if (compactHeader) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                                    maxLines = if (compactHeader) 1 else Int.MAX_VALUE, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                if (compactHeader && summary != null) Text(summary, style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                         ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_sort, "Sort queue") { presentation = false; sorting = true }
                         ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_settings, "Queue view options") { presentation = true; sorting = true }
@@ -69,14 +83,13 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                                     onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
                             }
                         }
+                        if (compactHeader) playbackOptions()
                     }
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    if (active != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${active.entries.indexOfFirst { it.id == active.currentEntryId } + 1} / ${active.entries.size} · " +
-                            formatTime(active.entries.mapNotNull { it.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()), Modifier.weight(1f))
-                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_shuffle, "Shuffle: ${active.shuffle}") { controller?.shuffle(active.id) }
-                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_repeat, "Repeat: ${active.repeat.name}") { controller?.repeat(active.id) }
-                    } else Text("Tap a song in Library to start a queue.")
+                    if (active != null && !compactHeader) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(summary.orEmpty(), Modifier.weight(1f)); playbackOptions()
+                    }
+                    if (active == null) Text("Tap a song in Library to start a queue.")
                 }
             }, presentationOnly = presentation, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() })
     }

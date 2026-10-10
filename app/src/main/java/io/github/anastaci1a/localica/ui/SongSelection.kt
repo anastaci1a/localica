@@ -35,7 +35,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
             if (onCollapse != null) ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_down, "Collapse selection", onClick = onCollapse)
             ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Close selection") { onSelection(emptySet()) }
         }
-        FlowRow(Modifier.fillMaxWidth(), maxItemsInEachRow = 3) {
+        FlowRow(Modifier.fillMaxWidth()) {
             if (editTags != null) TextButton(enabled = chosen.isNotEmpty(), onClick = {
                 editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }
             }) { Text("Edit tags") }
