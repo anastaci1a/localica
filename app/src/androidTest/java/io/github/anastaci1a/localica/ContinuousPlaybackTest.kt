@@ -41,9 +41,16 @@ class ContinuousPlaybackTest {
         samples.forEach(expected::putShort)
         play(files) { assertArrayEquals("Decoded audio must retain every sample across the split", expected.array(), it) }
     }
-    @Test fun encodedTracksRespectGaplessTrimmingAtTheBoundary() {
+    @Test fun encodedTracksRespectGaplessTrimmingAtTheBoundary() = checkEncoded(listOf("mp3", "m4a"))
+    @Test fun flacRetainsEveryDecodedSampleWhenDeviceProvidesDecoder() {
+        // FLAC MediaCodec is not supplied by stock Android before API 27.
+        org.junit.Assume.assumeTrue("Device has no FLAC decoder", android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS)
+            .codecInfos.any { !it.isEncoder && it.supportedTypes.any { type -> type.equals("audio/flac", ignoreCase = true) } })
+        checkEncoded(listOf("flac"))
+    }
+    private fun checkEncoded(extensions: List<String>) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        for (extension in listOf("flac", "mp3", "m4a")) {
+        for (extension in extensions) {
             val file = File(instrumentation.targetContext.cacheDir, "boundary." + extension)
             instrumentation.context.assets.open(file.name).use { input -> file.outputStream().use(input::copyTo) }
             // A PCM tail makes both encoded end boundaries observable, without a final encoder pad.
