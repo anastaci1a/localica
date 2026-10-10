@@ -2,9 +2,9 @@
 
 An Android player for music stored on your device. Browse folders, albums and artists, organize playlists, and keep separate listening queues.
 
-Saved queues, configurable listening behavior, embedded album artwork, and background playback. No account or internet access. The current interface is functional testing scaffolding.
+Saved queues, configurable navigation and listening behavior, embedded album artwork, and background playback. No account or internet access. The lasting layout is taking shape with simple materials; liquid-glass styling comes later.
 
-<img src="docs/images/player.png" width="250" alt="Player with track details, progress, and playback control"> <img src="docs/images/library.png" width="250" alt="Library with search, folder filtering, sorting, and scanned songs">
+<img src="docs/images/player.png" width="250" alt="Expanded player with playback controls and queue overlay button"> <img src="docs/images/library.png" width="250" alt="Library with filters, floating mini-player, and navigation shelf">
 
 Screenshots show the app with generated sample tones.
 
