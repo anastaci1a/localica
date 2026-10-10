@@ -1,4 +1,4 @@
-<!-- Release: v0.11.0 -->
+<!-- Release: v0.11.1 -->
 
 Development APK for Android 8 or newer. Signed with the project development key; updates the existing `.debug` app in place. Production distribution signing is not configured.
 
@@ -21,7 +21,7 @@ Development APK for Android 8 or newer. Signed with the project development key;
 
 ## Install
 
-1. Download `localica-v0.11.0-debug.apk` from **Assets** below.
+1. Download `localica-v0.11.1-debug.apk` from **Assets** below.
 2. Open it and allow installation from your browser or file manager if prompted.
 3. Install over your existing development app to keep its data.
 
