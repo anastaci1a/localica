@@ -17,6 +17,8 @@ object PlaylistEdits {
         val to = (from + offset).coerceIn(0, playlist.entries.lastIndex)
         return playlist.copy(entries = playlist.entries.toMutableList().apply { add(to, removeAt(from)) })
     }
+    fun moveBefore(playlist: ManualPlaylist, ids: Set<String>, beforeId: String?) = playlist.copy(
+        entries = OccurrenceMoves.before(playlist.entries, ids, beforeId) { it.id })
     /** A rescan updates available metadata without losing unavailable references or occurrence IDs. */
     fun rows(playlist: ManualPlaylist, snapshot: LibrarySnapshot, query: LibraryQuery): List<SongRow> {
         val tracks = snapshot.tracks.associateBy { it.id }

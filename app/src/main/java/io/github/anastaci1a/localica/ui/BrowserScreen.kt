@@ -5,6 +5,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +23,7 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.home.PinEdits
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -56,12 +59,26 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     LaunchedEffect(scrollToTopRequest, loadedResult != null) {
         if (loadedResult != null && consumedScrollRequest != scrollToTopRequest) {
             consumedScrollRequest = scrollToTopRequest
+            snapshotFlow { gridState.layoutInfo.totalItemsCount }.first { it > 0 }
             gridState.easeToTop(reducedMotion)
         }
     }
     val session = LocalSessionSelection.current ?: remember { SessionSelection() }
-    val selection = session.entries.filter { it.source == route.collection }.map { it.row.id }.toSet()
+    val selectedTracks = session.entries.map { it.row.track.id }.toSet()
     SideEffect { if (selectionVisible) { session.visible = result.rows; session.source = route.collection } }
+    val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
+    val editableOrder = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank() &&
+        route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)
+    SideEffect { reorder.reconcile(result.items) }
+    val edge = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
+    LaunchedEffect(reorder.drag) { if (reorder.drag != null) reorder.autoScroll(edge) }
+    val moveSongs: (Set<String>, String?, (Boolean) -> Unit) -> Unit = { ids, before, done ->
+        when (route.collection?.kind) {
+            MediaKind.Queue -> if (queues != null) queues.moveBefore(route.collection.id, ids, before, done) else done(false)
+            MediaKind.Playlist -> if (playlistController != null) playlistController.moveBefore(route.collection.id, ids, before, done) else done(false)
+            else -> done(false)
+        }
+    }
     var contextMenu by remember { mutableStateOf<String?>(null) }
     var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<Track?>(null) }
@@ -85,7 +102,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     { onRoute(route.copy(filter = kind)) }, { Text(kind.label) }) }
             }
         }
-        Box(Modifier.weight(1f)) {
+        Box(Modifier.weight(1f).onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
+            .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion, moveSongs)) {
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth())
             else LazyVerticalGrid(state = gridState, columns = when (style.presentation) {
                 Presentation.List -> GridCells.Fixed(1)
@@ -102,10 +120,20 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         if (result.items.isEmpty() && !library.loading) Text(if (route.search) "No matching items" else "Nothing here yet")
                     }
                 }
-                items(result.items, key = { it.key }) { item ->
+                items(reorder.rendered(result.items), key = { it?.key ?: DropGapKey }) { entry ->
+                    if (entry == null) {
+                        val height = with(androidx.compose.ui.platform.LocalDensity.current) { (reorder.drag?.cardSize?.height ?: 0f).toDp() }
+                        Box(Modifier.fillMaxWidth().height(height).testTag("drop-gap"))
+                        return@items
+                    }
+                    val item = entry
                     val current = item.row != null && if (playingEntryId != null) item.row.id == playingEntryId else item.row.track.id == playingTrackId
-                    Box {
-                        Column(Modifier.fillMaxWidth().testTag("media-${item.key}").combinedClickable(
+                    val selectedCount = if (item.row != null) { if (session.contains(route.collection, item.row.id)) 1 else 0 }
+                        else item.songs.count { it.track.id in selectedTracks }
+                    val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
+                    Box(Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null)
+                        .graphicsLayer { alpha = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) 0f else 1f }) {
+                        Column(Modifier.fillMaxWidth().padding(4.dp).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
                             enabled = item.row == null || enabled,
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
@@ -121,19 +149,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (item.row != null && session.active) Checkbox(item.key in selection,
-                                    { session.toggle(route.collection, item.row) })
                                 if (style.presentation == Presentation.List) MediaArtwork(item.coverUris, Modifier.size(48.dp))
                                 Column(Modifier.weight(1f).padding(start = if (style.presentation == Presentation.List) 12.dp else 0.dp)) {
                                     Text((if (current) "▶ " else "") + item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     item.information(style)?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
-                                }
-                                if (item.row != null && style.sort == TrackSort.Manual && style.ascending && route.text.isBlank() &&
-                                    route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) ReorderHandle("Reorder " + item.title) { offset ->
-                                    if (route.collection?.kind == MediaKind.Queue) queues?.moveEntry(item.key, offset, route.collection?.id)
-                                    else route.collection?.let { playlistController?.move(it.id, item.key, offset) {} }
                                 }
                                 ActionIcon(R.drawable.ic_more, "Actions for " + item.title) { contextMenu = item.key }
                             }
@@ -177,13 +198,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
             }
+            SongDragOverlay(reorder, reducedMotion)
             val playingIndex = result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
             val showCurrent by remember(playingIndex) { derivedStateOf {
                 playingIndex != null && gridState.layoutInfo.visibleItemsInfo.none { it.index == playingIndex }
             } }
-            androidx.compose.animation.AnimatedVisibility(showCurrent, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+            androidx.compose.animation.AnimatedVisibility(showCurrent && !session.active && reorder.drag == null, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
-                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300))) {
+                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
+                    androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
                 FilledTonalButton(onClick = { playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion) } } }) {
                     Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_play), null, Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp)); Text("Current song")

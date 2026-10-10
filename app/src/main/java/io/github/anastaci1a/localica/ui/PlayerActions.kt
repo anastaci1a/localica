@@ -41,19 +41,19 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
         val halves = value.actions.chunked(((value.actions.size + 1) / 2).coerceAtLeast(1))
         fun section(index: Int) = halves.getOrNull(index).orEmpty()
-        @Composable fun RowScope.buttons(actions: List<PlayerAction>) {
+        @Composable fun RowScope.buttons(actions: List<PlayerAction>, alignment: Alignment.Horizontal) {
             BoxWithConstraints(Modifier.weight(1f)) {
-            Column(Modifier.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).widthIn(min = maxWidth), horizontalAlignment = if (value.centered) Alignment.CenterHorizontally else Alignment.Start) {
+            Column(Modifier.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).widthIn(min = maxWidth), horizontalAlignment = if (value.centered) Alignment.CenterHorizontally else alignment) {
                 val rows = if (value.twoRows) actions.chunked(((actions.size + 1) / 2).coerceAtLeast(1)) else listOf(actions)
                 rows.forEach { row -> Row { row.forEach { action -> IconButton(onClick = { onAction(action) }, Modifier.size(48.dp)) {
                     Icon(painterResource(action.icon), label(action), Modifier.size(if (value.small) 20.dp else 24.dp))
                 } } } }
             } }
         }
-        buttons(section(0))
+        buttons(section(0), Alignment.Start)
         Box(Modifier.width(48.dp).fillMaxHeight().combinedClickable(onClick = {}, onLongClickLabel = "Customize player actions",
             onLongClick = onCustomize))
-        buttons(section(1))
+        buttons(section(1), Alignment.End)
     }
 }
 
