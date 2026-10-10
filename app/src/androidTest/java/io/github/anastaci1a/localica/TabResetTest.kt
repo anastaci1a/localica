@@ -35,8 +35,11 @@ class TabResetTest {
             compose.mainClock.autoAdvance = true
             compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
             list.performScrollToNode(hasText("Album 060"))
+            // The viewport extends behind floating navigation; put the target above it before tapping.
+            list.performTouchInput { swipe(androidx.compose.ui.geometry.Offset(centerX, height * 0.55f),
+                androidx.compose.ui.geometry.Offset(centerX, height * 0.25f)) }
             compose.onNodeWithText("Album 060").performClick()
-            compose.onNodeWithText("Song 60").assertIsDisplayed()
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Song 60").assertIsDisplayed() }.isSuccess }
             compose.onNodeWithContentDescription("Library").performClick()
             compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
             compose.onNodeWithContentDescription("Back").assertDoesNotExist()

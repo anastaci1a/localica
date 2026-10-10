@@ -37,7 +37,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             scroll.easeToItem(0, reducedMotion, 500)
         }
     }
-    LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(vertical = 16.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")

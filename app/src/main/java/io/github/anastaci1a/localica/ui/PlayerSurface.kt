@@ -114,7 +114,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val fullArtHeight = floatingHeight + (windowWidth / palette.aspect - floatingHeight) * backgroundProgress
     val artWidth = 48.dp + (fullArt - 48.dp) * p
     val artHeight = 48.dp + (fullArtHeight - 48.dp) * p
-    val artX = 8.dp + ((windowWidth - fullArt) / 2 - 8.dp) * p
+    val artX = 12.dp + ((windowWidth - fullArt) / 2 - 12.dp) * p
     val fullArtY = statusInset + 52.dp + (floatingArt - fullArtHeight) / 2
     val artY = 8.dp + (fullArtY - 8.dp) * p - 24.dp * lyricProgress
     val ordinarySeekY = statusInset + 52.dp + floatingArt + 8.dp
@@ -125,9 +125,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricTransport = virtualHeight - navigationInset - 152.dp
     val transportY = 8.dp + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - 8.dp) * p
-    val miniTextWidth = (windowWidth - 248.dp).coerceAtLeast(40.dp)
+    val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
     val textWidth = miniTextWidth + (windowWidth - 48.dp - miniTextWidth) * p
-    val textX = 64.dp + (24.dp - 64.dp) * p
+    val textX = 68.dp + (24.dp - 68.dp) * p
     val foreground = androidx.compose.ui.graphics.lerp(Color.Black, Color.White, p)
     val baseColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = baseColors.copy(onSurface = foreground,
