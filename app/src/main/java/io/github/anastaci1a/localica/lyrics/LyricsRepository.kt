@@ -31,9 +31,9 @@ class LyricsRepository(private val context: Context) {
             sources += LyricSource(id, label, parsed, sidecar)
             if (parsed.synced) sources += LyricSource("$id:plain", "$label · plain text", ParsedLyrics(parsed.plain, parsed.plain), sidecar)
         }
-        suspend fun attempt(block: suspend () -> Unit) {
+        suspend fun attempt(message: String = "An embedded lyric source could not be read.", block: suspend () -> Unit) {
             try { block() } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { problems += failure.message ?: "A lyric source could not be read." }
+            catch (_: Exception) { problems += message }
         }
         attempt {
             val tag = ContainerTags.read(context, track.uri, track.fileName)
@@ -55,7 +55,7 @@ class LyricsRepository(private val context: Context) {
                 add("embedded:$index", "Embedded lyrics ${index + 1}", LrcParser.parse(text))
             }
         }
-        for (location in track.locations.sortedBy { it.uri != track.uri }) attempt {
+        for (location in track.locations.sortedBy { it.uri != track.uri }) attempt("A lyric file or folder could not be read. Check folder access and file format.") {
             var directory = documents.root(location.folderUri)
             val folders = location.relativePath.substringBeforeLast('/', "").split('/').filter(String::isNotEmpty)
             for (name in folders) {
