@@ -41,16 +41,18 @@ class NavigationTest {
         compose.setContent {
             LocalicaTheme {
                 FolderSettings(LibraryUiState(snapshot = LibrarySnapshot(listOf(FolderSelection("tree", "Music"))), loading = false),
-                    onDismiss = {}, onChooseFolder = {}, onRescan = {}, onCancel = {}, onRemove = { removed = it })
+                    onDismiss = {}, onChooseFolder = {}, onRemove = { removed = it })
             }
         }
         compose.onNodeWithText("Library and tags").performClick()
-        compose.onNodeWithText("Remove").performClick()
-        compose.onNodeWithText("Remove folder?").assertIsDisplayed()
+        compose.onNodeWithText("Folders to scan").performClick()
+        compose.onNodeWithText("Music").performClick()
+        compose.onNodeWithText("Remove folder").performClick()
+        compose.onNodeWithText("Remove Music?").assertIsDisplayed()
         compose.runOnIdle { assertNull(removed) }
         compose.onNodeWithText("Cancel").performClick()
         compose.runOnIdle { assertNull(removed) }
-        compose.onNodeWithText("Remove").performClick()
+        compose.onNodeWithText("Remove folder").performClick()
         compose.onAllNodesWithText("Remove").onLast().performClick()
         compose.runOnIdle { assertEquals("tree", removed) }
     }
@@ -75,7 +77,8 @@ class NavigationTest {
         compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Settings").performClick()
         compose.onNodeWithText("Library and tags").performClick()
-        compose.onNodeWithText("Music folders").assertIsDisplayed()
+        compose.onNodeWithText("Folders to scan").performClick()
+        compose.onNodeWithText("Folders to scan").assertIsDisplayed()
         compose.onNodeWithText("Add folder").performClick()
         compose.runOnIdle { assertTrue(requestedFolder) }
     }

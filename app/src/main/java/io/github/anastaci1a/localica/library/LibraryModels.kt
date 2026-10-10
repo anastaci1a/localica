@@ -24,7 +24,9 @@ data class Track(
 
 data class TrackLocation(val folderUri: String, val uri: String, val relativePath: String)
 data class FolderSelection(val uri: String, val name: String)
-data class LibrarySnapshot(val folders: List<FolderSelection> = emptyList(), val tracks: List<Track> = emptyList())
+data class MetadataFailure(val trackId: String, val folderUri: String, val path: String)
+data class LibrarySnapshot(val folders: List<FolderSelection> = emptyList(), val tracks: List<Track> = emptyList(),
+    val metadataFailures: List<MetadataFailure> = emptyList())
 
 data class AudioMetadata(
     val composer: String? = null,
@@ -59,4 +61,10 @@ interface DocumentSource {
     suspend fun metadata(uri: String, fileName: String): AudioMetadata = metadata(uri)
 }
 
-data class ScanResult(val folder: FolderSelection, val tracks: List<Track>, val metadataFailures: Int)
+data class ScanResult(val folder: FolderSelection, val tracks: List<Track>, val metadataFailures: Int,
+    val failedMetadataIds: Set<String> = emptySet())
+
+data class ScanOptions(val includeSubfolders: Boolean = true, val minimumDurationSeconds: Int = 0,
+    val excludedPaths: Set<String> = emptySet()) {
+    fun excludes(path: String) = excludedPaths.any { path == it || path.startsWith("$it/") }
+}

@@ -7,6 +7,11 @@ import org.junit.Test
 import java.io.IOException
 
 class TreeScannerTest {
+    @Test fun playlistAudioMimeTypesAreNotIndexedAsSongs() {
+        assertFalse(AudioFiles.accepts("mix.m3u8", "audio/x-mpegurl"))
+        assertFalse(AudioFiles.accepts("mix.pls", "audio/x-scpls"))
+        assertFalse(AudioFiles.accepts("mix.m3u", "application/octet-stream"))
+    }
     @Test fun `scans nested folders once and ignores non audio files`() = runTest {
         val source = FakeDocuments()
         val nested = directory("nested")
@@ -30,6 +35,7 @@ class TreeScannerTest {
         source.failureUri = "broken"
         val result = TreeScanner(source).scan("tree")
         assertEquals(1, result.metadataFailures)
+        assertEquals(setOf("broken"), result.failedMetadataIds)
         assertEquals("A song", result.tracks.first().title)
         assertNull(result.tracks.last().artist)
         assertNull(result.tracks.last().durationMs)
@@ -69,6 +75,20 @@ class TreeScannerTest {
         assertTrue(AudioFiles.accepts("no extension", "audio/mpeg"))
         assertFalse(AudioFiles.accepts("video.m4a", "video/mp4"))
         assertFalse(AudioFiles.accepts("song.mp3.txt", "text/plain"))
+    }
+    @Test fun `scan rules exclude folders and short audio but retain unknown durations`() = runTest {
+        val source = FakeDocuments()
+        source.entries["root"] = listOf(directory("excluded"), directory("included"), audio("short", "short.mp3"), audio("unknown", "unknown.mp3"))
+        source.entries["excluded"] = listOf(audio("skip", "skip.mp3"))
+        source.entries["included"] = listOf(audio("long", "long.mp3"))
+        source.tags["short"] = AudioMetadata(durationMs = 500)
+        source.tags["long"] = AudioMetadata(durationMs = 30000)
+        val scanned = TreeScanner(source).scan("tree", ScanOptions(minimumDurationSeconds = 10, excludedPaths = setOf("excluded")))
+        assertEquals(setOf("long", "unknown"), scanned.tracks.map { it.id }.toSet())
+        assertFalse("excluded" in source.queried)
+        source.queried.clear()
+        assertEquals(setOf("short", "unknown"), TreeScanner(source).scan("tree", ScanOptions(includeSubfolders = false)).tracks.map { it.id }.toSet())
+        assertEquals(listOf("root"), source.queried)
     }
 }
 

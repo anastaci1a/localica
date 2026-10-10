@@ -36,7 +36,7 @@ public class TestDocumentsProvider extends DocumentsProvider {
     @Override public Cursor queryChildDocuments(String parent, String[] projection, String sortOrder) {
         MatrixCursor cursor = new MatrixCursor(projection == null ? DOCUMENTS : projection);
         if (parent.equals("root")) {
-            addDocument(cursor, "tone.mp3"); addDocument(cursor, "nested"); addDocument(cursor, "notes.txt"); addDocument(cursor, "tone.lrc");
+            addDocument(cursor, "tone.mp3"); addDocument(cursor, "nested"); addDocument(cursor, "notes.txt"); addDocument(cursor, "tone.lrc"); addDocument(cursor, "import.m3u8");
         } else if (parent.equals("nested")) addDocument(cursor, "tone.m4a");
         return cursor;
     }
@@ -46,7 +46,10 @@ public class TestDocumentsProvider extends DocumentsProvider {
     }
 
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
-        if (!(id.equals("tone.mp3") || id.equals("tone.m4a") || (id.equals("tone.lrc") && mode.equals("r")))) throw new FileNotFoundException(id);
+        boolean metadataFixture = id.matches("tagged\\.(mp3|m4a|flac|ogg|opus)") || id.equals("provider-lyrics.mp3");
+        if (!(id.equals("tone.mp3") || id.equals("tone.m4a") || ((id.equals("tone.lrc") || id.equals("import.m3u8") || metadataFixture) && mode.equals("r")))) throw new FileNotFoundException(id);
+        // Model provider latency so background/lifecycle checks exercise an in-flight scan.
+        if (mode.equals("r")) android.os.SystemClock.sleep(150);
         File file = new File(getContext().getCacheDir(), id);
         if (!file.exists()) {
             try (InputStream input = getContext().getAssets().open(id); OutputStream output = new FileOutputStream(file)) {
@@ -61,7 +64,7 @@ public class TestDocumentsProvider extends DocumentsProvider {
     private void addDocument(MatrixCursor cursor, String id) {
         boolean directory = id.equals("root") || id.equals("nested");
         String mime = directory ? Document.MIME_TYPE_DIR : id.equals("tone.mp3") ? "audio/mpeg" :
-            id.equals("tone.m4a") ? "audio/mp4" : "text/plain";
+            id.equals("tone.m4a") ? "audio/mp4" : id.equals("import.m3u8") ? "audio/x-mpegurl" : "text/plain";
         cursor.newRow().add(Document.COLUMN_DOCUMENT_ID, id)
             .add(Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "Test tones" : id)
             .add(Document.COLUMN_MIME_TYPE, mime).add(Document.COLUMN_FLAGS, directory ? 0 : Document.FLAG_SUPPORTS_WRITE)

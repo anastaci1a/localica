@@ -36,7 +36,8 @@ data class TrackRecord(
     ForeignKey(entity = FolderRecord::class, parentColumns = ["uri"], childColumns = ["folderUri"], onDelete = ForeignKey.CASCADE),
     ForeignKey(entity = TrackRecord::class, parentColumns = ["id"], childColumns = ["trackId"], onDelete = ForeignKey.CASCADE),
 ], indices = [Index("trackId")])
-data class FolderTrackRecord(val folderUri: String, val trackId: String, val uri: String, val relativePath: String)
+data class FolderTrackRecord(val folderUri: String, val trackId: String, val uri: String, val relativePath: String,
+    @ColumnInfo(defaultValue = "0") val metadataFailed: Boolean = false)
 
 data class TrackInFolder(
     @Embedded val location: FolderTrackRecord,
@@ -82,11 +83,16 @@ abstract class LibraryDao {
     }
 }
 
-@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 4, exportSchema = true)
+@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 5, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     companion object {
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE folder_tracks ADD COLUMN metadataFailed INTEGER NOT NULL DEFAULT 0")
+            }
+        }
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN composer TEXT")
@@ -148,7 +154,7 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
         dao.replaceRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
             TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
                 it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt)
-        }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath) })
+        }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })
     }
     override suspend fun removeRoot(uri: String) = dao.removeRoot(uri)
     override suspend fun updateMetadata(track: Track) = dao.updateMetadata(TrackRecord(track.id, track.title,
@@ -165,5 +171,8 @@ private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {
             location.relativePath, record.id, record.albumArtist, record.trackNumber, record.discNumber, record.year,
             record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt)
     }.sortedWith(trackOrder)
-    return LibrarySnapshot(map { FolderSelection(it.folder.uri, it.folder.name) }, tracks)
+    return LibrarySnapshot(map { FolderSelection(it.folder.uri, it.folder.name) }, tracks,
+        flatMap { it.tracks }.filter { it.location.metadataFailed }.map {
+            MetadataFailure(it.track.id, it.location.folderUri, it.location.relativePath)
+        })
 }

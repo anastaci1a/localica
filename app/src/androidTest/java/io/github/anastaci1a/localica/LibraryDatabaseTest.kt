@@ -17,7 +17,7 @@ class LibraryDatabaseTest {
         val name = "test-library.db"
         context.deleteDatabase(name)
         val result = ScanResult(FolderSelection("content://test/root", "Music"), listOf(
-            Track("content://test/song", "Song", fileName = "song.mp3", relativePath = "nested/song.mp3")), 0)
+            Track("content://test/song", "Song", fileName = "song.mp3", relativePath = "nested/song.mp3")), 1, setOf("content://test/song"))
         var database = Room.databaseBuilder(context, LibraryDatabase::class.java, name).build()
         try {
             RoomLibraryStore(database.libraryDao()).replaceRoot(result)
@@ -26,11 +26,14 @@ class LibraryDatabaseTest {
             database = Room.databaseBuilder(context, LibraryDatabase::class.java, name).build()
             val store = RoomLibraryStore(database.libraryDao())
             assertEquals(snapshot, store.current())
+            assertEquals("nested/song.mp3", store.current().metadataFailures.single().path)
             try {
                 store.replaceRoot(result.copy(folder = FolderSelection("other", "Other"), tracks = result.tracks + result.tracks))
                 fail("Duplicate memberships must fail")
             } catch (_: android.database.SQLException) { }
             assertEquals(snapshot, store.current())
+            store.replaceRoot(result.copy(metadataFailures = 0, failedMetadataIds = emptySet()))
+            assertTrue(store.current().metadataFailures.isEmpty())
         } finally { database.close(); context.deleteDatabase(name) }
     }
 
@@ -74,7 +77,7 @@ class LibraryDatabaseTest {
             old.version = 1
         }
         val database = Room.databaseBuilder(context, LibraryDatabase::class.java, name)
-            .addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4).build()
+            .addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4, LibraryDatabase.MIGRATION_4_5).build()
         try {
             val store = RoomLibraryStore(database.libraryDao())
             val snapshot = store.current()
