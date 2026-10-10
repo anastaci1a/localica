@@ -21,7 +21,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
         "Player" -> {
             SettingsHeading("Player behavior")
             BooleanPreference("Expand player when a song starts", value.expandOnPlay) { onChange(value.copy(expandOnPlay = it)) }
-            BooleanPreference("Show album artist first", value.albumArtistFirst) { onChange(value.copy(albumArtistFirst = it)) }
+            BooleanPreference("Show Album Artist first", value.albumArtistFirst) { onChange(value.copy(albumArtistFirst = it)) }
             SettingsHeading("Artwork")
             ChoicePreference("Player artwork", value.artworkLayout, ArtworkLayout.entries, { it.label }) { onChange(value.copy(artworkLayout = it)) }
             ArtworkActionPreference("Artwork tap", value.artworkTap) { onChange(value.copy(artworkTap = it)) }

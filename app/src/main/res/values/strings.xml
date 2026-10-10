@@ -59,7 +59,7 @@
     <string name="sort_title">Title</string>
     <string name="sort_artist">Artist</string>
     <string name="sort_album">Album</string>
-    <string name="sort_album_artist">Album artist</string>
+    <string name="sort_album_artist">Album Artist</string>
     <string name="sort_path">Path</string>
     <string name="sort_year">Year</string>
     <string name="sort_duration">Duration</string>

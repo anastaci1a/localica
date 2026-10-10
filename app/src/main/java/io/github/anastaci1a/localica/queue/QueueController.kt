@@ -77,18 +77,18 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     fun tap(tracks: List<Track>, selectedId: String) = tap(tracks, tracks.indexOfFirst { it.id == selectedId })
-    fun tap(tracks: List<Track>, selectedIndex: Int, view: SongListView = SongListView.Songs, sourceName: String = "All Songs") = submit {
-        perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false, sourceName = sourceName)
+    fun tap(tracks: List<Track>, selectedIndex: Int, view: SongListView = SongListView.Songs, sourceName: String = "All Songs", playlistOrigins: List<String?> = emptyList()) = submit {
+        perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false, sourceName = sourceName, playlistOrigins = playlistOrigins)
     }
     /** Explicit selection actions bypass all tap preferences and preserve displayed occurrence order. */
-    fun act(tracks: List<Track>, action: SongTap, complete: (Boolean) -> Unit = {}) = submit {
+    fun act(tracks: List<Track>, action: SongTap, playlistOrigins: List<String?> = emptyList(), complete: (Boolean) -> Unit = {}) = submit {
         try {
-            val done = perform(tracks, 0, action, batch = true)
+            val done = perform(tracks, 0, action, batch = true, playlistOrigins = playlistOrigins)
             if (done) complete(true) else if (state.value.pending != null) pendingComplete = complete else complete(false)
         } catch (failure: Exception) { complete(false); throw failure }
     }
 
-    private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean, sourceName: String = "Selected songs"): Boolean {
+    private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean, sourceName: String = "Selected songs", playlistOrigins: List<String?> = emptyList()): Boolean {
         val selected = tracks.getOrNull(selectedIndex) ?: return false
         pendingComplete?.invoke(false); pendingComplete = null
         if (state.value.pending != null) mutable.update { it.copy(pending = null) }
@@ -97,11 +97,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val expand = action == SongTap.NewQueue || action == SongTap.PlayNow
         if (action == SongTap.NewQueue || current == null) {
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
-                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName)) }
+                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName, playlistOrigins)) }
                 return false
-            } else create(tracks, selectedIndex, emptySet(), expand, sourceName)
+            } else create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins)
         } else {
-            save(state.value.library.update(QueueEdits.insert(current, if (batch) tracks else listOf(selected), action)))
+            save(state.value.library.update(QueueEdits.insert(current, if (batch) tracks else listOf(selected), action, if (batch) playlistOrigins else listOf(playlistOrigins.getOrNull(selectedIndex)))))
             activate(if (action == SongTap.PlayNow) true else null)
             if (action == SongTap.PlayNow) requestPlayer()
         }
@@ -115,19 +115,19 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             mutable.update { it.copy(problem = "Select enough inactive queues to make room. The current queue is protected.") }
             return@submit
         }
-        create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer, pending.sourceName)
+        create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)
         pendingComplete?.invoke(true); pendingComplete = null
     }
     fun cancelCreation() = submit {
         mutable.update { it.copy(pending = null, problem = null) }
         pendingComplete?.invoke(false); pendingComplete = null
     }
-    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String) {
+    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String, playlistOrigins: List<String?>) {
         val names = state.value.library.queues.filterNot { it.id in removals }.map { it.name }.toSet()
         var name = sourceName
         var suffix = 2
         while (name in names) name = "$sourceName (${suffix++})"
-        val queue = QueueEdits.create(tracks, selectedIndex, name).copy(lastActivatedAt = nextActivation())
+        val queue = QueueEdits.create(tracks, selectedIndex, name, playlistOrigins).copy(lastActivatedAt = nextActivation())
         save(QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id))
         mutable.update { it.copy(pending = null, browsedId = queue.id) }
         activate(play = true)
@@ -315,7 +315,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val items = withContext(Dispatchers.IO) {
             val currentLibrary = library.snapshots.first().tracks.associateBy { it.id }
             val tracks = library.playableTracks(queue.entries.map { currentLibrary[it.track.id] ?: it.track })
-            queue.entries.zip(tracks) { entry, track -> queueMediaItem(entry.id, track) }
+            queue.entries.zip(tracks) { entry, track -> queueMediaItem(entry.id, track, entry.sourcePlaylistId) }
         }
         if (player !== attached) return
         val index = queue.entries.indexOfFirst { it.id == queue.currentEntryId }.coerceAtLeast(0)
@@ -350,8 +350,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 }
 
-internal fun queueMediaItem(entryId: String, track: Track): MediaItem {
+internal fun queueMediaItem(entryId: String, track: Track, sourcePlaylistId: String? = null): MediaItem {
     val extras = Bundle().apply {
+        putString("sourcePlaylistId", sourcePlaylistId)
         putString("trackId", track.id); putString("trackUri", track.uri); putString("fileName", track.fileName)
         track.durationMs?.let { putLong("durationMs", it) }
     }

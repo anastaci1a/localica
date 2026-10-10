@@ -4,10 +4,10 @@ import java.util.UUID
 
 enum class MainTab(val label: String) {
     Home("Home"), Library("Library"), Songs("Songs"), Albums("Albums"), Artists("Artists"),
-    AlbumArtists("Album artists"), Folders("Folders"), Playlists("Playlists"), Queues("Queues"), MostPlayed("Most played")
+    AlbumArtists("Album Artists"), Folders("Folders"), Playlists("Playlists"), Queues("Queues"), MostPlayed("Most played")
 }
 enum class MediaKind(val label: String) {
-    Song("Songs"), Album("Albums"), Artist("Artists"), AlbumArtist("Album artists"), Folder("Folders"), Playlist("Playlists"), Queue("Queues")
+    Song("Songs"), Album("Albums"), Artist("Artists"), AlbumArtist("Album Artists"), Folder("Folders"), Playlist("Playlists"), Queue("Queues")
 }
 data class MediaRef(val kind: MediaKind, val id: String)
 data class BrowseRoute(

@@ -31,6 +31,7 @@ class LibraryViewModel(
     val playback: PlaybackConnection,
     val playlists: PlaylistController,
     private val scanner: ScanController,
+    statistics: Flow<io.github.anastaci1a.localica.statistics.ListeningStatistics> = flowOf(io.github.anastaci1a.localica.statistics.ListeningStatistics()),
 ) : ViewModel() {
     private val mutableLibrary = MutableStateFlow(LibraryUiState())
     val library = mutableLibrary.asStateFlow()
@@ -39,7 +40,7 @@ class LibraryViewModel(
 
     init {
         viewModelScope.launch {
-            repository.snapshots.catch { mutableLibrary.update { it.copy(loading = false, problem = LibraryProblem.LoadFailed) } }
+            combine(repository.snapshots, statistics) { snapshot, counts -> counts.applyTo(snapshot) }.catch { mutableLibrary.update { it.copy(loading = false, problem = LibraryProblem.LoadFailed) } }
                 .collect { snapshot ->
                     mutableLibrary.update { it.copy(snapshot = snapshot, loading = false, metadataFailures = snapshot.metadataFailures.size) }
                     refreshAccess()

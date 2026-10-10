@@ -16,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -38,7 +40,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     sorting: Boolean = false, onSortDismiss: () -> Unit = {}, queueState: QueueUiState = QueueUiState(),
     playingTrackId: String? = null, playingEntryId: String? = null,
     header: @Composable () -> Unit = {}, presentationOnly: Boolean = false, selectionVisible: Boolean = true,
-    onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false) {
+    onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
+    libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {}) {
     val obscuredInset = LocalBrowseObscuredInset.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -54,11 +57,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             focus.requestFocus(); keyboard?.show(); focusedOnce = true
         }
     }
+    val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
+    LaunchedEffect(libraryFilters.visible, route.key, route.filter, selectionVisible) {
+        if (selectionVisible && route.tab == MainTab.Library && route.collection == null && !route.globalSearch && filters.none { it.kind == route.filter }) {
+            onRoute(route.copy(filter = filters.first().kind))
+        }
+    }
+    var filterMenu by remember { mutableStateOf<LibraryFilter?>(null) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    val loadedResult by produceState<BrowseResult?>(null, library.snapshot, playlists.playlists, route, style, queueState.library) {
+    val loadedResult by produceState<BrowseResult?>(null, library.snapshot, playlists.playlists, route, style, queueState.library, libraryFilters) {
         value = withContext(Dispatchers.Default) {
-            BrowseQueries.evaluate(library.snapshot, playlists.playlists, route, style.query(), queueState.library.queues).let {
+            BrowseQueries.evaluate(library.snapshot, playlists.playlists, route, style.query(), queueState.library.queues, libraryFilters.allCollections).let {
                 if (route.collection?.kind == MediaKind.Album) it.groupAlbumSongs(style.songGrouping) else it
             }
         }
@@ -113,9 +123,21 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).focusRequester(focus))
         if (route.collection == null && (route.tab == MainTab.Library || route.globalSearch)) {
             Row(Modifier.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(route.filter == null, { onRoute(route.copy(filter = null)) }, { Text("All") })
-                BrowseQueries.libraryKinds.forEach { kind -> FilterChip(route.filter == kind,
-                    { onRoute(route.copy(filter = kind)) }, { Text(kind.label) }) }
+                filters.forEach { filter -> Box {
+                    val selected = route.filter == filter.kind
+                    Surface(shape = Corners.card,
+                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
+                        Text(filter.label, Modifier.heightIn(min = 48.dp).combinedClickable(
+                            role = androidx.compose.ui.semantics.Role.Tab,
+                            onClick = { onRoute(route.copy(filter = filter.kind)) },
+                            onLongClickLabel = "Configure library filters", onLongClick = { filterMenu = filter })
+                            .semantics { this.selected = selected }.padding(horizontal = 16.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.labelLarge)
+                    }
+                    DropdownMenu(filterMenu == filter, { filterMenu = null }) {
+                        ActionMenuItem("Edit library filters and order", onClick = { filterMenu = null; onFilterSettings() })
+                    }
+                } }
             }
         }
         Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
@@ -155,7 +177,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                         if (editTags != null) ActionMenuItem("Edit tags", onClick = { contextMenu = null; editTags(listOf(item.row.track)) {} })
                                         ActionMenuItem("Add to playlist", onClick = { contextMenu = null; addingSong = item.row.track })
                                         SongTap.entries.forEach { action -> ActionMenuItem(action.label(), onClick = {
-                                            contextMenu = null; queues?.act(listOf(item.row.track), action)
+                                            contextMenu = null; queues?.act(listOf(item.row.track), action, listOf(item.row.sourcePlaylistId))
                                         }) }
                                     }
                                     if (item.row == null) ActionMenuItem("Select all songs", onClick = {

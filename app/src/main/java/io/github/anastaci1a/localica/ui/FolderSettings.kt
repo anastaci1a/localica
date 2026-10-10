@@ -23,6 +23,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Playback and queues", null, R.drawable.ic_play, "Preloading, queue switching, and retention"),
     SettingsDestination("Song tap behavior", "Playback and queues", R.drawable.ic_music, "Default action and per-list overrides"),
     SettingsDestination("Library and tags", null, R.drawable.ic_library, "Folders, scanner configuration, and tag recovery"),
+    SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and collections in All"),
     SettingsDestination("Folders to scan", "Library and tags", R.drawable.ic_folder, "Choose music folders and excluded subfolders"),
     SettingsDestination("Scanner configuration", "Library and tags", R.drawable.ic_search, "Subfolders, short files, and scanning on launch"),
     SettingsDestination("Tag recovery", "Library and tags", R.drawable.ic_music, "Recover interrupted tag and artwork edits"),
@@ -39,7 +40,7 @@ private fun settingsPath(title: String?): List<String> {
 fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder: () -> Unit,
     onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {},
     interfaceContent: @Composable (String) -> Unit = {}, playbackContent: @Composable (String) -> Unit = {},
-    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null) {
+    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, libraryFiltersContent: @Composable () -> Unit = {}) {
     var path by rememberSaveable { mutableStateOf(settingsPath(initialCategory)) }
     var search by rememberSaveable { mutableStateOf("") }
     var folderUri by rememberSaveable { mutableStateOf<String?>(null) }
@@ -76,6 +77,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     }
                     "Song tap behavior" -> playbackContent(page)
                     "About and licenses" -> aboutContent()
+                    "Library filters" -> libraryFiltersContent()
                     "Tag recovery" -> { Text("Interrupted edits keep a recovery copy until you resolve them."); extraContent() }
                     "Folders to scan" -> {
                         Text("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)

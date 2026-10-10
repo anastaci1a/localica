@@ -30,6 +30,7 @@ data class TrackRecord(
     val composer: String? = null,
     val lyricist: String? = null,
     val modifiedAt: Long? = null,
+    val addedAt: Long? = null,
 )
 
 @Entity(tableName = "folder_tracks", primaryKeys = ["folderUri", "trackId"], foreignKeys = [
@@ -50,6 +51,8 @@ data class FolderWithTracks(
     val tracks: List<TrackInFolder>,
 )
 
+data class AddedDate(val id: String, val addedAt: Long?)
+
 @Dao
 abstract class LibraryDao {
     @Transaction @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE, uri")
@@ -60,7 +63,13 @@ abstract class LibraryDao {
 
     @Upsert protected abstract suspend fun upsertFolder(folder: FolderRecord)
     @Upsert protected abstract suspend fun upsertTracks(tracks: List<TrackRecord>)
-    @Update abstract suspend fun updateMetadata(track: TrackRecord)
+    @Update protected abstract suspend fun updateTrack(track: TrackRecord)
+    @Query("SELECT * FROM tracks WHERE id = :id") protected abstract suspend fun track(id: String): TrackRecord?
+    @Query("SELECT id, addedAt FROM tracks") protected abstract suspend fun addedDates(): List<AddedDate>
+    @Transaction open suspend fun updateMetadata(track: TrackRecord) {
+        val saved = track(track.id) ?: return
+        updateTrack(track.copy(addedAt = saved.addedAt))
+    }
     @Insert protected abstract suspend fun insertLocations(locations: List<FolderTrackRecord>)
     @Query("DELETE FROM folder_tracks WHERE folderUri = :uri") protected abstract suspend fun clearLocations(uri: String)
     @Query("DELETE FROM folders WHERE uri = :uri") protected abstract suspend fun deleteFolder(uri: String)
@@ -70,7 +79,9 @@ abstract class LibraryDao {
     open suspend fun replaceRoot(folder: FolderRecord, tracks: List<TrackRecord>, locations: List<FolderTrackRecord>) {
         require(locations.all { it.folderUri == folder.uri })
         upsertFolder(folder)
-        upsertTracks(tracks)
+        val dates = addedDates().associate { it.id to it.addedAt }
+        val now = System.currentTimeMillis()
+        upsertTracks(tracks.map { it.copy(addedAt = dates[it.id] ?: now) })
         clearLocations(folder.uri)
         insertLocations(locations)
         pruneTracks()
@@ -83,11 +94,17 @@ abstract class LibraryDao {
     }
 }
 
-@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 5, exportSchema = true)
+@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 6, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     companion object {
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tracks ADD COLUMN addedAt INTEGER")
+                db.execSQL("UPDATE tracks SET addedAt = ?", arrayOf(System.currentTimeMillis()))
+            }
+        }
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE folder_tracks ADD COLUMN metadataFailed INTEGER NOT NULL DEFAULT 0")
@@ -169,7 +186,7 @@ private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {
         val location = locations.first()
         Track(location.uri, record.title, record.artist, record.album, record.durationMs, record.fileName,
             location.relativePath, record.id, record.albumArtist, record.trackNumber, record.discNumber, record.year,
-            record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt)
+            record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt, record.addedAt)
     }.sortedWith(trackOrder)
     return LibrarySnapshot(map { FolderSelection(it.folder.uri, it.folder.name) }, tracks,
         flatMap { it.tracks }.filter { it.location.metadataFailed }.map {

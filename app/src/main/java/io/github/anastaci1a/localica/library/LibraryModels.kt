@@ -20,13 +20,17 @@ data class Track(
     val composer: String? = null,
     val lyricist: String? = null,
     val modifiedAt: Long? = null,
+    val addedAt: Long? = null,
+    /** Live local statistics; never written into audio files or saved track snapshots. */
+    val playCount: Long = 0,
 )
 
 data class TrackLocation(val folderUri: String, val uri: String, val relativePath: String)
 data class FolderSelection(val uri: String, val name: String)
 data class MetadataFailure(val trackId: String, val folderUri: String, val path: String)
 data class LibrarySnapshot(val folders: List<FolderSelection> = emptyList(), val tracks: List<Track> = emptyList(),
-    val metadataFailures: List<MetadataFailure> = emptyList())
+    val metadataFailures: List<MetadataFailure> = emptyList(),
+    val playlistPlays: Map<String, Long> = emptyMap(), val trackPlays: Map<String, Long> = emptyMap())
 
 data class AudioMetadata(
     val composer: String? = null,

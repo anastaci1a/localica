@@ -50,7 +50,7 @@ class CollectionNavigationTest {
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Compilation"))
         compose.onNodeWithText("Compilation").performClick()
         compose.runOnIdle { assertNotNull(opened) }
-        compose.onNodeWithText("Album artists").performScrollTo().performClick()
+        compose.onNodeWithText("Album Artists").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(MediaKind.AlbumArtist, route.filter) }
     }
 }

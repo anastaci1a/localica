@@ -21,6 +21,8 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> 
             Text(track.uri, style = MaterialTheme.typography.bodySmall)
             Text("Duration: " + formatTime(track.durationMs))
             track.modifiedAt?.let { Text("Modified: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it))) }
+            track.addedAt?.let { Text("Added to library: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it))) }
+            Text("Qualified plays: ${track.playCount}")
             EditField.entries.forEach { field -> if (field.value(track).isNotBlank()) Text(field.label + ": " + field.value(track)) }
             FlowRow { listOf(PlayerAction.Album, PlayerAction.Artist, PlayerAction.AlbumArtist, PlayerAction.Folder).forEach {
                 TextButton(onClick = { onDismiss(); onAction(it) }) { Text(it.label) }

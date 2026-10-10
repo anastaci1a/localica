@@ -19,14 +19,14 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     }
     var edited by remember { mutableStateOf(value) }
     var override by remember { mutableStateOf(overridden) }
-    val songs = route.collection != null || route.tab == MainTab.Songs || route.filter == MediaKind.Song
+    val songs = route.collection != null || route.tab in setOf(MainTab.Songs, MainTab.MostPlayed) || route.filter == MediaKind.Song
     val fields = if (songs) TrackSort.entries.filter { it != TrackSort.Count && (it != TrackSort.Manual || route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) }
         else TrackSort.entries.filterNot { it in setOf(TrackSort.Manual, TrackSort.Album, TrackSort.Folder) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Sort") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             Text("Sort by")
-            fields.forEach { field -> TextButton(onClick = { edited = edited.copy(sort = field) }) {
-                Text((if (edited.sort == field) "✓ " else "") + if (field == TrackSort.Album) "Album / disc / track" else field.name)
+            fields.forEach { field -> TextButton(onClick = { edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending) }) {
+                Text((if (edited.sort == field) "✓ " else "") + sortLabel(field))
             } }
             BooleanPreference("Ascending", edited.ascending) { edited = edited.copy(ascending = it) }
             if (route.collection != null) {
@@ -37,4 +37,14 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
         }
     }, confirmButton = { TextButton(onClick = { onSave(edited, override) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+}
+
+private fun sortLabel(sort: TrackSort) = when (sort) {
+    TrackSort.Album -> "Album / disc / track"
+    TrackSort.AlbumArtist -> "Album Artist"
+    TrackSort.Added -> "Date added"
+    TrackSort.Modified -> "Date modified"
+    TrackSort.MostPlayed -> "Most played"
+    TrackSort.Count -> "Number of songs"
+    else -> sort.name
 }

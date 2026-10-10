@@ -4,7 +4,7 @@ import io.github.anastaci1a.localica.library.*
 import java.util.UUID
 
 data class ManualPlaylist(val id: String = UUID.randomUUID().toString(), val name: String,
-    val createdAt: Long = System.currentTimeMillis(), val entries: List<SongRow> = emptyList())
+    val createdAt: Long = System.currentTimeMillis(), val entries: List<SongRow> = emptyList(), val modifiedAt: Long = createdAt)
 data class PlaylistState(val playlists: List<ManualPlaylist> = emptyList(), val loading: Boolean = true,
     val problem: String? = null)
 object PlaylistEdits {
@@ -22,6 +22,6 @@ object PlaylistEdits {
     /** A rescan updates available metadata without losing unavailable references or occurrence IDs. */
     fun rows(playlist: ManualPlaylist, snapshot: LibrarySnapshot, query: LibraryQuery): List<SongRow> {
         val tracks = snapshot.tracks.associateBy { it.id }
-        return LibraryQueries.rows(playlist.entries.map { it.copy(track = tracks[it.track.id] ?: it.track) }, query)
+        return LibraryQueries.rows(playlist.entries.map { it.copy(track = tracks[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), sourcePlaylistId = playlist.id) }, query)
     }
 }

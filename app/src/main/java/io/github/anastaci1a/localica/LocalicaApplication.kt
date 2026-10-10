@@ -16,18 +16,22 @@ class LocalicaApplication : Application() {
         super.onCreate()
         java.io.File(cacheDir, "tag-views").listFiles()?.forEach { it.delete() }
     }
+    val statistics by lazy {
+        io.github.anastaci1a.localica.statistics.StatisticsRepository(Room.databaseBuilder(this,
+            io.github.anastaci1a.localica.statistics.StatisticsDatabase::class.java, "statistics.db").build().statistics())
+    }
     val scanner by lazy { io.github.anastaci1a.localica.scanner.ScanController(this, library) }
     val lyrics by lazy { io.github.anastaci1a.localica.lyrics.LyricsRepository(this) }
     val tagEditing by lazy { io.github.anastaci1a.localica.editing.TagEditingController(this, library, queues, playlists) }
     val playlists by lazy {
-        PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").build().playlists())
+        PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").addMigrations(PlaylistDatabase.MIGRATION_1_2).build().playlists())
     }
     val queues by lazy {
-        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3).build().queues(),
+        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4).build().queues(),
             QueuePreferences(this), library)
     }
     val library by lazy {
-        val database = Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4, LibraryDatabase.MIGRATION_4_5).build()
+        val database = Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4, LibraryDatabase.MIGRATION_4_5, LibraryDatabase.MIGRATION_5_6).build()
         LibraryRepository(RoomLibraryStore(database.libraryDao()), TreeScanner(AndroidDocuments(this)),
             PersistedFolderPermissions(contentResolver))
     }

@@ -13,6 +13,7 @@ import io.github.anastaci1a.localica.LocalicaApplication
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackService : MediaSessionService() {
+    private var statistics: io.github.anastaci1a.localica.statistics.PlaybackStatistics? = null
     private var session: MediaSession? = null
 
     override fun onCreate() {
@@ -30,6 +31,7 @@ class PlaybackService : MediaSessionService() {
                 }
             })
         }
+        statistics = io.github.anastaci1a.localica.statistics.PlaybackStatistics(player, (application as LocalicaApplication).statistics::record)
         (application as LocalicaApplication).queues.attach(player)
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -47,6 +49,7 @@ class PlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onDestroy() {
+        statistics?.close(); statistics = null
         session?.run { (application as LocalicaApplication).queues.detach(player); player.release(); release() }
         session = null
         super.onDestroy()

@@ -60,6 +60,8 @@ fun LocalicaScreen(
     val editTags = LocalTagEdit.current
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
     var settings by remember { mutableStateOf(preferences.read()) }
+    val libraryFilterPreferences = remember(context) { io.github.anastaci1a.localica.browse.LibraryFilterPreferences(context) }
+    var libraryFilters by remember { mutableStateOf(libraryFilterPreferences.read()) }
     val pinPreferences = remember(context) { PinPreferences(context) }
     var pins by remember { mutableStateOf(pinPreferences.read()) }
     fun pin(ref: MediaRef) { pins = PinEdits.toggle(pins, ref); pinPreferences.write(pins) }
@@ -140,7 +142,8 @@ fun LocalicaScreen(
     val currentTrack = queues.library.active?.let { queue ->
         queue.entries.firstOrNull { it.id == queue.currentEntryId }?.track
     }
-    val indexedTrack = currentTrack?.let { saved -> library.snapshot.tracks.firstOrNull { it.id == saved.id } ?: saved }
+    val indexedTrack = currentTrack?.let { saved -> library.snapshot.tracks.firstOrNull { it.id == saved.id }
+        ?: saved.copy(playCount = library.snapshot.trackPlays[saved.id] ?: 0) }
     fun playerAction(action: PlayerAction) {
         val track = indexedTrack ?: return
         when (action) {
@@ -212,12 +215,13 @@ fun LocalicaScreen(
                     { item -> navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title)) },
                     { settingsCategory = "Folders to scan"; settingsOpen = true }, { rows, index, scope ->
                         if (index >= 0) {
-                            if (queueController != null) queueController.tap(rows.map { it.track }, index, scope, io.github.anastaci1a.localica.browse.queueSourceName(route, rows.map { it.track }))
+                            if (queueController != null) queueController.tap(rows.map { it.track }, index, scope, io.github.anastaci1a.localica.browse.queueSourceName(route, rows.map { it.track }), rows.map { it.sourcePlaylistId })
                             else onPlay(rows[index].track)
                         }
                     }, queueController, playlistController, playback.connected, expanded, pins, ::pin,
                     sortingRoute == route.key, { sortingRoute = null }, playingTrackId = playback.trackId, presentationOnly = viewOptions, selectionVisible = page == pager.settledPage,
                     onSearchEdit = { navigation = navigation.editSearch(it) }, onSearchCommit = { navigation = navigation.commitSearch() },
+                    libraryFilters = libraryFilters, onFilterSettings = { settingsCategory = "Library filters"; settingsOpen = true },
                     scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion)
             } }
             }
@@ -318,7 +322,9 @@ fun LocalicaScreen(
             Text("Localica", style = MaterialTheme.typography.headlineSmall)
             Text("Offline music, organized your way.")
             LibraryLicenses()
-        }, initialCategory = settingsCategory)
+        }, initialCategory = settingsCategory, libraryFiltersContent = {
+            LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
+        })
     if (scannerOpen) ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan) { destination ->
         scannerOpen = false; returnToScanner = true; settingsCategory = destination; settingsOpen = true
     }

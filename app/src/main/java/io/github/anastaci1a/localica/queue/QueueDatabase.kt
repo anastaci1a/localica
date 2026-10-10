@@ -8,7 +8,7 @@ data class QueueRecord(@PrimaryKey val id: String, val name: String, val created
     val currentEntryId: String?, val positionMs: Long, val shuffle: Boolean, val repeat: String, @ColumnInfo(defaultValue = "0") val ordinal: Int = 0, @ColumnInfo(defaultValue = "0") val lastActivatedAt: Long = 0)
 @Entity(tableName = "queue_entries", foreignKeys = [ForeignKey(entity = QueueRecord::class,
     parentColumns = ["id"], childColumns = ["queueId"], onDelete = ForeignKey.CASCADE)], indices = [Index("queueId")])
-data class EntryRecord(@PrimaryKey val id: String, val queueId: String, val ordinal: Int, val track: String)
+data class EntryRecord(@PrimaryKey val id: String, val queueId: String, val ordinal: Int, val track: String, val sourcePlaylistId: String? = null)
 @Entity(tableName = "queue_state")
 data class ActiveQueueRecord(@PrimaryKey val id: Int = 1, val queueId: String?)
 data class StoredQueue(@Embedded val queue: QueueRecord,
@@ -27,7 +27,7 @@ abstract class QueueDao {
     @Transaction open suspend fun read(): QueueLibrary {
         val queues = readQueues().map { stored -> stored.queue.let { q ->
             ListeningQueue(q.id, q.name, q.createdAt, stored.entries.sortedBy { it.ordinal }.map {
-                QueueEntry(it.id, TrackSnapshot.decode(it.track)) }, q.currentEntryId, q.positionMs, q.shuffle,
+                QueueEntry(it.id, TrackSnapshot.decode(it.track), it.sourcePlaylistId) }, q.currentEntryId, q.positionMs, q.shuffle,
                 QueueRepeat.entries.firstOrNull { it.name == q.repeat } ?: QueueRepeat.Off, q.lastActivatedAt)
         } }
         return QueueLibrary(queues, readActive()?.queueId?.takeIf { id -> queues.any { it.id == id } })
@@ -44,17 +44,22 @@ abstract class QueueDao {
             if (previous?.entries != queue.entries) {
                 clearEntries(queue.id)
                 insertEntries(queue.entries.mapIndexed { index, entry ->
-                    EntryRecord(entry.id, queue.id, index, TrackSnapshot.encode(entry.track)) })
+                    EntryRecord(entry.id, queue.id, index, TrackSnapshot.encode(entry.track), entry.sourcePlaylistId) })
             }
         }
         upsertActive(ActiveQueueRecord(queueId = after.activeId))
     }
 }
 
-@Database(entities = [QueueRecord::class, EntryRecord::class, ActiveQueueRecord::class], version = 3, exportSchema = true)
+@Database(entities = [QueueRecord::class, EntryRecord::class, ActiveQueueRecord::class], version = 4, exportSchema = true)
 abstract class QueueDatabase : RoomDatabase() {
     abstract fun queues(): QueueDao
     companion object {
+        val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE queue_entries ADD COLUMN sourcePlaylistId TEXT")
+            }
+        }
         val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE queues ADD COLUMN lastActivatedAt INTEGER NOT NULL DEFAULT 0")

@@ -5,7 +5,7 @@ import org.jaudiotagger.tag.FieldKey
 
 enum class EditField(val label: String, val key: FieldKey, val numeric: Boolean = false) {
     Title("Name", FieldKey.TITLE), Album("Album", FieldKey.ALBUM), Artist("Artist", FieldKey.ARTIST),
-    AlbumArtist("Album artist", FieldKey.ALBUM_ARTIST), Year("Year", FieldKey.YEAR, true),
+    AlbumArtist("Album Artist", FieldKey.ALBUM_ARTIST), Year("Year", FieldKey.YEAR, true),
     Disc("Disc number", FieldKey.DISC_NO, true), TrackNumber("Track number", FieldKey.TRACK, true),
     Comment("Comment", FieldKey.COMMENT), Genre("Genre", FieldKey.GENRE),
     Composer("Composer", FieldKey.COMPOSER), Lyricist("Lyricist", FieldKey.LYRICIST);

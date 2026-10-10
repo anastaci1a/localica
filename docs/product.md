@@ -34,6 +34,7 @@ Maintain this inventory as capabilities are added; these are target settings, no
 | Tap setting scope | App-wide default with optional overrides for song, album, artist, album artist, folder, playlist, and search lists. |
 | Queue retention | Unlimited; optional maximum with the cleanup dialog described above. |
 | Queue switching | Browse without affecting playback; alternatives restore paused, resume immediately, or preserve playback state. |
+| Library filters | Configurable visible filters/order and collection types in All; defaults and shortcut in [Interface](interface.md#browsing-search-and-selection). |
 | Sort and presentation | Defaults by list type with optional collection overrides; explicit reset/inherit. |
 | Navigation and player | Custom tabs, tab history, exit confirmation, automatic player expansion, and secondary metadata; defaults in [Interface](interface.md). |
 | Player artwork gestures | Tap toggles the integrated lyrics panel; hold opens artwork actions. Both are independently configurable in Settings. |

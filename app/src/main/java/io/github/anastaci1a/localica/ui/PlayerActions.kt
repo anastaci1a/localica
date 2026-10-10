@@ -19,7 +19,7 @@ internal enum class PlayerAction(val label: String, val icon: Int) {
     Info("Information", R.drawable.ic_music), Edit("Edit tags", R.drawable.ic_settings), Artwork("Artwork", R.drawable.ic_albums),
     Lyrics("Lyrics", R.drawable.ic_lyrics), Playlist("Add to playlist", R.drawable.ic_playlist), Pin("Pin to Home", R.drawable.ic_home),
     Album("Go to album", R.drawable.ic_albums), Artist("Go to artist", R.drawable.ic_artist),
-    AlbumArtist("Go to album artist", R.drawable.ic_artist), Folder("Go to folder", R.drawable.ic_folder),
+    AlbumArtist("Go to Album Artist", R.drawable.ic_artist), Folder("Go to folder", R.drawable.ic_folder),
     Shuffle("Shuffle", R.drawable.ic_shuffle), Repeat("Repeat", R.drawable.ic_repeat), Count("Track count", R.drawable.ic_queue),
     BackTen("Back 10 seconds", R.drawable.ic_previous), ForwardTen("Forward 10 seconds", R.drawable.ic_next), More("More actions", R.drawable.ic_more)
 }

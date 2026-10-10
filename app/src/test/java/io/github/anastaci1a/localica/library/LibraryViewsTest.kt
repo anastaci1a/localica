@@ -21,7 +21,7 @@ class LibraryViewsTest {
         assertEquals(2, LibraryViews.groups(snapshot, SongListView.AlbumArtists, LibraryQuery()).size)
     }
     @Test fun `missing names and separator characters cannot collide with real tags`() {
-        val tracks = listOf(song("missing"), song("literal", album = "Unknown album", artist = "Unknown album artist"),
+        val tracks = listOf(song("missing"), song("literal", album = "Unknown album", artist = "Unknown Album Artist"),
             song("one", album = "a:b", artist = "c"), song("two", album = "a", artist = "b:c"))
         val groups = LibraryViews.groups(LibrarySnapshot(tracks = tracks), SongListView.Albums, LibraryQuery())
         assertEquals(4, groups.map { it.id }.toSet().size)
@@ -54,7 +54,7 @@ class LibraryViewsTest {
         assertEquals(3, queue.entries.size)
         val matches = PlaylistEdits.rows(playlist, LibrarySnapshot(), LibraryQuery(text = "a", sort = TrackSort.Title))
         assertEquals(playlist.entries.drop(1).map { it.id }, matches.map { it.id })
-        assertEquals(playlist.entries, PlaylistEdits.rows(playlist, LibrarySnapshot(), LibraryViews.defaults(SongListView.Playlists)))
+        assertEquals(playlist.entries.map { it.copy(sourcePlaylistId = playlist.id) }, PlaylistEdits.rows(playlist, LibrarySnapshot(), LibraryViews.defaults(SongListView.Playlists)))
     }
     @Test fun `batch insertion preserves order and view overrides fall back to app preference`() {
         val queue = QueueEdits.create(listOf(song("a"), song("d")), 0, "Queue").copy(positionMs = 1200)
