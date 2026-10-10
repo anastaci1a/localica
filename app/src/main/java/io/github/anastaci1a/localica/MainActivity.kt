@@ -28,12 +28,13 @@ class MainActivity : ComponentActivity() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 LibraryViewModel((application as LocalicaApplication).library, PlaybackConnection(applicationContext),
-                    AndroidLibraryQueryPreferences(applicationContext)) as T
+                    AndroidLibraryQueryPreferences(applicationContext), (application as LocalicaApplication).playlists) as T
         })[LibraryViewModel::class.java]
         setContent {
             val library by model.library.collectAsStateWithLifecycle()
             val playback by model.playback.state.collectAsStateWithLifecycle()
             val queues by model.playback.queues.state.collectAsStateWithLifecycle()
+            val playlist by model.playlist.collectAsStateWithLifecycle()
             val picker = rememberLauncherForActivityResult(LocalFolderPicker()) { uri ->
                 uri?.let { model.scan(it.toString()) }
             }
@@ -43,7 +44,11 @@ class MainActivity : ComponentActivity() {
                     onRescan = model::scan, onCancelScan = model::cancelScan,
                     onRemoveFolder = model::removeFolder, onQuery = model::setQuery,
                     queues = queues, queueController = model.playback.queues,
-                    onPrevious = model.playback::previous, onNext = model.playback::next)
+                    onPrevious = model.playback::previous, onNext = model.playback::next,
+                    onView = model::setView, onGroup = model::openGroup,
+                    playlist = playlist, playlistController = model.playlists,
+                    onOpenPlaylist = model::openPlaylist, onPlaylistQuery = model::setPlaylistQuery,
+                    onPlaylistPlay = model::playPlaylist)
             }
         }
     }

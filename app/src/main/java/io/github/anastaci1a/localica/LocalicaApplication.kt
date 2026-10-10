@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.app.Application
+import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
 import androidx.room.Room
 import io.github.anastaci1a.localica.library.AndroidDocuments
@@ -11,6 +12,9 @@ import io.github.anastaci1a.localica.library.RoomLibraryStore
 import io.github.anastaci1a.localica.library.TreeScanner
 
 class LocalicaApplication : Application() {
+    val playlists by lazy {
+        PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").build().playlists())
+    }
     val queues by lazy {
         QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").build().queues(),
             QueuePreferences(this), library)

@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica.library
 
 import java.util.Locale
 
-enum class TrackSort { Title, Artist, Album, AlbumArtist, Folder, Year, Duration }
+enum class TrackSort { Manual, Title, Artist, Album, AlbumArtist, Folder, Year, Duration }
 
 data class LibraryQuery(
     val text: String = "",
@@ -13,7 +13,10 @@ data class LibraryQuery(
 
 /** Shared, deterministic query semantics. Call off the main thread for large libraries. */
 object LibraryQueries {
-    fun tracks(snapshot: LibrarySnapshot, query: LibraryQuery): List<Track> {
+    fun tracks(snapshot: LibrarySnapshot, query: LibraryQuery): List<Track> =
+        rows(snapshot.tracks.map { SongRow(it.id, it) }, query).map { it.track }
+
+    fun rows(rows: List<SongRow>, query: LibraryQuery): List<SongRow> {
         val terms = query.text.trim().lowercase(Locale.ROOT).split(Regex("\\s+")).filter { it.isNotEmpty() }
         val direction = if (query.ascending) 1 else -1
         fun <T : Comparable<T>> compare(a: T?, b: T?): Int = when {
@@ -25,6 +28,7 @@ object LibraryQueries {
         fun key(value: String?) = value?.lowercase(Locale.ROOT)
         val order = Comparator<Track> { a, b ->
             val primary = when (query.sort) {
+                TrackSort.Manual -> 0
                 TrackSort.Title -> compare(key(a.title), key(b.title))
                 TrackSort.Artist -> compare(key(a.artist), key(b.artist))
                 TrackSort.AlbumArtist -> compare(key(a.albumArtist ?: a.artist), key(b.albumArtist ?: b.artist))
@@ -36,22 +40,25 @@ object LibraryQueries {
                 TrackSort.Year -> compare(a.year, b.year)
                 TrackSort.Duration -> compare(a.durationMs, b.durationMs)
             }
-            primary.takeIf { it != 0 } ?: a.title.lowercase(Locale.ROOT).compareTo(b.title.lowercase(Locale.ROOT)).takeIf { it != 0 }
+            if (query.sort == TrackSort.Manual) 0 else primary.takeIf { it != 0 } ?: a.title.lowercase(Locale.ROOT).compareTo(b.title.lowercase(Locale.ROOT)).takeIf { it != 0 }
                 ?: a.id.compareTo(b.id)
         }
-        return snapshot.tracks.asSequence().mapNotNull { track ->
-            if (query.folderUri == null) track else {
+        val result = rows.asSequence().mapNotNull { row ->
+            val track = row.track
+            if (query.folderUri == null) row else {
                 track.locations.firstOrNull { it.folderUri == query.folderUri }?.let {
-                    track.copy(uri = it.uri, relativePath = it.relativePath)
+                    row.copy(track = track.copy(uri = it.uri, relativePath = it.relativePath))
                 }
             }
-        }.filter { track ->
+        }.filter { row ->
+            val track = row.track
             if (terms.isEmpty()) true else {
-                val paths = if (query.folderUri == null) track.locations.map { it.relativePath } else listOf(track.relativePath)
+                val paths = if (query.folderUri == null) track.locations.map { it.relativePath } + track.relativePath else listOf(track.relativePath)
                 val searchable = (listOfNotNull(track.title, track.artist, track.album, track.albumArtist,
                     track.genre, track.comment, track.year?.toString(), track.fileName) + paths).joinToString("\n").lowercase(Locale.ROOT)
                 terms.all { it in searchable }
             }
-        }.sortedWith(order).toList()
+        }.sortedWith { a, b -> order.compare(a.track, b.track) }.toList()
+        return if (query.sort == TrackSort.Manual && !query.ascending) result.reversed() else result
     }
 }

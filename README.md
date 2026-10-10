@@ -1,6 +1,6 @@
 # localica
 
-An Android player for music stored on your device. Add music folders, search and sort their songs, and keep separate listening queues.
+An Android player for music stored on your device. Browse folders, albums and artists, organize playlists, and keep separate listening queues.
 
 Saved queues, configurable listening behavior, embedded album artwork, and background playback. No account or internet access. The current interface is functional testing scaffolding.
 

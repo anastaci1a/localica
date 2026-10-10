@@ -6,6 +6,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.SongListView
 import io.github.anastaci1a.localica.playback.PlaybackConnection
 import io.github.anastaci1a.localica.queue.*
 import org.junit.Assert.*
@@ -75,6 +76,17 @@ class QueuePlaybackTest {
                 instrumentation.runOnMainSync { playback.next() }
                 await { queues.state.value.library.active!!.currentEntryId == queues.state.value.library.active!!.entries.last().id }
                 assertEquals("Second", playback.state.value.trackId) // duplicate, different entry
+                queues.settings(QueueSettings(songTap = SongTap.Append,
+                    tapOverrides = mapOf(SongListView.Playlists to SongTap.NewQueue)))
+                queues.tap(listOf(tracks[0], tracks[1], tracks[0]), 2, SongListView.Playlists)
+                await { queues.state.value.library.queues.size == 3 && playback.state.value.trackId == "First" }
+                val duplicateQueue = queues.state.value.library.active!!
+                assertEquals(duplicateQueue.entries[2].id, duplicateQueue.currentEntryId)
+                queues.act(listOf(tracks[2], tracks[1]), SongTap.PlayNext)
+                await { queues.state.value.library.active!!.entries.size == 5 }
+                assertEquals(listOf("First", "Second", "First", "Third", "Second"),
+                    queues.state.value.library.active!!.entries.map { it.track.id })
+                assertEquals(duplicateQueue.entries[2].id, queues.state.value.library.active!!.currentEntryId)
             } finally {
                 queues.settings(QueueSettings())
                 queues.removeQueues(queues.state.value.library.queues.map { it.id }.toSet())

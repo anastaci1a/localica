@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.library.SongListView
 
 @Composable
 fun QueueScreen(state: QueueUiState, controller: QueueController?) {
@@ -135,13 +136,28 @@ internal fun QueueSettingsControls(settings: QueueSettings, onChange: (QueueSett
                 onClick = { onChange(settings.copy(switching = action)); switchOpen = false }) }
         }
     }
+    SongListView.entries.forEach { view ->
+        var open by remember { mutableStateOf(false) }
+        Box {
+            TextButton(onClick = { open = true }) { Text(view.label+": "+(settings.tapOverrides[view]?.label() ?: "Inherit app default")) }
+            DropdownMenu(open, { open = false }) {
+                DropdownMenuItem(text = { Text("Inherit app default") }, onClick = {
+                    onChange(settings.copy(tapOverrides = settings.tapOverrides - view)); open = false
+                })
+                SongTap.entries.forEach { action -> DropdownMenuItem(text = { Text(action.label()) }, onClick = {
+                    onChange(settings.copy(tapOverrides = settings.tapOverrides + (view to action))); open = false
+                }) }
+            }
+        }
+    }
+    TextButton(onClick = { onChange(settings.copy(tapOverrides = emptyMap())) }) { Text("Reset all tap overrides") }
     OutlinedTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
         isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
     TextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0,
         onClick = { onChange(settings.copy(maximum = limit.toIntOrNull())) }) { Text("Save queue limit") }
     Text("A limit never deletes existing queues automatically.", style = MaterialTheme.typography.bodySmall)
 }
-private fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"
+internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"
     SongTap.PlayNow -> "Insert after current and play"; SongTap.PlayNext -> "Add next"; SongTap.Append -> "Append to current" }
 private fun QueueSwitch.label() = when (this) { QueueSwitch.Paused -> "Restore paused"
     QueueSwitch.Resume -> "Resume immediately"; QueueSwitch.KeepPlaybackState -> "Keep playing or paused" }

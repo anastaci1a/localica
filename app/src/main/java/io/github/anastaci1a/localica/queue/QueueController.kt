@@ -7,6 +7,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import io.github.anastaci1a.localica.library.LibraryRepository
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.SongListView
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -69,19 +70,24 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
 
-    fun tap(tracks: List<Track>, selectedId: String) = submit {
+    fun tap(tracks: List<Track>, selectedId: String) = tap(tracks, tracks.indexOfFirst { it.id == selectedId })
+    fun tap(tracks: List<Track>, selectedIndex: Int, view: SongListView = SongListView.Songs) = submit {
+        perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false)
+    }
+    /** Explicit selection actions bypass all tap preferences and preserve displayed occurrence order. */
+    fun act(tracks: List<Track>, action: SongTap) = submit { perform(tracks, 0, action, batch = true) }
+
+    private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean) {
+        val selected = tracks.getOrNull(selectedIndex) ?: return
         capture()
-        val selected = tracks.firstOrNull { it.id == selectedId } ?: return@submit
         val current = state.value.library.active
-        val action = state.value.settings.songTap
         if (action == SongTap.NewQueue || current == null) {
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
-                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedId, QueueEdits.oldestInactive(it.library))) }
-            } else create(tracks, selectedId, emptySet())
+                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library))) }
+            } else create(tracks, selectedIndex, emptySet())
         } else {
-            val play = if (action == SongTap.PlayNow) true else null
-            save(state.value.library.update(QueueEdits.insert(current, selected, action)))
-            activate(play)
+            save(state.value.library.update(QueueEdits.insert(current, if (batch) tracks else listOf(selected), action)))
+            activate(if (action == SongTap.PlayNow) true else null)
         }
     }
 
@@ -92,16 +98,16 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             mutable.update { it.copy(problem = "Select enough inactive queues to make room. The current queue is protected.") }
             return@submit
         }
-        create(pending.tracks, pending.selectedId, removals)
+        create(pending.tracks, pending.selectedIndex, removals)
     }
     fun cancelCreation() = submit { mutable.update { it.copy(pending = null, problem = null) } }
-    private suspend fun create(tracks: List<Track>, selectedId: String, removals: Set<String>) {
-        val selected = tracks.first { it.id == selectedId }
+    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>) {
+        val selected = tracks[selectedIndex]
         val names = state.value.library.queues.filterNot { it.id in removals }.map { it.name }.toSet()
         var name = selected.title
         var suffix = 2
         while (name in names) name = "${selected.title} (${suffix++})"
-        val queue = QueueEdits.create(tracks, selectedId, name)
+        val queue = QueueEdits.create(tracks, selectedIndex, name)
         save(QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id))
         mutable.update { it.copy(pending = null) }
         activate(play = true)
