@@ -14,10 +14,11 @@ Reference-based layouts, continuous player/Queue gestures, tab swiping, restored
 
 The v0.9.1 patch isolates live route rendering/focus, prevents scrollbar/menu overlap, distinguishes gallery densities, expands compact titles, and makes the top drag card follow the finger directly.
 
+The v0.10.0 player adds aligned floating navigation/utility/mini-player pills, filled transport icons, uncropped artwork backgrounds or floating covers over a matte gradient, and a shared blended lyrics layout with controls that ease downward.
+
 ## Reviewable release checkpoints
 
-1. **v0.10.0 — player and navigation layout:** aligned floating tab/utility/mini-player pills, filled transport icons, artwork background choice, and one blended lyrics layout with animated controls.
-2. **v0.11.0 — organization and settings:** reference-based settings/list options, scanner dialog and background operation, dedicated folder/error pages, and playlist creation/import menus.
+1. **v0.11.0 — organization and settings:** reference-based settings/list options, scanner dialog and background operation, dedicated folder/error pages, and playlist creation/import menus.
 
 Publish a verified APK at each checkpoint for device feedback; address regressions before advancing. These steps precede glass rendering.
 
