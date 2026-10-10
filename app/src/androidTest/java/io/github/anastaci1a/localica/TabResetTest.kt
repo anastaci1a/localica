@@ -25,7 +25,7 @@ class TabResetTest {
             compose.setContent { LocalicaTheme { LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false),
                 PlaybackState(connected = true), {}, {}, {}, {}, {}, {}) } }
             val list = compose.onNodeWithTag("browser-list")
-            list.performScrollToNode(hasText("Album 060"))
+            compose.scrollToUncoveredItem(hasText("Album 060"))
             val before = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
             compose.mainClock.autoAdvance = false
             compose.onNodeWithContentDescription("Library").performClick()
@@ -34,10 +34,7 @@ class TabResetTest {
             assertTrue("Must move without teleporting: $before -> $during", during > 0 && during < before)
             compose.mainClock.autoAdvance = true
             compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
-            list.performScrollToNode(hasText("Album 060"))
-            // The viewport extends behind floating navigation; put the target above it before tapping.
-            list.performTouchInput { swipe(androidx.compose.ui.geometry.Offset(centerX, height * 0.55f),
-                androidx.compose.ui.geometry.Offset(centerX, height * 0.25f)) }
+            compose.scrollToUncoveredItem(hasText("Album 060"))
             compose.onNodeWithText("Album 060").performClick()
             compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Song 60").assertIsDisplayed() }.isSuccess }
             compose.onNodeWithContentDescription("Library").performClick()
