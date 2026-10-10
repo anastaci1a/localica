@@ -21,7 +21,7 @@ import java.util.Locale
 
 @Composable
 fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> Unit, onOpenLibrary: () -> Unit,
-                 onPrevious: () -> Unit = {}, onNext: () -> Unit = {}) {
+                 onPrevious: () -> Unit = {}, onNext: () -> Unit = {}, albumArtistFirst: Boolean = true) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium,
@@ -40,7 +40,8 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
             Spacer(Modifier.height(24.dp))
             OutlinedButton(onClick = onOpenLibrary) { Text(stringResource(R.string.open_library)) }
         } else {
-            Text(state.artist ?: stringResource(R.string.unknown_artist), style = MaterialTheme.typography.bodyLarge,
+            Text((if (albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist)
+                ?: stringResource(R.string.unknown_artist), style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             state.album?.let { Text(it, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center) }
@@ -65,13 +66,13 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
             Spacer(Modifier.height(24.dp))
             val pause = state.isPlaying || state.isBuffering
             Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onPrevious, enabled = state.connected) { Text("Previous") }
+            ActionIcon(R.drawable.ic_previous, "Previous", state.connected, onPrevious)
             FilledIconButton(onClick = onToggle, enabled = state.connected, modifier = Modifier.size(72.dp)) {
                 Icon(painterResource(if (pause) R.drawable.ic_pause else R.drawable.ic_play),
                     stringResource(if (pause) R.string.pause else if (state.ended) R.string.replay else R.string.play),
                     Modifier.size(36.dp))
             }
-            TextButton(onClick = onNext, enabled = state.connected) { Text("Next") }
+            ActionIcon(R.drawable.ic_next, "Next", state.connected, onNext)
             }
             Spacer(Modifier.height(12.dp))
             if (state.isBuffering) Text(stringResource(R.string.loading_audio), style = MaterialTheme.typography.bodySmall)

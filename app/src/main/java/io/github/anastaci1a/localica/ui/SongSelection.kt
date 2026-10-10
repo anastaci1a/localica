@@ -64,11 +64,13 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
             }
         }
     }
-    adding?.let { tracks -> AddToPlaylistDialog(tracks, playlistState, playlists) { adding = null; onSelection(emptySet()) } }
+    adding?.let { tracks -> AddToPlaylistDialog(tracks, playlistState, playlists,
+        onDismiss = { adding = null }, onAdded = { adding = null; onSelection(emptySet()) }) }
 }
 
 @Composable
-private fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, controller: PlaylistController?, onDismiss: () -> Unit) {
+private fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, controller: PlaylistController?,
+    onDismiss: () -> Unit, onAdded: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var chosen by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf(false) }
@@ -87,6 +89,6 @@ private fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, contr
         }
     }, confirmButton = { TextButton(enabled = !state.loading && (chosen != null || name.isNotBlank()), onClick = {
         chosen?.let { controller?.append(it, tracks) } ?: controller?.create(name, tracks)
-        onDismiss()
+        onAdded()
     }) { Text("Add") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }

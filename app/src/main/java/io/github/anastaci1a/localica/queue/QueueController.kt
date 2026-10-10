@@ -81,13 +81,15 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val selected = tracks.getOrNull(selectedIndex) ?: return
         capture()
         val current = state.value.library.active
+        val expand = action == SongTap.NewQueue || action == SongTap.PlayNow
         if (action == SongTap.NewQueue || current == null) {
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
-                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library))) }
-            } else create(tracks, selectedIndex, emptySet())
+                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand)) }
+            } else create(tracks, selectedIndex, emptySet(), expand)
         } else {
             save(state.value.library.update(QueueEdits.insert(current, if (batch) tracks else listOf(selected), action)))
             activate(if (action == SongTap.PlayNow) true else null)
+            if (action == SongTap.PlayNow) requestPlayer()
         }
     }
 
@@ -98,10 +100,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             mutable.update { it.copy(problem = "Select enough inactive queues to make room. The current queue is protected.") }
             return@submit
         }
-        create(pending.tracks, pending.selectedIndex, removals)
+        create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer)
     }
     fun cancelCreation() = submit { mutable.update { it.copy(pending = null, problem = null) } }
-    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>) {
+    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean) {
         val selected = tracks[selectedIndex]
         val names = state.value.library.queues.filterNot { it.id in removals }.map { it.name }.toSet()
         var name = selected.title
@@ -111,7 +113,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         save(QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id))
         mutable.update { it.copy(pending = null) }
         activate(play = true)
+        if (expandPlayer) requestPlayer()
     }
+
+    private fun requestPlayer() { mutable.update { it.copy(playerRequest = it.playerRequest + 1) } }
 
     fun switchTo(id: String) = submit {
         if (state.value.library.queues.none { it.id == id }) return@submit
@@ -257,5 +262,5 @@ internal fun queueMediaItem(entryId: String, track: Track): MediaItem {
     }
     return MediaItem.Builder().setMediaId(entryId).setUri(track.uri)
         .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist)
-            .setAlbumTitle(track.album).setExtras(extras).build()).build()
+            .setAlbumTitle(track.album).setAlbumArtist(track.albumArtist).setExtras(extras).build()).build()
 }

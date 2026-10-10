@@ -29,11 +29,7 @@ class FolderPickerTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val device = UiDevice.getInstance(instrumentation)
-        compose.onNodeWithText("Library").performClick()
-        if (compose.onAllNodesWithText("Reset view").fetchSemanticsNodes().isNotEmpty()) {
-            compose.onNodeWithTag("library-list").performScrollToNode(hasText("Reset view"))
-            compose.onNodeWithText("Reset view").performClick()
-        }
+        compose.onNodeWithContentDescription("Library").performClick()
         // Real picker tests must also be repeatable after manual library checks on this device.
         val repository = (context.applicationContext as LocalicaApplication).library
         runBlocking { repository.snapshots.first().folders.forEach { repository.removeFolder(it.uri) } }
@@ -54,14 +50,13 @@ class FolderPickerTest {
         val tree = "content://io.github.anastaci1a.localica.test.documents/tree/root"
         await { context.contentResolver.persistedUriPermissions.any { it.uri.toString() == tree && it.isReadPermission } }
         device.pressBack() // close settings
-        compose.onNodeWithText("Library").performClick()
+        compose.onNodeWithContentDescription("Library").performClick()
+        compose.onNodeWithText("Songs").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Morning tone").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("library-list").performScrollToNode(hasText("2 songs · Test tones"))
-        compose.onNodeWithText("2 songs · Test tones").assertIsDisplayed()
-        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Quiet interval"))
+        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Quiet interval"))
         compose.onNodeWithText("Quiet interval").assertIsDisplayed()
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Morning tone"))
+        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Morning tone"))
         compose.onNodeWithText("Morning tone").assertIsDisplayed()
         val scan = runBlocking { TreeScanner(AndroidDocuments(context)).scan(tree) }
         assertEquals(2, scan.tracks.size)
