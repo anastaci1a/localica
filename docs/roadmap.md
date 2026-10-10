@@ -10,15 +10,11 @@ Shared browsing, scoped/global search, sorting overrides, contextual selection, 
 
 Recoverable individual/bulk tag and artwork editing, image selection, and zoomable artwork viewing shipped in v0.7.1. Local embedded/sidecar lyrics, configurable artwork gestures, synced following, tap-to-seek, and fading viewport edges shipped in v0.8.1. Unsupported write formats/providers remain read-only.
 
-## Next release: v0.9.0
-
-Build the lasting reference-based layout before liquid-glass rendering using all 19 supplied screenshots. Deliver continuous mini-player/player/Queue gestures, reusable rounded menus, tab swiping, persistent local search, configurable player actions, session-wide ordered selection, richer metadata, queue organization, and next-track preloading. The behavioral contract is in [Interface](interface.md).
-
-Verify migrations, tag recovery, audio boundaries, accessibility, small/landscape screens, and Android 8/16 before publishing an APK. Review this structural release before starting glass. Keep focused commits pushed and update real screenshots with finished layouts.
+Reference-based layouts, continuous player/Queue gestures, tab swiping, restored search/list history, configurable player actions, outlined session selection, cancelable multi-song drag stacks, richer metadata, independent queue browsing, and next-track preloading ship in v0.9.0. The behavioral contract is in [Interface](interface.md).
 
 ## Visual design system
 
-Apply the Apple Music-inspired liquid-glass presentation to the established layout and interactions after the functional foundation is proven. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
+Review the v0.9.0 layout and interactions on real devices, including drag haptics, before starting the glass layer. Apply the Apple Music-inspired liquid-glass presentation to the established layout and interactions after the functional foundation is proven. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
 
 ## Subsequent functionality
 
