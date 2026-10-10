@@ -88,7 +88,7 @@ fun LocalicaScreen(
         durationMs = currentTrack.durationMs, positionMs = 0) else playback
     val hasPlayer = currentTrack != null || playback.trackUri != null
     LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = inset + if (hasPlayer) 144.dp else 64.dp)
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
