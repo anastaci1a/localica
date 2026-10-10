@@ -34,7 +34,9 @@ Maintain this inventory as capabilities are added; these are target settings, no
 | Tap setting scope | App-wide default with optional overrides for song, album, artist, album artist, folder, playlist, and search lists. |
 | Queue retention | Unlimited; optional maximum with the cleanup dialog described above. |
 | Queue switching | Restore paused; make immediate resume and preservation of playback state selectable alternatives. |
-| Sort and filters | Persist per view; explicit reset to defaults. |
+| Sort and presentation | Defaults by list type with optional collection overrides; explicit reset/inherit. |
+| Navigation and player | Custom tabs, tab history, exit confirmation, automatic player expansion, and secondary metadata; defaults in [Interface](interface.md). |
+| Home | Configurable carousel sources, order, sorting, presentation, and preview counts. |
 | Playback | Shuffle and repeat controls arrive with queue playback; defaults off. |
 | Appearance | System/light/dark themes, reduced motion/transparency, and a legible solid-material fallback. |
 
@@ -50,6 +52,6 @@ Aim for write support across all playback formats. Editability depends on the ac
 
 ## Visual direction and later capabilities
 
-The current UI is disposable testing scaffolding. Spend only enough effort to expose and verify behavior; add a plain bottom-bar button for each new section, including queues. Build and verify functionality before the glass graphics work. Create reusable Compose components inside Localica, with glass-like materials concentrated on navigation and playback controls. Follow [Apple's material guidance](https://developer.apple.com/design/human-interface-guidelines/materials) on hierarchy and legibility. Extract a separate graphics package only when real reuse justifies it. Older devices retain a usable solid-material presentation.
+The next releases establish the lasting layout and interaction structure described in [Interface](interface.md). Polish that structure before applying glass graphics. Create reusable Compose components inside Localica, with glass-like materials concentrated on navigation and playback controls. Follow [Apple's material guidance](https://developer.apple.com/design/human-interface-guidelines/materials) on hierarchy and legibility. Extract a separate graphics package only when real reuse justifies it. Older devices retain a usable solid-material presentation.
 
 Gapless playback, sleep timers, lyrics, equalizers, bookmarks, favorites, widgets, Android Auto, and backup/export remain later candidates. They do not delay the [ordered roadmap](roadmap.md).
