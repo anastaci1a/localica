@@ -126,9 +126,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          curl --fail --location --retry 3 https://repo.maven.apache.org/maven2/net/jthink/jaudiotagger/3.0.1/jaudiotagger-3.0.1-sources.jar -o artifacts/jaudiotagger-3.0.1-sources.jar
+          echo 'd9c79a145944e6bc37579403843c9da84cd81459e42c9877351802ee284f5858  artifacts/jaudiotagger-3.0.1-sources.jar' | sha256sum --check
           mv artifacts/app-debug.apk "artifacts/localica-$GITHUB_REF_NAME-debug.apk"
           cd artifacts
           sha256sum "localica-$GITHUB_REF_NAME-debug.apk" > "localica-$GITHUB_REF_NAME-debug.apk.sha256"
-          gh release create "$GITHUB_REF_NAME" *.apk *.sha256 --verify-tag --prerelease \
+          gh release create "$GITHUB_REF_NAME" *.apk *.sha256 *.jar --verify-tag --prerelease \
             --title "localica $GITHUB_REF_NAME" \
             --notes-file "$GITHUB_WORKSPACE/.github/RELEASE_NOTES.md"
