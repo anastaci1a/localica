@@ -4,7 +4,7 @@ import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.SongListView
 import java.util.UUID
 
-data class QueueEntry(val id: String = UUID.randomUUID().toString(), val track: Track)
+data class QueueEntry(val id: String = UUID.randomUUID().toString(), val track: Track, val sourcePlaylistId: String? = null)
 data class ListeningQueue(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -28,7 +28,7 @@ data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val acti
     val active: ListeningQueue? get() = queues.firstOrNull { it.id == activeId }
     fun update(queue: ListeningQueue) = copy(queues = queues.map { if (it.id == queue.id) queue else it })
 }
-data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true, val sourceName: String = "All Songs")
+data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true, val sourceName: String = "All Songs", val playlistOrigins: List<String?> = emptyList())
 data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading: Boolean = true,
     val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0, val browsedId: String? = null)
 
@@ -37,17 +37,17 @@ object QueueEdits {
     fun create(tracks: List<Track>, selectedId: String, name: String): ListeningQueue {
         return create(tracks, tracks.indexOfFirst { it.id == selectedId }, name)
     }
-    fun create(tracks: List<Track>, index: Int, name: String): ListeningQueue {
+    fun create(tracks: List<Track>, index: Int, name: String, playlistOrigins: List<String?> = emptyList()): ListeningQueue {
         require(index in tracks.indices)
-        val entries = tracks.map { QueueEntry(track = it) }
+        val entries = tracks.mapIndexed { i, track -> QueueEntry(track = track, sourcePlaylistId = playlistOrigins.getOrNull(i)) }
         return ListeningQueue(name = name, entries = entries, currentEntryId = entries[index].id)
     }
     fun insert(queue: ListeningQueue, track: Track, action: SongTap): ListeningQueue {
         return insert(queue, listOf(track), action)
     }
-    fun insert(queue: ListeningQueue, tracks: List<Track>, action: SongTap): ListeningQueue {
+    fun insert(queue: ListeningQueue, tracks: List<Track>, action: SongTap, playlistOrigins: List<String?> = emptyList()): ListeningQueue {
         require(action != SongTap.NewQueue && tracks.isNotEmpty())
-        val added = tracks.map { QueueEntry(track = it) }
+        val added = tracks.mapIndexed { i, track -> QueueEntry(track = track, sourcePlaylistId = playlistOrigins.getOrNull(i)) }
         val current = queue.entries.indexOfFirst { it.id == queue.currentEntryId }
         val position = if (action == SongTap.Append) queue.entries.size else (current + 1).coerceAtLeast(0)
         val entries = queue.entries.toMutableList().apply { addAll(position, added) }

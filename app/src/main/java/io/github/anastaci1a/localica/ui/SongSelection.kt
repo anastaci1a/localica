@@ -40,7 +40,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
                 editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }
             }) { Text("Edit tags") }
             SongTap.entries.forEach { action -> TextButton(enabled = chosen.isNotEmpty() && queues != null, onClick = {
-                queues?.act(chosen.map { it.track }, action) { if (it) onSelection(emptySet()) }
+                queues?.act(chosen.map { it.track }, action, chosen.map { it.sourcePlaylistId }) { if (it) onSelection(emptySet()) }
             }) { Text(when (action) { SongTap.NewQueue -> "New queue"; SongTap.PlayNow -> "Play now"; SongTap.PlayNext -> "Play next"; SongTap.Append -> "Append" }) } }
             TextButton(enabled = chosen.isNotEmpty(), onClick = { adding = chosen.map { it.track } }) { Text("Add to playlist") }
             if (onRemove != null) TextButton(enabled = chosen.isNotEmpty(), onClick = {
