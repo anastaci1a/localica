@@ -9,3 +9,6 @@ include a generated solid teal 1800x1200 JPEG cover to verify bounded decoding.
 The Ogg and Opus variants intentionally have no cover to exercise the fallback.
 queue-tone.mp3 is an original 20-second quiet sine tone used to exercise live
 queue edits without the track ending during the assertions.
+
+The tone.lrc sidecar and lyrics.opus lyric metadata contain original synthetic
+lines for local lyric discovery, source selection, and timing tests.

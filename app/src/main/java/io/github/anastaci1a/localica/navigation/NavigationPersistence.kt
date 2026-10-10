@@ -11,13 +11,16 @@ class InterfacePreferences(context: Context) {
             ?.distinct()?.takeIf { it.isNotEmpty() } ?: InterfaceSettings().tabs
         return InterfaceSettings(tabs, preferences.getBoolean("history", true), preferences.getBoolean("confirm-exit", false),
             preferences.getBoolean("expand-on-play", true), preferences.getBoolean("album-artist", true),
-            preferences.getBoolean("reduced-motion", false))
+            preferences.getBoolean("reduced-motion", false),
+            ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-tap", null) } ?: ArtworkAction.Lyrics,
+            ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-hold", null) } ?: ArtworkAction.Menu)
     }
     fun write(value: InterfaceSettings) {
         require(value.tabs.isNotEmpty() && value.tabs.distinct() == value.tabs)
         preferences.edit().putString("tabs", value.tabs.joinToString(",") { it.name }).putBoolean("history", value.tabHistory)
             .putBoolean("confirm-exit", value.confirmExit).putBoolean("expand-on-play", value.expandOnPlay)
-            .putBoolean("album-artist", value.albumArtistFirst).putBoolean("reduced-motion", value.reducedMotion).apply()
+            .putBoolean("album-artist", value.albumArtistFirst).putBoolean("reduced-motion", value.reducedMotion)
+            .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()
     }
 }
 

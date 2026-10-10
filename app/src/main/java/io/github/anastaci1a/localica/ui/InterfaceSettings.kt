@@ -19,6 +19,8 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, onChange: (Inte
     BooleanPreference("Expand player when a song starts", value.expandOnPlay) { onChange(value.copy(expandOnPlay = it)) }
     BooleanPreference("Show album artist first", value.albumArtistFirst) { onChange(value.copy(albumArtistFirst = it)) }
     BooleanPreference("Reduce motion", value.reducedMotion) { onChange(value.copy(reducedMotion = it)) }
+    ArtworkActionPreference("Artwork tap", value.artworkTap) { onChange(value.copy(artworkTap = it)) }
+    ArtworkActionPreference("Artwork hold", value.artworkHold) { onChange(value.copy(artworkHold = it)) }
     Text("Main tabs", style = MaterialTheme.typography.titleMedium)
     value.tabs.forEachIndexed { index, tab ->
         Column {
@@ -46,6 +48,17 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, onChange: (Inte
         }
     }
     TextButton(onClick = { onChange(value.copy(tabs = InterfaceSettings().tabs)) }) { Text("Reset main tabs") }
+}
+
+@Composable
+internal fun ArtworkActionPreference(label: String, value: ArtworkAction, onChange: (ArtworkAction) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { open = true }) { Text("$label: ${value.label}") }
+        DropdownMenu(open, { open = false }) { ArtworkAction.entries.forEach { action ->
+            DropdownMenuItem(text = { Text(action.label) }, onClick = { onChange(action); open = false })
+        } }
+    }
 }
 
 @Composable

@@ -61,6 +61,12 @@ class FolderPickerTest {
         val scan = runBlocking { TreeScanner(AndroidDocuments(context)).scan(tree) }
         assertEquals(2, scan.tracks.size)
         assertEquals("nested/tone.m4a", scan.tracks.last().relativePath)
+        val indexed = runBlocking { repository.snapshots.first().tracks }
+        val lyrics = runBlocking { (context.applicationContext as LocalicaApplication).lyrics.load(indexed.first { it.fileName == "tone.mp3" }, 0) }
+        assertTrue(lyrics.toString(), lyrics.sources.first().sidecar)
+        assertTrue(lyrics.sources.first().document.synced)
+        val nestedLyrics = runBlocking { (context.applicationContext as LocalicaApplication).lyrics.load(indexed.first { it.fileName == "tone.m4a" }, 0) }
+        assertTrue(nestedLyrics.sources.none { it.sidecar })
         compose.onNodeWithText("Morning tone").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Pause").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(10000) { compose.onAllNodesWithText("Track finished").fetchSemanticsNodes().isNotEmpty() }
