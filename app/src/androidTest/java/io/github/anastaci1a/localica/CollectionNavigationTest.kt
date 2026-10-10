@@ -23,17 +23,17 @@ class CollectionNavigationTest {
         var saved: QueueSettings? = null
         compose.setContent {
             LocalicaTheme {
-                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, {}, {},
+                FolderSettings(LibraryUiState(loading = false), {}, {}, {},
                     playbackContent = { QueueSettingsControls(QueueSettings()) { saved = it } }, initialCategory = "Playback and queues")
             }
         }
         compose.onNodeWithText("Playback and queues").assertIsDisplayed()
-        compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
         compose.onNodeWithText("Maximum queues: unlimited").performScrollTo().performClick()
         compose.onNodeWithText("Maximum queues (blank = unlimited)").performTextInput("3")
         compose.onNodeWithText("Save queue limit").performClick()
         compose.runOnIdle { assertEquals(3, saved?.maximum) }
-        compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
     }
 
     @Test fun albumGroupsAndViewChoicesAreReachable() {

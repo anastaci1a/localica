@@ -5,15 +5,14 @@ import androidx.lifecycle.viewModelScope
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.playback.PlaybackConnection
+import io.github.anastaci1a.localica.scanner.ScanController
+import io.github.anastaci1a.localica.scanner.ScanState
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-enum class LibraryProblem { ScanFailed, LoadFailed, RemoveFailed }
+enum class LibraryProblem { ScanFailed, LoadFailed, RemoveFailed, AddFailed }
 data class LibraryUiState(
     val snapshot: LibrarySnapshot = LibrarySnapshot(),
     val loading: Boolean = true,
@@ -23,66 +22,53 @@ data class LibraryUiState(
     val problem: LibraryProblem? = null,
     val unavailableFolders: Set<String> = emptySet(),
     val scanningFolderUri: String? = null,
+    val scanStatus: ScanState = ScanState(),
+    val updatingFolders: Boolean = false,
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(
     private val repository: LibraryRepository,
     val playback: PlaybackConnection,
     val playlists: PlaylistController,
+    private val scanner: ScanController,
 ) : ViewModel() {
     private val mutableLibrary = MutableStateFlow(LibraryUiState())
     val library = mutableLibrary.asStateFlow()
     val playlist = playlists.state
-    private var scanJob: Job? = null
+    private var folderJob: Job? = null
 
     init {
         viewModelScope.launch {
             repository.snapshots.catch { mutableLibrary.update { it.copy(loading = false, problem = LibraryProblem.LoadFailed) } }
                 .collect { snapshot ->
-                    mutableLibrary.update { it.copy(snapshot = snapshot, loading = false) }
+                    mutableLibrary.update { it.copy(snapshot = snapshot, loading = false, metadataFailures = snapshot.metadataFailures.size) }
                     refreshAccess()
                 }
         }
-    }
-
-    fun scan(uri: String) {
-        if (scanJob?.isActive == true) return
-        scanJob = viewModelScope.launch {
-            mutableLibrary.update { it.copy(scanning = true, scanningFolderUri = uri, scannedCount = 0, problem = null, metadataFailures = 0) }
-            try {
-                val result = repository.scan(uri) { count -> mutableLibrary.update { it.copy(scannedCount = count) } }
-                ArtworkCache.invalidate()
-                mutableLibrary.update { it.copy(metadataFailures = result.metadataFailures) }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                mutableLibrary.update { it.copy(problem = LibraryProblem.ScanFailed) }
-            } finally {
-                mutableLibrary.update { it.copy(scanning = false, scanningFolderUri = null) }
-                refreshAccess()
+        viewModelScope.launch {
+            scanner.state.collect { scan ->
+                mutableLibrary.update { it.copy(scanning = scan.running, scannedCount = scan.count,
+                    scanningFolderUri = scan.folder, scanStatus = scan) }
+                if (!scan.running) refreshAccess()
             }
         }
     }
 
-    fun removeFolder(uri: String) {
-        if (scanJob?.isActive == true) return
-        scanJob = viewModelScope.launch {
-            mutableLibrary.update { it.copy(scanning = true, problem = null) }
-            try {
-                repository.removeFolder(uri)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                mutableLibrary.update { it.copy(problem = LibraryProblem.RemoveFailed) }
-            } finally {
-                mutableLibrary.update { it.copy(scanning = false) }
-                refreshAccess()
-            }
+    fun scan(uri: String) { scanner.start(listOf(uri)) }
+    fun scanAll() { scanner.start(library.value.snapshot.folders.map { it.uri }) }
+    fun cancelScan() { scanner.cancel() }
+    fun addFolder(uri: String) = changeFolder(LibraryProblem.AddFailed) { repository.addFolder(uri) }
+    fun removeFolder(uri: String) = changeFolder(LibraryProblem.RemoveFailed) { repository.removeFolder(uri) }
+    private fun changeFolder(failure: LibraryProblem, action: suspend () -> Unit) {
+        if (folderJob?.isActive == true || scanner.state.value.running) return
+        folderJob = viewModelScope.launch {
+            mutableLibrary.update { it.copy(updatingFolders = true, problem = null) }
+            try { action() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { mutableLibrary.update { it.copy(problem = failure) } }
+            finally { mutableLibrary.update { it.copy(updatingFolders = false) }; refreshAccess() }
         }
     }
-
-    fun cancelScan() { scanJob?.cancel() }
     fun play(track: Track) {
         val tracks = library.value.snapshot.tracks
         val index = tracks.indexOfFirst { it.id == track.id }

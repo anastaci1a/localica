@@ -154,57 +154,35 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
 }
 
 @Composable
-internal fun QueueSettingsControls(settings: QueueSettings, onChange: (QueueSettings) -> Unit) {
-    var tapOpen by remember { mutableStateOf(false) }
-    var switchOpen by remember { mutableStateOf(false) }
+internal fun QueueSettingsControls(settings: QueueSettings, section: String = "Playback and queues", onChange: (QueueSettings) -> Unit) {
     var limitOpen by remember { mutableStateOf(false) }
-    HorizontalDivider()
-    Text("Listening behavior", style = MaterialTheme.typography.titleMedium)
-    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        Text("Preload next track", Modifier.weight(1f))
-        Switch(settings.preloadNext, { onChange(settings.copy(preloadNext = it)) })
-    }
-    Box {
-        TextButton(onClick = { tapOpen = true }) { Text("Song tap: ${settings.songTap.label()}") }
-        DropdownMenu(expanded = tapOpen, onDismissRequest = { tapOpen = false }) {
-            SongTap.entries.forEach { action -> ActionMenuItem(action.label(),
-                onClick = { onChange(settings.copy(songTap = action)); tapOpen = false }) }
-        }
-    }
-    Box {
-        TextButton(onClick = { switchOpen = true }) { Text("Switch queue: ${settings.switching.label()}") }
-        DropdownMenu(expanded = switchOpen, onDismissRequest = { switchOpen = false }) {
-            QueueSwitch.entries.forEach { action -> ActionMenuItem(action.label(),
-                onClick = { onChange(settings.copy(switching = action)); switchOpen = false }) }
-        }
-    }
-    SongListView.entries.forEach { view ->
-        var open by remember { mutableStateOf(false) }
-        Box {
-            TextButton(onClick = { open = true }) { Text(view.label+": "+(settings.tapOverrides[view]?.label() ?: "Inherit app default")) }
-            DropdownMenu(open, { open = false }) {
-                ActionMenuItem("Inherit app default", onClick = {
-                    onChange(settings.copy(tapOverrides = settings.tapOverrides - view)); open = false
-                })
-                SongTap.entries.forEach { action -> ActionMenuItem(action.label(), onClick = {
-                    onChange(settings.copy(tapOverrides = settings.tapOverrides + (view to action))); open = false
-                }) }
+    if (section == "Song tap behavior") {
+        SettingsHeading("Default song action")
+        ChoicePreference("Song tap", settings.songTap, SongTap.entries, { it.label() }) { onChange(settings.copy(songTap = it)) }
+        SettingsHeading("List overrides")
+        SongListView.entries.forEach { view ->
+            ChoicePreference(view.label, settings.tapOverrides[view], listOf(null) + SongTap.entries,
+                { it?.label() ?: "Inherit app default" }) { action ->
+                onChange(settings.copy(tapOverrides = if (action == null) settings.tapOverrides - view else settings.tapOverrides + (view to action)))
             }
         }
+        TextButton(onClick = { onChange(settings.copy(tapOverrides = emptyMap())) }) { Text("Reset all tap overrides") }
+    } else {
+        SettingsHeading("Playback")
+        BooleanPreference("Preload next track", settings.preloadNext) { onChange(settings.copy(preloadNext = it)) }
+        SettingsHeading("Queues")
+        ChoicePreference("Switch queue", settings.switching, QueueSwitch.entries, { it.label() }) { onChange(settings.copy(switching = it)) }
+        SettingsLink("Maximum queues: " + (settings.maximum ?: "unlimited"), "A limit never deletes existing queues automatically.") { limitOpen = true }
     }
-    TextButton(onClick = { onChange(settings.copy(tapOverrides = emptyMap())) }) { Text("Reset all tap overrides") }
-    TextButton(onClick = { limitOpen = true }) { Text("Maximum queues: ${settings.maximum ?: "unlimited"}") }
-    Text("A limit never deletes existing queues automatically.", style = MaterialTheme.typography.bodySmall)
     if (limitOpen) {
         var limit by remember(settings.maximum) { mutableStateOf(settings.maximum?.toString().orEmpty()) }
         AlertDialog(onDismissRequest = { limitOpen = false }, title = { Text("Queue limit") }, text = {
             OutlinedTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
         }, confirmButton = { TextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0, onClick = {
             onChange(settings.copy(maximum = limit.toIntOrNull())); limitOpen = false
-        }) { Text("Save queue limit") } }, dismissButton = {
-            TextButton(onClick = { limitOpen = false }) { Text("Cancel") }
-        })
+        }) { Text("Save queue limit") } }, dismissButton = { TextButton(onClick = { limitOpen = false }) { Text("Cancel") } })
     }
 }
 internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"

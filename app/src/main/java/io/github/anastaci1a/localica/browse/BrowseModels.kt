@@ -7,9 +7,21 @@ import io.github.anastaci1a.localica.queue.ListeningQueue
 import java.util.Locale
 
 data class BrowserItem(val ref: MediaRef, val title: String, val subtitle: String?, val songs: List<SongRow>,
-    val row: SongRow? = null) {
+    val row: SongRow? = null, val groupHeading: String? = null) {
     val key: String get() = row?.id ?: "${ref.kind}:${ref.id}"
     val coverUris: List<String> = songs.sortedBy { it.track.id }.map { it.track.uri }.distinct()
+}
+
+internal fun BrowseResult.groupAlbumSongs(grouping: SongGrouping): BrowseResult {
+    if (grouping == SongGrouping.None) return this
+    fun label(item: BrowserItem): String = item.row?.track?.let { track -> when (grouping) {
+        SongGrouping.Artist -> track.artist
+        SongGrouping.AlbumArtist -> track.albumArtist ?: track.artist
+        SongGrouping.Composer -> track.composer
+        SongGrouping.None -> null
+    } }?.takeIf { it.isNotBlank() } ?: "Unknown ${grouping.label.lowercase(Locale.ROOT)}"
+    val grouped = items.groupBy(::label).toSortedMap(compareBy<String> { it.lowercase(Locale.ROOT) }.thenBy { it })
+    return copy(items = grouped.flatMap { (name, songs) -> songs.mapIndexed { index, item -> item.copy(groupHeading = name.takeIf { index == 0 }) } })
 }
 data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: SongListView = SongListView.Songs) {
     val rows: List<SongRow> get() = items.mapNotNull { it.row }
