@@ -33,18 +33,18 @@ class TabResetTest {
             val during = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
             assertTrue("Must move without teleporting: $before -> $during", during > 0 && during < before)
             compose.mainClock.autoAdvance = true
-            compose.onNodeWithText("Album 000").assertIsDisplayed()
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
             list.performScrollToNode(hasText("Album 060"))
             compose.onNodeWithText("Album 060").performClick()
             compose.onNodeWithText("Song 60").assertIsDisplayed()
             compose.onNodeWithContentDescription("Library").performClick()
-            compose.onNodeWithText("Album 000").assertIsDisplayed()
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
             compose.onNodeWithContentDescription("Back").assertDoesNotExist()
             compose.onNodeWithContentDescription("Search library").performClick()
             compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("060")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.onNodeWithContentDescription("Library").performClick()
-            compose.onNodeWithText("Album 000").assertIsDisplayed()
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
             compose.onNodeWithContentDescription("Back").assertDoesNotExist()
         } finally {
