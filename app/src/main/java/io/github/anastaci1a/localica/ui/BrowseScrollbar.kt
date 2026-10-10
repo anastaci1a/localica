@@ -30,11 +30,10 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
     LaunchedEffect(state) { for (index in requests) state.scrollToItem(index + 1) }
     var dragging by remember { mutableStateOf(false) }
     var target by remember { mutableIntStateOf(0) }
-    val visibleCount = state.layoutInfo.visibleItemsInfo.count { it.index > 0 }.coerceAtLeast(1)
     val lastStart = items.lastIndex
     val fraction = if (!state.canScrollForward) 1f else ((state.firstVisibleItemIndex - 1).coerceAtLeast(0).toFloat() / lastStart).coerceIn(0f, 1f)
     val density = LocalDensity.current
-    BoxWithConstraints(modifier.fillMaxHeight().width(104.dp).padding(top = 8.dp, bottom = 80.dp)) {
+    BoxWithConstraints(modifier.fillMaxHeight().width(76.dp).padding(top = 8.dp, bottom = 80.dp)) {
         val thumbHeight = 48.dp
         val travel = with(density) { (maxHeight - thumbHeight).toPx().coerceAtLeast(1f) }
         val halfThumb = with(density) { thumbHeight.toPx() / 2 }
@@ -45,7 +44,7 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
             target = (((y - halfThumb) / travel).coerceIn(0f, 1f) * lastStart).roundToInt()
             requests.trySend(target)
         }
-        Box(Modifier.align(Alignment.CenterEnd).width(48.dp).fillMaxHeight().testTag("browse-scrollbar")
+        Box(Modifier.align(Alignment.CenterEnd).width(20.dp).fillMaxHeight().testTag("browse-scrollbar")
             .semantics {
                 contentDescription = "Scroll list"
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
@@ -57,7 +56,7 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
                     change.consume(); seek(dragY + delta)
                 }
             }) {
-            Box(Modifier.align(Alignment.TopEnd).offset { IntOffset(-8.dp.roundToPx(), position.roundToInt()) }
+            Box(Modifier.align(Alignment.TopEnd).offset { IntOffset(-4.dp.roundToPx(), position.roundToInt()) }
                 .width(if (dragging) 6.dp else 4.dp).height(thumbHeight)
                 .background(if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)))
         }
