@@ -8,9 +8,10 @@ Use one `app` module and ordinary constructor injection. Extract modules only wh
 | `app/.../playlist/` | Durable manual playlists, bounded local imports, independent occurrence identities, and serialized edits. |
 | `app/.../scanner/` | Foreground scanning service, app-owned progress/cancellation, and scanner preferences. |
 | `app/.../queue/` | Persistent listening sessions, entry identity, serialized commands, and typed listening settings. |
+| `app/.../statistics/` | Service-player elapsed-listening accounting and durable local qualified plays, independently of library/queue deletion. |
 | `app/.../playback/` | Media3 service and controller; the service owns the player independently of screens. |
 | `app/.../navigation/` | Typed per-tab routes, saved-state codec, Back history, and interface preferences. |
-| `app/.../browse/` | Shared collection/search results and list-type presentation/sort preferences with collection overrides. |
+| `app/.../browse/` | Shared collection/search results, configurable Library filters/All collections, and list-type presentation/sort preferences with collection overrides. |
 | `app/.../home/` | Durable typed pins and their manual ordering. |
 | `app/.../editing/` | Checked-field tag patches, verified format writes, durable recovery, batch outcomes, and image selection. |
 | `app/.../lyrics/` | Local embedded/sidecar discovery, bounded lyric caching, LRC/SYLT parsing, source choice, and playback-position lookup. |
