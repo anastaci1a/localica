@@ -1,6 +1,12 @@
 <!-- Release: v0.5.0 -->
 
-Localica now has configurable navigation tabs and a mini-player that expands into the full player. Search, browsing history, and Back behavior keep your place as you move through your music.
+Development APK for Android 8 or newer. Signed with the project development key; uses a separate `.debug` application ID. Production distribution signing is not configured.
+
+## Changes
+
+- Configurable navigation tabs with dedicated search views
+- Expanding mini-player with swipe controls and a queue overlay
+- Restored browsing history and configurable Back behavior
 
 ## Resolved issues
 
