@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.anastaci1a.localica.library.AndroidLibraryQueryPreferences
 import io.github.anastaci1a.localica.playback.PlaybackConnection
 import io.github.anastaci1a.localica.ui.LibraryViewModel
 import io.github.anastaci1a.localica.ui.LocalicaScreen
@@ -26,7 +27,8 @@ class MainActivity : ComponentActivity() {
         model = ViewModelProvider(this, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                LibraryViewModel((application as LocalicaApplication).library, PlaybackConnection(applicationContext)) as T
+                LibraryViewModel((application as LocalicaApplication).library, PlaybackConnection(applicationContext),
+                    AndroidLibraryQueryPreferences(applicationContext)) as T
         })[LibraryViewModel::class.java]
         setContent {
             val library by model.library.collectAsStateWithLifecycle()
@@ -36,8 +38,9 @@ class MainActivity : ComponentActivity() {
             }
             LocalicaTheme {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,
-                    onChooseFolder = { picker.launch(library.snapshot.folder?.uri?.let(Uri::parse)) },
-                    onRescan = model::rescan, onCancelScan = model::cancelScan)
+                    onChooseFolder = { picker.launch(library.snapshot.folders.firstOrNull()?.uri?.let(Uri::parse)) },
+                    onRescan = model::scan, onCancelScan = model::cancelScan,
+                    onRemoveFolder = model::removeFolder, onQuery = model::setQuery)
             }
         }
     }

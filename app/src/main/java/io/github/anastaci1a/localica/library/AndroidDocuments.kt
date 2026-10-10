@@ -37,7 +37,8 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
                     val name = it.getString(1) ?: "Untitled"
                     val mime = it.getString(2).orEmpty()
                     add(ScanDocument(id, DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(), name,
-                        mime, mime == DocumentsContract.Document.MIME_TYPE_DIR))
+                        mime, mime == DocumentsContract.Document.MIME_TYPE_DIR,
+                        DocumentsContract.buildDocumentUri(requireNotNull(tree.authority), id).toString()))
                 }
             }
         }
@@ -51,6 +52,11 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
                 title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
                 artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
                 album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM),
+                albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
+                trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER).tagNumber(),
+                discNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER).tagNumber(),
+                year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR).tagNumber(),
+                genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE),
                 durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull(),
             )
         } finally {
@@ -83,3 +89,5 @@ class PersistedFolderPermissions(private val resolver: ContentResolver) : Folder
         }
     }
 }
+
+private fun String?.tagNumber(): Int? = this?.substringBefore('/')?.trim()?.toIntOrNull()?.takeIf { it > 0 }

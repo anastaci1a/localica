@@ -11,6 +11,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.LibraryQuery
 import io.github.anastaci1a.localica.playback.PlaybackState
 
 @Composable
@@ -21,8 +22,10 @@ fun LocalicaScreen(
     onToggle: () -> Unit,
     onSeek: (Long) -> Unit,
     onChooseFolder: () -> Unit,
-    onRescan: () -> Unit,
+    onRescan: (String) -> Unit,
     onCancelScan: () -> Unit,
+    onRemoveFolder: (String) -> Unit = {},
+    onQuery: (LibraryQuery) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -47,21 +50,22 @@ fun LocalicaScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (tab == 0) PlayerScreen(playback, onToggle, onSeek, onOpenLibrary = { tab = 1 })
-            else LibraryScreen(library, playback.trackUri, enabled = playback.connected && !library.scanning,
-                onTrack = { onPlay(it); tab = 0 }, onSettings = { settingsOpen = true })
+            else LibraryScreen(library, playback.trackId, enabled = playback.connected,
+                onTrack = { onPlay(it); tab = 0 }, onSettings = { settingsOpen = true }, onQuery = onQuery)
         }
     }
-    if (settingsOpen) FolderSettings(library, playback.connected,
-        onDismiss = { settingsOpen = false }, onChooseFolder, onRescan, onCancelScan)
+    if (settingsOpen) FolderSettings(library,
+        onDismiss = { settingsOpen = false }, onChooseFolder, onRescan, onCancelScan, onRemoveFolder)
 }
 
 @Composable
 internal fun LibraryNotice(state: LibraryUiState) {
     val message = when (state.problem) {
-        LibraryProblem.AccessLost -> R.string.access_lost
+        LibraryProblem.RemoveFailed -> R.string.remove_failed
         LibraryProblem.ScanFailed -> R.string.scan_failed
         LibraryProblem.LoadFailed -> R.string.load_failed
-        null -> if (state.metadataFailures > 0) R.string.metadata_missing else null
+        null -> if (state.unavailableFolders.isNotEmpty()) R.string.access_lost
+            else if (state.metadataFailures > 0) R.string.metadata_missing else null
     }
     message?.let {
         Text(stringResource(it), color = if (state.problem != null) MaterialTheme.colorScheme.error

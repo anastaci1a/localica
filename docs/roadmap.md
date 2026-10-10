@@ -2,13 +2,9 @@
 
 ## Released baseline
 
-v0.1.3 provides a persistent single-folder library, single-track playback, background/system controls, and a verified development APK release workflow. Android 8 and 16 are covered by device checks. Production distribution signing remains a separate decision.
+The library foundation supports multiple folders, overlap deduplication, retained search/filter/sort choices, and richer organization metadata, with an in-place migration from v0.1.3. Playback remains single-track with background/system controls. The development APK workflow covers Android 8 and 16; production distribution signing remains a separate decision.
 
-## Next: durable library and queries
-
-Support multiple selected roots without losing the existing library during migration. Preserve other roots and the last successful scan when a root fails or loses access. Add album artist, disc/track, and other organization metadata, stable track references, and shared search/filter/sort queries. Deliver simple folder management and query controls so the foundation is usable and testable before broader visual work.
-
-## Persistent multiple queues
+## Next: persistent multiple queues
 
 Make this the first major listening improvement after the library foundation. The playback service owns durable queue state and Media3 playback. Ship a basic queue screen and selector, saved positions, editing, and the configurable song-tap and retention behavior defined in [Product](product.md). Verify process recreation and interactions with scanning and unavailable files.
 
