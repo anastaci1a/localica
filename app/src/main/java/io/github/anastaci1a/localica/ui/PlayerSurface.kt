@@ -25,7 +25,8 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expanded: Boolean, onExpanded: (Boolean) -> Unit,
     settings: InterfaceSettings, progress: Animatable<Float, *>, onToggle: () -> Unit, onSeek: (Long) -> Unit,
-    onPrevious: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit, onLibrary: () -> Unit) {
+    onPrevious: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit, onLibrary: () -> Unit,
+    onEditTags: (() -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -74,9 +75,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 ActionIcon(R.drawable.ic_down, "Collapse player") { onExpanded(false) }
                 Text("Now playing", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
+                if (onEditTags != null) TextButton(onClick = onEditTags) { Text("Edit tags") }
             }
             Box(Modifier.weight(1f).then(drag)) {
-                PlayerScreen(state, onToggle, onSeek, onLibrary, onPrevious, onNext, settings.albumArtistFirst)
+                PlayerScreen(state, onToggle, onSeek, onLibrary, onPrevious, onNext, settings.albumArtistFirst, onEditTags)
             }
             Surface(Modifier.padding(8.dp).fillMaxWidth().height(64.dp), shape = RoundedCornerShape(16.dp), tonalElevation = 3.dp) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {

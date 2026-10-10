@@ -10,6 +10,7 @@ media3 = "1.9.3"
 coroutines = "1.10.2"
 
 [libraries]
+jaudiotagger = { module = "net.jthink:jaudiotagger", version = "3.0.1" }
 androidx-core = { module = "androidx.core:core-ktx", version = "1.16.0" }
 androidx-activity = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 androidx-lifecycle-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }

@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
                 uri?.let { model.scan(it.toString()) }
             }
             LocalicaTheme {
+                io.github.anastaci1a.localica.ui.TagEditorHost((application as LocalicaApplication).tagEditing) {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,
                     onChooseFolder = { picker.launch(library.snapshot.folders.firstOrNull()?.uri?.let(Uri::parse)) },
                     onRescan = model::scan, onCancelScan = model::cancelScan,
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
                     queues = queues, queueController = model.playback.queues,
                     onPrevious = model.playback::previous, onNext = model.playback::next,
                     playlist = playlist, playlistController = model.playlists)
+                }
             }
         }
     }

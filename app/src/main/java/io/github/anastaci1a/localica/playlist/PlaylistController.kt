@@ -50,6 +50,11 @@ class PlaylistController(private val dao: PlaylistDao,
     fun removeEntries(id: String, entries: Set<String>, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.remove(it, entries) }
     fun move(id: String, entry: String, offset: Int, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.move(it, entry, offset) }
     fun delete(id: String, complete: (Boolean) -> Unit = {}) { submit(complete) { playlists -> playlists.filterNot { it.id == id } } }
+    fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = submit(complete) { playlists ->
+        playlists.map { list -> list.copy(entries = list.entries.map { entry ->
+            if (entry.track.id == track.id) entry.copy(track = track) else entry
+        }) }
+    }
     private fun edit(id: String, complete: (Boolean) -> Unit, change: (ManualPlaylist) -> ManualPlaylist) {
         submit(complete) { playlists ->
             check(playlists.any { it.id == id })

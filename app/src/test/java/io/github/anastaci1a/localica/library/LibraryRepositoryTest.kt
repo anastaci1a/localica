@@ -76,6 +76,7 @@ class LibraryRepositoryTest {
 }
 
 private class MemoryStore(initial: LibrarySnapshot) : LibraryStore {
+    override suspend fun updateMetadata(track: Track) { snapshots.value = snapshots.value.copy(tracks = snapshots.value.tracks.map { if (it.id == track.id) track else it }) }
     override val snapshots = MutableStateFlow(initial)
     var failWrites = false
     override suspend fun current() = snapshots.value

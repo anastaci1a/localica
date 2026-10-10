@@ -49,6 +49,7 @@ interface DocumentSource {
     fun root(treeUri: String): ScanDocument
     fun children(treeUri: String, documentId: String): List<ScanDocument>
     suspend fun metadata(uri: String): AudioMetadata
+    suspend fun metadata(uri: String, fileName: String): AudioMetadata = metadata(uri)
 }
 
 data class ScanResult(val folder: FolderSelection, val tracks: List<Track>, val metadataFailures: Int)

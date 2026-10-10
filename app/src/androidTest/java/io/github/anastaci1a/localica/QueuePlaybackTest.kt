@@ -57,6 +57,16 @@ class QueuePlaybackTest {
                 // Controller estimates can be corrected by a few milliseconds when the service publishes its timeline.
                 assertTrue("Position before move: $beforeMove; after: ${playback.state.value.positionMs}",
                     playback.state.value.positionMs >= beforeMove - 50)
+                val editPosition = playback.state.value.positionMs
+                val editToken = java.util.concurrent.atomic.AtomicReference<QueueController.EditPlayback?>()
+                queues.beginFileEdit("Second") { editToken.set(it) }
+                await { editToken.get() != null && !playback.state.value.isPlaying }
+                val refreshed = java.util.concurrent.atomic.AtomicBoolean(false)
+                queues.refreshTrack(tracks[1].copy(title = "Updated title")) { refreshed.set(it) }
+                await { refreshed.get() && playback.state.value.title == "Updated title" }
+                queues.endFileEdit(editToken.get()) {}
+                await { playback.state.value.isPlaying && playback.state.value.positionMs >= editPosition - 100 }
+                assertEquals(firstQueue.currentEntryId, queues.state.value.library.active!!.currentEntryId)
                 queues.settings(QueueSettings(maximum = 2))
                 playback.play(tracks[0])
                 await { queues.state.value.pending != null }

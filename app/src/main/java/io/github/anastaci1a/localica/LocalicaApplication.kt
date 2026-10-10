@@ -12,6 +12,7 @@ import io.github.anastaci1a.localica.library.RoomLibraryStore
 import io.github.anastaci1a.localica.library.TreeScanner
 
 class LocalicaApplication : Application() {
+    val tagEditing by lazy { io.github.anastaci1a.localica.editing.TagEditingController(this, library, queues, playlists) }
     val playlists by lazy {
         PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").build().playlists())
     }

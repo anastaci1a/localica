@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -21,12 +22,23 @@ import java.util.Locale
 
 @Composable
 fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> Unit, onOpenLibrary: () -> Unit,
-                 onPrevious: () -> Unit = {}, onNext: () -> Unit = {}, albumArtistFirst: Boolean = true) {
+                 onPrevious: () -> Unit = {}, onNext: () -> Unit = {}, albumArtistFirst: Boolean = true,
+                 onEditTags: (() -> Unit)? = null) {
+    var viewing by remember { mutableStateOf(false) }
+    var artworkMenu by remember { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val artworkSize = (maxHeight * 0.3f).coerceIn(80.dp, 240.dp)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        AlbumArtwork(state.trackUri, Modifier.size(artworkSize))
+        Box {
+            AlbumArtwork(state.trackUri, Modifier.size(artworkSize).combinedClickable(enabled = state.trackUri != null,
+                onClickLabel = "View artwork", onClick = { viewing = true },
+                onLongClickLabel = "Artwork actions", onLongClick = { artworkMenu = true }))
+            DropdownMenu(artworkMenu, { artworkMenu = false }) {
+                DropdownMenuItem(text = { Text("View artwork") }, onClick = { artworkMenu = false; viewing = true })
+                if (onEditTags != null) DropdownMenuItem(text = { Text("Change artwork") }, onClick = { artworkMenu = false; onEditTags() })
+            }
+        }
         Spacer(Modifier.height(12.dp))
         Text(state.title.ifEmpty { stringResource(R.string.nothing_playing) }, style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
@@ -87,6 +99,7 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
         }
     }
     }
+    if (viewing && state.trackUri != null) ArtworkViewer(state.trackUri) { viewing = false }
 }
 
 internal fun formatTime(milliseconds: Long?): String {
