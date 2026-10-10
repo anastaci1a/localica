@@ -42,6 +42,8 @@ class InterfaceNavigationTest {
         back() // dismiss keyboard before opening player
         compose.onNodeWithTag("player-surface").performTouchInput { swipeUp() }
         compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Previous").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Next").assertIsDisplayed()
         compose.onNodeWithContentDescription("Open queue").performClick()
         compose.onNodeWithText("Rename").assertIsDisplayed()
         back()

@@ -22,16 +22,13 @@ import java.util.Locale
 @Composable
 fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> Unit, onOpenLibrary: () -> Unit,
                  onPrevious: () -> Unit = {}, onNext: () -> Unit = {}, albumArtistFirst: Boolean = true) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 24.dp),
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val artworkSize = (maxHeight * 0.3f).coerceIn(80.dp, 240.dp)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(36.dp))
-        AlbumArtwork(state.trackUri)
-        Spacer(Modifier.height(32.dp))
-        Text(stringResource(R.string.now_playing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        AlbumArtwork(state.trackUri, Modifier.size(artworkSize))
         Spacer(Modifier.height(12.dp))
-        Text(state.title.ifEmpty { stringResource(R.string.nothing_playing) }, style = MaterialTheme.typography.headlineMedium,
+        Text(state.title.ifEmpty { stringResource(R.string.nothing_playing) }, style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         if (state.trackUri == null) {
@@ -45,12 +42,7 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             state.album?.let { Text(it, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center) }
-            if (state.fileName.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                Text(state.fileName, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(8.dp))
             var draggedPosition by remember(state.trackUri) { mutableStateOf<Float?>(null) }
             val duration = (state.durationMs ?: 0).coerceAtLeast(1).toFloat()
             val seekLabel = stringResource(R.string.seek)
@@ -63,18 +55,18 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
                 Text(formatTime(draggedPosition?.toLong() ?: state.positionMs), style = MaterialTheme.typography.labelMedium)
                 Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelMedium)
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(8.dp))
             val pause = state.isPlaying || state.isBuffering
             Row(verticalAlignment = Alignment.CenterVertically) {
             ActionIcon(R.drawable.ic_previous, "Previous", state.connected, onPrevious)
-            FilledIconButton(onClick = onToggle, enabled = state.connected, modifier = Modifier.size(72.dp)) {
+            FilledIconButton(onClick = onToggle, enabled = state.connected, modifier = Modifier.size(64.dp)) {
                 Icon(painterResource(if (pause) R.drawable.ic_pause else R.drawable.ic_play),
                     stringResource(if (pause) R.string.pause else if (state.ended) R.string.replay else R.string.play),
                     Modifier.size(36.dp))
             }
             ActionIcon(R.drawable.ic_next, "Next", state.connected, onNext)
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             if (state.isBuffering) Text(stringResource(R.string.loading_audio), style = MaterialTheme.typography.bodySmall)
             if (state.ended) Text(stringResource(R.string.track_finished), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -93,6 +85,7 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
             Spacer(Modifier.height(16.dp))
             Text(stringResource(R.string.connecting), style = MaterialTheme.typography.bodySmall)
         }
+    }
     }
 }
 
