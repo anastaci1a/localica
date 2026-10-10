@@ -19,7 +19,8 @@ enum class QueueRepeat { Off, All, One }
 enum class SongTap { NewQueue, PlayNow, PlayNext, Append }
 enum class QueueSwitch { Paused, Resume, KeepPlaybackState }
 data class QueueSettings(val songTap: SongTap = SongTap.NewQueue, val switching: QueueSwitch = QueueSwitch.Paused,
-    val maximum: Int? = null, val tapOverrides: Map<SongListView, SongTap> = emptyMap()) {
+    val maximum: Int? = null, val tapOverrides: Map<SongListView, SongTap> = emptyMap(),
+    val preloadNext: Boolean = true) {
     fun tapFor(view: SongListView) = tapOverrides[view] ?: songTap
 }
 data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val activeId: String? = null) {

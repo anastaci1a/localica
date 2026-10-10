@@ -63,10 +63,23 @@ class QueuePlaybackTest {
                 await { editToken.get() != null && !playback.state.value.isPlaying }
                 val refreshed = java.util.concurrent.atomic.AtomicBoolean(false)
                 queues.refreshTrack(tracks[1].copy(title = "Updated title")) { refreshed.set(it) }
-                await { refreshed.get() && playback.state.value.title == "Updated title" }
+                await { refreshed.get() }
                 queues.endFileEdit(editToken.get()) {}
                 await { playback.state.value.isPlaying && playback.state.value.positionMs >= editPosition - 100 }
                 assertEquals(firstQueue.currentEntryId, queues.state.value.library.active!!.currentEntryId)
+                assertEquals("Updated title", playback.state.value.title)
+                // Upcoming sources must be released too, without losing the current occurrence/cursor.
+                val beforeUpcomingEdit = playback.state.value.positionMs
+                editToken.set(null)
+                queues.beginFileEdit("Third") { editToken.set(it) }
+                await { editToken.get() != null && !playback.state.value.isPlaying }
+                assertEquals(firstQueue.currentEntryId, editToken.get()!!.entryId)
+                queues.endFileEdit(editToken.get()) {}
+                await { playback.state.value.isPlaying && playback.state.value.positionMs >= beforeUpcomingEdit - 100 }
+                assertEquals("Second", playback.state.value.trackId)
+                queues.settings(queues.state.value.settings.copy(preloadNext = false))
+                await { !queues.state.value.settings.preloadNext }
+                assertFalse(QueuePreferences(context).read().preloadNext)
                 queues.settings(QueueSettings(maximum = 2))
                 playback.play(tracks[0])
                 await { queues.state.value.pending != null }
