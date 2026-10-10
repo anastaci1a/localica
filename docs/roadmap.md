@@ -8,17 +8,13 @@ Configurable Home/Library navigation, saved per-tab routes and Back history, an 
 
 Shared browsing, scoped/global search, sorting overrides, contextual selection, cached artwork, and basic manually ordered pins shipped in v0.6.0.
 
-## Remaining release checkpoints
+## Release checkpoint
 
-Complete and verify v0.7.0 and v0.8.0, then stop for review before starting liquid-glass implementation. Together with the delivered v0.6.0, these are the three authorized release checkpoints.
+Tag and artwork editing are implemented for v0.7.1, including verified writes, recovery, bulk changes, image selection, and a zoomable artwork viewer. v0.7.0 remains an unpublished tag after Android 16 automation failures; v0.7.1 includes the corrected folder-picker selection test.
 
-### v0.7.0: safe tag and artwork editing
+Local embedded/sidecar lyrics and configurable artwork gestures are implemented for v0.8.0. The player includes selectable sources, synced following, tap-to-seek, fading viewport edges, and reduced-motion behavior.
 
-Deliver individual and bulk editing of the fields and embedded artwork listed in [Product](product.md#tag-editing). Include image selection from files/gallery, a quick recent-image chooser, and an artwork viewer with zoom. Validate writes and recovery for supported formats and provider capabilities; keep unsupported combinations read-only. Changes must flow back into grouping, searching, queues, and playlists without destroying their identities. Tag and artwork editing take priority over Home customization and statistics.
-
-### v0.8.0: lyrics and player interactions
-
-Deliver local synced/unsynced lyrics, embedded and matching `.lrc` sources, configurable artwork tap/hold actions, and the integrated fading lyrics panel specified in [Interface](interface.md#artwork-and-lyrics). Verify the shared screen structure, Back behavior, accessibility, and material boundaries across browsing, editing, image selection/viewing, and playback so liquid-glass work can begin from usable layouts.
+Finish release verification for v0.7.1 and v0.8.0, then stop for review before liquid-glass implementation. Together with v0.6.0, these are the three authorized released checkpoints.
 
 ## Visual design system
 
