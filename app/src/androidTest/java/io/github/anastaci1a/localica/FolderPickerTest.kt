@@ -13,6 +13,7 @@ import androidx.test.uiautomator.Until
 import io.github.anastaci1a.localica.library.AndroidDocuments
 import io.github.anastaci1a.localica.library.TreeScanner
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -28,6 +29,14 @@ class FolderPickerTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val device = UiDevice.getInstance(instrumentation)
+        compose.onNodeWithText("Library").performClick()
+        if (compose.onAllNodesWithText("Reset view").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithTag("library-list").performScrollToNode(hasText("Reset view"))
+            compose.onNodeWithText("Reset view").performClick()
+        }
+        // Real picker tests must also be repeatable after manual library checks on this device.
+        val repository = (context.applicationContext as LocalicaApplication).library
+        runBlocking { repository.snapshots.first().folders.forEach { repository.removeFolder(it.uri) } }
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.waitUntil(10000) {
             compose.onAllNodes(hasText("Choose folder") or hasText("Add folder"))
@@ -60,7 +69,8 @@ class FolderPickerTest {
         compose.onNodeWithText("Morning tone").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Pause").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(10000) { compose.onAllNodesWithText("Track finished").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Morning tone").assertIsDisplayed()
+        // The library tap captures the displayed list, then automatically advances to its second song.
+        compose.onNodeWithText("Quiet interval").assertIsDisplayed()
     }
 }
 

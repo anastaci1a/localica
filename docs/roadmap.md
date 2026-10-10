@@ -2,13 +2,9 @@
 
 ## Released baseline
 
-The library foundation supports multiple folders, overlap deduplication, retained search/filter/sort choices, and richer organization metadata, with an in-place migration from v0.1.3. Playback remains single-track with background/system controls. The development APK workflow covers Android 8 and 16; production distribution signing remains a separate decision.
+The library foundation supports multiple folders, overlap deduplication, retained search/filter/sort choices, and richer organization metadata, with an in-place migration from v0.1.3. Persistent multiple queues now include saved positions, editing, configurable song-tap and switching behavior, and optional confirmed retention limits. Embedded artwork and comment reading extend the metadata foundation. The development APK workflow covers Android 8 and 16; production distribution signing remains a separate decision.
 
-## Next: persistent multiple queues
-
-Make this the first major listening improvement after the library foundation. The playback service owns durable queue state and Media3 playback. Ship a basic queue screen and selector, saved positions, editing, and the configurable song-tap and retention behavior defined in [Product](product.md). Verify process recreation and interactions with scanning and unavailable files.
-
-## Library views and manual playlists
+## Next: library views and manual playlists
 
 Build album, artist, album artist, folder, and playlist navigation on the shared queries. Add manual playlist management and consistent multi-selection/context actions. All lists use the same queue policies and preserve their sort/filter preferences.
 

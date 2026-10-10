@@ -14,7 +14,7 @@ import io.github.anastaci1a.localica.library.FolderSelection
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder: () -> Unit,
-                   onRescan: (String) -> Unit, onCancel: () -> Unit, onRemove: (String) -> Unit) {
+                   onRescan: (String) -> Unit, onCancel: () -> Unit, onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {}) {
     var removing by remember { mutableStateOf<FolderSelection?>(null) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
@@ -48,6 +48,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     Text(stringResource(if (state.snapshot.folders.isEmpty()) R.string.choose_folder else R.string.add_folder))
                 }
             }
+            extraContent()
         }
     }
     removing?.let { folder ->

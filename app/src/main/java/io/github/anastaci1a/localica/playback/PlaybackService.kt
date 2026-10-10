@@ -9,6 +9,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import io.github.anastaci1a.localica.MainActivity
+import io.github.anastaci1a.localica.LocalicaApplication
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackService : MediaSessionService() {
@@ -29,6 +30,7 @@ class PlaybackService : MediaSessionService() {
                 }
             })
         }
+        (application as LocalicaApplication).queues.attach(player)
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         session = MediaSession.Builder(this, player)
@@ -45,7 +47,7 @@ class PlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onDestroy() {
-        session?.run { player.release(); release() }
+        session?.run { (application as LocalicaApplication).queues.detach(player); player.release(); release() }
         session = null
         super.onDestroy()
     }

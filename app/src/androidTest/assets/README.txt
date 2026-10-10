@@ -7,3 +7,5 @@ The tagged.* fixtures are synthetic tone.wav copies with test metadata for title
 album, artist, album artist, date, disc, track, and comment. tagged.mp3/m4a/flac
 include a generated solid teal 1800x1200 JPEG cover to verify bounded decoding.
 The Ogg and Opus variants intentionally have no cover to exercise the fallback.
+queue-tone.mp3 is an original 20-second quiet sine tone used to exercise live
+queue edits without the track ending during the assertions.

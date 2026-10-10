@@ -81,13 +81,10 @@ class LibraryViewModel(
 
     fun removeFolder(uri: String) {
         if (scanJob?.isActive == true) return
-        val currentUri = playback.state.value.trackUri
-        val currentLocations = library.value.snapshot.tracks.flatMap { it.locations }.filter { it.uri == currentUri }
         scanJob = viewModelScope.launch {
             mutableLibrary.update { it.copy(scanning = true, problem = null) }
             try {
                 repository.removeFolder(uri)
-                if (currentLocations.isNotEmpty() && currentLocations.all { it.folderUri == uri }) playback.clear()
                 if (queries.value.folderUri == uri) setQuery(queries.value.copy(folderUri = null))
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -101,7 +98,10 @@ class LibraryViewModel(
     }
 
     fun cancelScan() { scanJob?.cancel() }
-    fun play(track: Track) { playback.play(repository.playableTrack(track)) }
+    fun play(track: Track) {
+        val visible = library.value.visibleTracks
+        if (visible.any { it.id == track.id }) playback.playFromList(visible, track.id)
+    }
     fun refreshAccess() {
         val missing = library.value.snapshot.folders.filterNot(repository::hasAccess).map { it.uri }.toSet()
         mutableLibrary.update { it.copy(unavailableFolders = missing) }
