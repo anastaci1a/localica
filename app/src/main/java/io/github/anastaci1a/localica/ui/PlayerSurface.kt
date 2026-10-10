@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -78,7 +79,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 ActionIcon(R.drawable.ic_lyrics, if (lyricsOpen) "Hide lyrics" else "Show lyrics") { onLyrics(!lyricsOpen) }
                 if (onEditTags != null) TextButton(onClick = onEditTags) { Text("Edit tags") }
             }
-            Box(Modifier.weight(1f).then(if (lyricsOpen) Modifier else drag)) {
+            Box(Modifier.weight(1f).clipToBounds().then(if (lyricsOpen) Modifier else drag)) {
                 PlayerScreen(state, onToggle, onSeek, onLibrary, onPrevious, onNext, settings.albumArtistFirst, onEditTags,
                     settings, lyricsOpen, onLyrics, track, onSettings)
             }
