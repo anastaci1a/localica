@@ -12,3 +12,13 @@ queue edits without the track ending during the assertions.
 
 The tone.lrc sidecar and lyrics.opus lyric metadata contain original synthetic
 lines for local lyric discovery, source selection, and timing tests.
+
+boundary.flac/mp3/m4a encode an original one-second mono 44.1 kHz 16-bit
+sawtooth: sample[i] = ((i % 441) - 220) * 80. Generated using FFmpeg 7.0.2
+from a PCM WAV with default format encoders. Repeating it tests exact lossless
+samples and encoded delay/padding at natural queue boundaries.
+The boundary.m4a sample table declares its complete final 1,024-sample AAC frame
+and uses the one-second edit list to trim padding. boundary-edit-list.m4a retains
+FFmpeg's original shortened final sample (68 samples), reproducing issue #28:
+Media3 currently leaves 956 padding samples at each such track boundary.
+A PCM tail in the boundary test forces the last encoded transition to be checked.

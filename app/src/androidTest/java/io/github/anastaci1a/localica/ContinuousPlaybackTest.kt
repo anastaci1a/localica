@@ -37,6 +37,35 @@ class ContinuousPlaybackTest {
                     .putShort(2).putShort(16).put("data".toByteArray()).putInt(pcm.size * 2)
                 pcm.forEach(data::putShort); file.writeBytes(data.array())
             } }
+        val expected = ByteBuffer.allocate(samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+        samples.forEach(expected::putShort)
+        play(files) { assertArrayEquals("Decoded audio must retain every sample across the split", expected.array(), it) }
+    }
+    @Test fun encodedTracksRespectGaplessTrimmingAtTheBoundary() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        for (extension in listOf("flac", "mp3", "m4a")) {
+            val file = File(instrumentation.targetContext.cacheDir, "boundary." + extension)
+            instrumentation.context.assets.open(file.name).use { input -> file.outputStream().use(input::copyTo) }
+            // A PCM tail makes both encoded end boundaries observable, without a final encoder pad.
+            val tail = File(instrumentation.targetContext.cacheDir, "boundary-tail.wav")
+            val pcm = ByteBuffer.allocate(44 + 44100 * 2).order(ByteOrder.LITTLE_ENDIAN)
+            pcm.put("RIFF".toByteArray()).putInt(36 + 44100 * 2).put("WAVEfmt ".toByteArray())
+                .putInt(16).putShort(1).putShort(1).putInt(44100).putInt(88200).putShort(2).putShort(16)
+                .put("data".toByteArray()).putInt(88200)
+            repeat(44100) { pcm.putShort(((it % 441 - 220) * 80).toShort()) }; tail.writeBytes(pcm.array())
+            play(listOf(file, file, tail)) { decoded ->
+                assertEquals(extension + " must trim encoder delay/padding", 44100 * 3 * 2, decoded.size)
+                if (extension == "flac") {
+                    val expected = ByteBuffer.allocate(44100 * 3 * 2).order(ByteOrder.LITTLE_ENDIAN)
+                    repeat(44100 * 3) { expected.putShort(((it % 441 - 220) * 80).toShort()) }
+                    assertArrayEquals(expected.array(), decoded)
+                }
+            }
+        }
+    }
+    private fun play(files: List<File>, check: (ByteArray) -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
         val captured = ByteArrayOutputStream()
         val ended = AtomicBoolean(false)
         val rebuffered = AtomicBoolean(false)
@@ -75,11 +104,8 @@ class ContinuousPlaybackTest {
         try {
             await { ended.get() }
             assertFalse("Natural transition rebuffered", rebuffered.get())
-            assertEquals(1, transitions)
-            val expected = ByteBuffer.allocate(samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
-            samples.forEach(expected::putShort)
-            assertArrayEquals("Decoded audio must retain every sample across the split", expected.array(),
-                synchronized(captured) { captured.toByteArray() })
+            assertEquals(files.size - 1, transitions)
+            check(synchronized(captured) { captured.toByteArray() })
         } finally {
             instrumentation.runOnMainSync { player.release() }
             files.forEach(File::delete)
