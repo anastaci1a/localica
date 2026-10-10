@@ -28,9 +28,27 @@ class NavigationTest {
                 }
             }
         }
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Open settings"))
+        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Open settings"))
         compose.onNodeWithText("Open settings").assertIsDisplayed().performClick()
         compose.runOnIdle { assertTrue(opened) }
+    }
+
+    @Test fun folderRemovalRequiresConfirmationAndDoesNotRemoveFiles() {
+        var removed: String? = null
+        compose.setContent {
+            LocalicaTheme {
+                FolderSettings(LibraryUiState(snapshot = LibrarySnapshot(listOf(FolderSelection("tree", "Music"))), loading = false),
+                    onDismiss = {}, onChooseFolder = {}, onRescan = {}, onCancel = {}, onRemove = { removed = it })
+            }
+        }
+        compose.onNodeWithText("Remove").performClick()
+        compose.onNodeWithText("Remove folder?").assertIsDisplayed()
+        compose.runOnIdle { assertNull(removed) }
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle { assertNull(removed) }
+        compose.onNodeWithText("Remove").performClick()
+        compose.onAllNodesWithText("Remove").onLast().performClick()
+        compose.runOnIdle { assertEquals("tree", removed) }
     }
 
     @Test fun tabsSelectScrollableLibraryAndSettingsOpenFolderConfiguration() {
@@ -39,7 +57,7 @@ class NavigationTest {
         var requestedFolder = false
         compose.setContent {
             LocalicaTheme {
-                LocalicaScreen(LibraryUiState(LibrarySnapshot(FolderSelection("tree", "Music"), tracks), loading = false),
+                LocalicaScreen(LibraryUiState(LibrarySnapshot(listOf(FolderSelection("tree", "Music")), tracks), loading = false),
                     PlaybackState(connected = true), onPlay = { selected = it }, onToggle = {}, onSeek = {},
                     onChooseFolder = { requestedFolder = true }, onRescan = {}, onCancelScan = {})
             }
@@ -50,13 +68,13 @@ class NavigationTest {
         val settingsCenter = compose.onNodeWithContentDescription("Settings").fetchSemanticsNode().boundsInRoot.center.x
         assertTrue(playerCenter < libraryCenter && libraryCenter < settingsCenter)
         compose.onNodeWithText("Library").performClick()
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Track 40"))
+        compose.onNodeWithTag("library-list").performScrollToNode(hasText("Track 40"))
         compose.onNodeWithText("Track 40").performClick()
         compose.runOnIdle { assertEquals(tracks.last(), selected) }
         compose.onNodeWithText("Nothing playing").assertIsDisplayed()
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Music folder").assertIsDisplayed()
-        compose.onNodeWithText("Change folder").performClick()
+        compose.onNodeWithText("Music folders").assertIsDisplayed()
+        compose.onNodeWithText("Add folder").performClick()
         compose.runOnIdle { assertTrue(requestedFolder) }
     }
 }

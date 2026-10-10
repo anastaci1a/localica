@@ -46,6 +46,22 @@ class TreeScannerTest {
         } catch (_: CancellationException) { }
     }
 
+    @Test fun `retains grouping metadata and deduplicates document identity across aliases`() = runTest {
+        val source = FakeDocuments()
+        source.entries["root"] = listOf(audio("one", "one.mp3").copy(identity = "document:song"),
+            audio("alias", "alias.mp3").copy(identity = "document:song"))
+        source.tags["one"] = AudioMetadata(albumArtist = " Various Artists ", trackNumber = 4, discNumber = 2,
+            year = 2024, genre = " Jazz ")
+        val track = TreeScanner(source).scan("tree").tracks.single()
+        assertEquals("document:song", track.id)
+        assertEquals("Various Artists", track.albumArtist)
+        assertEquals(4, track.trackNumber)
+        assertEquals(2, track.discNumber)
+        assertEquals(2024, track.year)
+        assertEquals("Jazz", track.genre)
+        assertEquals(1, source.metadataReads)
+    }
+
     @Test fun `recognizes common formats without claiming videos`() {
         listOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus").forEach {
             assertTrue(AudioFiles.accepts("song.$it", "application/octet-stream"))
