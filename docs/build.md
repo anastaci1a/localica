@@ -9,6 +9,8 @@ Use JDK 17 and an Android SDK with platform 36 and build tools 35.0.0. Set `ANDR
 
 The installable development APK is `app/build/outputs/apk/debug/app-debug.apk`. The release variant is intentionally unsigned until production distribution is configured. `androidTest` contains original synthetic audio and a test-only document provider for real folder-picker and codec tests; neither is included in the app.
 
+Jaudiotagger 3.0.1 supplies tag writing under LGPL 2.1 or later. Its notice/license are bundled in the app's open-source licenses screen; releases include the unmodified library's source archive. To use a modified version, build that source with Maven, replace `implementation(libs.jaudiotagger)` with a local JAR dependency, and rebuild using the commands above. A rebuilt APK uses your own development signing key. Localica's own code remains MIT licensed.
+
 ## Automation and versions
 
 The Android workflow checks each main push and pull request, uploads a development APK, and runs device tests on API 26 and 36. Actions are pinned to commit hashes. A `vX.X.X` tag must match `versionName` in `app/build.gradle.kts`; increase `versionCode` for each new build distributed as an update. Once all tag checks pass, the workflow publishes a development prerelease with an APK and checksum.

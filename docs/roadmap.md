@@ -6,13 +6,11 @@ The library foundation supports multiple folders, overlap deduplication, album/a
 
 Configurable Home/Library navigation, saved per-tab routes and Back history, an expanding mini-player, and a queue overlay shipped in v0.5.0. The layout uses shared components with simple materials.
 
-## Next three releases
+Shared browsing, scoped/global search, sorting overrides, contextual selection, cached artwork, and basic manually ordered pins shipped in v0.6.0.
 
-Complete and verify these three APK checkpoints, then stop for review before starting liquid-glass implementation.
+## Remaining release checkpoints
 
-### v0.6.0: shared browsing interactions
-
-Finish the shared list/gallery presentation, artwork loading, dedicated scoped/global search, sorting inheritance/overrides, contextual selection, and basic pins already underway, according to [Interface](interface.md).
+Complete and verify v0.7.0 and v0.8.0, then stop for review before starting liquid-glass implementation. Together with the delivered v0.6.0, these are the three authorized release checkpoints.
 
 ### v0.7.0: safe tag and artwork editing
 
