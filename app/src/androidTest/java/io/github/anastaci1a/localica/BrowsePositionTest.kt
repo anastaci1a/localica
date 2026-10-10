@@ -37,13 +37,14 @@ class BrowsePositionTest {
                 compose.onNodeWithText(filter, useUnmergedTree = true).performScrollTo().performClick()
                 for (hardware in listOf(false, true)) {
                     val title = "$prefix 060"
-                    compose.onNodeWithTag("browser-list").performScrollToNode(hasText(title))
+                    compose.scrollToUncoveredItem(hasText(title))
                     val before = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
                     compose.onNodeWithText(title).performClick()
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
                     if (hardware) UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
                     else compose.onNodeWithContentDescription("Back").performClick()
-                    compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for $title").fetchSemanticsNodes().isNotEmpty() }
+                    compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty() &&
+                        compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
                     compose.onNodeWithText(title).assertIsDisplayed()
                     assertEquals("$filter / hardware=$hardware", before, compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot)
                 }
