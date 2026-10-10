@@ -54,7 +54,9 @@ class QueuePlaybackTest {
                 await { queues.state.value.library.active!!.entries[1].track.id == "Third" }
                 assertEquals("Second", playback.state.value.trackId)
                 assertTrue(playback.state.value.isPlaying)
-                assertTrue(playback.state.value.positionMs >= beforeMove)
+                // Controller estimates can be corrected by a few milliseconds when the service publishes its timeline.
+                assertTrue("Position before move: $beforeMove; after: ${playback.state.value.positionMs}",
+                    playback.state.value.positionMs >= beforeMove - 50)
                 queues.settings(QueueSettings(maximum = 2))
                 playback.play(tracks[0])
                 await { queues.state.value.pending != null }
