@@ -43,7 +43,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     var sourcesOpen by remember { mutableStateOf(false) }
     Column(modifier.testTag("lyrics-panel")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Lyrics", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.weight(1f))
             if (source != null) Box {
                 TextButton(onClick = { sourcesOpen = true }) { Text("Sources") }
                 DropdownMenu(sourcesOpen, { sourcesOpen = false }) {

@@ -70,8 +70,11 @@ data class InterfaceSettings(
     val artworkTap: ArtworkAction = ArtworkAction.Lyrics,
     val artworkHold: ArtworkAction = ArtworkAction.Menu,
     val fasterMotion: Boolean = false,
+    val artworkLayout: ArtworkLayout = ArtworkLayout.FullBackground,
 )
 
 enum class ArtworkAction(val label: String) {
     Lyrics("Toggle lyrics"), Menu("Show artwork menu"), View("View artwork"), Change("Change artwork"), None("Do nothing")
 }
+
+enum class ArtworkLayout(val label: String) { FullBackground("Full-background artwork"), Floating("Floating artwork with matte background") }
