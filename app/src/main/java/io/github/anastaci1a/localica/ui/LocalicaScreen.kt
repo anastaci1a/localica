@@ -90,6 +90,7 @@ fun LocalicaScreen(
     val actionPreferences = remember(context) { PlayerActionPreferences(context) }
     var playerActions by remember { mutableStateOf(actionPreferences.read()) }
     var customizeActions by remember { mutableStateOf(false) }
+    var repeatOptions by remember { mutableStateOf(false) }
     var songInfo by remember { mutableStateOf(false) }
     var viewArt by remember { mutableStateOf(false) }
     var addPlaying by remember { mutableStateOf(false) }
@@ -290,10 +291,15 @@ fun LocalicaScreen(
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress) {
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
-                PlayerAction.Repeat -> "Repeat: " + queues.settings.repeat.name
+                PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
                 PlayerAction.Count -> "Track " + ((queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1) + " of " + (queues.library.active?.entries?.size ?: 0)
+                PlayerAction.Lyrics -> if (lyricsOpen) "Hide lyrics" else "Show lyrics"
+                PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
-            } }, ::playerAction, { customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat)
+            } }, ::playerAction, { customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
+                lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
+                onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
+                count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
         if (queueProgress.value > 0f) QueueSurface(queueProgress, settings, { queueOpen = it }) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
@@ -331,14 +337,14 @@ fun LocalicaScreen(
     if (exitPrompt) AlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
         text = { Text("Playback will continue.") }, confirmButton = { TextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
         dismissButton = { TextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
-    if (customizeActions) PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false })
+    if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
+    if (customizeActions) PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false }, settings.reducedMotion)
     if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { songInfo = false }, { playerAction(PlayerAction.Edit) }, ::playerAction)
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) ModalBottomSheet(onDismissRequest = { playerMore = false }, shape = Corners.panel) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
             PlayerAction.entries.filterNot { it == PlayerAction.More }.forEach { action -> TextButton(onClick = { playerMore = false; playerAction(action) }) { Text(action.label) } }
-            TextButton(onClick = { playerMore = false; customizeActions = true }) { Text("Customize player actions") }
         }
     }
     QueueDialogs(queues, queueController)
