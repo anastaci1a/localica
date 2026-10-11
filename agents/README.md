@@ -1,48 +1,41 @@
 # Working instructions
 
-These instructions govern how to work on localica. Product goals and plans belong in `docs/`; working method belongs here. Read only the relevant linked document before a task, then update the smallest set of living documents affected by the result.
+Read the relevant page in the [documentation map](../docs/README.md) before editing. Product contracts belong in `docs/`; this file owns working practices.
 
-## Keep context compact
+## Passive documentation maintenance
 
-- Treat `README.md`, `docs/`, and this directory as **living documents**, not activity logs. Replace stale statements, merge overlapping notes, and delete superseded detail. Do not append a new section for every work session.
-- Keep each fact in one canonical place. `README.md` is a short public introduction; `docs/README.md` is the map; the other `docs/` files hold current product decisions, structure, and milestones. Link instead of copying.
-- Before adding a document, try to fit the information into an existing one. Split only when a document has a distinct reader or purpose. Keep headings scannable and prose as short as accuracy allows.
-- Record decisions as the current choice, its reason, and any important constraint. Preserve history in Git when it is no longer needed for the next decision. Do not keep daily notes, transcripts, repeated task lists, or a running journal.
-- At the end of meaningful work, reconcile the plan with what is now true. Remove completed or obsolete plan text. Keep open questions only when they affect a coming decision.
-- Keep the main `README.md` easy to read. Add a small number of real app screenshots once screens exist; update or remove outdated screenshots when the UI changes. Avoid placeholder images and lengthy feature inventories there.
-- Review README screenshots and animated previews before each release. Recapture changed screens from the release candidate, inspect the resulting files, and keep the navigation GIF short. Credit any third-party artwork used in previews; never bundle demo music in the app.
+**Consolidate as part of every relevant change. Do not wait for a separate cleanup task.**
 
-## Work and issues
+- Give each fact one authoritative home, following the map. Link to it elsewhere; do not restate contracts in the roadmap, architecture, release notes or multiple settings inventories.
+- Edit the existing rule in place. In the same pass, remove superseded statements, completed plans and nearby repetition. Aim for the touched section to stay the same size or shrink; new length must convey a new durable decision.
+- Keep the current choice, necessary rationale, defaults, exceptions and constraints. Preserve specific user-agreed behavior while removing repeated explanations, implementation narration and exhaustive inventories already maintained in code/tests.
+- Use short focused sections, bullets for independent rules, and tables for defaults/comparisons. Break dense mixed-topic paragraphs by responsibility. Split a document only for a distinct reader/task; prefer consolidating existing sections over adding files.
+- The roadmap owns upcoming outcomes/dependencies, Issues own tasks/acceptance criteria, and Git/Releases own history. Never append session logs, release-by-release summaries, duplicated ticket lists or stale completion notes to living docs.
+- Before committing docs, review the diff for duplicated facts, stale tense/current-vs-planned ambiguity and unnecessary growth; check moved headings/links. Touch only affected documents. A docs-only change needs these checks, not an Android build.
+- Keep the public README short with current real-app previews. Follow [preview maintenance](../docs/build.md#previews) during release preparation.
 
-- [GitHub Issues](https://github.com/anastaci1a/localica/issues) are the source of truth for bugs and actionable work. Create or update an issue with reproduction, expected behavior, and acceptance criteria as relevant; refer to its number in commits or pull requests. Do not maintain a bug list or issue tracker in `docs/`.
-- Keep submitted issues and replies short and to the point, using bullets instead of long paragraphs. For bugs, state the observed effect, how to reproduce it, and the cause if known. For features, state the requested change directly. Link to supporting details instead of repeating plans, implementation narratives, or test logs.
-- Use the [bug](../.github/ISSUE_TEMPLATE/bug_report.md) and [feature](../.github/ISSUE_TEMPLATE/feature_request.md) templates when applicable, including their prompts when creating issues through the CLI or API. Omit unnecessary optional bullets. Replies need only the bullets relevant to the update; do not repeat the template.
-- `docs/roadmap.md` tracks milestone outcomes and their order, not individual tickets. Remove a milestone when its outcome is delivered, or rewrite it to reflect the next decision.
-- Keep commits focused on one coherent change so each can be reviewed or reverted safely. Separate planning changes, implementation, and release automation when practical. Never mix an unrelated cleanup into a bug fix. Use descriptive imperative commit subjects and the repository-local `anastaci1a` identity.
-- Push every commit to the remote; do not leave completed commits only on the local machine.
-- Check the working tree and relevant verification before each commit. Document material limitations in the final report or the relevant issue, rather than burying them in a new project log.
+## Issues and commits
 
-### Issue labels
+- [GitHub Issues](https://github.com/anastaci1a/localica/issues) track bugs/actionable work. Use the [bug](../.github/ISSUE_TEMPLATE/bug_report.md) or [feature](../.github/ISSUE_TEMPLATE/feature_request.md) template, including for CLI/API submissions; omit irrelevant optional fields.
+- Issues and replies must be short, direct bullets. Bugs describe observed/expected effects, reproducibility and known cause; features state the request and observable completion. Link supporting detail instead of copying narratives/logs.
+- Keep commits coherent and reviewable; separate unrelated cleanup, implementation and release automation. Reference relevant issues, use descriptive imperative subjects and repository-local `anastaci1a` identity. Check the working tree and appropriate verification; report material limitations plainly.
+- **Push every commit.** Never leave completed work only locally.
 
-Label issues when creating or triaging them. Use one type and the relevant area labels; usually one or two areas are enough. Keep workflow labels current as work proceeds, and remove them when closing an issue. Use GitHub's open/closed state for completion.
+### Labels
 
-| Purpose | Labels and usage |
+Use one type and usually one or two areas. Add workflow labels only while applicable and remove them on closure; GitHub's open/closed state owns completion. Reuse this vocabulary; add labels only for recurring gaps, updating this table.
+
+| Purpose | Labels |
 | --- | --- |
-| Type | `bug`: broken behavior; `enhancement`: a feature or improvement; `documentation`: documentation changes; `maintenance`: internal refactoring, tooling, or upkeep. |
-| Library | `area: library`: indexing, metadata, artwork, organization, and queries. |
-| Playback | `area: playback`: audio, transport, queues, and listening statistics. |
-| Interface | `area: interface`: navigation, browsing, layout, interaction, and visuals. |
-| Storage | `area: storage`: document access, persistence, migrations, and recovery. |
-| Build | `area: build`: builds, automated tests, CI, signing, and releases. |
-| Workflow | `in progress`: active implementation or release verification; `blocked`: a named dependency prevents progress; `question`: an answer is needed to proceed. State the blocker or question briefly, linking dependencies where relevant. |
-| Accessibility | `accessibility`: a barrier affecting people with disabilities; combine with the appropriate type and area. |
-| Contributions | `help wanted`: outside help is welcome; `good first issue`: the work is small, bounded, and has clear acceptance criteria. |
-| Closure reason | `duplicate`, `invalid`, or `wontfix`: use only when closing for that reason, with a short explanation or link to the original issue. |
+| Type | `bug` (broken behavior), `enhancement` (capability/improvement), `documentation`, `maintenance` (internal/tooling). |
+| Area | `area: library` (index/metadata/queries), `area: playback` (audio/queues/statistics), `area: interface`, `area: storage` (access/persistence/recovery), `area: build` (CI/releases). |
+| Workflow | `in progress`, `blocked` (state/link dependency), `question` (state missing decision). |
+| Accessibility | `accessibility`, plus type/area. |
+| Contributions | `help wanted`; `good first issue` for bounded, approachable work. |
+| Closure reason | `duplicate`, `invalid`, `wontfix`, with a short reason or link. |
 
-Reuse these labels. Add another only for a recurring gap, and update this table when doing so. Do not use labels to duplicate roadmap milestones or invent priorities that have not been agreed.
+Do not invent priorities or duplicate roadmap milestones with labels.
 
-## Versioning and releases
+## Releases
 
-- Use `vX.X.X` tags for releases and the corresponding `X.X.X` app version name. Increase major for breaking changes, minor for features, and patch for fixes.
-- Prepare every release description using the [release template](../.github/RELEASE_TEMPLATE.md): start with the basic development APK, Android compatibility, and signing note without a header; follow with `Changes`, `Resolved issues`, and `Install` sections. Keep `Changes` as short high-level bullets covering the release, including changes not adequately described by the issue list. List **all issues resolved in that release** as short bullets, each with its full GitHub URL for an embedded reference, a dash, and a description shorter than a sentence. Include only completed issues; if none were resolved, say so briefly. Keep installation steps short. Follow the [release preparation steps](../docs/build.md#release-descriptions).
-- Add APK build and release automation only after a buildable Android project and signing/distribution choices exist. A workflow must have a real build command and a verifiable artifact before it is treated as release automation.
+Follow [Build → Release preparation](../docs/build.md#release-preparation), including its exact-commit verification gate, preview review and [release template](../.github/RELEASE_TEMPLATE.md). Use `vX.X.X` tags matching app versions: major for breaking changes, minor for features, patch for fixes. Release descriptions must remain brief, bullet-based and include every resolved issue; leave already published descriptions unchanged unless requested.
