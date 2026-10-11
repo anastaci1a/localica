@@ -94,7 +94,7 @@ jobs:
           target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window ${{ matrix.api == 36 && '-gpu swiftshader -feature -Vulkan' || '-gpu swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -memory 3072
           # Keep API 36 system transitions at normal speed while verifying Back and DocumentsUI.
           # Its cold CI launcher stalls with forced zero-duration transitions; Compose tests own their clock.
           disable-animations: ${{ matrix.api < 36 }}
@@ -105,6 +105,12 @@ jobs:
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
             sleep 60
             ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
+      - name: Capture host diagnostics on emulator failure
+        if: failure()
+        run: |
+          free -h
+          df -h
+          sudo dmesg --ctime | tail -100
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

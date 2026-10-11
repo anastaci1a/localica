@@ -53,6 +53,9 @@ class GalleryNavigationTest {
                 val colors = buildSet { for (y in 0 until image.height) for (x in 0 until image.width) add(image[x, y]) }
                 assertTrue("Song text must actually render for $n", colors.size > 8)
                 compose.onNodeWithContentDescription("Back").performTouchInput { click() }
+                compose.waitUntil(5000) { runCatching {
+                    compose.onNode(hasText("Album $n") and hasClickAction()).assertIsDisplayed()
+                }.isSuccess }
                 compose.onNodeWithText("Album $n").assertIsDisplayed()
                 compose.onNodeWithContentDescription("Search library").performTouchInput { click() }
                 compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(n)
