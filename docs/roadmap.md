@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Verify and publish the full glass overhaul, then pause for physical-device feedback on glass readability, control-to-panel transitions, player expansion, artwork swipes and pinch navigation. Track concrete regressions in Issues before choosing the next implementation batch. Preserve accessibility, playback continuity and older-Android support; keep the shared rendering system in this repository.
+Review physical-device feedback on glass readability, control-to-panel transitions, player expansion, artwork swipes and pinch navigation before choosing the next implementation batch. Track concrete regressions in Issues. Preserve accessibility, playback continuity and older-Android support; keep the shared rendering system in this repository.
 
 ## Deferred capabilities
 
