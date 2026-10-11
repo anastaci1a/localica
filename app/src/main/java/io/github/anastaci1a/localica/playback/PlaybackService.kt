@@ -34,8 +34,14 @@ class PlaybackService : MediaSessionService() {
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val controls = object : ForwardingPlayer(player) {
+            override fun seekToNext() { (application as LocalicaApplication).queues.next() }
+            override fun seekToNextMediaItem() { (application as LocalicaApplication).queues.next() }
             override fun seekToPrevious() { (application as LocalicaApplication).queues.previous() }
             override fun seekToPreviousMediaItem() { (application as LocalicaApplication).queues.previous() }
+            override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {
+                val queues = (application as LocalicaApplication).queues
+                queues.settings(queues.state.value.settings.copy(shuffle = shuffleModeEnabled))
+            }
             override fun setRepeatMode(repeatMode: Int) {
                 val queues = (application as LocalicaApplication).queues
                 queues.settings(queues.state.value.settings.copy(advancedRepeat = null,
