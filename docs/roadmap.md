@@ -22,11 +22,11 @@ Library filters and All’s collection types are configurable. Songs retain firs
 
 ## Device review
 
-The v0.14.0 APK is available for review. It adds draggable player action slots, advanced Repeat behavior, smoother text/scroll motion, and aligned floating controls. Address device feedback in small verified releases.
+The v0.15.0 APK is available for review. It adds a continuous frosted Queue drawer, directional return buttons, smoother artwork/player transitions, friendly playback failure dialogs, and Library filter/sort fixes. README screenshots and the navigation GIF reflect this release; the demo library is retained locally. Development is paused for device feedback.
 
 ## Visual design system
 
-Verify and release v0.15.0: replace the player’s floating Queue pill with a bottom-attached frosted drawer, preserving the Musicolet-based queue controls. Use one continuous material from collapsed to expanded, eliminating the white-panel flash. Transmit the actual player behind the surface with soft scattering, subtle non-repeating grain, restrained directional light and edge highlights; keep text crisp. Use the same material for circular directional return-to-current-position buttons in lyrics and queues. Also verify quiet retained/faded player artwork, shared cover-loading animation, circular artist artwork, coherent player transitions, friendly playback failure dialogs, and atomic Library filter/sort changes with a soft edge behind filters. Establish a reusable backdrop/material boundary before extending Apple Music-inspired liquid glass elsewhere. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
+The Queue drawer and directional return buttons now share a reusable frosted material, with live scene scattering on Android 12+ and a snapshot fallback on older devices. Review its appearance and motion on real devices before extending Apple Music-inspired liquid glass elsewhere. Preserve crisp controls, continuous gestures, accessibility, and frame performance as the material develops. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
 
 ## Subsequent functionality
 
