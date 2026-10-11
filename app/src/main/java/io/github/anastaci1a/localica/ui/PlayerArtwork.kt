@@ -8,6 +8,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -25,9 +27,11 @@ internal fun rememberPlayerVisual(uri: String?, provider: CoverProvider = Embedd
     val revision by ArtworkCache.revision.collectAsState()
     val request = uri to revision
     val loaded by produceState<Pair<Pair<String?, Long>?, PlayerVisual>>(null to PlayerVisual(), request, provider) {
-        val bitmap = provider.load(context, listOfNotNull(uri), 768)
-        // Do not publish a placeholder between requests. Cancellation discards obsolete skips.
-        value = request to if (bitmap == null) PlayerVisual() else PlayerVisual(bitmap.asImageBitmap(), playerPalette(bitmap))
+        if (uri != null) {
+            val prepared = PlayerVisualCache.read(context, uri, provider)
+            currentCoroutineContext().ensureActive()
+            value = request to prepared
+        }
     }
     return loaded.second.copy(loading = uri != null && loaded.first != request)
 }
@@ -35,7 +39,41 @@ internal fun rememberPlayerVisual(uri: String?, provider: CoverProvider = Embedd
 @Composable
 internal fun PlayerArtwork(visual: PlayerVisual, modifier: Modifier, shape: Shape, contentScale: ContentScale, duration: Int) {
     ArtworkBlend(visual, modifier.clip(shape), duration) { frame ->
-        if (frame.artwork != null) Image(frame.artwork, stringResource(R.string.album_artwork), Modifier.fillMaxSize(), contentScale = contentScale)
-        else ArtworkPlaceholder(visual.loading, Modifier.fillMaxSize())
+        PlayerArtworkFrame(frame, Modifier.fillMaxSize(), shape, contentScale)
+    }
+}
+
+@Composable
+internal fun PlayerArtworkFrame(visual: PlayerVisual, modifier: Modifier, shape: Shape, contentScale: ContentScale) {
+    Box(modifier.clip(shape)) {
+        androidx.compose.foundation.Canvas(Modifier.matchParentSize()) { drawRect(visual.palette.middle) }
+        if (visual.artwork != null) Image(visual.artwork, stringResource(R.string.album_artwork), Modifier.fillMaxSize(), contentScale = contentScale)
+        else androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_music), "No artwork",
+            Modifier.align(androidx.compose.ui.Alignment.Center).fillMaxSize(.3f), tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .4f))
+    }
+}
+
+/** Decoded pixels remain shared with ArtworkCache; only a few prepared visual bundles are retained. */
+internal object PlayerVisualCache {
+    private data class Key(val uri: String, val revision: Long)
+    private val cache = android.util.LruCache<Key, PlayerVisual>(4)
+    suspend fun read(context: android.content.Context, uri: String, provider: CoverProvider = EmbeddedCoverProvider): PlayerVisual {
+        val key = Key(uri, ArtworkCache.revision.value)
+        if (provider === EmbeddedCoverProvider) cache.get(key)?.let { return it }
+        val bitmap = provider.load(context, listOf(uri), 768)
+        val result = if (bitmap == null) PlayerVisual() else PlayerVisual(bitmap.asImageBitmap(), playerPalette(bitmap))
+        currentCoroutineContext().ensureActive()
+        if (provider === EmbeddedCoverProvider && key.revision == ArtworkCache.revision.value) cache.put(key, result)
+        return result
+    }
+}
+
+@Composable
+internal fun PrepareNeighborArtwork(uris: List<String?>) {
+    val context = LocalContext.current.applicationContext
+    val revision by ArtworkCache.revision.collectAsState()
+    LaunchedEffect(uris, revision) {
+        kotlinx.coroutines.delay(150)
+        for (uri in uris.filterNotNull().distinct()) PlayerVisualCache.read(context, uri)
     }
 }

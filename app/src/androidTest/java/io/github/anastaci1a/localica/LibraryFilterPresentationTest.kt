@@ -38,7 +38,8 @@ class LibraryFilterPresentationTest {
         } }
         fun finishQuery() { requireNotNull(tasks.poll(5, TimeUnit.SECONDS)) { "Expected a pending library query" }.run(); compose.waitForIdle() }
         finishQuery()
-        compose.onNodeWithText("All").assertIsSelected()
+        compose.onNodeWithText("All").assertDoesNotExist()
+        compose.onNodeWithText("Albums").assertIsNotSelected()
         compose.onNodeWithText("Album 00").assertIsDisplayed()
         val filters = compose.onNodeWithTag("library-filters").fetchSemanticsNode().boundsInRoot
         val list = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
@@ -46,7 +47,7 @@ class LibraryFilterPresentationTest {
         assertTrue("First item initially clears the filters", compose.onNodeWithText("Album 00").fetchSemanticsNode().boundsInRoot.top > filters.bottom)
         compose.onNodeWithText("Albums").performClick()
         // Hold the new query: the previous arrangement must still carry its previous label.
-        compose.onNodeWithText("All").assertIsSelected()
+        compose.onNodeWithText("All").assertDoesNotExist()
         compose.onNodeWithText("Albums").assertIsNotSelected()
         compose.onNodeWithText("Album 00").assertIsDisplayed()
         finishQuery()

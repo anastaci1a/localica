@@ -131,7 +131,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
     if (!drag.dropping) {
         val color by animateColorAsState(if (drag.overCancel) MaterialTheme.colorScheme.error.copy(alpha = .7f) else Color.Transparent,
             tween(if (reducedMotion) 0 else 160), label = "Cancel target")
-        LiquidGlassSurface(Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() }).size(60.dp).zIndex(10f)
+        LiquidGlassSurface(Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() }).size(CompactControlSize).zIndex(10f)
             .testTag("cancel-drag").semantics { contentDescription = "Release to cancel move"; stateDescription = if (drag.overCancel) "Cancel move" else "Drag here to cancel" },
             tint = color) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

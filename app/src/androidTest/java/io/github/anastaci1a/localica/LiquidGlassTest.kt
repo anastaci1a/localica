@@ -48,6 +48,8 @@ class LiquidGlassTest {
         val right = pixels[pixels.width * 3 / 4, y]
         assertTrue("Keep the red backdrop visible: $left", left.red > left.blue + .15f)
         assertTrue("Keep the blue backdrop visible: $right", right.blue > right.red + .15f)
+        assertTrue("Clear lens centers must not acquire a white frost: $left / $right", left.green < .03f && right.green < .03f)
+        assertTrue("The outer shadow must not darken the transparent center: $left / $right", left.red > .97f && right.blue > .97f)
         val center = pixels[pixels.width / 2, y]
         assertTrue("Foreground must remain black and unfiltered: $center", center.red + center.green + center.blue < .05f)
         val previous = source.fallback

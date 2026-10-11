@@ -33,6 +33,7 @@ class PlayerLayoutTest {
         val utility = compose.onNodeWithTag("utility-pill").fetchSemanticsNode().boundsInRoot
         assertEquals(mini.left, tabs.left, 1f); assertEquals(mini.right, utility.right, 1f)
         assertEquals(tabs.top, utility.top, 1f); assertEquals(tabs.bottom, utility.bottom, 1f)
+        assertEquals("Mini-player is four fifths of the tabs", tabs.height * .8f, mini.height, 1f)
         assertTrue(mini.bottom < tabs.top); assertTrue(tabs.right < utility.left)
         assertEquals(tabs.top - mini.bottom, utility.left - tabs.right, 2f)
         compose.onNodeWithContentDescription("Previous").assertIsDisplayed()
@@ -40,13 +41,13 @@ class PlayerLayoutTest {
         compose.onNodeWithContentDescription("Next").assertIsDisplayed()
         val artwork = compose.onNodeWithTag("player-artwork", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val title = compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        assertEquals("Artwork clears the curved leading edge", artwork.width / 4, artwork.left - mini.left, 1f)
-        assertEquals("Title keeps its gap from artwork", artwork.width / 6, title.left - artwork.right, 1f)
+        assertEquals("Artwork clears the curved leading edge", artwork.width / 2, artwork.left - mini.left, 1f)
+        assertEquals("Title keeps its gap from artwork", artwork.width * .3125f, title.left - artwork.right, 1f)
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
         val add = compose.onNodeWithTag("playlist-add-module").fetchSemanticsNode().boundsInRoot
         assertEquals("Add aligns with the right floating controls", utility.right, add.right, 1f)
-        assertEquals("Floating controls share a height", utility.height, add.height, 1f)
+        assertEquals("Circular controls match the mini-player", mini.height, add.height, 1f)
         assertEquals("Add uses the same gap above the miniplayer", tabs.top - mini.bottom, mini.top - add.bottom, 1f)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
         val list = compose.onNodeWithTag("browser-list")

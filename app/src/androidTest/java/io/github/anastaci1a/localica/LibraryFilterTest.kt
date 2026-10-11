@@ -21,7 +21,7 @@ class LibraryFilterTest {
         val previousFilters = filterPrefs.read()
         val previousInterface = interfacePrefs.read()
         try {
-            filterPrefs.write(LibraryFilters(visible = listOf(LibraryFilter.All, LibraryFilter.Albums)))
+            filterPrefs.write(LibraryFilters(visible = listOf(LibraryFilter.Songs, LibraryFilter.Albums)))
             interfacePrefs.write(InterfaceSettings(tabs = listOf(MainTab.Library), reducedMotion = true))
             val snapshot = LibrarySnapshot(tracks = listOf(Track("missing", "Song", artist = "Singer", albumArtist = "Band", album = "Album",
                 fileName = "song.mp3", relativePath = "song.mp3")))
@@ -29,7 +29,7 @@ class LibraryFilterTest {
                 LocalicaScreen(LibraryUiState(snapshot, loading = false), PlaybackState(connected = true), {}, {}, {}, {}, {}, {})
             } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Band").fetchSemanticsNodes().size == 2 }
-            compose.onNodeWithText("All").performTouchInput { longClick() }
+            compose.onNodeWithText("Songs").performTouchInput { longClick() }
             compose.onNodeWithText("Edit library filters and order").performClick()
             compose.onNodeWithText("Library filters").assertIsDisplayed()
             compose.onNodeWithText("Search settings").assertDoesNotExist()
@@ -37,15 +37,15 @@ class LibraryFilterTest {
             compose.onNodeWithContentDescription("Close settings").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Singer").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(MediaKind.Artist in LibraryFilterPreferences(context).read().allCollections)
-            compose.onNodeWithText("All").performTouchInput { longClick() }
+            compose.onNodeWithText("Songs").performTouchInput { longClick() }
             compose.onNodeWithText("Edit library filters and order").performClick()
             compose.onAllNodesWithText("Move down")[0].performScrollTo().performClick()
-            assertEquals(listOf(LibraryFilter.Albums, LibraryFilter.All), LibraryFilterPreferences(context).read().visible)
+            assertEquals(listOf(LibraryFilter.Albums, LibraryFilter.Songs), LibraryFilterPreferences(context).read().visible)
             compose.onAllNodesWithText("Remove")[1].performScrollTo().performClick()
             compose.onNodeWithContentDescription("Close settings").performClick()
             compose.onNodeWithText("All").assertDoesNotExist()
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Band").fetchSemanticsNodes().size <= 1 }
-            compose.onNodeWithText("Singer").assertDoesNotExist()
+            compose.onNodeWithText("Songs").assertDoesNotExist()
+            compose.onNodeWithText("Singer").assertIsDisplayed()
             assertEquals(listOf(LibraryFilter.Albums), LibraryFilterPreferences(context).read().visible)
         } finally { filterPrefs.write(previousFilters); interfacePrefs.write(previousInterface) }
     }

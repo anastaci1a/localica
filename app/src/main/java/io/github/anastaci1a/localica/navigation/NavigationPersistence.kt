@@ -15,7 +15,8 @@ class InterfacePreferences(context: Context) {
             ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-tap", null) } ?: ArtworkAction.Lyrics,
             ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-hold", null) } ?: ArtworkAction.Menu,
             fasterMotion = preferences.getBoolean("faster-motion", false),
-            artworkLayout = ArtworkLayout.entries.firstOrNull { it.name == preferences.getString("artwork-layout", null) } ?: ArtworkLayout.FullBackground)
+            artworkLayout = ArtworkLayout.entries.firstOrNull { it.name == preferences.getString("artwork-layout", null) } ?: ArtworkLayout.FullBackground,
+            artworkTransition = ArtworkTransition.entries.firstOrNull { it.name == preferences.getString("artwork-transition", null) } ?: ArtworkTransition.SoftWash)
     }
     fun write(value: InterfaceSettings) {
         require(value.tabs.isNotEmpty() && value.tabs.distinct() == value.tabs)
@@ -23,6 +24,7 @@ class InterfacePreferences(context: Context) {
             .putBoolean("confirm-exit", value.confirmExit).putBoolean("expand-on-play", value.expandOnPlay)
             .putBoolean("album-artist", value.albumArtistFirst).putBoolean("reduced-motion", value.reducedMotion)
             .putBoolean("faster-motion", value.fasterMotion).putString("artwork-layout", value.artworkLayout.name)
+            .putString("artwork-transition", value.artworkTransition.name)
             .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()
     }
 }

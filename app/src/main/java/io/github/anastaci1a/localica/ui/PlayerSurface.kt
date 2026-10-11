@@ -56,14 +56,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val density = LocalDensity.current
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val miniTop = maxHeight - navigationInset - 144.dp
+    val miniTop = maxHeight - navigationInset - (CompactControlSize + 80.dp)
     val distance = with(density) { miniTop.toPx().coerceAtLeast(1f) }
     val p = progress.value
     val artwork = visual ?: rememberPlayerVisual(state.trackUri)
-    val paletteDuration = settings.motionDuration(450)
+    val paletteDuration = settings.motionDuration(550)
     val palette = animatedPlayerPalette(artwork.palette, paletteDuration)
     val lyricBackdrop = rememberFrostedBackdrop(artwork to settings.artworkLayout, lyricsOpen)
-    val lyricVisibility by animateFloatAsState(if (lyricsOpen && expanded) 1f else 0f, tween(settings.motionDuration(450)), label = "Lyrics layout")
+    val lyricVisibility by animateFloatAsState(if (lyricsOpen && expanded) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // While the finger is down expanded remains true. Progress, rather than release,
     // must restore the same artwork and metadata as the surface returns to the miniplayer.
     val lyricProgress = lyricVisibility * p
@@ -118,7 +118,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 else scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }
             } else settle(settleOpen(travelDp, velocityDp, progress.value, !startExpanded,
                 velocityThreshold = if (startExpanded) 400f else 450f,
-                distanceThreshold = if (startExpanded) 72f else 48f))
+                distanceThreshold = if (startExpanded) 72f else CompactControlSize.value * .55f))
         })
     // Resolve the full-cover feather and its color continuation together before the cover
     // separates from the screen edges. The wash must not turn into a second miniature cover.
@@ -132,19 +132,20 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val floatingHeight = minOf(floatingArt, floatingArt / palette.aspect)
     val fullArt = floatingWidth + (windowWidth - floatingWidth) * backgroundProgress
     val fullArtHeight = floatingHeight + (windowWidth / palette.aspect - floatingHeight) * backgroundProgress
-    val artWidth = 48.dp + (fullArt - 48.dp) * p
-    val artHeight = 48.dp + (fullArtHeight - 48.dp) * p
-    val artX = 12.dp + ((windowWidth - fullArt) / 2 - 12.dp) * p
+    val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * p
+    val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * p
+    val artX = 16.dp + ((windowWidth - fullArt) / 2 - 16.dp) * p
     val fullArtY = statusInset + 52.dp + (floatingArt - fullArtHeight) / 2
-    val artY = 8.dp + (fullArtY - 8.dp) * p - 24.dp * lyricProgress
+    val miniArtY = (CompactControlSize - MiniArtworkSize) / 2
+    val artY = miniArtY + (fullArtY - miniArtY) * p - 24.dp * lyricProgress
     val oldMetadataY = statusInset + 52.dp + floatingArt + 8.dp
     val lyricSeekY = virtualHeight - navigationInset - 280.dp
     val latestMetadataY = virtualHeight - navigationInset - 368.dp - extraActions
     val ordinarySeekY = (oldMetadataY + (lyricSeekY - oldMetadataY) * .5f)
         .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
     val metadataY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
-    val titleY = 10.dp + (metadataY - 10.dp) * p
-    val subtitleY = 34.dp + (metadataY + 34.dp - 34.dp) * p
+    val titleY = 5.dp + (metadataY - 5.dp) * p
+    val subtitleY = 26.dp + (metadataY + 34.dp - 26.dp) * p
     val seekY = metadataY + 64.dp
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricTransport = virtualHeight - navigationInset - 152.dp
@@ -156,7 +157,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val transportWidth = minOf(contentWidth, 280.dp)
     val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
     val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
-    val textX = 68.dp + (contentInset - 68.dp) * p
+    val textX = 58.dp + (contentInset - 58.dp) * p
     val foreground = androidx.compose.ui.graphics.lerp(Color.Black, Color.White, p)
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val baseColors = MaterialTheme.colorScheme
@@ -167,22 +168,20 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainerHigh = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHigh, palette.middle, p),
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
     Surface(Modifier.offset(x = 12.dp * (1f - p), y = miniTop * (1f - p))
-        .width(surfaceWidth).height(64.dp + (maxHeight - 64.dp) * p)
+        .width(surfaceWidth).height(CompactControlSize + (maxHeight - CompactControlSize) * p)
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface").then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop) else Modifier),
-        shape = RoundedCornerShape((32 * (1f - p)).dp), color = baseColors.surface.copy(alpha = (p / .2f).coerceIn(0f, 1f)), contentColor = foreground, shadowElevation = 3.dp) {
+        shape = RoundedCornerShape((32 * (1f - p)).dp), color = palette.bottom.copy(alpha = (p / .2f).coerceIn(0f, 1f)), contentColor = foreground) {
         if (p < .2f) LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - p / .2f }, source = glassBackdrop)
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
-            if (p > 0f) ArtworkBlend(artwork, Modifier.fillMaxSize().graphicsLayer { alpha = p }.recordFrostedBackdrop(lyricBackdrop),
-                duration = paletteDuration) { frame ->
-                PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), coverBlend * (1f - lyricProgress),
-                    with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
+            if (lyricsOpen) PlayerBackdrop(palette, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop))
+            ArtworkBlend(artwork, Modifier.fillMaxSize(), duration = paletteDuration) { frame ->
+                if (p > 0f) PlayerBackdrop(frame.palette, Modifier.fillMaxSize().graphicsLayer { alpha = p },
+                    coverBlend * (1f - lyricProgress), with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                     with(density) { artX.toPx() }, with(density) { artWidth.toPx() })
-            }
-            Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer { alpha = 1f - lyricProgress }
-                .then(if (lyricsOpen && p >= .99f) Modifier.clearAndSetSemantics {} else Modifier)) {
-                PlayerArtwork(artwork, Modifier.fillMaxSize().testTag("player-artwork").graphicsLayer {
+                Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer { alpha = 1f - lyricProgress }) {
+                PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag("player-artwork").graphicsLayer {
                     compositingStrategy = if (coverBlend > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
                 }.drawWithContent {
                     drawContent()
@@ -195,13 +194,15 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         }
                         drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
                     }
-                }.clip(artworkShape).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
-                    onClickLabel = settings.artworkTap.label,
-                    onClick = { artworkAction(settings.artworkTap) },
-                    onLongClickLabel = settings.artworkHold.label,
-                    onLongClick = { artworkAction(settings.artworkHold) }) else Modifier),
+                }.clip(artworkShape),
                     shape = artworkShape,
-                    contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit, duration = paletteDuration)
+                    contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
+                }
+            }
+            Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight)
+                .then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
+                    onClickLabel = settings.artworkTap.label, onClick = { artworkAction(settings.artworkTap) },
+                    onLongClickLabel = settings.artworkHold.label, onLongClick = { artworkAction(settings.artworkHold) }) else Modifier)) {
                 DropdownMenu(artworkMenu, { artworkMenu = false }) {
                     ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
                     if (onEditTags != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; onEditTags() })
@@ -254,7 +255,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 .width(contentWidth).height(48.dp * actionRows).graphicsLayer { alpha = fullControlsReveal * (1f - lyricProgress) }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,
-                y = 8.dp + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - 8.dp) * transportMotion),
+                y = (CompactControlSize - 48.dp) / 2 + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - (CompactControlSize - 48.dp) / 2) * transportMotion),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((transportWidth - 160.dp) / 2 * transportMotion)) {
                 IconButton(onPrevious, Modifier.size(48.dp), enabled = state.connected) {
                     Icon(painterResource(R.drawable.ic_previous), "Previous", Modifier.size(24.dp + 10.dp * transportMotion), tint = foreground)
