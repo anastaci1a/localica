@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -62,10 +63,16 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     return source
 }
 
-internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop): Modifier =
+internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null): Modifier =
     onGloballyPositioned { source.origin = it.positionInRoot(); source.size = it.size }
         .drawWithContent {
-            source.layer.record { this@drawWithContent.drawContent() }
+            source.layer.record {
+                if (backing != null && !backing.layer.isReleased) {
+                    val offset = backing.origin - source.origin
+                    clipRect { translate(offset.x, offset.y) { drawLayer(backing.layer) } }
+                }
+                this@drawWithContent.drawContent()
+            }
             drawLayer(source.layer)
         }
 
@@ -80,10 +87,14 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     val base = if (dark) Color(0xFF18212C) else MaterialTheme.colorScheme.surface
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
     val grain = remember { frostGrain }
+    // Descendant lenses sample the finished panel material, never the art below it.
+    // Keep controls outside this recording to prevent feedback through nested lenses.
+    val material = rememberFrostedBackdrop(Unit, enabled = false, dark = dark)
     Box(modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false).clip(shape)
         .onGloballyPositioned { origin = it.positionInRoot() }
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) .38f else .8f),
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
+        Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
         if (source != null) Canvas(Modifier.matchParentSize().graphicsLayer {
             if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(22.dp.toPx(), 22.dp.toPx(), TileMode.Clamp)
         }) {
@@ -102,7 +113,8 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             drawImage(grain, dstSize = IntSize(size.width.toInt().coerceAtLeast(1), size.height.toInt().coerceAtLeast(1)),
                 filterQuality = FilterQuality.Medium, alpha = if (dark) .5f else .3f)
         }
-        CompositionLocalProvider(LocalContentColor provides foreground) { content() }
+        }
+        CompositionLocalProvider(LocalContentColor provides foreground, LocalFrostedBackdrop provides material) { content() }
     }
 }
 

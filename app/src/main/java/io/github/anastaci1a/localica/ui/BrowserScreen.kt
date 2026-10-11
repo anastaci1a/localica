@@ -109,9 +109,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
     val surroundingBackdrop = LocalFrostedBackdrop.current
-    val needsListBackdrop = surroundingBackdrop == null && (showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
+    val needsListBackdrop = (showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
         (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
-    val listBackdrop = rememberFrostedBackdrop(presentation, needsListBackdrop, dark = false)
+    val listBackdrop = rememberFrostedBackdrop(presentation, needsListBackdrop, dark = surroundingBackdrop?.dark == true)
     val refreshBackdrop = LocalBackdropRefresh.current
     LaunchedEffect(presentation, gridState.isScrollInProgress) {
         if (!gridState.isScrollInProgress) {
@@ -194,7 +194,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters || showSearchPill) pillSlotHeight else 0.dp).testTag("browse-loading"))
             else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
-                .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop).background(MaterialTheme.colorScheme.surface) else Modifier)
+                .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, surroundingBackdrop)
+                    .then(if (surroundingBackdrop == null) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
                 .then(if (showSearchPill || showFilters) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
@@ -296,7 +297,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
             }
-            CompositionLocalProvider(LocalFrostedBackdrop provides (surroundingBackdrop ?: listBackdrop)) {
+            CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
             if (showFilters) Box(Modifier.align(Alignment.TopStart)) {
                 LibraryFilterBubbles(filters, displayedFilter, reducedMotion,
                     { onRoute(route.copy(filter = it)) }, onFilterSettings)
@@ -324,7 +325,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
                 exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
-                CompositionLocalProvider(LocalFrostedBackdrop provides (surroundingBackdrop ?: listBackdrop)) {
+                CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
                     ReturnToPositionButton(up = returnDirection < 0, label = "Current song", visible = showCurrent && !session.active && reorder.drag == null) {
                         playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, visibleTop) } }
                     }

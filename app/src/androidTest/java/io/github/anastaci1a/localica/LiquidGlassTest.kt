@@ -26,6 +26,21 @@ class LiquidGlassTest {
     @Test fun lightPillTransmitsAndRefreshesSceneWithoutBlurringForeground() = verifyLens(false)
     @Test fun darkBubbleTransmitsAndRefreshesSceneWithoutBlurringForeground() = verifyLens(true)
 
+    @Test fun transparentListPixelsLeaveTheDrawerVisibleThroughTheLens() {
+        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize().background(Color.Red)) {
+            val source = rememberFrostedBackdrop(Unit)
+            Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                // A transparent list over a drawer must not replace that drawer with raw artwork.
+                drawRect(Color.Blue, Offset(size.width / 2, 0f), Size(size.width / 2, size.height))
+            }
+            LiquidGlassSurface(Modifier.align(Alignment.Center).size(300.dp, 96.dp).testTag("transparent-lens"), source)
+        } } }
+        val pixels = compose.onNodeWithTag("transparent-lens").captureToImage().toPixelMap()
+        val edge = pixels[(pixels.width * .02f).toInt(), pixels.height / 2]
+        assertTrue("Transparent source pixels must preserve the immediate red backdrop: $edge",
+            edge.red > .97f && edge.green < .01f && edge.blue < .01f)
+    }
+
     private fun verifyLens(dark: Boolean) {
         lateinit var source: FrostedBackdrop
         var swapped by mutableStateOf(false)
