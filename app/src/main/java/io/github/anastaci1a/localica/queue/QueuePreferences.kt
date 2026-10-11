@@ -13,11 +13,17 @@ class QueuePreferences(context: Context) {
         }.toMap(),
         maximum = preferences.getInt("maximum", 0).takeIf { it > 0 },
         preloadNext = preferences.getBoolean("preload-next", true),
+        shuffle = preferences.getBoolean("shuffle", false),
+        repeat = QueueRepeat.entries.firstOrNull { it.name == preferences.getString("repeat", null) } ?: QueueRepeat.Off,
     )
+    fun migratePlaybackModes(active: ListeningQueue?) {
+        if (!preferences.contains("global-playback-modes")) write(read().copy(shuffle = active?.shuffle ?: false, repeat = active?.repeat ?: QueueRepeat.Off))
+    }
     fun write(settings: QueueSettings) {
         val edit = preferences.edit()
         SongListView.entries.forEach { edit.putString("tap.${it.name}", settings.tapOverrides[it]?.name) }
         edit.putString("tap", settings.songTap.name).putString("switch-browse", settings.switching.name)
-            .putInt("maximum", settings.maximum ?: 0).putBoolean("preload-next", settings.preloadNext).apply()
+            .putInt("maximum", settings.maximum ?: 0).putBoolean("preload-next", settings.preloadNext)
+            .putBoolean("global-playback-modes", true).putBoolean("shuffle", settings.shuffle).putString("repeat", settings.repeat.name).apply()
     }
 }

@@ -12,6 +12,7 @@ data class ListeningQueue(
     val entries: List<QueueEntry>,
     val currentEntryId: String? = entries.firstOrNull()?.id,
     val positionMs: Long = 0,
+    // Legacy per-queue values are read only when migrating to global playback modes.
     val shuffle: Boolean = false,
     val repeat: QueueRepeat = QueueRepeat.Off,
     val lastActivatedAt: Long = createdAt,
@@ -21,7 +22,7 @@ enum class SongTap { NewQueue, PlayNow, PlayNext, Append }
 enum class QueueSwitch { Browse, Paused, Resume, KeepPlaybackState }
 data class QueueSettings(val songTap: SongTap = SongTap.NewQueue, val switching: QueueSwitch = QueueSwitch.Browse,
     val maximum: Int? = null, val tapOverrides: Map<SongListView, SongTap> = emptyMap(),
-    val preloadNext: Boolean = true) {
+    val preloadNext: Boolean = true, val shuffle: Boolean = false, val repeat: QueueRepeat = QueueRepeat.Off) {
     fun tapFor(view: SongListView) = tapOverrides[view] ?: songTap
 }
 data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val activeId: String? = null) {
