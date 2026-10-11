@@ -57,6 +57,8 @@ class GlassDialogsTest {
         compose.onNodeWithText("Source choices").assertIsDisplayed()
         assertNotSame(parentScene, childScene)
         pressSystemBack()
+        // The accessibility service dispatches Back asynchronously to the window.
+        compose.waitUntil(5_000) { !childOpen }
         compose.onNodeWithText("Source choices").assertDoesNotExist()
         compose.onNodeWithText("Parent options").assertIsDisplayed()
         assertTrue(parentOpen)
