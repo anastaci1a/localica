@@ -51,7 +51,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             items(items, key = { it.key }) { item -> Box {
                 Column(Modifier.width(160.dp).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {
-                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
+                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f), shape = artworkShape(item.ref.kind))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }

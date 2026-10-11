@@ -271,12 +271,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         ).padding(horizontal = if (denseGallery) 4.dp else 12.dp, vertical = 8.dp)) {
                             if (style.presentation != Presentation.List) {
                                 Box {
-                                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
+                                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f), shape = artworkShape(item.ref.kind))
                                     itemMenu(false)
                                 }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (style.presentation == Presentation.List) MediaArtwork(item.coverUris, Modifier.size(48.dp))
+                                if (style.presentation == Presentation.List) MediaArtwork(item.coverUris, Modifier.size(48.dp), shape = artworkShape(item.ref.kind))
                                 Column(Modifier.weight(1f).padding(start = if (style.presentation == Presentation.List) 12.dp else 0.dp)) {
                                     Text(item.title, style = if (denseGallery) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -302,9 +302,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
                 exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
-                FilledTonalButton(onClick = { playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, if (showSearchPill) with(density) { 56.dp.toPx() } else 0f) } } }) {
-                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_play), null, Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp)); Text("Current song")
+                ReturnToPositionButton(up = (playingIndex ?: 0) < gridState.firstVisibleItemIndex, label = "Current song") {
+                    playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, if (showSearchPill) with(density) { 56.dp.toPx() } else 0f) } }
                 }
             }
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, style.sort, Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset))

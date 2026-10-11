@@ -52,6 +52,7 @@ fun LocalicaScreen(
     playlistController: PlaylistController? = null,
     onScanAll: () -> Unit = { library.snapshot.folders.forEach { onRescan(it.uri) } },
     scannerRequest: Int = 0,
+    onRetryPlayback: () -> Unit = onToggle,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val session: SessionSelection = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -177,7 +178,11 @@ fun LocalicaScreen(
     val hasPlayer = currentTrack != null || playback.trackUri != null
     LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }
     val dragHost = remember { SongDragHost() }
-    CompositionLocalProvider(LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    val playerVisual = rememberPlayerVisual(player.trackUri)
+    val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded)
+    val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
+    PlayerSystemBars(hasPlayer && progress.value >= .99f)
+    CompositionLocalProvider(LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
             (if (hasPlayer) 152.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
@@ -288,7 +293,7 @@ fun LocalicaScreen(
             onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
             if (currentTrack != null && editTags != null) ({ editTags(listOf(library.snapshot.tracks.firstOrNull { it.id == currentTrack.id } ?: currentTrack)) {} }) else null,
             lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
-            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress) {
+            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, visual = playerVisual) {
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
@@ -301,13 +306,18 @@ fun LocalicaScreen(
                 onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
-        if (queueProgress.value > 0f) QueueSurface(queueProgress, settings, { queueOpen = it }) {
+        if (hasPlayer && progress.value > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
+        MaterialTheme(colorScheme = darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFFD4E6FF),
+            surface = playerPalette.bottom, surfaceContainer = playerPalette.middle, surfaceContainerLow = playerPalette.bottom,
+            onSurface = androidx.compose.ui.graphics.Color.White, onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFDBDFE6))) {
+        QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = progress.value) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying) } }
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).verticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)
             }
         }
+        } }
         ForegroundSongDragOverlay(dragHost)
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
@@ -348,6 +358,7 @@ fun LocalicaScreen(
         }
     }
     QueueDialogs(queues, queueController)
+    PlaybackFailureDialog(playback, playback.hasNext, onRetryPlayback) { onNext(); onRetryPlayback() }
     }
 }
 
