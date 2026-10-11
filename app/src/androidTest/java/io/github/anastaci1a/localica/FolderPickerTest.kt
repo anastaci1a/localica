@@ -13,12 +13,21 @@ import androidx.test.uiautomator.Until
 import io.github.anastaci1a.localica.library.AndroidDocuments
 import io.github.anastaci1a.localica.library.TreeScanner
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.regex.Pattern
 
 @RunWith(AndroidJUnit4::class)
@@ -101,15 +110,25 @@ class FolderPickerTest {
         assertTrue(lyrics.sources.first().document.synced)
         val nestedLyrics = runBlocking { (context.applicationContext as LocalicaApplication).lyrics.load(indexed.first { it.fileName == "tone.m4a" }, 0) }
         assertTrue(nestedLyrics.sources.none { it.sidecar })
-        compose.onNodeWithText("Morning tone").performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Pause").fetchSemanticsNodes().isNotEmpty() }
         lateinit var playback: io.github.anastaci1a.localica.playback.PlaybackConnection
-        compose.runOnIdle { playback = io.github.anastaci1a.localica.playback.PlaybackConnection(context) }
+        val played = CopyOnWriteArrayList<String>()
+        val observation = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        compose.runOnIdle {
+            playback = io.github.anastaci1a.localica.playback.PlaybackConnection(context)
+            // Both two-second fixtures can finish while Compose waits for a cold player
+            // expansion to become idle. Observe playback before tapping, not a transient icon.
+            observation.launch {
+                playback.state.filter { it.isPlaying }.map { it.title }.distinctUntilChanged().collect { played += it }
+            }
+        }
         try {
-            await { playback.state.value.ended }
+            await { playback.state.value.connected }
+            compose.onNode(hasText("Morning tone") and inList).performClick()
+            await { playback.state.value.ended && playback.state.value.title == "Quiet interval" }
+            assertEquals(listOf("Morning tone", "Quiet interval"), played.toList())
             assertEquals("Quiet interval", playback.state.value.title)
             compose.onNodeWithText("Track finished").assertDoesNotExist()
-        } finally { compose.runOnIdle { playback.close() } }
+        } finally { compose.runOnIdle { observation.cancel(); playback.close() } }
         // The library tap captures the displayed list, then automatically advances to its second song.
         compose.waitUntil(5000) {
             runCatching { compose.onNodeWithTag("player-title", useUnmergedTree = true)
