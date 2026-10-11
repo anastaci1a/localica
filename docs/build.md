@@ -25,4 +25,8 @@ The repository secret `ANDROID_DEBUG_KEYSTORE` holds the base64-encoded developm
 
 Before pushing a release tag, copy the [template](../.github/RELEASE_TEMPLATE.md) over [the current release notes](../.github/RELEASE_NOTES.md), fill every placeholder, and commit and push the result with the version change. Review issues resolved since the preceding release so the linked list is complete; references in commits alone do not mean an issue is resolved. Keep the change bullets and installation steps short, following the [release writing rules](../agents/README.md#versioning-and-releases).
 
+Review the README previews against the candidate UI. Recapture changed screens and the short navigation GIF on an emulator, inspect them at README size, and update their version caption and artwork credits. Keep recordings silent and demo media outside the app; remove obsolete images.
+
+Reuse the local preview library under `${XDG_DATA_HOME:-$HOME/.local/share}/localica/previews/`, including its capture setup notes and raw recordings. Preserve the capture emulator's music folder and app data between releases; update its APK with `adb install -r`. The demo library stays outside Git and the APK.
+
 The workflow checks the version marker and rejects unfilled placeholders, then publishes this file as the release body. Replace the file for each release; Git and GitHub Releases retain previous descriptions. This format starts with v0.5.0; earlier release descriptions stay as published.
