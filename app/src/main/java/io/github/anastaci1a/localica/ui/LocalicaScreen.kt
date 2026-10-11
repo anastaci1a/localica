@@ -135,6 +135,11 @@ fun LocalicaScreen(
     }
     val indexedTrack = currentTrack?.let { saved -> library.snapshot.tracks.firstOrNull { it.id == saved.id }
         ?: saved.copy(playCount = library.snapshot.trackPlays[saved.id] ?: 0) }
+    fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
+        navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title))
+        queueOpen = false; expanded = false; songInfo = false
+        navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
+    }
     fun playerAction(action: PlayerAction) {
         val track = indexedTrack ?: return
         when (action) {
@@ -156,7 +161,7 @@ fun LocalicaScreen(
                     MediaKind.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
                 val item = io.github.anastaci1a.localica.browse.BrowseQueries.evaluate(library.snapshot, playlist.playlists, BrowseRoute(tab))
                     .items.firstOrNull { item -> item.songs.any { it.track.id == track.id } }
-                if (item != null) { navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title)); expanded = false }
+                if (item != null) openCollection(item)
             }
         }
     }
@@ -169,6 +174,7 @@ fun LocalicaScreen(
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
     val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded)
+    val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded)
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
     PlayerSystemBars(hasPlayer && progress.value >= .99f)
     CompositionLocalProvider(LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
@@ -177,7 +183,7 @@ fun LocalicaScreen(
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
-        Column(Modifier.fillMaxSize().statusBarsPadding()
+        Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(MaterialTheme.colorScheme.background).statusBarsPadding()
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
             val route = navigation.route
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -196,8 +202,8 @@ fun LocalicaScreen(
             // Routes retain saved state, but must not recycle live drawing/focus nodes from
             // a different grid or text field through SaveableStateProvider's ReusableContent.
             key(route.key) { holder.SaveableStateProvider(route.key) {
-                if (route.tab == MainTab.Queues && !route.search) QueueScreen(queues, queueController, library,
-                    playlist, playlistController, playback.connected, pins, ::pin, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage, isPlaying = playback.isPlaying)
+                if (route.tab == MainTab.Queues && !route.search && (route.collection == null || route.collection.kind == MediaKind.Queue)) QueueScreen(queues, queueController, library,
+                    playlist, playlistController, playback.connected, pins, ::pin, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage, isPlaying = playback.isPlaying, onOpen = ::openCollection)
                 else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
                     PinnedHome(library, playlist, pins, { settingsCategory = "Folders to scan"; settingsOpen = true },
                         { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) },
@@ -272,12 +278,12 @@ fun LocalicaScreen(
                 }
             }
         }
-        if (session.active && !expanded) Surface(Modifier.align(Alignment.BottomCenter)
+        SelectionPanelVisibility(session.active && !expanded && dragHost.state?.drag == null, Modifier.align(Alignment.BottomCenter)
             .padding(horizontal = 8.dp).padding(bottom = inset + if (hasPlayer) 152.dp else 80.dp)
-            .fillMaxWidth().heightIn(max = maxHeight / 2).onSizeChanged { selectionHeight = with(density) { it.height.toDp() } },
-            shape = Corners.panel, tonalElevation = 6.dp) {
+            .fillMaxWidth().heightIn(max = maxHeight / 2).onSizeChanged { selectionHeight = with(density) { it.height.toDp() } }, settings.reducedMotion) {
+            Surface(shape = Corners.panel, tonalElevation = 6.dp) {
             Column(Modifier.verticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }
-        }
+        } }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
             if (currentTrack != null && editTags != null) ({ editTags(listOf(library.snapshot.tracks.firstOrNull { it.id == currentTrack.id } ?: currentTrack)) {} }) else null,
@@ -301,13 +307,16 @@ fun LocalicaScreen(
             onSurface = androidx.compose.ui.graphics.Color.White, onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFDBDFE6))) {
         QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = progress.value) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
-                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying) } }
+                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection) } }
+            SelectionPanelVisibility(session.active && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).verticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)
-            }
+            } }
         }
         } }
-        ForegroundSongDragOverlay(dragHost)
+        CompositionLocalProvider(LocalFrostedBackdrop provides if (queueProgress.value > 0f) playerBackdrop else browseBackdrop) {
+            ForegroundSongDragOverlay(dragHost)
+        }
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
     androidx.activity.compose.BackHandler(queueOpen || queueProgress.value > 0f) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
