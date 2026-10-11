@@ -89,10 +89,15 @@ internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view:
 }
 
 @Composable
-internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null): Modifier {
+internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null,
+    enabled: Boolean = true): Modifier {
     val view = LocalView.current
     return onGloballyPositioned { source.origin = it.backdropPosition(view); source.size = it.size }
         .drawWithContent {
+            if (!enabled) {
+                drawContent()
+                return@drawWithContent
+            }
             source.layer.record {
                 if (backing != null && !backing.layer.isReleased) {
                     val offset = backing.origin - source.origin

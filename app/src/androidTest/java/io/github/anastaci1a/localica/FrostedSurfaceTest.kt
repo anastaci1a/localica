@@ -87,6 +87,20 @@ class FrostedSurfaceTest {
                 }
                 val image = compose.onRoot().captureToImage()
                 File(context.getExternalFilesDir(null), name).outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+                if (name == "queue-frosted-collapsed.png") {
+                    // Attaching a new recording modifier at the end of expansion can
+                    // leave descendant layers blank for a frame despite intact semantics.
+                    val bounds = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
+                    val pixels = image.toPixelMap()
+                    var whitePixels = 0
+                    for (y in bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(pixels.height)) {
+                        for (x in bounds.left.toInt().coerceAtLeast(0) until bounds.right.toInt().coerceAtMost(pixels.width)) {
+                            val color = pixels[x, y]
+                            if (color.red > .8f && color.green > .8f && color.blue > .8f) whitePixels++
+                        }
+                    }
+                    assertTrue("Keep the Play icon painted while preparing the Queue backdrop", whitePixels > 30)
+                }
                 val glass = compose.onNodeWithTag("queue-surface").captureToImage().toPixelMap()
                 val c = glass[glass.width / 3, 10.coerceAtMost(glass.height - 1)]
                 assertTrue("Queue material must not flash white: $c", c.red + c.green + c.blue < 2f)
