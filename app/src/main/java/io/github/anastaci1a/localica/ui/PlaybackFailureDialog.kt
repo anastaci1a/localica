@@ -17,7 +17,7 @@ internal fun PlaybackFailureDialog(state: PlaybackState, canSkip: Boolean, onRet
     var dismissed by rememberSaveable(state.trackUri, state.problem) { mutableStateOf(false) }
     val problem = state.problem ?: return
     if (dismissed) return
-    AlertDialog(onDismissRequest = { dismissed = true }, shape = Corners.panel,
+    GlassAlertDialog(onDismissRequest = { dismissed = true },
         icon = { Icon(painterResource(R.drawable.ic_info), null, Modifier.size(28.dp)) },
         title = { Text(if (problem == PlaybackProblem.Connection) "Playback disconnected" else "Couldn't play this song") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

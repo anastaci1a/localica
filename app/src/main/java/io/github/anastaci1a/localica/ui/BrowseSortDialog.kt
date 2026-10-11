@@ -22,7 +22,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     val songs = route.collection != null || route.tab in setOf(MainTab.Songs, MainTab.MostPlayed) || route.filter == MediaKind.Song
     val fields = if (songs) TrackSort.entries.filter { it != TrackSort.Count && (it != TrackSort.Manual || route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) }
         else TrackSort.entries.filterNot { it in setOf(TrackSort.Manual, TrackSort.Album, TrackSort.Folder) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Sort") }, text = {
+    GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Sort") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             if (onRandomize != null) {
                 TextButton(onClick = onRandomize) { Text("Randomize queue order") }

@@ -63,7 +63,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
-                DropdownMenu(menu == item.ref, { menu = null }) {
+                GlassMenu(menu == item.ref, rememberGlassAnchor(), { menu = null }) {
                     ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
                     ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,

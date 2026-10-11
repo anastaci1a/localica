@@ -53,7 +53,7 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
             AlbumArtwork(state.trackUri, Modifier.size(artworkSize).then(Modifier.testTag("player-artwork")).combinedClickable(enabled = state.trackUri != null,
                 onClickLabel = settings.artworkTap.label, onClick = { action(settings.artworkTap) },
                 onLongClickLabel = settings.artworkHold.label, onLongClick = { action(settings.artworkHold) }))
-            DropdownMenu(artworkMenu, { artworkMenu = false }) {
+            GlassMenu(artworkMenu, rememberGlassAnchor(), { artworkMenu = false }) {
                 ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
                 if (onEditTags != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; onEditTags() })
                 ActionMenuItem("Configure tap action", onClick = { artworkMenu = false; configureTap = true })
@@ -91,13 +91,13 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
             Spacer(Modifier.height(8.dp))
             val pause = state.isPlaying || state.isBuffering
             Row(verticalAlignment = Alignment.CenterVertically) {
-            ActionIcon(R.drawable.ic_previous, "Previous", state.connected, onPrevious)
+            ActionIcon(R.drawable.ic_previous, "Previous", state.connected, onClick = onPrevious)
             FilledIconButton(onClick = onToggle, enabled = state.connected, modifier = Modifier.size(64.dp)) {
                 Icon(painterResource(if (pause) R.drawable.ic_pause else R.drawable.ic_play),
                     stringResource(if (pause) R.string.pause else if (state.ended) R.string.replay else R.string.play),
                     Modifier.size(36.dp))
             }
-            ActionIcon(R.drawable.ic_next, "Next", state.connected, onNext)
+            ActionIcon(R.drawable.ic_next, "Next", state.connected, onClick = onNext)
             }
             Spacer(Modifier.height(8.dp))
             if (state.isBuffering) Text(stringResource(R.string.loading_audio), style = MaterialTheme.typography.bodySmall)
@@ -121,7 +121,7 @@ fun PlayerScreen(state: PlaybackState, onToggle: () -> Unit, onSeek: (Long) -> U
     }
     }
     if (viewing && state.trackUri != null) ArtworkViewer(state.trackUri) { viewing = false }
-    if (configureTap) AlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
+    if (configureTap) GlassAlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
         text = { Column { ArtworkAction.entries.forEach { value -> TextButton(onClick = {
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { TextButton(onClick = { configureTap = false }) { Text("Cancel") } })

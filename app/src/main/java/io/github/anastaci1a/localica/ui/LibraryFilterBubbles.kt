@@ -95,6 +95,9 @@ internal fun LibraryFilterBubbles(filters: List<LibraryFilter>, selected: MediaK
         .nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll).padding(horizontal = 12.dp)
         .width(total).height(listPillTargetHeight())) {
         filters.forEach { filter -> key(filter) {
+            val menuAnchor = rememberGlassAnchor()
+            val source = LocalFrostedBackdrop.current
+            SideEffect { menuAnchor.source = source; menuAnchor.face = { Text(filter.label, style = style, maxLines = 1) } }
             Box(Modifier.offset { IntOffset(offsets.getValue(filter).value.roundToInt(), 0) }
                 .zIndex(if (filter == active) 2f else if (filter in moving) 1f else 0f)
                 .width(widths.getValue(filter)).fillMaxHeight()
@@ -103,12 +106,12 @@ internal fun LibraryFilterBubbles(filters: List<LibraryFilter>, selected: MediaK
                     onClick = { onSelect(filter.kind.takeUnless { it == selected }) },
                     onLongClickLabel = "Configure library filters", onLongClick = { menu = filter })
                 .semantics { this.selected = filter.kind == selected }, contentAlignment = Alignment.Center) {
-                LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()),
+                LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(menuAnchor),
                     tint = if (filter.kind == selected) androidx.compose.ui.graphics.Color.Black.copy(alpha = .07f)
                         else androidx.compose.ui.graphics.Color.Transparent) {
                     Text(filter.label, Modifier.align(Alignment.Center), style = style, maxLines = 1)
                 }
-                DropdownMenu(menu == filter, { menu = null }) {
+                GlassMenu(menu == filter, menuAnchor, { menu = null }) {
                     ActionMenuItem("Edit library filters and order", onClick = { menu = null; onConfigure() })
                 }
             }
