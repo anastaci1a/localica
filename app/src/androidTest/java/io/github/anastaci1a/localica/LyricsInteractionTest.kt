@@ -32,7 +32,7 @@ class LyricsInteractionTest {
             compose.onNodeWithText("Song").performClick()
             compose.onNodeWithTag("player-artwork").performClick()
             compose.onNodeWithTag("lyrics-panel").assertIsDisplayed()
-            UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+            pressSystemBack()
             compose.onNodeWithTag("lyrics-panel").assertDoesNotExist()
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
             compose.onNodeWithTag("player-artwork").performTouchInput { longClick() }
@@ -41,7 +41,7 @@ class LyricsInteractionTest {
             assertEquals(ArtworkAction.View, InterfacePreferences(context).read().artworkTap)
             compose.onNodeWithTag("player-artwork").performClick()
             compose.onNodeWithText("Close artwork").assertIsDisplayed()
-            UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+            pressSystemBack()
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
         } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
     }

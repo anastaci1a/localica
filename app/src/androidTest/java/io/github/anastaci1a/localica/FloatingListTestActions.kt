@@ -6,6 +6,8 @@ import androidx.compose.ui.test.junit4.ComposeContentTestRule
 
 /** Scroll into the interactive viewport, not just the area drawn behind floating controls. */
 internal fun ComposeContentTestRule.scrollToUncoveredItem(target: SemanticsMatcher) {
+    // Query work runs outside Compose's idle clock. Wait for its first layout.
+    waitUntil(5000) { onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
     val list = onNodeWithTag("browser-list")
     list.performScrollToNode(target)
     val coveredTop = onAllNodes(hasTestTag("tab-pill") or hasTestTag("player-surface"))

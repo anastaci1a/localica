@@ -22,7 +22,7 @@ class InterfaceNavigationTest {
     private val track = Track("missing", "Evening", artist = "Artist", albumArtist = "Album artist", album = "Seasons",
         fileName = "evening.mp3", relativePath = "evening.mp3")
     private val library = LibraryUiState(LibrarySnapshot(listOf(FolderSelection("tree", "Music")), listOf(track)), loading = false)
-    private fun back() { UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack(); compose.waitForIdle() }
+    private fun back() { pressSystemBack(); compose.waitForIdle() }
     @Before fun reset() { context.getSharedPreferences("interface", 0).edit().clear().commit() }
     @After fun cleanup() { reset() }
 
@@ -61,7 +61,7 @@ class InterfaceNavigationTest {
         compose.setContent { LocalicaTheme { LocalicaScreen(library, PlaybackState(connected = true), {}, {}, {}, {}, {}, {}) } }
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Seasons").performClick()
-        compose.onNodeWithText("Evening").assertIsDisplayed()
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Evening").assertIsDisplayed() }.isSuccess }
         back()
         compose.onNodeWithText("Seasons").assertIsDisplayed()
         back()

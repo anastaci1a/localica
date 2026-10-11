@@ -138,7 +138,12 @@ internal fun UiDevice.clickWhenReady(selector: BySelector) {
                     return@await false
                 }
                 val node = findObject(selector)
-                if (node != null && node.isEnabled) { node.click(); true } else false
+                if (node != null && node.isEnabled) {
+                    // Old DocumentsUI file tiles expose no click action; their stable content
+                    // still needs a touch. Root rows and toolbar buttons use accessibility.
+                    if (!node.clickSystemAction()) node.click()
+                    true
+                } else false
             } catch (_: StaleObjectException) { false }
         }
     } catch (failure: AssertionError) {
