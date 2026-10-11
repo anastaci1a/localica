@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -43,21 +44,15 @@ jobs:
           expected=$(keytool -exportcert -alias androiddebugkey -keystore "$LOCALICA_DEBUG_KEYSTORE" -storepass android | sha256sum | cut -d ' ' -f 1)
           actual=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
           test "$expected" = "$actual"
-      - name: Check release version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
-          version=$(jq -r '.elements[0].versionName' app/build/outputs/apk/debug/output-metadata.json)
-          test "$GITHUB_REF_NAME" = "v$version"
-          test "$(head -n 1 .github/RELEASE_NOTES.md)" = "<!-- Release: $GITHUB_REF_NAME -->"
-          if grep -q '{{' .github/RELEASE_NOTES.md; then
-            echo 'Fill all release-note placeholders before tagging.' >&2
-            exit 1
-          fi
+      - name: Record verified APK checksum
+        working-directory: app/build/outputs/apk/debug
+        run: sha256sum app-debug.apk > app-debug.apk.sha256
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: localica-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/app-debug.apk.sha256
           if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -66,6 +61,7 @@ jobs:
           path: app/build/reports/
 
   device-tests:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -114,16 +110,52 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build, device-tests]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Find successful verification for the tagged commit
+        id: verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          commit=$(git rev-parse HEAD)
+          run_id=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/android.yml/runs" \
+            -f head_sha="$commit" -f branch=main -f event=push -f per_page=100 \
+            --jq '.workflow_runs | map(select(.head_branch == "main" and .event == "push")) | first | .id // empty')
+          if [ -z "$run_id" ]; then
+            echo 'No main verification for this commit. Finish its checks, then rerun this release job.' >&2
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > verified-run.json
+          jq -e --arg commit "$commit" '.head_sha == $commit and .head_branch == "main" and .event == "push" and .conclusion == "success"' verified-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" > verified-jobs.json
+          jq -e '["build", "device-tests (26)", "device-tests (36)"] - [.jobs[] | select(.conclusion == "success") | .name] | length == 0' verified-jobs.json
+          echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: localica-debug
           path: artifacts
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.verified.outputs.run-id }}
+      - name: Check release version and signing identity
+        run: |
+          (cd artifacts && sha256sum --check app-debug.apk.sha256)
+          mv artifacts/app-debug.apk.sha256 verified-apk.sha256
+          [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/app-debug.apk > apk-badging.txt
+          version=$(sed -n "s/^package: .*versionName='\([^']*\)'.*/\1/p" apk-badging.txt)
+          test "$GITHUB_REF_NAME" = "v$version"
+          actual=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs artifacts/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          test "$actual" = 'b18a3e7bf9eebd67d6eb2ebc0f2374aba803e17e9e89d6647792433937037827'
+          test "$(head -n 1 .github/RELEASE_NOTES.md)" = "<!-- Release: $GITHUB_REF_NAME -->"
+          if grep -q '{{' .github/RELEASE_NOTES.md; then
+            echo 'Fill all release-note placeholders before tagging.' >&2
+            exit 1
+          fi
       - name: Publish development prerelease
         env:
           GH_TOKEN: ${{ github.token }}
