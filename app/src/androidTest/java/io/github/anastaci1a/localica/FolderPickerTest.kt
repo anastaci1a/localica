@@ -102,9 +102,18 @@ class FolderPickerTest {
         assertTrue(nestedLyrics.sources.none { it.sidecar })
         compose.onNodeWithText("Morning tone").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Pause").fetchSemanticsNodes().isNotEmpty() }
-        compose.waitUntil(10000) { compose.onAllNodesWithText("Track finished").fetchSemanticsNodes().isNotEmpty() }
+        lateinit var playback: io.github.anastaci1a.localica.playback.PlaybackConnection
+        compose.runOnIdle { playback = io.github.anastaci1a.localica.playback.PlaybackConnection(context) }
+        try {
+            await { playback.state.value.ended }
+            assertEquals("Quiet interval", playback.state.value.title)
+            compose.onNodeWithText("Track finished").assertDoesNotExist()
+        } finally { compose.runOnIdle { playback.close() } }
         // The library tap captures the displayed list, then automatically advances to its second song.
-        compose.onNodeWithText("Quiet interval").assertIsDisplayed()
+        compose.waitUntil(5000) {
+            runCatching { compose.onNodeWithTag("player-title", useUnmergedTree = true)
+                .assertIsDisplayed().assert(hasAnyDescendant(hasText("Quiet interval"))) }.isSuccess
+        }
         compose.onNodeWithContentDescription("Collapse player").performClick()
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithContentDescription("Add playlist").performClick()

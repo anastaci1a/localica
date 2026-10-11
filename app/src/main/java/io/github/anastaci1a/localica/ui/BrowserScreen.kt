@@ -114,13 +114,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
     val scrollScope = rememberCoroutineScope()
+    val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
     var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(scrollToTopRequest) {
         if (consumedScrollRequest != scrollToTopRequest) {
             localSearchOpen = false
             // Keep one job through query publication and the first layout. A readiness key can
             // restart this effect after it consumed the request but before scrolling could begin.
-            snapshotFlow { loadedResult != null && gridState.layoutInfo.totalItemsCount > 0 }.first { it }
+            snapshotFlow { readyToScroll && gridState.layoutInfo.totalItemsCount > 0 }.first { it }
+            // Let the newly published rows replace the restored route's empty/old layout.
+            withFrameNanos { }; withFrameNanos { }
             consumedScrollRequest = scrollToTopRequest
             gridState.easeToTop(reducedMotion)
         }

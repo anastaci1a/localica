@@ -71,7 +71,7 @@ class NavigationTest {
         compose.onNodeWithText("Your music").assertIsDisplayed()
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
-        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Track 40"))
+        compose.scrollToUncoveredItem(hasText("Track 40"))
         compose.onNodeWithText("Track 40").performClick()
         compose.runOnIdle { assertEquals(tracks.last(), selected) }
         compose.onNodeWithContentDescription("More").performClick()

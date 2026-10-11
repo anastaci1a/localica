@@ -43,6 +43,9 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true): Froste
         if (Build.VERSION.SDK_INT < 31 && enabled && source.size != IntSize.Zero) {
             suspend fun capture() {
                 withFrameNanos { }; withFrameNanos { }
+                // Layout can exist before the first recorded draw, or survive a restored
+                // player layer briefly. ImageReader rejects a zero-sized recording.
+                if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return
                 val snapshot = source.layer.toImageBitmap()
                 source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
             }
