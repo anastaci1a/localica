@@ -32,6 +32,76 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var editPlayRequest: Boolean? = null
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { submit { capture() } }
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) enqueueSongEnd()
+        }
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED && player?.playWhenReady == true) enqueueSongEnd()
+        }
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            val policy = state.value.settings.advancedRepeat ?: return
+            val attached = player ?: return
+            if (reason != Player.DISCONTINUITY_REASON_AUTO_TRANSITION || !policy.reshuffle || policy.pausesEachSong ||
+                policy.songEnd == SongEnd.Repeat || policy.queueEnd != QueueEnd.Repeat || !state.value.settings.shuffle) return
+            if (oldPosition.mediaItem?.mediaId == traversal.lastOrNull() && newPosition.mediaItem?.mediaId == traversal.firstOrNull()) {
+                val expected = generation
+                submit { if (player === attached && generation == expected) applyPlaybackModes(resetShuffle = true) }
+            }
+        }
+    }
+
+    private fun enqueueSongEnd() {
+        val attached = player ?: return
+        val entry = attached.currentMediaItem?.mediaId ?: return
+        val expected = generation
+        val position = attached.currentPosition
+        val policy = state.value.settings.advancedRepeat
+        attached.pause()
+        submit {
+            // A song tap/seek or service replacement queued ahead of this callback wins.
+            if (player !== attached || generation != expected || attached.currentMediaItem?.mediaId != entry ||
+                attached.currentPosition < position - 250 || state.value.settings.advancedRepeat != policy) return@submit
+            if (policy == null) { capture(); return@submit }
+            val next = attached.nextMediaItemIndex
+            if (policy.songEnd == SongEnd.Stop && next != C.INDEX_UNSET) { capture(); return@submit }
+            if (policy.songEnd == SongEnd.NextPaused && next != C.INDEX_UNSET) {
+                attached.seekTo(next, 0); capture(); return@submit
+            }
+            finishQueue(policy, play = !policy.pausesEachSong)
+        }
+    }
+
+    private suspend fun finishQueue(policy: AdvancedRepeat, play: Boolean) {
+        val attached = player ?: return
+        capture()
+        val queue = state.value.library.active ?: return
+        val firstId = if (state.value.settings.shuffle) traversal.firstOrNull() else queue.entries.firstOrNull()?.id
+        when (policy.queueEnd) {
+            QueueEnd.Stop -> {
+                if (policy.resetToFirst) attached.seekTo(0, 0)
+                if (policy.reshuffle) applyPlaybackModes(resetShuffle = true)
+                capture()
+            }
+            QueueEnd.Repeat -> {
+                val first = queue.entries.indexOfFirst { it.id == firstId }.coerceAtLeast(0)
+                attached.seekTo(first, 0)
+                if (policy.reshuffle) applyPlaybackModes(resetShuffle = true)
+                attached.playWhenReady = play
+                capture()
+            }
+            QueueEnd.NextQueue -> {
+                val queues = state.value.library.queues
+                val index = queues.indexOfFirst { it.id == queue.id }
+                val next = (1 until queues.size).map { queues[(index + it) % queues.size] }.firstOrNull { it.entries.isNotEmpty() }
+                if (policy.resetToFirst) attached.seekTo(0, 0)
+                capture()
+                if (next == null) return
+                saveStartingPlayback(state.value.library.update(next.copy(lastActivatedAt = nextActivation())).copy(activeId = next.id)) {
+                    activate(play, seek = true, resetShuffle = policy.reshuffle)
+                }
+                mutable.update { if (it.browsedId == null || it.browsedId == queue.id) it.copy(browsedId = next.id) else it }
+            }
+        }
     }
 
     init {
@@ -231,7 +301,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         applyPlaybackModes(resetShuffle = true)
     }
     fun repeat() = submit {
-        updateSettings(state.value.settings.copy(repeat = QueueRepeat.entries[(state.value.settings.repeat.ordinal + 1) % QueueRepeat.entries.size]))
+        updateSettings(state.value.settings.copy(advancedRepeat = null, repeat = QueueRepeat.entries[(state.value.settings.repeat.ordinal + 1) % QueueRepeat.entries.size]))
         applyPlaybackModes()
     }
     fun randomize(queueId: String, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { queue ->
@@ -250,7 +320,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         require(value.maximum == null || value.maximum > 0)
         require(value.previousThresholdSeconds in 1..60)
         val resetShuffle = state.value.settings.shuffle != value.shuffle
-        updateSettings(value)
+        updateSettings(value.copy(repeat = value.advancedRepeat?.repeat ?: value.repeat))
         configurePreloading()
         applyPlaybackModes(resetShuffle)
     }
@@ -267,7 +337,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val order = traversal.map { ids.indexOf(it) }.toIntArray()
             attached.setShuffleOrder(androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(order, kotlin.random.Random.nextLong()))
         } else if (!modes.shuffle) traversal = emptyList()
-        attached.repeatMode = when (modes.repeat) { QueueRepeat.Off -> Player.REPEAT_MODE_OFF
+        val policy = modes.advancedRepeat
+        (attached as? ExoPlayer)?.setPauseAtEndOfMediaItems(policy?.pausesEachSong == true)
+        attached.repeatMode = when (if (policy?.pausesEachSong == true) QueueRepeat.Off else modes.repeat) { QueueRepeat.Off -> Player.REPEAT_MODE_OFF
             QueueRepeat.All -> Player.REPEAT_MODE_ALL; QueueRepeat.One -> Player.REPEAT_MODE_ONE }
         attached.shuffleModeEnabled = modes.shuffle
     }
@@ -361,9 +433,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val modes = state.value.settings
             val repeat = when (attached.repeatMode) { Player.REPEAT_MODE_ALL -> QueueRepeat.All
                 Player.REPEAT_MODE_ONE -> QueueRepeat.One; else -> QueueRepeat.Off }
-            if (modes.shuffle != attached.shuffleModeEnabled || modes.repeat != repeat) {
+            if (modes.shuffle != attached.shuffleModeEnabled || (modes.advancedRepeat == null && modes.repeat != repeat)) {
                 val resetShuffle = modes.shuffle != attached.shuffleModeEnabled
-                updateSettings(modes.copy(shuffle = attached.shuffleModeEnabled, repeat = repeat))
+                updateSettings(modes.copy(shuffle = attached.shuffleModeEnabled, repeat = if (modes.advancedRepeat == null) repeat else modes.repeat))
                 if (resetShuffle) applyPlaybackModes(true)
             }
         }

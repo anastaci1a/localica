@@ -27,11 +27,6 @@ class PlaybackService : MediaSessionService() {
             setWakeMode(C.WAKE_MODE_LOCAL)
             repeatMode = Player.REPEAT_MODE_OFF
             shuffleModeEnabled = false
-            addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_ENDED) pause()
-                }
-            })
         }
         engine = player
         statistics = io.github.anastaci1a.localica.statistics.PlaybackStatistics(player, (application as LocalicaApplication).statistics::record)
@@ -41,6 +36,15 @@ class PlaybackService : MediaSessionService() {
         val controls = object : ForwardingPlayer(player) {
             override fun seekToPrevious() { (application as LocalicaApplication).queues.previous() }
             override fun seekToPreviousMediaItem() { (application as LocalicaApplication).queues.previous() }
+            override fun setRepeatMode(repeatMode: Int) {
+                val queues = (application as LocalicaApplication).queues
+                queues.settings(queues.state.value.settings.copy(advancedRepeat = null,
+                    repeat = when (repeatMode) {
+                        Player.REPEAT_MODE_ALL -> io.github.anastaci1a.localica.queue.QueueRepeat.All
+                        Player.REPEAT_MODE_ONE -> io.github.anastaci1a.localica.queue.QueueRepeat.One
+                        else -> io.github.anastaci1a.localica.queue.QueueRepeat.Off
+                    }))
+            }
         }
         session = MediaSession.Builder(this, controls)
             .setSessionActivity(activity)
