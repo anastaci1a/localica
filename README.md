@@ -2,7 +2,7 @@
 
 An Android player for music stored on your device. Browse folders, albums and artists, organize playlists, and keep separate listening queues.
 
-Saved queues, configurable navigation, bulk tag/artwork editing, local synced lyrics, and background playback. No account or internet access. A frosted Queue drawer begins the move toward a shared glass interface.
+Saved queues, configurable navigation, bulk tag/artwork editing, local synced lyrics, and background playback. No account or internet access. Liquid Glass floating controls complement a frosted Queue drawer.
 
 Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus where the device provides a decoder. Songs advance through the active queue.
 
@@ -19,4 +19,4 @@ Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus
   <p><img src="docs/images/navigation.gif" width="360" alt="Navigating the Library, album lists, player, and Queue drawer in Localica"></p>
 </details>
 
-Previews captured in v0.15.1 using silent demo files. Album artwork and track names: Radiohead’s [In Rainbows](https://radiohead.bandcamp.com/album/in-rainbows) and [Kid A](https://radiohead.bandcamp.com/album/kid-a). Artwork belongs to its respective rights holders and is not included in the app.
+Previews captured in v0.16.0 using silent demo files. Album artwork and track names: Radiohead’s [In Rainbows](https://radiohead.bandcamp.com/album/in-rainbows) and [Kid A](https://radiohead.bandcamp.com/album/kid-a). Artwork belongs to its respective rights holders and is not included in the app.

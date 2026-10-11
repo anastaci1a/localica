@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -113,6 +114,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val queryPending = presentation?.route != route || presentation?.style != style
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
+    val surroundingBackdrop = LocalFrostedBackdrop.current
+    val needsListBackdrop = surroundingBackdrop == null && route.collection?.kind == MediaKind.Queue
+    val listBackdrop = rememberFrostedBackdrop(presentation, needsListBackdrop, dark = false)
+    val refreshBackdrop = LocalBackdropRefresh.current
+    LaunchedEffect(presentation, gridState.isScrollInProgress) {
+        if (!gridState.isScrollInProgress) {
+            kotlinx.coroutines.delay(150)
+            refreshBackdrop()
+            if (needsListBackdrop) listBackdrop.refresh()
+        }
+    }
     val scrollScope = rememberCoroutineScope()
     val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
     var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
@@ -205,7 +217,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters) filterHeight + 8.dp else if (showSearchPill) 56.dp else 0.dp).testTag("browse-loading"))
-            else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize().then(if (showSearchPill || showFilters) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
+            else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
+                .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop).background(MaterialTheme.colorScheme.surface) else Modifier)
+                .then(if (showSearchPill || showFilters) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         if (showSearchPill || showFilters) Spacer(Modifier.height(if (showFilters) filterHeight + 8.dp else 56.dp))
@@ -319,8 +333,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
                 exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
-                ReturnToPositionButton(up = (playingIndex ?: 0) < gridState.firstVisibleItemIndex, label = "Current song", visible = showCurrent && !session.active && reorder.drag == null) {
-                    playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, if (showSearchPill) with(density) { 56.dp.toPx() } else 0f) } }
+                CompositionLocalProvider(LocalFrostedBackdrop provides (surroundingBackdrop ?: listBackdrop)) {
+                    ReturnToPositionButton(up = (playingIndex ?: 0) < gridState.firstVisibleItemIndex, label = "Current song", visible = showCurrent && !session.active && reorder.drag == null) {
+                        playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, if (showSearchPill) with(density) { 56.dp.toPx() } else 0f) } }
+                    }
                 }
             }
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, displayedStyle.sort, Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset))

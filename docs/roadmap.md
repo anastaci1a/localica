@@ -2,11 +2,11 @@
 
 ## Current checkpoint
 
-Implement device feedback in v0.15.1 (gesture ownership, player layout, selection transitions and navigation), then v0.16.0 (shared Liquid Glass controls and neutral accents). Pause after both verified APKs for device review. Current contracts live in [Product](product.md) and [Interface](interface.md); release history belongs in [GitHub Releases](https://github.com/anastaci1a/localica/releases).
+Review the v0.15.1 fixes and v0.16.0 Liquid Glass controls on device before further visual changes. Current contracts live in [Product](product.md) and [Interface](interface.md); release history belongs in [GitHub Releases](https://github.com/anastaci1a/localica/releases).
 
 ## Next outcome
 
-Refine the shared frosted Queue/return-button material and gestures from device feedback, then extend the established layout toward Apple Music-inspired liquid glass. Preserve legibility, accessibility, performance and older-device fallbacks. Keep the design system in this repository until demonstrated reuse justifies extraction.
+Tune the shared Liquid Glass controls, frosted Queue drawer and player gestures from device feedback before expanding the material to other surfaces. Preserve legibility, accessibility, performance and older-device fallbacks. Keep the design system in this repository until demonstrated reuse justifies extraction.
 
 ## Deferred capabilities
 

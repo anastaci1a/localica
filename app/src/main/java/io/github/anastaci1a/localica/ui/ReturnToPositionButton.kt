@@ -20,9 +20,9 @@ import io.github.anastaci1a.localica.R
 internal fun ReturnToPositionButton(up: Boolean, label: String, visible: Boolean = true, onClick: () -> Unit) {
     var direction by remember { mutableStateOf(up) }
     SideEffect { if (visible) direction = up }
-    FrostedSurface(Modifier.size(52.dp).clip(CircleShape)
+    LiquidGlassSurface(Modifier.size(52.dp).clip(CircleShape)
         .semantics { stateDescription = if (direction) "Scroll up" else "Scroll down" }
-        .clickable(role = Role.Button, onClickLabel = label, onClick = onClick), shape = CircleShape, compact = true) {
+        .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)) {
         Icon(painterResource(R.drawable.ic_arrow_down), label,
             Modifier.align(Alignment.Center).size(24.dp).graphicsLayer { rotationZ = if (direction) 180f else 0f })
     }
