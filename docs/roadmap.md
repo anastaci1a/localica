@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Implement the agreed device feedback across player motion, glass interactions, interactive browsing, collection pages and tag editing. Track acceptance criteria in Issues; complete these outcomes in at most three verified APK releases, preserving accessibility, playback continuity and older-Android support.
+Review the implemented player carousel, glass motion, collection headers, interactive pinch and tag-editing flow on the user's phone. Tune motion, contrast and gesture feel from concrete device feedback; Issues own any resulting changes. Preserve accessibility, playback continuity and older-Android support.
 
 ## Deferred capabilities
 
