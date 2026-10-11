@@ -65,8 +65,11 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
         }
     }
     Box(modifier) {
-        FloatingActionButton(onClick = { menu = true }) {
-            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), "Add playlist", Modifier.size(24.dp))
+        Surface(onClick = { menu = true }, modifier = Modifier.size(64.dp),
+            shape = androidx.compose.foundation.shape.CircleShape, tonalElevation = 3.dp, shadowElevation = 2.dp) {
+            Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), "Add playlist", Modifier.size(24.dp))
+            }
         }
         DropdownMenu(menu, { menu = false }) {
             ActionMenuItem("Create playlist", enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
