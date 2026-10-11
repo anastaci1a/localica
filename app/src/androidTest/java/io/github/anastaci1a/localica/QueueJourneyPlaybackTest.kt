@@ -51,7 +51,13 @@ class QueueJourneyPlaybackTest {
             start()
             assertNull(queues.state.value.library.active!!.journey!!.previous)
             for (index in listOf(3, 1, 5)) { queues.selectEntry(ids[index]); at(index) }
-            queues.previous(alwaysSong = true); at(1)
+            queues.settings(queues.state.value.settings.copy(previousBehavior = PreviousBehavior.RestartSong))
+            await { queues.state.value.settings.previousBehavior == PreviousBehavior.RestartSong }
+            val previous = queues.state.value.library.active!!.journey!!.previous!!
+            val swiped = CompletableDeferred<Boolean>()
+            queues.swipeTo(previous.token) { swiped.complete(it) }
+            assertTrue(runBlocking { withTimeout(10000) { swiped.await() } })
+            at(1)
             queues.previous(alwaysSong = true); at(3)
             val rewound = queues.state.value.library.active!!.journey!!
             assertEquals(listOf(0, 3, 1, 5).map { ids[it] }, rewound.history.map { it.entryId })

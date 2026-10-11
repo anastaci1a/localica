@@ -58,6 +58,7 @@ internal fun PlayerArtworkFrame(visual: PlayerVisual, modifier: Modifier, shape:
 internal object PlayerVisualCache {
     private data class Key(val uri: String, val revision: Long)
     private val cache = android.util.LruCache<Key, PlayerVisual>(4)
+    fun peek(uri: String): PlayerVisual? = cache.get(Key(uri, ArtworkCache.revision.value))
     suspend fun read(context: android.content.Context, uri: String, provider: CoverProvider = EmbeddedCoverProvider): PlayerVisual {
         val key = Key(uri, ArtworkCache.revision.value)
         if (provider === EmbeddedCoverProvider) cache.get(key)?.let { return it }
@@ -76,11 +77,12 @@ internal object PlayerVisualCache {
 }
 
 @Composable
-internal fun PrepareNeighborArtwork(uris: List<String?>) {
+internal fun rememberNeighborArtwork(uri: String?): PlayerVisual? {
     val context = LocalContext.current.applicationContext
     val revision by ArtworkCache.revision.collectAsState()
-    LaunchedEffect(uris, revision) {
-        kotlinx.coroutines.delay(150)
-        for (uri in uris.filterNotNull().distinct()) PlayerVisualCache.read(context, uri)
+    val request = uri to revision
+    val prepared by produceState<Pair<Pair<String?, Long>, PlayerVisual>?>(null, request) {
+        value = if (uri == null) null else request to PlayerVisualCache.read(context, uri)
     }
+    return prepared?.takeIf { it.first == request }?.second ?: uri?.let(PlayerVisualCache::peek)
 }

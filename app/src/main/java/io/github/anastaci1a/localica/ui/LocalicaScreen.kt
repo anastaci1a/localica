@@ -176,7 +176,11 @@ fun LocalicaScreen(
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
     val neighbors = queueController?.artworkNeighbors().orEmpty()
-    PrepareNeighborArtwork(neighbors)
+    val journey = queues.library.active?.journey
+    val nextVisual = rememberNeighborArtwork(neighbors.getOrNull(0))
+    val previousVisual = rememberNeighborArtwork(neighbors.getOrNull(1))
+    val nextArtwork = journey?.next?.let { visit -> nextVisual?.let { ArtworkNeighbor(visit.token, it) } }
+    val previousArtwork = journey?.previous?.let { visit -> previousVisual?.let { ArtworkNeighbor(visit.token, it) } }
     val previewTracks = library.snapshot.tracks
     val currentPreviewTrack = previewTracks.firstOrNull { it.uri == player.trackUri }
     val previewUris = (listOfNotNull(player.trackUri) + previewTracks.filterNot {
@@ -292,7 +296,9 @@ fun LocalicaScreen(
             onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
             if (currentTrack != null && editTags != null) ({ editTags(listOf(library.snapshot.tracks.firstOrNull { it.id == currentTrack.id } ?: currentTrack)) {} }) else null,
             lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
-            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual) {
+            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
+            artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
+            onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)

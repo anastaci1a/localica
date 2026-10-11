@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Complete the full glass overhaul; device feedback follows the completed release. Add interactive artwork swipes using the persisted per-queue history. Extend configurable glass controls, frosted panels and origin-based control-to-panel morphing throughout the app, including scoped search and creation menus. Include position-anchored pinch navigation between list/gallery sizes ([#75](https://github.com/anastaci1a/localica/issues/75)). Issues own acceptance criteria. Preserve accessibility, playback continuity and older-Android support; keep the shared rendering system in this repository.
+Complete the full glass overhaul; device feedback follows the completed release. Extend configurable glass controls, frosted panels and origin-based control-to-panel morphing throughout the app, including scoped search and creation menus. Include position-anchored pinch navigation between list/gallery sizes ([#75](https://github.com/anastaci1a/localica/issues/75)). Issues own acceptance criteria. Preserve accessibility, playback continuity and older-Android support; keep the shared rendering system in this repository.
 
 ## Deferred capabilities
 

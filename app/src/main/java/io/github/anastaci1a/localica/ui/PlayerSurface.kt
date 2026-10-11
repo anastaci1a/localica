@@ -48,7 +48,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     onEditTags: (() -> Unit)? = null, lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {},
     track: Track? = null, onSettings: (InterfaceSettings) -> Unit = {},
     actionRows: Int = 1, queueProgress: Animatable<Float, *>? = null, frostedBackdrop: FrostedBackdrop? = null,
-    glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null, actions: @Composable () -> Unit = {}) {
+    glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null,
+    artworkVisit: String? = null, previousArtwork: ArtworkNeighbor? = null, nextArtwork: ArtworkNeighbor? = null,
+    onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, actions: @Composable () -> Unit = {}) {
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
     val playerScroll = rememberScrollState()
@@ -175,6 +177,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val textX = 58.dp + (contentInset - 58.dp) * p
     val foreground = androidx.compose.ui.graphics.lerp(Color.Black, Color.White, backgroundReveal)
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
+    val artPixels = with(density) { artWidth.toPx() }
+    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork,
+        artPixels, expanded && p >= .99f && !lyricsOpen && !artwork.loading && (queueProgress?.value ?: 0f) == 0f,
+        settings, onArtworkVisit)
+    val swipeOffset = artSwipe.offset.value
+    val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels * 1.1f)).coerceIn(0f, 1f)
+    val swipeFeather = kotlin.math.sin(swipeFraction * kotlin.math.PI).toFloat() * .9f
     val baseColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = baseColors.copy(onSurface = foreground,
         onSurfaceVariant = foreground.copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, Color.White, p),
@@ -191,35 +200,53 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
-            ArtworkBlend(artwork, Modifier.fillMaxSize(), duration = paletteDuration) { frame ->
-                if (backgroundReveal > 0f) PlayerBackdrop(frame.palette, Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }
-                    .then(if (lyricsOpen) Modifier.recordFrostedBackdrop(lyricBackdrop) else Modifier),
-                    coverBlend * (1f - lyricProgress), with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                    with(density) { artX.toPx() }, with(density) { artWidth.toPx() })
-                Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer { alpha = 1f - lyricProgress }) {
-                if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,
-                    Modifier.fillMaxSize().graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
-                    contentScale = ContentScale.Fit)
-                PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag("player-artwork").graphicsLayer {
-                    compositingStrategy = if (coverBlend > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
-                }.drawWithContent {
-                    drawContent()
-                    if (coverBlend > 0f) {
-                        val stops = Array(33) { index ->
-                            val y = index / 32f
-                            val edge = if (y < 0.14f) (0.14f - y) / 0.14f else (y - 0.68f) / 0.32f
-                            val t = edge.coerceIn(0f, 1f)
-                            y to Color.Black.copy(alpha = 1f - t * t * (3f - 2f * t) * coverBlend)
-                        }
-                        drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
-                    }
-                }.artworkEdgeFeather(edgeSoftness, edgeBand).clip(artworkShape),
-                    shape = artworkShape,
-                    contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
+            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize(), duration = paletteDuration,
+                immediate = artworkVisit != null && artSwipe.handoff == artworkVisit) { frame ->
+                val destination = artSwipe.destination
+                val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels * 1.1f
+                if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }
+                    .then(if (lyricsOpen) Modifier.recordFrostedBackdrop(lyricBackdrop) else Modifier)) {
+                    PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), coverBlend * (1f - lyricProgress),
+                        with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
+                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = swipeFeather / .9f)
+                    if (destination != null) PlayerBackdrop(destination.visual.palette,
+                        Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, coverBlend,
+                        with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
+                        with(density) { artX.toPx() } + neighborOffset, artPixels, softness = swipeFeather / .9f)
                 }
+                @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
+                    Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer {
+                        val remaining = if (neighbor) kotlin.math.abs(swipeOffset) else artPixels * 1.1f - kotlin.math.abs(swipeOffset)
+                        alpha = (1f - lyricProgress) * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
+                        translationX = offset
+                    }.then(if (neighbor) Modifier.clearAndSetSemantics {} else Modifier)) {
+                    if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,
+                        Modifier.fillMaxSize().graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
+                        contentScale = ContentScale.Fit)
+                    PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag(if (neighbor) "player-neighbor-artwork" else "player-artwork").graphicsLayer {
+                        compositingStrategy = if (coverBlend > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                    }.drawWithContent {
+                        drawContent()
+                        if (coverBlend > 0f) {
+                            val stops = Array(33) { index ->
+                                val y = index / 32f
+                                val edge = if (y < 0.14f) (0.14f - y) / 0.14f else (y - 0.68f) / 0.32f
+                                val t = edge.coerceIn(0f, 1f)
+                                y to Color.Black.copy(alpha = 1f - t * t * (3f - 2f * t) * coverBlend)
+                            }
+                            drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
+                        }
+                    }.artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather), if (artSwipe.active) .13f else edgeBand).clip(artworkShape),
+                        shape = artworkShape,
+                        contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
+                    }
+                }
+                // Soft edges reveal the two blended color continuations in the space between covers.
+                cover(frame, swipeOffset)
+                if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
             }
-            Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight)
-                .then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
+            Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).testTag("artwork-gesture")
+                .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
                     onClickLabel = settings.artworkTap.label, onClick = { artworkAction(settings.artworkTap) },
                     onLongClickLabel = settings.artworkHold.label, onLongClick = { artworkAction(settings.artworkHold) }) else Modifier)) {
                 DropdownMenu(artworkMenu, { artworkMenu = false }) {
