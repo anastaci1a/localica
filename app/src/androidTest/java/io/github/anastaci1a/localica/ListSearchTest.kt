@@ -58,6 +58,7 @@ class ListSearchTest {
             compose.onNode(hasSetTextAction()).assertIsFocused().assertTextContains("Album")
             compose.onNode(hasSetTextAction()).performTextReplacement("061")
             compose.onNode(hasSetTextAction()).performImeAction()
+            compose.onNode(hasSetTextAction()).assertIsNotFocused()
             compose.waitUntil(5000) { InstrumentationRegistry.getInstrumentation().uiAutomation.windows.none {
                 it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
             } }

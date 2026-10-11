@@ -65,7 +65,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val resultsFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
     var focusedRequest by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(-1) }
-    LaunchedEffect(route.key, playerOpen, focusRequest) {
+    var inputCompletion by remember(route.key) { mutableIntStateOf(0) }
+    fun submitSearch() {
+        // Cancel a pending frame-delayed focus request before ending this input session.
+        focusedOnce = true; focusedRequest = focusRequest; inputCompletion++
+        onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
+    }
+    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion) {
         if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
             withFrameNanos { } // Wait until the newly keyed field is attached.
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
@@ -144,15 +150,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             leadingIcon = { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null) },
             trailingIcon = { ActionIcon(R.drawable.ic_close, "Close list search", onClick = popupDismiss) },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide() }),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submitSearch() }),
             colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                 unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
         else if (route.search) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide() }),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submitSearch() }),
             trailingIcon = { if (popupDismiss != null) ActionIcon(R.drawable.ic_close, "Close list search", onClick = popupDismiss)
-                else ActionIcon(R.drawable.ic_search, "Submit search") { onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide() } },
+                else ActionIcon(R.drawable.ic_search, "Submit search") { submitSearch() } },
             label = { Text(if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}") },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus), shape = Corners.card)
         if (route.collection == null && (route.tab == MainTab.Library || route.globalSearch)) {
