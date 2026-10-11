@@ -22,19 +22,15 @@ Library filters and All’s collection types are configurable. Songs retain firs
 
 ## Device review
 
-The v0.12.3 APK is available for device review, particularly the numbered queue UI, scoped search history, global playback modes, gallery column counts, and player gestures/artwork, alongside collection sorting and playback counts. Continue with the upward-drag patch while device feedback is pending; address new regressions in small verified releases before applying glass materials.
+The v0.13.0 APK is available for review. It starts selected songs before lengthy queue saves, adds configurable Previous behavior, and updates drag motion, selection cleanup, lyrics, and queue titles. Address device feedback in small verified releases.
 
-## Next interaction checkpoint
+## Current interaction checkpoint
 
-Verify and release v0.13.0: stabilize drag-stack motion and upward edge scrolling before frosted glass; clear mutable-list selection on Back or a completed move. Include prompt local song starts, configurable Previous behavior, quiet lyrics, and consistent queue titles/actions. Verify playback persistence, cancellation, paused transport, and Android 8/16 behavior.
-
-## Player action customization
-
-After the interaction checkpoint, replace the action reorder list with a slot preview and scrollable icon palette based on all six Poweramp customization references. Centered uses balanced fixed slots; non-centered uses a horizontal slot carousel. Two rows and Small change slot capacity. Open the editor by holding an empty slot or through Settings; if every visible slot is filled, use Settings. Preserve empty positions and hidden assignments, support direct smooth drag/drop with haptics, and retain accessible alternatives and clear action-state icons. Verify this before applying glass materials.
+Verify and release v0.14.0: slot-based player action customization with smooth drag/drop, the advanced Repeat popup and actual playback boundaries, fixed-metric player text scaling, automatic scrolling without overshoot, and aligned floating controls. Preserve existing assignments and verify Android 8/16 behavior.
 
 ## Visual design system
 
-Start with the queue after the current interface release is reviewed: replace its floating player pill with a bottom-attached frosted drawer, preserving the Musicolet-based queue controls. Use one continuous material from collapsed to expanded, eliminating the white-panel flash. Transmit the actual player behind the surface with soft scattering, subtle non-repeating grain, restrained directional light and edge highlights; keep text crisp. Establish a reusable backdrop/material boundary before extending Apple Music-inspired liquid glass elsewhere. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
+Continue directly with the queue after the interaction checkpoint: replace its floating player pill with a bottom-attached frosted drawer, preserving the Musicolet-based queue controls. Use one continuous material from collapsed to expanded, eliminating the white-panel flash. Transmit the actual player behind the surface with soft scattering, subtle non-repeating grain, restrained directional light and edge highlights; keep text crisp. Use the same material for circular directional return-to-current-position buttons in lyrics and queues. Establish a reusable backdrop/material boundary before extending Apple Music-inspired liquid glass elsewhere. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
 
 ## Subsequent functionality
 
@@ -42,7 +38,7 @@ These capabilities remain planned but do not gate the start of visual work:
 
 - **Personalized Home:** configurable carousels using the existing first-added dates, qualified play counts, and pins. Support mixed sources, manual carousel order, sorting, presentation, and preview counts while preserving offline operation.
 - **Optional Last.fm integration:** account connection, track/artist equivalency matching with review for ambiguous results, and opt-in scrobbling with durable pending submissions. Implement after local statistics; keep local counts independent of matching and service availability. See [Product](product.md#optional-lastfm-integration).
-- **Later playback and presentation:** configurable crossfades, advanced repeat behavior, sleep timer, equalizer, and multilingual UI.
+- **Later playback and presentation:** configurable crossfades, additional shuffle modes, sleep timer, equalizer, and multilingual UI.
 - **Visualizers:** a player destination compatible with Poweramp presets. First review MilkDrop v1/v2 files, shader conversion, textures, Poweramp extensions/packaging, licensing, and device performance with compatibility fixtures. [Primary specification](https://github.com/maxmpz/powerampapi/blob/master/poweramp_vis_presets_example/readme.md).
 - **Lyric editing:** a manual `.lrc` text editor and a playback-assisted mode that timestamps a line when the user taps it. Include correction, preview, and safe save/export; follow the local lyric reader and tag-write foundations.
 
