@@ -1,6 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateBounds
+import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -17,6 +20,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,6 +39,7 @@ import kotlinx.coroutines.withContext
 
 private data class PresentedBrowse(val route: BrowseRoute, val style: BrowseStyle, val result: BrowseResult)
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, route: BrowseRoute,
     onRoute: (BrowseRoute) -> Unit, onOpen: (BrowserItem) -> Unit, onSettings: () -> Unit,
@@ -108,6 +114,29 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val queryPending = presentation?.route != route || presentation?.style != style
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
+    var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
+    LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
+        val anchor = zoomAnchor ?: return@LaunchedEffect
+        if (anchor.route != route) { zoomAnchor = null; return@LaunchedEffect }
+        if (queryPending || displayedStyle != anchor.style) return@LaunchedEffect
+        val index = result.items.indexOfFirst { it.key == anchor.key }
+        try {
+            if (index >= 0) {
+                gridState.scrollToItem(index + 1, -anchor.top)
+                // Rows above the anchor change height during reflow. Compensate until
+                // their bounds settle; a fresh user scroll cancels this mutation.
+                gridState.scroll {
+                    val start = withFrameNanos { it }
+                    do {
+                        val now = withFrameNanos { it }
+                        gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == anchor.key }?.let {
+                            scrollBy((it.offset.y - anchor.top).toFloat())
+                        }
+                    } while (now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
+                }
+            }
+        } finally { if (zoomAnchor == anchor) zoomAnchor = null }
+    }
     val surroundingBackdrop = LocalFrostedBackdrop.current
     val needsListBackdrop = (showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
         (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
@@ -189,12 +218,29 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             label = { Text(if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}") },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus), shape = Corners.card)
 
+        LookaheadScope {
         if (popupDismiss == null || route.text.isNotBlank()) Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
             .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
             val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters || showSearchPill) pillSlotHeight else 0.dp).testTag("browse-loading"))
             else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
+                .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List"
+                    else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
+                .pinchToChangeView(enabled && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind != MediaKind.Queue) { zoomIn, midpoint ->
+                    val next = displayedStyle.zoomStep(zoomIn, with(density) { reorder.viewportWidth.toDp().value },
+                        albumSongs = route.collection?.kind == MediaKind.Album)
+                    if (next != displayedStyle) {
+                        val nearest = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }.minByOrNull {
+                            val x = it.offset.x + it.size.width / 2f - midpoint.x
+                            val y = it.offset.y + it.size.height / 2f - midpoint.y
+                            x * x + y * y
+                        }
+                        if (nearest != null) zoomAnchor = BrowseZoomAnchor(route, next, nearest.key, nearest.offset.y)
+                        preferences.write(route, next, preferences.overridden(route))
+                        style = next
+                    }
+                }
                 .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, surroundingBackdrop)
                     .then(if (surroundingBackdrop == null) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
                 .then(if (showSearchPill || showFilters) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
@@ -209,7 +255,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
                 items(reorder.rendered(result.items), key = { it?.key ?: DropGapKey },
-                    contentType = { if (it == null) "gap" else "${displayedStyle.presentation}:${it.ref.kind}" }) { entry ->
+                    contentType = { if (it == null) "gap" else it.ref.kind.name }) { entry ->
                     if (entry == null) {
                         val height = with(androidx.compose.ui.platform.LocalDensity.current) { (reorder.drag?.cardSize?.height ?: 0f).toDp() }
                         Box(Modifier.fillMaxWidth().height(height).testTag("drop-gap"))
@@ -265,7 +311,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
-                        Column(Modifier.fillMaxWidth().padding(4.dp).clip(Corners.card).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
+                        Column(Modifier.animateBounds(this@LookaheadScope,
+                            modifier = Modifier.fillMaxWidth().padding(4.dp),
+                            boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder) 0 else 350) })
+                            .clip(Corners.card).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
@@ -277,22 +326,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 else contextMenu = item.key
                             }
                         ).padding(horizontal = if (denseGallery) 4.dp else 12.dp, vertical = 8.dp)) {
-                            if (displayedStyle.presentation != Presentation.List) {
-                                Box {
-                                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f), shape = artworkShape(item.ref.kind))
-                                    itemMenu(false)
-                                }
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (displayedStyle.presentation == Presentation.List) MediaArtwork(item.coverUris, Modifier.size(48.dp), shape = artworkShape(item.ref.kind))
-                                Column(Modifier.weight(1f).padding(start = if (displayedStyle.presentation == Presentation.List) 12.dp else 0.dp)) {
-                                    Text(item.title, style = if (denseGallery) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium, maxLines = 2,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    item.information(displayedStyle)?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
-                                }
-                                if (displayedStyle.presentation == Presentation.List) itemMenu(true)
-                            }
+                            BrowseItemLayout(item, displayedStyle, denseGallery, this@LookaheadScope, reducedMotion, itemMenu)
                         }
 
                     }
@@ -336,6 +370,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
                 PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset).testTag("playlist-add-module"))
             }
+        }
         }
         if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.active && reorder.drag == null, reducedMotion = reducedMotion) {
             SessionSelectionPanel(session, queues, playlistController, playlists)
