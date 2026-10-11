@@ -10,6 +10,7 @@ These instructions govern how to work on localica. Product goals and plans belon
 - Record decisions as the current choice, its reason, and any important constraint. Preserve history in Git when it is no longer needed for the next decision. Do not keep daily notes, transcripts, repeated task lists, or a running journal.
 - At the end of meaningful work, reconcile the plan with what is now true. Remove completed or obsolete plan text. Keep open questions only when they affect a coming decision.
 - Keep the main `README.md` easy to read. Add a small number of real app screenshots once screens exist; update or remove outdated screenshots when the UI changes. Avoid placeholder images and lengthy feature inventories there.
+- Review README screenshots and animated previews before each release. Recapture changed screens from the release candidate, inspect the resulting files, and keep the navigation GIF short. Credit any third-party artwork used in previews; never bundle demo music in the app.
 
 ## Work and issues
 
