@@ -39,6 +39,12 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
     var loadJob by remember { mutableStateOf<Job?>(null) }
     var preview by remember { mutableStateOf<PlaylistImportPreview?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val menuAnchor = rememberGlassAnchor()
+    val menuSource = LocalFrostedBackdrop.current
+    SideEffect {
+        menuAnchor.source = menuSource
+        menuAnchor.face = { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), null, Modifier.size(24.dp)) }
+    }
     val picker = rememberLauncherForActivityResult(LocalPlaylistPicker()) { uri ->
         if (uri != null) loadJob = scope.launch {
             loading = true; error = null
@@ -66,15 +72,17 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
         }
     }
     Box(modifier) {
-        LiquidGlassSurface(Modifier.size(CompactControlSize).clickable { menu = true }) {
+        LiquidGlassSurface(Modifier.size(CompactControlSize).glassAnchor(menuAnchor).clickable { menu = true }) {
             Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), "Add playlist", Modifier.size(24.dp))
             }
         }
-        DropdownMenu(menu, { menu = false }) {
+        GlassMorphPopup(menu, menuAnchor, { menu = false }) {
+            Column(Modifier.padding(vertical = 8.dp).verticalScroll(rememberScrollState())) {
             ActionMenuItem("Create playlist", enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
             ActionMenuItem("Import playlist from file", enabled = !state.loading && !loading,
                 onClick = { menu = false; picker.launch(arrayOf("*/*")) })
+            }
         }
     }
     if (loading) AlertDialog(onDismissRequest = { loadJob?.cancel() }, title = { Text("Reading playlist") },

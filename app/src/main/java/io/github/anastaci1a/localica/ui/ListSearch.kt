@@ -17,8 +17,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import io.github.anastaci1a.localica.R
 
 internal val ListPillVerticalInset = 4.dp
@@ -28,18 +26,25 @@ internal val ListPillVerticalInset = 4.dp
 
 /** Shared visible body and touch target with Library filter bubbles, including large text. */
 @Composable
-internal fun ListSearchPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ListSearchPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, anchor: GlassAnchor? = null) {
     val interaction = remember { MutableInteractionSource() }
+    val source = LocalFrostedBackdrop.current
+    SideEffect { anchor?.source = source; anchor?.face = { SearchPillFace(label) } }
     Box(modifier.fillMaxWidth().height(listPillTargetHeight()).clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
         .testTag("list-search-pill"), contentAlignment = Alignment.Center) {
-        LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight())) {
-            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(R.drawable.ic_search), null, Modifier.size(20.dp), tint = LocalContentColor.current.copy(alpha = .8f))
-                Spacer(Modifier.width(10.dp))
-                Text(label, style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = .8f),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+        LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)) {
+            SearchPillFace(label)
         }
+    }
+}
+
+@Composable
+private fun SearchPillFace(label: String) {
+    Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(R.drawable.ic_search), null, Modifier.size(20.dp), tint = LocalContentColor.current.copy(alpha = .8f))
+        Spacer(Modifier.width(10.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = .8f),
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -53,11 +58,11 @@ internal fun Modifier.listTopFade() = graphicsLayer { compositingStrategy = Comp
     }
 
 @Composable
-internal fun ListSearchWindow(hasQuery: Boolean, onDismiss: () -> Unit, content: @Composable () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
-            Surface(Modifier.fillMaxWidth().then(if (hasQuery) Modifier.height(maxHeight * .85f) else Modifier.wrapContentHeight())
-                .testTag("list-search-popup"), shape = Corners.panel, tonalElevation = 6.dp, shadowElevation = 8.dp) {
+internal fun ListSearchWindow(visible: Boolean, anchor: GlassAnchor, hasQuery: Boolean, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    GlassMorphPopup(visible, anchor, onDismiss, GlassPlacement.Search) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            Box(Modifier.fillMaxWidth().then(if (hasQuery) Modifier.height(maxHeight * .85f) else Modifier.wrapContentHeight())
+                .testTag("list-search-popup")) {
                 content()
             }
         }
