@@ -53,7 +53,7 @@ class LyricsInteractionTest {
         compose.setContent { LocalicaTheme { LyricsLines(document, 15000, true, { sought = it }, Modifier.height(300.dp)) } }
         compose.onNodeWithText("Line 15").assertIsDisplayed().assertIsSelected()
         compose.onNodeWithTag("lyric-lines").performTouchInput { swipeDown() }
-        compose.onNodeWithText("Return to current line").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Return to current line").assertIsDisplayed().performClick()
         compose.onNodeWithText("Line 15").performClick()
         assertEquals(15000L, sought)
     }

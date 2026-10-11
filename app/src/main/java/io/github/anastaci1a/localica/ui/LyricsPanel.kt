@@ -108,7 +108,15 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                             .padding(vertical = 12.dp, horizontal = 4.dp))
                 }
             }
+            androidx.compose.animation.AnimatedVisibility(!following && document.synced && active >= 0,
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
+                enter = androidx.compose.animation.fadeIn(tween(if (reducedMotion) 0 else 300)),
+                exit = androidx.compose.animation.fadeOut(tween(if (reducedMotion) 0 else 300)) +
+                    androidx.compose.animation.slideOutVertically(tween(if (reducedMotion) 0 else 300)) { it }) {
+                val current = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == active }
+                ReturnToPositionButton(up = current?.let { it.offset < 0 } ?: (active < list.firstVisibleItemIndex),
+                    label = "Return to current line") { following = true }
+            }
         }
-        if (!following && document.synced) TextButton(onClick = { following = true }) { Text("Return to current line") }
     }
 }

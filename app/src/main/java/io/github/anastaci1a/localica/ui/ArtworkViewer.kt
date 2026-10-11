@@ -1,6 +1,5 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
@@ -20,7 +19,9 @@ import io.github.anastaci1a.localica.library.ArtworkReader
 @Composable
 internal fun ArtworkViewer(uri: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val cover by produceState<android.graphics.Bitmap?>(null, uri) { value = ArtworkReader(context).read(uri, 2048) }
+    val cover by produceState<Pair<String?, android.graphics.Bitmap?>>(null to null, uri) {
+        value = uri to ArtworkReader(context).read(uri, 2048)
+    }
     var scale by remember(uri) { mutableFloatStateOf(1f) }
     var offset by remember(uri) { mutableStateOf(Offset.Zero) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -38,9 +39,10 @@ internal fun ArtworkViewer(uri: String, onDismiss: () -> Unit) {
                         val limitX = width * (scale - 1f) / 2; val limitY = height * (scale - 1f) / 2
                         offset = Offset((offset.x + pan.x).coerceIn(-limitX, limitX), (offset.y + pan.y).coerceIn(-limitY, limitY))
                     }
-                    cover?.let { Image(it.asImageBitmap(), "Album artwork", Modifier.fillMaxSize().transformable(transform)
-                        .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y }) }
-                        ?: Text("No embedded artwork available", Modifier.padding(24.dp))
+                    ArtworkImage(cover.second?.takeIf { cover.first == uri }?.asImageBitmap(), cover.first != uri,
+                        Modifier.fillMaxSize().transformable(transform)
+                            .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y },
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit, emptyText = "No embedded artwork available")
                 }
             }
         }

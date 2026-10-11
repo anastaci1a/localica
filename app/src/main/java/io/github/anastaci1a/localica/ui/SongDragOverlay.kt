@@ -115,7 +115,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
             shape = Corners.card, color = if (index == 0) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.secondaryContainer,
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))) {
             if (index == 0 || !lifted || drag.dropping) Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                MediaArtwork(item.coverUris, Modifier.size(48.dp))
+                MediaArtwork(item.coverUris, Modifier.size(48.dp), shape = artworkShape(item.ref.kind))
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
                     Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
                     item.subtitle?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
