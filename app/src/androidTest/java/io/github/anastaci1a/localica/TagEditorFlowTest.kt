@@ -47,6 +47,7 @@ class TagEditorFlowTest {
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
         val inList = hasAnyAncestor(hasTestTag("browser-list"))
+        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Morning tone"))
         compose.waitUntil(15000) { compose.onAllNodes(hasText("Morning tone") and inList).fetchSemanticsNodes().isNotEmpty() }
         val original = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
         try {
@@ -61,6 +62,7 @@ class TagEditorFlowTest {
             assertTrue(app.tagEditing.state.value.results.toString(), app.tagEditing.state.value.results.single().saved)
             assertEquals("Retagged tone", runBlocking { AndroidDocuments(context).metadata(uri.toString()).title })
             compose.onNodeWithText("Close editor").performClick()
+            compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Retagged tone"))
             compose.onNode(hasText("Retagged tone") and inList).assertIsDisplayed()
             compose.onAllNodes(isToggleable() and hasAnyAncestor(hasTestTag("browser-list"))).assertCountEquals(0)
         } finally {

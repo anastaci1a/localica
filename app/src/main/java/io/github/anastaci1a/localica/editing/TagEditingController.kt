@@ -10,36 +10,63 @@ import java.io.File
 import kotlin.coroutines.resume
 
 data class TagEditorState(val tracks: List<Track> = emptyList(), val busy: Boolean = false,
-    val results: List<EditResult> = emptyList(), val recovery: String? = null, val error: String? = null)
+    val results: List<EditResult> = emptyList(), val recovery: String? = null, val error: String? = null,
+    val background: Boolean = false, val jobsVisible: Boolean = false, val jobs: List<TagJob> = emptyList())
 
-class TagEditingController(context: Context, private val library: LibraryRepository,
+class TagEditingController(private val context: Context, private val library: LibraryRepository,
     private val queues: QueueController, private val playlists: PlaylistController) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val documents = AndroidDocuments(context)
     private val writer = RecoverableTagWriter(File(context.filesDir, "tag-recovery"), AndroidEditableDocuments(context))
-    private val mutable = MutableStateFlow(TagEditorState())
+    private val history = TagJobHistory(context)
+    private val mutable = MutableStateFlow(TagEditorState(jobs = history.read()))
+    private var pendingPatch: TagPatch? = null
+    private var activeJob: String? = null
     val state = mutable.asStateFlow()
     private var stopped = false
     private var completion: ((Boolean) -> Unit)? = null
     init { scope.launch { checkRecovery() } }
     fun open(tracks: List<Track>, complete: (Boolean) -> Unit = {}) {
-        if (state.value.busy) return
+        if (state.value.busy) { showJobs(); return }
         completion?.invoke(false); completion = complete
-        mutable.update { it.copy(tracks = tracks.distinctBy(Track::id), results = emptyList(), error = null) }
+        mutable.update { it.copy(tracks = tracks.distinctBy(Track::id), results = emptyList(), error = null, background = false) }
     }
     fun close() {
         if (state.value.busy) return
         completion?.invoke(state.value.results.size == state.value.tracks.size && state.value.results.all { it.saved })
         completion = null; mutable.update { it.copy(tracks = emptyList(), results = emptyList(), error = null) }
     }
+    fun continueInBackground() { mutable.update { it.copy(background = true) } }
+    fun showJobs() { mutable.update { it.copy(jobsVisible = true) } }
+    fun hideJobs() { mutable.update { it.copy(jobsVisible = false) } }
+    fun serviceFailed(message: String) {
+        pendingPatch = null
+        mutable.update { it.copy(busy = false, error = message) }
+        scope.launch { recordJob("Stopped: $message") }
+    }
     fun stopAfterCurrent() { stopped = true }
+    fun interrupted() {
+        stopped = true
+        if (state.value.busy) mutable.update { it.copy(error = "Android stopped background editing. Check the results and tag recovery before retrying.") }
+    }
     fun save(patch: TagPatch) {
         if (state.value.busy) return
         try { patch.validate() } catch (failure: Exception) { mutable.update { it.copy(error = failure.message) }; return }
         stopped = false
+        pendingPatch = patch
+        activeJob = java.util.UUID.randomUUID().toString()
+        mutable.update { it.copy(busy = true, results = emptyList(), error = null,
+            jobs = (listOf(TagJob(activeJob!!, it.tracks.size)) + it.jobs).take(8)) }
+        try {
+            androidx.core.content.ContextCompat.startForegroundService(context,
+                android.content.Intent(context, TagEditService::class.java))
+        } catch (failure: Exception) { serviceFailed("Android couldn’t start background editing. Keep the app open and retry.") }
+    }
+    suspend fun runPending() {
+        val patch = pendingPatch ?: return
+        pendingPatch = null
         val tracks = state.value.tracks
-        mutable.update { it.copy(busy = true, results = emptyList(), error = null) }
-        scope.launch {
+        recordJob("Editing")
             try {
                 for (track in tracks) {
                     if (stopped || state.value.recovery != null) break
@@ -57,11 +84,32 @@ class TagEditingController(context: Context, private val library: LibraryReposit
                         } finally { await<Boolean> { queues.endFileEdit(token, it) } }
                     }
                     mutable.update { it.copy(results = it.results + result) }
+                    recordJob("Editing")
                     checkRecovery()
                 }
-            } catch (failure: Exception) { mutable.update { it.copy(error = failure.message ?: "Editing stopped.") } }
-            finally { mutable.update { it.copy(busy = false) }; checkRecovery() }
-        }
+            } catch (failure: Exception) { mutable.update { it.copy(error = it.error ?: if (failure is CancellationException) "Editing interrupted." else failure.message ?: "Editing stopped.") } }
+            finally { withContext(NonCancellable) {
+                mutable.update { it.copy(busy = false) }; checkRecovery()
+                val current = state.value
+                recordJob(when {
+                    current.error != null -> "Stopped: ${current.error}"
+                    current.results.size < tracks.size -> "Stopped after ${current.results.size} of ${tracks.size} files"
+                    current.results.any { !it.saved } -> "Finished with errors"
+                    else -> "Complete"
+                })
+                if (current.background) {
+                    completion?.invoke(current.results.size == tracks.size && current.results.all { it.saved })
+                    completion = null
+                }
+            } }
+    }
+    private suspend fun recordJob(status: String) {
+        val id = activeJob ?: return
+        mutable.update { current -> current.copy(jobs = current.jobs.map { job ->
+            if (job.id != id) job else job.copy(status = status, outcomes = current.results.map { "${it.track.fileName}: ${it.message}" })
+        }) }
+        try { withContext(Dispatchers.IO) { history.write(state.value.jobs) } }
+        catch (failure: Exception) { mutable.update { it.copy(error = failure.message) }; stopped = true }
     }
     fun recover() {
         if (state.value.busy) return

@@ -15,7 +15,7 @@ import io.github.anastaci1a.localica.library.Track
 internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> Unit, onAction: (PlayerAction) -> Unit) {
     GlassDialog(onDismiss, GlassPlacement.Sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            AlbumArtwork(track.uri, Modifier.size(144.dp))
+            AlbumArtwork(track.uri, Modifier.size(144.dp).align(androidx.compose.ui.Alignment.CenterHorizontally))
             Text(track.title, style = MaterialTheme.typography.headlineSmall)
             Text(track.fileName); Text(track.relativePath, style = MaterialTheme.typography.bodySmall)
             Text(track.uri, style = MaterialTheme.typography.bodySmall)
@@ -24,9 +24,12 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> 
             track.addedAt?.let { Text("Added to library: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it))) }
             Text("Qualified plays: ${track.playCount}")
             EditField.entries.forEach { field -> if (field.value(track).isNotBlank()) Text(field.label + ": " + field.value(track)) }
-            FlowRow { listOf(PlayerAction.Album, PlayerAction.Artist, PlayerAction.AlbumArtist, PlayerAction.Folder).forEach {
-                TextButton(onClick = { onDismiss(); onAction(it) }) { Text(it.label) }
-            } }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Text("Explore", style = MaterialTheme.typography.titleSmall)
+            listOf(PlayerAction.Album, PlayerAction.Artist, PlayerAction.AlbumArtist, PlayerAction.Folder).forEach { action ->
+                GlassActionButton(action.icon, action.label, Modifier.fillMaxWidth()) { onDismiss(); onAction(action) }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Row { TextButton(onClick = { onDismiss(); onEdit() }) { Text("Edit tags") }
                 TextButton(onClick = onDismiss) { Text("Done") } }
         }

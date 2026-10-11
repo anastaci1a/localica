@@ -28,6 +28,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var model: LibraryViewModel
     private var scannerRequest by mutableIntStateOf(0)
     private fun consumeScannerIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("show-tag-jobs", false) == true) {
+            (application as LocalicaApplication).tagEditing.showJobs(); intent.removeExtra("show-tag-jobs")
+        }
         if (intent?.getBooleanExtra("show-scanner", false) == true) { scannerRequest++; intent.removeExtra("show-scanner") }
     }
     override fun onCreate(savedInstanceState: Bundle?) {

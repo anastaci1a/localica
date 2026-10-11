@@ -36,7 +36,7 @@ Read/edit Title, Album, Artist, Album Artist, Year, Disc number, Track number, C
 
 - Individual and bulk edits change only checked fields; blank checked values remove tags. Preserve unchecked/mixed values and deduplicate physical songs for writes.
 - Request write grants explicitly, preview/review changes, verify writes, retain recovery, and report per-file outcomes. A batch can stop after its current transaction. Unsupported formats/fields/providers remain playable and read-only with an explanation; never silently substitute app-only tags.
-- Artwork can be replaced or removed. Offer readable recent device/previously selected images plus a full files/gallery picker; handle limited/revoked grants without requiring broad photo access. Preview before applying. The player's artwork action edits only its current song; album-wide changes require explicit bulk selection.
+- Artwork can be replaced or removed. Offer readable recent device/previously selected images plus a full files/gallery picker; handle limited/revoked grants without requiring broad photo access. Every newly chosen image passes through a required square pan/zoom crop before review; retain orientation and allow existing non-square embedded covers to display normally. Export crops at up to 2048 pixels. Preview before applying. The player's artwork action edits only its current song; album-wide changes require explicit bulk selection.
 
 Implementation and supported-write limitations: [Structure](structure.md#file-operations).
 

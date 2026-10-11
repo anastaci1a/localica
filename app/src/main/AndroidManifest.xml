@@ -27,6 +27,7 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+        <service android:name=".editing.TagEditService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".scanner.ScanService" android:exported="false" android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

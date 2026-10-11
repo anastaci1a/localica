@@ -24,11 +24,11 @@ private val settingsDestinations = listOf(
     SettingsDestination("Motion", "Interface", R.drawable.ic_next, "Animation speed and reduced motion"),
     SettingsDestination("Playback and queues", null, R.drawable.ic_play, "Preloading, queue switching, and retention"),
     SettingsDestination("Song tap behavior", "Playback and queues", R.drawable.ic_music, "Default action and per-list overrides"),
-    SettingsDestination("Library and tags", null, R.drawable.ic_library, "Folders, scanner configuration, and tag recovery"),
+    SettingsDestination("Library and tags", null, R.drawable.ic_library, "Folders, scanner configuration, tag jobs and recovery"),
     SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and unfiltered collections"),
     SettingsDestination("Folders to scan", "Library and tags", R.drawable.ic_folder, "Choose music folders and excluded subfolders"),
     SettingsDestination("Scanner configuration", "Library and tags", R.drawable.ic_search, "Subfolders, short files, and scanning on launch"),
-    SettingsDestination("Tag recovery", "Library and tags", R.drawable.ic_music, "Recover interrupted tag and artwork edits"),
+    SettingsDestination("Tag recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
     SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, and open-source licenses"),
 )
 private fun settingsPath(title: String?): List<String> {
