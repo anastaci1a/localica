@@ -44,6 +44,10 @@ class PlayerLayoutTest {
         assertEquals("Title keeps its gap from artwork", artwork.width / 6, title.left - artwork.right, 1f)
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
+        val add = compose.onNodeWithTag("playlist-add-module").fetchSemanticsNode().boundsInRoot
+        assertEquals("Add aligns with the right floating controls", utility.right, add.right, 1f)
+        assertEquals("Floating controls share a height", utility.height, add.height, 1f)
+        assertEquals("Add uses the same gap above the miniplayer", tabs.top - mini.bottom, mini.top - add.bottom, 1f)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
         val list = compose.onNodeWithTag("browser-list")
         assertTrue("List must continue behind floating controls", list.fetchSemanticsNode().boundsInRoot.bottom > tabs.bottom)
