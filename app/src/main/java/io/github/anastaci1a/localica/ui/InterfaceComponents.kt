@@ -30,6 +30,7 @@ internal fun MainTab.icon() = when (this) {
 @Composable
 internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     val icon = when {
+        label.startsWith("Rename", true) || label.startsWith("Edit", true) -> R.drawable.ic_edit
         label.contains("playlist", true) -> R.drawable.ic_playlist
         label.contains("queue", true) -> R.drawable.ic_queue
         label.contains("artwork", true) || label.contains("album", true) -> R.drawable.ic_albums
@@ -41,7 +42,7 @@ internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () 
         label.startsWith("Delete") || label.startsWith("Remove") || label.startsWith("Close") -> R.drawable.ic_close
         label.startsWith("Play") || label.startsWith("Insert") -> R.drawable.ic_play
         label.startsWith("Move") -> R.drawable.ic_drag
-        label.contains("Settings", true) || label.contains("Edit", true) || label.contains("Configure", true) || label.contains("Rename", true) -> R.drawable.ic_settings
+        label.contains("Settings", true) || label.contains("Configure", true) -> R.drawable.ic_settings
         else -> R.drawable.ic_more
     }
     DropdownMenuItem(text = { Text(label) }, onClick = onClick, enabled = enabled,
