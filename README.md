@@ -10,6 +10,8 @@ Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus
 
 <p>
   <img src="docs/images/library.png" width="240" alt="Library showing In Rainbows and Kid A with floating navigation and mini-player">
+  <img src="docs/images/album.png" width="240" alt="In Rainbows album page with artwork fading into its track list">
+  <img src="docs/images/artist.png" width="240" alt="Radiohead artist page with an album multiselect and combined Play and Shuffle controls">
   <img src="docs/images/player.png" width="240" alt="Player with embedded artwork and configurable actions">
   <img src="docs/images/queue.png" width="240" alt="Frosted Queue drawer with saved queues and song controls">
 </p>
@@ -19,4 +21,4 @@ Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus
   <p><img src="docs/images/navigation.gif" width="360" alt="Navigating the Library, album lists, player, and Queue drawer in Localica"></p>
 </details>
 
-Previews captured in v0.18.0 using silent demo files. Album artwork and track names: Radiohead’s [In Rainbows](https://radiohead.bandcamp.com/album/in-rainbows) and [Kid A](https://radiohead.bandcamp.com/album/kid-a). Artwork belongs to its respective rights holders and is not included in the app.
+Previews captured in v0.19.0 using silent demo files. Album artwork and track names: Radiohead’s [In Rainbows](https://radiohead.bandcamp.com/album/in-rainbows) and [Kid A](https://radiohead.bandcamp.com/album/kid-a). Artwork belongs to its respective rights holders and is not included in the app.
