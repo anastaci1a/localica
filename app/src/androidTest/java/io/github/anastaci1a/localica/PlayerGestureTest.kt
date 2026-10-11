@@ -61,8 +61,13 @@ class PlayerGestureTest {
             down(Offset(8f, centerY)); repeat(20) { moveBy(Offset(0f, 8f), delayMillis = 30) }
         }
         compose.mainClock.advanceTimeBy(32)
+        val rootBounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val heldBounds = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+        val exposedHeight = heldBounds.top - rootBounds.top
+        assertTrue("The held drag must expose browsing: $heldBounds", exposedHeight > 16f)
         val pixels = compose.onRoot().captureToImage().toPixelMap()
-        val exposed = pixels[4, (pixels.height * .06f).toInt()]
+        // Touch slop varies with density; sample above the actual moving surface.
+        val exposed = pixels[4, (exposedHeight / 2).toInt()]
         assertTrue("Exposed browsing background must be light during drag: $exposed", exposed.red > .8f && exposed.green > .8f && exposed.blue > .8f)
         compose.onNodeWithTag("player-surface").performTouchInput { cancel() }
         compose.mainClock.autoAdvance = true
