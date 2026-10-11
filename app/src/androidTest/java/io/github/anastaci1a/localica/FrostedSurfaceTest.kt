@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -26,6 +27,20 @@ import java.io.File
 
 class FrostedSurfaceTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun listBackdropCannotPaintOverSiblingHeaderControls() {
+        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            val panel = rememberFrostedBackdrop(Unit, enabled = false)
+            val list = rememberFrostedBackdrop(Unit, enabled = false)
+            Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(panel)) { drawRect(Color.Blue) }
+            Box(Modifier.fillMaxWidth().height(80.dp).background(Color.Red).testTag("header"))
+            Canvas(Modifier.padding(top = 100.dp).fillMaxWidth().height(100.dp).recordFrostedBackdrop(list, panel)) {
+                drawRect(Color.Green)
+            }
+        } } }
+        val image = compose.onNodeWithTag("header").captureToImage().toPixelMap()
+        val center = image[image.width / 2, image.height / 2]
+        assertTrue("A list's backing layer must stay within its viewport: $center", center.red > .97f && center.blue < .01f)
+    }
     @Test fun queueDrawerKeepsItsMaterialFromShelfThroughHeldExpansion() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
