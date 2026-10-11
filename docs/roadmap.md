@@ -22,7 +22,7 @@ Library filters and All’s collection types are configurable. Songs retain firs
 
 ## Device review
 
-Review the v0.12.2 APK on the user's device before advancing, particularly the numbered queue UI, scoped search history, global playback modes, gallery column counts, and player gestures/artwork, alongside collection sorting and playback counts. Address regressions in small verified releases before applying glass materials.
+Review the v0.12.3 APK on the user's device before advancing, particularly the numbered queue UI, scoped search history, global playback modes, gallery column counts, and player gestures/artwork, alongside collection sorting and playback counts. Address regressions in small verified releases before applying glass materials.
 
 ## Next interaction checkpoint
 
