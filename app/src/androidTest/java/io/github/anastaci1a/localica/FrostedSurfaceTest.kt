@@ -36,8 +36,10 @@ class FrostedSurfaceTest {
             album = "Color studies", fileName = audio.name, relativePath = audio.name, durationMs = 180000)
         val tracks = (0..24).map { track.copy(id = "frost:$it", title = if (it == 0) track.title else "Evening light · ${it + 1}") }
         val queue = io.github.anastaci1a.localica.queue.QueueEdits.create(tracks, 0, "Color studies ◀ Localica")
+        lateinit var hostView: android.view.View
         try {
-            compose.setContent { LocalicaTheme { LocalicaScreen(
+            compose.setContent { hostView = androidx.compose.ui.platform.LocalView.current
+                LocalicaTheme { LocalicaScreen(
                 LibraryUiState(io.github.anastaci1a.localica.library.LibrarySnapshot(tracks = tracks), loading = false),
                 io.github.anastaci1a.localica.playback.PlaybackState(connected = true, trackId = tracks.first().id, trackUri = track.uri,
                     title = track.title, artist = track.artist, album = track.album, durationMs = 180000),
@@ -46,6 +48,14 @@ class FrostedSurfaceTest {
             compose.onNodeWithTag("player-title", useUnmergedTree = true).performTouchInput { click() }
             compose.onNodeWithContentDescription("Open queue").assertIsDisplayed()
             fun record(name: String) {
+                compose.runOnIdle {
+                    var owner = hostView.context
+                    while (owner is android.content.ContextWrapper && owner !is android.app.Activity) owner = owner.baseContext
+                    val window = (owner as android.app.Activity).window
+                    val bars = androidx.core.view.WindowCompat.getInsetsController(window, hostView)
+                    assertFalse("Keep light status icons over the player and Queue", bars.isAppearanceLightStatusBars)
+                    assertFalse("Keep light navigation icons over the player and Queue", bars.isAppearanceLightNavigationBars)
+                }
                 val image = compose.onRoot().captureToImage()
                 File(context.getExternalFilesDir(null), name).outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
                 val glass = compose.onNodeWithTag("queue-surface").captureToImage().toPixelMap()
