@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
@@ -174,10 +175,12 @@ fun LocalicaScreen(
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
     val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded)
-    val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded)
+    val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = false)
+    LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
     PlayerSystemBars(hasPlayer && progress.value >= .99f)
     CompositionLocalProvider(LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+        LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
             (if (hasPlayer) 152.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
@@ -231,13 +234,17 @@ fun LocalicaScreen(
             .offset(y = (80.dp + inset) * progress.value)
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill"), shape = androidx.compose.foundation.shape.CircleShape,
-                tonalElevation = 3.dp, shadowElevation = 2.dp) {
+            LiquidGlassSurface(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill"), source = browseBackdrop) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val fits = maxWidth >= 56.dp * settings.tabs.size
                     Row(if (fits) Modifier.fillMaxWidth() else Modifier.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState())) {
                         settings.tabs.forEach { tab ->
-                            Column((if (fits) Modifier.weight(1f) else Modifier.width(56.dp)).fillMaxHeight()
+                            val selectedColor by androidx.compose.animation.animateColorAsState(
+                                if (navigation.active == tab) androidx.compose.ui.graphics.Color.Black.copy(alpha = .09f) else androidx.compose.ui.graphics.Color.Transparent,
+                                androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Selected tab")
+                            Column((if (fits) Modifier.weight(1f) else Modifier.width(56.dp)).padding(4.dp).fillMaxHeight()
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(selectedColor, androidx.compose.foundation.shape.CircleShape)
                                 .selectable(navigation.active == tab, role = androidx.compose.ui.semantics.Role.Tab,
                                     onClick = { navigation = navigation.resetTab(tab)
                                         scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
@@ -258,8 +265,7 @@ fun LocalicaScreen(
                 }
 
             }
-            Surface(Modifier.width(104.dp).fillMaxHeight().testTag("utility-pill"), shape = androidx.compose.foundation.shape.CircleShape,
-                tonalElevation = 3.dp, shadowElevation = 2.dp) {
+            LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().testTag("utility-pill"), source = browseBackdrop) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 ActionIcon(R.drawable.ic_search, "Search library") {
                     navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true))
@@ -288,7 +294,7 @@ fun LocalicaScreen(
             onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
             if (currentTrack != null && editTags != null) ({ editTags(listOf(library.snapshot.tracks.firstOrNull { it.id == currentTrack.id } ?: currentTrack)) {} }) else null,
             lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
-            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, visual = playerVisual) {
+            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual) {
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
@@ -302,7 +308,11 @@ fun LocalicaScreen(
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
         if (hasPlayer && progress.value > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
-        MaterialTheme(colorScheme = darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFFD4E6FF),
+        MaterialTheme(colorScheme = darkColorScheme(primary = androidx.compose.ui.graphics.Color.White,
+            onPrimary = androidx.compose.ui.graphics.Color.Black,
+            primaryContainer = androidx.compose.ui.graphics.Color(0xFF414249), onPrimaryContainer = androidx.compose.ui.graphics.Color.White,
+            secondary = androidx.compose.ui.graphics.Color(0xFFDDDEE2), secondaryContainer = androidx.compose.ui.graphics.Color(0xFF414249),
+            onSecondaryContainer = androidx.compose.ui.graphics.Color.White, surfaceTint = androidx.compose.ui.graphics.Color.White,
             surface = playerPalette.bottom, surfaceContainer = playerPalette.middle, surfaceContainerLow = playerPalette.bottom,
             onSurface = androidx.compose.ui.graphics.Color.White, onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFDBDFE6))) {
         QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = progress.value) {
