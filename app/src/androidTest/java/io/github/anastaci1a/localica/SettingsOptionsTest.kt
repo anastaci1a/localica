@@ -38,7 +38,9 @@ class SettingsOptionsTest {
                 prefs.write(route, style, override); saved = style
             }, {}) } }
             compose.onNodeWithText("Extra information").performClick()
-            compose.onNodeWithText("Album Artist").performClick()
+            // This is the tenth option: scroll it clear of the dialog footer on
+            // shorter viewports before injecting an actual touch.
+            compose.onNodeWithText("Album Artist").performScrollTo().performClick()
             // Dialog windows finish removal asynchronously on Android 16. Wait for the old
             // radio group to close before opening another with overlapping option labels.
             compose.waitUntil(5000) { compose.onAllNodes(hasText("Album Artist") and

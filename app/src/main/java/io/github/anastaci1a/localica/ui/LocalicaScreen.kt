@@ -187,7 +187,9 @@ fun LocalicaScreen(
     val previewUris = (listOfNotNull(player.trackUri) + previewTracks.filterNot {
         currentPreviewTrack != null && it.album == currentPreviewTrack.album && it.albumArtist == currentPreviewTrack.albumArtist
     }.distinctBy { it.album to it.albumArtist }.map { it.uri } + neighbors.filterNotNull()).distinct().take(8)
-    val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded, glassBlur = settings.glass.blur)
+    // Older Android snapshots must never capture the expanding mini-player's
+    // light browsing glass and stretch it into the Queue's dark material.
+    val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded && progress.value >= .99f, glassBlur = settings.glass.blur)
     var browseInk by remember { mutableStateOf(androidx.compose.ui.graphics.Color.Black) }
     var pageBackground by remember { mutableStateOf(androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
     val miniInk by androidx.compose.animation.animateColorAsState(browseInk,
