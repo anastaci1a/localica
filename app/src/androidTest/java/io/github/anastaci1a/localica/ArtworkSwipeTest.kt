@@ -148,6 +148,31 @@ class ArtworkSwipeTest {
         compose.onNodeWithTag("player-neighbor-artwork", true).assertDoesNotExist()
     }
 
+    @Test fun diagonalCoverSwipesKeepOwnershipAndEqualArtworkDoesNotAnimateOnSkip() {
+        var visit by mutableStateOf("A")
+        var current by mutableStateOf(red.copy(contentKey = "same-pixels"))
+        var queueOpens = 0
+        val calls = mutableListOf<String>()
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            PlayerSurface(state, true, {}, InterfaceSettings(), remember { Animatable(1f) }, {}, {}, {}, {}, { queueOpens++ }, {},
+                visual = current, artworkVisit = visit, nextArtwork = ArtworkNeighbor("B", blue),
+                onArtworkVisit = { token, done -> calls += token; done(false) })
+        } } }
+        compose.onNodeWithTag("artwork-gesture").performTouchInput {
+            swipe(Offset(width * .8f, height * .2f), Offset(width * .2f, height * .7f), 500)
+        }
+        compose.waitForIdle()
+        assertEquals(listOf("B"), calls)
+        assertEquals(0, queueOpens)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { visit = "same-album"; current = visual(Color.Red).copy(contentKey = "same-pixels") }
+        compose.mainClock.advanceTimeBy(160)
+        compose.onNodeWithTag("player-neighbor-artwork", true).assertDoesNotExist()
+        val cover = compose.onNodeWithTag("player-artwork", true).captureToImage().toPixelMap()
+        assertTrue(cover[cover.width / 2, cover.height / 2].red > .95f)
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun externalPlaybackChangesCancelAHeldGesture() {
         var visit by mutableStateOf("A")
         var current by mutableStateOf(red)

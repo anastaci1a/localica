@@ -19,7 +19,7 @@ import io.github.anastaci1a.localica.library.CoverProvider
 import io.github.anastaci1a.localica.library.EmbeddedCoverProvider
 
 internal data class PlayerVisual(val artwork: ImageBitmap? = null, val palette: PlayerPalette = NeutralPalette,
-    val loading: Boolean = false, val softArtwork: ImageBitmap? = null)
+    val loading: Boolean = false, val softArtwork: ImageBitmap? = null, val contentKey: String? = null)
 
 /** Player-only retention: reusable library rows must still clear artwork when their identity changes. */
 @Composable
@@ -68,7 +68,17 @@ internal object PlayerVisualCache {
             val soft = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                 blurGlassSnapshot(image, bitmap.width * .035f)
             }
-            PlayerVisual(image, playerPalette(bitmap), softArtwork = soft)
+            val fingerprint = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                val row = IntArray(bitmap.width)
+                val bytes = java.nio.ByteBuffer.allocate(bitmap.width * 4)
+                for (y in 0 until bitmap.height) {
+                    bitmap.getPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
+                    bytes.clear(); row.forEach { bytes.putInt(it) }; digest.update(bytes.array())
+                }
+                digest.digest().joinToString("") { "%02x".format(it) }
+            }
+            PlayerVisual(image, playerPalette(bitmap), softArtwork = soft, contentKey = fingerprint)
         }
         currentCoroutineContext().ensureActive()
         if (provider === EmbeddedCoverProvider && key.revision == ArtworkCache.revision.value) cache.put(key, result)

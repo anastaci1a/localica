@@ -78,13 +78,12 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                     }
                     val mode = action in setOf(PlayerAction.Shuffle, PlayerAction.Repeat, PlayerAction.Lyrics, PlayerAction.Pin)
                     Box(Modifier.fillMaxWidth().height(48.dp).clip(Corners.card)
-                        .then(if (active) Modifier.background(LocalContentColor.current.copy(alpha = .16f)) else Modifier)
                         .testTag("player-slot-${slot.key}")
                         .semantics {
                             if (action == null) contentDescription = "Empty player action slot, ${slot.label}"
                             if (mode) { selected = active; stateDescription = label(action!!) }
                         }
-                        .combinedClickable(onClick = { if (action != null) onAction(action) },
+                        .combinedClickable(interactionSource = null, indication = null, onClick = { if (action != null) onAction(action) },
                             onLongClickLabel = if (action == null) "Customize player actions" else if (action == PlayerAction.Repeat && onRepeatOptions != null) "Repeat options" else null,
                             onLongClick = if (action == null) onCustomize else if (action == PlayerAction.Repeat) onRepeatOptions else null),
                         contentAlignment = Alignment.Center) {
