@@ -42,7 +42,7 @@ class GalleryNavigationTest {
                         .takeScreenshot(java.io.File(context.getExternalFilesDir(null), "gallery-failure.png"))
                     throw error
                 }
-                androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+                pressSystemBack()
                 compose.waitUntil(5000) { compose.onAllNodesWithText("Select all songs").fetchSemanticsNodes().isEmpty() }
                 compose.onNodeWithText("Album $n").performTouchInput { click() }
                 compose.waitUntil(5000) { compose.onAllNodesWithText("Visible song $n").fetchSemanticsNodes().isNotEmpty() }
