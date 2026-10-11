@@ -58,7 +58,7 @@ class PlayerGestureTest {
         // Hold a collapsing gesture; browsing must already be light before releasing.
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("player-surface").performTouchInput {
-            down(Offset(8f, centerY)); repeat(20) { moveBy(Offset(0f, 8f), delayMillis = 30) }
+            down(Offset(8f, centerY)); repeat(20) { moveBy(Offset(0f, height * .01f), delayMillis = 30) }
         }
         compose.mainClock.advanceTimeBy(32)
         val rootBounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
@@ -69,9 +69,8 @@ class PlayerGestureTest {
         // Touch slop varies with density; sample above the actual moving surface.
         val exposed = pixels[4, (exposedHeight / 2).toInt()]
         assertTrue("Exposed browsing background must be light during drag: $exposed", exposed.red > .8f && exposed.green > .8f && exposed.blue > .8f)
-        compose.onNodeWithTag("player-surface").performTouchInput { cancel() }
+        compose.onNodeWithTag("player-surface").performTouchInput { advanceEventTime(600); up() }
         compose.mainClock.autoAdvance = true
-        compose.onNodeWithContentDescription("Collapse player").performClick()
         assertEquals(mini, art.fetchSemanticsNode().boundsInRoot)
     }
 }
