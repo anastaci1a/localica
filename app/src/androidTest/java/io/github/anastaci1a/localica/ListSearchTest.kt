@@ -64,6 +64,7 @@ class ListSearchTest {
             pressSystemBack()
             compose.waitUntil(5000) { runCatching { compose.onNode(hasSetTextAction()).assertTextContains("Album") }.isSuccess }
             compose.onNodeWithText("Album 061").assertIsDisplayed()
+            compose.onNode(hasSetTextAction()).assertIsNotFocused()
             pressSystemBack()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
             assertEquals(before, compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot)

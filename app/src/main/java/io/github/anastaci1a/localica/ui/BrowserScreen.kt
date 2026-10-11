@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -61,12 +62,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val showSearchPill = !route.search && style.quickSearch && (route.collection != null || route.tab != MainTab.Library)
     val focus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val resultsFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
     var focusedRequest by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(-1) }
     LaunchedEffect(route.key, playerOpen, focusRequest) {
         if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
             withFrameNanos { } // Wait until the newly keyed field is attached.
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
+        } else if (route.search && route.queryCommitted && !playerOpen) {
+            // Replacing a focused field can transfer focus to the restored field even without
+            // requestFocus. Back restores results, so explicitly end that input session.
+            withFrameNanos { }
+            resultsFocus.requestFocus(); keyboard?.hide()
         }
     }
     val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
@@ -125,6 +132,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<Track?>(null) }
     Column(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
+        .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
         .then(if (localSearchOpen && !playerOpen) Modifier.clearAndSetSemantics { } else Modifier)) {
         if (popupDismiss == null && route.collection?.kind == MediaKind.Playlist) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { renaming = true }) { Text("Rename") }
@@ -136,15 +144,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             leadingIcon = { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null) },
             trailingIcon = { ActionIcon(R.drawable.ic_close, "Close list search", onClick = popupDismiss) },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); keyboard?.hide() }),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide() }),
             colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                 unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
         else if (route.search) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); keyboard?.hide() }),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide() }),
             trailingIcon = { if (popupDismiss != null) ActionIcon(R.drawable.ic_close, "Close list search", onClick = popupDismiss)
-                else ActionIcon(R.drawable.ic_search, "Submit search") { onSearchCommit(); keyboard?.hide() } },
+                else ActionIcon(R.drawable.ic_search, "Submit search") { onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide() } },
             label = { Text(if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}") },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus), shape = Corners.card)
         if (route.collection == null && (route.tab == MainTab.Library || route.globalSearch)) {
