@@ -27,6 +27,20 @@ import java.io.File
 
 class FrostedSurfaceTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun darkFrostAddsNoBlueTintToANeutralBackdrop() {
+        lateinit var source: FrostedBackdrop
+        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            source = rememberFrostedBackdrop(Unit)
+            Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Gray) }
+            FrostedSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(200.dp).testTag("neutral-frost"), source = source) { }
+        } } }
+        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
+        val image = compose.onNodeWithTag("neutral-frost").captureToImage().toPixelMap()
+        val center = image[image.width / 2, image.height / 2]
+        assertEquals("Neutral red/green", center.red, center.green, .015f)
+        assertEquals("No added blue", center.red, center.blue, .015f)
+        assertTrue("Darken the backdrop without hiding it", center.red in .15f.. .45f)
+    }
     @Test fun listBackdropCannotPaintOverSiblingHeaderControls() {
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
             val panel = rememberFrostedBackdrop(Unit, enabled = false)

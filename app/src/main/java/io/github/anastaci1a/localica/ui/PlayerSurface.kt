@@ -132,8 +132,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val floatingHeight = minOf(floatingArt, floatingArt / palette.aspect)
     val fullArt = floatingWidth + (windowWidth - floatingWidth) * backgroundProgress
     val fullArtHeight = floatingHeight + (windowWidth / palette.aspect - floatingHeight) * backgroundProgress
-    val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * p
-    val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * p
+    // Leave space for metadata to pass below the growing cover, then catch up smoothly.
+    val artProgress = p * (.78f + .22f * p)
+    val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
+    val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
     val artX = 16.dp + ((windowWidth - fullArt) / 2 - 16.dp) * p
     val fullArtY = statusInset + 52.dp + (floatingArt - fullArtHeight) / 2
     val miniArtY = (CompactControlSize - MiniArtworkSize) / 2
@@ -144,13 +146,26 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val ordinarySeekY = (oldMetadataY + (lyricSeekY - oldMetadataY) * .5f)
         .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
     val metadataY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
-    val titleY = 5.dp + (metadataY - 5.dp) * p
-    val subtitleY = 26.dp + (metadataY + 34.dp - 26.dp) * p
     val seekY = metadataY + 64.dp
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricTransport = virtualHeight - navigationInset - 152.dp
     val transportMotion = p * p * (3f - 2f * p)
     fun smoothReveal(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+    val stackedMetadata = smoothReveal((p - .04f) / .2f) * (1f - smoothReveal((p - .8f) / .2f))
+    val titleBaseY = 5.dp + (metadataY - 5.dp) * p
+    val metadataShift = (artY + artHeight + 8.dp - titleBaseY).coerceAtLeast(0.dp) * stackedMetadata
+    val titleY = titleBaseY + metadataShift
+    val subtitleY = 26.dp + (metadataY + 34.dp - 26.dp) * p + metadataShift
+    val transportBaseY = (CompactControlSize - 48.dp) / 2 +
+        (normalTransport + (lyricTransport - normalTransport) * lyricProgress - (CompactControlSize - 48.dp) / 2) * transportMotion
+    val transportY = transportBaseY + (subtitleY + 28.dp - transportBaseY).coerceAtLeast(0.dp) *
+        smoothReveal((p - .2f) / .1f) * (1f - smoothReveal((p - .8f) / .2f))
+    val backgroundReveal = smoothReveal((p - .38f) / .59f)
+    val handleReveal = smoothReveal((p - .72f) / .28f)
+    val glassFrost = smoothReveal((p - .08f) / .8f)
+    val surfaceCorner = CompactControlSize / 2 * (1f - smoothReveal((p - .8f) / .2f))
+    val edgeSoftness = backgroundProgress * smoothReveal(p / .18f) * (1f - smoothReveal((p - .9f) / .1f))
+    val edgeBand = .02f + .24f * smoothReveal(p / .75f)
     val fullControlsReveal = smoothReveal((p - .8f) / .2f)
     val contentInset = 32.dp
     val contentWidth = windowWidth - contentInset * 2
@@ -158,7 +173,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
     val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
     val textX = 58.dp + (contentInset - 58.dp) * p
-    val foreground = androidx.compose.ui.graphics.lerp(Color.Black, Color.White, p)
+    val foreground = androidx.compose.ui.graphics.lerp(Color.Black, Color.White, backgroundReveal)
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val baseColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = baseColors.copy(onSurface = foreground,
@@ -170,17 +185,21 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     Surface(Modifier.offset(x = 12.dp * (1f - p), y = miniTop * (1f - p))
         .width(surfaceWidth).height(CompactControlSize + (maxHeight - CompactControlSize) * p)
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface").then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop) else Modifier),
-        shape = RoundedCornerShape((32 * (1f - p)).dp), color = palette.bottom.copy(alpha = (p / .2f).coerceIn(0f, 1f)), contentColor = foreground) {
-        if (p < .2f) LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - p / .2f }, source = glassBackdrop)
+        shape = RoundedCornerShape(surfaceCorner), color = Color.Transparent, contentColor = foreground) {
+        if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
+            cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false)
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
-            if (lyricsOpen) PlayerBackdrop(palette, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop))
             ArtworkBlend(artwork, Modifier.fillMaxSize(), duration = paletteDuration) { frame ->
-                if (p > 0f) PlayerBackdrop(frame.palette, Modifier.fillMaxSize().graphicsLayer { alpha = p },
+                if (backgroundReveal > 0f) PlayerBackdrop(frame.palette, Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }
+                    .then(if (lyricsOpen) Modifier.recordFrostedBackdrop(lyricBackdrop) else Modifier),
                     coverBlend * (1f - lyricProgress), with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                     with(density) { artX.toPx() }, with(density) { artWidth.toPx() })
                 Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer { alpha = 1f - lyricProgress }) {
+                if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,
+                    Modifier.fillMaxSize().graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
+                    contentScale = ContentScale.Fit)
                 PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag("player-artwork").graphicsLayer {
                     compositingStrategy = if (coverBlend > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
                 }.drawWithContent {
@@ -194,7 +213,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         }
                         drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
                     }
-                }.clip(artworkShape),
+                }.artworkEdgeFeather(edgeSoftness, edgeBand).clip(artworkShape),
                     shape = artworkShape,
                     contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
                 }
@@ -209,11 +228,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     ActionMenuItem("Configure tap action", onClick = { artworkMenu = false; configureTap = true })
                 }
             }
-            if (p > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = p }) {
+            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset * handleReveal).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {
                 Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
                     .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { settle(false) }
                     .semantics { contentDescription = "Collapse player" }) {
-                    Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp)
+                    Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp * handleReveal).size(72.dp, 4.dp).testTag("player-handle")
                         .background(Color.White.copy(alpha = .42f), RoundedCornerShape(2.dp)))
                 }
                 if (lyricProgress > 0f) Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp).graphicsLayer { alpha = lyricProgress }) {
@@ -255,7 +274,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 .width(contentWidth).height(48.dp * actionRows).graphicsLayer { alpha = fullControlsReveal * (1f - lyricProgress) }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,
-                y = (CompactControlSize - 48.dp) / 2 + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - (CompactControlSize - 48.dp) / 2) * transportMotion),
+                y = transportY),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((transportWidth - 160.dp) / 2 * transportMotion)) {
                 IconButton(onPrevious, Modifier.size(48.dp), enabled = state.connected) {
                     Icon(painterResource(R.drawable.ic_previous), "Previous", Modifier.size(24.dp + 10.dp * transportMotion), tint = foreground)

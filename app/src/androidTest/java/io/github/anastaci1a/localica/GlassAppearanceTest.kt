@@ -43,6 +43,7 @@ class GlassAppearanceTest {
 
     @Test fun blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp() {
         var appearance by mutableStateOf(GlassAppearance(0f, 0f, 0f, 0f))
+        var expansion by mutableFloatStateOf(0f)
         lateinit var source: FrostedBackdrop
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides appearance) {
@@ -52,7 +53,7 @@ class GlassAppearanceTest {
                         drawRect(Color.Red, size = Size(size.width / 2, size.height))
                         drawRect(Color.Blue, Offset(size.width / 2, 0f), Size(size.width / 2, size.height))
                     }
-                    LiquidGlassSurface(Modifier.align(Alignment.Center).size(280.dp, 96.dp).testTag("glass"), source) {
+                    LiquidGlassSurface(Modifier.align(Alignment.Center).size(280.dp, 96.dp).testTag("glass"), source, frostProgress = expansion) {
                         Box(Modifier.align(Alignment.TopCenter).padding(top = 16.dp).size(10.dp).background(Color.Black).testTag("ink"))
                         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).size(10.dp)
                             .background(androidx.compose.material3.LocalContentColor.current).testTag("adaptive-ink"))
@@ -66,6 +67,11 @@ class GlassAppearanceTest {
         }
         val clear = nearBoundary()
         assertTrue("Zero blur preserves the red side: $clear", clear.red > .95f && clear.blue < .05f)
+        compose.runOnIdle { expansion = 1f }
+        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
+        compose.waitUntil(5000) { nearBoundary().blue > .2f }
+        compose.runOnIdle { expansion = 0f }
+        compose.waitUntil(5000) { nearBoundary().blue < .05f }
         compose.runOnIdle { appearance = appearance.copy(blur = 1f) }
         if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.glassFallback != null }
         compose.waitUntil(5000) { nearBoundary().blue > .2f }
