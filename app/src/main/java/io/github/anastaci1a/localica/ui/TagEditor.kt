@@ -27,7 +27,8 @@ internal val LocalTagEdit = staticCompositionLocalOf<((List<Track>, (Boolean) ->
 internal fun TagEditorHost(controller: TagEditingController, content: @Composable () -> Unit) {
     val state by controller.state.collectAsState()
     CompositionLocalProvider(LocalTagEdit provides controller::open) { content() }
-    if (state.tracks.isNotEmpty()) TagEditorDialog(state, controller)
+    if (state.tracks.isNotEmpty() && !state.background) TagEditorDialog(state, controller)
+    if (state.jobsVisible) TagJobsDialog(state, controller)
     var recoveryDismissed by remember(state.recovery) { mutableStateOf(false) }
     if (state.recovery != null && !recoveryDismissed && state.tracks.isEmpty()) GlassAlertDialog(
         onDismissRequest = { recoveryDismissed = true }, title = { Text("Interrupted tag edit") },
@@ -41,6 +42,8 @@ internal fun TagEditorHost(controller: TagEditingController, content: @Composabl
 internal fun TagRecoverySettings(controller: TagEditingController) {
     val state by controller.state.collectAsState()
     var confirming by remember { mutableStateOf(false) }
+    SettingsLink("Tag editing jobs", if (state.busy) "${state.results.size} of ${state.tracks.size} files checked" else "Recent outcomes and interrupted work",
+        icon = io.github.anastaci1a.localica.R.drawable.ic_edit, onClick = controller::showJobs)
     if (state.recovery != null) TextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Restore original file?") },
         text = { Text("This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
@@ -78,9 +81,9 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
     }
     fun patch() = TagPatch(changed.associate { name -> EditField.valueOf(name) to JSONObject(values).getString(name) },
         if (removeImage) ArtworkChange.Remove else cover?.let { ArtworkChange.Replace(it) } ?: ArtworkChange.Keep)
-    GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Page) {
-        Surface(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+    GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Sheet) {
+        Surface(Modifier.fillMaxWidth().fillMaxHeight(.94f), color = androidx.compose.ui.graphics.Color.Transparent) {
+            Column(Modifier.fillMaxSize().imePadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Edit ${state.tracks.size} ${if (state.tracks.size == 1) "song" else "songs"}", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     TextButton(enabled = !state.busy, onClick = controller::close) { Text("Close editor") }
@@ -88,32 +91,36 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    Text("Artwork", style = MaterialTheme.typography.titleMedium)
-                    cover?.let { image ->
-                        val bitmap = remember(image) { BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size) }
-                        Image(bitmap.asImageBitmap(), "New artwork preview", Modifier.size(128.dp))
+                    Box(Modifier.align(Alignment.CenterHorizontally).size(180.dp)) {
+                        if (!removeImage) {
+                            val image = cover
+                            if (image == null) AlbumArtwork(state.tracks.first().uri, Modifier.fillMaxSize())
+                            else {
+                                val bitmap = remember(image) { BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size) }
+                                Image(bitmap.asImageBitmap(), "New artwork preview", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+                            }
+                        }
+                        Row(Modifier.align(Alignment.BottomCenter).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_edit, "Choose artwork", enabled = !state.busy) { choosing = true }
+                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_trash, "Remove artwork from selected songs", enabled = !state.busy) { removeImage = true; imageUri = null }
+                        }
                     }
+                    TextButton(onClick = { viewing = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("View current artwork") }
                     imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    Row {
-                        TextButton(enabled = !state.busy, onClick = { choosing = true }) { Text("Choose artwork") }
-                        TextButton(onClick = { viewing = true }) { Text("View current artwork") }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        InterfaceCheckbox(removeImage, { removeImage = it; if (it) imageUri = null }, enabled = !state.busy)
-                        Text("Remove artwork from selected songs")
-                    }
+                    if (removeImage) Text("Artwork will be removed", Modifier.align(Alignment.CenterHorizontally))
                     if (imageUri != null || removeImage) TextButton(enabled = !state.busy,
-                        onClick = { imageUri = null; removeImage = false }) { Text("Keep existing artwork") }
-                    AlbumArtwork(state.tracks.first().uri, Modifier.size(128.dp))
+                        onClick = { imageUri = null; removeImage = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Keep existing artwork") }
                     EditField.entries.forEach { field ->
                         val common = state.tracks.map(field::value).distinct().size == 1
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             InterfaceCheckbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name }, enabled = !state.busy)
-                            OutlinedTextField(JSONObject(values).getString(field.name), { text ->
+                            TextField(JSONObject(values).getString(field.name), { text ->
                                 values = JSONObject(values).put(field.name, text).toString()
                                 if (field.name !in changed) changed = changed + field.name
                             }, enabled = !state.busy, label = { Text(field.label) }, placeholder = { if (!common) Text("Mixed values — unchanged") },
-                                modifier = Modifier.weight(1f), singleLine = field != EditField.Comment)
+                                modifier = Modifier.weight(1f), singleLine = field != EditField.Comment,
+                                colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent))
                         }
                     }
                     state.tracks.flatMap { it.locations }.distinctBy { it.folderUri }.forEach { location ->
@@ -128,8 +135,11 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                         color = if (result.saved) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error) }
                     if (state.recovery != null) TextButton(enabled = !state.busy, onClick = { controller.close() }) { Text("Close editor to recover interrupted edit") }
                 }
-                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End) {
-                    if (state.busy) TextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
+                FlowRow(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End) {
+                    if (state.busy) {
+                        TextButton(onClick = controller::continueInBackground) { Text("Continue in background") }
+                        TextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
+                    }
                     Button(enabled = !state.busy && state.recovery == null && imageError == null && (imageUri == null || cover != null) &&
                         (changed.isNotEmpty() || cover != null || removeImage), onClick = { confirming = true }) { Text("Review changes") }
                 }
@@ -144,4 +154,26 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
             Text("Changes are written to the audio files. Playback pauses while editing a file in the active queue, then resumes after verification.") } },
         confirmButton = { TextButton(onClick = { confirming = false; controller.save(patch()) }) { Text("Save changes") } },
         dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
+}
+
+@Composable
+private fun TagJobsDialog(state: TagEditorState, controller: TagEditingController) {
+    GlassDialog(controller::hideJobs, GlassPlacement.Sheet) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Tag editing jobs", style = MaterialTheme.typography.titleLarge)
+            if (state.busy) {
+                Text("${state.results.size} of ${state.tracks.size} files checked")
+                LinearProgressIndicator(progress = { state.results.size.toFloat() / state.tracks.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
+                TextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
+            }
+            if (state.jobs.isEmpty()) Text("No tag editing jobs yet.")
+            state.jobs.forEach { job ->
+                HorizontalDivider()
+                Text("${job.total} songs · ${job.status}", style = MaterialTheme.typography.titleSmall)
+                job.outcomes.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+            if (state.recovery != null) Text("An original file is retained. Use Tag recovery in Settings before retrying.")
+            TextButton(onClick = controller::hideJobs, modifier = Modifier.align(Alignment.End)) { Text("Close") }
+        }
+    }
 }
