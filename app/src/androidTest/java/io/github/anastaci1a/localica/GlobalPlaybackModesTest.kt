@@ -67,6 +67,13 @@ class GlobalPlaybackModesTest {
             verifyTraversal(second.currentEntryId!!)
             assertTrue(QueuePreferences(context).read().shuffle)
             assertEquals(QueueRepeat.All, QueuePreferences(context).read().repeat)
+            // The timeline exposes the selected item before its duration is loaded.
+            // Wait until seeking is available, as the player UI does.
+            await {
+                var ready = false
+                instrumentation.runOnMainSync { ready = player.playbackState == Player.STATE_READY && player.duration > 1234L }
+                ready
+            }
             queues.seek(1234)
             await { queues.state.value.library.active?.positionMs == 1234L }
             val done = CompletableDeferred<Boolean>()
