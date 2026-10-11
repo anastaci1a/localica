@@ -15,7 +15,7 @@ Jaudiotagger 3.0.1 supplies tag writing under LGPL 2.1 or later. Its notice/lice
 
 ## Automation and versions
 
-The Android workflow checks each main push and pull request, uploads a development APK, and runs device tests on API 26 and 36. Keep API 36 system animation scales at their normal values: forcing them to zero caused launcher/Back and document-picker stalls on the cold CI emulator. Compose animation assertions use their own controlled clock. Actions are pinned to commit hashes.
+The Android workflow checks each main push and pull request, uploads a development APK, and runs device tests on API 26 and 36. API 36 uses software GLES with Vulkan disabled and a 720×1280 display at 280 dpi, preserving the Pixel 2's logical dimensions while reducing rendering work. Keep its system animation scales at their normal values: forcing them to zero caused launcher/Back and document-picker stalls on the cold CI emulator. Compose animation assertions use their own controlled clock. Actions are pinned to commit hashes.
 
 Wait for successful main verification before tagging its exact commit. A `vX.X.X` tag must match `versionName` in `app/build.gradle.kts`; increase `versionCode` for each new build distributed as an update. The tag workflow requires successful build and both device jobs from a main push for that commit, downloads its existing APK, checks the version and signing identity, and publishes it with a checksum. It does not rebuild or repeat the test matrix. Missing verification or an expired artifact blocks publishing: rerun the main checks, then rerun the release job. Never substitute an APK from another commit.
 
