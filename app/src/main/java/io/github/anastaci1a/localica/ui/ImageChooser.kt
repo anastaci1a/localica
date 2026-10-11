@@ -26,25 +26,26 @@ import io.github.anastaci1a.localica.editing.CoverImages
 internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     val context = LocalContext.current
     val images = remember { CoverImages(context) }
+    var cropUri by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var revision by remember { mutableIntStateOf(0) }
     val recent by produceState(emptyList<String>(), revision) { value = images.recent() }
     fun chosen(uri: Uri?) { if (uri != null) {
         runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        images.remember(uri.toString()); onChosen(uri.toString())
+        images.remember(uri.toString()); cropUri = uri.toString()
     } }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), ::chosen)
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { revision++ }
-    GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
+    if (cropUri == null) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
         Column {
             Text("Recent images")
             if (recent.isEmpty()) Text("Choose an image or allow access to show recent photos.", style = MaterialTheme.typography.bodySmall)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
                     val cover by produceState<android.graphics.Bitmap?>(null, uri) {
-                        value = runCatching { images.read(uri, 128).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
+                        value = runCatching { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
                     }
-                    cover?.let { Image(it.asImageBitmap(), "Choose recent image", Modifier.size(80.dp).clickable { chosen(Uri.parse(uri)) }, contentScale = ContentScale.Crop) }
+                    cover?.let { Image(it.asImageBitmap(), "Choose recent image", Modifier.size(104.dp).clickable { chosen(Uri.parse(uri)) }, contentScale = ContentScale.Crop) }
                 }
             }
             TextButton(onClick = { permission.launch(when {
@@ -52,8 +53,12 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
                 Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
                 else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
             }) }) { Text("Allow recent photos") }
-            TextButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Open gallery") }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_albums, "Open gallery", Modifier.fillMaxWidth()) {
+                gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }
             TextButton(onClick = { files.launch(arrayOf("image/*")) }) { Text("Browse files") }
         }
     }, confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    cropUri?.let { uri -> ArtworkCrop(uri, { cropUri = null }, onChosen) }
 }
