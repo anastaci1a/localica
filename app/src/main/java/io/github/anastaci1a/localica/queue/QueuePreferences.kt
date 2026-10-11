@@ -15,6 +15,9 @@ class QueuePreferences(context: Context) {
         preloadNext = preferences.getBoolean("preload-next", true),
         shuffle = preferences.getBoolean("shuffle", false),
         repeat = QueueRepeat.entries.firstOrNull { it.name == preferences.getString("repeat", null) } ?: QueueRepeat.Off,
+        previousBehavior = PreviousBehavior.entries.firstOrNull { it.name == preferences.getString("previous-behavior", null) }
+            ?: PreviousBehavior.RestartAfterThreshold,
+        previousThresholdSeconds = preferences.getInt("previous-threshold-seconds", 5).coerceIn(1, 60),
     )
     fun migratePlaybackModes(active: ListeningQueue?) {
         if (!preferences.contains("global-playback-modes")) write(read().copy(shuffle = active?.shuffle ?: false, repeat = active?.repeat ?: QueueRepeat.Off))
@@ -24,6 +27,7 @@ class QueuePreferences(context: Context) {
         SongListView.entries.forEach { edit.putString("tap.${it.name}", settings.tapOverrides[it]?.name) }
         edit.putString("tap", settings.songTap.name).putString("switch-browse", settings.switching.name)
             .putInt("maximum", settings.maximum ?: 0).putBoolean("preload-next", settings.preloadNext)
+            .putString("previous-behavior", settings.previousBehavior.name).putInt("previous-threshold-seconds", settings.previousThresholdSeconds)
             .putBoolean("global-playback-modes", true).putBoolean("shuffle", settings.shuffle).putString("repeat", settings.repeat.name).apply()
     }
 }
