@@ -16,7 +16,8 @@ import io.github.anastaci1a.localica.scanner.ScanPreferences
 
 private data class SettingsDestination(val title: String, val parent: String?, val icon: Int, val summary: String)
 private val settingsDestinations = listOf(
-    SettingsDestination("Interface", null, R.drawable.ic_settings, "Navigation, player, and motion"),
+    SettingsDestination("Interface", null, R.drawable.ic_settings, "Navigation, player, glass, and motion"),
+    SettingsDestination("Glass", "Interface", R.drawable.ic_settings, "Blur, white tint, and floating shadows"),
     SettingsDestination("Navigation", "Interface", R.drawable.ic_home, "Main tabs, Back history, and exit confirmation"),
     SettingsDestination("Player", "Interface", R.drawable.ic_albums, "Artwork, gestures, and player actions"),
     SettingsDestination("Motion", "Interface", R.drawable.ic_next, "Animation speed and reduced motion"),
@@ -70,7 +71,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     "Interface", "Library and tags" -> settingsDestinations.filter { it.parent == page }.forEach { child ->
                         SettingsLink(child.title, child.summary, child.icon) { path = path + child.title }
                     }
-                    "Navigation", "Player", "Motion" -> interfaceContent(page)
+                    "Navigation", "Player", "Motion", "Glass" -> interfaceContent(page)
                     "Playback and queues" -> {
                         playbackContent(page)
                         SettingsLink("Song tap behavior", "Default action and per-list overrides", R.drawable.ic_music) { path = path + "Song tap behavior" }

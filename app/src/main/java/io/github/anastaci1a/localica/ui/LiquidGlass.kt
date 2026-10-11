@@ -51,29 +51,44 @@ internal fun Modifier.glassPress(onPressed: (Boolean) -> Unit = {}): Modifier {
     }
 }
 
-/** Clear lens over a separately recorded scene. Foreground content is never filtered. */
+/** Adjustable lens over a separately recorded scene. Foreground content is never filtered. */
 @Composable
 internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, tint: Color = Color.Transparent,
     content: @Composable BoxScope.() -> Unit = {}) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     val dark = source?.dark == true
+    val appearance = LocalGlassAppearance.current.normalized()
     var pressed by remember { mutableStateOf(false) }
     val energy by animateFloatAsState(if (pressed) 1f else 0f, spring(stiffness = 650f), label = "Glass illumination")
     val lens = remember { if (Build.VERSION.SDK_INT >= 33) GlassLens() else null }
-    BoxWithConstraints(modifier.glassPress { pressed = it }.clearGlassShadow().clip(CircleShape)
+    // Keep the outer shadow outside the press layer: pre-Android 10 ViewLayer clips
+    // drawing beyond its bounds even when the Compose layer itself is not clipped.
+    BoxWithConstraints(modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread).glassPress { pressed = it }.clip(CircleShape)
         .onGloballyPositioned { origin = it.positionInRoot() }) {
-        if (source != null && Build.VERSION.SDK_INT >= 33) {
+        if (source != null && Build.VERSION.SDK_INT >= 31) {
             // Padding supplies actual neighboring pixels along the curved silhouette.
-            val padding = 24.dp
+            val padding = 48.dp
             Canvas(Modifier.requiredSize(maxWidth + padding * 2, maxHeight + padding * 2)
-                .graphicsLayer { renderEffect = lens?.effect(size.width, size.height, padding.toPx()) }) {
+                .graphicsLayer {
+                    val blur = 22.dp.toPx() * appearance.blur
+                    renderEffect = if (Build.VERSION.SDK_INT >= 33) lens?.effect(size.width, size.height, padding.toPx(), blur)
+                        else if (blur > 0f) BlurEffect(blur, blur, TileMode.Clamp) else null
+                }) {
                 val offset = source.origin - origin + Offset(padding.toPx(), padding.toPx())
                 translate(offset.x, offset.y) { if (!source.layer.isReleased) drawLayer(source.layer) }
             }
         }
-        // Older Android uses direct transparency, never the frosted snapshot fallback.
+        if (source != null && Build.VERSION.SDK_INT < 31 && appearance.blur > 0f) {
+            Canvas(Modifier.matchParentSize()) {
+                val offset = source.origin - origin
+                translate(offset.x, offset.y) {
+                    source.glassFallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) }
+                }
+            }
+        }
         Canvas(Modifier.matchParentSize()) {
+            drawRect(Color.White.copy(alpha = appearance.whiteTint))
             drawRect(tint)
             val radius = size.minDimension / 2
             drawRoundRect(Brush.linearGradient(listOf(Color.White.copy(alpha = .85f + .15f * energy), Color.White.copy(alpha = .06f),
@@ -83,18 +98,19 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 topLeft = Offset(inset, inset), size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), (size.height - 2 * inset).coerceAtLeast(0f)),
                 cornerRadius = CornerRadius((radius - inset).coerceAtLeast(0f)), style = Stroke(2.dp.toPx()))
         }
-        CompositionLocalProvider(LocalContentColor provides if (dark) Color.White else Color(0xFF202124)) { content() }
+        CompositionLocalProvider(LocalContentColor provides if (dark && appearance.whiteTint < .45f) Color.White else Color(0xFF202124)) { content() }
     }
 }
 
 /** Ordinary elevation paints a dark silhouette through a transparent center. Exclude it. */
-private fun Modifier.clearGlassShadow() = drawBehind {
+private fun Modifier.clearGlassShadow(strength: Float, width: Float) = drawBehind {
     val radius = size.minDimension / 2
     val body = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(radius))) }
     clipPath(body, ClipOp.Difference) {
-        for (step in 6 downTo 1) {
-            val spread = step.dp.toPx()
-            drawRoundRect(Color.Black.copy(alpha = .018f), Offset(-spread, 2.dp.toPx() - spread),
+        for (step in 24 downTo 1) {
+            val spread = ((2f + width * 22f) * step / 24f).dp.toPx()
+            val opacity = strength * .045f * (1f - step / 25f)
+            drawRoundRect(Color.Black.copy(alpha = opacity), Offset(-spread, 2.dp.toPx() - spread),
                 androidx.compose.ui.geometry.Size(size.width + 2 * spread, size.height + 2 * spread), CornerRadius(radius + spread))
         }
     }
@@ -127,16 +143,20 @@ private class GlassLens {
             return color;
         }
     """.trimIndent())
-    private var dimensions = Triple(0f, 0f, 0f)
+    private var dimensions = listOf<Float>()
     private var cached: RenderEffect? = null
-    fun effect(width: Float, height: Float, padding: Float): RenderEffect? {
+    fun effect(width: Float, height: Float, padding: Float, blur: Float): RenderEffect? {
         if (width <= padding * 2 || height <= padding * 2) return null
-        val next = Triple(width, height, padding)
+        val next = listOf(width, height, padding, blur)
         if (next != dimensions) {
             dimensions = next
             shader.setFloatUniform("extent", width, height)
             shader.setFloatUniform("padding", padding)
-            cached = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene").asComposeRenderEffect()
+            val refraction = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")
+            // Scatter the sampled backdrop before applying lens curvature and its sharp rim.
+            cached = (if (blur > 0f) android.graphics.RenderEffect.createChainEffect(refraction,
+                android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.CLAMP))
+                else refraction).asComposeRenderEffect()
         }
         return cached
     }

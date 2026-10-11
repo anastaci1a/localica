@@ -181,12 +181,12 @@ fun LocalicaScreen(
     val previewUris = (listOfNotNull(player.trackUri) + previewTracks.filterNot {
         currentPreviewTrack != null && it.album == currentPreviewTrack.album && it.albumArtist == currentPreviewTrack.albumArtist
     }.distinctBy { it.album to it.albumArtist }.map { it.uri } + neighbors.filterNotNull()).distinct().take(8)
-    val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded)
-    val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = false)
+    val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded, glassBlur = settings.glass.blur)
+    val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = false, glassBlur = settings.glass.blur)
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
     PlayerSystemBars(hasPlayer && progress.value >= .99f)
-    CompositionLocalProvider(LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalGlassAppearance provides settings.glass, LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
             (if (hasPlayer) CompactControlSize + 88.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {

@@ -74,7 +74,19 @@ data class InterfaceSettings(
     val fasterMotion: Boolean = false,
     val artworkLayout: ArtworkLayout = ArtworkLayout.FullBackground,
     val artworkTransition: ArtworkTransition = ArtworkTransition.SoftWash,
+    val glass: GlassAppearance = GlassAppearance(),
 )
+
+data class GlassAppearance(
+    val blur: Float = .2f,
+    val whiteTint: Float = .06f,
+    val shadowStrength: Float = .12f,
+    val shadowSpread: Float = .6f,
+) {
+    fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
+        shadowStrength.unit(.12f), shadowSpread.unit(.6f))
+    private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
+}
 
 enum class ArtworkAction(val label: String) {
     Lyrics("Toggle lyrics"), Menu("Show artwork menu"), View("View artwork"), Change("Change artwork"), None("Do nothing")

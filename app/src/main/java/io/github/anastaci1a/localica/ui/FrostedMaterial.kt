@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,8 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, val dark: Boolean) {
     var origin by mutableStateOf(Offset.Zero)
     var size by mutableStateOf(IntSize.Zero)
     var fallback by mutableStateOf<ImageBitmap?>(null)
+    var snapshot by mutableStateOf<ImageBitmap?>(null)
+    var glassFallback by mutableStateOf<ImageBitmap?>(null)
     var revision by mutableIntStateOf(0)
     fun refresh() { if (Build.VERSION.SDK_INT < 31) revision++ }
 }
@@ -38,7 +41,8 @@ internal val LocalFrostedBackdrop = staticCompositionLocalOf<FrostedBackdrop?> {
 internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 
 @Composable
-internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true): FrostedBackdrop {
+internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true,
+    glassBlur: Float = LocalGlassAppearance.current.blur): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val source = remember(layer, dark) { FrostedBackdrop(layer, dark) }
     // Android 8–11 have no RenderEffect. Read back only when the scene/size changes,
@@ -51,6 +55,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 // player layer briefly. ImageReader rejects a zero-sized recording.
                 if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return
                 val snapshot = source.layer.toImageBitmap()
+                source.snapshot = snapshot
                 source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
             }
             capture()
@@ -58,6 +63,18 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
             // Refresh its settled appearance once, without readback on every animation frame.
             kotlinx.coroutines.delay(500)
             capture()
+        }
+    }
+    val blurRadius = with(LocalDensity.current) { 22.dp.toPx() } * glassBlur.coerceIn(0f, 1f)
+    LaunchedEffect(source, source.snapshot, blurRadius) {
+        if (Build.VERSION.SDK_INT < 31) {
+            val snapshot = source.snapshot
+            if (blurRadius == 0f || snapshot == null) source.glassFallback = null
+            else {
+                // Coalesce slider movement; each recorded source shares one prepared bitmap.
+                kotlinx.coroutines.delay(32)
+                source.glassFallback = withContext(Dispatchers.Default) { blurGlassSnapshot(snapshot, blurRadius) }
+            }
         }
     }
     return source
@@ -89,7 +106,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     val grain = remember { frostGrain }
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
-    val material = rememberFrostedBackdrop(Unit, enabled = false, dark = dark)
+    val material = rememberFrostedBackdrop(source?.fallback, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
     Box(modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false).clip(shape)
         .onGloballyPositioned { origin = it.positionInRoot() }
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) .38f else .8f),
