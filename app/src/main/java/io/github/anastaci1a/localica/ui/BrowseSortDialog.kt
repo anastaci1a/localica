@@ -12,7 +12,7 @@ import io.github.anastaci1a.localica.navigation.*
 
 @Composable
 internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden: Boolean,
-    onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false) {
+    onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: (() -> Unit)? = null, reducedMotion: Boolean = false) {
     if (presentationOnly) {
         ListViewOptions(route, value, overridden, onDismiss, onSave, onReset)
         return
@@ -24,11 +24,13 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
         else TrackSort.entries.filterNot { it in setOf(TrackSort.Manual, TrackSort.Album, TrackSort.Folder) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Sort") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
+            if (onRandomize != null) {
+                TextButton(onClick = onRandomize) { Text("Randomize queue order") }
+                Text("Changes the saved order; keeps the current song and playback position.", style = MaterialTheme.typography.bodySmall)
+            }
             Text("Sort by")
-            fields.forEach { field -> TextButton(onClick = { edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending) }) {
-                Text((if (edited.sort == field) "✓ " else "") + sortLabel(field))
-            } }
-            BooleanPreference("Ascending", edited.ascending) { edited = edited.copy(ascending = it) }
+            fields.forEach { field -> OptionRow(sortLabel(field), edited.sort == field, onClick = { edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending) }) }
+            SortDirection(edited.ascending, reducedMotion) { edited = edited.copy(ascending = it) }
             if (route.collection != null) {
                 BooleanPreference("Only for this collection", override) { override = it }
                 if (overridden) TextButton(onClick = onReset) { Text("Use list-type defaults") }

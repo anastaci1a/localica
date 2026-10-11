@@ -13,11 +13,13 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -41,20 +43,30 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     playingTrackId: String? = null, playingEntryId: String? = null,
     header: @Composable () -> Unit = {}, presentationOnly: Boolean = false, selectionVisible: Boolean = true,
     onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
-    libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {}) {
+    libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {},
+    popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0) {
+    var localSearchOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var localSearch by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
+        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
+        mutableStateOf(NavigationState(route.tab, mapOf(route.tab to listOf(route.copy(search = true, key = java.util.UUID.randomUUID().toString())))))
+    }
+    var localFocusRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
+    val searchHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val obscuredInset = LocalBrowseObscuredInset.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val editTags = LocalTagEdit.current
     val preferences = remember(context) { BrowsePreferences(context) }
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
+    val showSearchPill = !route.search && style.quickSearch && (route.collection != null || route.tab != MainTab.Library)
     val focus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
-    LaunchedEffect(route.key, playerOpen) {
-        if (route.search && !focusedOnce && !playerOpen) {
+    var focusedRequest by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(-1) }
+    LaunchedEffect(route.key, playerOpen, focusRequest) {
+        if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
             withFrameNanos { } // Wait until the newly keyed field is attached.
-            focus.requestFocus(); keyboard?.show(); focusedOnce = true
+            focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
         }
     }
     val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
@@ -79,6 +91,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(scrollToTopRequest) {
         if (consumedScrollRequest != scrollToTopRequest) {
+            localSearchOpen = false
             // Keep one job through query publication and the first layout. A readiness key can
             // restart this effect after it consumed the request but before scrolling could begin.
             snapshotFlow { loadedResult != null && gridState.layoutInfo.totalItemsCount > 0 }.first { it }
@@ -88,7 +101,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val session = LocalSessionSelection.current ?: remember { SessionSelection() }
     val selectedTracks = session.entries.map { it.row.track.id }.toSet()
-    SideEffect { if (selectionVisible) { session.visible = result.rows; session.source = route.collection } }
+    SideEffect { if (selectionVisible && !localSearchOpen) { session.visible = result.rows; session.source = route.collection } }
     val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
     val dragHost = LocalSongDragHost.current
     SideEffect {
@@ -111,18 +124,29 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var contextMenu by remember { mutableStateOf<String?>(null) }
     var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<Track?>(null) }
-    Column(Modifier.fillMaxSize()) {
-        if (route.collection?.kind == MediaKind.Playlist) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
+        .then(if (localSearchOpen && !playerOpen) Modifier.clearAndSetSemantics { } else Modifier)) {
+        if (popupDismiss == null && route.collection?.kind == MediaKind.Playlist) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { renaming = true }) { Text("Rename") }
                 TextButton(onClick = { deleting = true }) { Text("Delete") }
         }
         header()
-        if (route.search || style.quickSearch && (route.collection != null || route.tab != MainTab.Library)) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
+        if (route.search && popupDismiss != null) TextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) },
+            singleLine = true, placeholder = { Text("Search " + (route.title ?: route.tab.label)) },
+            leadingIcon = { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null) },
+            trailingIcon = { ActionIcon(R.drawable.ic_close, "Close list search", onClick = popupDismiss) },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); keyboard?.hide() }),
-            trailingIcon = { ActionIcon(R.drawable.ic_search, "Submit search") { onSearchCommit(); keyboard?.hide() } },
+            colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
+        else if (route.search) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearchCommit(); keyboard?.hide() }),
+            trailingIcon = { if (popupDismiss != null) ActionIcon(R.drawable.ic_close, "Close list search", onClick = popupDismiss)
+                else ActionIcon(R.drawable.ic_search, "Submit search") { onSearchCommit(); keyboard?.hide() } },
             label = { Text(if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}") },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).focusRequester(focus))
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus), shape = Corners.card)
         if (route.collection == null && (route.tab == MainTab.Library || route.globalSearch)) {
             Row(Modifier.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 filters.forEach { filter -> Box {
@@ -142,13 +166,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 } }
             }
         }
-        Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
+        if (popupDismiss == null || route.text.isNotBlank()) Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
             .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion, style.presentation == Presentation.List, moveSongs)) {
+            val columns = galleryColumns(style.presentation, with(density) { reorder.viewportWidth.toDp().value }, style.itemsPerRow)
+            val denseGallery = style.presentation != Presentation.List && columns >= 3
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth())
-            else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(galleryColumns(style.presentation,
-                with(androidx.compose.ui.platform.LocalDensity.current) { reorder.viewportWidth.toDp().value })), modifier = Modifier.fillMaxSize().testTag("browser-list"), contentPadding = PaddingValues(bottom = maxOf(80.dp, obscuredInset + 16.dp))) {
+            else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize().then(if (showSearchPill) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
+                        if (showSearchPill) Spacer(Modifier.height(56.dp))
                         LibraryNotice(library)
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -213,7 +239,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
-                        Column(Modifier.fillMaxWidth().padding(4.dp).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
+                        Column(Modifier.fillMaxWidth().padding(4.dp).clip(Corners.card).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
                             enabled = item.row == null || enabled,
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
@@ -224,7 +250,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 if (item.row != null) session.select(route.collection, listOf(item.row))
                                 else contextMenu = item.key
                             }
-                        ).padding(horizontal = if (style.presentation == Presentation.Compact) 4.dp else 12.dp, vertical = 8.dp)) {
+                        ).padding(horizontal = if (denseGallery) 4.dp else 12.dp, vertical = 8.dp)) {
                             if (style.presentation != Presentation.List) {
                                 Box {
                                     MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
@@ -234,7 +260,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (style.presentation == Presentation.List) MediaArtwork(item.coverUris, Modifier.size(48.dp))
                                 Column(Modifier.weight(1f).padding(start = if (style.presentation == Presentation.List) 12.dp else 0.dp)) {
-                                    Text((if (current) "▶ " else "") + item.title, style = if (style.presentation == Presentation.Compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium, maxLines = 2,
+                                    Text(item.title, style = if (denseGallery) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     item.information(style)?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
@@ -246,6 +272,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
             }
+            if (showSearchPill) ListSearchPill("Search "+ (route.title ?: route.tab.label), {
+                localFocusRequest++; localSearchOpen = true
+            }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = 4.dp))
             if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
             val playingIndex = result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
             val showCurrent by remember(playingIndex) { derivedStateOf {
@@ -255,7 +284,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
                 exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
-                FilledTonalButton(onClick = { playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion) } } }) {
+                FilledTonalButton(onClick = { playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, if (showSearchPill) with(density) { 56.dp.toPx() } else 0f) } } }) {
                     Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_play), null, Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp)); Text("Current song")
                 }
@@ -267,6 +296,26 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (LocalSessionSelection.current == null) SessionSelectionPanel(session, queues, playlistController, playlists)
     }
 
+    if (localSearchOpen && !playerOpen) {
+        fun closeSearch() { localSearchOpen = false }
+        fun searchBack() {
+            val previous = localSearch.back(false)
+            if (previous == null) closeSearch() else localSearch = previous
+        }
+        ListSearchWindow(localSearch.route.text.isNotBlank(), ::searchBack) {
+            CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
+                val searchRoute = localSearch.route
+                key(searchRoute.key) { searchHolder.SaveableStateProvider(searchRoute.key) {
+                    BrowserScreen(library, playlists, searchRoute, { localSearch = localSearch.update(it) }, onOpen, onSettings,
+                        onPlay, queues, playlistController, enabled, playerOpen, pins, onPin, queueState = queueState,
+                        playingTrackId = playingTrackId, playingEntryId = playingEntryId, reducedMotion = reducedMotion,
+                        onSearchEdit = { localSearch = localSearch.editSearch(it) },
+                        onSearchCommit = { localSearch = localSearch.commitSearch() },
+                        libraryFilters = libraryFilters, popupDismiss = ::closeSearch, focusRequest = localFocusRequest)
+                } }
+            }
+        }
+    }
     addingSong?.let { song -> AddToPlaylistDialog(listOf(song), playlists, playlistController, { addingSong = null }, { addingSong = null }) }
     info?.let { song -> SongInformation(song, { info = null }, { editTags?.invoke(listOf(song)) {} }) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
@@ -278,7 +327,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         preferences.write(route, value, override); style = value
         if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
         onSortDismiss()
-    }, { preferences.reset(route); style = preferences.read(route); onSortDismiss() }, presentationOnly)
+    }, { preferences.reset(route); style = preferences.read(route); onSortDismiss() }, presentationOnly,
+        onRandomize = if (route.collection?.kind == MediaKind.Queue && queues != null) ({
+            queues.randomize(route.collection.id) { saved -> if (saved) {
+                style = style.copy(sort = TrackSort.Manual, ascending = true)
+                preferences.write(route, style, true)
+                onSortDismiss()
+            } }
+        }) else null, reducedMotion = reducedMotion)
     if (renaming) {
         var name by remember { mutableStateOf(playlists.playlists.firstOrNull { it.id == route.collection?.id }?.name.orEmpty()) }
         AlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename playlist") }, text = {

@@ -36,7 +36,7 @@ class SearchHistoryTest {
             compose.onNodeWithText("Common 060").assertIsDisplayed()
             assertEquals(before, compose.onNodeWithText("Common 060").fetchSemanticsNode().boundsInRoot)
             compose.onNodeWithContentDescription("Back").performClick()
-            compose.onNode(hasSetTextAction()).assertTextContains("Search Songs")
+            compose.onNodeWithTag("list-search-pill").assertTextContains("Search Songs")
         } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
     }
 }

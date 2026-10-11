@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
@@ -48,7 +49,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         } }
         item { LazyRow(modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
-                Column(Modifier.width(160.dp).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
+                Column(Modifier.width(160.dp).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {
                     MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
