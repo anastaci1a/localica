@@ -18,12 +18,21 @@ class QueuePreferences(context: Context) {
         previousBehavior = PreviousBehavior.entries.firstOrNull { it.name == preferences.getString("previous-behavior", null) }
             ?: PreviousBehavior.RestartAfterThreshold,
         previousThresholdSeconds = preferences.getInt("previous-threshold-seconds", 5).coerceIn(1, 60),
+        advancedRepeat = if (preferences.getBoolean("advanced-repeat", false)) AdvancedRepeat(
+            SongEnd.entries.firstOrNull { it.name == preferences.getString("song-end", null) } ?: SongEnd.Next,
+            QueueEnd.entries.firstOrNull { it.name == preferences.getString("queue-end", null) } ?: QueueEnd.Stop,
+            preferences.getBoolean("queue-reset-first", false), preferences.getBoolean("queue-reshuffle", true)) else null,
     )
     fun migratePlaybackModes(active: ListeningQueue?) {
         if (!preferences.contains("global-playback-modes")) write(read().copy(shuffle = active?.shuffle ?: false, repeat = active?.repeat ?: QueueRepeat.Off))
     }
     fun write(settings: QueueSettings) {
         val edit = preferences.edit()
+        edit.putBoolean("advanced-repeat", settings.advancedRepeat != null)
+        settings.advancedRepeat?.let {
+            edit.putString("song-end", it.songEnd.name).putString("queue-end", it.queueEnd.name)
+                .putBoolean("queue-reset-first", it.resetToFirst).putBoolean("queue-reshuffle", it.reshuffle)
+        }
         SongListView.entries.forEach { edit.putString("tap.${it.name}", settings.tapOverrides[it]?.name) }
         edit.putString("tap", settings.songTap.name).putString("switch-browse", settings.switching.name)
             .putInt("maximum", settings.maximum ?: 0).putBoolean("preload-next", settings.preloadNext)

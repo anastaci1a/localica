@@ -18,13 +18,25 @@ data class ListeningQueue(
     val lastActivatedAt: Long = createdAt,
 )
 enum class QueueRepeat { Off, All, One }
+enum class SongEnd(val label: String) { Stop("Stop here"), NextPaused("Load next song and pause"), Next("Play next song"), Repeat("Repeat this song") }
+enum class QueueEnd(val label: String) { Stop("Stop here"), NextQueue("Go to next queue"), Repeat("Repeat this queue") }
+data class AdvancedRepeat(val songEnd: SongEnd = SongEnd.Next, val queueEnd: QueueEnd = QueueEnd.Stop,
+    val resetToFirst: Boolean = false, val reshuffle: Boolean = true) {
+    val repeat: QueueRepeat get() = when {
+        songEnd == SongEnd.Repeat -> QueueRepeat.One
+        queueEnd == QueueEnd.Repeat -> QueueRepeat.All
+        else -> QueueRepeat.Off
+    }
+    val pausesEachSong: Boolean get() = songEnd == SongEnd.Stop || songEnd == SongEnd.NextPaused
+}
 enum class SongTap { NewQueue, PlayNow, PlayNext, Append }
 enum class QueueSwitch { Browse, Paused, Resume, KeepPlaybackState }
 enum class PreviousBehavior { RestartAfterThreshold, PreviousSong, RestartSong }
 data class QueueSettings(val songTap: SongTap = SongTap.NewQueue, val switching: QueueSwitch = QueueSwitch.Browse,
     val maximum: Int? = null, val tapOverrides: Map<SongListView, SongTap> = emptyMap(),
     val preloadNext: Boolean = true, val shuffle: Boolean = false, val repeat: QueueRepeat = QueueRepeat.Off,
-    val previousBehavior: PreviousBehavior = PreviousBehavior.RestartAfterThreshold, val previousThresholdSeconds: Int = 5) {
+    val previousBehavior: PreviousBehavior = PreviousBehavior.RestartAfterThreshold, val previousThresholdSeconds: Int = 5,
+    val advancedRepeat: AdvancedRepeat? = null) {
     fun tapFor(view: SongListView) = tapOverrides[view] ?: songTap
     fun restartOnPrevious(positionMs: Long) = when (previousBehavior) {
         PreviousBehavior.RestartAfterThreshold -> positionMs >= previousThresholdSeconds * 1000L
