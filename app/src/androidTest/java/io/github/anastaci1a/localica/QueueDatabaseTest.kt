@@ -13,6 +13,36 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class QueueDatabaseTest {
+    @Test fun rewoundHistoryAndShuffleMembershipSurviveReopenAndBranching() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "queue-journey-test.db"
+        context.deleteDatabase(name)
+        var db = Room.databaseBuilder(context, QueueDatabase::class.java, name).build()
+        val labels = listOf("A", "B", "C", "D", "E", "F", "X")
+        val queue = QueueEdits.create(labels.map { Track("song:$it", it, fileName = "$it.mp3", relativePath = "$it.mp3") }, 0, "History")
+        val ids = queue.entries.map { it.id }
+        val byLabel = labels.zip(ids).toMap()
+        var journey = QueueJourney.start(ids, byLabel.getValue("A"), JourneyModes(shuffle = true))
+        for (label in listOf("D", "B", "F")) journey = journey.select(byLabel.getValue(label), ids)
+        journey = journey.arrive(journey.history[1].token, ids)
+        var saved = QueueLibrary(listOf(queue.copy(currentEntryId = journey.current!!.entryId, positionMs = 2345, journey = journey)), queue.id)
+        try {
+            db.queues().save(QueueLibrary(), saved)
+            db.close(); db = Room.databaseBuilder(context, QueueDatabase::class.java, name).build()
+            assertEquals(saved, db.queues().read())
+            val restored = db.queues().read().active!!.journey!!
+            assertEquals(byLabel["B"], restored.next?.entryId)
+            val branch = restored.select(byLabel.getValue("X"), ids)
+            val next = saved.update(saved.active!!.copy(currentEntryId = branch.current!!.entryId, positionMs = 0, journey = branch))
+            db.queues().save(saved, next); saved = next
+            db.close(); db = Room.databaseBuilder(context, QueueDatabase::class.java, name).build()
+            assertEquals(saved, db.queues().read())
+            val final = db.queues().read().active!!.journey!!
+            assertEquals(listOf("A", "D", "X").map(byLabel::getValue), final.history.map { it.entryId })
+            assertTrue(byLabel.getValue("B") in final.visited && byLabel.getValue("F") in final.visited)
+        } finally { db.close(); context.deleteDatabase(name) }
+    }
+
     @Test fun releasedQueueSchemaMigratesOrderAndActivationHistoryWithoutLosingCursor() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val name = "queue-migration.db"
@@ -30,13 +60,14 @@ class QueueDatabaseTest {
             old.version = 1
         }
         val db = Room.databaseBuilder(context, QueueDatabase::class.java, name)
-            .addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4).build()
+            .addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5).build()
         try {
             val restored = db.queues().read()
             assertEquals(listOf("old", "new"), restored.queues.map { it.id })
             assertEquals("old", restored.activeId)
             assertEquals(2345L, restored.active!!.positionMs)
             assertEquals("entry", restored.active!!.currentEntryId)
+            assertNull("Migration must not fabricate listening history", restored.active!!.journey)
             assertEquals(track, restored.active!!.entries.single().track)
             assertTrue(restored.active!!.lastActivatedAt > restored.queues.last().lastActivatedAt)
         } finally { db.close(); context.deleteDatabase(name) }
@@ -50,7 +81,8 @@ class QueueDatabaseTest {
         val track = Track("content://missing/song", "Title", fileName = "song.mp3", relativePath = "song.mp3", id = "song",
             comment = "Keep this", locations = listOf(TrackLocation("root", "content://missing/song", "song.mp3")))
         val queue = QueueEdits.create(listOf(track, track), track.id, "Session").let {
-            it.copy(currentEntryId = it.entries.last().id, positionMs = 1234, shuffle = true, repeat = QueueRepeat.All)
+            it.copy(currentEntryId = it.entries.last().id, positionMs = 1234, shuffle = true, repeat = QueueRepeat.All,
+                journey = QueueJourney.start(it.entries.map { entry -> entry.id }, it.entries.last().id, JourneyModes(shuffle = true, loop = true)))
         }
         val saved = QueueLibrary(listOf(queue), queue.id)
         try {
