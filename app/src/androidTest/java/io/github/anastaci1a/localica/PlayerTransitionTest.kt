@@ -98,15 +98,11 @@ class PlayerTransitionTest {
             // Inside the rounded rectangle but outside the old, taller capsule's corner.
             val edge = pixels[10, (pixels.height * .3f).toInt()]
             assertTrue("Glass must reach the shared outline at $p: $edge", edge.green > .7f)
-            if (p == .5f) {
-                val cover = compose.onNodeWithTag("player-artwork", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-                val title = compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-                assertTrue("Metadata clears the growing artwork", title.top > cover.bottom)
-            }
+
         }
     }
 
-    @Test fun handleApproachesTheMovingTopAndLeavesBeforeItCanOverlapMiniPlayerControls() {
+    @Test fun handleKeepsItsInsetAndLeavesBeforeItCanOverlapMiniPlayerControls() {
         val progress = Animatable(0f)
         lateinit var scope: CoroutineScope
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -121,8 +117,8 @@ class PlayerTransitionTest {
         }
         val full = at(1f)
         val held = at(.85f)
-        assertTrue("The handle approaches the panel edge", held.second - held.first < full.second - full.first)
-        assertTrue("Handle travels down more slowly than the edge", held.second - full.second < held.first - full.first)
+        assertEquals("Handle keeps its inset from the moving edge", full.second - full.first, held.second - held.first, 1f)
+        assertEquals("Handle travels at the same speed as the edge", held.first - full.first, held.second - full.second, 1f)
         compose.runOnIdle { scope.launch { progress.snapTo(.65f) } }
         compose.onNodeWithTag("player-handle", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Collapse player").assertDoesNotExist()

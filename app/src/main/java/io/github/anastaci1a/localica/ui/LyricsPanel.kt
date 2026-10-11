@@ -34,7 +34,6 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     val repository = remember(context) { (context.applicationContext as? LocalicaApplication)?.lyrics ?: LyricsRepository(context) }
     val revision by ArtworkCache.revision.collectAsState()
     val result by produceState<LyricsResult?>(null, track?.id, track?.uri, revision) {
-        value = null
         value = track?.let { repository.load(it, revision) } ?: LyricsResult()
     }
     val preferences = remember { context.getSharedPreferences("lyric-sources", 0) }
@@ -55,15 +54,18 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                 }
             }
         }
-        when {
-            result == null -> Spacer(Modifier.weight(1f))
-            source == null -> Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.Center) {
-                Text("No local lyrics found", style = MaterialTheme.typography.titleMedium)
-                Text("Use embedded lyrics or a matching .lrc file in the song’s folder.", style = MaterialTheme.typography.bodySmall)
-                result?.problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            else -> key(track?.id, source.id) {
-                LyricsLines(source.document, positionMs, reducedMotion, onSeek, Modifier.weight(1f))
+        androidx.compose.animation.Crossfade(source, Modifier.weight(1f),
+            animationSpec = tween(if (reducedMotion) 0 else 300), label = "Song lyrics") { shown ->
+            when {
+                result == null -> Spacer(Modifier.fillMaxSize())
+                shown == null -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                    Text("No local lyrics found", style = MaterialTheme.typography.titleMedium)
+                    Text("Use embedded lyrics or a matching .lrc file in the song’s folder.", style = MaterialTheme.typography.bodySmall)
+                    result?.problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                else -> key(shown.id, shown.document) {
+                    LyricsLines(shown.document, positionMs, reducedMotion, onSeek, Modifier.fillMaxSize())
+                }
             }
         }
     }
