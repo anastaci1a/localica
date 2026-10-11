@@ -28,6 +28,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.navigation.*
@@ -43,7 +46,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     onPrevious: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit, onLibrary: () -> Unit,
     onEditTags: (() -> Unit)? = null, lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {},
     track: Track? = null, onSettings: (InterfaceSettings) -> Unit = {},
-    actionRows: Int = 1, queueProgress: Animatable<Float, *>? = null, actions: @Composable () -> Unit = {}) {
+    actionRows: Int = 1, queueProgress: Animatable<Float, *>? = null, frostedBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null, actions: @Composable () -> Unit = {}) {
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
     val playerScroll = rememberScrollState()
@@ -54,8 +57,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val miniTop = maxHeight - navigationInset - 144.dp
     val distance = with(density) { miniTop.toPx().coerceAtLeast(1f) }
     val p = progress.value
-    val palette = rememberPlayerPalette(state.trackUri)
-    val lyricProgress by animateFloatAsState(if (lyricsOpen && expanded) 1f else 0f, tween(settings.motionDuration(450)), label = "Lyrics layout")
+    val artwork = visual ?: rememberPlayerVisual(state.trackUri)
+    val paletteDuration = settings.motionDuration(450)
+    val palette = animatedPlayerPalette(artwork.palette, paletteDuration)
+    val lyricBackdrop = rememberFrostedBackdrop(artwork to settings.artworkLayout, lyricsOpen)
+    val lyricVisibility by animateFloatAsState(if (lyricsOpen && expanded) 1f else 0f, tween(settings.motionDuration(450)), label = "Lyrics layout")
+    // While the finger is down expanded remains true. Progress, rather than release,
+    // must restore the same artwork and metadata as the surface returns to the miniplayer.
+    val lyricProgress = lyricVisibility * p
     val backgroundProgress by animateFloatAsState(if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f,
         tween(settings.motionDuration(400)), label = "Artwork layout")
     var startExpanded by remember { mutableStateOf(expanded) }
@@ -128,7 +137,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val seekY = metadataY + 64.dp
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricTransport = virtualHeight - navigationInset - 152.dp
-    val transportY = 8.dp + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - 8.dp) * p
+    val transportMotion = p * p * (3f - 2f * p)
+    fun smoothReveal(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+    val fullControlsReveal = smoothReveal((p - .8f) / .2f)
     val contentInset = 32.dp
     val contentWidth = windowWidth - contentInset * 2
     val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
@@ -145,17 +156,20 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
     Surface(Modifier.offset(x = 12.dp * (1f - p), y = miniTop * (1f - p))
         .width(surfaceWidth).height(64.dp + (maxHeight - 64.dp) * p)
-        .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface"),
+        .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface").then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop) else Modifier),
         shape = RoundedCornerShape((32 * (1f - p)).dp), color = Color(0xFFF2F0EC), contentColor = foreground, shadowElevation = 3.dp) {
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
-            if (p > 0f) PlayerBackdrop(palette, Modifier.fillMaxSize().graphicsLayer { alpha = p },
-                coverBlend, with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                with(density) { artX.toPx() }, with(density) { artWidth.toPx() })
+            if (p > 0f) ArtworkBlend(artwork, Modifier.fillMaxSize().graphicsLayer { alpha = p }.recordFrostedBackdrop(lyricBackdrop),
+                duration = paletteDuration) { frame ->
+                PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), coverBlend,
+                    with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
+                    with(density) { artX.toPx() }, with(density) { artWidth.toPx() })
+            }
             Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer { alpha = 1f - lyricProgress }
-                .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
-                AlbumArtwork(state.trackUri, Modifier.fillMaxSize().testTag("player-artwork").graphicsLayer {
+                .then(if (lyricsOpen && p >= .99f) Modifier.clearAndSetSemantics {} else Modifier)) {
+                PlayerArtwork(artwork, Modifier.fillMaxSize().testTag("player-artwork").graphicsLayer {
                     compositingStrategy = if (coverBlend > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
                 }.drawWithContent {
                     drawContent()
@@ -168,13 +182,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         }
                         drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
                     }
-                }.clip(artworkShape).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(
+                }.clip(artworkShape).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
                     onClickLabel = settings.artworkTap.label,
                     onClick = { artworkAction(settings.artworkTap) },
                     onLongClickLabel = settings.artworkHold.label,
                     onLongClick = { artworkAction(settings.artworkHold) }) else Modifier),
                     shape = artworkShape,
-                    contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
+                    contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit, duration = paletteDuration)
                 DropdownMenu(artworkMenu, { artworkMenu = false }) {
                     ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
                     if (onEditTags != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; onEditTags() })
@@ -187,21 +201,26 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 ActionIcon(R.drawable.ic_lyrics, if (lyricsOpen) "Hide lyrics" else "Show lyrics") { onLyrics(!lyricsOpen) }
             }
-            if (lyricProgress > 0f) LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
+            if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
                     .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
-                    .graphicsLayer { alpha = lyricProgress * p })
+                    .graphicsLayer { alpha = lyricProgress * p }) }
             val titleScale = MaterialTheme.typography.titleSmall.fontSize.value / MaterialTheme.typography.headlineSmall.fontSize.value
             val subtitleScale = MaterialTheme.typography.bodySmall.fontSize.value / MaterialTheme.typography.bodyLarge.fontSize.value
             MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f),
                 Modifier.offset(textX, titleY).width(textWidth).scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title"),
                 style = MaterialTheme.typography.headlineSmall)
-            Text((if (settings.albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist).orEmpty() +
-                if (p > 0.99f && state.album != null) " · " + state.album else "",
+            val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
+            Text(buildAnnotatedString {
+                append((if (settings.albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist).orEmpty())
+                state.album?.let { album -> withStyle(SpanStyle(color = subtitleColor.copy(alpha = subtitleColor.alpha * smoothReveal((p - .65f) / .35f)))) {
+                    append(" · "); append(album)
+                } }
+            },
                 Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p),
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (p > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth).graphicsLayer { alpha = p }) {
+            if (fullControlsReveal > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth).graphicsLayer { alpha = fullControlsReveal }) {
                 var seeking by remember(state.trackUri) { mutableStateOf<Float?>(null) }
                 val duration = (state.durationMs ?: 0).coerceAtLeast(1).toFloat()
                 Slider((seeking ?: state.positionMs.toFloat()).coerceIn(0f, duration), { seeking = it },
@@ -215,49 +234,25 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelSmall)
                 }
             }
-            if (p > 0f && lyricProgress < 1f) Box(Modifier.offset(x = contentInset, y = ordinarySeekY + 128.dp + 32.dp * lyricProgress)
-                .width(contentWidth).height(48.dp * actionRows).graphicsLayer { alpha = p * (1f - lyricProgress) }
+            if (fullControlsReveal > 0f && lyricProgress < 1f) Box(Modifier.offset(x = contentInset, y = ordinarySeekY + 128.dp + 32.dp * lyricProgress)
+                .width(contentWidth).height(48.dp * actionRows).graphicsLayer { alpha = fullControlsReveal * (1f - lyricProgress) }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
-            Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - p) + ((windowWidth - 176.dp) / 2) * p, y = transportY),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp * p)) {
+            Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - 176.dp) / 2) * transportMotion,
+                y = 8.dp + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - 8.dp) * transportMotion),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp * transportMotion)) {
                 IconButton(onPrevious, Modifier.size(48.dp), enabled = state.connected) {
-                    Icon(painterResource(R.drawable.ic_previous), "Previous", Modifier.size(24.dp + 10.dp * p), tint = foreground)
+                    Icon(painterResource(R.drawable.ic_previous), "Previous", Modifier.size(24.dp + 10.dp * transportMotion), tint = foreground)
                 }
-                IconButton(onToggle, Modifier.size(48.dp + 16.dp * p), enabled = state.connected) {
+                IconButton(onToggle, Modifier.size(48.dp + 16.dp * transportMotion), enabled = state.connected) {
                     Icon(painterResource(if (state.isPlaying || state.isBuffering) R.drawable.ic_pause else R.drawable.ic_play),
-                        if (state.isPlaying || state.isBuffering) "Pause" else "Play", Modifier.size(24.dp + 16.dp * p), tint = foreground)
+                        if (state.isPlaying || state.isBuffering) "Pause" else "Play", Modifier.size(24.dp + 16.dp * transportMotion), tint = foreground)
                 }
                 IconButton(onNext, Modifier.size(48.dp), enabled = state.connected) {
-                    Icon(painterResource(R.drawable.ic_next), "Next", Modifier.size(24.dp + 10.dp * p), tint = foreground)
+                    Icon(painterResource(R.drawable.ic_next), "Next", Modifier.size(24.dp + 10.dp * transportMotion), tint = foreground)
                 }
             }
-            if (p > 0f) {
-                val message = when {
-                    state.problem != null -> when (state.problem) {
-                        io.github.anastaci1a.localica.playback.PlaybackProblem.Unreadable -> "File unavailable"
-                        io.github.anastaci1a.localica.playback.PlaybackProblem.Unsupported -> "Unsupported audio format"
-                        else -> "Playback failed. Try again."
-                    }
-                    state.isBuffering -> "Loading audio…"
-                    state.ended -> "Track finished"
-                    !state.connected -> "Connecting…"
-                    else -> null
-                }
-                if (message != null) Text(message, Modifier.offset(x = contentInset, y = transportY + 72.dp).width(contentWidth),
-                    style = MaterialTheme.typography.bodySmall, color = if (state.problem != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (p > 0f && (queueProgress?.value ?: 0f) == 0f) Surface(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
-                .padding(bottom = navigationInset + 8.dp).fillMaxWidth().height(64.dp).graphicsLayer { alpha = p },
-                shape = androidx.compose.foundation.shape.CircleShape,
-                color = androidx.compose.ui.graphics.lerp(palette.bottom, Color.White, 0.1f).copy(alpha = 0.94f),
-                contentColor = Color.White, shadowElevation = 6.dp) {
-                Row(Modifier.fillMaxSize().clickable(onClickLabel = "Open queue", onClick = onQueue)
-                    .semantics { contentDescription = "Open queue" },
-                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ic_queue), null, Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp)); Text("Queue")
-                }
-            }
+
+
         }
     }
     }

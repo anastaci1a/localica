@@ -6,41 +6,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.platform.LocalContext
-import io.github.anastaci1a.localica.library.ArtworkCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 internal data class PlayerPalette(val top: Color, val middle: Color, val bottom: Color, val aspect: Float = 1f,
     val wash: android.graphics.Bitmap? = null)
-private val NeutralPalette = PlayerPalette(Color(0xFF424C56), Color(0xFF343C47), Color(0xFF242B34))
+internal val NeutralPalette = PlayerPalette(Color(0xFF424C56), Color(0xFF343C47), Color(0xFF242B34))
 
 @Composable
-internal fun rememberPlayerPalette(uri: String?): PlayerPalette {
-    val context = LocalContext.current.applicationContext
-    val revision by ArtworkCache.revision.collectAsState()
-    val palette by produceState(NeutralPalette, uri, revision) {
-        value = NeutralPalette
-        val bitmap = uri?.let { ArtworkCache.read(context, it, 128) } ?: return@produceState
-        value = withContext(Dispatchers.Default) {
-            fun band(from: Float, to: Float): Color {
-                var red = 0L; var green = 0L; var blue = 0L; var count = 0L
-                for (y in (bitmap.height * from).toInt() until (bitmap.height * to).toInt() step 3) {
-                    for (x in 0 until bitmap.width step 3) {
-                        val pixel = bitmap.getPixel(x, y)
-                        if (android.graphics.Color.alpha(pixel) < 128) continue
-                        red += android.graphics.Color.red(pixel); green += android.graphics.Color.green(pixel)
-                        blue += android.graphics.Color.blue(pixel); count++
-                    }
-                }
-                if (count == 0L) return NeutralPalette.middle
-                return lerp(Color((red / count).toInt(), (green / count).toInt(), (blue / count).toInt()), Color.Black, 0.4f)
+internal fun animatedPlayerPalette(palette: PlayerPalette, duration: Int): PlayerPalette {
+    val top by androidx.compose.animation.animateColorAsState(palette.top, androidx.compose.animation.core.tween(duration), label = "Player top color")
+    val middle by androidx.compose.animation.animateColorAsState(palette.middle, androidx.compose.animation.core.tween(duration), label = "Player middle color")
+    val bottom by androidx.compose.animation.animateColorAsState(palette.bottom, androidx.compose.animation.core.tween(duration), label = "Player bottom color")
+    val aspect by androidx.compose.animation.core.animateFloatAsState(palette.aspect, androidx.compose.animation.core.tween(duration), label = "Cover proportions")
+    return palette.copy(top = top, middle = middle, bottom = bottom, aspect = aspect)
+}
+
+/** Derived with the full cover, so both become ready in the same frame. */
+internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalette = withContext(Dispatchers.Default) {
+    val sample = android.graphics.Bitmap.createScaledBitmap(bitmap, 96,
+        (96f * bitmap.height / bitmap.width).toInt().coerceAtLeast(1), true)
+    fun band(from: Float, to: Float): Color {
+        var red = 0L; var green = 0L; var blue = 0L; var count = 0L
+        for (y in (sample.height * from).toInt() until (sample.height * to).toInt() step 2) {
+            for (x in 0 until sample.width step 2) {
+                val pixel = sample.getPixel(x, y)
+                if (android.graphics.Color.alpha(pixel) < 128) continue
+                red += android.graphics.Color.red(pixel); green += android.graphics.Color.green(pixel)
+                blue += android.graphics.Color.blue(pixel); count++
             }
-            PlayerPalette(band(0f, 0.3f), band(0.3f, 0.7f), band(0.7f, 1f), bitmap.width.toFloat() / bitmap.height,
-                ArtworkWash.create(bitmap))
         }
+        if (count == 0L) return NeutralPalette.middle
+        return lerp(Color((red / count).toInt(), (green / count).toInt(), (blue / count).toInt()), Color.Black, 0.4f)
     }
-    return palette
+    PlayerPalette(band(0f, .3f), band(.3f, .7f), band(.7f, 1f), bitmap.width.toFloat() / bitmap.height,
+        ArtworkWash.create(sample))
 }
 
 /** Low-frequency artwork colors and fixed fine grain give a matte surface without a blur dependency. */

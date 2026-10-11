@@ -3,6 +3,8 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -18,6 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -28,11 +35,11 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>, settings: InterfaceSettings,
-    onSettled: (Boolean) -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    onSettled: (Boolean) -> Unit, playerProgress: Float = 1f, content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val top = maxHeight - inset - 72.dp
+    val top = maxHeight - inset - 64.dp
     val density = LocalDensity.current
     val distance = with(density) { (top - status).toPx().coerceAtLeast(1f) }
     var start by remember { mutableFloatStateOf(1f) }
@@ -73,23 +80,32 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         }
     }
     val p = progress.value
-    Box(Modifier.fillMaxSize().graphicsLayer { alpha = p * 0.2f }.clickable { settle(false) }) {
+    if (p > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = p * 0.2f }.clickable { settle(false) }) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.scrim) {}
     }
-    Surface(Modifier.offset(x = 8.dp * (1 - p), y = top + (status - top) * p)
-        .width(maxWidth - 16.dp * (1 - p)).height(64.dp + (maxHeight - status - inset - 64.dp) * p)
+    FrostedSurface(Modifier.offset(y = top + (status - top) * p + 80.dp * (1f - playerProgress))
+        .width(maxWidth).height(64.dp + inset + (maxHeight - status - inset - 64.dp) * p)
+        .graphicsLayer { alpha = ((playerProgress - .4f) / .6f).coerceIn(0f, 1f) }
+        .then(if (playerProgress < .99f) Modifier.clearAndSetSemantics {} else Modifier)
         .draggable(rememberDraggableState { dy ->
             delta += dy
             scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo((start - delta / distance).coerceIn(0f, 1f)) }
         }, Orientation.Vertical, onDragStarted = { progress.stop(); start = progress.value; delta = 0f },
             onDragStopped = { velocity -> settle(if (velocity > with(density) { 300.dp.toPx() }) false else progress.value >= 0.5f) })
-        .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel, tonalElevation = 8.dp) {
-        Column(Modifier.fillMaxSize().clipToBounds()) {
-            Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Queue", Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleMedium)
-                ActionIcon(R.drawable.ic_down, "Close queue") { settle(false) }
+        .nestedScroll(listPull).testTag("queue-surface"), shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+        Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
+            Box(Modifier.fillMaxWidth().height(64.dp).clickable(onClickLabel = if (p == 0f) "Open queue" else "Close queue") { settle(p < .5f) }
+                .then(if (p == 0f) Modifier.semantics { contentDescription = "Open queue" } else Modifier)) {
+                Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)
+                    .background(Color.White.copy(alpha = .38f), RoundedCornerShape(2.dp)))
+                Row(Modifier.fillMaxSize().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.width(48.dp))
+                    Text("Queue", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium)
+                    if (p > 0f) Box(Modifier.graphicsLayer { alpha = p }) { ActionIcon(R.drawable.ic_down, "Close queue") { settle(false) } }
+                    else Spacer(Modifier.width(48.dp))
+                }
             }
-            content()
+            if (p > 0f) content()
         }
     }
 }

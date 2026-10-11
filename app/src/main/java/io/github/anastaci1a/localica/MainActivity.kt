@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
                     queues = queues, queueController = model.playback.queues,
                     onPrevious = model.playback::previous, onNext = model.playback::next,
                     playlist = playlist, playlistController = model.playlists,
-                    onScanAll = model::scanAll, scannerRequest = scannerRequest)
+                    onScanAll = model::scanAll, scannerRequest = scannerRequest, onRetryPlayback = model.playback::retry)
                 }
             }
         }

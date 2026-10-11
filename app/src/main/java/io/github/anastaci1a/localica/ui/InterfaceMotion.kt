@@ -16,3 +16,5 @@ internal fun InterfaceSettings.motionDuration(normal: Int) = when {
     fasterMotion -> normal * 2 / 3
     else -> normal
 }
+
+internal val LocalReducedMotion = androidx.compose.runtime.staticCompositionLocalOf { false }
