@@ -22,23 +22,20 @@ Library filters and All’s collection types are configurable. Songs retain firs
 
 ## Device review
 
-The v0.13.0 APK is available for review. It starts selected songs before lengthy queue saves, adds configurable Previous behavior, and updates drag motion, selection cleanup, lyrics, and queue titles. Address device feedback in small verified releases.
-
-## Current interaction checkpoint
-
-Verify and release v0.14.0: slot-based player action customization with smooth drag/drop, the advanced Repeat popup and actual playback boundaries, fixed-metric player text scaling, automatic scrolling without overshoot, and aligned floating controls. Preserve existing assignments and verify Android 8/16 behavior.
+The v0.14.0 APK is available for review. It adds draggable player action slots, advanced Repeat behavior, smoother text/scroll motion, and aligned floating controls. Address device feedback in small verified releases.
 
 ## Visual design system
 
-Continue directly with the queue after the interaction checkpoint: replace its floating player pill with a bottom-attached frosted drawer, preserving the Musicolet-based queue controls. Use one continuous material from collapsed to expanded, eliminating the white-panel flash. Transmit the actual player behind the surface with soft scattering, subtle non-repeating grain, restrained directional light and edge highlights; keep text crisp. Use the same material for circular directional return-to-current-position buttons in lyrics and queues. Establish a reusable backdrop/material boundary before extending Apple Music-inspired liquid glass elsewhere. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
+Verify and release v0.15.0: replace the player’s floating Queue pill with a bottom-attached frosted drawer, preserving the Musicolet-based queue controls. Use one continuous material from collapsed to expanded, eliminating the white-panel flash. Transmit the actual player behind the surface with soft scattering, subtle non-repeating grain, restrained directional light and edge highlights; keep text crisp. Use the same material for circular directional return-to-current-position buttons in lyrics and queues. Also verify quiet retained/faded player artwork, shared cover-loading animation, circular artist artwork, coherent player transitions, friendly playback failure dialogs, and atomic Library filter/sort changes with a soft edge behind filters. Establish a reusable backdrop/material boundary before extending Apple Music-inspired liquid glass elsewhere. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
 
 ## Subsequent functionality
 
 These capabilities remain planned but do not gate the start of visual work:
 
+- **Metadata parsing:** a dedicated settings section for configurable title rules and separate Artist/Album Artist splitting, with previews, name exceptions, and consistent reindexing that preserves original tags ([#74](https://github.com/anastaci1a/localica/issues/74)).
 - **Personalized Home:** configurable carousels using the existing first-added dates, qualified play counts, and pins. Support mixed sources, manual carousel order, sorting, presentation, and preview counts while preserving offline operation.
 - **Optional Last.fm integration:** account connection, track/artist equivalency matching with review for ambiguous results, and opt-in scrobbling with durable pending submissions. Implement after local statistics; keep local counts independent of matching and service availability. See [Product](product.md#optional-lastfm-integration).
-- **Later playback and presentation:** configurable crossfades, additional shuffle modes, sleep timer, equalizer, and multilingual UI.
+- **Later playback and presentation:** position-preserving pinch between list/gallery sizes, one step per gesture and excluding queues ([#75](https://github.com/anastaci1a/localica/issues/75)), configurable crossfades, additional shuffle modes, sleep timer, equalizer, and multilingual UI.
 - **Visualizers:** a player destination compatible with Poweramp presets. First review MilkDrop v1/v2 files, shader conversion, textures, Poweramp extensions/packaging, licensing, and device performance with compatibility fixtures. [Primary specification](https://github.com/maxmpz/powerampapi/blob/master/poweramp_vis_presets_example/readme.md).
 - **Lyric editing:** a manual `.lrc` text editor and a playback-assisted mode that timestamps a line when the user taps it. Include correction, preview, and safe save/export; follow the local lyric reader and tag-write foundations.
 
