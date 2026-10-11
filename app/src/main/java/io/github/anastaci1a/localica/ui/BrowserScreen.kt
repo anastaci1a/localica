@@ -4,8 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -18,9 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -64,8 +59,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val editTags = LocalTagEdit.current
     val preferences = remember(context) { BrowsePreferences(context) }
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
-    val showFilters = route.collection == null && (route.tab == MainTab.Library || route.globalSearch)
-    var filterHeight by remember { mutableStateOf(48.dp) }
+    val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
+    val showFilters = route.collection == null && (route.tab == MainTab.Library || route.globalSearch) && filters.isNotEmpty()
+    val pillSlotHeight = listPillSlotHeight()
     val showSearchPill = !route.search && style.quickSearch && (route.collection != null || route.tab != MainTab.Library)
     val focus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -89,13 +85,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             resultsFocus.requestFocus(); keyboard?.hide()
         }
     }
-    val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
     LaunchedEffect(libraryFilters.visible, route.key, route.filter, selectionVisible) {
-        if (selectionVisible && route.tab == MainTab.Library && route.collection == null && !route.globalSearch && filters.none { it.kind == route.filter }) {
-            onRoute(route.copy(filter = filters.first().kind))
+        if (selectionVisible && route.tab == MainTab.Library && route.collection == null && !route.globalSearch && route.filter != null && filters.none { it.kind == route.filter }) {
+            onRoute(route.copy(filter = null))
         }
     }
-    var filterMenu by remember { mutableStateOf<LibraryFilter?>(null) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     // Publish filter, presentation and sorted results together. A background query must
@@ -115,7 +109,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
     val surroundingBackdrop = LocalFrostedBackdrop.current
-    val needsListBackdrop = surroundingBackdrop == null && route.collection?.kind == MediaKind.Queue
+    val needsListBackdrop = surroundingBackdrop == null && (showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
+        (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
     val listBackdrop = rememberFrostedBackdrop(presentation, needsListBackdrop, dark = false)
     val refreshBackdrop = LocalBackdropRefresh.current
     LaunchedEffect(presentation, gridState.isScrollInProgress) {
@@ -168,25 +163,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var contextMenu by remember { mutableStateOf<String?>(null) }
     var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<Track?>(null) }
-    val filterRow: @Composable () -> Unit = {
-            Row(Modifier.testTag("library-filters").onSizeChanged { filterHeight = with(density) { it.height.toDp() } }.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                filters.forEach { filter -> Box {
-                    val selected = displayedFilter == filter.kind
-                    Surface(shape = Corners.card,
-                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Text(filter.label, Modifier.heightIn(min = 48.dp).combinedClickable(
-                            role = androidx.compose.ui.semantics.Role.Tab,
-                            onClick = { onRoute(route.copy(filter = filter.kind)) },
-                            onLongClickLabel = "Configure library filters", onLongClick = { filterMenu = filter })
-                            .semantics { this.selected = selected }.padding(horizontal = 16.dp, vertical = 12.dp),
-                            style = MaterialTheme.typography.labelLarge)
-                    }
-                    DropdownMenu(filterMenu == filter, { filterMenu = null }) {
-                        ActionMenuItem("Edit library filters and order", onClick = { filterMenu = null; onFilterSettings() })
-                    }
-                } }
-            }
-        }
     Column(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
         .then(if (localSearchOpen && !playerOpen) Modifier.clearAndSetSemantics { } else Modifier)) {
@@ -216,13 +192,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
             val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
-            if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters) filterHeight + 8.dp else if (showSearchPill) 56.dp else 0.dp).testTag("browse-loading"))
+            if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters || showSearchPill) pillSlotHeight else 0.dp).testTag("browse-loading"))
             else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop).background(MaterialTheme.colorScheme.surface) else Modifier)
                 .then(if (showSearchPill || showFilters) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
-                        if (showSearchPill || showFilters) Spacer(Modifier.height(if (showFilters) filterHeight + 8.dp else 56.dp))
+                        if (showSearchPill || showFilters) Spacer(Modifier.height(pillSlotHeight))
                         LibraryNotice(library)
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -320,13 +296,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
             }
-            if (showFilters) Box(Modifier.align(Alignment.TopCenter)) { filterRow() }
+            CompositionLocalProvider(LocalFrostedBackdrop provides (surroundingBackdrop ?: listBackdrop)) {
+            if (showFilters) Box(Modifier.align(Alignment.TopStart)) {
+                LibraryFilterBubbles(filters, displayedFilter, reducedMotion,
+                    { onRoute(route.copy(filter = it)) }, onFilterSettings)
+            }
             if (showSearchPill) ListSearchPill("Search "+ (route.title ?: route.tab.label), {
                 localFocusRequest++; localSearchOpen = true
-            }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = 4.dp))
+            }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = ListPillVerticalInset))
             if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
             val playingIndex = result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
-            val visibleTop = with(density) { (if (showSearchPill) 56.dp else if (showFilters) filterHeight + 8.dp else 0.dp).toPx() }
+            val visibleTop = with(density) { (if (showSearchPill || showFilters) pillSlotHeight else 0.dp).toPx() }
             val hiddenBottom = with(density) { obscuredInset.toPx() }
             val returnDirection by remember(playingIndex, visibleTop, hiddenBottom) { derivedStateOf {
                 val layout = gridState.layoutInfo
@@ -353,6 +333,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, displayedStyle.sort, Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset))
             if (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
                 PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset).testTag("playlist-add-module"))
+            }
         }
         if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.active && reorder.drag == null, reducedMotion = reducedMotion) {
             SessionSelectionPanel(session, queues, playlistController, playlists)

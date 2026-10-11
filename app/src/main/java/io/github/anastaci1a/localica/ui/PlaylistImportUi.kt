@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -65,9 +66,8 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
         }
     }
     Box(modifier) {
-        Surface(onClick = { menu = true }, modifier = Modifier.size(64.dp),
-            shape = androidx.compose.foundation.shape.CircleShape, tonalElevation = 3.dp, shadowElevation = 2.dp) {
-            Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+        LiquidGlassSurface(Modifier.size(CompactControlSize).clickable { menu = true }) {
+            Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), "Add playlist", Modifier.size(24.dp))
             }
         }

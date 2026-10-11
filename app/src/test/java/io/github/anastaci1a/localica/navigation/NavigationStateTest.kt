@@ -9,7 +9,7 @@ class NavigationStateTest {
         val root = initial.route.copy(filter = MediaKind.Artist)
         val state = initial.update(root).open(BrowseRoute(MainTab.Library, search = true, text = "Artist"))
         val reset = state.resetTab(MainTab.Library)
-        assertEquals(root, reset.route)
+        assertEquals(root.copy(filter = null), reset.route)
         assertEquals(initial.history, reset.history)
         assertEquals(state.stacks[MainTab.Home], reset.stacks[MainTab.Home])
     }
