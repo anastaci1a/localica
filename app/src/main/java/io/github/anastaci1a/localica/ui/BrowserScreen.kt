@@ -37,8 +37,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private data class PresentedBrowse(val route: BrowseRoute, val style: BrowseStyle, val result: BrowseResult)
-
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, route: BrowseRoute,
@@ -98,19 +96,28 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    // Publish filter, presentation and sorted results together. A background query must
-    // never pair the new filter label with the preceding filter’s arrangement.
-    val presentation by produceState<PresentedBrowse?>(null, library.snapshot, playlists.playlists, route, style, queueState.library, libraryFilters) {
+    // The requested bubble reacts immediately; layout and rows publish together when
+    // their query completes. Retain the previous complete list during that query.
+    val presentationCache = LocalBrowsePresentationCache.current
+    val cachedPresentation = remember(library.snapshot, playlists.playlists, route, style, queueState.library, libraryFilters) {
+        presentationCache?.get(library.snapshot, playlists.playlists, queueState.library.queues, libraryFilters, route, style)
+    }
+    val queriedPresentation by produceState(cachedPresentation, library.snapshot, playlists.playlists, route, style, queueState.library, libraryFilters) {
+        if (cachedPresentation != null) { value = cachedPresentation; return@produceState }
         val queried = withContext(queryDispatcher) {
             BrowseQueries.evaluate(library.snapshot, playlists.playlists, route, style.query(), queueState.library.queues, libraryFilters.allCollections).let {
                 if (route.collection?.kind == MediaKind.Album) it.groupAlbumSongs(style.songGrouping) else it
             }
         }
-        value = PresentedBrowse(route, style, queried)
+        value = PresentedBrowse(route, style, queried).also {
+            presentationCache?.put(library.snapshot, playlists.playlists, queueState.library.queues, libraryFilters, it)
+        }
     }
+    val presentation = cachedPresentation ?: queriedPresentation
     val loadedResult = presentation?.result
+    val listReveal by androidx.compose.animation.core.animateFloatAsState(if (loadedResult == null) 0f else 1f,
+        androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300), label = "Browse content reveal")
     val displayedStyle = presentation?.style ?: style
-    val displayedFilter = if (presentation != null) presentation!!.route.filter else route.filter
     val queryPending = presentation?.route != route || presentation?.style != style
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
@@ -224,7 +231,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
             if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters || showSearchPill) pillSlotHeight else 0.dp).testTag("browse-loading"))
-            else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
+            else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize().graphicsLayer { alpha = listReveal }
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
                 .pinchToChangeView(enabled && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind != MediaKind.Queue) { zoomIn, midpoint ->
@@ -251,7 +258,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                         if (library.snapshot.folders.isEmpty() && route.collection?.kind != MediaKind.Queue) TextButton(onClick = onSettings) { Text("Add music folders") }
-                        if (result.items.isEmpty() && !library.loading) Text(if (route.search) "No matching items" else "Nothing here yet")
+                        if (result.items.isEmpty() && !library.loading && !queryPending) Text(if (route.search) "No matching items" else "Nothing here yet")
                     }
                 }
                 items(reorder.rendered(result.items), key = { it?.key ?: DropGapKey },
@@ -334,7 +341,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
             CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
             if (showFilters) Box(Modifier.align(Alignment.TopStart)) {
-                LibraryFilterBubbles(filters, displayedFilter, reducedMotion,
+                LibraryFilterBubbles(filters, route.filter, reducedMotion,
                     { onRoute(route.copy(filter = it)) }, onFilterSettings)
             }
             if (showSearchPill) ListSearchPill("Search "+ (route.title ?: route.tab.label), {

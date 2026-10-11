@@ -89,6 +89,7 @@ fun LocalicaScreen(
         }
     }
     val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    val presentationCache = remember { BrowsePresentationCache() }
     val actionPreferences = remember(context) { PlayerActionPreferences(context) }
     var playerActions by remember { mutableStateOf(actionPreferences.read()) }
     var customizeActions by remember { mutableStateOf(false) }
@@ -186,7 +187,9 @@ fun LocalicaScreen(
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
     PlayerSystemBars(hasPlayer && progress.value >= .99f)
+    LocalicaTheme(grayTone = settings.grayTone) {
     CompositionLocalProvider(LocalGlassAppearance provides settings.glass, LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+        LocalBrowsePresentationCache provides presentationCache,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
             (if (hasPlayer) CompactControlSize + 88.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {
@@ -195,20 +198,24 @@ fun LocalicaScreen(
         val queueSelectionMaxHeight = maxHeight / 3
         Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(MaterialTheme.colorScheme.background).statusBarsPadding()
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
-            val route = navigation.route
-            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (navigation.stacks.getValue(navigation.active).size > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
-                Text(if (route.search) "Search" else route.title ?: route.tab.label, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                if (route.tab != MainTab.Queues && (route.tab != MainTab.Home || route.search || route.collection != null)) {
-                    ActionIcon(R.drawable.ic_sort, "Sort") { viewOptions = false; sortingRoute = route.key }
-                    ActionIcon(R.drawable.ic_settings, "View options") { viewOptions = true; sortingRoute = route.key }
-                }
-
-            }
-            HorizontalPager(pager, Modifier.weight(1f), userScrollEnabled = !expanded, key = { settings.tabs[it].name }) { page ->
+            HorizontalPager(pager, Modifier.weight(1f), userScrollEnabled = !expanded,
+                beyondViewportPageCount = 1, key = { settings.tabs[it].name }) { page ->
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
+                    androidx.compose.animation.Crossfade(if (route.search) "Search" else route.title ?: route.tab.label,
+                        modifier = Modifier.weight(1f), animationSpec = androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Page heading") { title ->
+                        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))
+                    }
+                    if (route.tab != MainTab.Queues && (route.tab != MainTab.Home || route.search || route.collection != null)) {
+                        ActionIcon(R.drawable.ic_sort, "Sort") { viewOptions = false; sortingRoute = route.key }
+                        ActionIcon(R.drawable.ic_settings, "View options") { viewOptions = true; sortingRoute = route.key }
+                    }
+                }
+                Box(Modifier.weight(1f)) {
             // Routes retain saved state, but must not recycle live drawing/focus nodes from
             // a different grid or text field through SaveableStateProvider's ReusableContent.
             key(route.key) { holder.SaveableStateProvider(route.key) {
@@ -234,6 +241,8 @@ fun LocalicaScreen(
                     libraryFilters = libraryFilters, onFilterSettings = { settingsCategory = "Library filters"; settingsOpen = true },
                     scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion)
             } }
+                }
+            }
             }
         }
         Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
@@ -242,7 +251,7 @@ fun LocalicaScreen(
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             LiquidGlassSurface(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill"), source = browseBackdrop) {
-                SlidingTabs(settings.tabs, navigation.active, pager.currentPage + pager.currentPageOffsetFraction) { tab ->
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], pager.currentPage + pager.currentPageOffsetFraction) { tab ->
                     navigation = navigation.resetTab(tab)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
                     keyboard?.hide(); focusManager.clearFocus()
@@ -356,6 +365,7 @@ fun LocalicaScreen(
     }
     QueueDialogs(queues, queueController)
     PlaybackFailureDialog(playback, playback.hasNext, onRetryPlayback) { onNext(); onRetryPlayback() }
+    }
     }
 }
 

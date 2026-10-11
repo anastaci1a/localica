@@ -7,12 +7,32 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.*
 
 @Composable
 internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String = "Navigation", onChange: (InterfaceSettings) -> Unit) {
     when (section) {
+        "Appearance" -> {
+            SettingsHeading("Interface gray")
+            Text("Adjust secondary text and inactive icons throughout the app.")
+            Slider(value.grayTone, { onChange(value.copy(grayTone = it)) },
+                Modifier.semantics { contentDescription = "Gray tone" })
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Darker", style = MaterialTheme.typography.bodySmall)
+                Text("Lighter", style = MaterialTheme.typography.bodySmall)
+            }
+            Row(Modifier.fillMaxWidth().height(64.dp), horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_library), null,
+                    Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Secondary text", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Selected", color = NavigationAccent)
+            }
+            TextButton(onClick = { onChange(value.copy(grayTone = InterfaceSettings().grayTone)) }) { Text("Reset gray tone") }
+        }
         "Glass" -> GlassSettingsControls(value.glass) { onChange(value.copy(glass = it)) }
         "Motion" -> {
             SettingsHeading("Animation")

@@ -18,14 +18,18 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import io.github.anastaci1a.localica.navigation.MainTab
 
 @Composable
 internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, onSelect: (MainTab) -> Unit) {
     val reducedMotion = LocalReducedMotion.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val fits = maxWidth >= 56.dp * tabs.size
-        val width = if (fits) maxWidth / tabs.size else 56.dp
+        val fits = maxWidth >= 68.dp * tabs.size
+        val width = if (fits) maxWidth / tabs.size else 68.dp
         val scroll = rememberScrollState()
         Box(Modifier.fillMaxHeight().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll)) {
             Canvas(Modifier.width(width * tabs.size).fillMaxHeight()) {
@@ -37,13 +41,15 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, onSe
             }
             Row {
                 tabs.forEach { tab ->
+                    val color by animateColorAsState(if (active == tab) NavigationAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tween(if (reducedMotion) 0 else 140), label = "Tab foreground")
                     Column(Modifier.width(width).padding(4.dp).fillMaxHeight().clip(CircleShape)
                         .selectable(active == tab, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null, role = Role.Tab, onClick = { onSelect(tab) }),
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Icon(painterResource(tab.icon()), tab.label, Modifier.size(24.dp),
-                            tint = if (active == tab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelSmall, overflow = TextOverflow.Ellipsis)
+                        Icon(painterResource(tab.icon()), tab.label, Modifier.size(29.dp), tint = color)
+                        Text(tab.label, color = color, maxLines = 1, style = MaterialTheme.typography.labelMedium.copy(
+                            fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium), overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

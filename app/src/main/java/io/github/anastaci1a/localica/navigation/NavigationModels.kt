@@ -75,7 +75,10 @@ data class InterfaceSettings(
     val artworkLayout: ArtworkLayout = ArtworkLayout.FullBackground,
     val artworkTransition: ArtworkTransition = ArtworkTransition.SoftWash,
     val glass: GlassAppearance = GlassAppearance(),
+    val grayTone: Float = .4f,
 )
+
+fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f
 
 data class GlassAppearance(
     val blur: Float = .2f,

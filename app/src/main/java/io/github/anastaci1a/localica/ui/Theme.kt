@@ -4,6 +4,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.navigation.normalizedGrayTone
+
+internal val NavigationAccent = Color(0xFFEB315A)
+private val InterfaceFont = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal), Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold), Font(R.font.inter_bold, FontWeight.Bold))
+private val InterfaceTypography = Typography().let { base ->
+    fun androidx.compose.ui.text.TextStyle.face() = copy(fontFamily = InterfaceFont, letterSpacing = 0.sp)
+    base.copy(
+        displayLarge = base.displayLarge.face(), displayMedium = base.displayMedium.face(), displaySmall = base.displaySmall.face(),
+        headlineLarge = base.headlineLarge.face(), headlineMedium = base.headlineMedium.face(), headlineSmall = base.headlineSmall.face(),
+        titleLarge = base.titleLarge.face().copy(fontWeight = FontWeight.Bold), titleMedium = base.titleMedium.face(), titleSmall = base.titleSmall.face(),
+        bodyLarge = base.bodyLarge.face(), bodyMedium = base.bodyMedium.face(), bodySmall = base.bodySmall.face(),
+        labelLarge = base.labelLarge.face(), labelMedium = base.labelMedium.face(), labelSmall = base.labelSmall.face())
+}
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF25262A), onPrimary = Color.White,
@@ -24,8 +45,11 @@ private val LightColors = lightColorScheme(
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun LocalicaTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = LightColors,
+fun LocalicaTheme(grayTone: Float = .4f, content: @Composable () -> Unit) {
+    val level = .18f + .36f * grayTone.normalizedGrayTone()
+    val gray = Color(level, level, level + .012f)
+    MaterialTheme(colorScheme = LightColors.copy(onSurfaceVariant = gray, secondary = gray, tertiary = gray,
+        outline = Color(level + .13f, level + .13f, level + .142f)), typography = InterfaceTypography,
         shapes = androidx.compose.material3.Shapes(small = Corners.card, medium = Corners.menu, large = Corners.largeArtwork, extraLarge = Corners.panel),
     ) {
         androidx.compose.runtime.CompositionLocalProvider(
