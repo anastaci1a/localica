@@ -28,12 +28,16 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     val revision by ArtworkCache.revision.collectAsState()
     var pixels by remember { mutableIntStateOf(0) }
     val request = Triple(uris, pixels, revision)
+    val cached = remember(request, provider) {
+        if (provider === EmbeddedCoverProvider) ArtworkCache.peek(uris, pixels) else null
+    }
     val loaded by produceState<Pair<Triple<List<String>, Int, Long>?, ImageBitmap?>>(null to null, request, provider) {
         if (pixels > 0) value = request to provider.load(context, uris, pixels)?.asImageBitmap()
     }
-    val artwork = loaded.second.takeIf { loaded.first?.first == uris && loaded.first?.third == revision }
+    val sameContent = loaded.first?.first == uris && loaded.first?.third == revision
+    val artwork = (if (sameContent) loaded.second else cached?.bitmap?.asImageBitmap())
     val measured = modifier.clip(shape).onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
-    val loading = uris.isNotEmpty() && artwork == null && (pixels == 0 || loaded.first != request)
+    val loading = cached == null && uris.isNotEmpty() && artwork == null && (pixels == 0 || loaded.first != request)
     ArtworkImage(artwork, loading, measured, shape, contentScale)
 }
 

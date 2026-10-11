@@ -24,7 +24,7 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     emptyText: String? = null) {
     val reducedMotion = LocalReducedMotion.current
     val reveal by animateFloatAsState(if (artwork == null) 0f else 1f,
-        tween(if (reducedMotion) 0 else 160), label = "Artwork reveal")
+        tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing), label = "Artwork reveal")
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
         if (artwork == null || reveal < 1f) {
             ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)

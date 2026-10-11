@@ -19,7 +19,7 @@ import kotlin.coroutines.CoroutineContext
 
 class LibraryFilterPresentationTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun filterAndSavedSortBecomeVisibleTogetherAboveTheFadingList() {
+    @Test fun filterReactsBeforeQueryAndSavedSortPublishesWithMatchingRows() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         val tasks = LinkedBlockingQueue<Runnable>()
@@ -46,13 +46,14 @@ class LibraryFilterPresentationTest {
         assertEquals("Filters float over the same fading viewport", list.top, filters.top, 1f)
         assertTrue("First item initially clears the filters", compose.onNodeWithText("Album 00").fetchSemanticsNode().boundsInRoot.top > filters.bottom)
         compose.onNodeWithText("Albums").performClick()
-        // Hold the new query: the previous arrangement must still carry its previous label.
+        // Hold the new query: feedback is immediate, while the previous complete list remains.
         compose.onNodeWithText("All").assertDoesNotExist()
-        compose.onNodeWithText("Albums").assertIsNotSelected()
+        compose.onNodeWithText("Albums").assertIsSelected()
         compose.onNodeWithText("Album 00").assertIsDisplayed()
         finishQuery()
         compose.onNodeWithText("Albums").assertIsSelected()
         compose.onNodeWithText("Album 29").assertIsDisplayed()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Album 00").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithText("Album 00").assertDoesNotExist()
     }
 }

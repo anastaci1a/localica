@@ -26,6 +26,22 @@ class InterfaceNavigationTest {
     @Before fun reset() { context.getSharedPreferences("interface", 0).edit().clear().commit() }
     @After fun cleanup() { reset() }
 
+    @Test fun tabFeedbackAndHeadingArriveBeforeThePagerSettles() {
+        compose.setContent { LocalicaTheme { LocalicaScreen(library, PlaybackState(connected = true), {}, {}, {}, {}, {}, {}) } }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithContentDescription("Library").performClick()
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithContentDescription("Library").assertIsSelected()
+            compose.onNodeWithContentDescription("Home").assertIsNotSelected()
+            compose.mainClock.advanceTimeBy(128)
+            compose.onNode(hasTestTag("page-heading") and hasText("Library")).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Home").performClick()
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithContentDescription("Home").assertIsSelected()
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun transportDoesNotExpandAndPlayerCollapsePreservesSearchAcrossRestoration() {
         var next = 0
         val restore = StateRestorationTester(compose)
@@ -79,8 +95,11 @@ class InterfaceNavigationTest {
         val route = BrowseRoute(MainTab.Library, MediaRef(MediaKind.Album, "a"), "Album", true, false, "word", MediaKind.Song)
         val state = NavigationState().switch(MainTab.Library).open(route).switch(MainTab.Home)
         assertEquals(state, NavigationCodec.decode(NavigationCodec.encode(state)))
-        InterfacePreferences(context).write(InterfaceSettings(tabs = MainTab.entries, reducedMotion = true))
+        InterfacePreferences(context).write(InterfaceSettings(tabs = MainTab.entries, reducedMotion = true, grayTone = .73f))
         assertEquals(MainTab.entries, InterfacePreferences(context).read().tabs)
+        assertEquals(.73f, InterfacePreferences(context).read().grayTone)
+        InterfacePreferences(context).write(InterfaceSettings(grayTone = Float.NaN))
+        assertEquals(.4f, InterfacePreferences(context).read().grayTone)
     }
     @Test fun queueInformationNavigatesOutToAlbumAndPreservesPlayback() = queueLink("Go to album", "Seasons")
     @Test fun queueInformationNavigatesOutToArtist() = queueLink("Go to artist", "Artist")
