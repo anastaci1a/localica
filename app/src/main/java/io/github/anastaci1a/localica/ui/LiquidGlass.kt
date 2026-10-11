@@ -122,7 +122,7 @@ private class GlassLens {
             half4 color = scene.eval(p - normal * bend);
             float light = dot(normal, normalize(float2(-0.55, -1.0)));
             float rim = pow(t, 12.0);
-            color.rgb = mix(color.rgb, half3(1), half(max(light, 0.0) * rim * 0.55));
+            color.rgb = mix(color.rgb, half3(color.a), half(max(light, 0.0) * rim * 0.55));
             color.rgb *= half(1.0 - max(-light, 0.0) * rim * 0.16);
             return color;
         }
