@@ -69,11 +69,14 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val lens = remember { if (Build.VERSION.SDK_INT >= 33) GlassLens() else null }
     // Keep the outer shadow outside the press layer: pre-Android 10 ViewLayer clips
     // drawing beyond its bounds even when the Compose layer itself is not clipped.
-    BoxWithConstraints(modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius)
+    Box(modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius)
         .then(if (pressFeedback) Modifier.glassPress { pressed = it } else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
         .onGloballyPositioned { origin = it.backdropPosition(view) }) {
         if (source != null && Build.VERSION.SDK_INT >= 31) {
+            // A padded backdrop must never participate in the surface's intrinsic size.
+            // Measure it only after foreground content determines the actual bounds.
+            BoxWithConstraints(Modifier.matchParentSize()) {
             // Padding supplies actual neighboring pixels along the curved silhouette.
             val padding = 48.dp
             Canvas(Modifier.requiredSize(maxWidth + padding * 2, maxHeight + padding * 2)
@@ -86,6 +89,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 }) {
                 val offset = source.origin - origin + Offset(padding.toPx(), padding.toPx())
                 translate(offset.x, offset.y) { if (!source.layer.isReleased) drawLayer(source.layer) }
+            }
             }
         }
         if (source != null && Build.VERSION.SDK_INT < 31 && (appearance.blur > 0f || frost > 0f)) {

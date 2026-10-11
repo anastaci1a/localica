@@ -18,7 +18,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
         "Appearance" -> {
             SettingsHeading("Interface gray")
             Text("Adjust secondary text and inactive icons throughout the app.")
-            Slider(value.grayTone, { onChange(value.copy(grayTone = it)) },
+            InterfaceSlider(value.grayTone, { onChange(value.copy(grayTone = it)) },
                 Modifier.semantics { contentDescription = "Gray tone" })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Darker", style = MaterialTheme.typography.bodySmall)
@@ -90,6 +90,6 @@ internal fun BooleanPreference(label: String, value: Boolean, onChange: (Boolean
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).toggleable(value, role = Role.Switch, onValueChange = onChange)
         .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f).padding(end = 12.dp))
-        Switch(value, null)
+        InterfaceSwitch(value)
     }
 }

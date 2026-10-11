@@ -35,7 +35,7 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), ::chosen)
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { revision++ }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
+    GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
         Column {
             Text("Recent images")
             if (recent.isEmpty()) Text("Choose an image or allow access to show recent photos.", style = MaterialTheme.typography.bodySmall)

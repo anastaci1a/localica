@@ -85,13 +85,13 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
             }
         }
     }
-    if (loading) AlertDialog(onDismissRequest = { loadJob?.cancel() }, title = { Text("Reading playlist") },
+    if (loading) GlassAlertDialog(onDismissRequest = { loadJob?.cancel() }, title = { Text("Reading playlist") },
         text = { LinearProgressIndicator(Modifier.fillMaxWidth()) }, confirmButton = {
             TextButton(onClick = { loadJob?.cancel() }) { Text("Cancel") }
         })
     if (naming) PlaylistNameDialog(controller, { naming = false })
     preview?.let { found -> PlaylistImportDialog(found, controller, { preview = null }) }
-    error?.let { message -> AlertDialog(onDismissRequest = { error = null }, title = { Text("Playlist import") }, text = { Text(message) },
+    error?.let { message -> GlassAlertDialog(onDismissRequest = { error = null }, title = { Text("Playlist import") }, text = { Text(message) },
         confirmButton = { TextButton(onClick = { error = null }) { Text("Close") } }) }
 }
 
@@ -100,7 +100,7 @@ private fun PlaylistNameDialog(controller: PlaylistController?, onDismiss: () ->
     var name by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("New playlist") }, text = {
+    GlassAlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("New playlist") }, text = {
         Column {
             OutlinedTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true, enabled = !saving)
             if (failed) Text("Couldn’t save the playlist. Try again.", color = MaterialTheme.colorScheme.error)
@@ -117,7 +117,7 @@ internal fun PlaylistImportDialog(preview: PlaylistImportPreview, controller: Pl
     var failed by remember { mutableStateOf(false) }
     val found = preview.tracks
     val missing = preview.entries.size - found.size
-    AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("Import playlist") }, text = {
+    GlassAlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("Import playlist") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true, enabled = !saving)
             Text("${found.size} matched · $missing unresolved. Song order and repeated entries are preserved.")

@@ -78,6 +78,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     var dragging by remember { mutableStateOf(false) }
     var owner by remember { mutableStateOf(VerticalOwner.Undecided) }
     var sourcesRequest by remember { mutableIntStateOf(0) }
+    val sourcesAnchor = rememberGlassAnchor()
     LaunchedEffect(lyricsOpen) { if (!lyricsOpen) sourcesRequest = 0 }
     var viewing by remember { mutableStateOf(false) }
     var artworkMenu by remember { mutableStateOf(false) }
@@ -249,7 +250,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
                     onClickLabel = settings.artworkTap.label, onClick = { artworkAction(settings.artworkTap) },
                     onLongClickLabel = settings.artworkHold.label, onLongClick = { artworkAction(settings.artworkHold) }) else Modifier)) {
-                DropdownMenu(artworkMenu, { artworkMenu = false }) {
+                GlassMenu(artworkMenu, rememberGlassAnchor(), { artworkMenu = false }) {
                     ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
                     if (onEditTags != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; onEditTags() })
                     ActionMenuItem("Configure tap action", onClick = { artworkMenu = false; configureTap = true })
@@ -263,13 +264,15 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         .background(Color.White.copy(alpha = .42f), RoundedCornerShape(2.dp)))
                 }
                 if (lyricProgress > 0f) Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp).graphicsLayer { alpha = lyricProgress }) {
-                    ActionIcon(R.drawable.ic_lyrics, "Lyrics sources") { sourcesRequest++ }
+                    CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
+                        ActionIcon(R.drawable.ic_lyrics, "Lyrics sources", anchor = sourcesAnchor) { sourcesRequest++ }
+                    }
                 }
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
                     .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
-                    .graphicsLayer { alpha = lyricProgress * p }, sourcesRequest = sourcesRequest) }
+                    .graphicsLayer { alpha = lyricProgress * p }, sourcesRequest = sourcesRequest, sourcesAnchor = sourcesAnchor) }
             val titleScale = MaterialTheme.typography.titleSmall.fontSize.value / MaterialTheme.typography.headlineSmall.fontSize.value
             val subtitleScale = MaterialTheme.typography.bodySmall.fontSize.value / MaterialTheme.typography.bodyLarge.fontSize.value
             MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f),
@@ -321,7 +324,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     }
     }
     if (viewing && state.trackUri != null) ArtworkViewer(state.trackUri) { viewing = false }
-    if (configureTap) AlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
+    if (configureTap) GlassAlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
         text = { Column { ArtworkAction.entries.forEach { value -> TextButton(onClick = {
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { TextButton(onClick = { configureTap = false }) { Text("Close") } })

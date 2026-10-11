@@ -33,7 +33,7 @@ internal fun ListViewOptions(route: BrowseRoute, value: BrowseStyle, overridden:
             if (edited.presentation != Presentation.List) {
                 val columns = edited.itemsPerRow ?: galleryColumns(edited.presentation, width).coerceIn(1, 5)
                 Text("Items per row: $columns", style = MaterialTheme.typography.titleSmall)
-                Slider(columns.toFloat(), { edited = edited.copy(itemsPerRow = it.roundToInt().coerceIn(1, 5)) },
+                InterfaceSlider(columns.toFloat(), { edited = edited.copy(itemsPerRow = it.roundToInt().coerceIn(1, 5)) },
                     valueRange = 1f..5f, steps = 3, modifier = Modifier.semantics {
                         contentDescription = "Items per row"; stateDescription = columns.toString()
                     })

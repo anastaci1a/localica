@@ -121,8 +121,7 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
             if (velocity != 0f) { scroll.scrollBy(velocity * edge * 8 * seconds); hover(d) }
         }
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, shape = Corners.panel,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    GlassDialog(onDismiss, GlassPlacement.Sheet) {
         Box(Modifier.fillMaxWidth().fillMaxHeight(.88f).testTag("player-action-editor").onGloballyPositioned { rootOrigin = it.positionInRoot() }) {
             Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -130,9 +129,9 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
                     ActionIcon(R.drawable.ic_close, "Close customization", onClick = onDismiss)
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(value.centered, { onChange(value.copy(centered = !value.centered)) }, { Text("Centered") }, enabled = drag == null)
-                    FilterChip(value.twoRows, { onChange(value.copy(twoRows = !value.twoRows)) }, { Text("2 rows") }, enabled = drag == null)
-                    FilterChip(value.small, { onChange(value.copy(small = !value.small)) }, { Text("Small") }, enabled = drag == null)
+                    GlassFilterChoice(value.centered, { onChange(value.copy(centered = !value.centered)) }, "Centered", enabled = drag == null)
+                    GlassFilterChoice(value.twoRows, { onChange(value.copy(twoRows = !value.twoRows)) }, "2 rows", enabled = drag == null)
+                    GlassFilterChoice(value.small, { onChange(value.copy(small = !value.small)) }, "Small", enabled = drag == null)
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth().onGloballyPositioned { preview = it.boundsInRoot() }) {
                     val width = if (value.centered) (maxWidth / value.columns.size).coerceAtLeast(48.dp) else if (value.small) 48.dp else 64.dp

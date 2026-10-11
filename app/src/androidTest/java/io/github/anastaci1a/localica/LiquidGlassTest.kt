@@ -23,6 +23,21 @@ import org.junit.Test
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun paddedBackdropDoesNotExpandAContentSizedControl() {
+        compose.setContent { ClearGlassTheme { Box(Modifier.fillMaxSize()) {
+            val source = rememberFrostedBackdrop(Unit)
+            Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Blue) }
+            Column {
+                LiquidGlassSurface(Modifier.fillMaxWidth().testTag("content-sized-lens"), source) {
+                    Box(Modifier.fillMaxWidth().height(40.dp))
+                }
+                androidx.compose.material3.Text("Below the control")
+            }
+        } } }
+        compose.onNodeWithTag("content-sized-lens").assertHeightIsEqualTo(40.dp)
+        compose.onNodeWithText("Below the control").assertIsDisplayed()
+    }
+
     @Test fun lightPillTransmitsAndRefreshesSceneWithoutBlurringForeground() = verifyLens(false)
     @Test fun darkBubbleTransmitsAndRefreshesSceneWithoutBlurringForeground() = verifyLens(true)
 

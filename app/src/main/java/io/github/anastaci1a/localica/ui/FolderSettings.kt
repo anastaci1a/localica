@@ -25,7 +25,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Playback and queues", null, R.drawable.ic_play, "Preloading, queue switching, and retention"),
     SettingsDestination("Song tap behavior", "Playback and queues", R.drawable.ic_music, "Default action and per-list overrides"),
     SettingsDestination("Library and tags", null, R.drawable.ic_library, "Folders, scanner configuration, and tag recovery"),
-    SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and collections in All"),
+    SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and unfiltered collections"),
     SettingsDestination("Folders to scan", "Library and tags", R.drawable.ic_folder, "Choose music folders and excluded subfolders"),
     SettingsDestination("Scanner configuration", "Library and tags", R.drawable.ic_search, "Subfolders, short files, and scanning on launch"),
     SettingsDestination("Tag recovery", "Library and tags", R.drawable.ic_music, "Recover interrupted tag and artwork edits"),
@@ -54,8 +54,8 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     val pageKey = (page ?: "root") + if (page == "Folder options") folderUri.orEmpty() else ""
     fun back() { if (path.isEmpty()) onDismiss() else path = path.dropLast(1) }
     SettingsPage(page ?: "Settings", ::back, onDismiss) {
-        if (page == null) OutlinedTextField(search, { search = it }, label = { Text("Search settings") }, singleLine = true, shape = Corners.card,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+        if (page == null) GlassSearchField(search, { search = it }, "Search settings",
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp))
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -105,7 +105,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
             }
         } }
     }
-    removing?.let { folder -> AlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folder.name}?") },
+    removing?.let { folder -> GlassAlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folder.name}?") },
         text = { Text("Audio files are kept. Queues and playlists keep their references to these songs.") },
         confirmButton = { TextButton(onClick = { onRemove(folder.uri); removing = null; back() }) { Text("Remove") } },
         dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } }) }
@@ -127,7 +127,7 @@ private fun ScannerConfiguration(preferences: ScanPreferences, folders: () -> Un
     if (durationOpen) {
         var input by remember { mutableStateOf(options.minimumDurationSeconds.toString()) }
         val seconds = input.toIntOrNull()
-        AlertDialog(onDismissRequest = { durationOpen = false }, title = { Text("Exclude short files") }, text = {
+        GlassAlertDialog(onDismissRequest = { durationOpen = false }, title = { Text("Exclude short files") }, text = {
             OutlinedTextField(input, { input = it }, label = { Text("Minimum seconds (0 = off)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = seconds == null || seconds !in 0..3600)
@@ -146,7 +146,7 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
         var input by remember { mutableStateOf(paths.joinToString("\n")) }
         val lines = input.lineSequence().map { it.trim().replace('\\', '/').trimEnd('/') }.filter { it.isNotBlank() }.toSet()
         val valid = lines.all { !it.startsWith('/') && it.split('/').none { part -> part in setOf("", ".", "..") } }
-        AlertDialog(onDismissRequest = { open = false }, title = { Text("Excluded subfolders") }, text = {
+        GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Excluded subfolders") }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Changes apply on the next scan.")
                 OutlinedTextField(input, { input = it }, label = { Text("Subfolder paths") }, minLines = 3, maxLines = 6, isError = !valid)
