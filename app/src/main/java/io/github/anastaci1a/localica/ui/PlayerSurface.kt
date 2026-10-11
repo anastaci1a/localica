@@ -27,7 +27,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.lerp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -192,12 +191,16 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
                     .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
                     .graphicsLayer { alpha = lyricProgress * p })
-            MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f), Modifier.offset(textX, titleY).width(textWidth).testTag("player-title"),
-                style = lerp(MaterialTheme.typography.titleSmall, MaterialTheme.typography.headlineSmall, p))
+            val titleScale = MaterialTheme.typography.titleSmall.fontSize.value / MaterialTheme.typography.headlineSmall.fontSize.value
+            val subtitleScale = MaterialTheme.typography.bodySmall.fontSize.value / MaterialTheme.typography.bodyLarge.fontSize.value
+            MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f),
+                Modifier.offset(textX, titleY).width(textWidth).scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title"),
+                style = MaterialTheme.typography.headlineSmall)
             Text((if (settings.albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist).orEmpty() +
                 if (p > 0.99f && state.album != null) " · " + state.album else "",
-                Modifier.offset(textX, subtitleY).width(textWidth), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = lerp(MaterialTheme.typography.bodySmall, MaterialTheme.typography.bodyLarge, p), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (p > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth).graphicsLayer { alpha = p }) {
                 var seeking by remember(state.trackUri) { mutableStateOf<Float?>(null) }
                 val duration = (state.durationMs ?: 0).coerceAtLeast(1).toFloat()
