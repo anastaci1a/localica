@@ -13,6 +13,7 @@ import io.github.anastaci1a.localica.navigation.*
 @Composable
 internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String = "Navigation", onChange: (InterfaceSettings) -> Unit) {
     when (section) {
+        "Glass" -> GlassSettingsControls(value.glass) { onChange(value.copy(glass = it)) }
         "Motion" -> {
             SettingsHeading("Animation")
             BooleanPreference("Reduce motion", value.reducedMotion) { onChange(value.copy(reducedMotion = it)) }

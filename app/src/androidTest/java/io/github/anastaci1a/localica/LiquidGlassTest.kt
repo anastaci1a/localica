@@ -27,7 +27,7 @@ class LiquidGlassTest {
     @Test fun darkBubbleTransmitsAndRefreshesSceneWithoutBlurringForeground() = verifyLens(true)
 
     @Test fun transparentListPixelsLeaveTheDrawerVisibleThroughTheLens() {
-        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize().background(Color.Red)) {
+        compose.setContent { ClearGlassTheme { Box(Modifier.fillMaxSize().background(Color.Red)) {
             val source = rememberFrostedBackdrop(Unit)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                 // A transparent list over a drawer must not replace that drawer with raw artwork.
@@ -44,7 +44,7 @@ class LiquidGlassTest {
     private fun verifyLens(dark: Boolean) {
         lateinit var source: FrostedBackdrop
         var swapped by mutableStateOf(false)
-        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+        compose.setContent { ClearGlassTheme { Box(Modifier.fillMaxSize()) {
             // Keep the scene key constant: explicit invalidation also covers settled list scrolls.
             source = rememberFrostedBackdrop(Unit, dark = dark)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -75,5 +75,12 @@ class LiquidGlassTest {
             val color = updated[updated.width / 4, updated.height / 2]
             color.blue > color.red + .15f
         }
+    }
+}
+
+@Composable
+private fun ClearGlassTheme(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalGlassAppearance provides io.github.anastaci1a.localica.navigation.GlassAppearance(blur = 0f, whiteTint = 0f)) {
+        LocalicaTheme(content = content)
     }
 }

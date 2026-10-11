@@ -111,7 +111,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val surroundingBackdrop = LocalFrostedBackdrop.current
     val needsListBackdrop = (showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
         (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
-    val listBackdrop = rememberFrostedBackdrop(presentation, needsListBackdrop, dark = surroundingBackdrop?.dark == true)
+    val listBackdrop = rememberFrostedBackdrop(presentation to surroundingBackdrop?.fallback,
+        needsListBackdrop, dark = surroundingBackdrop?.dark == true)
     val refreshBackdrop = LocalBackdropRefresh.current
     LaunchedEffect(presentation, gridState.isScrollInProgress) {
         if (!gridState.isScrollInProgress) {
