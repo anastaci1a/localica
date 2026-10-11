@@ -50,7 +50,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     actionRows: Int = 1, queueProgress: Animatable<Float, *>? = null, frostedBackdrop: FrostedBackdrop? = null,
     glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null,
     artworkVisit: String? = null, previousArtwork: ArtworkNeighbor? = null, nextArtwork: ArtworkNeighbor? = null,
-    onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, actions: @Composable () -> Unit = {}) {
+    onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black, actions: @Composable () -> Unit = {}) {
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
     val playerScroll = rememberScrollState()
@@ -58,7 +58,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val density = LocalDensity.current
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val miniTop = maxHeight - navigationInset - (CompactControlSize + 80.dp)
+    val miniTop = maxHeight - navigationInset - (CompactControlSize + bottomChrome)
     val distance = with(density) { miniTop.toPx().coerceAtLeast(1f) }
     val p = progress.value
     val artwork = visual ?: rememberPlayerVisual(state.trackUri)
@@ -171,7 +171,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
     val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
     val textX = 58.dp + (contentInset - 58.dp) * p
-    val foreground = androidx.compose.ui.graphics.lerp(Color.Black, Color.White, backgroundReveal)
+    val foreground = androidx.compose.ui.graphics.lerp(miniForeground, Color.White, backgroundReveal)
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val artPixels = with(density) { artWidth.toPx() }
     val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork,
@@ -197,7 +197,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
             ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize(), duration = paletteDuration,
-                immediate = true) { frame ->
+                immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = true) { frame ->
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
                 if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }

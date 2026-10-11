@@ -22,7 +22,7 @@ class TabResetTest {
             throw failure
         }
     }
-    @Test fun tabTapLeavesSearchAndDetailsAndEasesToTop() {
+    @Test fun detailsHideTabsAndReturningAllowsTabResetOfSearchAndPosition() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
@@ -46,6 +46,8 @@ class TabResetTest {
                 compose.scrollToUncoveredItem(hasText("Album 060"))
                 compose.onNodeWithText("Album 060").performClick()
                 compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Song 60").assertIsDisplayed() }.isSuccess }
+                compose.onNodeWithContentDescription("Library").assertDoesNotExist()
+                compose.onNodeWithContentDescription("Back").performClick()
                 compose.onNodeWithContentDescription("Library").performClick()
                 awaitFirstAlbum()
                 compose.onNodeWithContentDescription("Back").assertDoesNotExist()

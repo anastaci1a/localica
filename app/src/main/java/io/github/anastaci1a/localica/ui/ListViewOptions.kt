@@ -45,7 +45,7 @@ internal fun ListViewOptions(route: BrowseRoute, value: BrowseStyle, overridden:
                 }
                 Text("Group the album’s songs into sections in list view.", style = MaterialTheme.typography.bodySmall)
             }
-            if (!route.search && (route.collection != null || route.tab != MainTab.Library))
+            if (!route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library))
                 BooleanPreference("Quick-search box", edited.quickSearch) { edited = edited.copy(quickSearch = it) }
             SettingsHeading("Apply to")
             if (route.collection != null) {

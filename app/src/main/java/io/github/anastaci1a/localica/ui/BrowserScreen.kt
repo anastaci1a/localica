@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
@@ -49,7 +50,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
     libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {},
     popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0, sortOrigin: GlassAnchor? = null,
-    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default) {
+    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, onBack: () -> Unit = {},
+    onAppearance: (androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color) -> Unit = { _, _ -> }) {
     var localSearchOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val searchAnchor = rememberGlassAnchor()
     val modalBackdrop = LocalModalBackdrop.current
@@ -70,7 +72,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
     val showFilters = route.collection == null && (route.tab == MainTab.Library || route.globalSearch) && filters.isNotEmpty()
     val pillSlotHeight = listPillSlotHeight()
-    val showSearchPill = !route.search && style.quickSearch && (route.collection != null || route.tab != MainTab.Library)
+    val showSearchPill = !route.search && route.collection?.kind != MediaKind.Album && style.quickSearch && (route.collection != null || route.tab != MainTab.Library)
     val focus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val resultsFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
@@ -125,7 +127,32 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300), label = "Browse content reveal")
     val displayedStyle = presentation?.style ?: style
     val queryPending = presentation?.route != route || presentation?.style != style
-    val result = loadedResult ?: BrowseResult()
+    val sourceResult = loadedResult ?: BrowseResult()
+    val artDetail = !route.search && route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist)
+    val artistDetail = artDetail && route.collection?.kind != MediaKind.Album
+    var selectedAlbums by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
+    val albums = remember(sourceResult.rows, artistDetail) {
+        if (artistDetail) LibraryViews.groups(library.snapshot.copy(tracks = sourceResult.rows.map { it.track }),
+            SongListView.Albums, LibraryViews.defaults(SongListView.Albums)) else emptyList()
+    }
+    val validAlbums = selectedAlbums.filter { id -> albums.any { it.id == id } }
+    val selectedTrackIds = remember(albums, validAlbums) {
+        albums.filter { it.id in validAlbums }.flatMap { it.tracks }.map { it.id }.toSet()
+    }
+    val result = if (artistDetail && validAlbums.isNotEmpty()) sourceResult.copy(items = sourceResult.items.filter { it.row?.track?.id in selectedTrackIds }) else sourceResult
+    val heroUri = if (artistDetail) albums.sortedWith(compareByDescending<LibraryGroup> { it.tracks.mapNotNull(Track::year).maxOrNull() ?: 0 }
+        .thenByDescending { it.tracks.mapNotNull(Track::addedAt).maxOrNull() ?: 0 }.thenBy { it.id }).firstOrNull()?.tracks?.firstOrNull()?.uri
+        else sourceResult.rows.firstOrNull()?.track?.uri
+    val hero = if (artDetail) rememberPlayerVisual(heroUri) else PlayerVisual()
+    val lightCollection = collectionIsLight(hero)
+    val collectionInk = if (lightCollection) androidx.compose.ui.graphics.Color(0xFF202124) else androidx.compose.ui.graphics.Color.White
+    SideEffect { if (selectionVisible) onAppearance(if (artDetail) collectionInk else androidx.compose.ui.graphics.Color.Black,
+        if (artDetail) { if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom } else androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
+    val collectionSource = rememberFrostedBackdrop(hero, artDetail, dark = !lightCollection)
+    var collectionSort by remember { mutableStateOf(false) }
+    var collectionView by remember { mutableStateOf(false) }
+    var collectionMenu by remember { mutableStateOf(false) }
+    val collectionMenuAnchor = rememberGlassAnchor()
     val gridState = rememberLazyGridState()
     val vacancyProgress = remember { androidx.compose.animation.core.Animatable(if (localSearchOpen) 1f else 0f) }
     val motionSpeed = LocalMotionSpeed.current
@@ -140,6 +167,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         modalBackdrop?.refresh()
     }
     val searchSlotHeight = (pillSlotHeight - with(density) { (searchVacancy * vacancyProgress.value.coerceIn(0f, 1f)).toDp() }).coerceAtLeast(0.dp)
+    val pinchMotion = remember(route.key) { BrowsePinchMotion() }
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
         val anchor = zoomAnchor ?: return@LaunchedEffect
@@ -158,7 +186,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == anchor.key }?.let {
                             scrollBy((it.offset.y - anchor.top).toFloat())
                         }
-                    } while (now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
+                    } while (pinchMotion.held || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
                 }
             }
         } finally { if (zoomAnchor == anchor) zoomAnchor = null }
@@ -167,13 +195,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val needsListBackdrop = (showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
         (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
     val listBackdrop = rememberFrostedBackdrop(presentation to surroundingBackdrop?.fallback,
-        needsListBackdrop, dark = surroundingBackdrop?.dark == true)
+        needsListBackdrop, dark = if (artDetail) !lightCollection else surroundingBackdrop?.dark == true)
     val refreshBackdrop = LocalBackdropRefresh.current
     LaunchedEffect(presentation, gridState.isScrollInProgress) {
         if (!gridState.isScrollInProgress) {
             kotlinx.coroutines.delay(150)
             refreshBackdrop()
             if (needsListBackdrop) listBackdrop.refresh()
+            if (artDetail) collectionSource.refresh()
         }
     }
     val scrollScope = rememberCoroutineScope()
@@ -219,6 +248,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var contextMenu by remember { mutableStateOf<String?>(null) }
     var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<Track?>(null) }
+    val pageColors = MaterialTheme.colorScheme
+    MaterialTheme(colorScheme = if (artDetail) pageColors.copy(onSurface = collectionInk, onSurfaceVariant = collectionInk.copy(alpha = .65f),
+        primary = collectionInk, surface = if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom) else pageColors) {
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+        LocalFrostedBackdrop provides if (artDetail) collectionSource else surroundingBackdrop) {
+    Box(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())) {
+    if (artDetail) {
+        val top = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "browser-notice" }?.offset?.y?.toFloat()
+            ?: if (gridState.firstVisibleItemIndex > 0) -reorder.viewportWidth * 2f else 0f
+        CollectionBackdrop(hero, top, Modifier.matchParentSize().recordFrostedBackdrop(collectionSource))
+    }
     Column(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
         .then(if (searchAnchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)) {
@@ -254,10 +294,31 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize().graphicsLayer { alpha = listReveal }
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
-                .pinchToChangeView(enabled && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind != MediaKind.Queue) { zoomIn, midpoint ->
+                .pinchToChangeView(enabled && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind != MediaKind.Queue,
+                    onProgress = { value -> if (pinchMotion.held && !reducedMotion) scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { pinchMotion.progress.snapTo(value) } },
+                    onRelease = {
+                        pinchMotion.held = false
+                        scrollScope.launch {
+                            if (reducedMotion) pinchMotion.progress.snapTo(1f)
+                            else pinchMotion.progress.animateTo(1f, androidx.compose.animation.core.tween(220))
+                            pinchMotion.source = null
+                        }
+                    }) { zoomIn, midpoint ->
                     val next = displayedStyle.zoomStep(zoomIn, with(density) { reorder.viewportWidth.toDp().value },
                         albumSongs = route.collection?.kind == MediaKind.Album)
                     if (next != displayedStyle) {
+                        val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
+                        pinchMotion.source = if (reducedMotion) null else displayedStyle
+                        pinchMotion.held = true
+                        pinchMotion.viewportWidth = reorder.viewportWidth.toFloat()
+                        pinchMotion.sourceColumns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
+                        pinchMotion.bounds = visible.associate { it.key to androidx.compose.ui.geometry.Rect(it.offset.x.toFloat(), it.offset.y.toFloat(),
+                            (it.offset.x + it.size.width).toFloat(), (it.offset.y + it.size.height).toFloat()) }
+                        visible.firstOrNull()?.let { first ->
+                            pinchMotion.anchorIndex = first.index - 1; pinchMotion.anchorTop = first.offset.y.toFloat()
+                            pinchMotion.rowHeight = first.size.height.toFloat()
+                        }
+                        scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { pinchMotion.progress.snapTo(if (reducedMotion) 1f else 0f) }
                         val nearest = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }.minByOrNull {
                             val x = it.offset.x + it.size.width / 2f - midpoint.x
                             val y = it.offset.y + it.size.height / 2f - midpoint.y
@@ -268,12 +329,30 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         style = next
                     }
                 }
-                .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, surroundingBackdrop)
-                    .then(if (surroundingBackdrop == null) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
-                .then(if (showSearchPill || showFilters) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
+                .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, if (artDetail) collectionSource else surroundingBackdrop)
+                    .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
+                .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
-                    Column(Modifier.padding(horizontal = 16.dp)) {
-                        if (showSearchPill || showFilters) Spacer(Modifier.height(if (showSearchPill) searchSlotHeight else pillSlotHeight))
+                    Column {
+                        if (artDetail) {
+                            CompositionLocalProvider(LocalFrostedBackdrop provides collectionSource) {
+                                CollectionHeader(route.title.orEmpty(), if (artistDetail) null else sourceResult.rows.firstOrNull()?.track?.let { it.albumArtist ?: it.artist },
+                                    hero, artistDetail, enabled && result.rows.isNotEmpty(),
+                                    onPlay = { onPlay(result.rows, 0, result.scope) }, onShuffle = {
+                                        if (queues != null) queues.randomizedQueue(result.rows.map { it.track }, route.title ?: "Collection", result.rows.map { it.sourcePlaylistId })
+                                        else onPlay(result.rows.shuffled(), 0, result.scope)
+                                    })
+                                if (artistDetail) ArtistAlbumChoices(albums, validAlbums) { selectedAlbums = it }
+                                if (artistDetail && showSearchPill) Box(Modifier.fillMaxWidth().height(searchSlotHeight).clipToBounds()) {
+                                    ListSearchPill("Search " + (route.title ?: route.tab.label), {
+                                        searchOriginalOffset = if (gridState.firstVisibleItemIndex == 0) gridState.firstVisibleItemScrollOffset else -1
+                                        searchVacancy = with(density) { pillSlotHeight.toPx() }
+                                        localFocusRequest++; localSearchOpen = true
+                                    }, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
+                                }
+                            }
+                        }
+                        if (!artDetail && (showSearchPill || showFilters)) Spacer(Modifier.height(if (showSearchPill) searchSlotHeight else pillSlotHeight))
                         LibraryNotice(library)
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -298,7 +377,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             val menuAnchor = rememberGlassAnchor()
                             Box {
-                                if (showButton) ActionIcon(R.drawable.ic_more, "Actions for " + item.title, anchor = menuAnchor) { contextMenu = item.key }
+                                if (showButton) ActionIcon(if (item.row != null) R.drawable.ic_ellipsis else R.drawable.ic_more, "Actions for " + item.title, anchor = menuAnchor, quiet = item.row != null) { contextMenu = item.key }
                                 GlassMenu(contextMenu == item.key, menuAnchor, { contextMenu = null }) {
                                     if (item.row != null) {
                                         ActionMenuItem("Information", onClick = { contextMenu = null; info = item.row.track })
@@ -339,10 +418,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
-                        Column(Modifier.animateBounds(this@LookaheadScope,
+                        Column(Modifier.then(if (pinchMotion.source == null) Modifier.animateBounds(this@LookaheadScope,
                             modifier = Modifier.fillMaxWidth().padding(4.dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder) 0 else 350) })
-                            .clip(Corners.card).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
+                            else Modifier.fillMaxWidth().padding(4.dp).graphicsLayer {
+                                val position = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.key }?.offset
+                                if (position != null) {
+                                    val old = pinchMotion.sourceBounds(item.key, result.items.indexOf(item))
+                                    translationX = (old.left - position.x) * (1f - pinchMotion.progress.value)
+                                    translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
+                                }
+                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
@@ -354,7 +440,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 else contextMenu = item.key
                             }
                         ).padding(horizontal = if (denseGallery) 4.dp else 12.dp, vertical = 8.dp)) {
-                            BrowseItemLayout(item, displayedStyle, denseGallery, this@LookaheadScope, reducedMotion, itemMenu)
+                            BrowseItemLayout(item, displayedStyle, denseGallery, this@LookaheadScope, reducedMotion, itemMenu,
+                                trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (result.items.indexOf(item) + 1).toString() else null, pinch = pinchMotion)
                         }
 
                     }
@@ -365,7 +452,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 LibraryFilterBubbles(filters, route.filter, reducedMotion,
                     { onRoute(route.copy(filter = it)) }, onFilterSettings)
             }
-            if (showSearchPill) ListSearchPill("Search "+ (route.title ?: route.tab.label), {
+            if (showSearchPill && !artDetail) ListSearchPill("Search "+ (route.title ?: route.tab.label), {
                 if (gridState.firstVisibleItemIndex == 0) {
                     searchOriginalOffset = gridState.firstVisibleItemScrollOffset
                     searchVacancy = (with(density) { pillSlotHeight.toPx() } - searchOriginalOffset).coerceAtLeast(0f)
@@ -409,6 +496,32 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
 
+    if (artDetail) {
+        val header = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "browser-notice" }
+        val coverWidth = reorder.viewportWidth.toFloat().coerceAtLeast(1f)
+        val scrollFade = if (header == null && gridState.firstVisibleItemIndex > 0) 1f
+            else ((-(header?.offset?.y ?: 0) - coverWidth * .65f) / (coverWidth * .35f)).coerceIn(0f, 1f)
+        Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(100.dp)
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(
+                MaterialTheme.colorScheme.surface.copy(alpha = .7f * scrollFade), androidx.compose.ui.graphics.Color.Transparent))))
+        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionIcon(R.drawable.ic_back, "Back", onClick = onBack)
+            Text(route.title.orEmpty(), Modifier.weight(1f).graphicsLayer { alpha = scrollFade }
+                .then(if (scrollFade < .1f) Modifier.clearAndSetSemantics {} else Modifier), maxLines = 1,
+                overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+            Box {
+                ActionIcon(R.drawable.ic_ellipsis, "Collection actions", anchor = collectionMenuAnchor) { collectionMenu = true }
+                GlassMenu(collectionMenu, collectionMenuAnchor, { collectionMenu = false }) {
+                    ActionMenuItem("Sort") { collectionMenu = false; collectionSort = true }
+                    ActionMenuItem("View options") { collectionMenu = false; collectionView = true; collectionSort = true }
+                    ActionMenuItem("Select all songs") { collectionMenu = false; session.select(route.collection, result.rows) }
+                }
+            }
+        }
+    }
+    } } }
+
     if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
         fun closeSearch() { localSearchOpen = false }
         fun searchBack() {
@@ -436,16 +549,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab)).items
             .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
     } }
-    if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { BrowseSortDialog(route, style, preferences.overridden(route), onSortDismiss, { value, override ->
+    fun dismissSorting() { collectionSort = false; collectionView = false; onSortDismiss() }
+    if (sorting || collectionSort) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
         preferences.write(route, value, override); style = value
         if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
-        onSortDismiss()
-    }, { preferences.reset(route); style = preferences.read(route); onSortDismiss() }, presentationOnly,
+        dismissSorting()
+    }, { preferences.reset(route); style = preferences.read(route); dismissSorting() }, presentationOnly || collectionView,
         onRandomize = if (route.collection?.kind == MediaKind.Queue && queues != null) ({
             queues.randomize(route.collection.id) { saved -> if (saved) {
                 style = style.copy(sort = TrackSort.Manual, ascending = true)
                 preferences.write(route, style, true)
-                onSortDismiss()
+                dismissSorting()
             } }
         }) else null, reducedMotion = reducedMotion) }
     if (renaming) {

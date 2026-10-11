@@ -46,14 +46,13 @@ class SettingsOptionsTest {
                     androidx.compose.ui.semantics.Role.RadioButton)).fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("Group album songs").performClick()
             compose.onNodeWithText("Artist").performClick()
-            compose.onNodeWithText("Quick-search box").performScrollTo().performClick()
+            compose.onNodeWithText("Quick-search box").assertDoesNotExist()
             compose.onNodeWithText("Only for this collection").performScrollTo().performClick()
             compose.onNodeWithText("Save").performClick()
             compose.runOnIdle {
                 assertEquals(saved, BrowsePreferences(context).read(route))
                 assertEquals(SongGrouping.Artist, saved?.songGrouping)
                 assertEquals(ExtraInfo.AlbumArtist, saved?.extraInfo)
-                assertEquals(false, saved?.quickSearch)
                 assertTrue(prefs.overridden(route))
                 assertEquals(SongGrouping.None, prefs.read(route.copy(collection = MediaRef(MediaKind.Album, "album-b"))).songGrouping)
                 prefs.reset(route)

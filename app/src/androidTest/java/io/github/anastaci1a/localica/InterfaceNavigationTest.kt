@@ -123,9 +123,13 @@ class InterfaceNavigationTest {
         compose.onNodeWithContentDescription("Actions for Evening").performClick()
         compose.onNodeWithText("Information").performClick()
         compose.onNodeWithText(action).performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Collapse player").fetchSemanticsNodes().isEmpty() }
+        compose.onAllNodesWithText(destination).onFirst().assertIsDisplayed()
+        // Artist headers include an album carousel above the songs. Navigation must
+        // preserve that initial header rather than forcing the first song onscreen.
+        compose.onNodeWithTag("browser-list").performScrollToIndex(1)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("media-" + track.id).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Collapse player").assertDoesNotExist()
-        compose.onAllNodesWithText(destination).onFirst().assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, playbackActions) }
         compose.onNodeWithTag("media-" + track.id).assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()

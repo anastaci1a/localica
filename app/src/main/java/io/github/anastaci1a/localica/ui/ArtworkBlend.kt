@@ -20,7 +20,7 @@ internal val LocalArtworkTransition = staticCompositionLocalOf { ArtworkTransiti
 /** Explicit opaque outgoing frame plus masked incoming frame. Interruptions flatten the
  * displayed composite once, rather than restarting from an old cover or stacking animations. */
 @Composable
-internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: Int, immediate: Boolean = false,
+internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: Int, immediate: Boolean = false, opacityBlend: Boolean = false,
     content: @Composable (PlayerVisual) -> Unit) {
     val target = visual.copy(loading = false)
     var outgoing by remember { mutableStateOf(target) }
@@ -60,9 +60,9 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
         Box(Modifier.matchParentSize().graphicsLayer {
             compositingStrategy = CompositingStrategy.Offscreen
             val p = if (immediate) 1f else progress.value
-            if (reduced) alpha = p
+            if (reduced || opacityBlend) alpha = p
             else if (Build.VERSION.SDK_INT >= 33) renderEffect = lens?.effect(size.width, size.height, p, style)
-        }.then(if (Build.VERSION.SDK_INT < 33 && !reduced) Modifier.drawWithContent {
+        }.then(if (Build.VERSION.SDK_INT < 33 && !reduced && !opacityBlend) Modifier.drawWithContent {
             drawContent()
             val p = if (immediate) 1f else progress.value
             if (p < 1f) {
