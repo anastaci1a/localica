@@ -47,7 +47,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     onPrevious: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit, onLibrary: () -> Unit,
     onEditTags: (() -> Unit)? = null, lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {},
     track: Track? = null, onSettings: (InterfaceSettings) -> Unit = {},
-    actionRows: Int = 1, queueProgress: Animatable<Float, *>? = null, frostedBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null, actions: @Composable () -> Unit = {}) {
+    actionRows: Int = 1, queueProgress: Animatable<Float, *>? = null, frostedBackdrop: FrostedBackdrop? = null,
+    glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null, actions: @Composable () -> Unit = {}) {
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
     val playerScroll = rememberScrollState()
@@ -168,7 +169,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     Surface(Modifier.offset(x = 12.dp * (1f - p), y = miniTop * (1f - p))
         .width(surfaceWidth).height(64.dp + (maxHeight - 64.dp) * p)
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface").then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop) else Modifier),
-        shape = RoundedCornerShape((32 * (1f - p)).dp), color = Color(0xFFF2F0EC), contentColor = foreground, shadowElevation = 3.dp) {
+        shape = RoundedCornerShape((32 * (1f - p)).dp), color = palette.bottom.copy(alpha = p), contentColor = foreground, shadowElevation = 3.dp) {
+        if (p < .2f) LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - p / .2f }, source = glassBackdrop)
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {

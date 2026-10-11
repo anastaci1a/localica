@@ -31,6 +31,14 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     }
     var menu by remember { mutableStateOf<MediaRef?>(null) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+    val carousel = androidx.compose.foundation.lazy.rememberLazyListState()
+    val refreshBackdrop = LocalBackdropRefresh.current
+    LaunchedEffect(items, scroll.isScrollInProgress, carousel.isScrollInProgress) {
+        if (!scroll.isScrollInProgress && !carousel.isScrollInProgress) {
+            kotlinx.coroutines.delay(150)
+            refreshBackdrop()
+        }
+    }
     var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(scrollToTopRequest) {
         if (consumedScrollRequest != scrollToTopRequest) {
@@ -47,7 +55,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (items.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
-        item { LazyRow(modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { LazyRow(state = carousel, modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
                 Column(Modifier.width(160.dp).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {

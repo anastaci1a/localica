@@ -26,20 +26,23 @@ import kotlinx.coroutines.withContext
 /** A recorded scene, independent of every surface that samples it. Never record a surface
  * into its own source: the player and its lyric background use separate sources. */
 @Stable
-internal class FrostedBackdrop(val layer: GraphicsLayer) {
+internal class FrostedBackdrop(val layer: GraphicsLayer, val dark: Boolean) {
     var origin by mutableStateOf(Offset.Zero)
     var size by mutableStateOf(IntSize.Zero)
     var fallback by mutableStateOf<ImageBitmap?>(null)
+    var revision by mutableIntStateOf(0)
+    fun refresh() { if (Build.VERSION.SDK_INT < 31) revision++ }
 }
 internal val LocalFrostedBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
+internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 
 @Composable
-internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true): FrostedBackdrop {
+internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
-    val source = remember(layer) { FrostedBackdrop(layer) }
+    val source = remember(layer, dark) { FrostedBackdrop(layer, dark) }
     // Android 8–11 have no RenderEffect. Read back only when the scene/size changes,
     // then scatter a small snapshot off the main thread; never blur on each gesture frame.
-    LaunchedEffect(source, key, source.size, enabled) {
+    LaunchedEffect(source, key, source.size, source.revision, enabled) {
         if (Build.VERSION.SDK_INT < 31 && enabled && source.size != IntSize.Zero) {
             suspend fun capture() {
                 withFrameNanos { }; withFrameNanos { }
@@ -73,7 +76,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, content: @Composable BoxScope.() -> Unit) {
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val dark = source != null
+    val dark = source?.dark == true
     val base = if (dark) Color(0xFF18212C) else MaterialTheme.colorScheme.surface
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
     val grain = remember { frostGrain }

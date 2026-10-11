@@ -22,7 +22,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     onValueChangeFinished: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val dragging by interaction.collectIsDraggedAsState()
-    val thickness by animateDpAsState(if (dragging) 9.dp else 5.dp, tween(160), label = "Seek thickness")
+    val thickness by animateDpAsState(if (dragging) 9.dp else 5.dp, tween(if (LocalReducedMotion.current) 0 else 160), label = "Seek thickness")
     Slider(value, onValueChange, modifier, enabled, valueRange = valueRange, onValueChangeFinished = onValueChangeFinished,
         interactionSource = interaction,
         thumb = { Box(Modifier.width(0.dp).height(40.dp)) },
