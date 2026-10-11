@@ -56,7 +56,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
             }
         }
         when {
-            result == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+            result == null -> Spacer(Modifier.weight(1f))
             source == null -> Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.Center) {
                 Text("No local lyrics found", style = MaterialTheme.typography.titleMedium)
                 Text("Use embedded lyrics or a matching .lrc file in the song’s folder.", style = MaterialTheme.typography.bodySmall)
@@ -103,7 +103,8 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                     Text(line.text.ifEmpty { "♪" }, color = color,
                         style = MaterialTheme.typography.headlineSmall, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         modifier = Modifier.fillMaxWidth().semantics { this.selected = document.synced && index == active }
-                            .then(if (line.timeMs != null) Modifier.clickable(onClickLabel = "Seek to lyric") { onSeek(line.timeMs); following = true } else Modifier)
+                            .then(if (line.timeMs != null) Modifier.clickable(interactionSource = null, indication = null,
+                                onClickLabel = "Seek to lyric") { onSeek(line.timeMs); following = true } else Modifier)
                             .padding(vertical = 12.dp, horizontal = 4.dp))
                 }
             }

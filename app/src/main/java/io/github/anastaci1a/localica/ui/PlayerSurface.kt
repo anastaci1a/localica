@@ -130,9 +130,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricTransport = virtualHeight - navigationInset - 152.dp
     val transportY = 8.dp + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - 8.dp) * p
+    val contentInset = 32.dp
+    val contentWidth = windowWidth - contentInset * 2
     val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
-    val textWidth = miniTextWidth + (windowWidth - 48.dp - miniTextWidth) * p
-    val textX = 68.dp + (24.dp - 68.dp) * p
+    val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
+    val textX = 68.dp + (contentInset - 68.dp) * p
     val foreground = androidx.compose.ui.graphics.lerp(Color.Black, Color.White, p)
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val baseColors = MaterialTheme.colorScheme
@@ -187,7 +189,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 ActionIcon(R.drawable.ic_lyrics, if (lyricsOpen) "Hide lyrics" else "Show lyrics") { onLyrics(!lyricsOpen) }
             }
             if (lyricProgress > 0f) LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
-                Modifier.offset(x = 24.dp, y = statusInset + 60.dp).width(windowWidth - 48.dp)
+                Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
                     .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
                     .graphicsLayer { alpha = lyricProgress * p })
             MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f), Modifier.offset(textX, titleY).width(textWidth).testTag("player-title"),
@@ -196,7 +198,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 if (p > 0.99f && state.album != null) " · " + state.album else "",
                 Modifier.offset(textX, subtitleY).width(textWidth), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = lerp(MaterialTheme.typography.bodySmall, MaterialTheme.typography.bodyLarge, p), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (p > 0f) Column(Modifier.offset(x = 24.dp, y = seekY).width(windowWidth - 48.dp).graphicsLayer { alpha = p }) {
+            if (p > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth).graphicsLayer { alpha = p }) {
                 var seeking by remember(state.trackUri) { mutableStateOf<Float?>(null) }
                 val duration = (state.durationMs ?: 0).coerceAtLeast(1).toFloat()
                 Slider((seeking ?: state.positionMs.toFloat()).coerceIn(0f, duration), { seeking = it },
@@ -210,8 +212,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelSmall)
                 }
             }
-            if (p > 0f && lyricProgress < 1f) Box(Modifier.offset(y = ordinarySeekY + 128.dp + 32.dp * lyricProgress)
-                .fillMaxWidth().height(48.dp * actionRows).graphicsLayer { alpha = p * (1f - lyricProgress) }
+            if (p > 0f && lyricProgress < 1f) Box(Modifier.offset(x = contentInset, y = ordinarySeekY + 128.dp + 32.dp * lyricProgress)
+                .width(contentWidth).height(48.dp * actionRows).graphicsLayer { alpha = p * (1f - lyricProgress) }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - p) + ((windowWidth - 176.dp) / 2) * p, y = transportY),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp * p)) {
@@ -238,7 +240,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     !state.connected -> "Connecting…"
                     else -> null
                 }
-                if (message != null) Text(message, Modifier.offset(x = 24.dp, y = transportY + 72.dp).width(windowWidth - 48.dp),
+                if (message != null) Text(message, Modifier.offset(x = contentInset, y = transportY + 72.dp).width(contentWidth),
                     style = MaterialTheme.typography.bodySmall, color = if (state.problem != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (p > 0f && (queueProgress?.value ?: 0f) == 0f) Surface(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
