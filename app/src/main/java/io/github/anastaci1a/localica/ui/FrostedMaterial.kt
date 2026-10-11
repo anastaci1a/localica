@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -80,8 +81,17 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     return source
 }
 
-internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null): Modifier =
-    onGloballyPositioned { source.origin = it.positionInRoot(); source.size = it.size }
+/** Screen coordinates also align sources sampled from another Compose window. */
+internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view: android.view.View): Offset {
+    val location = IntArray(2)
+    view.getLocationOnScreen(location)
+    return positionInRoot() + Offset(location[0].toFloat(), location[1].toFloat())
+}
+
+@Composable
+internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null): Modifier {
+    val view = LocalView.current
+    return onGloballyPositioned { source.origin = it.backdropPosition(view); source.size = it.size }
         .drawWithContent {
             source.layer.record {
                 if (backing != null && !backing.layer.isReleased) {
@@ -92,6 +102,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             }
             drawLayer(source.layer)
         }
+}
 
 /** Shared scattering, tint, broad lighting, fine non-tiled grain, and a thin illuminated edge.
  * Only the scene is filtered; controls and text are drawn afterwards at full resolution. */
@@ -100,6 +111,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, content: @Composable BoxScope.() -> Unit) {
     var origin by remember { mutableStateOf(Offset.Zero) }
+    val view = LocalView.current
     val dark = source?.dark == true
     val base = if (dark) Color.Black else MaterialTheme.colorScheme.surface
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
@@ -108,7 +120,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     // Keep controls outside this recording to prevent feedback through nested lenses.
     val material = rememberFrostedBackdrop(source?.fallback, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
     Box(modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false).clip(shape)
-        .onGloballyPositioned { origin = it.positionInRoot() }
+        .onGloballyPositioned { origin = it.backdropPosition(view) }
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) .38f else .8f),
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
@@ -117,7 +129,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
         }) {
             val offset = source.origin - origin
             translate(offset.x, offset.y) {
-                if (Build.VERSION.SDK_INT >= 31) drawLayer(source.layer)
+                if (Build.VERSION.SDK_INT >= 31 && !source.layer.isReleased) drawLayer(source.layer)
                 else source.fallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) }
             }
         }

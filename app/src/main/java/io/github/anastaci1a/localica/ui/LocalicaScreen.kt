@@ -188,16 +188,19 @@ fun LocalicaScreen(
     }.distinctBy { it.album to it.albumArtist }.map { it.uri } + neighbors.filterNotNull()).distinct().take(8)
     val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded, glassBlur = settings.glass.blur)
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = false, glassBlur = settings.glass.blur)
+    val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual),
+        dark = expanded, glassBlur = settings.glass.blur)
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
     PlayerSystemBars(hasPlayer && progress.value >= .99f)
     LocalicaTheme(grayTone = settings.grayTone) {
     CompositionLocalProvider(LocalGlassAppearance provides settings.glass, LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache,
+        LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
             (if (hasPlayer) CompactControlSize + 88.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+    BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
         Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(MaterialTheme.colorScheme.background).statusBarsPadding()

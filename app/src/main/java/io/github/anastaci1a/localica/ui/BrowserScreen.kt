@@ -51,6 +51,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default) {
     var localSearchOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val searchAnchor = rememberGlassAnchor()
+    val modalBackdrop = LocalModalBackdrop.current
+    var searchVacancy by androidx.compose.runtime.saveable.rememberSaveable { mutableFloatStateOf(0f) }
+    var searchOriginalOffset by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(-1) }
     var localSearch by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
         save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
         mutableStateOf(NavigationState(route.tab, mapOf(route.tab to listOf(route.copy(search = true, key = java.util.UUID.randomUUID().toString())))))
@@ -78,7 +82,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         focusedOnce = true; focusedRequest = focusRequest; inputCompletion++
         onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
     }
-    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion) {
+    val panelReady = LocalGlassPanelReady.current
+    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady) {
+        if (!panelReady) return@LaunchedEffect
         if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
             withFrameNanos { } // Wait until the newly keyed field is attached.
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
@@ -121,6 +127,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val queryPending = presentation?.route != route || presentation?.style != style
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
+    val vacancyProgress = remember { androidx.compose.animation.core.Animatable(if (localSearchOpen) 1f else 0f) }
+    LaunchedEffect(localSearchOpen, reducedMotion) {
+        if (reducedMotion) vacancyProgress.snapTo(if (localSearchOpen) 1f else 0f)
+        else vacancyProgress.animateTo(if (localSearchOpen) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = .86f, stiffness = 420f))
+        if (!localSearchOpen && searchOriginalOffset >= 0) {
+            gridState.scrollToItem(0, searchOriginalOffset)
+            searchOriginalOffset = -1; searchVacancy = 0f
+        }
+        searchAnchor.source?.refresh()
+        modalBackdrop?.refresh()
+    }
+    val searchSlotHeight = (pillSlotHeight - with(density) { (searchVacancy * vacancyProgress.value.coerceIn(0f, 1f)).toDp() }).coerceAtLeast(0.dp)
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
         val anchor = zoomAnchor ?: return@LaunchedEffect
@@ -202,7 +220,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var info by remember { mutableStateOf<Track?>(null) }
     Column(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
-        .then(if (localSearchOpen && !playerOpen) Modifier.clearAndSetSemantics { } else Modifier)) {
+        .then(if (searchAnchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)) {
         if (popupDismiss == null && route.collection?.kind == MediaKind.Playlist) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { renaming = true }) { Text("Rename") }
                 TextButton(onClick = { deleting = true }) { Text("Delete") }
@@ -215,7 +233,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submitSearch() }),
             colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent),
+                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
         else if (route.search) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
@@ -253,7 +273,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .then(if (showSearchPill || showFilters) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
-                        if (showSearchPill || showFilters) Spacer(Modifier.height(pillSlotHeight))
+                        if (showSearchPill || showFilters) Spacer(Modifier.height(if (showSearchPill) searchSlotHeight else pillSlotHeight))
                         LibraryNotice(library)
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -345,8 +365,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     { onRoute(route.copy(filter = it)) }, onFilterSettings)
             }
             if (showSearchPill) ListSearchPill("Search "+ (route.title ?: route.tab.label), {
+                if (gridState.firstVisibleItemIndex == 0) {
+                    searchOriginalOffset = gridState.firstVisibleItemScrollOffset
+                    searchVacancy = (with(density) { pillSlotHeight.toPx() } - searchOriginalOffset).coerceAtLeast(0f)
+                }
                 localFocusRequest++; localSearchOpen = true
-            }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = ListPillVerticalInset))
+            }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
             if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
             val playingIndex = result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
             val visibleTop = with(density) { (if (showSearchPill || showFilters) pillSlotHeight else 0.dp).toPx() }
@@ -384,13 +408,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
 
-    if (localSearchOpen && !playerOpen) {
+    if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
         fun closeSearch() { localSearchOpen = false }
         fun searchBack() {
             val previous = localSearch.back(false)
             if (previous == null) closeSearch() else localSearch = previous
         }
-        ListSearchWindow(localSearch.route.text.isNotBlank(), ::searchBack) {
+        ListSearchWindow(localSearchOpen && !playerOpen, searchAnchor, localSearch.route.text.isNotBlank(), ::searchBack) {
             CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
                 val searchRoute = localSearch.route
                 key(searchRoute.key) { searchHolder.SaveableStateProvider(searchRoute.key) {

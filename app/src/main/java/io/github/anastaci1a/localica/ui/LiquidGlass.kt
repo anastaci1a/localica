@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 
@@ -60,6 +60,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     cornerRadius: Dp? = null, frostProgress: Float = 0f, pressFeedback: Boolean = true,
     content: @Composable BoxScope.() -> Unit = {}) {
     var origin by remember { mutableStateOf(Offset.Zero) }
+    val view = LocalView.current
     val dark = source?.dark == true
     val appearance = LocalGlassAppearance.current.normalized()
     val frost = frostProgress.coerceIn(0f, 1f)
@@ -71,7 +72,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     BoxWithConstraints(modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius)
         .then(if (pressFeedback) Modifier.glassPress { pressed = it } else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
-        .onGloballyPositioned { origin = it.positionInRoot() }) {
+        .onGloballyPositioned { origin = it.backdropPosition(view) }) {
         if (source != null && Build.VERSION.SDK_INT >= 31) {
             // Padding supplies actual neighboring pixels along the curved silhouette.
             val padding = 48.dp
