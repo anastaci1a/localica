@@ -107,17 +107,6 @@ fun LocalicaScreen(
     var expanded by rememberSaveable { mutableStateOf(false) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(expanded) { if (expanded) { focusManager.clearFocus(); keyboard?.hide() } }
-    val view = androidx.compose.ui.platform.LocalView.current
-    SideEffect {
-        var owner: android.content.Context? = context
-        while (owner is android.content.ContextWrapper && owner !is android.app.Activity) owner = owner.baseContext
-        (owner as? android.app.Activity)?.let { activity ->
-            androidx.core.view.WindowCompat.getInsetsController(activity.window, view).apply {
-                isAppearanceLightStatusBars = !expanded || queueOpen
-                isAppearanceLightNavigationBars = !expanded || queueOpen
-            }
-        }
-    }
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var exitPrompt by remember { mutableStateOf(false) }
     var consumedRequest by rememberSaveable { mutableLongStateOf(queues.playerRequest) }
