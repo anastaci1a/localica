@@ -85,7 +85,14 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
                 d.pointer.x < it.offset.x + it.size.width / 2f)
         }
         val anchor = next ?: candidates.last()
-        d.insertion = (d.remainingPositions.getValue(anchor.key.toString()) + if (next == null) 1 else 0).coerceIn(0, d.remaining.size)
+        val insertion = (d.remainingPositions.getValue(anchor.key.toString()) + if (next == null) 1 else 0).coerceIn(0, d.remaining.size)
+        if (insertion != d.insertion) {
+            // Reordering changes the slot content, not the viewport. LazyGrid otherwise follows
+            // its first item's key (sometimes the moving gap), jumping a row during upward drags.
+            // Request the same index/offset for this remeasure; placement animations stay intact.
+            grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset)
+            d.insertion = insertion
+        }
     }
     suspend fun autoScroll(edge: Float) {
         while (currentCoroutineContext().isActive) {

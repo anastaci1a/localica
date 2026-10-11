@@ -22,11 +22,11 @@ Library filters and All’s collection types are configurable. Songs retain firs
 
 ## Device review
 
-Review the v0.12.3 APK on the user's device before advancing, particularly the numbered queue UI, scoped search history, global playback modes, gallery column counts, and player gestures/artwork, alongside collection sorting and playback counts. Address regressions in small verified releases before applying glass materials.
+The v0.12.3 APK is available for device review, particularly the numbered queue UI, scoped search history, global playback modes, gallery column counts, and player gestures/artwork, alongside collection sorting and playback counts. Continue with the upward-drag patch while device feedback is pending; address new regressions in small verified releases before applying glass materials.
 
 ## Next interaction checkpoint
 
-Before frosted glass, stabilize upward reordering in queues and playlists: eliminate stutter and sporadic downward viewport jumps for single-song and multi-song drags, including edge scrolling and the insertion gap.
+Verify and release v0.12.4: keep the viewport fixed when the insertion gap moves, preventing downward jumps during upward reordering. Cover single-song and disjoint-selection drags, upward edge scrolling, and cancellation before starting frosted glass.
 
 ## Visual design system
 
