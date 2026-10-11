@@ -34,9 +34,9 @@ internal fun ListSearchPill(label: String, onClick: () -> Unit, modifier: Modifi
         .testTag("list-search-pill"), contentAlignment = Alignment.Center) {
         LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight())) {
             Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(R.drawable.ic_search), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(painterResource(R.drawable.ic_search), null, Modifier.size(20.dp), tint = LocalContentColor.current.copy(alpha = .8f))
                 Spacer(Modifier.width(10.dp))
-                Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = .8f),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }

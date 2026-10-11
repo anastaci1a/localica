@@ -4,7 +4,8 @@ Development APK for Android 8 or newer. Signed with the project development key;
 
 ## Changes
 
-- Clear, rounded glass lenses with stronger edge distortion and elastic press feedback; simpler clear controls on Android 8–12
+- Rounded glass lenses with stronger edge distortion and elastic press feedback; simpler edge lighting on Android 8–12
+- Interface → Glass: live preview and independent blur, white tint, shadow strength and spread controls, with lightly blurred/tinted defaults and subtle broad shadows
 - Smaller mini-player, inset artwork and matching circular controls; one sliding tab-selection capsule
 - Three artwork transition choices with a replayable preview under Interface → Player, prepared neighboring artwork and uninterrupted rapid changes
 - Glass Library filters aligned with search pills: selection moves to the front, tapping again clears it, and reselecting Library restores the unfiltered view
