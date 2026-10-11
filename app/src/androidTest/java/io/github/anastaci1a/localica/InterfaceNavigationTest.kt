@@ -52,6 +52,7 @@ class InterfaceNavigationTest {
         restore.emulateSavedInstanceStateRestore()
         compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
         back()
+        compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Collapse player").fetchSemanticsNodes().isEmpty() }
         compose.onNode(hasSetTextAction()).assertTextContains("Evening")
         compose.onNodeWithContentDescription("Collapse player").assertDoesNotExist()
     }
@@ -63,8 +64,12 @@ class InterfaceNavigationTest {
         compose.onNodeWithText("Seasons").performClick()
         compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Evening").assertIsDisplayed() }.isSuccess }
         back()
+        // Native Back returns before navigation and the next window are necessarily drawn.
+        // The album heading also says Seasons, so require the root's clickable album card.
+        compose.waitUntil(5000) { runCatching { compose.onNode(hasText("Seasons") and hasClickAction()).assertIsDisplayed() }.isSuccess }
         compose.onNodeWithText("Seasons").assertIsDisplayed()
         back()
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Close Localica?").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithText("Close Localica?").assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
         assertFalse(InterfacePreferences(context).read().tabHistory)
