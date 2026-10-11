@@ -46,7 +46,7 @@ class BrowsePositionTest {
                         runCatching { compose.onNodeWithText("Song 060").assertIsDisplayed() }.isSuccess
                     }
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
-                    if (hardware) UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+                    if (hardware) pressSystemBack()
                     else compose.onNodeWithContentDescription("Back").performClick()
                     compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty() &&
                         compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
