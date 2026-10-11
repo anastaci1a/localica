@@ -172,7 +172,7 @@ private fun TagJobsDialog(state: TagEditorState, controller: TagEditingControlle
                 Text("${job.total} songs · ${job.status}", style = MaterialTheme.typography.titleSmall)
                 job.outcomes.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
-            if (state.recovery != null) Text("An original file is retained. Use Tag recovery in Settings before retrying.")
+            if (state.recovery != null) Text("An original file is retained. Use Tag jobs and recovery in Settings before retrying.")
             TextButton(onClick = controller::hideJobs, modifier = Modifier.align(Alignment.End)) { Text("Close") }
         }
     }

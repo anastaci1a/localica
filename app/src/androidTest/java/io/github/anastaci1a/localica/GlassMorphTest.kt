@@ -98,7 +98,18 @@ class GlassMorphTest {
         assertNotSame("Nested controls cannot resample the original scene", source, material)
         // Compose cannot capture Dialog roots before API 28. Read the real screen
         // using the material's global origin, also exercising cross-window alignment.
-        val screenshot = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        // Compose idleness precedes the dialog's first SurfaceFlinger frame on some
+        // software renderers. Require its darkened material before testing the blur.
+        compose.waitUntil(10000) {
+            val shot = automation.takeScreenshot()
+            try {
+                val sample = shot.asImageBitmap().toPixelMap()[(material.origin.x + material.size.width / 4).toInt(),
+                    (material.origin.y + material.size.height / 3).toInt()]
+                sample.red < .85f && sample.red > sample.blue + .2f
+            } finally { shot.recycle() }
+        }
+        val screenshot = automation.takeScreenshot()
         val pixels = screenshot.asImageBitmap().toPixelMap()
         val left = pixels[(material.origin.x + material.size.width / 4).toInt(), (material.origin.y + material.size.height / 3).toInt()]
         val right = pixels[(material.origin.x + material.size.width * 3 / 4).toInt(), (material.origin.y + material.size.height / 3).toInt()]

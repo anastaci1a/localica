@@ -82,7 +82,7 @@ internal fun ArtworkCrop(uri: String, onDismiss: () -> Unit, onCropped: (String)
             }
             failure?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text("Zoom", style = MaterialTheme.typography.labelLarge)
-            InterfaceSlider(zoom, { zoom = it; bitmap?.let(::constrain) }, valueRange = 1f..8f)
+            InterfaceSlider(zoom, { if (!saving) { zoom = it; bitmap?.let(::constrain) } }, valueRange = 1f..8f)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") }
                 TextButton(onClick = { zoom = 1f; centerX = .5f; centerY = .5f }, enabled = !saving) { Text("Reset crop") }

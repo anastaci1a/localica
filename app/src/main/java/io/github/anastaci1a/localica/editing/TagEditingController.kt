@@ -89,7 +89,7 @@ class TagEditingController(private val context: Context, private val library: Li
                 }
             } catch (failure: Exception) { mutable.update { it.copy(error = it.error ?: if (failure is CancellationException) "Editing interrupted." else failure.message ?: "Editing stopped.") } }
             finally { withContext(NonCancellable) {
-                mutable.update { it.copy(busy = false) }; checkRecovery()
+                checkRecovery()
                 val current = state.value
                 recordJob(when {
                     current.error != null -> "Stopped: ${current.error}"
@@ -97,6 +97,7 @@ class TagEditingController(private val context: Context, private val library: Li
                     current.results.any { !it.saved } -> "Finished with errors"
                     else -> "Complete"
                 })
+                mutable.update { it.copy(busy = false) }
                 if (current.background) {
                     completion?.invoke(current.results.size == tracks.size && current.results.all { it.saved })
                     completion = null
