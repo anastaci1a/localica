@@ -47,7 +47,7 @@ class GlassMorphTest {
         val start = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { open = true }
-        compose.mainClock.advanceTimeBy(96)
+        compose.mainClock.advanceTimeBy(176)
         compose.waitForIdle()
         val middle = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
         assertTrue("The original trigger is hidden throughout the morph", anchor.hidden)
@@ -57,7 +57,7 @@ class GlassMorphTest {
         assertTrue("Opening passes through an intermediate width", expanded.width > middle.width)
         compose.onNodeWithText("Create playlist").assertIsDisplayed()
         compose.runOnIdle { open = false }
-        compose.mainClock.advanceTimeBy(96)
+        compose.mainClock.advanceTimeBy(176)
         assertTrue("Do not expose a second surface during the return", anchor.hidden)
         compose.onNodeWithTag("glass-morph-surface").assertExists()
         compose.mainClock.advanceTimeBy(1000)

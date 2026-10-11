@@ -39,8 +39,9 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
         if (LocalReducedMotion.current) tween(0) else spring(.75f, 700f * speed * speed), label = "Slider pressure")
     val color = MaterialTheme.colorScheme.onSurface
     Slider(value, onValueChange, modifier, valueRange = valueRange, steps = steps, interactionSource = interaction,
-        thumb = { LiquidGlassSurface(Modifier.size(24.dp).graphicsLayer { scaleX = expansion; scaleY = expansion },
-            source = null, tint = Color.White.copy(alpha = .94f), pressFeedback = false) },
+        thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f)) {
+            LiquidGlassSurface(Modifier.size(28.dp).graphicsLayer { scaleX = expansion; scaleY = 2f - expansion }, pressFeedback = false)
+        } },
         track = {
             Canvas(Modifier.fillMaxWidth().height(48.dp)) {
                 val h = 5.dp.toPx()
@@ -58,16 +59,19 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
 @Composable
 internal fun InterfaceSwitch(checked: Boolean) {
     val speed = LocalMotionSpeed.current
-    val position by animateFloatAsState(if (checked) 1f else 0f,
-        if (LocalReducedMotion.current) tween(0) else spring(.72f, 600f * speed * speed), label = "Switch position")
+    val reduced = LocalReducedMotion.current
+    val position = remember { androidx.compose.animation.core.Animatable(if (checked) 1f else 0f) }
+    LaunchedEffect(checked, reduced) {
+        if (reduced) position.snapTo(if (checked) 1f else 0f)
+        else position.animateTo(if (checked) 1f else 0f, spring(.58f, 500f * speed * speed))
+    }
     val neutral = MaterialTheme.colorScheme.onSurface.copy(alpha = .18f)
     Box(Modifier.size(52.dp, 32.dp)) {
         Canvas(Modifier.matchParentSize()) {
-            drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.coerceIn(0f, 1f)),
+            drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 cornerRadius = CornerRadius(size.height / 2))
         }
-        LiquidGlassSurface(Modifier.offset(x = 2.dp + 20.dp * position, y = 2.dp).size(28.dp), source = null,
-            tint = Color.White.copy(alpha = .96f), pressFeedback = false)
+        SelectionLens(Modifier.offset(x = 2.dp + 20.dp * position.value, y = 2.dp).size(28.dp), position, if (checked) 1f else 0f)
     }
 }
 

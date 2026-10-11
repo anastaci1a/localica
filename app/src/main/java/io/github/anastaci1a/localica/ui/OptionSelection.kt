@@ -32,13 +32,15 @@ internal fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 internal fun SortDirection(ascending: Boolean, reducedMotion: Boolean, onSelect: (Boolean) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 8.dp).clip(Corners.card)
-        .background(MaterialTheme.colorScheme.surfaceContainerHighest).padding(4.dp).selectableGroup()) {
+        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .06f)).padding(4.dp).selectableGroup()) {
         val segmentWidth = maxWidth / 2
-        val offset by animateDpAsState(if (ascending) 0.dp else segmentWidth,
-            tween(if (reducedMotion) 0 else 300), label = "Sort direction")
-        Box(Modifier.offset(x = offset).width(segmentWidth).height(48.dp)
-            .background(MaterialTheme.colorScheme.primaryContainer, Corners.card)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .55f), Corners.card))
+        val position = remember { androidx.compose.animation.core.Animatable(if (ascending) 0f else 1f) }
+        LaunchedEffect(ascending, reducedMotion) {
+            if (reducedMotion) position.snapTo(if (ascending) 0f else 1f)
+            else position.animateTo(if (ascending) 0f else 1f, androidx.compose.animation.core.spring(.58f, 400f))
+        }
+        SelectionLens(Modifier.offset(x = segmentWidth * position.value).width(segmentWidth).height(48.dp),
+            position, if (ascending) 0f else 1f)
         Row {
             listOf(true to "Ascending", false to "Descending").forEach { (value, label) ->
                 Box(Modifier.weight(1f).height(48.dp).clip(Corners.card)
