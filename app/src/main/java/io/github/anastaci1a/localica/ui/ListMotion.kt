@@ -63,7 +63,7 @@ private suspend fun ScrollScope.approachItem(duration: Int, viewport: () -> Int,
 internal suspend fun LazyGridState.easeToTop(reducedMotion: Boolean) = easeToItem(0, reducedMotion)
 
 internal suspend fun LazyListState.easeToItem(index: Int, reducedMotion: Boolean, duration: Int = 350) {
-    if (index !in 0 until layoutInfo.totalItemsCount) return
+    if (index < 0) return
     if (reducedMotion) { scrollToItem(index); return }
     scroll {
         approachItem(duration, { layoutInfo.viewportSize.height }) {
@@ -78,7 +78,7 @@ internal suspend fun LazyListState.easeToItem(index: Int, reducedMotion: Boolean
 }
 
 internal suspend fun LazyGridState.easeToItem(index: Int, reducedMotion: Boolean, topInset: Float = 0f) {
-    if (index !in 0 until layoutInfo.totalItemsCount) return
+    if (index < 0) return
     if (reducedMotion) { scrollToItem(index, -topInset.toInt()); return }
     scroll {
         approachItem(500, { layoutInfo.viewportSize.height }) {
