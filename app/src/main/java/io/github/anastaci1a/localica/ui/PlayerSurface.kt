@@ -104,6 +104,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             })
             }
         })
+    // Resolve the full-cover feather and its color continuation together before the cover
+    // separates from the screen edges. The wash must not turn into a second miniature cover.
+    val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)
+    val coverBlend = backgroundProgress * (1f - lyricProgress) * reveal * reveal * (3f - 2f * reveal)
     val surfaceWidth = windowWidth - 24.dp * (1f - p)
     val extraActions = 48.dp * (actionRows - 1)
     val virtualHeight = maxHeight.coerceAtLeast(560.dp + statusInset + navigationInset + extraActions)
@@ -119,9 +123,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artY = 8.dp + (fullArtY - 8.dp) * p - 24.dp * lyricProgress
     val ordinarySeekY = statusInset + 52.dp + floatingArt + 8.dp
     val lyricSeekY = virtualHeight - navigationInset - 320.dp
-    val seekY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
-    val titleY = 10.dp + (seekY + 64.dp - 10.dp) * p
-    val subtitleY = 34.dp + (seekY + 98.dp - 34.dp) * p
+    val metadataY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
+    val titleY = 10.dp + (metadataY - 10.dp) * p
+    val subtitleY = 34.dp + (metadataY + 34.dp - 34.dp) * p
+    val seekY = metadataY + 64.dp
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricTransport = virtualHeight - navigationInset - 152.dp
     val transportY = 8.dp + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - 8.dp) * p
@@ -129,6 +134,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val textWidth = miniTextWidth + (windowWidth - 48.dp - miniTextWidth) * p
     val textX = 68.dp + (24.dp - 68.dp) * p
     val foreground = androidx.compose.ui.graphics.lerp(Color.Black, Color.White, p)
+    val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val baseColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = baseColors.copy(onSurface = foreground,
         onSurfaceVariant = foreground.copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, Color.White, p),
@@ -141,31 +147,32 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface"),
         shape = RoundedCornerShape((32 * (1f - p)).dp), color = Color(0xFFF2F0EC), contentColor = foreground, shadowElevation = 3.dp) {
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
-        Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()) {
+        Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
+            .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
             if (p > 0f) PlayerBackdrop(palette, Modifier.fillMaxSize().graphicsLayer { alpha = p },
-                backgroundProgress * (1f - lyricProgress), with(density) { artY.toPx() }, with(density) { artHeight.toPx() })
-            if (p < 1f) Box(Modifier.fillMaxSize().clickable(onClickLabel = "Expand player") { settle(true) })
+                coverBlend, with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
+                with(density) { artX.toPx() }, with(density) { artWidth.toPx() })
             Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer { alpha = 1f - lyricProgress }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
                 AlbumArtwork(state.trackUri, Modifier.fillMaxSize().testTag("player-artwork").graphicsLayer {
-                    compositingStrategy = if (p * backgroundProgress > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                    compositingStrategy = if (coverBlend > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
                 }.drawWithContent {
                     drawContent()
-                    if (p > 0f && backgroundProgress > 0f) {
+                    if (coverBlend > 0f) {
                         val stops = Array(33) { index ->
                             val y = index / 32f
-                            val edge = if (y < 0.14f) (0.14f - y) / 0.14f else (y - 0.48f) / 0.52f
+                            val edge = if (y < 0.14f) (0.14f - y) / 0.14f else (y - 0.68f) / 0.32f
                             val t = edge.coerceIn(0f, 1f)
-                            y to Color.Black.copy(alpha = 1f - t * t * (3f - 2f * t) * p * backgroundProgress)
+                            y to Color.Black.copy(alpha = 1f - t * t * (3f - 2f * t) * coverBlend)
                         }
                         drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
                     }
-                }.combinedClickable(enabled = !lyricsOpen,
-                    onClickLabel = if (expanded) settings.artworkTap.label else "Expand player",
-                    onClick = { if (expanded) artworkAction(settings.artworkTap) else settle(true) },
+                }.clip(artworkShape).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(
+                    onClickLabel = settings.artworkTap.label,
+                    onClick = { artworkAction(settings.artworkTap) },
                     onLongClickLabel = settings.artworkHold.label,
-                    onLongClick = { if (expanded) artworkAction(settings.artworkHold) }),
-                    shape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress)),
+                    onLongClick = { artworkAction(settings.artworkHold) }) else Modifier),
+                    shape = artworkShape,
                     contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
                 DropdownMenu(artworkMenu, { artworkMenu = false }) {
                     ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
@@ -181,9 +188,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             if (lyricProgress > 0f) LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = 24.dp, y = statusInset + 60.dp).width(windowWidth - 48.dp)
-                    .height((seekY - statusInset - 64.dp).coerceAtLeast(96.dp))
+                    .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
                     .graphicsLayer { alpha = lyricProgress * p })
-            MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f), Modifier.offset(textX, titleY).width(textWidth).clickable(enabled = !expanded) { settle(true) },
+            MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f), Modifier.offset(textX, titleY).width(textWidth).testTag("player-title"),
                 style = lerp(MaterialTheme.typography.titleSmall, MaterialTheme.typography.headlineSmall, p))
             Text((if (settings.albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist).orEmpty() +
                 if (p > 0.99f && state.album != null) " · " + state.album else "",

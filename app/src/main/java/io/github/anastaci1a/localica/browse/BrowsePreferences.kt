@@ -9,7 +9,8 @@ enum class ExtraInfo { Automatic, None, Count, Duration, Year, Modified, Added, 
 enum class SongGrouping(val label: String) { None("None"), Artist("Artist"), AlbumArtist("Album Artist"), Composer("Composer") }
 data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boolean = true,
     val presentation: Presentation = Presentation.List, val extraInfo: ExtraInfo = ExtraInfo.Automatic,
-    val quickSearch: Boolean = true, val songGrouping: SongGrouping = SongGrouping.None) {
+    val quickSearch: Boolean = true, val songGrouping: SongGrouping = SongGrouping.None,
+    val itemsPerRow: Int? = null) {
     fun query() = LibraryQuery(sort = sort, ascending = ascending)
 }
 
@@ -46,7 +47,8 @@ class BrowsePreferences(context: Context) {
             ExtraInfo.entries.firstOrNull { it.name == store.getString("$key.info", null) } ?: ExtraInfo.Automatic,
             store.getBoolean("$key.quick-search", true),
             SongGrouping.entries.firstOrNull { it.name == store.getString("$key.group", if (route.collection?.kind == MediaKind.Album)
-                store.getString("catalog.Album.group", null) else null) } ?: SongGrouping.None).let {
+                store.getString("catalog.Album.group", null) else null) } ?: SongGrouping.None,
+            store.getInt("$key.columns", 0).takeIf { it in 1..5 }).let {
             if (route.collection?.kind == MediaKind.Album && it.songGrouping != SongGrouping.None) it.copy(presentation = Presentation.List) else it
         }
     }
@@ -54,12 +56,13 @@ class BrowsePreferences(context: Context) {
         val key = if (override) requireNotNull(collectionKey(route)) else type(route)
         store.edit().putString("$key.sort", value.sort.name).putBoolean("$key.ascending", value.ascending)
             .putString("$key.presentation", value.presentation.name).putString("$key.info", value.extraInfo.name)
-            .putBoolean("$key.quick-search", value.quickSearch).putString("$key.group", value.songGrouping.name).apply()
+            .putBoolean("$key.quick-search", value.quickSearch).putString("$key.group", value.songGrouping.name)
+            .putInt("$key.columns", value.itemsPerRow?.coerceIn(1, 5) ?: 0).apply()
         if (!override) reset(route)
     }
     fun reset(route: BrowseRoute) {
         val key = collectionKey(route) ?: return
         store.edit().remove("$key.sort").remove("$key.ascending").remove("$key.presentation").remove("$key.info")
-            .remove("$key.quick-search").remove("$key.group").apply()
+            .remove("$key.quick-search").remove("$key.group").remove("$key.columns").apply()
     }
 }

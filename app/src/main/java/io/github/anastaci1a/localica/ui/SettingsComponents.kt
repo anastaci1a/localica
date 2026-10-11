@@ -61,11 +61,7 @@ internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, labe
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
             choices.forEach { choice ->
-                Row(Modifier.fillMaxWidth().selectable(choice == selected, role = Role.RadioButton,
-                    onClick = { onSelect(choice); onDismiss() }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(choice == selected, null)
-                    Text(label(choice), Modifier.weight(1f).padding(start = 8.dp))
-                }
+                OptionRow(label(choice), choice == selected) { onSelect(choice); onDismiss() }
             }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })

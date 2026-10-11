@@ -8,6 +8,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.sp
+import io.github.anastaci1a.localica.queue.QueueRepeat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -37,7 +44,7 @@ internal class PlayerActionPreferences(context: Context) {
 
 @Composable
 internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction) -> String,
-    onAction: (PlayerAction) -> Unit, onCustomize: () -> Unit) {
+    onAction: (PlayerAction) -> Unit, onCustomize: () -> Unit, shuffle: Boolean = false, repeat: QueueRepeat = QueueRepeat.Off) {
     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
         val halves = value.actions.chunked(((value.actions.size + 1) / 2).coerceAtLeast(1))
         fun section(index: Int) = halves.getOrNull(index).orEmpty()
@@ -45,8 +52,19 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
             BoxWithConstraints(Modifier.weight(1f)) {
             Column(Modifier.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).widthIn(min = maxWidth), horizontalAlignment = if (value.centered) Alignment.CenterHorizontally else alignment) {
                 val rows = if (value.twoRows) actions.chunked(((actions.size + 1) / 2).coerceAtLeast(1)) else listOf(actions)
-                rows.forEach { row -> Row { row.forEach { action -> IconButton(onClick = { onAction(action) }, Modifier.size(48.dp)) {
-                    Icon(painterResource(action.icon), label(action), Modifier.size(if (value.small) 20.dp else 24.dp))
+                rows.forEach { row -> Row { row.forEach { action ->
+                    val mode = action in setOf(PlayerAction.Shuffle, PlayerAction.Repeat)
+                    val active = if (action == PlayerAction.Shuffle) shuffle else action == PlayerAction.Repeat && repeat != QueueRepeat.Off
+                    val foreground = LocalContentColor.current
+                    IconButton(onClick = { onAction(action) }, Modifier.size(48.dp)
+                        .then(if (active) Modifier.background(foreground.copy(alpha = .16f), Corners.card) else Modifier)
+                        .semantics { if (mode) { selected = active; stateDescription = label(action) } }) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(painterResource(action.icon), label(action), Modifier.size(if (value.small) 20.dp else 24.dp),
+                            tint = foreground.copy(alpha = if (mode && !active) .5f else 1f))
+                        if (action == PlayerAction.Repeat && repeat == QueueRepeat.One) Text("1", fontSize = 11.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, modifier = Modifier.clearAndSetSemantics {})
+                    }
                 } } } }
             } }
         }

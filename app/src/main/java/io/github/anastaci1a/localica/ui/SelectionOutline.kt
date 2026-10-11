@@ -24,3 +24,15 @@ internal fun Modifier.selectionOutline(selected: Boolean, partial: Boolean, colo
                 pathEffect = if (partial) PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx())) else null))
     }
 }
+
+internal fun Modifier.currentSongHighlight(current: Boolean, color: Color) = semantics {
+    if (current) stateDescription = "Current song"
+}.drawBehind {
+    if (current) {
+        val inset = 3.dp.toPx()
+        val bounds = Size(size.width - inset * 2, size.height - inset * 2)
+        val corner = CornerRadius(14.dp.toPx())
+        drawRoundRect(color.copy(alpha = .09f), Offset(inset, inset), bounds, corner)
+        drawRoundRect(color.copy(alpha = .65f), Offset(inset, inset), bounds, corner, style = Stroke(1.5.dp.toPx()))
+    }
+}
