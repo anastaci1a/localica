@@ -169,7 +169,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     Surface(Modifier.offset(x = 12.dp * (1f - p), y = miniTop * (1f - p))
         .width(surfaceWidth).height(64.dp + (maxHeight - 64.dp) * p)
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface").then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop) else Modifier),
-        shape = RoundedCornerShape((32 * (1f - p)).dp), color = palette.bottom.copy(alpha = p), contentColor = foreground, shadowElevation = 3.dp) {
+        shape = RoundedCornerShape((32 * (1f - p)).dp), color = baseColors.surface.copy(alpha = (p / .2f).coerceIn(0f, 1f)), contentColor = foreground, shadowElevation = 3.dp) {
         if (p < .2f) LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - p / .2f }, source = glassBackdrop)
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()

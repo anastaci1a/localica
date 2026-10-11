@@ -3,11 +3,13 @@ package io.github.anastaci1a.localica
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -45,10 +47,11 @@ class PlayerTransitionTest {
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun transportPersistsWhileSeekAndActionsWaitUntilLateExpansion() {
+    @Test fun opaquePlayerAndTransportPersistWhileOtherControlsWaitUntilLateExpansion() {
         val progress = Animatable(0f)
+        var behind by mutableStateOf(Color.Red)
         lateinit var scope: CoroutineScope
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().background(behind)) {
             scope = rememberCoroutineScope()
             PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = PlayerVisual()) { Text("Custom action") }
         } } }
@@ -58,6 +61,14 @@ class PlayerTransitionTest {
         compose.onNodeWithContentDescription("Next").assertIsDisplayed()
         compose.onNodeWithContentDescription("Seek").assertDoesNotExist()
         compose.onNodeWithText("Custom action").assertDoesNotExist()
+        fun panelColor(): Color = compose.onNodeWithTag("player-surface").captureToImage().let {
+            it.toPixelMap()[it.width * 9 / 10, it.height / 2]
+        }
+        val before = panelColor()
+        compose.runOnIdle { behind = Color.Blue }
+        val after = panelColor()
+        assertEquals("Browsing must not bleed through the expanding player", before.red, after.red, .02f)
+        assertEquals("Browsing must not bleed through the expanding player", before.blue, after.blue, .02f)
         compose.runOnIdle { scope.launch { progress.snapTo(.96f) } }
         compose.onNodeWithContentDescription("Seek").assertIsDisplayed()
         compose.onNodeWithText("Custom action").assertIsDisplayed()
