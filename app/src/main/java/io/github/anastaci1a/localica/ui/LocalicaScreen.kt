@@ -174,15 +174,22 @@ fun LocalicaScreen(
     LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
+    val neighbors = queueController?.artworkNeighbors().orEmpty()
+    PrepareNeighborArtwork(neighbors)
+    val previewTracks = library.snapshot.tracks
+    val currentPreviewTrack = previewTracks.firstOrNull { it.uri == player.trackUri }
+    val previewUris = (listOfNotNull(player.trackUri) + previewTracks.filterNot {
+        currentPreviewTrack != null && it.album == currentPreviewTrack.album && it.albumArtist == currentPreviewTrack.albumArtist
+    }.distinctBy { it.album to it.albumArtist }.map { it.uri } + neighbors.filterNotNull()).distinct().take(8)
     val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded)
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = false)
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
     PlayerSystemBars(hasPlayer && progress.value >= .99f)
-    CompositionLocalProvider(LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
-            (if (hasPlayer) 152.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {
+            (if (hasPlayer) CompactControlSize + 88.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
@@ -230,37 +237,19 @@ fun LocalicaScreen(
             }
         }
         Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
-            .padding(bottom = inset + 8.dp).height(64.dp).fillMaxWidth()
+            .padding(bottom = inset + 8.dp).height(NavigationPillHeight).fillMaxWidth()
             .offset(y = (80.dp + inset) * progress.value)
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             LiquidGlassSurface(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill"), source = browseBackdrop) {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val fits = maxWidth >= 56.dp * settings.tabs.size
-                    Row(if (fits) Modifier.fillMaxWidth() else Modifier.nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState())) {
-                        settings.tabs.forEach { tab ->
-                            val selectedColor by androidx.compose.animation.animateColorAsState(
-                                if (navigation.active == tab) androidx.compose.ui.graphics.Color.Black.copy(alpha = .09f) else androidx.compose.ui.graphics.Color.Transparent,
-                                androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Selected tab")
-                            Column((if (fits) Modifier.weight(1f) else Modifier.width(56.dp)).padding(4.dp).fillMaxHeight()
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(selectedColor, androidx.compose.foundation.shape.CircleShape)
-                                .selectable(navigation.active == tab, role = androidx.compose.ui.semantics.Role.Tab,
-                                    onClick = { navigation = navigation.resetTab(tab)
-                                        scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
-                                        keyboard?.hide(); focusManager.clearFocus()
-                                        navigationScope.launch {
-                                        val index = settings.tabs.indexOf(tab)
-                                        if (settings.reducedMotion) pager.scrollToPage(index)
-                                        else pager.animateScrollToPage(index, animationSpec = androidx.compose.animation.core.tween(settings.motionDuration(400)))
-                                    } }),
-                                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Icon(painterResource(tab.icon()), tab.label, Modifier.size(24.dp),
-                                    tint = if (navigation.active == tab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelSmall,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                            }
-                        }
+                SlidingTabs(settings.tabs, navigation.active, pager.currentPage + pager.currentPageOffsetFraction) { tab ->
+                    navigation = navigation.resetTab(tab)
+                    scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
+                    keyboard?.hide(); focusManager.clearFocus()
+                    navigationScope.launch {
+                        val index = settings.tabs.indexOf(tab)
+                        if (settings.reducedMotion) pager.scrollToPage(index)
+                        else pager.animateScrollToPage(index, animationSpec = androidx.compose.animation.core.spring(dampingRatio = .85f, stiffness = 380f))
                     }
                 }
 
@@ -285,7 +274,7 @@ fun LocalicaScreen(
             }
         }
         SelectionPanelVisibility(session.active && !expanded && dragHost.state?.drag == null, Modifier.align(Alignment.BottomCenter)
-            .padding(horizontal = 8.dp).padding(bottom = inset + if (hasPlayer) 152.dp else 80.dp)
+            .padding(horizontal = 8.dp).padding(bottom = inset + if (hasPlayer) CompactControlSize + 88.dp else 80.dp)
             .fillMaxWidth().heightIn(max = maxHeight / 2).onSizeChanged { selectionHeight = with(density) { it.height.toDp() } }, settings.reducedMotion) {
             Surface(shape = Corners.panel, tonalElevation = 6.dp) {
             Column(Modifier.verticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }

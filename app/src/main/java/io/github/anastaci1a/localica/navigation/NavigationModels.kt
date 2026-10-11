@@ -31,8 +31,10 @@ data class NavigationState(
     val route: BrowseRoute get() = stacks.getValue(active).last()
     fun switch(tab: MainTab): NavigationState = if (tab == active) this else copy(active = tab,
         stacks = if (tab in stacks) stacks else stacks + (tab to listOf(BrowseRoute(tab))), history = history + active)
-    fun resetTab(tab: MainTab): NavigationState = copy(stacks = stacks +
-        (tab to listOf(stacks[tab]?.firstOrNull() ?: BrowseRoute(tab))))
+    fun resetTab(tab: MainTab): NavigationState {
+        val root = stacks[tab]?.firstOrNull() ?: BrowseRoute(tab)
+        return copy(stacks = stacks + (tab to listOf(if (tab == MainTab.Library) root.copy(filter = null) else root)))
+    }
     fun open(route: BrowseRoute) = copy(stacks = stacks + (active to (stacks.getValue(active) + route)))
     fun update(route: BrowseRoute) = copy(stacks = stacks + (active to (stacks.getValue(active).dropLast(1) + route)))
     fun editSearch(next: BrowseRoute): NavigationState {
@@ -71,6 +73,7 @@ data class InterfaceSettings(
     val artworkHold: ArtworkAction = ArtworkAction.Menu,
     val fasterMotion: Boolean = false,
     val artworkLayout: ArtworkLayout = ArtworkLayout.FullBackground,
+    val artworkTransition: ArtworkTransition = ArtworkTransition.SoftWash,
 )
 
 enum class ArtworkAction(val label: String) {
@@ -78,3 +81,5 @@ enum class ArtworkAction(val label: String) {
 }
 
 enum class ArtworkLayout(val label: String) { FullBackground("Full-background artwork"), Floating("Floating artwork with matte background") }
+
+enum class ArtworkTransition(val label: String) { SoftWash("Soft Wash"), FlowingDissolve("Flowing Dissolve"), GentleRipple("Gentle Ripple") }

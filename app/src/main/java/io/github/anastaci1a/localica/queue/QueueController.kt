@@ -371,6 +371,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         player?.let { if (it.duration != C.TIME_UNSET && it.duration > 0) it.seekTo(positionMs.coerceIn(0, it.duration)) }
         capture()
     }
+    /** The actual player traversal, including shuffle, is authoritative for visual preparation. */
+    fun artworkNeighbors(): List<String?> {
+        val attached = player ?: return emptyList()
+        val entries = state.value.library.active?.entries.orEmpty()
+        return listOf(attached.nextMediaItemIndex, attached.previousMediaItemIndex).map { index ->
+            if (index == C.INDEX_UNSET) null else entries.firstOrNull { it.id == attached.getMediaItemAt(index).mediaId }?.track?.uri
+        }
+    }
     fun next() = submit { player?.seekToNextMediaItem(); capture() }
     fun previous() = submit {
         player?.let {

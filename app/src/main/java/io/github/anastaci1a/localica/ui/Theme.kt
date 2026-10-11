@@ -22,6 +22,7 @@ private val LightColors = lightColorScheme(
     surfaceTint = Color(0xFF777980),
 )
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun LocalicaTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = LightColors,
@@ -29,6 +30,7 @@ fun LocalicaTheme(content: @Composable () -> Unit) {
     ) {
         androidx.compose.runtime.CompositionLocalProvider(
             androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+            androidx.compose.material3.LocalRippleConfiguration provides null,
             content = content)
     }
 }

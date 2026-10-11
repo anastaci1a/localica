@@ -11,7 +11,7 @@ import io.github.anastaci1a.localica.navigation.MediaKind
 @Composable
 internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilters) -> Unit) {
     SettingsHeading("Visible filters")
-    Text("Choose which filters appear in Library and their order. Global search keeps all item types available.", style = MaterialTheme.typography.bodyMedium)
+    Text("Choose the resting order of Library filters. Selecting a filter brings it to the front; tapping it again restores the combined Library view. Global search keeps all item types available.", style = MaterialTheme.typography.bodyMedium)
     value.visible.forEachIndexed { index, filter ->
         Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
@@ -23,17 +23,17 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
                     TextButton(enabled = index < value.visible.lastIndex, onClick = {
                         onChange(value.copy(visible = value.visible.toMutableList().apply { add(index + 1, removeAt(index)) }))
                     }) { Text("Move down") }
-                    TextButton(enabled = value.visible.size > 1, onClick = { onChange(value.copy(visible = value.visible - filter)) }) { Text("Remove") }
+                    TextButton(onClick = { onChange(value.copy(visible = value.visible - filter)) }) { Text("Remove") }
                 }
             }
         }
     }
     var adding by remember { mutableStateOf(false) }
     SettingsLink("Add library filter", enabled = value.visible.size < LibraryFilter.entries.size) { adding = true }
-    if (adding) ChoiceDialog("Add library filter", LibraryFilter.entries.filterNot { it in value.visible }, LibraryFilter.All,
+    if (adding) ChoiceDialog("Add library filter", LibraryFilter.entries.filterNot { it in value.visible }, LibraryFilter.entries.first { it !in value.visible },
         { it.label }, { adding = false }) { onChange(value.copy(visible = value.visible + it)) }
-    SettingsHeading("Collections in All")
-    Text("Independent of the visible filters. All contains collections only.", style = MaterialTheme.typography.bodyMedium)
+    SettingsHeading("Unfiltered Library collections")
+    Text("Choose which collections appear when no filter is selected. This is independent of the visible filter buttons.", style = MaterialTheme.typography.bodyMedium)
     MediaKind.entries.filterNot { it == MediaKind.Song || it == MediaKind.Queue }.forEach { kind ->
         BooleanPreference(kind.label, kind in value.allCollections) { included ->
             onChange(value.copy(allCollections = if (included) value.allCollections + kind else value.allCollections - kind))
