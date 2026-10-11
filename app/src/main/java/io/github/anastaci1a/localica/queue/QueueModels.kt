@@ -16,6 +16,7 @@ data class ListeningQueue(
     val shuffle: Boolean = false,
     val repeat: QueueRepeat = QueueRepeat.Off,
     val lastActivatedAt: Long = createdAt,
+    val journey: QueueJourney? = null,
 )
 enum class QueueRepeat { Off, All, One }
 enum class SongEnd(val label: String) { Stop("Stop here"), NextPaused("Load next song and pause"), Next("Play next song"), Repeat("Repeat this song") }
