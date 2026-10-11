@@ -39,9 +39,9 @@ internal fun Modifier.glassPress(onPressed: (Boolean) -> Unit = {}): Modifier {
     val notify by rememberUpdatedState(onPressed)
     val reduced = LocalReducedMotion.current
     var pressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (pressed && !reduced) 1.045f else 1f,
-        spring(dampingRatio = .62f, stiffness = 650f), label = "Glass pressure")
-    return graphicsLayer { scaleX = scale; scaleY = 1f + (scale - 1f) * .65f }.pointerInput(Unit) {
+    val scale by animateFloatAsState(if (pressed && !reduced) 1.035f else 1f,
+        spring(dampingRatio = .42f, stiffness = 550f), label = "Glass pressure")
+    return graphicsLayer { scaleX = scale; scaleY = 1f - (scale - 1f) * .85f }.pointerInput(Unit) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             pressed = true; notify(true)
