@@ -20,10 +20,17 @@ data class ListeningQueue(
 enum class QueueRepeat { Off, All, One }
 enum class SongTap { NewQueue, PlayNow, PlayNext, Append }
 enum class QueueSwitch { Browse, Paused, Resume, KeepPlaybackState }
+enum class PreviousBehavior { RestartAfterThreshold, PreviousSong, RestartSong }
 data class QueueSettings(val songTap: SongTap = SongTap.NewQueue, val switching: QueueSwitch = QueueSwitch.Browse,
     val maximum: Int? = null, val tapOverrides: Map<SongListView, SongTap> = emptyMap(),
-    val preloadNext: Boolean = true, val shuffle: Boolean = false, val repeat: QueueRepeat = QueueRepeat.Off) {
+    val preloadNext: Boolean = true, val shuffle: Boolean = false, val repeat: QueueRepeat = QueueRepeat.Off,
+    val previousBehavior: PreviousBehavior = PreviousBehavior.RestartAfterThreshold, val previousThresholdSeconds: Int = 5) {
     fun tapFor(view: SongListView) = tapOverrides[view] ?: songTap
+    fun restartOnPrevious(positionMs: Long) = when (previousBehavior) {
+        PreviousBehavior.RestartAfterThreshold -> positionMs >= previousThresholdSeconds * 1000L
+        PreviousBehavior.PreviousSong -> false
+        PreviousBehavior.RestartSong -> true
+    }
 }
 data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val activeId: String? = null) {
     val active: ListeningQueue? get() = queues.firstOrNull { it.id == activeId }

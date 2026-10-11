@@ -26,6 +26,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var loadedQueueId: String? = null
     private var generation = 0
     private var restored = false
+    private var persistedLibrary = QueueLibrary()
     private var pendingComplete: ((Boolean) -> Unit)? = null
     private var editing: EditPlayback? = null
     private var editPlayRequest: Boolean? = null
@@ -37,6 +38,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         scope.launch {
             try {
                 val saved = dao.read()
+                persistedLibrary = saved
                 preferences.migratePlaybackModes(saved.active)
                 mutable.update { it.copy(library = saved, settings = preferences.read(), loading = false) }; restored = true
             }
@@ -106,8 +108,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 return false
             } else create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins)
         } else {
-            save(state.value.library.update(QueueEdits.insert(current, if (batch) tracks else listOf(selected), action, if (batch) playlistOrigins else listOf(playlistOrigins.getOrNull(selectedIndex)))))
-            activate(if (action == SongTap.PlayNow) true else null, resetShuffle = action == SongTap.PlayNow)
+            val next = state.value.library.update(QueueEdits.insert(current, if (batch) tracks else listOf(selected), action, if (batch) playlistOrigins else listOf(playlistOrigins.getOrNull(selectedIndex))))
+            if (action == SongTap.PlayNow) saveStartingPlayback(next) { activate(true, resetShuffle = true, refreshLocations = false) }
+            else { save(next); activate(null) }
             if (action == SongTap.PlayNow) requestPlayer()
         }
         return true
@@ -133,9 +136,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         var suffix = 2
         while (name in names) name = "$sourceName (${suffix++})"
         val queue = QueueEdits.create(tracks, selectedIndex, name, playlistOrigins).copy(lastActivatedAt = nextActivation())
-        save(QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id))
+        val next = QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id)
+        // These tracks came from the visible list. Start the decoder before serializing a
+        // potentially large queue, and avoid re-reading the entire library on every song tap.
+        saveStartingPlayback(next) { activate(play = true, refreshLocations = false) }
         mutable.update { it.copy(pending = null, browsedId = queue.id) }
-        activate(play = true)
         if (expandPlayer) requestPlayer()
     }
 
@@ -168,9 +173,20 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun selectEntry(id: String) = submit {
         capture()
         val active = state.value.library.queues.firstOrNull { queue -> queue.entries.any { it.id == id } } ?: return@submit
-        save(state.value.library.update(active.copy(currentEntryId = id, positionMs = 0, lastActivatedAt = nextActivation())).copy(activeId = active.id))
+        val next = state.value.library.update(active.copy(currentEntryId = id, positionMs = 0, lastActivatedAt = nextActivation())).copy(activeId = active.id)
+        saveStartingPlayback(next) {
+            val attached = player
+            val index = active.entries.indexOfFirst { it.id == id }
+            if (attached != null && loadedQueueId == active.id && editing == null &&
+                index < attached.mediaItemCount && attached.getMediaItemAt(index).mediaId == id) {
+                // The loaded timeline already has these occurrences and resolved locations.
+                attached.seekTo(index, 0)
+                applyPlaybackModes(resetShuffle = true)
+                if (attached.playbackState == Player.STATE_IDLE) attached.prepare()
+                attached.play()
+            } else activate(play = true, seek = true, resetShuffle = true)
+        }
         mutable.update { it.copy(browsedId = active.id) }
-        activate(play = true, seek = true, resetShuffle = true)
         requestPlayer()
     }
     private fun nextActivation() = maxOf(System.currentTimeMillis(), (state.value.library.queues.maxOfOrNull { it.lastActivatedAt } ?: 0) + 1)
@@ -232,6 +248,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     fun settings(value: QueueSettings) = submit {
         require(value.maximum == null || value.maximum > 0)
+        require(value.previousThresholdSeconds in 1..60)
         val resetShuffle = state.value.settings.shuffle != value.shuffle
         updateSettings(value)
         configurePreloading()
@@ -275,7 +292,15 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         capture()
     }
     fun next() = submit { player?.seekToNextMediaItem(); capture() }
-    fun previous() = submit { player?.seekToPreviousMediaItem(); capture() }
+    fun previous() = submit {
+        player?.let {
+            if (it.currentMediaItem != null) {
+                if (state.value.settings.restartOnPrevious(it.currentPosition) || !it.hasPreviousMediaItem()) it.seekTo(0)
+                else it.seekToPreviousMediaItem()
+            }
+        }
+        capture()
+    }
 
     fun dismissProblem() { mutable.update { it.copy(problem = null) } }
     data class EditPlayback(val entryId: String, val resume: Boolean, val queueId: String)
@@ -344,11 +369,22 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     private suspend fun save(next: QueueLibrary) {
-        val previous = state.value.library
-        if (previous != next) withContext(Dispatchers.IO) { dao.save(previous, next) }
+        persist(next)
         mutable.update { it.copy(library = next, problem = null) }
     }
-    private suspend fun activate(play: Boolean?, seek: Boolean = false, resetShuffle: Boolean = false) {
+    private suspend fun persist(next: QueueLibrary) {
+        if (persistedLibrary != next) {
+            withContext(Dispatchers.IO) { dao.save(persistedLibrary, next) }
+            persistedLibrary = next
+        }
+    }
+    private suspend fun saveStartingPlayback(next: QueueLibrary, start: suspend () -> Unit) {
+        mutable.update { it.copy(library = next, problem = null) }
+        // Commands remain serialized, and callbacks still complete only after persistence.
+        // Retain the last durable snapshot so a failed write can be retried by the next capture.
+        try { start() } finally { persist(next) }
+    }
+    private suspend fun activate(play: Boolean?, seek: Boolean = false, resetShuffle: Boolean = false, refreshLocations: Boolean = true) {
         if (editing != null) {
             if (play != null) editPlayRequest = play
             return
@@ -360,7 +396,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         // Refresh access locations from the current index without rewriting the saved queue snapshot.
         val items = withContext(Dispatchers.IO) {
-            val currentLibrary = library.snapshots.first().tracks.associateBy { it.id }
+            val currentLibrary = if (refreshLocations) library.snapshots.first().tracks.associateBy { it.id } else emptyMap()
             val tracks = library.playableTracks(queue.entries.map { currentLibrary[it.track.id] ?: it.track })
             queue.entries.zip(tracks) { entry, track -> queueMediaItem(entry.id, track, entry.sourcePlaylistId) }
         }

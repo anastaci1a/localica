@@ -43,7 +43,6 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     var saving by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
-    var presentation by remember { mutableStateOf(false) }
     val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
     val queueNumber = state.library.queues.indexOfFirst { it.id == active?.id } + 1
     val playingThisQueue = active?.id == state.library.activeId && isPlaying
@@ -82,7 +81,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                             if (playingThisQueue) "Pause queue" else "Play queue", enabled = enabled && active?.entries?.isNotEmpty() == true) {
                             if (playingThisQueue) controller?.togglePlayback() else active?.id?.let { controller?.playQueue(it) }
                         }
-                        ActionIcon(R.drawable.ic_sort, "Sort queue") { presentation = false; sorting = true }
+                        ActionIcon(R.drawable.ic_sort, "Sort queue") { sorting = true }
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
                             Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
@@ -91,7 +90,6 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                         Box {
                             ActionIcon(R.drawable.ic_more, "Queue actions") { menu = true }
                             DropdownMenu(menu, { menu = false }) {
-                                ActionMenuItem("List view options", onClick = { menu = false; presentation = true; sorting = true })
                                 ActionMenuItem("Rename", enabled = active != null, onClick = { menu = false; renameId = active?.id })
                                 ActionMenuItem("Remove others", enabled = state.library.queues.size > 1,
                                     onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
@@ -101,7 +99,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (active == null) Text("Tap a song in Library to start a queue.")
                 }
-            }, presentationOnly = presentation, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() })
+            }, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() })
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     if (selector) Dialog(onDismissRequest = { selector = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -123,7 +121,9 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                                     verticalAlignment = Alignment.CenterVertically) {
                                     RadioButton(chosen, null, Modifier.size(32.dp))
                                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                                        Text("${index + 1}. ${queue.name}", maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        if (chosen) MarqueeTitle("${index + 1}. ${queue.name}", reducedMotion,
+                                            style = MaterialTheme.typography.bodyLarge)
+                                        else Text("${index + 1}. ${queue.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         if (queue.id == state.library.activeId) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
@@ -186,6 +186,7 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
 @Composable
 internal fun QueueSettingsControls(settings: QueueSettings, section: String = "Playback and queues", onChange: (QueueSettings) -> Unit) {
     var limitOpen by remember { mutableStateOf(false) }
+    var thresholdOpen by remember { mutableStateOf(false) }
     if (section == "Song tap behavior") {
         SettingsHeading("Default song action")
         ChoicePreference("Song tap", settings.songTap, SongTap.entries, { it.label() }) { onChange(settings.copy(songTap = it)) }
@@ -200,9 +201,26 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
     } else {
         SettingsHeading("Playback")
         BooleanPreference("Preload next track", settings.preloadNext) { onChange(settings.copy(preloadNext = it)) }
+        ChoicePreference("Previous button", settings.previousBehavior, PreviousBehavior.entries, { it.label() }) {
+            onChange(settings.copy(previousBehavior = it))
+        }
+        if (settings.previousBehavior == PreviousBehavior.RestartAfterThreshold) {
+            SettingsLink("Restart threshold", "${settings.previousThresholdSeconds} seconds; earlier taps go to the previous song") { thresholdOpen = true }
+        }
         SettingsHeading("Queues")
         ChoicePreference("Switch queue", settings.switching, QueueSwitch.entries, { it.label() }) { onChange(settings.copy(switching = it)) }
         SettingsLink("Maximum queues: " + (settings.maximum ?: "unlimited"), "A limit never deletes existing queues automatically.") { limitOpen = true }
+    }
+    if (thresholdOpen) {
+        var seconds by remember(settings.previousThresholdSeconds) { mutableStateOf(settings.previousThresholdSeconds.toString()) }
+        val valid = seconds.toIntOrNull()?.let { it in 1..60 } == true
+        AlertDialog(onDismissRequest = { thresholdOpen = false }, title = { Text("Restart threshold") }, text = {
+            OutlinedTextField(seconds, { seconds = it }, label = { Text("Seconds (1–60)") }, singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                isError = !valid)
+        }, confirmButton = { TextButton(enabled = valid, onClick = {
+            onChange(settings.copy(previousThresholdSeconds = seconds.toInt())); thresholdOpen = false
+        }) { Text("Save") } }, dismissButton = { TextButton(onClick = { thresholdOpen = false }) { Text("Cancel") } })
     }
     if (limitOpen) {
         var limit by remember(settings.maximum) { mutableStateOf(settings.maximum?.toString().orEmpty()) }
@@ -217,5 +235,10 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
 }
 internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"
     SongTap.PlayNow -> "Insert after current and play"; SongTap.PlayNext -> "Add next"; SongTap.Append -> "Append to current" }
+private fun PreviousBehavior.label() = when (this) {
+    PreviousBehavior.RestartAfterThreshold -> "Restart after threshold"
+    PreviousBehavior.PreviousSong -> "Always previous song"
+    PreviousBehavior.RestartSong -> "Always restart song"
+}
 private fun QueueSwitch.label() = when (this) { QueueSwitch.Browse -> "Browse without changing playback"; QueueSwitch.Paused -> "Restore paused"
     QueueSwitch.Resume -> "Resume immediately"; QueueSwitch.KeepPlaybackState -> "Keep playing or paused" }

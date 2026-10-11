@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -15,6 +16,7 @@ import io.github.anastaci1a.localica.LocalicaApplication
 class PlaybackService : MediaSessionService() {
     private var statistics: io.github.anastaci1a.localica.statistics.PlaybackStatistics? = null
     private var session: MediaSession? = null
+    private var engine: ExoPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -31,11 +33,16 @@ class PlaybackService : MediaSessionService() {
                 }
             })
         }
+        engine = player
         statistics = io.github.anastaci1a.localica.statistics.PlaybackStatistics(player, (application as LocalicaApplication).statistics::record)
         (application as LocalicaApplication).queues.attach(player)
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        session = MediaSession.Builder(this, player)
+        val controls = object : ForwardingPlayer(player) {
+            override fun seekToPrevious() { (application as LocalicaApplication).queues.previous() }
+            override fun seekToPreviousMediaItem() { (application as LocalicaApplication).queues.previous() }
+        }
+        session = MediaSession.Builder(this, controls)
             .setSessionActivity(activity)
             .setCallback(object : MediaSession.Callback {
                 override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
@@ -50,7 +57,9 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         statistics?.close(); statistics = null
-        session?.run { (application as LocalicaApplication).queues.detach(player); player.release(); release() }
+        engine?.let { (application as LocalicaApplication).queues.detach(it); it.release() }
+        engine = null
+        session?.release()
         session = null
         super.onDestroy()
     }
