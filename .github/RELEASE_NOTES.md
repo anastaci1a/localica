@@ -1,21 +1,23 @@
-<!-- Release: v0.16.0 -->
+<!-- Release: v0.17.0 -->
 
 Development APK for Android 8 or newer. Signed with the project development key; uses a separate `.debug` application ID. Production distribution signing is not configured.
 
 ## Changes
 
-- Shared Liquid Glass for the mini-player, navigation pills, Queue/lyrics return bubbles and drag-cancel target
-- Live backdrop blur, curved refraction and illuminated edges, with supported older-Android fallbacks
-- Neutral monochrome accents and a soft selected-tab capsule; the Queue drawer keeps its frosted texture
-- Queue return controls also recognize rows hidden behind floating controls
+- Clear, rounded glass lenses with stronger edge distortion and elastic press feedback; simpler clear controls on Android 8–12
+- Smaller mini-player, inset artwork and matching circular controls; one sliding tab-selection capsule
+- Three artwork transition choices with a replayable preview under Interface → Player, prepared neighboring artwork and uninterrupted rapid changes
+- Glass Library filters aligned with search pills: selection moves to the front, tapping again clears it, and reselecting Library restores the unfiltered view
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/78 - Liquid Glass floating controls and neutral accents
-- https://github.com/anastaci1a/localica/issues/79 - Return to a current queue row obscured by floating controls
+- https://github.com/anastaci1a/localica/issues/80 - White flashes when switching player artwork
+- https://github.com/anastaci1a/localica/issues/81 - Clear rounded lenses and fluid glass interactions
+- https://github.com/anastaci1a/localica/issues/84 - Sliding navigation selection capsule
+- https://github.com/anastaci1a/localica/issues/87 - Animated Library filter selection and restoration
 
 ## Install
 
-1. Download `localica-v0.16.0-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.17.0-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. Install over the existing development build to retain your data.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
