@@ -47,7 +47,8 @@ class QueueRestoreTest {
             }
             instrumentation.runOnMainSync {
                 assertFalse(player.playWhenReady)
-                assertEquals(2, player.mediaItemCount)
+                assertEquals(queues.state.value.library.active!!.journey!!.window().size, player.mediaItemCount)
+                assertNull(queues.state.value.library.active!!.journey!!.previous)
                 assertEquals(saved.entries.last().id, player.currentMediaItem?.mediaId)
                 queues.seek(3456)
             }
