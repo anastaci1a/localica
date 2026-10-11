@@ -20,7 +20,7 @@ internal val LocalArtworkTransition = staticCompositionLocalOf { ArtworkTransiti
 /** Explicit opaque outgoing frame plus masked incoming frame. Interruptions flatten the
  * displayed composite once, rather than restarting from an old cover or stacking animations. */
 @Composable
-internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: Int,
+internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: Int, immediate: Boolean = false,
     content: @Composable (PlayerVisual) -> Unit) {
     val target = visual.copy(loading = false)
     var outgoing by remember { mutableStateOf(target) }
@@ -30,8 +30,11 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
     val layer = rememberGraphicsLayer()
     val reduced = LocalReducedMotion.current
     val style = LocalArtworkTransition.current
-    LaunchedEffect(target) {
-        if (target != incoming) {
+    LaunchedEffect(target, immediate) {
+        if (immediate) {
+            frozen = null; outgoing = target; incoming = target
+            progress.snapTo(1f)
+        } else if (target != incoming) {
             if (progress.value < 1f && layer.size.width > 0 && !layer.isReleased) {
                 frozen = layer.toImageBitmap()
             } else { frozen = null; outgoing = incoming }
@@ -45,7 +48,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
         layer.record { this@drawWithContent.drawContent() }
         drawLayer(layer)
     }) {
-        if (progress.value < 1f) {
+        if (!immediate && progress.value < 1f) {
             val image = frozen
             if (image != null) Canvas(Modifier.matchParentSize()) {
                 drawImage(image, dstSize = IntSize(size.width.toInt(), size.height.toInt()))
@@ -56,11 +59,12 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
         val pixels = remember { IntArray(64 * 64) }
         Box(Modifier.matchParentSize().graphicsLayer {
             compositingStrategy = CompositingStrategy.Offscreen
-            if (reduced) alpha = progress.value
-            else if (Build.VERSION.SDK_INT >= 33) renderEffect = lens?.effect(size.width, size.height, progress.value, style)
+            val p = if (immediate) 1f else progress.value
+            if (reduced) alpha = p
+            else if (Build.VERSION.SDK_INT >= 33) renderEffect = lens?.effect(size.width, size.height, p, style)
         }.then(if (Build.VERSION.SDK_INT < 33 && !reduced) Modifier.drawWithContent {
             drawContent()
-            val p = progress.value
+            val p = if (immediate) 1f else progress.value
             if (p < 1f) {
                 for (y in 0 until 64) for (x in 0 until 64) pixels[y * 64 + x] =
                     (artworkCoverage(x / 63f, y / 63f, p, style) * 255).toInt().coerceIn(0, 255).shl(24) or 0xffffff
@@ -68,7 +72,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
                 drawImage(mask.asImageBitmap(), dstSize = IntSize(size.width.toInt(), size.height.toInt()),
                     filterQuality = FilterQuality.Medium, blendMode = BlendMode.DstIn)
             }
-        } else Modifier)) { content(incoming) }
+        } else Modifier)) { content(if (immediate) target else incoming) }
     }
 }
 

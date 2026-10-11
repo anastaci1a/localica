@@ -412,6 +412,16 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         capture()
         state.value.library.active?.journey?.next?.let { moveTo(it) }
     }
+    /** A gesture commits the visit it previewed; autoplay or changed modes may invalidate it. */
+    fun swipeTo(token: String, complete: (Boolean) -> Unit) = submit {
+        try {
+            capture()
+            val journey = state.value.library.active?.journey
+            val visit = listOfNotNull(journey?.previous, journey?.next).firstOrNull { it.token == token }
+            if (visit == null) complete(false)
+            else { moveTo(visit); complete(true) }
+        } catch (failure: Exception) { complete(false); throw failure }
+    }
     fun previous(alwaysSong: Boolean = false) = submit {
         capture()
         player?.let { attached ->

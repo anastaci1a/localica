@@ -10,7 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 internal data class PlayerPalette(val top: Color, val middle: Color, val bottom: Color, val aspect: Float = 1f,
-    val wash: android.graphics.Bitmap? = null)
+    val wash: android.graphics.Bitmap? = null, val softWash: android.graphics.Bitmap? = null)
 internal val NeutralPalette = PlayerPalette(Color(0xFF424C56), Color(0xFF343C47), Color(0xFF242B34))
 
 @Composable
@@ -39,31 +39,30 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
         if (count == 0L) return NeutralPalette.middle
         return lerp(Color((red / count).toInt(), (green / count).toInt(), (blue / count).toInt()), Color.Black, 0.4f)
     }
+    val wash = ArtworkWash.create(sample)
     PlayerPalette(band(0f, .3f), band(.3f, .7f), band(.7f, 1f), bitmap.width.toFloat() / bitmap.height,
-        ArtworkWash.create(sample))
+        wash, blurGlassSnapshot(wash.asImageBitmap(), ArtworkWash.WIDTH * .12f).asAndroidBitmap())
 }
 
 /** Low-frequency artwork colors and fixed fine grain give a matte surface without a blur dependency. */
 @Composable
 internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifier, fullArtBlend: Float = 0f,
-    artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f) {
+    artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f) {
     val washPaint = remember(palette.wash) {
         palette.wash?.let { bitmap -> android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
             shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
         } }
     }
-    val washMatrix = remember { android.graphics.Matrix() }
-    val grainPaint = remember {
-        val random = kotlin.random.Random(417)
-        // One low-contrast field spans the whole surface. No small repeating tile and no
-        // net brightening: both dark and light grains sit over the diffused color layers.
-        val bitmap = android.graphics.Bitmap.createBitmap(512, 1024, android.graphics.Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(IntArray(512 * 1024) {
-            val tone = if (random.nextBoolean()) 255 else 0
-            android.graphics.Color.argb(random.nextInt(7), tone, tone, tone)
-        }, 0, 512, 0, 0, 512, 1024)
-        android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+    val softWashPaint = remember(palette.softWash) {
+        palette.softWash?.let { bitmap -> android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
             shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+        } }
+    }
+    val washMatrix = remember { android.graphics.Matrix() }
+    val softWashMatrix = remember { android.graphics.Matrix() }
+    val grainPaint = remember {
+        android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+            shader = android.graphics.BitmapShader(playerGrain, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
         }
     }
     val grainMatrix = remember { android.graphics.Matrix() }
@@ -77,10 +76,31 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
             washPaint.shader.setLocalMatrix(washMatrix)
             washPaint.alpha = (255 * fullArtBlend).toInt().coerceIn(0, 255)
             drawIntoCanvas { it.nativeCanvas.drawRect(0f, 0f, size.width, size.height, washPaint) }
+            if (softWashPaint != null && softness > 0f) {
+                val soft = requireNotNull(palette.softWash)
+                softWashMatrix.set(washMatrix)
+                softWashMatrix.preScale(ArtworkWash.WIDTH.toFloat() / soft.width, ArtworkWash.HEIGHT.toFloat() / soft.height)
+                softWashPaint.shader.setLocalMatrix(softWashMatrix)
+                softWashPaint.alpha = (255 * fullArtBlend * softness).toInt().coerceIn(0, 255)
+                drawIntoCanvas { it.nativeCanvas.drawRect(0f, 0f, size.width, size.height, softWashPaint) }
+            }
         }
         grainMatrix.setScale(size.width / 512f, size.height / 1024f)
         grainPaint.shader.setLocalMatrix(grainMatrix)
         grainPaint.alpha = (255 * (1f - fullArtBlend * .8f)).toInt()
         drawIntoCanvas { it.nativeCanvas.drawRect(0f, 0f, size.width, size.height, grainPaint) }
     }
+}
+
+/** Shared immutable grain avoids generating a large texture when a neighbor enters a swipe. */
+private val playerGrain: android.graphics.Bitmap by lazy {
+    val random = kotlin.random.Random(417)
+    // One low-contrast field spans the whole surface. No small repeating tile and no
+    // net brightening: both dark and light grains sit over the diffused color layers.
+    val bitmap = android.graphics.Bitmap.createBitmap(512, 1024, android.graphics.Bitmap.Config.ARGB_8888)
+    bitmap.setPixels(IntArray(512 * 1024) {
+        val tone = if (random.nextBoolean()) 255 else 0
+        android.graphics.Color.argb(random.nextInt(7), tone, tone, tone)
+    }, 0, 512, 0, 0, 512, 1024)
+    bitmap
 }
