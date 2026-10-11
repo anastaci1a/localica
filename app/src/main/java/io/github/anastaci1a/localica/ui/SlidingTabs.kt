@@ -37,7 +37,7 @@ internal fun magneticTabPosition(raw: Float): Float {
 }
 
 @Composable
-internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, onSelect: (MainTab) -> Unit) {
+internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, onSelect: (MainTab) -> Unit) {
     val reduced = LocalReducedMotion.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -73,7 +73,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, onSe
                 lens.animateTo(chosen.toFloat(), spring(.6f, 450f))
             })) {
             SelectionLens(Modifier.offset(x = width * lens.value + 4.dp, y = 4.dp)
-                .width(width - 8.dp).height(NavigationPillHeight - 8.dp), lens, chosen.toFloat())
+                .width(width - 8.dp).height(NavigationPillHeight - 8.dp), lens, chosen.toFloat(), source)
             @Composable fun Labels(color: Color, interactive: Boolean) {
                 Row(Modifier.width(width * tabs.size).fillMaxHeight().then(if (interactive) Modifier else
                     Modifier.clearAndSetSemantics {}.drawWithContent {

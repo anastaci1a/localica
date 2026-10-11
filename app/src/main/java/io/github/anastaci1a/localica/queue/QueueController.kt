@@ -186,6 +186,13 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         } catch (failure: Exception) { complete(false); throw failure }
     }
 
+    /** Randomize the saved visible order without enabling traversal shuffle. */
+    fun randomizedQueue(tracks: List<Track>, sourceName: String, playlistOrigins: List<String?> = emptyList()) = submit {
+        val order = tracks.indices.shuffled()
+        perform(order.map(tracks::get), 0, SongTap.NewQueue, batch = true, sourceName = sourceName,
+            playlistOrigins = order.map { playlistOrigins.getOrNull(it) })
+    }
+
     private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean, sourceName: String = "Selected songs", playlistOrigins: List<String?> = emptyList()): Boolean {
         val selected = tracks.getOrNull(selectedIndex) ?: return false
         pendingComplete?.invoke(false); pendingComplete = null

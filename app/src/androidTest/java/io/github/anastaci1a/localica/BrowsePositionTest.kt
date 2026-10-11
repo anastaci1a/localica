@@ -40,6 +40,7 @@ class BrowsePositionTest {
                     compose.scrollToUncoveredItem(hasText(title))
                     val before = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
                     compose.onNodeWithText(title).performClick()
+                    compose.onNodeWithTag("browser-list").performScrollToIndex(1)
                     // Browse queries run on Dispatchers.Default, outside Compose's idle clock.
                     // Await their first laid-out result before testing navigation and position.
                     compose.waitUntil(5000) {

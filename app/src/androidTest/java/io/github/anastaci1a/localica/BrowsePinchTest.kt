@@ -115,6 +115,41 @@ class BrowsePinchTest {
         } finally { prefs.write(route, old, false) }
     }
 
+    @Test fun heldPinchChangesArtworkGeometryBeforeRelease() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val route = BrowseRoute(MainTab.Songs)
+        val prefs = BrowsePreferences(context)
+        val old = prefs.read(route)
+        prefs.write(route, BrowseStyle(), false)
+        try {
+            val tracks = (0..20).map { Track("live:$it", "Song ${it.toString().padStart(2, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
+            compose.setContent { LocalicaTheme {
+                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                    queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+            } }
+            val list = compose.onNodeWithTag("browser-list")
+            compose.waitForIdle()
+            compose.mainClock.autoAdvance = false
+            list.performTouchInput {
+                down(0, Offset(centerX - 50, 200f)); down(1, Offset(centerX + 50, 200f))
+                moveTo(0, Offset(centerX - 65, 200f)); moveTo(1, Offset(centerX + 65, 200f))
+            }
+            compose.mainClock.advanceTimeBy(64)
+            val first = compose.onNodeWithTag("browse-art-live:0", true).fetchSemanticsNode().boundsInRoot.width
+            list.performTouchInput {
+                moveTo(0, Offset(centerX - 110, 200f)); moveTo(1, Offset(centerX + 110, 200f))
+            }
+            compose.mainClock.advanceTimeBy(64)
+            val second = compose.onNodeWithTag("browse-art-live:0", true).fetchSemanticsNode().boundsInRoot.width
+            assertTrue("Artwork must respond while both fingers remain down: $first / $second", kotlin.math.abs(second - first) > 1f)
+            list.performTouchInput { up(0); up(1) }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            assertEquals(5, prefs.read(route).itemsPerRow)
+        } finally { compose.mainClock.autoAdvance = true; prefs.write(route, old, false) }
+    }
+
     private fun waitForView(label: String) {
         compose.waitUntil(5000) { compose.onNodeWithTag("browser-list").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == label }
         compose.waitForIdle()
