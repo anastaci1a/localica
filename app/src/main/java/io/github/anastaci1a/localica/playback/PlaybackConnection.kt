@@ -38,6 +38,7 @@ data class PlaybackState(
     val isBuffering: Boolean = false,
     val ended: Boolean = false,
     val problem: PlaybackProblem? = null,
+    val hasNext: Boolean = false,
 )
 
 interface PlaybackActions {
@@ -91,6 +92,7 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
     fun playFromList(tracks: List<Track>, selectedId: String) { queues.tap(tracks, selectedId) }
     fun previous() { queues.previous() }
     fun next() { queues.next() }
+    fun retry() { queues.retryPlayback() }
 
     override fun toggle() { queues.togglePlayback() }
     override fun seekTo(positionMs: Long) { queues.seek(positionMs) }
@@ -117,6 +119,7 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
             isBuffering = player.playbackState == Player.STATE_BUFFERING,
             ended = player.playbackState == Player.STATE_ENDED,
             problem = player.playerError?.toProblem(),
+            hasNext = player.hasNextMediaItem(),
         )
     }
 

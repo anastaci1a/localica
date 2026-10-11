@@ -359,6 +359,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         capture()
     }
+    fun retryPlayback() = submit {
+        player?.run {
+            if (currentMediaItem == null) return@run
+            if (playbackState == Player.STATE_IDLE || playerError != null) prepare()
+            play()
+        }
+        capture()
+    }
     fun seek(positionMs: Long) = submit {
         player?.let { if (it.duration != C.TIME_UNSET && it.duration > 0) it.seekTo(positionMs.coerceIn(0, it.duration)) }
         capture()

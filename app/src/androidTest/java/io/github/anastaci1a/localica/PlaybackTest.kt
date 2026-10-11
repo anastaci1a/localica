@@ -21,8 +21,12 @@ class PlaybackTest {
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
             lateinit var playback: PlaybackConnection
             instrumentation.runOnMainSync { playback = PlaybackConnection(context) }
+            await { !playback.queues.state.value.loading }
+            val savedSettings = playback.queues.state.value.settings
             try {
                 await { playback.state.value.connected }
+                playback.queues.settings(io.github.anastaci1a.localica.queue.QueueSettings())
+                await { playback.queues.state.value.settings == io.github.anastaci1a.localica.queue.QueueSettings() }
                 for (extension in listOf("mp3", "m4a", "wav")) {
                     val file = File(context.cacheDir, "test-tone.$extension")
                     instrumentation.context.assets.open("tone.$extension").use { input -> file.outputStream().use(input::copyTo) }
@@ -52,12 +56,24 @@ class PlaybackTest {
                     await { playback.state.value.trackUri == null }
                     file.delete()
                 }
-                val missing = Track("file:///missing.mp3", "Missing", fileName = "missing.mp3", relativePath = "missing.mp3")
+                val restored = File(context.cacheDir, "retry-tone.mp3").apply { delete() }
+                val missing = Track(restored.toURI().toString(), "Missing", fileName = restored.name, relativePath = restored.name)
                 instrumentation.runOnMainSync { playback.play(missing) }
                 await { playback.state.value.problem != null }
                 assertFalse(playback.state.value.isPlaying)
+                try {
+                    instrumentation.context.assets.open("tone.mp3").use { input -> restored.outputStream().use(input::copyTo) }
+                    instrumentation.runOnMainSync { playback.retry() }
+                    await { playback.state.value.isPlaying && playback.state.value.problem == null }
+                    val stillMissing = missing.copy(uri = "file:///unavailable-skip.mp3", id = "unavailable-skip")
+                    instrumentation.runOnMainSync { playback.playFromList(listOf(stillMissing, missing), stillMissing.id) }
+                    await { playback.state.value.problem != null && playback.state.value.hasNext }
+                    instrumentation.runOnMainSync { playback.next(); playback.retry() }
+                    await { playback.state.value.isPlaying && playback.state.value.trackId == missing.id }
+                    assertNull(playback.state.value.problem)
+                } finally { restored.delete() }
             } finally {
-                instrumentation.runOnMainSync { playback.clear(); playback.close() }
+                instrumentation.runOnMainSync { playback.queues.settings(savedSettings); playback.clear(); playback.close() }
             }
         }
     }
