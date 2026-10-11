@@ -109,7 +109,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
 @Composable
 internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corners.panel,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
-    tint: Color = Color.Transparent, content: @Composable BoxScope.() -> Unit) {
+    tint: Color = Color.Transparent, darkening: Float = .5f, content: @Composable BoxScope.() -> Unit) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     val view = LocalView.current
     val dark = source?.dark == true
@@ -134,7 +134,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             }
         }
         Canvas(Modifier.matchParentSize()) {
-            drawRect(base.copy(alpha = if (dark) { if (compact) .22f else .5f } else { if (compact) .65f else .91f }))
+            drawRect(base.copy(alpha = if (dark) { if (compact) .22f else darkening } else { if (compact) .65f else .91f }))
             drawRect(tint)
             drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .075f), Color.Transparent),
                 center = Offset(size.width * .12f, 0f), radius = maxOf(size.width, size.height) * .9f))

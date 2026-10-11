@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Review physical-device feedback on glass readability, control-to-panel transitions, player expansion, artwork swipes and pinch navigation before choosing the next implementation batch. Track concrete regressions in Issues. Preserve accessibility, playback continuity and older-Android support; keep the shared rendering system in this repository.
+Implement the agreed device feedback across player motion, glass interactions, interactive browsing, collection pages and tag editing. Track acceptance criteria in Issues; complete these outcomes in at most three verified APK releases, preserving accessibility, playback continuity and older-Android support.
 
 ## Deferred capabilities
 
