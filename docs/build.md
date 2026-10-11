@@ -1,32 +1,40 @@
-# Build and verification
+# Build and release
 
-Use JDK 17 and an Android SDK with platform 36 and build tools 35.0.0. Set `ANDROID_HOME` or an untracked `local.properties` containing `sdk.dir=/path/to/sdk`. The checked-in wrapper downloads the pinned Gradle version and verifies its checksum.
+## Local verification
+
+Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME` or untracked `local.properties` with `sdk.dir=/path/to/sdk`; the pinned wrapper verifies its download checksum.
 
 ```sh
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
-./gradlew connectedDebugAndroidTest  # running emulator or connected device
+./gradlew connectedDebugAndroidTest  # emulator or connected device
 ```
 
-The installable development APK is `app/build/outputs/apk/debug/app-debug.apk`. The release variant is intentionally unsigned until production distribution is configured. `androidTest` contains original synthetic audio and a test-only document provider for real folder-picker and codec tests; neither is included in the app. Boundary tests compare decoded samples, MP3 waveform alignment, and buffering across transitions. The FLAC case runs only when a device exposes a FLAC decoder (stock Android supplies it from API 27). The precise Android 8 MP3 padding failure is reported as a known-failure skip after checking playback/transitions; see [#30](https://github.com/anastaci1a/localica/issues/30). Other MP3 sample counts or decoder failures still fail the test.
+Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only synthetic audio/document-provider fixtures never ship in the app.
 
-Media3 is pinned to 1.10.1 until a stable release includes the fix for its [MP3 trimming regression](https://github.com/androidx/media/issues/3425). Boundary length alone cannot detect that regression; the waveform checks must pass before upgrading.
+Verify affected contracts: migrations/recovery and failed operations; occurrence/cursor/metadata preservation; navigation/search restoration and gesture ownership; playback/lyrics/artwork boundaries; accessibility, short/landscape screens, large fonts and reduced motion. Physical-device review supplements automation. Docs-only edits require content/link review, not Android tests.
 
-Jaudiotagger 3.0.1 supplies tag writing under LGPL 2.1 or later. Its notice/license are bundled in the app's open-source licenses screen; releases include the unmodified library's source archive. To use a modified version, build that source with Maven, replace `implementation(libs.jaudiotagger)` with a local JAR dependency, and rebuild using the commands above. A rebuilt APK uses your own development signing key. Localica's own code remains MIT licensed.
+## Compatibility and dependencies
 
-## Automation and versions
+- Android 8+; MP3 and AAC/M4A are primary formats, with WAV/FLAC/Ogg/Opus using available device decoders. No decoder extensions. Boundary tests check decoded samples, MP3 waveform alignment and transition buffering; sample counts alone are insufficient.
+- FLAC tests require a decoder (stock Android supplies one from API 27). Known padding limits: some shortened-final-sample FFmpeg M4A files ([#28](https://github.com/anastaci1a/localica/issues/28)) and the legacy Android 8 MP3 decoder ([#30](https://github.com/anastaci1a/localica/issues/30)). Only the precise known Android 8 failure is skipped after playback checks; other failures remain failures.
+- Media3 stays pinned to 1.10.1 pending a stable [MP3 trimming fix](https://github.com/androidx/media/issues/3425); rerun waveform checks before upgrading.
+- Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its source archive with releases. To replace it, build the source with Maven, replace `implementation(libs.jaudiotagger)` with the local JAR, and rebuild under your signing key. Localica remains MIT licensed.
 
-The Android workflow checks each main push and pull request, uploads a development APK, and runs device tests on API 26 and 36. API 36 uses explicit `lavapipe` graphics and a 720×1280 display at 280 dpi, preserving the Pixel 2's logical dimensions while reducing rendering work. Both `swiftshader_indirect` and the automatically selected `software` backend intermittently crashed the emulator during lyric rendering. Explicit Mesa rendering completed the full local suite; keep its default feature selection. Keep system animation scales at their normal values: forcing them to zero caused launcher/Back and document-picker stalls on the cold CI emulator. Compose animation assertions use their own controlled clock. Actions are pinned to commit hashes.
+## CI and signing
 
-Wait for successful main verification before tagging its exact commit. A `vX.X.X` tag must match `versionName` in `app/build.gradle.kts`; increase `versionCode` for each new build distributed as an update. The tag workflow requires successful build and both device jobs from a main push for that commit, downloads its existing APK, checks the version and signing identity, and publishes it with a checksum. It does not rebuild or repeat the test matrix. Missing verification or an expired artifact blocks publishing: rerun the main checks, then rerun the release job. Never substitute an APK from another commit.
+The [Android workflow](../.github/workflows/android.yml) builds main/PR changes and tests API 26/36. API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes; zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
-The repository secret `ANDROID_DEBUG_KEYSTORE` holds the base64-encoded development keystore so successive CI APKs can update one another. CI passes its restored path through `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate against that keystore before upload. Keep a backup outside Git. Local builds use the usual debug key unless this variable is set; pull requests use a disposable debug key. Production signing requires a separate key and distribution decision.
+`ANDROID_DEBUG_KEYSTORE` holds the base64 development key; CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key; PRs use a disposable key. Production distribution/signing remains separate.
 
-### Release descriptions
+## Release preparation
 
-Before pushing a release tag, copy the [template](../.github/RELEASE_TEMPLATE.md) over [the current release notes](../.github/RELEASE_NOTES.md), fill every placeholder, and commit and push the result with the version change. Review issues resolved since the preceding release so the linked list is complete; references in commits alone do not mean an issue is resolved. Keep the change bullets and installation steps short, following the [release writing rules](../agents/README.md#versioning-and-releases).
+1. Update app version/name and increment `versionCode` for every distributed update. Fill the [template](../.github/RELEASE_TEMPLATE.md) into [RELEASE_NOTES](../.github/RELEASE_NOTES.md): basic APK/compatibility/signing introduction, short Changes bullets, **all** resolved issue URLs with brief description fragments, and short Install steps. Include only completed issues; say so if none. Keep previous published descriptions intact.
+2. Review [previews](#previews), current docs and resolved issues; commit and push.
+3. **Wait for successful build and both device jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks; never substitute another commit's APK. Unfilled release placeholders block publication.
+4. Verify published assets, close resolved issues/remove workflow labels, and replace completed roadmap outcomes with the next checkpoint.
 
-Review the README previews against the candidate UI. Recapture changed screens and the short navigation GIF on an emulator, inspect them at README size, and update their version caption and artwork credits. Keep recordings silent and demo media outside the app; remove obsolete images.
+## Previews
 
-Reuse the local preview library under `${XDG_DATA_HOME:-$HOME/.local/share}/localica/previews/`, including its capture setup notes and raw recordings. Preserve the capture emulator's music folder and app data between releases; update its APK with `adb install -r`. The demo library stays outside Git and the APK.
+Review README screenshots/GIF for each release. Recapture changed screens from the candidate, inspect at README size, update version/credits and remove obsolete images. Keep navigation recordings short/silent and third-party demo media outside Git/APK.
 
-The workflow checks the version marker and rejects unfilled placeholders, then publishes this file as the release body. Replace the file for each release; Git and GitHub Releases retain previous descriptions. This format starts with v0.5.0; earlier release descriptions stay as published.
+Reuse `${XDG_DATA_HOME:-$HOME/.local/share}/localica/previews/` for the local library, setup notes and raw captures. Preserve emulator music/app data; update with `adb install -r` rather than recreating the library.
