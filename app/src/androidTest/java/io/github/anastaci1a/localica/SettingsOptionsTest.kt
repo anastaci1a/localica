@@ -39,6 +39,11 @@ class SettingsOptionsTest {
             }, {}) } }
             compose.onNodeWithText("Extra information").performClick()
             compose.onNodeWithText("Album Artist").performClick()
+            // Dialog windows finish removal asynchronously on Android 16. Wait for the old
+            // radio group to close before opening another with overlapping option labels.
+            compose.waitUntil(5000) { compose.onAllNodes(hasText("Album Artist") and
+                SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role,
+                    androidx.compose.ui.semantics.Role.RadioButton)).fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("Group album songs").performClick()
             compose.onNodeWithText("Artist").performClick()
             compose.onNodeWithText("Quick-search box").performScrollTo().performClick()

@@ -121,7 +121,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val fullArtY = statusInset + 52.dp + (floatingArt - fullArtHeight) / 2
     val artY = 8.dp + (fullArtY - 8.dp) * p - 24.dp * lyricProgress
     val ordinarySeekY = statusInset + 52.dp + floatingArt + 8.dp
-    val lyricSeekY = virtualHeight - navigationInset - 320.dp
+    val lyricSeekY = virtualHeight - navigationInset - 280.dp
     val metadataY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
     val titleY = 10.dp + (metadataY - 10.dp) * p
     val subtitleY = 34.dp + (metadataY + 34.dp - 34.dp) * p
