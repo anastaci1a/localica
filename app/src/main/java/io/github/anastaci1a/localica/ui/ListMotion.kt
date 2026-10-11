@@ -31,14 +31,14 @@ internal suspend fun LazyListState.easeToItem(index: Int, reducedMotion: Boolean
     }
 }
 
-internal suspend fun LazyGridState.easeToItem(index: Int, reducedMotion: Boolean) {
-    if (reducedMotion) { scrollToItem(index); return }
+internal suspend fun LazyGridState.easeToItem(index: Int, reducedMotion: Boolean, topInset: Float = 0f) {
+    if (reducedMotion) { scrollToItem(index, -topInset.toInt()); return }
     repeat(5) {
         val items = layoutInfo.visibleItemsInfo
         val target = items.firstOrNull { it.index == index }
         val columns = (items.maxOfOrNull { it.column } ?: 0) + 1
         val height = items.map { it.size.height }.average().takeIf { it.isFinite() && it > 0 } ?: 64.0
-        val distance = target?.offset?.y?.toFloat() ?: (((index - firstVisibleItemIndex) / columns) * height - firstVisibleItemScrollOffset).toFloat()
+        val distance = (target?.offset?.y?.toFloat() ?: (((index - firstVisibleItemIndex) / columns) * height - firstVisibleItemScrollOffset).toFloat()) - topInset
         if (kotlin.math.abs(distance) < 1) return
         if (kotlin.math.abs(animateScrollBy(distance, tween(500))) < 1) return
     }

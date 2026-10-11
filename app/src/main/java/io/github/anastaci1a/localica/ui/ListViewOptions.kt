@@ -7,6 +7,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.*
 
@@ -17,6 +22,7 @@ internal fun ListViewOptions(route: BrowseRoute, value: BrowseStyle, overridden:
     var override by remember { mutableStateOf(overridden) }
     val albumSongs = route.collection?.kind == MediaKind.Album
     val albumCatalog = route.collection == null && (route.tab == MainTab.Albums || route.filter == MediaKind.Album)
+    val width = LocalConfiguration.current.screenWidthDp.toFloat()
     SettingsPage("List view options", onDismiss, backLabel = "Back from view options") {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingsHeading(route.title ?: route.filter?.label ?: route.tab.label)
@@ -24,8 +30,14 @@ internal fun ListViewOptions(route: BrowseRoute, value: BrowseStyle, overridden:
                 edited = edited.copy(presentation = if (it) Presentation.Standard else Presentation.List,
                     songGrouping = if (it && albumSongs) SongGrouping.None else edited.songGrouping)
             }
-            if (edited.presentation != Presentation.List) ChoicePreference("Grid size", edited.presentation,
-                Presentation.entries.filterNot { it == Presentation.List }, { it.label }) { edited = edited.copy(presentation = it) }
+            if (edited.presentation != Presentation.List) {
+                val columns = edited.itemsPerRow ?: galleryColumns(edited.presentation, width).coerceIn(1, 5)
+                Text("Items per row: $columns", style = MaterialTheme.typography.titleSmall)
+                Slider(columns.toFloat(), { edited = edited.copy(itemsPerRow = it.roundToInt().coerceIn(1, 5)) },
+                    valueRange = 1f..5f, steps = 3, modifier = Modifier.semantics {
+                        contentDescription = "Items per row"; stateDescription = columns.toString()
+                    })
+            }
             ChoicePreference("Extra information", edited.extraInfo, ExtraInfo.entries, ::extraInfoLabel) { edited = edited.copy(extraInfo = it) }
             if (albumSongs || albumCatalog) {
                 ChoicePreference("Group album songs", edited.songGrouping, SongGrouping.entries, { it.label }) {

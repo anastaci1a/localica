@@ -46,30 +46,41 @@ internal fun rememberPlayerPalette(uri: String?): PlayerPalette {
 /** Low-frequency artwork colors and fixed fine grain give a matte surface without a blur dependency. */
 @Composable
 internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifier, fullArtBlend: Float = 0f,
-    artTop: Float = 0f, artHeight: Float = 0f) {
+    artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f) {
     val washPaint = remember(palette.wash) {
         palette.wash?.let { bitmap -> android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
             shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
         } }
     }
     val washMatrix = remember { android.graphics.Matrix() }
-    val grain = remember {
+    val grainPaint = remember {
         val random = kotlin.random.Random(417)
-        val bitmap = android.graphics.Bitmap.createBitmap(32, 32, android.graphics.Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(IntArray(32 * 32) { android.graphics.Color.argb(random.nextInt(18), 255, 255, 255) }, 0, 32, 0, 0, 32, 32)
-        ShaderBrush(ImageShader(bitmap.asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
+        // One low-contrast field spans the whole surface. No small repeating tile and no
+        // net brightening: both dark and light grains sit over the diffused color layers.
+        val bitmap = android.graphics.Bitmap.createBitmap(512, 1024, android.graphics.Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(IntArray(512 * 1024) {
+            val tone = if (random.nextBoolean()) 255 else 0
+            android.graphics.Color.argb(random.nextInt(7), tone, tone, tone)
+        }, 0, 512, 0, 0, 512, 1024)
+        android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+            shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+        }
     }
+    val grainMatrix = remember { android.graphics.Matrix() }
     Canvas(modifier) {
         drawRect(Brush.verticalGradient(listOf(palette.top, palette.middle, palette.bottom)))
         drawRect(Brush.radialGradient(listOf(palette.top.copy(alpha = 0.45f), Color.Transparent),
             center = Offset(size.width * 0.1f, size.height * 0.4f), radius = size.width * 1.2f))
         if (washPaint != null && fullArtBlend > 0f && artHeight > 0f) {
-            washMatrix.setScale(size.width / ArtworkWash.WIDTH, artHeight / ArtworkWash.WIDTH)
-            washMatrix.postTranslate(0f, artTop + artHeight * ArtworkWash.TOP)
+            washMatrix.setScale((artWidth.takeIf { it > 0f } ?: size.width) / ArtworkWash.WIDTH, artHeight / ArtworkWash.WIDTH)
+            washMatrix.postTranslate(artLeft, artTop + artHeight * ArtworkWash.TOP)
             washPaint.shader.setLocalMatrix(washMatrix)
             washPaint.alpha = (255 * fullArtBlend).toInt().coerceIn(0, 255)
             drawIntoCanvas { it.nativeCanvas.drawRect(0f, 0f, size.width, size.height, washPaint) }
         }
-        drawRect(grain, alpha = 1f - fullArtBlend * 0.75f)
+        grainMatrix.setScale(size.width / 512f, size.height / 1024f)
+        grainPaint.shader.setLocalMatrix(grainMatrix)
+        grainPaint.alpha = (255 * (1f - fullArtBlend * .8f)).toInt()
+        drawIntoCanvas { it.nativeCanvas.drawRect(0f, 0f, size.width, size.height, grainPaint) }
     }
 }

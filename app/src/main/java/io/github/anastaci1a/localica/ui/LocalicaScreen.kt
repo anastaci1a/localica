@@ -179,8 +179,7 @@ fun LocalicaScreen(
     CompositionLocalProvider(LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
             (if (hasPlayer) 152.dp else 80.dp) + if (session.active) selectionHeight else 0.dp)) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(if (expanded && !queueOpen) androidx.compose.ui.graphics.Color(0xFF242B34)
-        else MaterialTheme.colorScheme.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
         Column(Modifier.fillMaxSize().statusBarsPadding()
@@ -203,7 +202,7 @@ fun LocalicaScreen(
             // a different grid or text field through SaveableStateProvider's ReusableContent.
             key(route.key) { holder.SaveableStateProvider(route.key) {
                 if (route.tab == MainTab.Queues && !route.search) QueueScreen(queues, queueController, library,
-                    playlist, playlistController, playback.connected, pins, ::pin, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage)
+                    playlist, playlistController, playback.connected, pins, ::pin, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage, isPlaying = playback.isPlaying)
                 else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
                     PinnedHome(library, playlist, pins, { settingsCategory = "Folders to scan"; settingsOpen = true },
                         { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) },
@@ -290,15 +289,15 @@ fun LocalicaScreen(
             lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress) {
             PlayerActionStrip(playerActions, { action -> when (action) {
-                PlayerAction.Shuffle -> "Shuffle: " + if (queues.library.active?.shuffle == true) "on" else "off"
-                PlayerAction.Repeat -> "Repeat: " + queues.library.active?.repeat?.name.orEmpty()
+                PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
+                PlayerAction.Repeat -> "Repeat: " + queues.settings.repeat.name
                 PlayerAction.Count -> "Track " + ((queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1) + " of " + (queues.library.active?.entries?.size ?: 0)
                 else -> action.label
-            } }, ::playerAction, { customizeActions = true })
+            } }, ::playerAction, { customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat)
         }
         if (queueProgress.value > 0f) QueueSurface(queueProgress, settings, { queueOpen = it }) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
-                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion) } }
+                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying) } }
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).verticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)
             }

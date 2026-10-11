@@ -67,6 +67,8 @@ class PlayerLayoutTest {
             val cover = compose.onNodeWithTag("player-artwork").fetchSemanticsNode().boundsInRoot
             if (layout == ArtworkLayout.FullBackground) assertEquals(player.width, cover.width, 2f)
             else assertTrue(cover.width < player.width)
+            assertTrue("Metadata precedes the slider", compose.onNodeWithTag("player-title").fetchSemanticsNode().boundsInRoot.bottom <
+                compose.onNodeWithContentDescription("Seek").fetchSemanticsNode().boundsInRoot.top)
             val before = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithContentDescription("Show lyrics").performClick()
             val lines = compose.onNodeWithTag("lyrics-panel").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
@@ -74,6 +76,8 @@ class PlayerLayoutTest {
             assertTrue("Lyrics should use the upper screen", lines.height > player.height * 0.35f)
             assertTrue("Controls ease down", controls.top > before.top)
             assertTrue("Lyrics stay above controls", lines.bottom < controls.top)
+            assertTrue("Lyrics metadata precedes the slider", compose.onNodeWithTag("player-title").fetchSemanticsNode().boundsInRoot.bottom <
+                compose.onNodeWithContentDescription("Seek").fetchSemanticsNode().boundsInRoot.top)
             compose.onNodeWithText("Lyrics", substring = false).assertDoesNotExist()
             compose.onNodeWithText("Extra player action").assertDoesNotExist()
             if (lyricBounds != null) { assertEquals(lyricBounds, lines); assertEquals(transportBounds, controls) }

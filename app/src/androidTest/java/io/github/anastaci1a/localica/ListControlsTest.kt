@@ -52,11 +52,11 @@ class ListControlsTest {
         compose.onNodeWithText("1 selected").assertIsDisplayed()
         compose.onNodeWithContentDescription("Close selection").performClick()
         compose.onNodeWithText("Current song").assertIsDisplayed().performClick()
-        compose.onNodeWithText("▶ Z song 004").assertIsDisplayed()
+        compose.onNodeWithText("Z song 004").assertIsDisplayed()
         compose.onNodeWithText("Current song").assertDoesNotExist()
         compose.runOnIdle { current = queue.entries.last().id }
         compose.onNodeWithText("Current song").assertIsDisplayed().performClick()
-        compose.onNodeWithText("▶ Z song 099").assertIsDisplayed()
+        compose.onNodeWithText("Z song 099").assertIsDisplayed()
         compose.onNodeWithText("Current song").assertDoesNotExist()
     }
 }

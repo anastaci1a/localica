@@ -1,5 +1,13 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import io.github.anastaci1a.localica.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,7 +36,7 @@ import io.github.anastaci1a.localica.library.SongListView
 fun QueueScreen(state: QueueUiState, controller: QueueController?, library: LibraryUiState = LibraryUiState(loading = false),
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
-    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true) {
+    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false) {
     var selector by remember { mutableStateOf(false) }
     var renameId by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Set<String>?>(null) }
@@ -37,16 +45,10 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     var sorting by remember { mutableStateOf(false) }
     var presentation by remember { mutableStateOf(false) }
     val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val compactHeader = configuration.screenHeightDp < 480 && configuration.screenWidthDp > 600
-    val summary = active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size} · " +
-        formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { durations -> durations.isNotEmpty() }?.sum()) }
-    @Composable fun playbackOptions() {
-        if (active != null) {
-            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_shuffle, "Shuffle: ${active.shuffle}") { controller?.shuffle(active.id) }
-            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_repeat, "Repeat: ${active.repeat.name}") { controller?.repeat(active.id) }
-        }
-    }
+    val queueNumber = state.library.queues.indexOfFirst { it.id == active?.id } + 1
+    val playingThisQueue = active?.id == state.library.activeId && isPlaying
+    val position = active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
+    val duration = active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
     var browsing by rememberSaveable(active?.id, stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
         save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
         mutableStateOf(NavigationState(MainTab.Queues, mapOf(MainTab.Queues to listOf(BrowseRoute(MainTab.Queues,
@@ -62,50 +64,78 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
             rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
         }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
             playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId, header = {
-                Column(Modifier.padding(horizontal = 16.dp)) {
+                Column(Modifier.padding(horizontal = 12.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { selector = true }, enabled = state.library.queues.isNotEmpty(), modifier = Modifier.weight(1f)) {
-                            Column {
-                                Text(active?.name ?: "Queues", style = if (compactHeader) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
-                                    maxLines = if (compactHeader) 1 else Int.MAX_VALUE, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                if (compactHeader && summary != null) Text(summary, style = MaterialTheme.typography.bodySmall)
+                        Surface(shape = Corners.card, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier.weight(1f)) {
+                            Row(Modifier.clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }
+                                .heightIn(min = 48.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(active?.let { "$queueNumber. ${it.name}" } ?: "Queues", Modifier.weight(1f),
+                                    style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Icon(painterResource(R.drawable.ic_down), "Select queue", Modifier.size(24.dp))
                             }
                         }
-                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_sort, "Sort queue") { presentation = false; sorting = true }
-                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_settings, "Queue view options") { presentation = true; sorting = true }
+                        ActionIcon(R.drawable.ic_close, "Delete current queue", enabled = active != null) { deleting = setOfNotNull(active?.id) }
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        ActionIcon(if (playingThisQueue) R.drawable.ic_pause else R.drawable.ic_play,
+                            if (playingThisQueue) "Pause queue" else "Play queue", enabled = enabled && active?.entries?.isNotEmpty() == true) {
+                            if (playingThisQueue) controller?.togglePlayback() else active?.id?.let { controller?.playQueue(it) }
+                        }
+                        ActionIcon(R.drawable.ic_sort, "Sort queue") { presentation = false; sorting = true }
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
+                            Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
+                        }
+                        ActionIcon(R.drawable.ic_save, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true) { saving = true }
                         Box {
-                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_more, "Queue actions") { menu = true }
+                            ActionIcon(R.drawable.ic_more, "Queue actions") { menu = true }
                             DropdownMenu(menu, { menu = false }) {
-                                ActionMenuItem("Save as playlist", enabled = active?.entries?.isNotEmpty() == true, onClick = { menu = false; saving = true })
+                                ActionMenuItem("List view options", onClick = { menu = false; presentation = true; sorting = true })
                                 ActionMenuItem("Rename", enabled = active != null, onClick = { menu = false; renameId = active?.id })
-                                ActionMenuItem("Delete", enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
                                 ActionMenuItem("Remove others", enabled = state.library.queues.size > 1,
                                     onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
                             }
                         }
-                        if (compactHeader) playbackOptions()
                     }
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    if (active != null && !compactHeader) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(summary.orEmpty(), Modifier.weight(1f)); playbackOptions()
-                    }
                     if (active == null) Text("Tap a song in Library to start a queue.")
                 }
             }, presentationOnly = presentation, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() })
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
-    if (selector) ModalBottomSheet(onDismissRequest = { selector = false }, shape = Corners.panel) {
-        LazyColumn(Modifier.fillMaxWidth().padding(16.dp)) {
-            item { Text("Listening queues", style = MaterialTheme.typography.titleLarge) }
-            itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { _, queue ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ReorderHandle("Reorder " + queue.name) { controller?.moveQueue(queue.id, it) }
-                    TextButton(onClick = { controller?.switchTo(queue.id); selector = false }, modifier = Modifier.weight(1f)) {
-                        Text((if (queue.id == active?.id) "✓ " else "") + queue.name + " · " + queue.entries.size)
-                    }
-                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_settings, "Rename " + queue.name) { renameId = queue.id }
-                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Delete " + queue.name) { deleting = setOf(queue.id) }
+    if (selector) Dialog(onDismissRequest = { selector = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 560.dp), shape = Corners.panel, tonalElevation = 6.dp) {
+            Column(Modifier.padding(vertical = 12.dp)) {
+                Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painterResource(R.drawable.ic_queue), null, Modifier.size(24.dp))
+                    Text("Queues", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.titleLarge)
                 }
+                LazyColumn(Modifier.weight(1f, fill = false).selectableGroup().padding(horizontal = 8.dp)) {
+                    itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { index, queue ->
+                        val chosen = queue.id == active?.id
+                        Surface(shape = Corners.card, color = if (chosen) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.padding(vertical = 2.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                ReorderHandle("Reorder " + queue.name) { controller?.moveQueue(queue.id, it) }
+                                Row(Modifier.weight(1f).selectable(chosen, role = Role.RadioButton,
+                                    onClick = { controller?.switchTo(queue.id); selector = false }).heightIn(min = 56.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    RadioButton(chosen, null, Modifier.size(32.dp))
+                                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                                        Text("${index + 1}. ${queue.name}", maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        if (queue.id == state.library.activeId) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                                ActionIcon(R.drawable.ic_edit, "Rename " + queue.name) { renameId = queue.id }
+                                ActionIcon(R.drawable.ic_close, "Delete " + queue.name) { deleting = setOf(queue.id) }
+                            }
+                        }
+                    }
+                }
+                TextButton(enabled = state.library.queues.size > 1, onClick = {
+                    deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet()
+                }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("Remove all other queues") }
             }
         }
     }
