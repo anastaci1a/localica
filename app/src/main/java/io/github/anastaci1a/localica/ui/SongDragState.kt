@@ -175,6 +175,7 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
         val held = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.changes.count { it.pressed } > 1) return@withTimeoutOrNull false
                 val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull false
                 if (!change.pressed || change.isConsumed || (change.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull false
             }
