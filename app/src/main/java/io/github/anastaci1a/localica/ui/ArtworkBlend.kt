@@ -31,7 +31,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
     val reduced = LocalReducedMotion.current
     val style = LocalArtworkTransition.current
     LaunchedEffect(target, immediate) {
-        if (immediate) {
+        if (immediate || target.contentKey != null && target.contentKey == incoming.contentKey) {
             frozen = null; outgoing = target; incoming = target
             progress.snapTo(1f)
         } else if (target != incoming) {
