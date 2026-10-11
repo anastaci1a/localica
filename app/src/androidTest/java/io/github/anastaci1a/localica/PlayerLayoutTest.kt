@@ -38,8 +38,8 @@ class PlayerLayoutTest {
         compose.onNodeWithContentDescription("Previous").assertIsDisplayed()
         compose.onNodeWithContentDescription("Play").assertIsDisplayed()
         compose.onNodeWithContentDescription("Next").assertIsDisplayed()
-        val artwork = compose.onNodeWithTag("player-artwork").fetchSemanticsNode().boundsInRoot
-        val title = compose.onNodeWithText(track.title).fetchSemanticsNode().boundsInRoot
+        val artwork = compose.onNodeWithTag("player-artwork", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals("Artwork clears the curved leading edge", artwork.width / 4, artwork.left - mini.left, 1f)
         assertEquals("Title keeps its gap from artwork", artwork.width / 6, title.left - artwork.right, 1f)
         compose.onNodeWithContentDescription("Library").performClick()

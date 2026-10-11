@@ -33,6 +33,7 @@ class LyricsInteractionTest {
             compose.onNodeWithTag("player-artwork").performClick()
             compose.onNodeWithTag("lyrics-panel").assertIsDisplayed()
             pressSystemBack()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("lyrics-panel").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("lyrics-panel").assertDoesNotExist()
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
             compose.onNodeWithTag("player-artwork").performTouchInput { longClick() }
@@ -42,6 +43,7 @@ class LyricsInteractionTest {
             compose.onNodeWithTag("player-artwork").performClick()
             compose.onNodeWithText("Close artwork").assertIsDisplayed()
             pressSystemBack()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Close artwork").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
         } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
     }
