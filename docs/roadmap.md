@@ -26,7 +26,11 @@ The v0.12.3 APK is available for device review, particularly the numbered queue 
 
 ## Next interaction checkpoint
 
-Verify and release v0.12.4: keep the viewport fixed when the insertion gap moves, preventing downward jumps during upward reordering. Cover single-song and disjoint-selection drags, upward edge scrolling, and cancellation before starting frosted glass.
+Verify and release v0.13.0: stabilize drag-stack motion and upward edge scrolling before frosted glass; clear mutable-list selection on Back or a completed move. Include prompt local song starts, configurable Previous behavior, quiet lyrics, and consistent queue titles/actions. Verify playback persistence, cancellation, paused transport, and Android 8/16 behavior.
+
+## Player action customization
+
+After the interaction checkpoint, replace the action reorder list with a slot preview and scrollable icon palette based on all six Poweramp customization references. Centered uses balanced fixed slots; non-centered uses a horizontal slot carousel. Two rows and Small change slot capacity. Open the editor by holding an empty slot or through Settings; if every visible slot is filled, use Settings. Preserve empty positions and hidden assignments, support direct smooth drag/drop with haptics, and retain accessible alternatives and clear action-state icons. Verify this before applying glass materials.
 
 ## Visual design system
 
