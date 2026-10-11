@@ -22,11 +22,11 @@ Library filters and All’s collection types are configurable. Songs retain firs
 
 ## Device review
 
-Review the v0.12.0 APK on the user's device before advancing, particularly filter customization, mixed collection sorting, and playback counts, alongside the existing gesture/artwork/scanner feedback. Address regressions in small verified releases before applying glass materials.
+Review the v0.12.1 APK on the user's device before advancing, particularly the numbered queue UI, scoped search history, global playback modes, gallery column counts, and player gestures/artwork, alongside collection sorting and playback counts. Address regressions in small verified releases before applying glass materials.
 
 ## Visual design system
 
-Apply the Apple Music-inspired liquid-glass presentation to the established layout and interactions after the functional foundation is proven. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
+Start with the queue after the current interface release is reviewed: replace its floating player pill with a bottom-attached frosted drawer, preserving the Musicolet-based queue controls. Use one continuous material from collapsed to expanded, eliminating the white-panel flash. Transmit the actual player behind the surface with soft scattering, subtle non-repeating grain, restrained directional light and edge highlights; keep text crisp. Establish a reusable backdrop/material boundary before extending Apple Music-inspired liquid glass elsewhere. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
 
 ## Subsequent functionality
 
