@@ -5,6 +5,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -28,6 +30,9 @@ internal class SongDrag(val original: List<BrowserItem>, val moving: List<Browse
     var dropping by mutableStateOf(false)
     var dropItems by mutableStateOf<List<BrowserItem>?>(null)
     var destinations by mutableStateOf<Map<String, Rect>?>(null)
+    var returnFrom by mutableStateOf<Map<String, Rect>?>(null)
+    val landing = Animatable(0f)
+    val handoff = Animatable(0f)
     fun ordered() = remaining.take(insertion) + moving + remaining.drop(insertion)
 }
 
@@ -136,20 +141,23 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
             else commit(d.keys, d.remaining.getOrNull(d.insertion)?.key) { result.complete(it) }
             withFrameNanos { }; withFrameNanos { }
             d.destinations = bounds()
-            delay(if (reducedMotion) 0 else 380)
+            d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
             val saved = if (cancel) false else withTimeoutOrNull(5000) { result.await() } == true
             if (!saved && !cancel) {
+                d.returnFrom = d.destinations
+                d.landing.snapTo(0f)
                 d.dropItems = items
                 withFrameNanos { }; withFrameNanos { }
                 d.destinations = bounds()
-                delay(if (reducedMotion) 0 else 380)
+                d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
             }
             if (saved && items.map { it.key } != expected.map { it.key }) {
                 optimisticBase = items.map { it.key }
                 optimistic = expected
             }
-            if (drag === d) drag = null
             if (saved) onMoved()
+            d.handoff.animateTo(1f, tween(if (reducedMotion) 0 else 220))
+            if (drag === d) drag = null
         }
     }
 }

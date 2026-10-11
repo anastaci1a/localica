@@ -38,6 +38,19 @@ class PlayerGestureTest {
         compose.onRoot().performTouchInput { advanceEventTime(600); up() }
         compose.mainClock.autoAdvance = true
         compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
+        // Once the body begins opening Queue, reversing cannot dismiss the player.
+        compose.onNodeWithTag("player-surface").performTouchInput {
+            down(Offset(8f, centerY)); moveBy(Offset(0f, -100f), delayMillis = 120)
+            moveBy(Offset(0f, 180f), delayMillis = 120); up()
+        }
+        compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
+        // A short fast flick starting on the drawer also opens it.
+        compose.onNodeWithContentDescription("Open queue").performTouchInput {
+            swipe(Offset(centerX, centerY), Offset(centerX, centerY - 85f), durationMillis = 60)
+        }
+        compose.onNodeWithContentDescription("Queue actions").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close queue").performClick()
+
         val full = art.fetchSemanticsNode().boundsInRoot
         assertTrue(full.top < middle.top && full.width > middle.width)
         compose.onNodeWithTag("player-surface").performTouchInput {

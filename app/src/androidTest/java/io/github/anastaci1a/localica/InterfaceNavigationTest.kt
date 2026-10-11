@@ -20,7 +20,7 @@ class InterfaceNavigationTest {
     @get:Rule val compose = createComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val track = Track("missing", "Evening", artist = "Artist", albumArtist = "Album artist", album = "Seasons",
-        fileName = "evening.mp3", relativePath = "evening.mp3")
+        fileName = "evening.mp3", relativePath = "evening.mp3", locations = listOf(TrackLocation("tree", "missing", "evening.mp3")))
     private val library = LibraryUiState(LibrarySnapshot(listOf(FolderSelection("tree", "Music")), listOf(track)), loading = false)
     private fun back() { pressSystemBack(); compose.waitForIdle() }
     @Before fun reset() { context.getSharedPreferences("interface", 0).edit().clear().commit() }
@@ -82,4 +82,34 @@ class InterfaceNavigationTest {
         InterfacePreferences(context).write(InterfaceSettings(tabs = MainTab.entries, reducedMotion = true))
         assertEquals(MainTab.entries, InterfacePreferences(context).read().tabs)
     }
+    @Test fun queueInformationNavigatesOutToAlbumAndPreservesPlayback() = queueLink("Go to album", "Seasons")
+    @Test fun queueInformationNavigatesOutToArtist() = queueLink("Go to artist", "Artist")
+    @Test fun queueInformationNavigatesOutToAlbumArtist() = queueLink("Go to Album Artist", "Album artist")
+    @Test fun queueInformationNavigatesOutToFolder() = queueLink("Go to folder", "Music")
+    @Test fun queueTabInformationNavigatesOutToAlbum() = queueLink("Go to album", "Seasons", true)
+
+    private fun queueLink(action: String, destination: String, queueTab: Boolean = false) {
+        if (queueTab) InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Queues), reducedMotion = true))
+        var playbackActions = 0
+        val queue = QueueEdits.create(listOf(track), 0, "Evening")
+        compose.setContent { LocalicaTheme { LocalicaScreen(library,
+            PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title),
+            {}, {}, {}, {}, { playbackActions++ }, { playbackActions++ },
+            queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false),
+            onPrevious = { playbackActions++ }, onNext = { playbackActions++ }) } }
+        if (!queueTab) {
+            compose.onNodeWithTag("player-surface").performClick()
+            compose.onNodeWithContentDescription("Open queue").performClick()
+        }
+        compose.onNodeWithContentDescription("Actions for Evening").performClick()
+        compose.onNodeWithText("Information").performClick()
+        compose.onNodeWithText(action).performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("media-" + track.id).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Collapse player").assertDoesNotExist()
+        compose.onAllNodesWithText(destination).onFirst().assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, playbackActions) }
+        compose.onNodeWithTag("media-" + track.id).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+    }
+
 }

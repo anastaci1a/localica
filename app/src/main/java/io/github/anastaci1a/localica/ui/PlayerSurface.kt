@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
@@ -69,8 +70,12 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         tween(settings.motionDuration(400)), label = "Artwork layout")
     var startExpanded by remember { mutableStateOf(expanded) }
     var startProgress by remember { mutableFloatStateOf(progress.value) }
+    var startQueueProgress by remember { mutableFloatStateOf(0f) }
     var movement by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
+    var owner by remember { mutableStateOf(VerticalOwner.Undecided) }
+    var sourcesRequest by remember { mutableIntStateOf(0) }
+    LaunchedEffect(lyricsOpen) { if (!lyricsOpen) sourcesRequest = 0 }
     var viewing by remember { mutableStateOf(false) }
     var artworkMenu by remember { mutableStateOf(false) }
     var configureTap by remember { mutableStateOf(false) }
@@ -89,33 +94,35 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         scope.launch { progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400))) }
     }
     val dragState = rememberDraggableState { delta ->
+        if (owner == VerticalOwner.Undecided) owner = if (startExpanded && (delta < 0f || startQueueProgress > 0f)) VerticalOwner.Queue else VerticalOwner.Player
         movement += delta
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            progress.snapTo((startProgress - movement / distance).coerceIn(0f, 1f))
-            if (startExpanded) queueProgress?.snapTo((-movement / distance).coerceIn(0f, 1f))
+            if (owner == VerticalOwner.Queue) {
+                progress.snapTo(1f)
+                queueProgress?.snapTo((startQueueProgress - movement / distance).coerceIn(0f, 1f))
+            } else progress.snapTo((startProgress - movement / distance).coerceIn(0f, 1f))
         }
     }
     val drag = Modifier.draggable(dragState, Orientation.Vertical,
-        onDragStarted = { startExpanded = expanded; startProgress = progress.value; movement = 0f; dragging = true; progress.stop() },
+        onDragStarted = { startExpanded = expanded; startProgress = progress.value; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f
+            owner = VerticalOwner.Undecided; dragging = true; progress.stop(); queueProgress?.stop() },
         onDragStopped = { velocity ->
             dragging = false
-            val threshold = with(density) { 48.dp.toPx() }
-            if (startExpanded && (movement < -threshold || velocity < -with(density) { 300.dp.toPx() })) { settle(true); onQueue() }
-            else {
-            scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }
-            settle(when {
-                velocity < -900f -> true
-                velocity > with(density) { 300.dp.toPx() } -> false
-                !startExpanded && movement < -threshold -> true
-                startExpanded && movement > threshold -> false
-                else -> progress.value >= 0.5f
-            })
-            }
+            val travelDp = -movement / density.density
+            val velocityDp = -velocity / density.density
+            if (owner == VerticalOwner.Queue) {
+                settle(true)
+                val open = settleOpen(travelDp, velocityDp, queueProgress?.value ?: 0f, startQueueProgress < .5f)
+                if (open) onQueue()
+                else scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }
+            } else settle(settleOpen(travelDp, velocityDp, progress.value, !startExpanded,
+                velocityThreshold = if (startExpanded) 400f else 450f,
+                distanceThreshold = if (startExpanded) 72f else 48f))
         })
     // Resolve the full-cover feather and its color continuation together before the cover
     // separates from the screen edges. The wash must not turn into a second miniature cover.
     val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)
-    val coverBlend = backgroundProgress * (1f - lyricProgress) * reveal * reveal * (3f - 2f * reveal)
+    val coverBlend = backgroundProgress * reveal * reveal * (3f - 2f * reveal)
     val surfaceWidth = windowWidth - 24.dp * (1f - p)
     val extraActions = 48.dp * (actionRows - 1)
     val virtualHeight = maxHeight.coerceAtLeast(560.dp + statusInset + navigationInset + extraActions)
@@ -129,8 +136,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artX = 12.dp + ((windowWidth - fullArt) / 2 - 12.dp) * p
     val fullArtY = statusInset + 52.dp + (floatingArt - fullArtHeight) / 2
     val artY = 8.dp + (fullArtY - 8.dp) * p - 24.dp * lyricProgress
-    val ordinarySeekY = statusInset + 52.dp + floatingArt + 8.dp
+    val oldMetadataY = statusInset + 52.dp + floatingArt + 8.dp
     val lyricSeekY = virtualHeight - navigationInset - 280.dp
+    val latestMetadataY = virtualHeight - navigationInset - 368.dp - extraActions
+    val ordinarySeekY = (oldMetadataY + (lyricSeekY - oldMetadataY) * .5f)
+        .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
     val metadataY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
     val titleY = 10.dp + (metadataY - 10.dp) * p
     val subtitleY = 34.dp + (metadataY + 34.dp - 34.dp) * p
@@ -142,6 +152,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val fullControlsReveal = smoothReveal((p - .8f) / .2f)
     val contentInset = 32.dp
     val contentWidth = windowWidth - contentInset * 2
+    val transportWidth = minOf(contentWidth, 280.dp)
     val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
     val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
     val textX = 68.dp + (contentInset - 68.dp) * p
@@ -163,7 +174,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
             if (p > 0f) ArtworkBlend(artwork, Modifier.fillMaxSize().graphicsLayer { alpha = p }.recordFrostedBackdrop(lyricBackdrop),
                 duration = paletteDuration) { frame ->
-                PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), coverBlend,
+                PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), coverBlend * (1f - lyricProgress),
                     with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                     with(density) { artX.toPx() }, with(density) { artWidth.toPx() })
             }
@@ -195,16 +206,21 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     ActionMenuItem("Configure tap action", onClick = { artworkMenu = false; configureTap = true })
                 }
             }
-            if (p > 0f) Row(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = p },
-                verticalAlignment = Alignment.CenterVertically) {
-                ActionIcon(R.drawable.ic_down, "Collapse player") { settle(false) }
-                Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                ActionIcon(R.drawable.ic_lyrics, if (lyricsOpen) "Hide lyrics" else "Show lyrics") { onLyrics(!lyricsOpen) }
+            if (p > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = p }) {
+                Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
+                    .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { settle(false) }
+                    .semantics { contentDescription = "Collapse player" }) {
+                    Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp)
+                        .background(Color.White.copy(alpha = .42f), RoundedCornerShape(2.dp)))
+                }
+                if (lyricProgress > 0f) Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp).graphicsLayer { alpha = lyricProgress }) {
+                    ActionIcon(R.drawable.ic_lyrics, "Lyrics sources") { sourcesRequest++ }
+                }
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
                     .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
-                    .graphicsLayer { alpha = lyricProgress * p }) }
+                    .graphicsLayer { alpha = lyricProgress * p }, sourcesRequest = sourcesRequest) }
             val titleScale = MaterialTheme.typography.titleSmall.fontSize.value / MaterialTheme.typography.headlineSmall.fontSize.value
             val subtitleScale = MaterialTheme.typography.bodySmall.fontSize.value / MaterialTheme.typography.bodyLarge.fontSize.value
             MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f),
@@ -223,10 +239,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             if (fullControlsReveal > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth).graphicsLayer { alpha = fullControlsReveal }) {
                 var seeking by remember(state.trackUri) { mutableStateOf<Float?>(null) }
                 val duration = (state.durationMs ?: 0).coerceAtLeast(1).toFloat()
-                Slider((seeking ?: state.positionMs.toFloat()).coerceIn(0f, duration), { seeking = it },
+                PlayerSeekBar((seeking ?: state.positionMs.toFloat()).coerceIn(0f, duration), { seeking = it },
                     valueRange = 0f..duration, onValueChangeFinished = { seeking?.let { onSeek(it.toLong()) }; seeking = null },
-                    colors = SliderDefaults.colors(activeTrackColor = Color.White, thumbColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.22f), inactiveTickColor = Color.Transparent),
                     enabled = state.connected && (state.durationMs ?: 0) > 0,
                     modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = "Seek" })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -237,9 +251,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             if (fullControlsReveal > 0f && lyricProgress < 1f) Box(Modifier.offset(x = contentInset, y = ordinarySeekY + 128.dp + 32.dp * lyricProgress)
                 .width(contentWidth).height(48.dp * actionRows).graphicsLayer { alpha = fullControlsReveal * (1f - lyricProgress) }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
-            Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - 176.dp) / 2) * transportMotion,
+            Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,
                 y = 8.dp + (normalTransport + (lyricTransport - normalTransport) * lyricProgress - 8.dp) * transportMotion),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp * transportMotion)) {
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((transportWidth - 160.dp) / 2 * transportMotion)) {
                 IconButton(onPrevious, Modifier.size(48.dp), enabled = state.connected) {
                     Icon(painterResource(R.drawable.ic_previous), "Previous", Modifier.size(24.dp + 10.dp * transportMotion), tint = foreground)
                 }

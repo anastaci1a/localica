@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-[v0.15.0](https://github.com/anastaci1a/localica/releases/tag/v0.15.0) is under device review. App development is paused for feedback. Current contracts live in [Product](product.md) and [Interface](interface.md); release history belongs in [GitHub Releases](https://github.com/anastaci1a/localica/releases).
+Implement device feedback in v0.15.1 (gesture ownership, player layout, selection transitions and navigation), then v0.16.0 (shared Liquid Glass controls and neutral accents). Pause after both verified APKs for device review. Current contracts live in [Product](product.md) and [Interface](interface.md); release history belongs in [GitHub Releases](https://github.com/anastaci1a/localica/releases).
 
 ## Next outcome
 

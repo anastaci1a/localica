@@ -74,7 +74,7 @@ class PlayerLayoutTest {
             assertTrue("Metadata precedes the slider", compose.onNodeWithTag("player-title").fetchSemanticsNode().boundsInRoot.bottom <
                 compose.onNodeWithContentDescription("Seek").fetchSemanticsNode().boundsInRoot.top)
             val before = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
-            compose.onNodeWithContentDescription("Show lyrics").performClick()
+            compose.onNodeWithTag("player-artwork").performClick()
             val lines = compose.onNodeWithTag("lyrics-panel").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             val controls = compose.onNodeWithContentDescription("Play").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             assertTrue("Lyrics should use the upper screen", lines.height > player.height * 0.35f)

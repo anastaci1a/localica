@@ -174,6 +174,15 @@ class DragReorderTest {
         assertEquals(playlist, controller.state.value.playlists.single())
         compose.runOnIdle { assertEquals(listOf(id), selection.entries.map { it.row.id }) }
     }
+    @Test fun releasingAtOriginalPositionFinishesSelection() = fixture { controller, playlist ->
+        val id = playlist.entries[1].id
+        compose.onNodeWithTag("media-$id").performTouchInput {
+            down(center); advanceEventTime(650); moveBy(Offset(70f, 0f)); advanceEventTime(32); up()
+        }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
+        assertEquals(playlist.entries, controller.state.value.playlists.single().entries)
+        compose.runOnIdle { assertFalse(selection.active); assertTrue(selection.entries.isEmpty()) }
+    }
     @Test fun canceledDragKeepsOrderAndSelection() = fixture { controller, playlist ->
         val id = playlist.entries[1].id
         compose.onNodeWithTag("media-$id").performTouchInput {

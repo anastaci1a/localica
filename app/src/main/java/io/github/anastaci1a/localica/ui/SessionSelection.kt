@@ -37,12 +37,14 @@ internal val LocalSessionSelection = staticCompositionLocalOf<SessionSelection?>
 internal fun SessionSelectionPanel(session: SessionSelection, queues: io.github.anastaci1a.localica.queue.QueueController?,
     playlists: io.github.anastaci1a.localica.playlist.PlaylistController?,
     playlistState: io.github.anastaci1a.localica.playlist.PlaylistState) {
-    if (!session.active) return
+    var retained by remember { mutableStateOf(session.entries.toList()) }
+    if (session.active) SideEffect { retained = session.entries.toList() }
+    val entries = if (session.active) session.entries.toList() else retained
     if (session.collapsed) androidx.compose.material3.TextButton(onClick = { session.collapsed = false }) {
         androidx.compose.material3.Text("Selection: " + session.entries.size)
     } else {
-        val rows = session.entries.map { it.row.copy(id = it.id) }
-        val source = session.entries.map { it.source }.distinct().singleOrNull()
+        val rows = entries.map { it.row.copy(id = it.id) }
+        val source = entries.map { it.source }.distinct().singleOrNull()
         val remove: (((Boolean) -> Unit) -> Unit)? = when {
             source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Playlist -> ({ complete ->
                 playlists?.removeEntries(source.id, session.entries.map { it.row.id }.toSet(), complete) })
@@ -55,4 +57,15 @@ internal fun SessionSelectionPanel(session: SessionSelection, queues: io.github.
             onAll = { session.select(session.source, session.visible) }, onRange = session::range,
             onCollapse = { session.collapsed = true })
     }
+}
+
+@Composable
+internal fun SelectionPanelVisibility(visible: Boolean, modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
+    reducedMotion: Boolean = false, content: @Composable () -> Unit) {
+    val duration = if (reducedMotion) 0 else 220
+    androidx.compose.animation.AnimatedVisibility(visible, modifier,
+        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(duration)) +
+            androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(duration)) { it / 2 },
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(duration)) +
+            androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(duration)) { it / 2 }) { content() }
 }
