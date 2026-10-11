@@ -70,13 +70,14 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop): Modifier =
  * Only the scene is filtered; controls and text are drawn afterwards at full resolution. */
 @Composable
 internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corners.panel,
-    source: FrostedBackdrop? = LocalFrostedBackdrop.current, content: @Composable BoxScope.() -> Unit) {
+    source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
+    tint: Color = Color.Transparent, content: @Composable BoxScope.() -> Unit) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     val dark = source != null
     val base = if (dark) Color(0xFF18212C) else MaterialTheme.colorScheme.surface
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
     val grain = remember { frostGrain }
-    Box(modifier.shadow(8.dp, shape, clip = false).clip(shape)
+    Box(modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false).clip(shape)
         .onGloballyPositioned { origin = it.positionInRoot() }
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) .38f else .8f),
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
@@ -90,7 +91,8 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             }
         }
         Canvas(Modifier.matchParentSize()) {
-            drawRect(base.copy(alpha = if (dark) .64f else .91f))
+            drawRect(base.copy(alpha = if (dark) { if (compact) .26f else .64f } else { if (compact) .65f else .91f }))
+            drawRect(tint)
             drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .075f), Color.Transparent),
                 center = Offset(size.width * .12f, 0f), radius = maxOf(size.width, size.height) * .9f))
             drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .055f), Color.Transparent, Color.Black.copy(alpha = .08f))))

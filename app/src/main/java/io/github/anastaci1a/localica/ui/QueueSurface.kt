@@ -49,9 +49,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         scope.launch { progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400))) }
     }
     val currentSettle by rememberUpdatedState<(Boolean) -> Unit>(::settle)
-    val dismissDistance = with(density) { 72.dp.toPx() }
-    val dismissVelocity = with(density) { 300.dp.toPx() }
-    val listPull = remember(progress, distance, dismissDistance, dismissVelocity) {
+    val listPull = remember(progress, distance, density.density) {
         object : NestedScrollConnection {
             var pulling = false
             var pulled = 0f
@@ -73,7 +71,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             override suspend fun onPreFling(available: Velocity): Velocity {
                 if (!pulling) return Velocity.Zero
                 pulling = false
-                currentSettle(!(pulled >= dismissDistance || available.y >= dismissVelocity))
+                currentSettle(settleOpen(-pulled / density.density, -available.y / density.density,
+                    progress.value, opening = false))
                 pulled = 0f
                 return Velocity(0f, available.y)
             }
@@ -91,7 +90,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             delta += dy
             scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo((start - delta / distance).coerceIn(0f, 1f)) }
         }, Orientation.Vertical, onDragStarted = { progress.stop(); start = progress.value; delta = 0f },
-            onDragStopped = { velocity -> settle(if (velocity > with(density) { 300.dp.toPx() }) false else progress.value >= 0.5f) })
+            onDragStopped = { velocity -> settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f)) })
         .nestedScroll(listPull).testTag("queue-surface"), shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(64.dp).clickable(onClickLabel = if (p == 0f) "Open queue" else "Close queue") { settle(p < .5f) }

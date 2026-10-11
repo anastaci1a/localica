@@ -204,7 +204,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
             val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
-            if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (loadedResult == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters) filterHeight + 8.dp else if (showSearchPill) 56.dp else 0.dp).testTag("browse-loading"))
             else LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize().then(if (showSearchPill || showFilters) Modifier.listTopFade() else Modifier).testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
@@ -224,12 +224,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         return@items
                     }
                     val item = entry
-                    val current = item.row != null && if (playingEntryId != null) item.row.id == playingEntryId else item.row.track.id == playingTrackId
+                    val current = route.collection?.kind == MediaKind.Queue && item.row != null && item.row.id == playingEntryId
                     val selectedCount = if (item.row != null) { if (session.contains(route.collection, item.row.id)) 1 else 0 }
                         else item.songs.count { it.track.id in selectedTracks }
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
                     Column(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
-                        .graphicsLayer { alpha = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) 0f else 1f }) {
+                        .graphicsLayer { alpha = reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f }) {
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
                                 if (showButton) ActionIcon(R.drawable.ic_more, "Actions for " + item.title) { contextMenu = item.key }
@@ -319,7 +319,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
                 exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
-                ReturnToPositionButton(up = (playingIndex ?: 0) < gridState.firstVisibleItemIndex, label = "Current song") {
+                ReturnToPositionButton(up = (playingIndex ?: 0) < gridState.firstVisibleItemIndex, label = "Current song", visible = showCurrent && !session.active && reorder.drag == null) {
                     playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, if (showSearchPill) with(density) { 56.dp.toPx() } else 0f) } }
                 }
             }
@@ -355,7 +355,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
         BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab)).items
-            .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let(onOpen)
+            .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
     } }
     if (sorting) BrowseSortDialog(route, style, preferences.overridden(route), onSortDismiss, { value, override ->
         preferences.write(route, value, override); style = value

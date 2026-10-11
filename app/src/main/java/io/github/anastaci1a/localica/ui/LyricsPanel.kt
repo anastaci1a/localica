@@ -29,7 +29,7 @@ import io.github.anastaci1a.localica.lyrics.*
 
 @Composable
 internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier, sourcesRequest: Int = 0) {
     val context = LocalContext.current
     val repository = remember(context) { (context.applicationContext as? LocalicaApplication)?.lyrics ?: LyricsRepository(context) }
     val revision by ArtworkCache.revision.collectAsState()
@@ -41,11 +41,11 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     var chosen by rememberSaveable(track?.id) { mutableStateOf(preferences.getString(track?.id ?: "", null)) }
     val source = result?.sources?.firstOrNull { it.id == chosen } ?: result?.sources?.firstOrNull()
     var sourcesOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(sourcesRequest) { if (sourcesRequest > 0) sourcesOpen = true }
     Column(modifier.testTag("lyrics-panel")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
             if (source != null) Box {
-                TextButton(onClick = { sourcesOpen = true }) { Text("Sources") }
                 DropdownMenu(sourcesOpen, { sourcesOpen = false }) {
                     result?.sources?.forEach { item -> DropdownMenuItem(text = {
                         Text(item.label + if (item.document.synced) " · synced" else "")
@@ -115,7 +115,7 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                     androidx.compose.animation.slideOutVertically(tween(if (reducedMotion) 0 else 300)) { it }) {
                 val current = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == active }
                 ReturnToPositionButton(up = current?.let { it.offset < 0 } ?: (active < list.firstVisibleItemIndex),
-                    label = "Return to current line") { following = true }
+                    label = "Return to current line", visible = !following) { following = true }
             }
         }
     }

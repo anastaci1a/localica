@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -84,7 +85,6 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
     cards.reversed().forEach { (index, item) -> key(drag, item.key) {
         val destination = drag.destinations?.get(item.key)
         fun stackTarget() = homePosition() + Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2))
-        val position = remember { Animatable(drag.initialBounds[item.key]?.topLeft ?: homePosition(), Offset.VectorConverter) }
         val liftOffset = remember { Animatable((drag.initialBounds[item.key]?.topLeft ?: stackTarget()) - stackTarget(), Offset.VectorConverter) }
         LaunchedEffect(drag, reducedMotion) {
             if (reducedMotion) liftOffset.snapTo(Offset.Zero) else liftOffset.animateTo(Offset.Zero, tween(240))
@@ -93,24 +93,18 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         // frames should rebuild artwork/text or measure the card tree.
         fun heldPosition() = (if (index == 0 || reducedMotion) homePosition() else followers[(index - 1).coerceAtMost(1)]) +
             Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2)) + liftOffset.value
-        fun displayed() = if (!drag.dropping) heldPosition() else position.value
-        val cardWidth = remember { Animatable(drag.initialBounds[item.key]?.width ?: stackWidth) }
-        LaunchedEffect(destination?.width, reducedMotion) {
-            val targetWidth = destination?.width ?: stackWidth
-            if (reducedMotion) cardWidth.snapTo(targetWidth) else cardWidth.animateTo(targetWidth, tween(350))
+        val landingStart = remember(drag.dropping, destination, drag.returnFrom) {
+            drag.returnFrom?.get(item.key)?.topLeft ?: heldPosition()
         }
-        LaunchedEffect(drag.dropping, reducedMotion) {
-            if (drag.dropping) position.snapTo(heldPosition())
-        }
-        LaunchedEffect(destination, reducedMotion) {
-            if (destination == null) return@LaunchedEffect
-            if (reducedMotion) position.snapTo(destination.topLeft) else position.animateTo(destination.topLeft, tween(350))
-        }
+        fun displayed() = if (!drag.dropping) heldPosition() else destination?.let {
+            landingStart + (it.topLeft - landingStart) * drag.landing.value
+        } ?: landingStart
+        fun cardWidth() = stackWidth + ((destination?.width ?: stackWidth) - stackWidth) * drag.landing.value
         val alpha by animateFloatAsState(if (drag.destinations != null && destination == null) 0f else 1f,
             tween(if (reducedMotion) 0 else 300), label = "Song landing")
         Surface(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
             .graphicsLayer { translationX = displayed().x; translationY = displayed().y }
-            .width(with(density) { cardWidth.value.toDp() }).height(height).graphicsLayer { this.alpha = alpha }
+            .width(with(density) { cardWidth().toDp() }).height(height).graphicsLayer { this.alpha = alpha * (1f - drag.handoff.value) }
             .testTag(if (index == 0) "drag-stack" else "drag-card-${item.key}"),
             shape = Corners.card, color = if (index == 0) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.secondaryContainer,
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))) {
@@ -135,12 +129,12 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         }
     } }
     if (!drag.dropping) {
-        val color by animateColorAsState(if (drag.overCancel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceContainerHigh,
+        val color by animateColorAsState(if (drag.overCancel) MaterialTheme.colorScheme.error.copy(alpha = .7f) else Color.Transparent,
             tween(if (reducedMotion) 0 else 160), label = "Cancel target")
-        Surface(Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() }).size(60.dp).zIndex(10f)
+        FrostedSurface(Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() }).size(60.dp).zIndex(10f)
             .testTag("cancel-drag").semantics { contentDescription = "Release to cancel move"; stateDescription = if (drag.overCancel) "Cancel move" else "Drag here to cancel" },
-            shape = CircleShape, color = color, shadowElevation = 12.dp) {
-            Box(contentAlignment = Alignment.Center) {
+            shape = CircleShape, compact = true, tint = color) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_close), null,
                     Modifier.size(26.dp), tint = if (drag.overCancel) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurface)
             }

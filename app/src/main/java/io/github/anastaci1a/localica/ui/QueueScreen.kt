@@ -36,7 +36,7 @@ import io.github.anastaci1a.localica.library.SongListView
 fun QueueScreen(state: QueueUiState, controller: QueueController?, library: LibraryUiState = LibraryUiState(loading = false),
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
-    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false) {
+    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}) {
     var selector by remember { mutableStateOf(false) }
     var renameId by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Set<String>?>(null) }
@@ -59,7 +59,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     val route = browsing.route
     BackHandler(browsing.stacks.getValue(MainTab.Queues).size > 1) { browsing.back(false)?.let { browsing = it } }
     rememberSaveableStateHolder().SaveableStateProvider(route.key) {
-        BrowserScreen(library, playlists, route, { browsing = browsing.update(it) }, {}, {}, { rows, index, _ ->
+        BrowserScreen(library, playlists, route, { browsing = browsing.update(it) }, onOpen, {}, { rows, index, _ ->
             rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
         }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
             playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId, header = {
