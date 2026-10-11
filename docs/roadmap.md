@@ -24,6 +24,10 @@ Library filters and All’s collection types are configurable. Songs retain firs
 
 Review the v0.12.1 APK on the user's device before advancing, particularly the numbered queue UI, scoped search history, global playback modes, gallery column counts, and player gestures/artwork, alongside collection sorting and playback counts. Address regressions in small verified releases before applying glass materials.
 
+## Next interaction checkpoint
+
+Before frosted glass, stabilize upward reordering in queues and playlists: eliminate stutter and sporadic downward viewport jumps for single-song and multi-song drags, including edge scrolling and the insertion gap.
+
 ## Visual design system
 
 Start with the queue after the current interface release is reviewed: replace its floating player pill with a bottom-attached frosted drawer, preserving the Musicolet-based queue controls. Use one continuous material from collapsed to expanded, eliminating the white-panel flash. Transmit the actual player behind the surface with soft scattering, subtle non-repeating grain, restrained directional light and edge highlights; keep text crisp. Establish a reusable backdrop/material boundary before extending Apple Music-inspired liquid glass elsewhere. Test accessibility, frame performance, and fallbacks across supported Android versions. Keep the design system in this repository initially; consider extraction only after demonstrated reuse.
