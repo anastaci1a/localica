@@ -46,10 +46,11 @@ class TagEditorFlowTest {
         compose.waitUntil(10000) { compose.onAllNodesWithText("Retrace tab history").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
-        compose.waitUntil(15000) { compose.onAllNodesWithText("Morning tone").fetchSemanticsNodes().isNotEmpty() }
+        val inList = hasAnyAncestor(hasTestTag("browser-list"))
+        compose.waitUntil(15000) { compose.onAllNodes(hasText("Morning tone") and inList).fetchSemanticsNodes().isNotEmpty() }
         val original = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
         try {
-            compose.onNodeWithText("Morning tone").performTouchInput { longClick() }
+            compose.onNode(hasText("Morning tone") and inList).performTouchInput { longClick() }
             compose.onNodeWithText("Edit tags").performClick()
             compose.onNode(hasSetTextAction() and hasText("Morning tone")).performScrollTo().performTextReplacement("Retagged tone")
             compose.onNodeWithText("Grant write access: root").performScrollTo().performClick()
@@ -60,7 +61,7 @@ class TagEditorFlowTest {
             assertTrue(app.tagEditing.state.value.results.toString(), app.tagEditing.state.value.results.single().saved)
             assertEquals("Retagged tone", runBlocking { AndroidDocuments(context).metadata(uri.toString()).title })
             compose.onNodeWithText("Close editor").performClick()
-            compose.onNodeWithText("Retagged tone").assertIsDisplayed()
+            compose.onNode(hasText("Retagged tone") and inList).assertIsDisplayed()
             compose.onAllNodes(isToggleable() and hasAnyAncestor(hasTestTag("browser-list"))).assertCountEquals(0)
         } finally {
             context.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(original) }

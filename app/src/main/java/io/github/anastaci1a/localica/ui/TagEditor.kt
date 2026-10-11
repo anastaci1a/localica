@@ -17,8 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import io.github.anastaci1a.localica.editing.*
 import io.github.anastaci1a.localica.library.Track
 import org.json.JSONObject
@@ -31,7 +29,7 @@ internal fun TagEditorHost(controller: TagEditingController, content: @Composabl
     CompositionLocalProvider(LocalTagEdit provides controller::open) { content() }
     if (state.tracks.isNotEmpty()) TagEditorDialog(state, controller)
     var recoveryDismissed by remember(state.recovery) { mutableStateOf(false) }
-    if (state.recovery != null && !recoveryDismissed && state.tracks.isEmpty()) AlertDialog(
+    if (state.recovery != null && !recoveryDismissed && state.tracks.isEmpty()) GlassAlertDialog(
         onDismissRequest = { recoveryDismissed = true }, title = { Text("Interrupted tag edit") },
         text = { Column { Text("An original copy of ${state.recovery} is retained. Restore it to undo the interrupted edit. You can also recover from Settings.")
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) } } },
@@ -44,7 +42,7 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
     val state by controller.state.collectAsState()
     var confirming by remember { mutableStateOf(false) }
     if (state.recovery != null) TextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
-    if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Restore original file?") },
+    if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Restore original file?") },
         text = { Text("This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
         confirmButton = { TextButton(onClick = { confirming = false; controller.recover() }) { Text("Restore original") } },
         dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
@@ -80,8 +78,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
     }
     fun patch() = TagPatch(changed.associate { name -> EditField.valueOf(name) to JSONObject(values).getString(name) },
         if (removeImage) ArtworkChange.Remove else cover?.let { ArtworkChange.Replace(it) } ?: ArtworkChange.Keep)
-    Dialog(onDismissRequest = { if (!state.busy) controller.close() }, properties = DialogProperties(usePlatformDefaultWidth = false,
-        dismissOnBackPress = !state.busy, dismissOnClickOutside = !state.busy)) {
+    GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Page) {
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -102,7 +99,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                         TextButton(onClick = { viewing = true }) { Text("View current artwork") }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(removeImage, { removeImage = it; if (it) imageUri = null }, enabled = !state.busy)
+                        InterfaceCheckbox(removeImage, { removeImage = it; if (it) imageUri = null }, enabled = !state.busy)
                         Text("Remove artwork from selected songs")
                     }
                     if (imageUri != null || removeImage) TextButton(enabled = !state.busy,
@@ -111,7 +108,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                     EditField.entries.forEach { field ->
                         val common = state.tracks.map(field::value).distinct().size == 1
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name }, enabled = !state.busy)
+                            InterfaceCheckbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name }, enabled = !state.busy)
                             OutlinedTextField(JSONObject(values).getString(field.name), { text ->
                                 values = JSONObject(values).put(field.name, text).toString()
                                 if (field.name !in changed) changed = changed + field.name
@@ -141,7 +138,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
     }
     if (choosing) ImageChooser({ choosing = false }) { imageUri = it; removeImage = false; choosing = false }
     if (viewing) ArtworkViewer(state.tracks.first().uri) { viewing = false }
-    if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Save changes to ${state.tracks.size} files?") },
+    if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Save changes to ${state.tracks.size} files?") },
         text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }
             if (removeImage) Text("Remove artwork") else if (cover != null) Text("Replace artwork")
             Text("Changes are written to the audio files. Playback pauses while editing a file in the active queue, then resumes after verification.") } },

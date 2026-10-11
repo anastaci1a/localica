@@ -2,7 +2,8 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -10,8 +11,14 @@ import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.navigation.MainTab
 
 @Composable
-internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    IconButton(onClick, Modifier.size(48.dp), enabled = enabled) {
+internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, anchor: GlassAnchor? = null,
+    glass: Boolean = true, onClick: () -> Unit) {
+    val source = LocalFrostedBackdrop.current
+    SideEffect { anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(24.dp)) } }
+    val modifier = Modifier.size(if (glass) CompactControlSize else 48.dp).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)
+    if (glass) LiquidGlassSurface(modifier.alpha(if (enabled) 1f else .38f), pressFeedback = enabled) {
+        IconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(resource), label, Modifier.size(24.dp)) }
+    } else IconButton(onClick, modifier, enabled = enabled) {
         Icon(painterResource(resource), label, Modifier.size(24.dp))
     }
 }
@@ -30,6 +37,11 @@ internal fun MainTab.icon() = when (this) {
 @Composable
 internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     val icon = when {
+        label.contains("Information", true) -> R.drawable.ic_info
+        label.startsWith("Delete") || label.startsWith("Remove") -> R.drawable.ic_trash
+        label.startsWith("Close") -> R.drawable.ic_close
+        label.startsWith("Save") -> R.drawable.ic_save
+        label.startsWith("Add to playlist") -> R.drawable.ic_playlist_add
         label.startsWith("Rename", true) || label.startsWith("Edit", true) -> R.drawable.ic_edit
         label.contains("playlist", true) -> R.drawable.ic_playlist
         label.contains("queue", true) -> R.drawable.ic_queue
@@ -39,7 +51,6 @@ internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () 
         label.contains("lyrics", true) -> R.drawable.ic_lyrics
         label.contains("select", true) || label.startsWith("Add") -> R.drawable.ic_plus
         label.startsWith("Pin") || label.startsWith("Unpin") -> R.drawable.ic_home
-        label.startsWith("Delete") || label.startsWith("Remove") || label.startsWith("Close") -> R.drawable.ic_close
         label.startsWith("Play") || label.startsWith("Insert") -> R.drawable.ic_play
         label.startsWith("Move") -> R.drawable.ic_drag
         label.contains("Settings", true) || label.contains("Configure", true) -> R.drawable.ic_settings

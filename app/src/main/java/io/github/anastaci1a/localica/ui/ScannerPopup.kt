@@ -47,7 +47,7 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
     val restricted = remember(revision) { Build.VERSION.SDK_INT >= 28 && context.getSystemService(ActivityManager::class.java).isBackgroundRestricted }
     var asked by remember { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { asked = true; revision++ }
-    AlertDialog(onDismissRequest = onDismiss, title = {
+    GlassAlertDialog(onDismissRequest = onDismiss, title = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Scan music", Modifier.weight(1f))
             ActionIcon(R.drawable.ic_settings, "Scanner configuration") { onSettings("Scanner configuration") }
@@ -73,7 +73,7 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
             SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs") { failuresOpen = true }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } })
-    if (backgroundHelp) AlertDialog(onDismissRequest = { backgroundHelp = false }, title = { Text("Background scanning") }, text = {
+    if (backgroundHelp) GlassAlertDialog(onDismissRequest = { backgroundHelp = false }, title = { Text("Background scanning") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!notifications) {
                 Text("Notifications are off. Scanning can continue, but its progress and Cancel button won’t appear in the notification drawer.")

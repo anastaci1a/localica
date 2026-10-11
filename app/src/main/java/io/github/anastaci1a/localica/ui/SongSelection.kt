@@ -58,11 +58,16 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
     var name by remember { mutableStateOf("") }
     var chosen by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Add ${tracks.size} songs to playlist") }, text = {
+    GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Add ${tracks.size} songs to playlist") }, text = {
         Column {
+            val pickerAnchor = rememberGlassAnchor()
+            val pickerLabel = state.playlists.firstOrNull { it.id == chosen }?.name ?: "New playlist"
+            SideEffect { pickerAnchor.face = { Text(pickerLabel, Modifier.padding(horizontal = 12.dp), maxLines = 1) } }
             Box {
-                TextButton(onClick = { expanded = true }) { Text(state.playlists.firstOrNull { it.id == chosen }?.name ?: "New playlist") }
-                DropdownMenu(expanded, { expanded = false }) {
+                LiquidGlassSurface(Modifier.glassAnchor(pickerAnchor)) {
+                    TextButton(onClick = { expanded = true }) { Text(pickerLabel) }
+                }
+                GlassMenu(expanded, pickerAnchor, { expanded = false }) {
                     DropdownMenuItem(text = { Text("New playlist") }, onClick = { chosen = null; expanded = false })
                     state.playlists.forEach { list ->
                         val contains = tracks.size == 1 && list.entries.any { it.track.id == tracks.single().id }

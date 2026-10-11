@@ -13,7 +13,7 @@ import io.github.anastaci1a.localica.library.Track
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> Unit, onAction: (PlayerAction) -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, shape = Corners.panel, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    GlassDialog(onDismiss, GlassPlacement.Sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AlbumArtwork(track.uri, Modifier.size(144.dp))
             Text(track.title, style = MaterialTheme.typography.headlineSmall)

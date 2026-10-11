@@ -48,7 +48,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     header: @Composable () -> Unit = {}, presentationOnly: Boolean = false, selectionVisible: Boolean = true,
     onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
     libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {},
-    popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0,
+    popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0, sortOrigin: GlassAnchor? = null,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default) {
     var localSearchOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val searchAnchor = rememberGlassAnchor()
@@ -128,9 +128,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val result = loadedResult ?: BrowseResult()
     val gridState = rememberLazyGridState()
     val vacancyProgress = remember { androidx.compose.animation.core.Animatable(if (localSearchOpen) 1f else 0f) }
-    LaunchedEffect(localSearchOpen, reducedMotion) {
+    val motionSpeed = LocalMotionSpeed.current
+    LaunchedEffect(localSearchOpen, reducedMotion, motionSpeed) {
         if (reducedMotion) vacancyProgress.snapTo(if (localSearchOpen) 1f else 0f)
-        else vacancyProgress.animateTo(if (localSearchOpen) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = .86f, stiffness = 420f))
+        else vacancyProgress.animateTo(if (localSearchOpen) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = .86f, stiffness = 420f * motionSpeed * motionSpeed))
         if (!localSearchOpen && searchOriginalOffset >= 0) {
             gridState.scrollToItem(0, searchOriginalOffset)
             searchOriginalOffset = -1; searchVacancy = 0f
@@ -237,13 +238,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                 unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
-        else if (route.search) OutlinedTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) }, singleLine = true, enabled = !playerOpen,
+        else if (route.search) GlassSearchField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) },
+            if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}", enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submitSearch() }),
-            trailingIcon = { if (popupDismiss != null) ActionIcon(R.drawable.ic_close, "Close list search", onClick = popupDismiss)
-                else ActionIcon(R.drawable.ic_search, "Submit search") { submitSearch() } },
-            label = { Text(if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}") },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus), shape = Corners.card)
+            trailingIcon = { ActionIcon(R.drawable.ic_forward, "Submit search", glass = false) { submitSearch() } },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), fieldModifier = Modifier.focusRequester(focus))
 
         LookaheadScope {
         if (popupDismiss == null || route.text.isNotBlank()) Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
@@ -296,9 +296,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     Column(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer { alpha = reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f }) {
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
+                            val menuAnchor = rememberGlassAnchor()
                             Box {
-                                if (showButton) ActionIcon(R.drawable.ic_more, "Actions for " + item.title) { contextMenu = item.key }
-                                DropdownMenu(contextMenu == item.key, { contextMenu = null }) {
+                                if (showButton) ActionIcon(R.drawable.ic_more, "Actions for " + item.title, anchor = menuAnchor) { contextMenu = item.key }
+                                GlassMenu(contextMenu == item.key, menuAnchor, { contextMenu = null }) {
                                     if (item.row != null) {
                                         ActionMenuItem("Information", onClick = { contextMenu = null; info = item.row.track })
                                         if (editTags != null) ActionMenuItem("Edit tags", onClick = { contextMenu = null; editTags(listOf(item.row.track)) {} })
@@ -435,7 +436,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab)).items
             .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
     } }
-    if (sorting) BrowseSortDialog(route, style, preferences.overridden(route), onSortDismiss, { value, override ->
+    if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { BrowseSortDialog(route, style, preferences.overridden(route), onSortDismiss, { value, override ->
         preferences.write(route, value, override); style = value
         if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
         onSortDismiss()
@@ -446,16 +447,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 preferences.write(route, style, true)
                 onSortDismiss()
             } }
-        }) else null, reducedMotion = reducedMotion)
+        }) else null, reducedMotion = reducedMotion) }
     if (renaming) {
         var name by remember { mutableStateOf(playlists.playlists.firstOrNull { it.id == route.collection?.id }?.name.orEmpty()) }
-        AlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename playlist") }, text = {
+        GlassAlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename playlist") }, text = {
             OutlinedTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true)
         }, confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = {
             route.collection?.let { playlistController?.rename(it.id, name); onRoute(route.copy(title = name.trim())) }; renaming = false
         }) { Text("Save") } }, dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } })
     }
-    if (deleting) AlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete playlist?") },
+    if (deleting) GlassAlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete playlist?") },
         text = { Text("Audio files and queues are kept.") }, confirmButton = { TextButton(onClick = {
             route.collection?.let { playlistController?.delete(it.id) }; deleting = false
             onRoute(route.copy(collection = null, title = null))

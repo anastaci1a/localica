@@ -17,7 +17,7 @@ internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit,
     var policy by remember { mutableStateOf(settings.advancedRepeat ?: AdvancedRepeat(
         songEnd = if (settings.repeat == QueueRepeat.One) SongEnd.Repeat else SongEnd.Next,
         queueEnd = if (settings.repeat == QueueRepeat.All) QueueEnd.Repeat else QueueEnd.Stop)) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Repeat modes") }, text = {
+    GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Repeat modes") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 listOf("Simple", "Advanced").forEachIndexed { index, label ->

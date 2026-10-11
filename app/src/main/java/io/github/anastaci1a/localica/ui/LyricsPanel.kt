@@ -29,7 +29,7 @@ import io.github.anastaci1a.localica.lyrics.*
 
 @Composable
 internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier, sourcesRequest: Int = 0) {
+    modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null) {
     val context = LocalContext.current
     val repository = remember(context) { (context.applicationContext as? LocalicaApplication)?.lyrics ?: LyricsRepository(context) }
     val revision by ArtworkCache.revision.collectAsState()
@@ -46,7 +46,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
             if (source != null) Box {
-                DropdownMenu(sourcesOpen, { sourcesOpen = false }) {
+                GlassMenu(sourcesOpen, sourcesAnchor ?: rememberGlassAnchor(), { sourcesOpen = false }) {
                     result?.sources?.forEach { item -> DropdownMenuItem(text = {
                         Text(item.label + if (item.document.synced) " · synced" else "")
                     }, onClick = {

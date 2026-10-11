@@ -22,7 +22,7 @@ internal fun LibraryLicenses() {
                 context.assets.open("licenses/$it").bufferedReader().use { reader -> reader.readText() }
             }
         } }
-        AlertDialog(onDismissRequest = { open = false }, title = { Text("Open-source licenses") },
+        GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Open-source licenses") },
             text = { Text(text, Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
             confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } })
     }

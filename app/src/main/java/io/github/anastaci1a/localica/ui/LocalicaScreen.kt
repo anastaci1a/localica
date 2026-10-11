@@ -190,12 +190,15 @@ fun LocalicaScreen(
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = false, glassBlur = settings.glass.blur)
     val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual),
         dark = expanded, glassBlur = settings.glass.blur)
+    val dialogs = LocalGlassDialogs.current
+    SideEffect { dialogs?.backdrop = modalBackdrop }
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
     PlayerSystemBars(hasPlayer && progress.value >= .99f)
     LocalicaTheme(grayTone = settings.grayTone) {
     CompositionLocalProvider(LocalGlassAppearance provides settings.glass, LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache,
+        LocalMotionSpeed provides if (settings.fasterMotion) 1.5f else 1f,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
@@ -210,15 +213,17 @@ fun LocalicaScreen(
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
+            val sortAnchor = rememberGlassAnchor()
             Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
                     androidx.compose.animation.Crossfade(if (route.search) "Search" else route.title ?: route.tab.label,
                         modifier = Modifier.weight(1f), animationSpec = androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Page heading") { title ->
                         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))
                     }
                     if (route.tab != MainTab.Queues && (route.tab != MainTab.Home || route.search || route.collection != null)) {
-                        ActionIcon(R.drawable.ic_sort, "Sort") { viewOptions = false; sortingRoute = route.key }
+                        ActionIcon(R.drawable.ic_sort, "Sort", anchor = sortAnchor) { viewOptions = false; sortingRoute = route.key }
                         ActionIcon(R.drawable.ic_settings, "View options") { viewOptions = true; sortingRoute = route.key }
                     }
                 }
@@ -246,7 +251,7 @@ fun LocalicaScreen(
                     sortingRoute == route.key, { sortingRoute = null }, playingTrackId = playback.trackId, presentationOnly = viewOptions, selectionVisible = page == pager.settledPage,
                     onSearchEdit = { navigation = navigation.editSearch(it) }, onSearchCommit = { navigation = navigation.commitSearch() },
                     libraryFilters = libraryFilters, onFilterSettings = { settingsCategory = "Library filters"; settingsOpen = true },
-                    scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion)
+                    scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, sortOrigin = if (viewOptions) null else sortAnchor)
             } }
                 }
             }
@@ -270,14 +275,21 @@ fun LocalicaScreen(
                 }
 
             }
-            LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().testTag("utility-pill"), source = browseBackdrop) {
+            val utilityAnchor = rememberGlassAnchor()
+            SideEffect { utilityAnchor.source = browseBackdrop; utilityAnchor.face = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null, Modifier.size(24.dp)) }
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_more), null, Modifier.size(24.dp)) }
+                }
+            } }
+            LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().glassAnchor(utilityAnchor).testTag("utility-pill"), source = browseBackdrop) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                ActionIcon(R.drawable.ic_search, "Search library") {
+                ActionIcon(R.drawable.ic_search, "Search library", glass = false) {
                     navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true))
                 }
                 Box {
-                    ActionIcon(R.drawable.ic_more, "More") { moreOpen = true }
-                    DropdownMenu(moreOpen, { moreOpen = false }) {
+                    ActionIcon(R.drawable.ic_more, "More", glass = false) { moreOpen = true }
+                    GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
                         ActionMenuItem("Scan music", onClick = {
                             moreOpen = false; scannerOpen = true
                         })
@@ -359,7 +371,7 @@ fun LocalicaScreen(
     if (scannerOpen) ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan) { destination ->
         scannerOpen = false; returnToScanner = true; settingsCategory = destination; settingsOpen = true
     }
-    if (exitPrompt) AlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
+    if (exitPrompt) GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
         text = { Text("Playback will continue.") }, confirmButton = { TextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
         dismissButton = { TextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
     if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
@@ -367,7 +379,7 @@ fun LocalicaScreen(
     if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { songInfo = false }, { playerAction(PlayerAction.Edit) }, ::playerAction)
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
-    if (playerMore) ModalBottomSheet(onDismissRequest = { playerMore = false }, shape = Corners.panel) {
+    if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
             PlayerAction.entries.filterNot { it == PlayerAction.More }.forEach { action -> TextButton(onClick = { playerMore = false; playerAction(action) }) { Text(action.label) } }
         }

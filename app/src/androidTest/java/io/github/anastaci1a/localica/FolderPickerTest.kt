@@ -66,12 +66,13 @@ class FolderPickerTest {
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithText("Morning tone").fetchSemanticsNodes().isNotEmpty() }
+        val inList = hasAnyAncestor(hasTestTag("browser-list"))
+        compose.waitUntil(10000) { compose.onAllNodes(hasText("Morning tone") and inList).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Quiet interval"))
-        compose.onNodeWithText("Quiet interval").assertIsDisplayed()
+        compose.onNode(hasText("Quiet interval") and inList).assertIsDisplayed()
         compose.activityRule.scenario.recreate()
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Morning tone"))
-        compose.onNodeWithText("Morning tone").assertIsDisplayed()
+        compose.onNode(hasText("Morning tone") and inList).assertIsDisplayed()
         val scan = runBlocking { TreeScanner(AndroidDocuments(context)).scan(tree) }
         assertEquals(2, scan.tracks.size)
         assertEquals("nested/tone.m4a", scan.tracks.last().relativePath)

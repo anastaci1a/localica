@@ -19,7 +19,7 @@ internal fun ArtworkTransitionPreview(settings: InterfaceSettings) {
     if (opened) {
         var index by remember { mutableIntStateOf(0) }
         val visual = rememberPlayerVisual(uris[index % uris.size])
-        AlertDialog(onDismissRequest = { opened = false }, title = { Text(settings.artworkTransition.label) },
+        GlassAlertDialog(onDismissRequest = { opened = false }, title = { Text(settings.artworkTransition.label) },
             text = {
                 CompositionLocalProvider(LocalArtworkTransition provides settings.artworkTransition,
                     LocalReducedMotion provides settings.reducedMotion) {

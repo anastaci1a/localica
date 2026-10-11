@@ -47,7 +47,7 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
 private fun GlassSlider(label: String, value: Float, low: String, high: String, onChange: (Float) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Text("$label · ${(value * 100).roundToInt()}%", style = MaterialTheme.typography.titleMedium)
-        Slider(value, onChange, Modifier.semantics { contentDescription = label })
+        InterfaceSlider(value, onChange, Modifier.semantics { contentDescription = label })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(low, style = MaterialTheme.typography.bodySmall)
             Text(high, style = MaterialTheme.typography.bodySmall)

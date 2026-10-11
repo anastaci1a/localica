@@ -5,8 +5,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import io.github.anastaci1a.localica.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -38,6 +36,9 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
     enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}) {
     var selector by remember { mutableStateOf(false) }
+    val selectorAnchor = rememberGlassAnchor()
+    val sortAnchor = rememberGlassAnchor()
+    val menuAnchor = rememberGlassAnchor()
     var renameId by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Set<String>?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -45,6 +46,9 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     var sorting by remember { mutableStateOf(false) }
     val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
     val queueNumber = state.library.queues.indexOfFirst { it.id == active?.id } + 1
+    val selectorLabel = active?.let { "$queueNumber. ${it.name}" } ?: "Queues"
+    SideEffect { selectorAnchor.face = { Text(selectorLabel, Modifier.padding(horizontal = 12.dp),
+        style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
     val playingThisQueue = active?.id == state.library.activeId && isPlaying
     val position = active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
     val duration = active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
@@ -64,32 +68,31 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
             playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId, header = {
                 Column(Modifier.padding(horizontal = 12.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = Corners.card, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            modifier = Modifier.weight(1f)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
                             Row(Modifier.clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }
-                                .heightIn(min = 48.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(active?.let { "$queueNumber. ${it.name}" } ?: "Queues", Modifier.weight(1f),
+                                .heightIn(min = CompactControlSize).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(selectorLabel, Modifier.weight(1f),
                                     style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Icon(painterResource(R.drawable.ic_down), "Select queue", Modifier.size(24.dp))
                             }
                         }
                         ActionIcon(R.drawable.ic_close, "Delete current queue", enabled = active != null) { deleting = setOfNotNull(active?.id) }
                     }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         ActionIcon(if (playingThisQueue) R.drawable.ic_pause else R.drawable.ic_play,
                             if (playingThisQueue) "Pause queue" else "Play queue", enabled = enabled && active?.entries?.isNotEmpty() == true) {
                             if (playingThisQueue) controller?.togglePlayback() else active?.id?.let { controller?.playQueue(it) }
                         }
-                        ActionIcon(R.drawable.ic_sort, "Sort queue") { sorting = true }
+                        ActionIcon(R.drawable.ic_sort, "Sort queue", anchor = sortAnchor) { sorting = true }
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
                             Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
                         }
                         ActionIcon(R.drawable.ic_save, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true) { saving = true }
                         Box {
-                            ActionIcon(R.drawable.ic_more, "Queue actions") { menu = true }
-                            DropdownMenu(menu, { menu = false }) {
+                            ActionIcon(R.drawable.ic_more, "Queue actions", anchor = menuAnchor) { menu = true }
+                            GlassMenu(menu, menuAnchor, { menu = false }) {
                                 ActionMenuItem("Rename", enabled = active != null, onClick = { menu = false; renameId = active?.id })
                                 ActionMenuItem("Remove others", enabled = state.library.queues.size > 1,
                                     onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
@@ -99,11 +102,11 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (active == null) Text("Tap a song in Library to start a queue.")
                 }
-            }, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() })
+            }, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor)
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
-    if (selector) Dialog(onDismissRequest = { selector = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 560.dp), shape = Corners.panel, tonalElevation = 6.dp) {
+    GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center) {
+        Box(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
             Column(Modifier.padding(vertical = 12.dp)) {
                 Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(painterResource(R.drawable.ic_queue), null, Modifier.size(24.dp))
@@ -112,14 +115,14 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 LazyColumn(Modifier.weight(1f, fill = false).selectableGroup().padding(horizontal = 8.dp)) {
                     itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { index, queue ->
                         val chosen = queue.id == active?.id
-                        Surface(shape = Corners.card, color = if (chosen) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                        Surface(shape = Corners.card, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (chosen) .08f else 0f),
                             modifier = Modifier.padding(vertical = 2.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 ReorderHandle("Reorder " + queue.name) { controller?.moveQueue(queue.id, it) }
                                 Row(Modifier.weight(1f).selectable(chosen, role = Role.RadioButton,
                                     onClick = { controller?.switchTo(queue.id); selector = false }).heightIn(min = 56.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
-                                    RadioButton(chosen, null, Modifier.size(32.dp))
+                                    InterfaceCheckbox(chosen, null, Modifier.size(32.dp))
                                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
                                         if (chosen) MarqueeTitle("${index + 1}. ${queue.name}", reducedMotion,
                                             style = MaterialTheme.typography.bodyLarge)
@@ -141,12 +144,12 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     }
     state.library.queues.firstOrNull { it.id == renameId }?.let { queue ->
         var name by remember(queue.id) { mutableStateOf(queue.name) }
-        AlertDialog(onDismissRequest = { renameId = null }, title = { Text("Rename queue") },
+        GlassAlertDialog(onDismissRequest = { renameId = null }, title = { Text("Rename queue") },
             text = { OutlinedTextField(name, { name = it }, label = { Text("Queue name") }) },
             confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renameId = null }) { Text("Save") } },
             dismissButton = { TextButton(onClick = { renameId = null }) { Text("Cancel") } })
     }
-    deleting?.let { ids -> AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete queues?") },
+    deleting?.let { ids -> GlassAlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete queues?") },
         text = { Text(state.library.queues.filter { it.id in ids }.joinToString("\n") { it.name }) },
         confirmButton = { TextButton(onClick = { controller?.removeQueues(ids); deleting = null }) { Text("Delete") } },
         dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }) }
@@ -156,7 +159,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
 internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
     state.pending?.let { pending ->
         var removals by remember(pending) { mutableStateOf(setOfNotNull(pending.suggestedRemoval)) }
-        AlertDialog(onDismissRequest = { controller?.cancelCreation() }, title = { Text("Make room for a new queue") },
+        GlassAlertDialog(onDismissRequest = { controller?.cancelCreation() }, title = { Text("Make room for a new queue") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -167,7 +170,7 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
                         Row(Modifier.fillMaxWidth().toggleable(value = queue.id in removals, role = Role.Checkbox,
                             onValueChange = { checked -> removals = if (checked) removals + queue.id else removals - queue.id }),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(queue.id in removals, null)
+                            InterfaceCheckbox(queue.id in removals, null)
                             Text(queue.name, Modifier.weight(1f))
                         }
                     }
@@ -178,7 +181,7 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
                 onClick = { controller?.confirmCreation(removals) }) { Text("Remove and create") } },
             dismissButton = { TextButton(onClick = { controller?.cancelCreation() }) { Text("Cancel") } })
     }
-    if (state.problem != null && state.pending == null) AlertDialog(onDismissRequest = { controller?.dismissProblem() },
+    if (state.problem != null && state.pending == null) GlassAlertDialog(onDismissRequest = { controller?.dismissProblem() },
         title = { Text("Queue change failed") }, text = { Text(state.problem) },
         confirmButton = { TextButton(onClick = { controller?.dismissProblem() }) { Text("Close") } })
 }
@@ -214,7 +217,7 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
     if (thresholdOpen) {
         var seconds by remember(settings.previousThresholdSeconds) { mutableStateOf(settings.previousThresholdSeconds.toString()) }
         val valid = seconds.toIntOrNull()?.let { it in 1..60 } == true
-        AlertDialog(onDismissRequest = { thresholdOpen = false }, title = { Text("Restart threshold") }, text = {
+        GlassAlertDialog(onDismissRequest = { thresholdOpen = false }, title = { Text("Restart threshold") }, text = {
             OutlinedTextField(seconds, { seconds = it }, label = { Text("Seconds (1–60)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = !valid)
@@ -224,7 +227,7 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
     }
     if (limitOpen) {
         var limit by remember(settings.maximum) { mutableStateOf(settings.maximum?.toString().orEmpty()) }
-        AlertDialog(onDismissRequest = { limitOpen = false }, title = { Text("Queue limit") }, text = {
+        GlassAlertDialog(onDismissRequest = { limitOpen = false }, title = { Text("Queue limit") }, text = {
             OutlinedTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)

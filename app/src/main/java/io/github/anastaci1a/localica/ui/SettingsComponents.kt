@@ -12,25 +12,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import io.github.anastaci1a.localica.R
 
 @Composable
 internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit = onBack,
     backLabel: String = "Back from settings", content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    GlassDialog(onBack, GlassPlacement.Page) {
         Surface(Modifier.fillMaxSize()) {
+            val reduced = LocalReducedMotion.current
+            val speed = LocalMotionSpeed.current
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                     ActionIcon(R.drawable.ic_back, backLabel, onClick = onBack)
-                    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                    androidx.compose.animation.Crossfade(title, Modifier.weight(1f),
+                        androidx.compose.animation.core.tween(if (reduced) 0 else (220 / speed).toInt()), label = "Settings heading") {
+                        Text(it, style = MaterialTheme.typography.titleLarge)
+                    }
                     ActionIcon(R.drawable.ic_close, "Close settings", onClick = onClose)
                 }
-                content()
+                key(title) {
+                    var entered by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) { entered = true }
+                    val reveal by androidx.compose.animation.core.animateFloatAsState(if (entered) 1f else 0f,
+                        androidx.compose.animation.core.tween(if (reduced) 0 else (240 / speed).toInt()), label = "Settings page")
+                    Column(Modifier.weight(1f).graphicsLayer { alpha = reveal; translationX = 16.dp.toPx() * (1f - reveal) }, content = content)
+                }
             }
         }
     }
@@ -58,7 +68,7 @@ internal fun SettingsHeading(title: String) {
 @Composable
 internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, label: (T) -> String,
     onDismiss: () -> Unit, onSelect: (T) -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
+    GlassAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
             choices.forEach { choice ->
                 OptionRow(label(choice), choice == selected) { onSelect(choice); onDismiss() }
