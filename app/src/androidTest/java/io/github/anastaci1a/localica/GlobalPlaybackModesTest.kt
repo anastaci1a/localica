@@ -14,7 +14,7 @@ import java.io.File
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class GlobalPlaybackModesTest {
-    @Test fun globalModesKeepVisibleOrderAndResetTraversalOnSelectionWhileRandomizePersists() {
+    @Test fun globalModesKeepVisibleOrderAndVisitedMembershipWhileRandomizePersists() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val preferences = QueuePreferences(context)
@@ -32,16 +32,16 @@ class GlobalPlaybackModesTest {
         lateinit var queues: QueueController
         fun verifyTraversal(startId: String) {
             instrumentation.runOnMainSync {
-                val timeline = player.currentTimeline
-                var index = timeline.getFirstWindowIndex(true)
-                val visited = mutableListOf<String>()
-                while (index != C.INDEX_UNSET && visited.size <= tracks.size) {
-                    visited += player.getMediaItemAt(index).mediaId
-                    index = timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, true)
-                }
-                assertEquals(startId, visited.first())
-                assertEquals(tracks.size, visited.size)
-                assertEquals(tracks.size, visited.toSet().size)
+                val journey = queues.state.value.library.active!!.journey!!
+                assertEquals(startId, player.currentMediaItem?.mediaId)
+                assertEquals(journey.window().map { it.token }, (0 until player.mediaItemCount).map {
+                    player.getMediaItemAt(it).mediaMetadata.extras!!.getString("queueVisit")
+                })
+                val remaining = journey.future.filter { it.cycle == journey.cycle }.map { it.entryId }
+                assertEquals(tracks.size - journey.visited.size, remaining.size)
+                assertEquals(remaining.size, remaining.toSet().size)
+                assertTrue(remaining.none { it in journey.visited })
+                assertEquals(journey.next?.entryId, player.getMediaItemAt(player.nextMediaItemIndex).mediaId)
                 assertTrue(player.shuffleModeEnabled)
                 assertEquals(Player.REPEAT_MODE_ALL, player.repeatMode)
             }
@@ -55,7 +55,7 @@ class GlobalPlaybackModesTest {
             await { !queues.state.value.loading }
             queues.shuffle(); queues.repeat()
             await { queues.state.value.settings.shuffle && queues.state.value.settings.repeat == QueueRepeat.All }
-            await { var ready = false; instrumentation.runOnMainSync { ready = player.mediaItemCount == tracks.size && player.shuffleModeEnabled }; ready }
+            await { var ready = false; instrumentation.runOnMainSync { ready = player.mediaItemCount > 0 && player.shuffleModeEnabled && player.repeatMode == Player.REPEAT_MODE_ALL }; ready }
             verifyTraversal(first.currentEntryId!!)
             assertEquals(first.entries, queues.state.value.library.active!!.entries)
             queues.selectEntry(first.entries[5].id)

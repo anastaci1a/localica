@@ -28,7 +28,7 @@ class PlaybackStartTest {
         lateinit var player: ExoPlayer
         lateinit var queues: QueueController
         fun playing(index: Int) = await { var result = false; instrumentation.runOnMainSync {
-            result = player.currentMediaItemIndex == index && player.isPlaying
+            result = player.currentMediaItem?.mediaMetadata?.extras?.getString("trackId") == "start:$index" && player.isPlaying
         }; result }
         try {
             instrumentation.runOnMainSync {
@@ -44,8 +44,13 @@ class PlaybackStartTest {
             playing(500)
             assertFalse(gate.isCompleted)
             assertTrue(runBlocking { db.queues().read().queues.isEmpty() })
+            // Native/system arrivals must all be journaled even while the command channel waits on storage.
+            instrumentation.runOnMainSync { player.seekToNextMediaItem(); player.seekToNextMediaItem() }
+            playing(502)
             gate.complete(Unit)
-            await { runBlocking { db.queues().read().active?.entries?.size == tracks.size } }
+            await { runBlocking { db.queues().read().active?.journey?.history?.size == 3 } }
+            assertEquals(listOf(500, 501, 502).map { queues.state.value.library.active!!.entries[it].id },
+                queues.state.value.library.active!!.journey!!.history.map { it.entryId })
             instrumentation.runOnMainSync { player.pause() }
             await { queues.state.value.library.active?.currentEntryId == playerId(instrumentation, player) }
             val next = queues.state.value.library.active!!.entries[700].id
@@ -55,6 +60,29 @@ class PlaybackStartTest {
             assertFalse(dao.gate!!.isCompleted)
             dao.gate!!.complete(Unit)
             await { runBlocking { db.queues().read().active?.currentEntryId == next } }
+            // A service shutdown during an unrelated pending write must retain both the edit and final visits.
+            dao.gateName = "Renamed while playing"
+            dao.gate = CompletableDeferred()
+            dao.entered = CompletableDeferred()
+            val activeId = queues.state.value.library.activeId!!
+            queues.rename(activeId, "Renamed while playing")
+            runBlocking { withTimeout(10000) { dao.entered!!.await() } }
+            instrumentation.runOnMainSync { player.seekToNextMediaItem(); player.seekToNextMediaItem() }
+            val finalEntry = queues.state.value.library.active!!.entries[702].id
+            await { playerId(instrumentation, player) == finalEntry }
+            instrumentation.runOnMainSync {
+                queues.detach(player); player.release()
+                player = ExoPlayer.Builder(context).build().apply { volume = 0f }
+                queues.attach(player)
+            }
+            dao.gate!!.complete(Unit)
+            dao.gateName = null
+            await { runBlocking { db.queues().read().active?.currentEntryId == finalEntry } }
+            await { playerId(instrumentation, player) == finalEntry }
+            assertEquals("Renamed while playing", queues.state.value.library.active!!.name)
+            assertEquals(listOf(700, 701, 702).map { queues.state.value.library.active!!.entries[it].id },
+                queues.state.value.library.active!!.journey!!.history.takeLast(3).map { it.entryId })
+            instrumentation.runOnMainSync { assertFalse(player.playWhenReady) }
             // A failed playback save remains retryable rather than treating the in-memory state as durable.
             dao.failNext = true
             queues.tap(tracks.take(2), 1)
@@ -77,10 +105,13 @@ class PlaybackStartTest {
 
 private class GatedQueueDao(private val delegate: QueueDao) : QueueDao() {
     @Volatile var gate: CompletableDeferred<Unit>? = null
+    @Volatile var entered: CompletableDeferred<Unit>? = null
+    @Volatile var gateName: String? = null
     @Volatile var failNext = false
     override suspend fun read() = delegate.read()
     override suspend fun save(before: QueueLibrary, after: QueueLibrary) {
-        if (before.activeId != after.activeId || before.active?.currentEntryId != after.active?.currentEntryId) {
+        if ((gateName != null && after.active?.name == gateName && before.active?.name != gateName) || before.activeId != after.activeId || before.active?.currentEntryId != after.active?.currentEntryId) {
+            entered?.complete(Unit)
             gate?.await()
             if (failNext) { failNext = false; error("Injected storage failure") }
         }

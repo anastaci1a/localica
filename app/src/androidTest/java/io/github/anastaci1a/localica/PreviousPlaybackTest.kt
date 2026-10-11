@@ -22,7 +22,7 @@ class PreviousPlaybackTest {
         val file = File(context.cacheDir, "previous-tone.mp3")
         instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
         val tracks = (0..2).map { Track(file.toURI().toString(), "Track $it", fileName = file.name, relativePath = file.name, id = "previous:$it") }
-        val queue = QueueEdits.create(tracks, 1, "Previous test")
+        val queue = QueueEdits.create(tracks, 0, "Previous test")
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         runBlocking { db.queues().save(QueueLibrary(), QueueLibrary(listOf(queue), queue.id)) }
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -30,11 +30,15 @@ class PreviousPlaybackTest {
         lateinit var queues: QueueController
         fun ready() = await { var result = false; instrumentation.runOnMainSync { result = player.playbackState == Player.STATE_READY }; result }
         fun checkPrevious(position: Long, expectedIndex: Int) {
-            instrumentation.runOnMainSync { player.pause(); player.seekTo(1, position) }
+            val target = queue.entries[1].id
+            if (queues.state.value.library.active?.currentEntryId != target) queues.next()
+            await { queues.state.value.library.active?.currentEntryId == target }
+            ready()
+            instrumentation.runOnMainSync { player.pause(); player.seekTo(position) }
             ready()
             queues.previous()
             await { var result = false; instrumentation.runOnMainSync {
-                result = player.currentMediaItemIndex == expectedIndex && player.currentPosition == 0L
+                result = player.currentMediaItem?.mediaId == queue.entries[expectedIndex].id && player.currentPosition == 0L
             }; result }
             instrumentation.runOnMainSync { assertFalse(player.playWhenReady) }
         }
@@ -60,10 +64,12 @@ class PreviousPlaybackTest {
             assertEquals(queues.state.value.settings, QueuePreferences(context).read())
             queues.settings(QueueSettings())
             await { queues.state.value.settings == QueueSettings() }
-            instrumentation.runOnMainSync { player.seekTo(0, 1000) }
+            queues.previous(alwaysSong = true)
+            await { queues.state.value.library.active?.currentEntryId == queue.entries[0].id }
+            instrumentation.runOnMainSync { player.seekTo(1000) }
             ready()
             queues.previous()
-            await { var result = false; instrumentation.runOnMainSync { result = player.currentMediaItemIndex == 0 && player.currentPosition == 0L }; result }
+            await { var result = false; instrumentation.runOnMainSync { result = player.currentMediaItem?.mediaId == queue.entries[0].id && player.currentPosition == 0L }; result }
         } finally {
             instrumentation.runOnMainSync { queues.detach(player); player.release(); scope.cancel() }
             db.close(); file.delete(); preferences.write(savedSettings)
