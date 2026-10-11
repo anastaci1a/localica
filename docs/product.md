@@ -41,7 +41,7 @@ Maintain this inventory as capabilities are added; these are target settings, no
 | Lyrics | Prefer synced lyrics; within the same sync type prefer a matching `.lrc` sidecar to embedded lyrics. Allow source selection when both exist; keep reduced-motion behavior. |
 | Home | Configurable carousel sources, order, sorting, presentation, and preview counts. |
 | Last.fm | Disconnected/off by default; explicit connection, scrobbling controls, and matching review. Local statistics work independently. |
-| Playback | Shuffle and repeat controls arrive with queue playback; defaults off. |
+| Playback | Global shuffle and repeat persist across queues; defaults off. Randomize queue order is a separate saved-order action. |
 | Appearance | System/light/dark themes, reduced motion/transparency, and a legible solid-material fallback. |
 
 In selection mode, tapping changes the selection instead of executing the song-tap preference. Explicit contextual actions remain available regardless of the tap default.
