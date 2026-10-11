@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
+import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.ArtworkLayout
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineScope
@@ -40,14 +42,14 @@ class PlayerTransitionTest {
             repeat(30) { moveBy(Offset(0f, height * .014f), delayMillis = 30) }
         }
         compose.mainClock.advanceTimeBy(32)
-        val image = compose.onNodeWithTag("player-artwork").assertIsDisplayed().captureToImage().toPixelMap()
+        val image = compose.onNodeWithTag("player-artwork", useUnmergedTree = true).assertIsDisplayed().captureToImage().toPixelMap()
         val color = image[image.width / 2, image.height / 2]
         assertTrue("Artwork must already be visible during the held gesture: $color", color.red > color.blue + .2f)
         compose.onNodeWithTag("player-surface").performTouchInput { advanceEventTime(500); up() }
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun opaquePlayerAndTransportPersistWhileOtherControlsWaitUntilLateExpansion() {
+    @Test fun glassStaysTranslucentUntilLateExpansionAndTransportPersists() {
         val progress = Animatable(0f)
         var behind by mutableStateOf(Color.Red)
         lateinit var scope: CoroutineScope
@@ -67,10 +69,92 @@ class PlayerTransitionTest {
         val before = panelColor()
         compose.runOnIdle { behind = Color.Blue }
         val after = panelColor()
-        assertEquals("Browsing must not bleed through the expanding player", before.red, after.red, .02f)
-        assertEquals("Browsing must not bleed through the expanding player", before.blue, after.blue, .02f)
+        assertTrue("Expanding glass still transmits browsing", before.red > after.red + .2f)
+        assertTrue("Expanding glass still transmits browsing", after.blue > before.blue + .2f)
         compose.runOnIdle { scope.launch { progress.snapTo(.96f) } }
         compose.onNodeWithContentDescription("Seek").assertIsDisplayed()
         compose.onNodeWithText("Custom action").assertIsDisplayed()
+        val complete = panelColor()
+        compose.runOnIdle { behind = Color.Red }
+        val opaque = panelColor()
+        assertEquals("Artwork backing becomes opaque near full size", complete.red, opaque.red, .02f)
+        assertEquals("Artwork backing becomes opaque near full size", complete.blue, opaque.blue, .02f)
+    }
+
+    @Test fun glassFillsTheSharedRoundedOutlineDuringHeldExpansionAndReversal() {
+        val progress = Animatable(0f)
+        lateinit var scope: CoroutineScope
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(whiteTint = 1f, shadowStrength = 0f)) {
+                BoxWithConstraints(Modifier.fillMaxSize().background(Color.Magenta)) {
+                    scope = rememberCoroutineScope()
+                    PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = PlayerVisual())
+                }
+            }
+        } }
+        for (p in listOf(.15f, .5f, .15f)) {
+            compose.runOnIdle { scope.launch { progress.snapTo(p) } }
+            val pixels = compose.onNodeWithTag("player-surface").captureToImage().toPixelMap()
+            // Inside the rounded rectangle but outside the old, taller capsule's corner.
+            val edge = pixels[10, (pixels.height * .3f).toInt()]
+            assertTrue("Glass must reach the shared outline at $p: $edge", edge.green > .7f)
+            if (p == .5f) {
+                val cover = compose.onNodeWithTag("player-artwork", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                val title = compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                assertTrue("Metadata clears the growing artwork", title.top > cover.bottom)
+            }
+        }
+    }
+
+    @Test fun handleApproachesTheMovingTopAndLeavesBeforeItCanOverlapMiniPlayerControls() {
+        val progress = Animatable(0f)
+        lateinit var scope: CoroutineScope
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            scope = rememberCoroutineScope()
+            PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = PlayerVisual())
+        } } }
+        fun at(value: Float): Pair<Float, Float> {
+            compose.runOnIdle { scope.launch { progress.snapTo(value) } }
+            val panel = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+            val handle = compose.onNodeWithTag("player-handle", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            return panel.top to handle.top
+        }
+        val full = at(1f)
+        val held = at(.85f)
+        assertTrue("The handle approaches the panel edge", held.second - held.first < full.second - full.first)
+        assertTrue("Handle travels down more slowly than the edge", held.second - full.second < held.first - full.first)
+        compose.runOnIdle { scope.launch { progress.snapTo(.65f) } }
+        compose.onNodeWithTag("player-handle", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Collapse player").assertDoesNotExist()
+    }
+
+    @Test fun expandingFullBackgroundSoftensCoverEdgesButFloatingArtworkStaysDefined() {
+        val bitmap = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888).apply {
+            setPixels(IntArray(192 * 192) { if ((it % 192) / 3 % 2 == 0) android.graphics.Color.WHITE else android.graphics.Color.BLACK }, 0, 192, 0, 0, 192, 192)
+        }.asImageBitmap()
+        val soft = kotlinx.coroutines.runBlocking { blurGlassSnapshot(bitmap, 12f) }
+        val visual = PlayerVisual(bitmap, softArtwork = soft)
+        val progress = Animatable(0f)
+        var layout by mutableStateOf(ArtworkLayout.FullBackground)
+        lateinit var scope: CoroutineScope
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().background(Color.Gray)) {
+            scope = rememberCoroutineScope()
+            PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout), progress, {}, {}, {}, {}, {}, {}, visual = visual)
+        } } }
+        compose.runOnIdle { scope.launch { progress.snapTo(.65f) } }
+        fun contrasts(): Pair<Float, Float> {
+            val image = compose.onNodeWithTag("player-artwork", useUnmergedTree = true).captureToImage().toPixelMap()
+            fun contrast(from: Float, to: Float): Float {
+                val samples = ((image.width * from).toInt()..(image.width * to).toInt()).map { image[it, image.height / 2].red }
+                return samples.max() - samples.min()
+            }
+            return contrast(.03f, .1f) to contrast(.4f, .6f)
+        }
+        val softened = contrasts()
+        assertTrue("Center retains detail", softened.second > .8f)
+        assertTrue("Edge loses sharp detail while expanding: $softened", softened.first < softened.second * .65f)
+        compose.runOnIdle { layout = ArtworkLayout.Floating }
+        val floating = contrasts()
+        assertTrue("Floating artwork keeps a defined edge: $floating", floating.first > floating.second * .8f)
     }
 }

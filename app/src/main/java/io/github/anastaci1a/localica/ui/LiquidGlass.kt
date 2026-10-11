@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 
 internal val NavigationPillHeight = 64.dp
 internal val CompactControlSize = NavigationPillHeight * .8f
@@ -55,42 +57,51 @@ internal fun Modifier.glassPress(onPressed: (Boolean) -> Unit = {}): Modifier {
 @Composable
 internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, tint: Color = Color.Transparent,
+    cornerRadius: Dp? = null, frostProgress: Float = 0f, pressFeedback: Boolean = true,
     content: @Composable BoxScope.() -> Unit = {}) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     val dark = source?.dark == true
     val appearance = LocalGlassAppearance.current.normalized()
+    val frost = frostProgress.coerceIn(0f, 1f)
     var pressed by remember { mutableStateOf(false) }
     val energy by animateFloatAsState(if (pressed) 1f else 0f, spring(stiffness = 650f), label = "Glass illumination")
     val lens = remember { if (Build.VERSION.SDK_INT >= 33) GlassLens() else null }
     // Keep the outer shadow outside the press layer: pre-Android 10 ViewLayer clips
     // drawing beyond its bounds even when the Compose layer itself is not clipped.
-    BoxWithConstraints(modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread).glassPress { pressed = it }.clip(CircleShape)
+    BoxWithConstraints(modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius)
+        .then(if (pressFeedback) Modifier.glassPress { pressed = it } else Modifier)
+        .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
         .onGloballyPositioned { origin = it.positionInRoot() }) {
         if (source != null && Build.VERSION.SDK_INT >= 31) {
             // Padding supplies actual neighboring pixels along the curved silhouette.
             val padding = 48.dp
             Canvas(Modifier.requiredSize(maxWidth + padding * 2, maxHeight + padding * 2)
                 .graphicsLayer {
-                    val blur = 22.dp.toPx() * appearance.blur
-                    renderEffect = if (Build.VERSION.SDK_INT >= 33) lens?.effect(size.width, size.height, padding.toPx(), blur)
+                    val blur = 22.dp.toPx() * (appearance.blur + (1f - appearance.blur) * frost)
+                    val radius = (cornerRadius?.toPx() ?: ((size.minDimension - 2 * padding.toPx()) / 2))
+                        .coerceIn(0f, (size.minDimension / 2 - padding.toPx()).coerceAtLeast(0f))
+                    renderEffect = if (Build.VERSION.SDK_INT >= 33) lens?.effect(size.width, size.height, padding.toPx(), blur, radius)
                         else if (blur > 0f) BlurEffect(blur, blur, TileMode.Clamp) else null
                 }) {
                 val offset = source.origin - origin + Offset(padding.toPx(), padding.toPx())
                 translate(offset.x, offset.y) { if (!source.layer.isReleased) drawLayer(source.layer) }
             }
         }
-        if (source != null && Build.VERSION.SDK_INT < 31 && appearance.blur > 0f) {
+        if (source != null && Build.VERSION.SDK_INT < 31 && (appearance.blur > 0f || frost > 0f)) {
             Canvas(Modifier.matchParentSize()) {
                 val offset = source.origin - origin
                 translate(offset.x, offset.y) {
-                    source.glassFallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) }
+                    if (appearance.blur > 0f) source.glassFallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) }
+                    // Blend shared prepared endpoints; no bitmap processing during a gesture.
+                    if (frost > 0f) source.fallback?.let { drawImage(it, dstSize = source.size,
+                        filterQuality = FilterQuality.Medium, alpha = frost) }
                 }
             }
         }
         Canvas(Modifier.matchParentSize()) {
             drawRect(Color.White.copy(alpha = appearance.whiteTint))
             drawRect(tint)
-            val radius = size.minDimension / 2
+            val radius = (cornerRadius?.toPx() ?: (size.minDimension / 2)).coerceIn(0f, size.minDimension / 2)
             drawRoundRect(Brush.linearGradient(listOf(Color.White.copy(alpha = .85f + .15f * energy), Color.White.copy(alpha = .06f),
                 Color.Black.copy(alpha = .2f), Color.White.copy(alpha = .7f))), cornerRadius = CornerRadius(radius), style = Stroke(1.dp.toPx()))
             val inset = 2.dp.toPx()
@@ -103,8 +114,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 }
 
 /** Ordinary elevation paints a dark silhouette through a transparent center. Exclude it. */
-private fun Modifier.clearGlassShadow(strength: Float, width: Float) = drawBehind {
-    val radius = size.minDimension / 2
+private fun Modifier.clearGlassShadow(strength: Float, width: Float, cornerRadius: Dp?) = drawBehind {
+    val radius = (cornerRadius?.toPx() ?: (size.minDimension / 2)).coerceIn(0f, size.minDimension / 2)
     val body = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(radius))) }
     clipPath(body, ClipOp.Difference) {
         for (step in 24 downTo 1) {
@@ -122,10 +133,11 @@ private class GlassLens {
         uniform shader scene;
         uniform float2 extent;
         uniform float padding;
+        uniform float corner;
         half4 main(float2 p) {
             float2 center = extent * 0.5;
             float2 halfSize = center - padding;
-            float radius = min(halfSize.x, halfSize.y);
+            float radius = max(corner, 0.001);
             float2 local = p - center;
             float2 axis = clamp(local, -max(halfSize-radius, float2(0)), max(halfSize-radius, float2(0)));
             float2 radial = local - axis;
@@ -145,13 +157,14 @@ private class GlassLens {
     """.trimIndent())
     private var dimensions = listOf<Float>()
     private var cached: RenderEffect? = null
-    fun effect(width: Float, height: Float, padding: Float, blur: Float): RenderEffect? {
+    fun effect(width: Float, height: Float, padding: Float, blur: Float, radius: Float): RenderEffect? {
         if (width <= padding * 2 || height <= padding * 2) return null
-        val next = listOf(width, height, padding, blur)
+        val next = listOf(width, height, padding, blur, radius)
         if (next != dimensions) {
             dimensions = next
             shader.setFloatUniform("extent", width, height)
             shader.setFloatUniform("padding", padding)
+            shader.setFloatUniform("corner", radius)
             val refraction = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")
             // Scatter the sampled backdrop before applying lens curvature and its sharp rim.
             cached = (if (blur > 0f) android.graphics.RenderEffect.createChainEffect(refraction,

@@ -101,7 +101,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     tint: Color = Color.Transparent, content: @Composable BoxScope.() -> Unit) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     val dark = source?.dark == true
-    val base = if (dark) Color(0xFF18212C) else MaterialTheme.colorScheme.surface
+    val base = if (dark) Color.Black else MaterialTheme.colorScheme.surface
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
     val grain = remember { frostGrain }
     // Descendant lenses sample the finished panel material, never the art below it.
@@ -122,7 +122,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             }
         }
         Canvas(Modifier.matchParentSize()) {
-            drawRect(base.copy(alpha = if (dark) { if (compact) .26f else .64f } else { if (compact) .65f else .91f }))
+            drawRect(base.copy(alpha = if (dark) { if (compact) .22f else .5f } else { if (compact) .65f else .91f }))
             drawRect(tint)
             drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .075f), Color.Transparent),
                 center = Offset(size.width * .12f, 0f), radius = maxOf(size.width, size.height) * .9f))

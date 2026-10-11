@@ -18,7 +18,8 @@ import io.github.anastaci1a.localica.library.ArtworkCache
 import io.github.anastaci1a.localica.library.CoverProvider
 import io.github.anastaci1a.localica.library.EmbeddedCoverProvider
 
-internal data class PlayerVisual(val artwork: ImageBitmap? = null, val palette: PlayerPalette = NeutralPalette, val loading: Boolean = false)
+internal data class PlayerVisual(val artwork: ImageBitmap? = null, val palette: PlayerPalette = NeutralPalette,
+    val loading: Boolean = false, val softArtwork: ImageBitmap? = null)
 
 /** Player-only retention: reusable library rows must still clear artwork when their identity changes. */
 @Composable
@@ -61,7 +62,13 @@ internal object PlayerVisualCache {
         val key = Key(uri, ArtworkCache.revision.value)
         if (provider === EmbeddedCoverProvider) cache.get(key)?.let { return it }
         val bitmap = provider.load(context, listOf(uri), 768)
-        val result = if (bitmap == null) PlayerVisual() else PlayerVisual(bitmap.asImageBitmap(), playerPalette(bitmap))
+        val result = if (bitmap == null) PlayerVisual() else {
+            val image = bitmap.asImageBitmap()
+            val soft = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                blurGlassSnapshot(image, bitmap.width * .035f)
+            }
+            PlayerVisual(image, playerPalette(bitmap), softArtwork = soft)
+        }
         currentCoroutineContext().ensureActive()
         if (provider === EmbeddedCoverProvider && key.revision == ArtworkCache.revision.value) cache.put(key, result)
         return result
