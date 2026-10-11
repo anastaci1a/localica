@@ -12,6 +12,7 @@ import androidx.compose.ui.input.pointer.*
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.navigation.MediaRef
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 
 internal const val DropGapKey = "localica-drop-gap"
 
@@ -95,19 +96,36 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
         }
     }
     suspend fun autoScroll(edge: Float) {
+        fun speed(d: SongDrag) = when {
+            d.overCancel -> 0f
+            d.pointer.y < edge -> -((edge - d.pointer.y) / edge).coerceIn(0f, 1f)
+            d.pointer.y > viewportHeight - obscuredBottom - edge -> ((d.pointer.y - viewportHeight + obscuredBottom + edge) / edge).coerceIn(0f, 1f)
+            else -> 0f
+        }
+        var previousFrame = withFrameNanos { it }
         while (currentCoroutineContext().isActive) {
-            delay(16)
             val d = drag?.takeUnless { it.dropping } ?: return
-            val speed = when {
-                d.overCancel -> 0f
-                d.pointer.y < edge -> -((edge - d.pointer.y) / edge).coerceIn(0f, 1f)
-                d.pointer.y > viewportHeight - obscuredBottom - edge -> ((d.pointer.y - viewportHeight + obscuredBottom + edge) / edge).coerceIn(0f, 1f)
-                else -> 0f
+            if (speed(d) == 0f) {
+                snapshotFlow { d.dropping || speed(d) != 0f }.first { it }
+                previousFrame = withFrameNanos { it }
             }
-            if (speed != 0f) { grid.scrollBy(speed * edge / 5); updateInsertion(d) }
+            val frame = withFrameNanos { it }
+            val seconds = ((frame - previousFrame) / 1_000_000_000f).coerceIn(0f, 0.032f)
+            previousFrame = frame
+            if (d.dropping || drag !== d) return
+            val velocity = speed(d)
+            if (velocity != 0f) {
+                val consumed = grid.scrollBy(velocity * edge * 12f * seconds)
+                updateInsertion(d)
+                if (consumed == 0f) {
+                    val resting = d.pointer
+                    snapshotFlow { d.dropping || d.pointer != resting }.first { it }
+                    previousFrame = withFrameNanos { it }
+                }
+            }
         }
     }
-    fun finish(cancel: Boolean, reducedMotion: Boolean, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit) {
+    fun finish(cancel: Boolean, reducedMotion: Boolean, onMoved: () -> Unit = {}, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit) {
         val d = drag?.takeUnless { it.dropping } ?: return
         d.dropping = true
         val expected = if (cancel) items else d.ordered()
@@ -131,6 +149,7 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
                 optimistic = expected
             }
             if (drag === d) drag = null
+            if (saved) onMoved()
         }
     }
 }
@@ -169,7 +188,7 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
                     change.consume()
                     if (moving) {
                         if (!canceled) state.move(change.position)
-                        state.finish(canceled || state.drag?.overCancel == true, reducedMotion, commit)
+                        state.finish(canceled || state.drag?.overCancel == true, reducedMotion, selection::clear, commit)
                     }
                     break
                 }
@@ -179,6 +198,6 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
                 }
                 if (moving) state.move(change.position)
             }
-        } finally { if (moving && state.drag?.dropping == false) state.finish(true, reducedMotion, commit) }
+        } finally { if (moving && state.drag?.dropping == false) state.finish(true, reducedMotion, selection::clear, commit) }
     }
 }

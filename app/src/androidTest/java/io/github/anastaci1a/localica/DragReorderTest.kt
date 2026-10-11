@@ -29,6 +29,7 @@ import org.junit.Test
 class DragReorderTest {
     @get:Rule val compose = createComposeRule()
     private val selection = SessionSelection()
+    private lateinit var backDispatcher: androidx.activity.OnBackPressedDispatcher
     private fun fixture(failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
@@ -46,14 +47,16 @@ class DragReorderTest {
             if (failWrites) db.openHelper.writableDatabase.execSQL(
                 "CREATE TRIGGER reject_move BEFORE INSERT ON playlist_entries BEGIN SELECT RAISE(ABORT, 'Injected failure'); END")
             compose.setContent { LocalicaTheme {
+                backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
                 val state by controller.state.collectAsState()
                 val host = remember { SongDragHost() }
+                val route = remember(playlist.id) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)) }
                 Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter) 80.dp else 0.dp).clipToBounds()) {
                 CompositionLocalProvider(LocalSessionSelection provides selection, LocalSongDragHost provides host) {
                     BrowserScreen(LibraryUiState(loading = false), state,
-                        BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)), {}, {}, {},
-                        { _, _, _ -> fail("A held song must not play") }, null, controller, true, false, selectionVisible = false)
+                        route, {}, {}, {},
+                        { _, _, _ -> fail("A held song must not play") }, null, controller, true, false)
                 } }
                 if (foregroundFooter) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(80.dp).background(Color.Magenta).testTag("fixture-footer"))
                 ForegroundSongDragOverlay(host)
@@ -62,6 +65,13 @@ class DragReorderTest {
             compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty() }
             test(controller, playlist)
         } finally { scope.cancel(); db.close() }
+    }
+    @Test fun backClearsMutableListSelectionWithoutLeavingTheList() = fixture { _, playlist ->
+        val id = playlist.entries[1].id
+        compose.onNodeWithTag("media-$id").performTouchInput { longClick() }
+        compose.runOnIdle { assertTrue(selection.active); backDispatcher.onBackPressed() }
+        compose.onNodeWithTag("media-$id").assertIsDisplayed().assertIsNotSelected()
+        compose.runOnIdle { assertFalse(selection.active); assertTrue(selection.entries.isEmpty()) }
     }
     @Test fun disjointSelectionLiftsIntoStackAndMovesInSourceOrder() = fixture { controller, playlist ->
         val ids = playlist.entries.map { it.id }
@@ -84,7 +94,7 @@ class DragReorderTest {
         assertEquals(result.indexOf(ids[0]) + 1, result.indexOf(ids[2]))
         assertTrue(result.indexOf(ids[0]) > 0)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
-        compose.runOnIdle { assertEquals(setOf(ids[0], ids[2]), selection.entries.map { it.row.id }.toSet()) }
+        compose.runOnIdle { assertTrue(selection.entries.isEmpty()); assertFalse(selection.active) }
     }
     @Test fun heldCardTracksTheFingerWithinOneFrame() = fixture { _, playlist ->
         val id = playlist.entries[1].id
