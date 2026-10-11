@@ -44,8 +44,8 @@ class ThemeTest {
             compose.runOnIdle { night = systemNight }
             compose.onNodeWithContentDescription("Library").performClick()
             compose.runOnIdle {
-                assertEquals(Color(0xFFFAF8F5), background)
-                assertEquals(Color(0xFF242723), foreground)
+                assertEquals(Color(0xFFF9F9FB), background)
+                assertEquals(Color(0xFF202124), foreground)
             }
             val pixels = compose.onRoot().captureToImage().toPixelMap()
             val middle = pixels[1, pixels.height / 2]
