@@ -18,7 +18,8 @@ class InterfacePreferences(context: Context) {
             artworkLayout = ArtworkLayout.entries.firstOrNull { it.name == preferences.getString("artwork-layout", null) } ?: ArtworkLayout.FullBackground,
             artworkTransition = ArtworkTransition.entries.firstOrNull { it.name == preferences.getString("artwork-transition", null) } ?: ArtworkTransition.SoftWash,
             glass = GlassAppearance(preferences.getFloat("glass-blur", .2f), preferences.getFloat("glass-white-tint", .06f),
-                preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f)).normalized())
+                preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f)).normalized(),
+            grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone())
     }
     fun write(value: InterfaceSettings) {
         require(value.tabs.isNotEmpty() && value.tabs.distinct() == value.tabs)
@@ -28,6 +29,7 @@ class InterfacePreferences(context: Context) {
             .putBoolean("album-artist", value.albumArtistFirst).putBoolean("reduced-motion", value.reducedMotion)
             .putBoolean("faster-motion", value.fasterMotion).putString("artwork-layout", value.artworkLayout.name)
             .putString("artwork-transition", value.artworkTransition.name)
+            .putFloat("gray-tone", value.grayTone.normalizedGrayTone())
             .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
             .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)
             .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()

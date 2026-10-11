@@ -228,7 +228,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             val subtitleScale = MaterialTheme.typography.bodySmall.fontSize.value / MaterialTheme.typography.bodyLarge.fontSize.value
             MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f),
                 Modifier.offset(textX, titleY).width(textWidth).scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title"),
-                style = MaterialTheme.typography.headlineSmall)
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
             val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
             Text(buildAnnotatedString {
                 append((if (settings.albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist).orEmpty())

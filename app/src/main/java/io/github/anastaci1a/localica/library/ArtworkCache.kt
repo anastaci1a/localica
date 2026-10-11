@@ -30,6 +30,18 @@ object ArtworkCache {
     private val gate = Mutex()
     private val mutableRevision = MutableStateFlow(0L)
     val revision = mutableRevision.asStateFlow()
+    data class CachedArtwork(val bitmap: Bitmap?)
+
+    /** A memory-only first frame, including known missing art; never starts a reader. */
+    fun peek(uris: List<String>, pixels: Int = 0): CachedArtwork? = synchronized(cache) {
+        for (uri in uris) {
+            val sizes = if (pixels <= 0) listOf(128, 384, 768) else
+                listOf(128, 384, 768).filter { it >= bucket(pixels) } + listOf(768, 384, 128).filter { it < bucket(pixels) }
+            val cover = sizes.firstNotNullOfOrNull { cache.get(Key(uri, it, revision.value)) } ?: return@synchronized null
+            if (cover.bitmap != null) return@synchronized CachedArtwork(cover.bitmap)
+        }
+        CachedArtwork(null)
+    }
     fun bucket(pixels: Int) = when { pixels <= 128 -> 128; pixels <= 384 -> 384; else -> 768 }
     fun invalidate() = synchronized(cache) { cache.evictAll(); mutableRevision.value++ }
     suspend fun read(context: Context, uri: String, pixels: Int): Bitmap? = gate.withLock {
