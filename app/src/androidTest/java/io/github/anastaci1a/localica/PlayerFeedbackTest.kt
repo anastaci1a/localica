@@ -79,13 +79,14 @@ class PlayerFeedbackTest {
         loaded.complete(blue)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("artwork-loading").fetchSemanticsNodes().isEmpty() }
         fun center(): Color = compose.onNodeWithTag("thumbnail").captureToImage().let { it.toPixelMap()[it.width / 2, it.height / 2] }
-        assertTrue(center().blue > .95f)
+        fun showsBlueCover(): Boolean = center().let { it.blue > .95f && it.red < .05f && it.green < .05f }
+        assertTrue(showsBlueCover())
         compose.runOnIdle { uri = "missing" }
         compose.onNodeWithTag("artwork-loading").assertIsDisplayed()
-        assertTrue("Recycled rows must not retain an unrelated cover", center().blue < .95f)
+        assertFalse("Recycled rows must not retain an unrelated cover", showsBlueCover())
         missing.complete(null)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("artwork-loading").fetchSemanticsNodes().isEmpty() }
-        assertTrue(center().blue < .95f)
+        assertFalse(showsBlueCover())
     }
 
     @Test fun failuresUseDismissiblePlainLanguageDialogsWithoutRepeatingOnPositionUpdates() {
