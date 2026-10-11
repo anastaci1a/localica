@@ -33,9 +33,10 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     val context = LocalContext.current
     val repository = remember(context) { (context.applicationContext as? LocalicaApplication)?.lyrics ?: LyricsRepository(context) }
     val revision by ArtworkCache.revision.collectAsState()
-    val result by produceState<LyricsResult?>(null, track?.id, track?.uri, revision) {
-        value = track?.let { repository.load(it, revision) } ?: LyricsResult()
+    val loaded by produceState<Pair<String?, LyricsResult>?>(null, track?.id, track?.uri, revision) {
+        value = track?.id to (track?.let { repository.load(it, revision) } ?: LyricsResult())
     }
+    val result = loaded?.second
     val preferences = remember { context.getSharedPreferences("lyric-sources", 0) }
     var chosen by rememberSaveable(track?.id) { mutableStateOf(preferences.getString(track?.id ?: "", null)) }
     val source = result?.sources?.firstOrNull { it.id == chosen } ?: result?.sources?.firstOrNull()
@@ -64,7 +65,9 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                     result?.problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
                 else -> key(shown.id, shown.document) {
-                    LyricsLines(shown.document, positionMs, reducedMotion, onSeek, Modifier.fillMaxSize())
+                    var shownPosition by remember { mutableLongStateOf(positionMs) }
+                    SideEffect { if (shown == source && loaded?.first == track?.id) shownPosition = positionMs }
+                    LyricsLines(shown.document, shownPosition, reducedMotion, onSeek, Modifier.fillMaxSize())
                 }
             }
         }

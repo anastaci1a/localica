@@ -24,7 +24,7 @@ class TagEditService : Service() {
             NotificationChannel("tag-edits", "Tag editing", NotificationManager.IMPORTANCE_LOW))
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "stop") { controller.stopAfterCurrent(); return START_NOT_STICKY }
+        if (intent?.action == "stop") { controller.stopAfterCurrent(); if (work?.isActive != true) stopSelf(); return START_NOT_STICKY }
         if (work?.isActive == true) return START_NOT_STICKY
         try {
             ServiceCompat.startForeground(this, 9010, notification(controller.state.value),

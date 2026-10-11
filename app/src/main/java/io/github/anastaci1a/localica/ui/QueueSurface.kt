@@ -97,11 +97,11 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                 .then(if (p == 0f) Modifier.semantics { contentDescription = "Open queue" } else Modifier)) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)
                     .background(Color.White.copy(alpha = .38f), RoundedCornerShape(2.dp)))
-                Row(Modifier.fillMaxSize().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.width(48.dp))
+                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.width(CompactControlSize))
                     Text("Queue", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium)
                     if (p > 0f) Box(Modifier.graphicsLayer { alpha = p }) { ActionIcon(R.drawable.ic_down, "Close queue") { settle(false) } }
-                    else Spacer(Modifier.width(48.dp))
+                    else Spacer(Modifier.width(CompactControlSize))
                 }
             }
             if (p > 0f) content()

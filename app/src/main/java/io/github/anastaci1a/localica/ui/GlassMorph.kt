@@ -117,7 +117,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val p = progress.value.coerceIn(0f, 1f)
-        val geometry = progress.value.coerceIn(-.02f, 1.04f)
+        val geometry = progress.value.coerceIn(-.02f, 1.07f)
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
             .pointerInput(visible) { detectTapGestures { if (visible) onDismiss() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
@@ -173,7 +173,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         Box(Modifier.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else LiquidGlassSurface(Modifier.fillMaxSize(), source = source, cornerRadius = radius, frostProgress = p,
-                                tint = (if (dark) Color.Black else Color.White).copy(alpha = p * if (dark) .42f else .30f), pressFeedback = false)
+                                tint = (if (dark) Color.Black else Color.White).copy(alpha = p * if (dark) .42f else .52f), pressFeedback = false)
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
                             .then(if (!visible || p < .85f) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
@@ -191,9 +191,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         val foreground = children[1].measure(Constraints(minWidth = targetWidth, maxWidth = targetWidth,
                             minHeight = if (page) maxHeight else 0, maxHeight = maxHeight))
                         targetHeight = foreground.height
-                        val width = (if (page) targetWidth else mix(if (detached) targetWidth * .96f else startWidth, targetWidth.toFloat()).roundToInt()).coerceAtLeast(1)
-                        val height = (if (page) foreground.height else mix(if (detached) foreground.height * .96f else startHeight,
-                            expandedHeight.value.takeIf { it >= 0f } ?: foreground.height.toFloat()).roundToInt()).coerceAtLeast(1)
+                        val width = (if (page) targetWidth else mix(if (detached) targetWidth * .96f else startWidth, targetWidth.toFloat()).roundToInt()).coerceIn(1, availableWidth)
+                        val height = (if (page) foreground.height else if (!detached && geometry < 0f)
+                            (startHeight * (1f - geometry * 2f)).roundToInt()
+                        else mix(if (detached) foreground.height * .96f else startHeight,
+                            expandedHeight.value.takeIf { it >= 0f } ?: foreground.height.toFloat()).roundToInt()).coerceIn(1, availableHeight)
                         val backing = children[0].measure(Constraints.fixed(width, height))
                         val face = children[2].measure(Constraints.fixed(startWidth.roundToInt().coerceAtLeast(1), startHeight.roundToInt().coerceAtLeast(1)))
                         layout(width, height) {

@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.*
 import io.github.anastaci1a.localica.library.AndroidDocuments
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -61,7 +62,21 @@ class TagEditorFlowTest {
             compose.waitUntil(30000) { !app.tagEditing.state.value.busy && app.tagEditing.state.value.results.isNotEmpty() }
             assertTrue(app.tagEditing.state.value.results.toString(), app.tagEditing.state.value.results.single().saved)
             assertEquals("Retagged tone", runBlocking { AndroidDocuments(context).metadata(uri.toString()).title })
-            compose.onNodeWithText("Close editor").performClick()
+            // A second verified write remains alive with no resumed Activity.
+            compose.activityRule.scenario.onActivity {
+                app.tagEditing.save(io.github.anastaci1a.localica.editing.TagPatch(mapOf(
+                    io.github.anastaci1a.localica.editing.EditField.Title to "Retagged tone")))
+                app.tagEditing.continueInBackground()
+            }
+            compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            runBlocking { kotlinx.coroutines.withTimeout(30000) {
+                app.tagEditing.state.first { !it.busy && it.results.isNotEmpty() }
+            } }
+            assertTrue(app.tagEditing.state.value.results.single().saved)
+            assertEquals("Complete", app.tagEditing.state.value.jobs.first().status)
+            compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            compose.activityRule.scenario.recreate()
+            compose.activityRule.scenario.onActivity { app.tagEditing.close() }
             compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Retagged tone"))
             compose.onNode(hasText("Retagged tone") and inList).assertIsDisplayed()
             compose.onAllNodes(isToggleable() and hasAnyAncestor(hasTestTag("browser-list"))).assertCountEquals(0)

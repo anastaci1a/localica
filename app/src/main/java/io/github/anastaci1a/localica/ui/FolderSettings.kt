@@ -28,7 +28,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and unfiltered collections"),
     SettingsDestination("Folders to scan", "Library and tags", R.drawable.ic_folder, "Choose music folders and excluded subfolders"),
     SettingsDestination("Scanner configuration", "Library and tags", R.drawable.ic_search, "Subfolders, short files, and scanning on launch"),
-    SettingsDestination("Tag recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
+    SettingsDestination("Tag jobs and recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
     SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, and open-source licenses"),
 )
 private fun settingsPath(title: String?): List<String> {
@@ -80,7 +80,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     "Song tap behavior" -> playbackContent(page)
                     "About and licenses" -> aboutContent()
                     "Library filters" -> libraryFiltersContent()
-                    "Tag recovery" -> { Text("Interrupted edits keep a recovery copy until you resolve them."); extraContent() }
+                    "Tag jobs and recovery" -> { Text("Interrupted edits keep a recovery copy until you resolve them."); extraContent() }
                     "Folders to scan" -> {
                         Text("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)
                         LibraryNotice(state)
