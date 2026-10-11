@@ -127,7 +127,11 @@ class InterfaceNavigationTest {
         compose.onAllNodesWithText(destination).onFirst().assertIsDisplayed()
         // Artist headers include an album carousel above the songs. Navigation must
         // preserve that initial header rather than forcing the first song onscreen.
-        compose.onNodeWithTag("browser-list").performScrollToIndex(1)
+        if (action != "Go to folder") {
+            val playLabel = if (action == "Go to album") "Play album" else "Play selected albums"
+            compose.onNode(hasTestTag("browser-list") and hasAnyDescendant(hasContentDescription(playLabel)))
+                .performScrollToIndex(1)
+        }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("media-" + track.id).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Collapse player").assertDoesNotExist()
         compose.runOnIdle { assertEquals(0, playbackActions) }
