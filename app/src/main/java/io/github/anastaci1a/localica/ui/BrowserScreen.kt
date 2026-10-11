@@ -326,16 +326,27 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = 4.dp))
             if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
             val playingIndex = result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
-            val showCurrent by remember(playingIndex) { derivedStateOf {
-                playingIndex != null && gridState.layoutInfo.visibleItemsInfo.none { it.index == playingIndex }
+            val visibleTop = with(density) { (if (showSearchPill) 56.dp else if (showFilters) filterHeight + 8.dp else 0.dp).toPx() }
+            val hiddenBottom = with(density) { obscuredInset.toPx() }
+            val returnDirection by remember(playingIndex, visibleTop, hiddenBottom) { derivedStateOf {
+                val layout = gridState.layoutInfo
+                val current = layout.visibleItemsInfo.firstOrNull { it.index == playingIndex }
+                when {
+                    playingIndex == null -> 0
+                    current == null -> if (playingIndex < gridState.firstVisibleItemIndex) -1 else 1
+                    current.offset.y + current.size.height <= visibleTop -> -1
+                    current.offset.y >= layout.viewportEndOffset - hiddenBottom -> 1
+                    else -> 0
+                }
             } }
+            val showCurrent = returnDirection != 0
             androidx.compose.animation.AnimatedVisibility(showCurrent && !session.active && reorder.drag == null, Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + 16.dp),
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
                 exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
                 CompositionLocalProvider(LocalFrostedBackdrop provides (surroundingBackdrop ?: listBackdrop)) {
-                    ReturnToPositionButton(up = (playingIndex ?: 0) < gridState.firstVisibleItemIndex, label = "Current song", visible = showCurrent && !session.active && reorder.drag == null) {
-                        playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, if (showSearchPill) with(density) { 56.dp.toPx() } else 0f) } }
+                    ReturnToPositionButton(up = returnDirection < 0, label = "Current song", visible = showCurrent && !session.active && reorder.drag == null) {
+                        playingIndex?.let { scrollScope.launch { gridState.easeToItem(it, reducedMotion, visibleTop) } }
                     }
                 }
             }

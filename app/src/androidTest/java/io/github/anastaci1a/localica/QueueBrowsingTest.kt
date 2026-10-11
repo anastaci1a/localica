@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.library.Track
@@ -13,6 +15,32 @@ import org.junit.Test
 
 class QueueBrowsingTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun currentRowHiddenBySearchPillHasAnUpwardReturnButton() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = context.getSharedPreferences("browse-style", 0)
+        preferences.edit().clear().commit()
+        val tracks = (1..24).map { Track("song:$it", "Song $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
+        val queue = QueueEdits.create(tracks, 2, "Mix")
+        val state = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
+        try {
+            compose.setContent { LocalicaTheme { QueueScreen(state, null) } }
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${queue.entries[2].id}").fetchSemanticsNodes().isNotEmpty() }
+            val current = compose.onNodeWithTag("media-${queue.entries[2].id}")
+            val pill = compose.onNodeWithTag("list-search-pill")
+            current.assertIsDisplayed()
+            val distance = current.fetchSemanticsNode().boundsInRoot.bottom - pill.fetchSemanticsNode().boundsInRoot.bottom + 24f
+            compose.onNodeWithTag("browser-list").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, distance) }
+            val button = compose.onNodeWithContentDescription("Current song")
+            button.assertIsDisplayed().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Scroll up"))
+            button.performTouchInput { click() }
+            compose.waitUntil(5000) {
+                current.fetchSemanticsNode().boundsInRoot.top >= pill.fetchSemanticsNode().boundsInRoot.bottom
+            }
+            button.assertDoesNotExist()
+            assertEquals(queue.entries[2].id, queue.currentEntryId)
+        } finally { preferences.edit().clear().commit() }
+    }
+
     @Test fun queueSearchReturnsToSavedOrderAndDisplaySortDisablesManualMoves() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = context.getSharedPreferences("browse-style", 0)

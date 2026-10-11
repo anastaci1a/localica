@@ -7,10 +7,12 @@ Development APK for Android 8 or newer. Signed with the project development key;
 - Shared Liquid Glass for the mini-player, navigation pills, Queue/lyrics return bubbles and drag-cancel target
 - Live backdrop blur, curved refraction and illuminated edges, with supported older-Android fallbacks
 - Neutral monochrome accents and a soft selected-tab capsule; the Queue drawer keeps its frosted texture
+- Queue return controls also recognize rows hidden behind floating controls
 
 ## Resolved issues
 
 - https://github.com/anastaci1a/localica/issues/78 - Liquid Glass floating controls and neutral accents
+- https://github.com/anastaci1a/localica/issues/79 - Return to a current queue row obscured by floating controls
 
 ## Install
 
