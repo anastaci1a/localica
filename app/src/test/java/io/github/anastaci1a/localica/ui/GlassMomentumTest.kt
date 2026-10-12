@@ -36,4 +36,17 @@ class GlassMomentumTest {
             assertTrue("Settles at $fps fps", body.settled)
         }
     }
+
+    @Test fun edgePressureHasDiminishingReturnsAndReleaseSettles() {
+        assertEquals(0f, glassEdgePressure(0f), .00001f)
+        assertTrue(glassEdgePressure(1f) < glassEdgePressure(.5f))
+        assertTrue(abs(glassEdgePressure(2f) - glassEdgePressure(1.5f)) < abs(glassEdgePressure(.5f)))
+        assertTrue(glassEdgePressure(100f) >= -.22f)
+        val body = GlassMomentum()
+        repeat(120) { body.advance(0f, 1f / 60, glassEdgePressure(1f)) }
+        assertTrue("A held drag keeps the lens compressed", body.strain < -.15f)
+        assertEquals(1f, body.scaleX * body.scaleY, .00001f)
+        repeat(120) { body.advance(0f, 1f / 60) }
+        assertTrue(body.settled)
+    }
 }

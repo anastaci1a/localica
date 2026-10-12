@@ -190,13 +190,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
     Surface(Modifier.offset(x = 12.dp * (1f - p), y = miniTop * (1f - p))
         .width(surfaceWidth).height(CompactControlSize + (maxHeight - CompactControlSize) * p)
+        .bottomGlassShadow(surfaceCorner, opacity = { 1f - progress.value })
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = RoundedCornerShape(surfaceCorner), color = Color.Transparent, contentColor = foreground) {
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
-            cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false)
+            cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false)
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {

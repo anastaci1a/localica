@@ -22,7 +22,7 @@ internal fun PlayerSystemBars(dark: Boolean) {
         val contrastWasEnforced = if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced else false
         controller.isAppearanceLightStatusBars = !dark
         controller.isAppearanceLightNavigationBars = !dark
-        if (Build.VERSION.SDK_INT >= 29 && dark) window.isNavigationBarContrastEnforced = false
+        if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         onDispose {
             controller.isAppearanceLightStatusBars = statusWasLight
             controller.isAppearanceLightNavigationBars = navigationWasLight

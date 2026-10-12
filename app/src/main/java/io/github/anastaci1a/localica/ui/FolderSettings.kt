@@ -128,7 +128,7 @@ private fun ScannerConfiguration(preferences: ScanPreferences, folders: () -> Un
         var input by remember { mutableStateOf(options.minimumDurationSeconds.toString()) }
         val seconds = input.toIntOrNull()
         GlassAlertDialog(onDismissRequest = { durationOpen = false }, title = { Text("Exclude short files") }, text = {
-            OutlinedTextField(input, { input = it }, label = { Text("Minimum seconds (0 = off)") }, singleLine = true,
+            GlassTextField(input, { input = it }, label = { Text("Minimum seconds (0 = off)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = seconds == null || seconds !in 0..3600)
         }, confirmButton = { TextButton(enabled = seconds != null && seconds in 0..3600, onClick = {
@@ -149,7 +149,7 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
         GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Excluded subfolders") }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Changes apply on the next scan.")
-                OutlinedTextField(input, { input = it }, label = { Text("Subfolder paths") }, minLines = 3, maxLines = 6, isError = !valid)
+                GlassTextField(input, { input = it }, label = { Text("Subfolder paths") }, minLines = 3, maxLines = 6, isError = !valid)
             }
         }, confirmButton = { TextButton(enabled = valid, onClick = { paths = lines; preferences.excluded(folder.uri, paths); open = false }) { Text("Save") } },
             dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } })

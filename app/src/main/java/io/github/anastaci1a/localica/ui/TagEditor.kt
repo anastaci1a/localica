@@ -118,7 +118,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                                 values = JSONObject(values).put(field.name, text).toString()
                                 if (field.name !in changed) changed = changed + field.name
                             }, enabled = !state.busy, label = { Text(field.label) }, placeholder = { if (!common) Text("Mixed values — unchanged") },
-                                modifier = Modifier.weight(1f), singleLine = field != EditField.Comment,
+                                modifier = Modifier.weight(1f).clearTextFocusOnBack(), singleLine = field != EditField.Comment,
                                 colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                                     unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent))
                         }

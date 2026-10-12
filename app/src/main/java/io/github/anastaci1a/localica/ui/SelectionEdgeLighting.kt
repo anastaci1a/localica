@@ -19,16 +19,15 @@ import kotlin.math.floor
  * only its lighting, with transparent interior pixels; never sample/read back content. */
 internal class SelectionEdgeLighting {
     private var previous = emptyList<SelectionRegion>()
-    private var previousSize = Size.Zero
     private var previousDensity = 0f
     private var image: ImageBitmap? = null
     var origin = Offset.Zero
         private set
 
     fun image(regions: List<SelectionRegion>, path: Path, size: Size, density: Float): ImageBitmap? {
-        if (regions == previous && size == previousSize && density == previousDensity) return image
-        previous = regions; previousSize = size; previousDensity = density
-        val bounds = path.getBounds().inflate(density).intersect(Rect(0f, 0f, size.width, size.height))
+        if (regions == previous && density == previousDensity) return image
+        previous = regions; previousDensity = density
+        val bounds = path.getBounds().inflate(density)
         if (bounds.isEmpty) { image = null; return null }
         origin = Offset(floor(bounds.left), floor(bounds.top))
         val bitmap = Bitmap.createBitmap(ceil(bounds.right - origin.x).toInt().coerceAtLeast(1),
@@ -36,11 +35,11 @@ internal class SelectionEdgeLighting {
         val canvas = Canvas(bitmap)
         canvas.translate(-origin.x, -origin.y)
         val outline = path.asAndroidPath()
-        val strength = regions.maxOf { it.progress }
+        val strength = 1f
         fun white(alpha: Float) = android.graphics.Color.argb((255 * alpha * strength).toInt(), 255, 255, 255)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            shader = LinearGradient(0f, 0f, size.width, size.height,
+            shader = LinearGradient(0f, 0f, bounds.right, bounds.bottom,
                 intArrayOf(white(.025f), android.graphics.Color.TRANSPARENT,
                     android.graphics.Color.argb((255 * .018f * strength).toInt(), 0, 0, 0)), null, Shader.TileMode.CLAMP)
         }
@@ -52,7 +51,7 @@ internal class SelectionEdgeLighting {
         }
         canvas.restore()
         paint.strokeWidth = .7f * density
-        paint.shader = LinearGradient(0f, 0f, size.width, size.height,
+        paint.shader = LinearGradient(0f, 0f, bounds.right, bounds.bottom,
             intArrayOf(white(.65f), white(.08f), white(.25f)), null, Shader.TileMode.CLAMP)
         canvas.drawPath(outline, paint)
         image = bitmap.asImageBitmap()

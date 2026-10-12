@@ -57,7 +57,7 @@ internal fun GlassSearchField(value: String, onValue: (String) -> Unit, label: S
     keyboardActions: androidx.compose.foundation.text.KeyboardActions = androidx.compose.foundation.text.KeyboardActions.Default,
     trailingIcon: (@Composable () -> Unit)? = null) {
     LiquidGlassSurface(modifier, cornerRadius = 28.dp, pressFeedback = false) {
-        TextField(value, onValue, fieldModifier.fillMaxWidth().semantics { contentDescription = "$label input" }, enabled = enabled,
+        TextField(value, onValue, fieldModifier.fillMaxWidth().clearTextFocusOnBack().semantics { contentDescription = "$label input" }, enabled = enabled,
             singleLine = true, placeholder = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(painterResource(R.drawable.ic_search), null, Modifier.size(22.dp)) }, trailingIcon = trailingIcon,
             keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,

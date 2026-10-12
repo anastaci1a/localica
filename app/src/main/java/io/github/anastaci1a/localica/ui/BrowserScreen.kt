@@ -283,7 +283,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                 focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                 unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
+            modifier = Modifier.fillMaxWidth().clearTextFocusOnBack().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
         else if (route.search) GlassSearchField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) },
             if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}", enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
@@ -590,7 +590,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     if (renaming) {
         var name by remember { mutableStateOf(playlists.playlists.firstOrNull { it.id == route.collection?.id }?.name.orEmpty()) }
         GlassAlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename playlist") }, text = {
-            OutlinedTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true)
+            GlassTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true)
         }, confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = {
             route.collection?.let { playlistController?.rename(it.id, name); onRoute(route.copy(title = name.trim())) }; renaming = false
         }) { Text("Save") } }, dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } })
