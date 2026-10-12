@@ -40,6 +40,7 @@ import kotlin.math.roundToInt
 internal class GlassAnchor {
     var bounds by mutableStateOf(Rect.Zero)
     var hidden by mutableStateOf(false)
+    var modalPresent by mutableStateOf(false)
     var source: FrostedBackdrop? = null
     var face: (@Composable () -> Unit)? = null
     var quiet = false
@@ -79,6 +80,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var deformation by remember { mutableFloatStateOf(0f) }
     val momentum = remember { GlassMomentum() }
     var present by remember { mutableStateOf(false) }
+    var surfaceReady by remember { mutableStateOf(false) }
     var origin by remember { mutableStateOf(Rect.Zero) }
     var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
     val ambientSource = LocalModalBackdrop.current
@@ -88,8 +90,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             if (!present && anchor.bounds == Rect.Zero) withFrameNanos { }
             if (!present) { origin = anchor.bounds; source = ambientSource ?: anchor.source }
             source?.refresh()
-            present = true
+            present = true; anchor.modalPresent = true
             // Keep the origin visible until the modal has a measured surface.
+            withFrameNanos { }; surfaceReady = true
             withFrameNanos { }; withFrameNanos { }
             anchor.hidden = true
         }
@@ -97,7 +100,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         else {
             val initial = progress.value
             val target = if (visible) 1f else 0f
-            val duration = 0.46f / speed
+            val duration = 0.34f / speed
             val begin = withFrameNanos { it }
             var lastFrame = begin
             var previous = initial
@@ -121,11 +124,17 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             }
             deformation = 0f
         }
-        if (!visible) { present = false; anchor.hidden = false }
+        if (!visible) {
+            // The underlying window must draw its restored trigger before the modal
+            // disappears. Keep the identical returned surface across that handoff.
+            anchor.hidden = false
+            withFrameNanos { }; withFrameNanos { }
+            present = false; surfaceReady = false; anchor.modalPresent = false
+        }
     }
-    DisposableEffect(anchor) { onDispose { anchor.hidden = false } }
+    DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false } }
     if (!present) return
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { TextEditingFocusHost {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
         @Suppress("DEPRECATION")
@@ -197,11 +206,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         else androidx.compose.ui.unit.IntOffset(mix(if (detached) x else start.left, x).roundToInt(),
                             mix(if (detached) y + margin * 2 else start.top, y).roundToInt())
                     }.graphicsLayer {
-                        alpha = if (detached) p else if (anchor.hidden) 1f else 0f
+                        alpha = if (detached) p else if (surfaceReady) 1f else 0f
                         val direction = if (kotlin.math.abs(targetWidth - startWidth) >= kotlin.math.abs(targetHeight - startHeight)) 1f else -1f
                         val strain = if (reduced || page) 0f else deformation * direction
                         scaleX = kotlin.math.exp(strain); scaleY = kotlin.math.exp(-strain)
                     }
+                        .clearGlassShadow(LocalGlassAppearance.current.shadowStrength *
+                            (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else if (detached) p else 1f),
+                            LocalGlassAppearance.current.shadowSpread, radius)
                         .clip(RoundedCornerShape(radius)).recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         Box(Modifier.recordFrostedBackdrop(material)) {
@@ -209,9 +221,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             else {
                                 if (p < 1f) LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = (1f - p) * (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f) },
                                     source = source, cornerRadius = radius, frostProgress = p, pressFeedback = false,
-                                    refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
+                                    shadow = false, refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
                                 FrostedSurface(Modifier.fillMaxSize().graphicsLayer { alpha = p },
-                                    shape = RoundedCornerShape(radius), source = source) {}
+                                    shape = RoundedCornerShape(radius), source = source, shadow = false) {}
                             }
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
@@ -252,5 +264,5 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }
             }
         }
-    }
+    } }
 }

@@ -50,7 +50,7 @@ class SelectionLensTest {
         assertEquals("Partial groups must not retain a lens", 0, residual)
     }
 
-    @Test fun selectionRisesAcrossFramesAndReversesBeforeSettling() {
+    @Test fun selectionAppearsImmediatelyAndDisappearsWithoutAnExitAnimation() {
         var chosen by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
             ConnectedSelectionHost(Modifier.size(200.dp).testTag("animated-lens")) {
@@ -69,14 +69,15 @@ class SelectionLensTest {
         }
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { chosen = true }
-        compose.mainClock.advanceTimeBy(96)
+        compose.mainClock.advanceTimeBy(32)
         val early = energy()
         compose.mainClock.advanceTimeBy(128)
         val middle = energy()
-        assertTrue("Selection rises visibly without another tap: $early -> $middle", middle > early + 5f)
+        assertTrue("Selection is visible immediately", early > 5f)
+        assertEquals("There is no entrance animation", early, middle, 1f)
         compose.runOnIdle { chosen = false }
-        compose.mainClock.advanceTimeBy(500)
-        assertTrue("An interrupted selection returns to a flat pane", energy() < 1f)
+        compose.mainClock.advanceTimeBy(32)
+        assertTrue("Deselecting removes the lens immediately", energy() < 1f)
     }
 
     @Test fun lensLeavesCentralDetailCrispOnBothRenderers() {
@@ -110,7 +111,7 @@ class SelectionLensTest {
     }
 
     private fun region(vararg rectangles: Rect): Region {
-        val path = connectedSelectionPath(rectangles.map { SelectionRegion(it, 1f) }, 16f)
+        val path = connectedSelectionPath(rectangles.map { SelectionRegion(it) }, 16f)
         return Region().apply { setPath(path.asAndroidPath(), Region(-1000, -1000, 1000, 1000)) }
     }
     @Test fun sideNeighborsJoinWithoutCoveringAnUnselectedHole() {
@@ -156,12 +157,45 @@ class SelectionLensTest {
             selected[(110 * density).toInt(), (180 * density).toInt()].red, .01f)
     }
 
-    @Test fun diagonalNeighborsHaveOnlyANarrowCornerBridge() {
+    @Test fun diagonalNeighborsStaySeparate() {
         val shape = region(Rect(0f, 0f, 80f, 80f), Rect(88f, 88f, 168f, 168f))
-        assertTrue(shape.contains(84, 84))
+        assertFalse(shape.contains(84, 84))
         assertFalse(shape.contains(120, 40))
         assertFalse(shape.contains(40, 120))
         val split = region(Rect(0f, 0f, 80f, 80f))
         assertFalse(split.contains(84, 84))
+    }
+
+    @Test fun translatingASelectionReusesItsDistanceField() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)
+        val regions = listOf(SelectionRegion(Rect(0f, 0f, 300f, 200f)))
+        val path = connectedSelectionPath(regions, 16f)
+        val optics = ConnectedLensOptics()
+        repeat(120) { index ->
+            optics.effect(regions, path, androidx.compose.ui.geometry.Size(500f, 800f), 22f, 1f,
+                androidx.compose.ui.geometry.Offset(0f, -index.toFloat()))
+        }
+        assertEquals("Scrolling must not rasterize/upload a field every frame", 1, optics.rasterizations)
+    }
+
+    @Test fun lensFollowsPlacementWithoutASecondLayoutCallback() {
+        var y by mutableStateOf(20.dp)
+        compose.setContent { LocalicaTheme {
+            ConnectedSelectionHost(Modifier.size(220.dp, 260.dp).background(Color.Black).testTag("moving")) {
+                Box(Modifier.offset(y = y).padding(horizontal = 20.dp).size(180.dp, 100.dp).selectionLens(true, false))
+            }
+        } }
+        val before = compose.onNodeWithTag("moving").captureToImage().toPixelMap()
+        compose.runOnIdle { y = 80.dp }
+        val after = compose.onNodeWithTag("moving").captureToImage().toPixelMap()
+        val d = before.width / 220f
+        var initial = 0; var moved = 0; var stale = 0
+        for (yy in (20*d).toInt()..(32*d).toInt()) for (x in (60*d).toInt()..(160*d).toInt()) {
+            if (before[x, yy].red > .02f) initial++
+            if (after[x, yy + (60*d).toInt()].red > .02f) moved++
+            if (after[x, yy].red > .02f) stale++
+        }
+        assertTrue(initial > 20 && moved > 20)
+        assertEquals("No lens remains at the previous row position", 0, stale)
     }
 }

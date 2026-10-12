@@ -28,6 +28,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.exp
 
 /** Shared drawing/motion, retaining Slider's keyboard, touch and accessibility behavior. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,12 +41,30 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val interaction = remember { MutableInteractionSource() }
     val speed = LocalMotionSpeed.current
     val dragged by interaction.collectIsDraggedAsState()
-    val expansion by animateFloatAsState(if (dragged) 1.12f else 1f,
-        if (LocalReducedMotion.current) tween(0) else spring(.75f, 700f * speed * speed), label = "Slider pressure")
+    var pressure by remember { mutableFloatStateOf(0f) }
+    val current by rememberUpdatedState(value)
+    val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
+    val deformation = rememberGlassElastic({ (value - valueRange.start) / span }, { pressure })
+    val inset = with(LocalDensity.current) { 14.dp.toPx() }
+    val touch = Modifier.pointerInput(valueRange) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val start = (current - valueRange.start) / span
+            try {
+                do {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    event.changes.firstOrNull { it.id == down.id }?.let {
+                        val raw = start + (it.position.x - down.position.x) / (size.width - 2 * inset).coerceAtLeast(1f)
+                        pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
+                    }
+                } while (event.changes.any { it.pressed })
+            } finally { pressure = 0f }
+        }
+    }
     val color = MaterialTheme.colorScheme.onSurface
-    Slider(value, onValueChange, modifier, valueRange = valueRange, steps = steps, interactionSource = interaction,
+    Slider(value, onValueChange, modifier.then(touch), valueRange = valueRange, steps = steps, interactionSource = interaction,
         thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f)) {
-            LiquidGlassSurface(Modifier.size(28.dp).graphicsLayer { scaleX = expansion; scaleY = 2f - expansion }, pressFeedback = false)
+            LiquidGlassSurface(Modifier.size(28.dp).graphicsLayer { scaleX = exp(deformation.value); scaleY = exp(-deformation.value) }, pressFeedback = false)
         } },
         track = {
             Canvas(Modifier.fillMaxWidth().height(48.dp)) {
@@ -67,13 +89,18 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
         if (reduced) position.snapTo(if (checked) 1f else 0f)
         else position.animateTo(if (checked) 1f else 0f, spring(1f, 500f * speed * speed))
     }
+    var raw by remember { mutableFloatStateOf(if (checked) 1f else 0f) }
+    var pressure by remember { mutableFloatStateOf(0f) }
     val neutral = MaterialTheme.colorScheme.onSurface.copy(alpha = .18f)
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
     Box(Modifier.size(52.dp, 32.dp).then(if (onChange == null) Modifier else Modifier.draggable(
         rememberDraggableState { dx -> scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-            position.snapTo((position.value + dx / with(density) { 20.dp.toPx() }).coerceIn(0f, 1f))
-        } }, Orientation.Horizontal, onDragStarted = { position.stop() }, onDragStopped = {
+            raw += dx / with(density) { 20.dp.toPx() }
+            pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
+            position.snapTo(raw.coerceIn(0f, 1f))
+        } }, Orientation.Horizontal, onDragStarted = { position.stop(); raw = position.value }, onDragStopped = {
+            pressure = 0f
             val next = position.value >= .5f
             onChange(next)
             position.animateTo(if (next) 1f else 0f, spring(1f, 500f))
@@ -82,7 +109,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 cornerRadius = CornerRadius(size.height / 2))
         }
-        SelectionLens(Modifier.offset(x = 2.dp + 20.dp * position.value, y = 2.dp).size(28.dp), position, if (checked) 1f else 0f)
+        SelectionLens(Modifier.offset(x = 2.dp + 20.dp * position.value, y = 2.dp).size(28.dp), position, if (checked) 1f else 0f, pressure = { pressure })
     }
 }
 

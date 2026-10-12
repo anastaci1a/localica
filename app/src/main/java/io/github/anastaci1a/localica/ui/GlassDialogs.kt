@@ -41,8 +41,8 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
                 GlassMorphPopup(entry.mounted, entry.anchor, { if (entry.mounted) entry.dismiss() },
                     entry.placement, darkOverride = entry.dark, content = entry.content)
             }
-            LaunchedEffect(entry.mounted, entry.anchor.hidden) {
-                if (!entry.mounted && !entry.anchor.hidden) host.entries.remove(entry)
+            LaunchedEffect(entry.mounted, entry.anchor.modalPresent) {
+                if (!entry.mounted && !entry.anchor.modalPresent) host.entries.remove(entry)
             }
         } }
     }

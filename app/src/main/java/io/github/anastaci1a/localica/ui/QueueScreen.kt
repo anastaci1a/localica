@@ -149,7 +149,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     state.library.queues.firstOrNull { it.id == renameId }?.let { queue ->
         var name by remember(queue.id) { mutableStateOf(queue.name) }
         GlassAlertDialog(onDismissRequest = { renameId = null }, title = { Text("Rename queue") },
-            text = { OutlinedTextField(name, { name = it }, label = { Text("Queue name") }) },
+            text = { GlassTextField(name, { name = it }, label = { Text("Queue name") }) },
             confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renameId = null }) { Text("Save") } },
             dismissButton = { TextButton(onClick = { renameId = null }) { Text("Cancel") } })
     }
@@ -222,7 +222,7 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
         var seconds by remember(settings.previousThresholdSeconds) { mutableStateOf(settings.previousThresholdSeconds.toString()) }
         val valid = seconds.toIntOrNull()?.let { it in 1..60 } == true
         GlassAlertDialog(onDismissRequest = { thresholdOpen = false }, title = { Text("Restart threshold") }, text = {
-            OutlinedTextField(seconds, { seconds = it }, label = { Text("Seconds (1–60)") }, singleLine = true,
+            GlassTextField(seconds, { seconds = it }, label = { Text("Seconds (1–60)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = !valid)
         }, confirmButton = { TextButton(enabled = valid, onClick = {
@@ -232,7 +232,7 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
     if (limitOpen) {
         var limit by remember(settings.maximum) { mutableStateOf(settings.maximum?.toString().orEmpty()) }
         GlassAlertDialog(onDismissRequest = { limitOpen = false }, title = { Text("Queue limit") }, text = {
-            OutlinedTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
+            GlassTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
         }, confirmButton = { TextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0, onClick = {

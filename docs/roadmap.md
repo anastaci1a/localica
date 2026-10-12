@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Review the implemented player carousel, glass motion, collection headers, interactive pinch and tag-editing flow on the user's phone. Tune motion, contrast and gesture feel from concrete device feedback; Issues own any resulting changes. Preserve accessibility, playback continuity and older-Android support.
+Verify glass rendering, overflowing navigation and text focus on the user's phone. After the optimization release, compile an Apple-sourced Liquid Glass design guide, then consolidate source and documentation while preserving the released behavior. Keep research-driven redesign proposals separate from that refactor; selection entrance motion awaits a new design review. Preserve accessibility, playback continuity and older-Android support.
 
 ## Deferred capabilities
 

@@ -114,7 +114,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
 @Composable
 internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corners.panel,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
-    tint: Color = Color.Transparent, darkening: Float = .5f, content: @Composable BoxScope.() -> Unit) {
+    tint: Color = Color.Transparent, darkening: Float = .5f, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     val view = LocalView.current
     val dark = source?.dark == true
@@ -124,18 +124,20 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
     val material = rememberFrostedBackdrop(source?.fallback, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
-    Box(modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false).clip(shape)
+    Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)
         .onGloballyPositioned { origin = it.backdropPosition(view) }
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) .38f else .8f),
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
-        if (source != null) Canvas(Modifier.matchParentSize().graphicsLayer {
-            if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(22.dp.toPx(), 22.dp.toPx(), TileMode.Clamp)
-        }) {
-            val offset = source.origin - origin
-            translate(offset.x, offset.y) {
-                if (Build.VERSION.SDK_INT >= 31 && !source.layer.isReleased) drawLayer(source.layer)
-                else source.fallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) }
+        if (source != null) {
+            if (Build.VERSION.SDK_INT >= 31) {
+                val blur = with(LocalDensity.current) { 22.dp.toPx() }
+                FilteredBackdrop(Modifier.matchParentSize(), source, { origin }, .5f, blur * 1.5f) { _, resolution ->
+                    BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp)
+                }
+            } else Canvas(Modifier.matchParentSize()) {
+                val offset = source.origin - origin
+                translate(offset.x, offset.y) { source.fallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) } }
             }
         }
         Canvas(Modifier.matchParentSize()) {
