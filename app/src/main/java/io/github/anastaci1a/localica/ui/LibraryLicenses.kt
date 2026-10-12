@@ -18,7 +18,7 @@ internal fun LibraryLicenses() {
     TextButton(onClick = { open = true }) { Text("Open-source licenses") }
     if (open) {
         val text by produceState("Loading licenses…") { value = withContext(Dispatchers.IO) {
-            listOf("NOTICE.txt", "inter-OFL.txt", "jaudiotagger-LGPL-2.1.txt").joinToString("\n\n") {
+            listOf("NOTICE.txt", "inter-OFL.txt", "heroicons-MIT.txt", "lucide-animated-MIT.txt", "jaudiotagger-LGPL-2.1.txt").joinToString("\n\n") {
                 context.assets.open("licenses/$it").bufferedReader().use { reader -> reader.readText() }
             }
         } }

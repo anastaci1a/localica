@@ -130,9 +130,9 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (!change.pressed || event.changes.count { it.pressed } > 1) break
                     total += change.positionChange()
-                    if (abs(total.x) > viewConfiguration.touchSlop && abs(total.x) > abs(total.y) * .72f) {
+                    if (abs(total.x) > viewConfiguration.touchSlop && abs(total.x) > abs(total.y) * .55f) {
                         change.consume(); start = change
-                    } else if (abs(total.y) > viewConfiguration.touchSlop && abs(total.y) > abs(total.x) / .72f) break
+                    } else if (abs(total.y) > viewConfiguration.touchSlop && abs(total.y) > abs(total.x) / .55f) break
                 }
                 if (start != null) {
                     val velocity = VelocityTracker()

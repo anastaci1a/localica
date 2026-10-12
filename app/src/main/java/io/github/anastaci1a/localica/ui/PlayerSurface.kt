@@ -107,10 +107,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             } else progress.snapTo((startProgress - movement / distance).coerceIn(0f, 1f))
         }
     }
-    val drag = Modifier.draggable(dragState, Orientation.Vertical,
-        onDragStarted = { startExpanded = expanded; startProgress = progress.value; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f
+    val drag = Modifier.playerVerticalDrag(onDelta = { dragState.dispatchRawDelta(it) },
+        onStart = { startExpanded = expanded; startProgress = progress.value; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f
             owner = VerticalOwner.Undecided; dragging = true; progress.stop(); queueProgress?.stop() },
-        onDragStopped = { velocity ->
+        onStop = { velocity ->
             dragging = false
             val travelDp = -movement / density.density
             val velocityDp = -velocity / density.density
@@ -179,7 +179,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         settings, onArtworkVisit)
     val swipeOffset = artSwipe.offset.value
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
-    val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground && artSwipe.active) 1f else 0f
+    val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground)
+        smoothReveal(swipeFraction / .18f) * smoothReveal((1f - swipeFraction) / .18f) else 0f
     val baseColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = baseColors.copy(onSurface = foreground,
         onSurfaceVariant = foreground.copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, Color.White, p),
@@ -218,7 +219,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         val remaining = if (neighbor) kotlin.math.abs(swipeOffset) else artPixels - kotlin.math.abs(swipeOffset)
                         alpha = (1f - lyricProgress) * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
                         translationX = offset
-                        rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -9f
+                        rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -27f
                         cameraDistance = 24f * density.density
                         val depth = kotlin.math.abs(offset / artPixels).coerceIn(0f, 1f)
                         scaleX = 1f - .035f * depth
@@ -240,7 +241,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                             }
                             drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
                         }
-                    }.artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather), if (artSwipe.active) .22f else edgeBand).clip(artworkShape),
+                    }.artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather), edgeBand + (.22f - edgeBand) * swipeFeather).clip(artworkShape),
                         shape = artworkShape,
                         contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
                     }
