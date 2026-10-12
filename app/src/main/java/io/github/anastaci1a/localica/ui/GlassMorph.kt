@@ -34,7 +34,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import kotlin.math.roundToInt
-import kotlinx.coroutines.launch
 
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
 @Stable
@@ -77,7 +76,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
     val progress = remember { Animatable(0f) }
-    val deformation = remember { Animatable(0f) }
+    var deformation by remember { mutableFloatStateOf(0f) }
+    val momentum = remember { GlassMomentum() }
     var present by remember { mutableStateOf(false) }
     var origin by remember { mutableStateOf(Rect.Zero) }
     var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
@@ -93,15 +93,33 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             withFrameNanos { }; withFrameNanos { }
             anchor.hidden = true
         }
-        if (reduced) progress.snapTo(if (visible) 1f else 0f)
-        else kotlinx.coroutines.coroutineScope {
-            launch { progress.animateTo(if (visible) 1f else 0f,
-                androidx.compose.animation.core.tween((420 / speed).toInt(), easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
-            launch {
-                kotlinx.coroutines.delay((280 / speed).toLong())
-                deformation.animateTo(.035f, androidx.compose.animation.core.tween((65 / speed).toInt()))
-                deformation.animateTo(0f, spring(.45f, 750f * speed * speed))
+        if (reduced) { progress.snapTo(if (visible) 1f else 0f); deformation = 0f; momentum.reset() }
+        else {
+            val initial = progress.value
+            val target = if (visible) 1f else 0f
+            val duration = 0.46f / speed
+            val begin = withFrameNanos { it }
+            var lastFrame = begin
+            var previous = initial
+            do {
+                val now = withFrameNanos { it }
+                val dt = (now - lastFrame) / 1_000_000_000f
+                val fraction = ((now - begin) / 1_000_000_000f / duration).coerceIn(0f, 1f)
+                val next = initial + (target - initial) * androidx.compose.animation.core.FastOutSlowInEasing.transform(fraction)
+                momentum.advance((next - previous) / dt.coerceAtLeast(.001f) / speed, dt * speed)
+                deformation = momentum.strain
+                progress.snapTo(next)
+                previous = next
+                lastFrame = now
+            } while (fraction < 1f)
+            // Dissipate the actual remaining energy; reversals retain it naturally.
+            while (!momentum.settled) {
+                val now = withFrameNanos { it }
+                momentum.advance(0f, (now - lastFrame) / 1_000_000_000f * speed)
+                lastFrame = now
+                deformation = momentum.strain
             }
+            deformation = 0f
         }
         if (!visible) { present = false; anchor.hidden = false }
     }
@@ -180,15 +198,16 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             mix(if (detached) y + margin * 2 else start.top, y).roundToInt())
                     }.graphicsLayer {
                         alpha = if (detached) p else if (anchor.hidden) 1f else 0f
-                        val impact = if (reduced || page) 0f else kotlin.math.sin(p * Math.PI).toFloat() * .035f
-                        scaleX = 1f + impact - deformation.value; scaleY = 1f - impact + deformation.value
+                        val direction = if (kotlin.math.abs(targetWidth - startWidth) >= kotlin.math.abs(targetHeight - startHeight)) 1f else -1f
+                        val strain = if (reduced || page) 0f else deformation * direction
+                        scaleX = kotlin.math.exp(strain); scaleY = kotlin.math.exp(-strain)
                     }
                         .clip(RoundedCornerShape(radius)).recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         Box(Modifier.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
-                                LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f },
+                                if (p < 1f) LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = (1f - p) * (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f) },
                                     source = source, cornerRadius = radius, frostProgress = p, pressFeedback = false,
                                     refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
                                 FrostedSurface(Modifier.fillMaxSize().graphicsLayer { alpha = p },
@@ -220,7 +239,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         val face = children[2].measure(Constraints.fixed(startWidth.roundToInt().coerceAtLeast(1), startHeight.roundToInt().coerceAtLeast(1)))
                         layout(width, height) {
                             backing.place(0, 0)
-                            foreground.place((width - foreground.width) / 2, (height - foreground.height) / 2)
+                            foreground.placeWithLayer((width - foreground.width) / 2, (height - foreground.height) / 2) {
+                                // Reveal the whole fixed-layout menu, not a moving crop of its
+                                // middle rows. A uniform scale keeps glyph proportions intact.
+                                val fit = if (page) 1f else minOf(width.toFloat() / foreground.width.coerceAtLeast(1),
+                                    height.toFloat() / foreground.height.coerceAtLeast(1)).coerceAtMost(1f)
+                                scaleX = fit; scaleY = fit
+                            }
                             face.place((width - face.width) / 2, (height - face.height) / 2)
                         }
                     }
