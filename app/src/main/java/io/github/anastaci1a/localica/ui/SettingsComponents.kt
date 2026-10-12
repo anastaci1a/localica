@@ -26,7 +26,8 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
             val reduced = LocalReducedMotion.current
             val speed = LocalMotionSpeed.current
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).heightIn(min = 64.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     ActionIcon(R.drawable.ic_back, backLabel, onClick = onBack)
                     androidx.compose.animation.Crossfade(title, Modifier.weight(1f),
                         androidx.compose.animation.core.tween(if (reduced) 0 else (220 / speed).toInt()), label = "Settings heading") {
