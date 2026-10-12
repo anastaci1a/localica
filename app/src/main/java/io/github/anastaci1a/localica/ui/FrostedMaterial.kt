@@ -139,7 +139,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             }
         }
         Canvas(Modifier.matchParentSize()) {
-            drawRect(base.copy(alpha = if (dark) { if (compact) .22f else darkening } else { if (compact) .65f else .91f }))
+            drawRect(base.copy(alpha = if (dark) { if (compact) .22f else darkening } else { if (compact) .18f else .42f }))
             drawRect(tint)
             drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .075f), Color.Transparent),
                 center = Offset(size.width * .12f, 0f), radius = maxOf(size.width, size.height) * .9f))

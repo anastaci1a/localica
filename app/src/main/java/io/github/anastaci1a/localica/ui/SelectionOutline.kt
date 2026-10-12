@@ -16,19 +16,7 @@ import androidx.compose.ui.unit.dp
 
 @androidx.compose.runtime.Composable
 internal fun Modifier.selectionOutline(selected: Boolean, partial: Boolean, color: Color): Modifier {
-    val opacity = androidx.compose.animation.core.animateFloatAsState(if (selected) 1f else 0f,
-        androidx.compose.animation.core.tween(if (LocalReducedMotion.current) 0 else 220), label = "Selection outline")
-    return semantics {
-        this.selected = selected
-        if (partial) stateDescription = "Partially selected"
-    }.drawBehind {
-        if (opacity.value > 0f) {
-            val stroke = 2.dp.toPx()
-            drawRoundRect(color.copy(alpha = color.alpha * opacity.value), Offset(stroke / 2, stroke / 2), Size(size.width - stroke, size.height - stroke),
-                CornerRadius(16.dp.toPx()), style = Stroke(stroke,
-                    pathEffect = if (partial) PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx())) else null))
-        }
-    }
+    return selectionLens(selected, partial)
 }
 
 internal fun Modifier.currentSongHighlight(current: Boolean, color: Color) = semantics {

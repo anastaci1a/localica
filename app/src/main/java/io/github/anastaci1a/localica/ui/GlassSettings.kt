@@ -19,7 +19,7 @@ internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 
 @Composable
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
-    Text("Tune floating glass throughout the app. Text and icons stay sharp.")
+    Text("Tune floating glass and the navigation selector.")
     CompositionLocalProvider(LocalGlassAppearance provides value) {
         Box(Modifier.fillMaxWidth().height(128.dp), contentAlignment = Alignment.Center) {
             val source = rememberFrostedBackdrop(Unit, dark = false)
@@ -40,6 +40,17 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
     GlassSlider("White tint", value.whiteTint, "None", "White") { onChange(value.copy(whiteTint = it)) }
     GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong") { onChange(value.copy(shadowStrength = it)) }
     GlassSlider("Shadow spread", value.shadowSpread, "Tight", "Broad") { onChange(value.copy(shadowSpread = it)) }
+    GlassSlider("Adaptive contrast", value.contrast, "Off", "Strong") { onChange(value.copy(contrast = it)) }
+    SettingsHeading("Navigation selector")
+    ChoicePreference("Selector style", value.tabStyle, io.github.anastaci1a.localica.navigation.TabLensStyle.entries, { it.label }) {
+        onChange(value.copy(tabStyle = it))
+    }
+    if (value.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Adjustable) {
+        GlassSlider("Selector blur", value.tabBlur, "Clear", "Frosted") { onChange(value.copy(tabBlur = it)) }
+        GlassSlider("Selector white tint", value.tabWhiteTint, "None", "White") { onChange(value.copy(tabWhiteTint = it)) }
+    } else Text(if (value.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Overlay)
+        "The clear lens bends the finished bar and its labels. Selector blur and tint are saved but inactive."
+        else "A simple gray pill, without glass deformation.", style = MaterialTheme.typography.bodySmall)
     TextButton(onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") }
 }
 

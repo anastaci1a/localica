@@ -72,8 +72,8 @@ internal fun GlassSearchField(value: String, onValue: (String) -> Unit, label: S
 internal fun Modifier.listTopFade() = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
-        val height = 64.dp.toPx().coerceAtMost(size.height)
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), endY = height),
+        val height = 80.dp.toPx().coerceAtMost(size.height)
+        drawRect(Brush.verticalGradient(*Array(17) { i -> val t = i / 16f; t to Color.Black.copy(alpha = t * t * (3f - 2f * t)) }, endY = height),
             size = Size(size.width, height), blendMode = BlendMode.DstIn)
     }
 

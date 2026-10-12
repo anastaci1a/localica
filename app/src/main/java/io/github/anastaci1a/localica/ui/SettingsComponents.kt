@@ -26,7 +26,7 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
             val reduced = LocalReducedMotion.current
             val speed = LocalMotionSpeed.current
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
                     ActionIcon(R.drawable.ic_back, backLabel, onClick = onBack)
                     androidx.compose.animation.Crossfade(title, Modifier.weight(1f),
                         androidx.compose.animation.core.tween(if (reduced) 0 else (220 / speed).toInt()), label = "Settings heading") {
@@ -49,12 +49,11 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
 @Composable
 internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = null, enabled: Boolean = true,
     onClick: () -> Unit) {
-    Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f)) {
+    LiquidGlassSurface(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f), cornerRadius = 20.dp) {
         ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } },
             leadingContent = icon?.let { { Icon(painterResource(it), null, Modifier.size(24.dp)) } },
             trailingContent = { Icon(painterResource(R.drawable.ic_back), null, Modifier.size(20.dp).rotate(180f)) },
-            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
             modifier = Modifier.clickable(enabled, onClick = onClick).heightIn(min = 64.dp))
     }
 }
@@ -70,9 +69,7 @@ internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, labe
     onDismiss: () -> Unit, onSelect: (T) -> Unit) {
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
-            choices.forEach { choice ->
-                OptionRow(label(choice), choice == selected) { onSelect(choice); onDismiss() }
-            }
+            GlassChoices(choices.map(label), choices.indexOf(selected).coerceAtLeast(0)) { index -> onSelect(choices[index]); onDismiss() }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }

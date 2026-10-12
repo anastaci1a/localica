@@ -25,7 +25,12 @@ internal class BrowsePinchMotion {
     var held by mutableStateOf(false)
     var source by mutableStateOf<BrowseStyle?>(null)
     var bounds: Map<Any, Rect> = emptyMap()
+    var focusKey: Any? = null
+    var focusTop: Int = 0
+    var target: BrowseStyle? = null
+    var targetColumns = 1
     var sourceColumns = 1
+    val retained = mutableMapOf<Any, androidx.compose.ui.graphics.layer.GraphicsLayer>()
     var anchorIndex = 0
     var anchorTop = 0f
     var rowHeight = 64f
@@ -39,11 +44,9 @@ internal class BrowsePinchMotion {
     }
 }
 
-/** Finger progress approaches its destination asymptotically; only release reaches one. */
-internal fun pinchProgress(scale: Float, outward: Boolean): Float {
-    val distance = (ln(scale) * if (outward) 1f else -1f).coerceAtLeast(0f)
-    return (1f - exp(-distance * 4f)).coerceIn(0f, .985f)
-}
+/** Linear finger distance; returning to the starting span restores the source. */
+internal fun pinchProgress(scale: Float, outward: Boolean): Float =
+    ((if (outward) scale - 1f else 1f - scale) / if (outward) .8f else .45f).coerceIn(0f, 1f)
 
 @Composable
 internal fun Modifier.pinchToChangeView(enabled: Boolean, onProgress: ((Float) -> Unit)? = null,

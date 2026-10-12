@@ -74,8 +74,8 @@ internal fun LibraryFilterBubbles(filters: List<LibraryFilter>, selected: MediaK
                 }.minOrNull() ?: 0f
                 delay((crossing * 120).toLong())
                 offsets.getValue(filter).animateTo(targets.getValue(filter),
-                    if (filter in travelers) spring(dampingRatio = .78f, stiffness = 440f)
-                    else spring(dampingRatio = .58f, stiffness = 700f))
+                    if (filter in travelers) spring(dampingRatio = 1f, stiffness = 440f)
+                    else spring(dampingRatio = 1f, stiffness = 700f))
             } }
             active?.let { filter -> launch {
                 snapshotFlow { offsets.getValue(filter).value }.collect { x ->

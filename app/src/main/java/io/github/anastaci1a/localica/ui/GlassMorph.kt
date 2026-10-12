@@ -34,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
 @Stable
@@ -42,6 +43,7 @@ internal class GlassAnchor {
     var hidden by mutableStateOf(false)
     var source: FrostedBackdrop? = null
     var face: (@Composable () -> Unit)? = null
+    var quiet = false
 }
 
 @Composable
@@ -75,23 +77,32 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
     val progress = remember { Animatable(0f) }
+    val deformation = remember { Animatable(0f) }
     var present by remember { mutableStateOf(false) }
     var origin by remember { mutableStateOf(Rect.Zero) }
     var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
     val ambientSource = LocalModalBackdrop.current
     LaunchedEffect(visible, reduced, speed) {
+        if (!visible && !present) { anchor.hidden = false; return@LaunchedEffect }
         if (visible) {
             if (!present && anchor.bounds == Rect.Zero) withFrameNanos { }
             if (!present) { origin = anchor.bounds; source = ambientSource ?: anchor.source }
             source?.refresh()
-            present = true; anchor.hidden = true
-        }
-        if (visible && !reduced && progress.value == 0f && origin != Rect.Zero) {
-            // Keep the trigger face in the shared surface for one rebound before opening.
-            progress.animateTo(-.018f, androidx.compose.animation.core.tween((80 / speed).toInt()))
+            present = true
+            // Keep the origin visible until the modal has a measured surface.
+            withFrameNanos { }; withFrameNanos { }
+            anchor.hidden = true
         }
         if (reduced) progress.snapTo(if (visible) 1f else 0f)
-        else progress.animateTo(if (visible) 1f else 0f, spring(dampingRatio = .67f, stiffness = 330f * speed * speed))
+        else kotlinx.coroutines.coroutineScope {
+            launch { progress.animateTo(if (visible) 1f else 0f,
+                androidx.compose.animation.core.tween((420 / speed).toInt(), easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+            launch {
+                kotlinx.coroutines.delay((280 / speed).toLong())
+                deformation.animateTo(.035f, androidx.compose.animation.core.tween((65 / speed).toInt()))
+                deformation.animateTo(0f, spring(.45f, 750f * speed * speed))
+            }
+        }
         if (!visible) { present = false; anchor.hidden = false }
     }
     DisposableEffect(anchor) { onDispose { anchor.hidden = false } }
@@ -117,7 +128,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val p = progress.value.coerceIn(0f, 1f)
-        val geometry = progress.value.coerceIn(-.02f, 1.07f)
+        val geometry = if (anchor.quiet) ((p - .14f) / .86f).coerceIn(0f, 1f) else p
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
             .pointerInput(visible) { detectTapGestures { if (visible) onDismiss() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
@@ -167,13 +178,22 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (page) androidx.compose.ui.unit.IntOffset(with(density) { (28.dp.toPx() * (1f - p)).roundToInt() }, 0)
                         else androidx.compose.ui.unit.IntOffset(mix(if (detached) x else start.left, x).roundToInt(),
                             mix(if (detached) y + margin * 2 else start.top, y).roundToInt())
-                    }.graphicsLayer { alpha = if (detached) p else 1f }
+                    }.graphicsLayer {
+                        alpha = if (detached) p else if (anchor.hidden) 1f else 0f
+                        val impact = if (reduced || page) 0f else kotlin.math.sin(p * Math.PI).toFloat() * .035f
+                        scaleX = 1f + impact - deformation.value; scaleY = 1f - impact + deformation.value
+                    }
                         .clip(RoundedCornerShape(radius)).recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         Box(Modifier.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
-                            else LiquidGlassSurface(Modifier.fillMaxSize(), source = source, cornerRadius = radius, frostProgress = p,
-                                tint = (if (dark) Color.Black else Color.White).copy(alpha = p * if (dark) .42f else .52f), pressFeedback = false)
+                            else {
+                                LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f },
+                                    source = source, cornerRadius = radius, frostProgress = p, pressFeedback = false,
+                                    refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
+                                FrostedSurface(Modifier.fillMaxSize().graphicsLayer { alpha = p },
+                                    shape = RoundedCornerShape(radius), source = source) {}
+                            }
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
                             .then(if (!visible || p < .85f) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {

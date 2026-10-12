@@ -77,9 +77,9 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
         Text("Albums", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "all-albums") {
-                Column(Modifier.width(120.dp).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
+                Column(Modifier.width(120.dp).selectionLens(selectedIds.isEmpty(), false).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
                     .semantics { selected = selectedIds.isEmpty() }.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    LiquidGlassSurface(Modifier.size(112.dp), cornerRadius = 20.dp, tint = LocalContentColor.current.copy(alpha = if (selectedIds.isEmpty()) .12f else 0f)) {
+                    Box(Modifier.size(112.dp)) {
                         Icon(painterResource(R.drawable.ic_albums), null, Modifier.align(Alignment.Center).size(36.dp))
                     }
                     Text("All albums", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge)
@@ -87,10 +87,10 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
             }
             items(albums, key = { it.id }) { album ->
                 val selected = album.id in selectedIds
-                Column(Modifier.width(120.dp).toggleable(selected, role = Role.Checkbox, onValueChange = {
+                Column(Modifier.width(120.dp).selectionLens(selected, false).toggleable(selected, role = Role.Checkbox, onValueChange = {
                     onSelection(if (selected) selectedIds - album.id else selectedIds + album.id)
                 }).semantics { this.selected = selected }.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    MediaArtwork(album.tracks.map { it.uri }, Modifier.size(112.dp).selectionOutline(selected, false, LocalContentColor.current))
+                    MediaArtwork(album.tracks.map { it.uri }, Modifier.size(112.dp))
                     Text(album.title, Modifier.padding(top = 8.dp), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
                 }

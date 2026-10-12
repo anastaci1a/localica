@@ -18,7 +18,10 @@ class InterfacePreferences(context: Context) {
             artworkLayout = ArtworkLayout.entries.firstOrNull { it.name == preferences.getString("artwork-layout", null) } ?: ArtworkLayout.FullBackground,
             artworkTransition = ArtworkTransition.entries.firstOrNull { it.name == preferences.getString("artwork-transition", null) } ?: ArtworkTransition.SoftWash,
             glass = GlassAppearance(preferences.getFloat("glass-blur", .2f), preferences.getFloat("glass-white-tint", .06f),
-                preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f)).normalized(),
+                preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f),
+                preferences.getFloat("glass-contrast", .4f),
+                TabLensStyle.entries.firstOrNull { it.name == preferences.getString("tab-lens-style", null) } ?: TabLensStyle.Adjustable,
+                preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone())
     }
     fun write(value: InterfaceSettings) {
@@ -32,6 +35,8 @@ class InterfacePreferences(context: Context) {
             .putFloat("gray-tone", value.grayTone.normalizedGrayTone())
             .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
             .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)
+            .putFloat("glass-contrast", glass.contrast).putString("tab-lens-style", glass.tabStyle.name)
+            .putFloat("tab-lens-blur", glass.tabBlur).putFloat("tab-lens-tint", glass.tabWhiteTint)
             .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()
     }
 }

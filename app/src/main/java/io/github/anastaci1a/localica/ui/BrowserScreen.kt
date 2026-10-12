@@ -168,6 +168,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val searchSlotHeight = (pillSlotHeight - with(density) { (searchVacancy * vacancyProgress.value.coerceIn(0f, 1f)).toDp() }).coerceAtLeast(0.dp)
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
+    val pinchGraphics = androidx.compose.ui.platform.LocalGraphicsContext.current
+    DisposableEffect(pinchMotion, pinchGraphics) { onDispose {
+        pinchMotion.retained.values.forEach(pinchGraphics::releaseGraphicsLayer)
+        pinchMotion.retained.clear()
+    } }
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
         val anchor = zoomAnchor ?: return@LaunchedEffect
@@ -253,6 +258,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         primary = collectionInk, surface = if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom) else pageColors) {
     CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface,
         LocalFrostedBackdrop provides if (artDetail) collectionSource else surroundingBackdrop) {
+    ConnectedSelectionHost(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())) {
     Box(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())) {
     if (artDetail) {
         val top = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "browser-notice" }?.offset?.y?.toFloat()
@@ -287,6 +293,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
         LookaheadScope {
         if (popupDismiss == null || route.text.isNotBlank()) Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
+            .pinchRetainedOverlay(pinchMotion, gridState, result.items.map { it.key })
             .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
             val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
@@ -299,8 +306,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     onRelease = {
                         pinchMotion.held = false
                         scrollScope.launch {
-                            if (reducedMotion) pinchMotion.progress.snapTo(1f)
-                            else pinchMotion.progress.animateTo(1f, androidx.compose.animation.core.tween(220))
+                            val commit = pinchMotion.progress.value >= .35f
+                            val destination = if (commit) pinchMotion.target else pinchMotion.source
+                            if (reducedMotion) pinchMotion.progress.snapTo(if (commit) 1f else 0f)
+                            else pinchMotion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
+                            if (destination != null) {
+                                style = destination
+                                preferences.write(route, destination, preferences.overridden(route))
+                                pinchMotion.focusKey?.let { zoomAnchor = BrowseZoomAnchor(route, destination, it, pinchMotion.focusTop) }
+                            }
+                            // Keep retained drawings through the source-layout handoff.
+                            withFrameNanos { }; withFrameNanos { }
                             pinchMotion.source = null
                         }
                     }) { zoomIn, midpoint ->
@@ -308,7 +324,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         albumSongs = route.collection?.kind == MediaKind.Album)
                     if (next != displayedStyle) {
                         val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
-                        pinchMotion.source = if (reducedMotion) null else displayedStyle
+                        pinchMotion.source = displayedStyle
+                        pinchMotion.target = next
+                        pinchMotion.targetColumns = galleryColumns(next.presentation, with(density) { reorder.viewportWidth.toDp().value }, next.itemsPerRow)
                         pinchMotion.held = true
                         pinchMotion.viewportWidth = reorder.viewportWidth.toFloat()
                         pinchMotion.sourceColumns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
@@ -324,8 +342,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             val y = it.offset.y + it.size.height / 2f - midpoint.y
                             x * x + y * y
                         }
-                        if (nearest != null) zoomAnchor = BrowseZoomAnchor(route, next, nearest.key, nearest.offset.y)
-                        preferences.write(route, next, preferences.overridden(route))
+                        if (nearest != null) {
+                            pinchMotion.focusKey = nearest.key; pinchMotion.focusTop = nearest.offset.y
+                            zoomAnchor = BrowseZoomAnchor(route, next, nearest.key, nearest.offset.y)
+                        }
                         style = next
                     }
                 }
@@ -357,7 +377,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                         if (library.snapshot.folders.isEmpty() && route.collection?.kind != MediaKind.Queue) TextButton(onClick = onSettings) { Text("Add music folders") }
-                        if (result.items.isEmpty() && !library.loading && !queryPending) Text(if (route.search) "No matching items" else "Nothing here yet")
+                        if (result.items.isEmpty() && !library.loading && !queryPending) Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+                            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_queue),
+                                if (route.search) "No matching items" else "Empty list", Modifier.size(72.dp),
+                                tint = LocalContentColor.current.copy(alpha = .13f))
+                        }
                     }
                 }
                 items(reorder.rendered(result.items), key = { it?.key ?: DropGapKey },
@@ -428,7 +452,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     translationX = (old.left - position.x) * (1f - pinchMotion.progress.value)
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
-                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary).testTag("media-${item.key}").combinedClickable(
+                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary)
+                            .retainPinchItem(item.key, pinchMotion, pinchGraphics).testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
@@ -520,7 +545,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
     }
-    } } }
+    } } } }
 
     if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
         fun closeSearch() { localSearchOpen = false }
