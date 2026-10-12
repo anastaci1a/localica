@@ -94,14 +94,13 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         .nestedScroll(listPull).testTag("queue-surface"), shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), darkening = .22f + .28f * p) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(64.dp).clickable(onClickLabel = if (p == 0f) "Open queue" else "Close queue") { settle(p < .5f) }
-                .then(if (p == 0f) Modifier.semantics { contentDescription = "Open queue" } else Modifier)) {
+                .semantics { contentDescription = if (p == 0f) "Open queue" else "Close queue" }) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)
                     .background(Color.White.copy(alpha = .38f), RoundedCornerShape(2.dp)))
                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Spacer(Modifier.width(CompactControlSize))
                     Text("Queue", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium)
-                    if (p > 0f) Box(Modifier.graphicsLayer { alpha = p }) { ActionIcon(R.drawable.ic_down, "Close queue") { settle(false) } }
-                    else Spacer(Modifier.width(CompactControlSize))
+                    Spacer(Modifier.width(CompactControlSize))
                 }
             }
             if (p > 0f) {

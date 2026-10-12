@@ -4,3 +4,7 @@ The library is used unmodified. Its source archive is included with Localica rel
 Source: https://repo.maven.apache.org/maven2/net/jthink/jaudiotagger/3.0.1/jaudiotagger-3.0.1-sources.jar
 Localica source and rebuild instructions: https://github.com/anastaci1a/localica
 You may replace/modify the library and rebuild Localica; see docs/build.md.
+
+Transport wedges adapt Heroicons (Tailwind Labs); directional motion adapts lucide-animated by pqoqubbw. Both are MIT licensed; see the included notices.
+https://github.com/tailwindlabs/heroicons
+https://github.com/pqoqubbw/icons
