@@ -88,6 +88,6 @@ internal fun BooleanPreference(label: String, value: Boolean, onChange: (Boolean
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).toggleable(value, role = Role.Switch, onValueChange = onChange)
         .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f).padding(end = 12.dp))
-        InterfaceSwitch(value)
+        InterfaceSwitch(value, onChange)
     }
 }

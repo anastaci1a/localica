@@ -31,7 +31,7 @@ class GlassAppearanceTest {
         val prefs = InterfacePreferences(context)
         val original = prefs.read()
         try {
-            val glass = GlassAppearance(.73f, .18f, .04f, .91f)
+            val glass = GlassAppearance(.73f, .18f, .04f, .91f, .67f, TabLensStyle.Overlay, .81f, .23f)
             prefs.write(original.copy(glass = glass))
             assertEquals(glass, InterfacePreferences(context).read().glass)
             prefs.write(original.copy(glass = GlassAppearance(-1f, 2f, Float.NaN, Float.POSITIVE_INFINITY)))
@@ -42,7 +42,7 @@ class GlassAppearanceTest {
     }
 
     @Test fun blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp() {
-        var appearance by mutableStateOf(GlassAppearance(0f, 0f, 0f, 0f))
+        var appearance by mutableStateOf(GlassAppearance(0f, 0f, 0f, 0f, contrast = 0f))
         var expansion by mutableFloatStateOf(0f)
         lateinit var source: FrostedBackdrop
         compose.setContent { LocalicaTheme {
@@ -86,7 +86,7 @@ class GlassAppearanceTest {
         val ink = compose.onNodeWithTag("ink").captureToImage().toPixelMap()
         val black = ink[ink.width / 2, ink.height * 3 / 4]
         assertTrue("Foreground is never blurred or tinted: $black", black.red + black.green + black.blue < .03f)
-        compose.runOnIdle { appearance = GlassAppearance(0f, 0f, 1f, 1f) }
+        compose.runOnIdle { appearance = GlassAppearance(0f, 0f, 1f, 1f, contrast = 0f) }
         assertTrue("Shadow cannot darken the clear center", nearBoundary().red > .95f)
         fun outsideBrightness(): Float {
             val scene = compose.onNodeWithTag("scene").captureToImage().toPixelMap()

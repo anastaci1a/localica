@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -148,6 +149,53 @@ class BrowsePinchTest {
             compose.waitForIdle()
             assertEquals(5, prefs.read(route).itemsPerRow)
         } finally { compose.mainClock.autoAdvance = true; prefs.write(route, old, false) }
+    }
+
+    @Test fun galleryPinchCanReturnToItsOriginalLayoutWithoutLifting() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val route = BrowseRoute(MainTab.Songs)
+        val prefs = BrowsePreferences(context)
+        val original = prefs.read(route)
+        val gallery = BrowseStyle(presentation = Presentation.Compact, itemsPerRow = 5)
+        prefs.write(route, gallery, false)
+        try {
+            val tracks = (0..59).map { Track("reverse:$it", "Song $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
+            compose.setContent { LocalicaTheme {
+                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                    queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+            } }
+            waitForView("Gallery, 5 columns")
+            val list = compose.onNodeWithTag("browser-list")
+            val viewport = list.fetchSemanticsNode().boundsInRoot
+            val artwork = compose.onNodeWithTag("browse-art-reverse:14", true).fetchSemanticsNode().boundsInRoot
+            val beforePixels = list.captureToImage().toPixelMap()
+            compose.mainClock.autoAdvance = false
+            list.performTouchInput {
+                down(0, Offset(centerX - 100, 200f)); down(1, Offset(centerX + 100, 200f))
+                moveTo(0, Offset(centerX - 65, 200f)); moveTo(1, Offset(centerX + 65, 200f))
+            }
+            compose.mainClock.advanceTimeBy(96)
+            list.performTouchInput {
+                moveTo(0, Offset(centerX - 100, 200f)); moveTo(1, Offset(centerX + 100, 200f))
+            }
+            compose.mainClock.advanceTimeBy(96)
+            val restoredPixels = list.captureToImage().toPixelMap()
+            var difference = 0f
+            for (dy in 2..8) for (dx in 2..8) {
+                val x = (artwork.left - viewport.left + artwork.width * dx / 10f).toInt().coerceIn(0, beforePixels.width - 1)
+                val y = (artwork.top - viewport.top + artwork.height * dy / 10f).toInt().coerceIn(0, beforePixels.height - 1)
+                val old = beforePixels[x, y]; val restored = restoredPixels[x, y]
+                difference += kotlin.math.abs(old.red - restored.red) + kotlin.math.abs(old.green - restored.green) + kotlin.math.abs(old.blue - restored.blue)
+            }
+            assertTrue("Reversing must restore virtualized artwork before release: $difference", difference / (49 * 3) < .12f)
+            list.performTouchInput { up(0); up(1) }
+            compose.mainClock.autoAdvance = true
+            waitForView("Gallery, 5 columns")
+            assertEquals(gallery.presentation, prefs.read(route).presentation)
+            assertEquals(5, prefs.read(route).itemsPerRow)
+            compose.onNodeWithTag("media-reverse:0").assertIsDisplayed()
+        } finally { compose.mainClock.autoAdvance = true; prefs.write(route, original, false) }
     }
 
     private fun waitForView(label: String) {

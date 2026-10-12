@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.pager.HorizontalPager
@@ -235,8 +236,12 @@ fun LocalicaScreen(
                         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))
                     }
                     if (route.tab != MainTab.Queues && (route.tab != MainTab.Home || route.search || route.collection != null)) {
-                        ActionIcon(R.drawable.ic_sort, "Sort", anchor = sortAnchor) { viewOptions = false; sortingRoute = route.key }
-                        ActionIcon(R.drawable.ic_eye, "View options") { viewOptions = true; sortingRoute = route.key }
+                        LiquidGlassSurface(Modifier.height(CompactControlSize), pressFeedback = false) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                ActionIcon(R.drawable.ic_sort, "Sort", anchor = sortAnchor, glass = false) { viewOptions = false; sortingRoute = route.key }
+                                ActionIcon(R.drawable.ic_eye, "View options", glass = false) { viewOptions = true; sortingRoute = route.key }
+                            }
+                        }
                     }
                 }
                 Box(Modifier.weight(1f)) {
@@ -275,8 +280,8 @@ fun LocalicaScreen(
             .graphicsLayer { alpha = chromeVisibility }
             .then(if (insideCollection || hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            LiquidGlassSurface(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill"), source = browseBackdrop, pressFeedback = false) {
-                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], pager.currentPage + pager.currentPageOffsetFraction, source = browseBackdrop) { tab ->
+            Box(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill")) {
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], pager.currentPage + pager.currentPageOffsetFraction, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value) { tab ->
                     navigation = navigation.resetTab(tab)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
                     keyboard?.hide(); focusManager.clearFocus()
@@ -307,7 +312,6 @@ fun LocalicaScreen(
                             moreOpen = false; scannerOpen = true
                         })
                         ActionMenuItem("Settings", onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
-                        ActionMenuItem("About and licenses", onClick = { moreOpen = false; settingsCategory = "About and licenses"; settingsOpen = true })
                         ActionMenuItem("Close Localica", onClick = { moreOpen = false; if (settings.confirmExit) exitPrompt = true else exit() })
                     }
                 }

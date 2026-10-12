@@ -80,14 +80,21 @@ data class InterfaceSettings(
 
 fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f
 
+enum class TabLensStyle(val label: String) { Adjustable("Adjustable glass"), Overlay("Clear overlay lens"), Classic("Classic gray pill") }
+
 data class GlassAppearance(
     val blur: Float = .2f,
     val whiteTint: Float = .06f,
     val shadowStrength: Float = .12f,
     val shadowSpread: Float = .6f,
+    val contrast: Float = .4f,
+    val tabStyle: TabLensStyle = TabLensStyle.Adjustable,
+    val tabBlur: Float = .3f,
+    val tabWhiteTint: Float = .16f,
 ) {
     fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
-        shadowStrength.unit(.12f), shadowSpread.unit(.6f))
+        shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.4f), tabStyle,
+        tabBlur.unit(.3f), tabWhiteTint.unit(.16f))
     private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
 }
 
