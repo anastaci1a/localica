@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.navigation
 
+import io.github.anastaci1a.localica.library.enumValue
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -12,15 +13,15 @@ class InterfacePreferences(context: Context) {
         return InterfaceSettings(tabs, preferences.getBoolean("history", true), preferences.getBoolean("confirm-exit", false),
             preferences.getBoolean("expand-on-play", true), preferences.getBoolean("album-artist", true),
             preferences.getBoolean("reduced-motion", false),
-            ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-tap", null) } ?: ArtworkAction.Lyrics,
-            ArtworkAction.entries.firstOrNull { it.name == preferences.getString("artwork-hold", null) } ?: ArtworkAction.Menu,
+            preferences.enumValue<ArtworkAction>("artwork-tap") ?: ArtworkAction.Lyrics,
+            preferences.enumValue<ArtworkAction>("artwork-hold") ?: ArtworkAction.Menu,
             fasterMotion = preferences.getBoolean("faster-motion", false),
-            artworkLayout = ArtworkLayout.entries.firstOrNull { it.name == preferences.getString("artwork-layout", null) } ?: ArtworkLayout.FullBackground,
-            artworkTransition = ArtworkTransition.entries.firstOrNull { it.name == preferences.getString("artwork-transition", null) } ?: ArtworkTransition.SoftWash,
+            artworkLayout = preferences.enumValue<ArtworkLayout>("artwork-layout") ?: ArtworkLayout.FullBackground,
+            artworkTransition = preferences.enumValue<ArtworkTransition>("artwork-transition") ?: ArtworkTransition.SoftWash,
             glass = GlassAppearance(preferences.getFloat("glass-blur", .2f), preferences.getFloat("glass-white-tint", .06f),
                 preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f),
                 preferences.getFloat("glass-contrast", .4f),
-                TabLensStyle.entries.firstOrNull { it.name == preferences.getString("tab-lens-style", null) } ?: TabLensStyle.Adjustable,
+                preferences.enumValue<TabLensStyle>("tab-lens-style") ?: TabLensStyle.Adjustable,
                 preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone())
     }

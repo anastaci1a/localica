@@ -12,7 +12,7 @@ import io.github.anastaci1a.localica.navigation.*
 
 @Composable
 internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden: Boolean,
-    onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: (() -> Unit)? = null, reducedMotion: Boolean = false) {
+    onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: (() -> Unit)? = null) {
     if (presentationOnly) {
         ListViewOptions(route, value, overridden, onDismiss, onSave, onReset)
         return
@@ -33,7 +33,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                 val field = fields[index]
                 edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending)
             }
-            SortDirection(edited.ascending, reducedMotion) { edited = edited.copy(ascending = it) }
+            SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }
             if (route.collection != null) {
                 BooleanPreference("Only for this collection", override) { override = it }
                 if (overridden) TextButton(onClick = onReset) { Text("Use list-type defaults") }

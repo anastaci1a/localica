@@ -13,7 +13,7 @@ class AndroidLibraryQueryPreferences(context: Context) : LibraryQueryPreferences
     override fun read(view: SongListView) = LibraryQuery(
         text = preferences.getString(key(view, "text"), "").orEmpty(),
         folderUri = preferences.getString(key(view, "folder"), null),
-        sort = TrackSort.entries.firstOrNull { it.name == preferences.getString(key(view, "sort"), null) }
+        sort = preferences.enumValue<TrackSort>(key(view, "sort"))
             ?: LibraryViews.defaults(view).sort,
         ascending = preferences.getBoolean(key(view, "ascending"), true),
     )

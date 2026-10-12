@@ -7,7 +7,6 @@ import android.graphics.Paint
 import android.graphics.Shader
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Rect
 import kotlin.math.floor
 import androidx.compose.ui.graphics.Path
@@ -58,7 +57,7 @@ internal class ConnectedLensOptics {
     internal var rasterizations = 0
         private set
 
-    fun effect(regions: List<SelectionRegion>, path: Path, size: Size, band: Float, strength: Float, origin: Offset = Offset.Zero): RenderEffect? {
+    fun effect(regions: List<SelectionRegion>, path: Path, band: Float, strength: Float, origin: Offset = Offset.Zero): RenderEffect? {
         if (regions == previous && band == previousBand) {
             if (origin != previousOrigin) {
                 previousOrigin = origin

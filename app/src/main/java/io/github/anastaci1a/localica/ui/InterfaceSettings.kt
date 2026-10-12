@@ -59,10 +59,10 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                         Text(tab.label, style = MaterialTheme.typography.titleMedium)
                         Row {
                             TextButton(enabled = index > 0, onClick = {
-                                val tabs = value.tabs.toMutableList().apply { add(index - 1, removeAt(index)) }; onChange(value.copy(tabs = tabs))
+                                val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, -1); onChange(value.copy(tabs = tabs))
                             }) { Text("Move up") }
                             TextButton(enabled = index < value.tabs.lastIndex, onClick = {
-                                val tabs = value.tabs.toMutableList().apply { add(index + 1, removeAt(index)) }; onChange(value.copy(tabs = tabs))
+                                val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, 1); onChange(value.copy(tabs = tabs))
                             }) { Text("Move down") }
                             TextButton(enabled = value.tabs.size > 1, onClick = { onChange(value.copy(tabs = value.tabs - tab)) }) { Text("Remove") }
                         }

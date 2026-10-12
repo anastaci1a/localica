@@ -172,21 +172,9 @@ private fun scatterSnapshot(image: ImageBitmap): ImageBitmap {
     if (original !== small) original.recycle()
     var pixels = IntArray(w * h)
     small.getPixels(pixels, 0, w, 0, 0, w, h)
-    fun pass(horizontal: Boolean) {
-        val result = IntArray(pixels.size)
-        for (y in 0 until h) for (x in 0 until w) {
-            var r = 0; var g = 0; var b = 0
-            for (offset in -3..3) {
-                val xx = if (horizontal) (x + offset).coerceIn(0, w - 1) else x
-                val yy = if (horizontal) y else (y + offset).coerceIn(0, h - 1)
-                val color = pixels[yy * w + xx]
-                r += (color ushr 16) and 255; g += (color ushr 8) and 255; b += color and 255
-            }
-            result[y * w + x] = android.graphics.Color.rgb(r / 7, g / 7, b / 7)
-        }
-        pixels = result
-    }
-    repeat(3) { pass(true); pass(false) }
+    // This panel treatment has always been opaque; preserve RGB while sharing the filter.
+    pixels.indices.forEach { pixels[it] = pixels[it] or (255 shl 24) }
+    repeat(3) { pixels = boxBlur(pixels, w, h, 3) }
     small.recycle()
     return android.graphics.Bitmap.createBitmap(pixels, w, h, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
 }

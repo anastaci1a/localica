@@ -107,11 +107,7 @@ object BrowseQueries {
             else terms.all { it in (item.title + "\n" + item.subtitle.orEmpty()).lowercase(Locale.ROOT) }
         }
         if (kinds == listOf(MediaKind.Song)) return BrowseResult(items, scope(route))
-        val direction = if (effective.ascending) 1 else -1
-        fun <T : Comparable<T>> compare(a: T?, b: T?): Int = when {
-            a == null && b == null -> 0; a == null -> 1; b == null -> -1
-            else -> a.compareTo(b) * direction
-        }
+        fun <T : Comparable<T>> compare(a: T?, b: T?) = compareKnown(a, b, effective.ascending)
         val ordered = items.sortedWith { a, b ->
             val primary = when (effective.sort) {
                 TrackSort.Count -> compare(a.songs.size, b.songs.size)

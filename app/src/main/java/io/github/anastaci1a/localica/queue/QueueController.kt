@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.queue
 
+import io.github.anastaci1a.localica.library.OccurrenceMoves
 import android.os.Bundle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -293,11 +294,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         name.trim().takeIf { it.isNotEmpty() }?.let { save(state.value.library.update(queue.copy(name = it))) }
     }
     fun moveQueue(id: String, offset: Int) = submit {
-        val queues = state.value.library.queues.toMutableList()
+        val queues = state.value.library.queues
         val from = queues.indexOfFirst { it.id == id }
         if (from >= 0) {
-            queues.add((from + offset).coerceIn(0, queues.lastIndex), queues.removeAt(from))
-            save(state.value.library.copy(queues = queues))
+            save(state.value.library.copy(queues = OccurrenceMoves.byOffset(queues, from, offset)))
         }
     }
     fun removeQueues(ids: Set<String>, protectActive: Boolean = false) = submit {
