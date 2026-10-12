@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -49,6 +50,65 @@ class SelectionLensTest {
         assertEquals("Partial groups must not retain a lens", 0, residual)
     }
 
+    @Test fun selectionRisesAcrossFramesAndReversesBeforeSettling() {
+        var chosen by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            ConnectedSelectionHost(Modifier.size(200.dp).testTag("animated-lens")) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF404040)))
+                Box(Modifier.padding(20.dp).size(160.dp, 100.dp).selectionLens(chosen, false))
+            }
+        } }
+        val node = compose.onNodeWithTag("animated-lens")
+        val original = node.captureToImage().toPixelMap()
+        fun energy(): Float {
+            val pixels = node.captureToImage().toPixelMap()
+            var total = 0f
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width)
+                total += kotlin.math.abs(pixels[x,y].red - original[x,y].red)
+            return total
+        }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { chosen = true }
+        compose.mainClock.advanceTimeBy(96)
+        val early = energy()
+        compose.mainClock.advanceTimeBy(128)
+        val middle = energy()
+        assertTrue("Selection rises visibly without another tap: $early -> $middle", middle > early + 5f)
+        compose.runOnIdle { chosen = false }
+        compose.mainClock.advanceTimeBy(500)
+        assertTrue("An interrupted selection returns to a flat pane", energy() < 1f)
+    }
+
+    @Test fun lensLeavesCentralDetailCrispOnBothRenderers() {
+        var chosen by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            ConnectedSelectionHost(Modifier.size(220.dp).testTag("detail-lens")) {
+                androidx.compose.foundation.Canvas(Modifier.padding(20.dp).size(180.dp, 140.dp).selectionLens(chosen, false)) {
+                    drawRect(Color.DarkGray)
+                    for (x in 0..18) drawRect(if (x % 2 == 0) Color.White else Color.Black,
+                        topLeft = androidx.compose.ui.geometry.Offset(x * 10.dp.toPx(), 0f),
+                        size = androidx.compose.ui.geometry.Size(5.dp.toPx(), size.height))
+                }
+            }
+        } }
+        val originalImage = compose.onNodeWithTag("detail-lens").captureToImage()
+        val original = originalImage.toPixelMap()
+        compose.runOnIdle { chosen = true }
+        val selectedImage = compose.onNodeWithTag("detail-lens").captureToImage()
+        val selected = selectedImage.toPixelMap()
+        val d = original.width / 220f
+        var changed = 0
+        for (y in (60*d).toInt()..(110*d).toInt()) for (x in (65*d).toInt()..(155*d).toInt())
+            if (kotlin.math.abs(original[x,y].red - selected[x,y].red) > .02f) changed++
+        if (changed > 0) {
+            val dir = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+            for ((name, image) in listOf("selection-original" to originalImage, "selection-chosen" to selectedImage)) {
+                java.io.File(dir, "$name.png").outputStream().use { image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
+        assertEquals("Only the curved edge can bend fine content (${original.width}x${original.height})", 0, changed)
+    }
+
     private fun region(vararg rectangles: Rect): Region {
         val path = connectedSelectionPath(rectangles.map { SelectionRegion(it, 1f) }, 16f)
         return Region().apply { setPath(path.asAndroidPath(), Region(-1000, -1000, 1000, 1000)) }
@@ -60,6 +120,42 @@ class SelectionLensTest {
         assertTrue(shape.contains(40, 84))
         assertFalse("Unselected tile must remain uncovered", shape.contains(120, 120))
     }
+    @Test fun wideRowsMergeWithoutCircularCapsOrInternalShoulders() {
+        val shape = region(Rect(8f, 240f, 712f, 360f), Rect(8f, 370f, 712f, 490f))
+        assertEquals(android.graphics.Rect(8, 240, 712, 490), shape.bounds)
+        for (y in 330..400) {
+            assertTrue("Continuous left side at $y", shape.contains(10, y))
+            assertTrue("Continuous right side at $y", shape.contains(710, y))
+        }
+        assertFalse("No circle reaching into the header", shape.contains(360, 100))
+        assertFalse("No circle reaching into the next song", shape.contains(360, 540))
+    }
+
+    @Test fun selectionHasABroadCurvedBodyAndAnUntouchedCenter() {
+        var chosen by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            ConnectedSelectionHost(Modifier.size(220.dp).testTag("lens-body")) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF404040)))
+                Box(Modifier.padding(20.dp).size(180.dp, 120.dp).selectionLens(chosen, false))
+            }
+        } }
+        val original = compose.onNodeWithTag("lens-body").captureToImage().toPixelMap()
+        compose.runOnIdle { chosen = true }
+        val selected = compose.onNodeWithTag("lens-body").captureToImage().toPixelMap()
+        val density = original.width / 220f
+        // Deep enough to reject the old 1dp outline; far enough from the corner to
+        // test the curved face rather than anti-aliasing at the silhouette.
+        var curved = 0
+        for (y in (24 * density).toInt()..(31 * density).toInt()) {
+            if (selected[(110 * density).toInt(), y].red > original[(110 * density).toInt(), y].red + .015f) curved++
+        }
+        assertTrue("The glass must have width, not just an outline", curved > 3)
+        assertEquals(original[(110 * density).toInt(), (80 * density).toInt()].red,
+            selected[(110 * density).toInt(), (80 * density).toInt()].red, .01f)
+        assertEquals(original[(110 * density).toInt(), (180 * density).toInt()].red,
+            selected[(110 * density).toInt(), (180 * density).toInt()].red, .01f)
+    }
+
     @Test fun diagonalNeighborsHaveOnlyANarrowCornerBridge() {
         val shape = region(Rect(0f, 0f, 80f, 80f), Rect(88f, 88f, 168f, 168f))
         assertTrue(shape.contains(84, 84))
