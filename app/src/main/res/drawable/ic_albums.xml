@@ -1,1 +1,7 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="M4,3H20V21H4ZM6,5V19H18V5ZM12,8A4,4 0,1 0,12,16A4,4 0,0 0,12,8M12,10A2,2 0,1 1,12,14A2,2 0,0 1,12,10"/></vector>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <!-- Original iOS-style optical record: shared by every album/record action. -->
+    <path android:fillColor="#000000" android:fillType="evenOdd"
+        android:pathData="M12,1.5A10.5,10.5 0,1 1,12,22.5A10.5,10.5 0,1 1,12,1.5ZM12,3.1A8.9,8.9 0,1 0,12,20.9A8.9,8.9 0,1 0,12,3.1ZM12,8A4,4 0,1 1,12,16A4,4 0,1 1,12,8ZM12,9.6A2.4,2.4 0,1 0,12,14.4A2.4,2.4 0,1 0,12,9.6Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#000000" android:strokeWidth="1.4" android:strokeLineCap="round"
+        android:pathData="M5.3,11A6.8,6.8 0,0 1,11,5.3M13,18.7A6.8,6.8 0,0 0,18.7,13" />
+</vector>

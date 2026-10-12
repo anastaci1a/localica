@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -44,16 +45,28 @@ internal class GlassAnchor {
     var source: FrostedBackdrop? = null
     var face: (@Composable () -> Unit)? = null
     var quiet = false
+    var ink by mutableStateOf(Color.Unspecified)
 }
 
 @Composable
-internal fun rememberGlassAnchor() = remember { GlassAnchor() }
+internal fun rememberGlassAnchor(): GlassAnchor {
+    val ink = LocalContentColor.current
+    return remember { GlassAnchor().also { it.ink = ink } }
+}
+
+@Composable
+internal fun GlassAnchor.captureInk() {
+    val color = LocalContentColor.current
+    SideEffect { ink = color }
+}
 
 @Composable
 internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
     val view = LocalView.current
     return onGloballyPositioned { anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat())) }
-        .graphicsLayer { alpha = if (anchor.hidden) 0f else 1f }
+        // Read visibility in drawing, not only in a child RenderNode's alpha. Recorded
+        // backdrop parents must re-record the restored trigger even while stationary.
+        .drawWithContent { if (!anchor.hidden) drawContent() }
         .then(if (anchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)
 }
 
@@ -73,12 +86,12 @@ internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> U
 /** Keep this call composed when closed so the same surface can return to its trigger. */
 @Composable
 internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit,
-    placement: GlassPlacement = GlassPlacement.Menu, darkOverride: Boolean? = null, content: @Composable () -> Unit) {
+    placement: GlassPlacement = GlassPlacement.Menu, darkOverride: Boolean? = null,
+    fitContent: Boolean = placement == GlassPlacement.Menu, content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
     val progress = remember { Animatable(0f) }
-    var deformation by remember { mutableFloatStateOf(0f) }
-    val momentum = remember { GlassMomentum() }
+    val body = rememberGlassBody({ progress.value })
     var present by remember { mutableStateOf(false) }
     var surfaceReady by remember { mutableStateOf(false) }
     var origin by remember { mutableStateOf(Rect.Zero) }
@@ -92,42 +105,16 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             source?.refresh()
             present = true; anchor.modalPresent = true
             // Keep the origin visible until the modal has a measured surface.
-            withFrameNanos { }; surfaceReady = true
             withFrameNanos { }; withFrameNanos { }
-            anchor.hidden = true
+            anchor.hidden = true; surfaceReady = true
         }
-        if (reduced) { progress.snapTo(if (visible) 1f else 0f); deformation = 0f; momentum.reset() }
-        else {
-            val initial = progress.value
-            val target = if (visible) 1f else 0f
-            val duration = 0.34f / speed
-            val begin = withFrameNanos { it }
-            var lastFrame = begin
-            var previous = initial
-            do {
-                val now = withFrameNanos { it }
-                val dt = (now - lastFrame) / 1_000_000_000f
-                val fraction = ((now - begin) / 1_000_000_000f / duration).coerceIn(0f, 1f)
-                val next = initial + (target - initial) * androidx.compose.animation.core.FastOutSlowInEasing.transform(fraction)
-                momentum.advance((next - previous) / dt.coerceAtLeast(.001f) / speed, dt * speed)
-                deformation = momentum.strain
-                progress.snapTo(next)
-                previous = next
-                lastFrame = now
-            } while (fraction < 1f)
-            // Dissipate the actual remaining energy; reversals retain it naturally.
-            while (!momentum.settled) {
-                val now = withFrameNanos { it }
-                momentum.advance(0f, (now - lastFrame) / 1_000_000_000f * speed)
-                lastFrame = now
-                deformation = momentum.strain
-            }
-            deformation = 0f
-        }
+        if (reduced) progress.snapTo(if (visible) 1f else 0f)
+        else progress.animateTo(if (visible) 1f else 0f,
+            spring(dampingRatio = 1f, stiffness = 650f * speed * speed))
         if (!visible) {
             // The underlying window must draw its restored trigger before the modal
             // disappears. Keep the identical returned surface across that handoff.
-            anchor.hidden = false
+            anchor.hidden = false; surfaceReady = false
             withFrameNanos { }; withFrameNanos { }
             present = false; surfaceReady = false; anchor.modalPresent = false
         }
@@ -141,6 +128,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         SideEffect {
             window?.let {
                 it.setWindowAnimations(0); it.setDimAmount(0f)
+                // A dismissed panel may finish drawing, but no longer owns input.
+                // Otherwise its transparent full-screen window blocks the next action.
+                val closingFlags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                if (visible) it.clearFlags(closingFlags) else it.addFlags(closingFlags)
                 it.statusBarColor = android.graphics.Color.TRANSPARENT
                 it.navigationBarColor = android.graphics.Color.TRANSPARENT
                 if (android.os.Build.VERSION.SDK_INT >= 29) {
@@ -173,10 +165,18 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val margin = with(density) { if (page) 0f else 12.dp.toPx() }
                 val availableWidth = constraints.maxWidth
                 val availableHeight = constraints.maxHeight
-                val targetWidth = minOf(availableWidth - margin * 2, with(density) {
-                    when (placement) { GlassPlacement.Menu -> 300.dp.toPx(); GlassPlacement.Center, GlassPlacement.Sheet -> 400.dp.toPx()
+                val widthLimit = minOf(availableWidth - margin * 2, with(density) {
+                    when (placement) { GlassPlacement.Menu -> if (fitContent) availableWidth.toFloat() else 400.dp.toPx(); GlassPlacement.Center, GlassPlacement.Sheet -> 400.dp.toPx()
                         GlassPlacement.Search, GlassPlacement.Page -> availableWidth.toFloat() }
                 }).roundToInt().coerceAtLeast(1)
+                var measuredWidth by remember { mutableIntStateOf(-1) }
+                val expandedWidth = remember { Animatable(-1f) }
+                LaunchedEffect(measuredWidth, reduced, speed) {
+                    if (measuredWidth <= 0) return@LaunchedEffect
+                    if (expandedWidth.value < 0f || reduced) expandedWidth.snapTo(measuredWidth.toFloat())
+                    else expandedWidth.animateTo(measuredWidth.toFloat(), spring(1f, 650f * speed * speed))
+                }
+                val targetWidth = (expandedWidth.value.takeIf { it > 0f } ?: measuredWidth.takeIf { it > 0 }?.toFloat() ?: widthLimit.toFloat()).roundToInt()
                 val maxHeight = (availableHeight - margin * 2).roundToInt().coerceAtLeast(1)
                 // Closing follows the restored trigger. Opening keeps the pre-collapse location.
                 val start = (if (visible) origin else anchor.bounds).translate(-windowOrigin)
@@ -208,8 +208,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     }.graphicsLayer {
                         alpha = if (detached) p else if (surfaceReady) 1f else 0f
                         val direction = if (kotlin.math.abs(targetWidth - startWidth) >= kotlin.math.abs(targetHeight - startHeight)) 1f else -1f
-                        val strain = if (reduced || page) 0f else deformation * direction
-                        scaleX = kotlin.math.exp(strain); scaleY = kotlin.math.exp(-strain)
+                        // The returning trigger has its resting footprint. Fade deformation
+                        // with travel near home rather than waiting for a low-damping tail.
+                        val shape = if (reduced || page) GlassShape() else body.value.let {
+                            GlassShape(it.strain * p, it.depth * p)
+                        }
+                        scaleX = shape.scaleX(direction < 0); scaleY = shape.scaleY(direction < 0)
                     }
                         .clearGlassShadow(LocalGlassAppearance.current.shadowStrength *
                             (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else if (detached) p else 1f),
@@ -219,11 +223,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         Box(Modifier.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
-                                if (p < 1f) LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer { alpha = (1f - p) * (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f) },
-                                    source = source, cornerRadius = radius, frostProgress = p, pressFeedback = false,
-                                    shadow = false, refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
-                                FrostedSurface(Modifier.fillMaxSize().graphicsLayer { alpha = p },
-                                    shape = RoundedCornerShape(radius), source = source, shadow = false) {}
+                                LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
+                                    cornerRadius = radius, frostProgress = p, panelProgress = p, panelDark = dark,
+                                    inkOverride = anchor.ink.takeIf { it != Color.Unspecified }
+                                        ?: if (dark) Color.White else Color(0xFF202124),
+                                    pressFeedback = false, shadow = false,
+                                    body = { body.value.let { GlassShape(it.strain * p, it.depth * p) } },
+                                    refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
                             }
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
@@ -233,13 +239,19 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
                                 LocalModalBackdrop provides completePanel,
                                 LocalGlassOrigin provides null,
-                                LocalGlassPanelReady provides (visible && p >= .9f)) { content() }
+                                LocalGlassPanelReady provides (visible && p >= .9f)) {
+                                GlassPanelTheme(dark, content)
+                            }
                         }
                         Box(Modifier.graphicsLayer { alpha = (1f - p / .32f).coerceIn(0f, 1f) }.clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-                            CompositionLocalProvider(LocalContentColor provides if (dark) Color.White else Color(0xFF202124)) { anchor.face?.invoke() }
+                            CompositionLocalProvider(LocalContentColor provides (anchor.ink.takeIf { it != Color.Unspecified }
+                                ?: if (dark) Color.White else Color(0xFF202124))) { anchor.face?.invoke() }
                         }
                     }) { children, _ ->
-                        val foreground = children[1].measure(Constraints(minWidth = targetWidth, maxWidth = targetWidth,
+                        val contentWidth = if (fitContent)
+                            children[1].maxIntrinsicWidth(maxHeight).coerceIn(1, widthLimit) else widthLimit
+                        measuredWidth = contentWidth
+                        val foreground = children[1].measure(Constraints(minWidth = contentWidth, maxWidth = contentWidth,
                             minHeight = if (page) maxHeight else 0, maxHeight = maxHeight))
                         targetHeight = foreground.height
                         val width = (if (page) targetWidth else mix(if (detached) targetWidth * .96f else startWidth, targetWidth.toFloat()).roundToInt()).coerceIn(1, availableWidth)

@@ -91,10 +91,14 @@ data class GlassAppearance(
     val tabStyle: TabLensStyle = TabLensStyle.Adjustable,
     val tabBlur: Float = .3f,
     val tabWhiteTint: Float = .16f,
+    val shapeDamping: Float = 8f,
+    val depth: Float = 1.35f,
 ) {
     fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
         shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.4f), tabStyle,
-        tabBlur.unit(.3f), tabWhiteTint.unit(.16f))
+        tabBlur.unit(.3f), tabWhiteTint.unit(.16f),
+        if (shapeDamping.isFinite()) shapeDamping.coerceIn(2f, 40f) else 8f,
+        if (depth.isFinite()) depth.coerceIn(.6f, 2f) else 1.35f)
     private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
 }
 

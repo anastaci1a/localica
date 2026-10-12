@@ -27,6 +27,8 @@ internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLoca
 
 internal val LocalGlassDialogs = staticCompositionLocalOf<GlassDialogs?> { null }
 internal val LocalGlassOrigin = compositionLocalOf<GlassAnchor?> { null }
+/** A persistent collection popup can replace its contents without opening a second window. */
+internal val LocalInlineGlassDialog = compositionLocalOf { false }
 
 @Composable
 internal fun GlassDialogHost(content: @Composable () -> Unit) {
@@ -50,6 +52,10 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
 
 @Composable
 internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = GlassPlacement.Center, content: @Composable () -> Unit) {
+    if (LocalInlineGlassDialog.current) {
+        CompositionLocalProvider(LocalInlineGlassDialog provides false, content = content)
+        return
+    }
     val host = checkNotNull(LocalGlassDialogs.current) { "Glass dialogs require LocalicaTheme" }
     val origin = LocalGlassOrigin.current?.takeUnless { placement == GlassPlacement.Page } ?: rememberGlassAnchor()
     val source = LocalModalBackdrop.current ?: LocalFrostedBackdrop.current ?: host.backdrop

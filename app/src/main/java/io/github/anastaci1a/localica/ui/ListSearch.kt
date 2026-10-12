@@ -35,6 +35,7 @@ internal fun ListSearchPill(label: String, onClick: () -> Unit, modifier: Modifi
     Box(modifier.fillMaxWidth().height(listPillTargetHeight()).clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
         .testTag("list-search-pill"), contentAlignment = Alignment.Center) {
         LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)) {
+            anchor?.captureInk()
             SearchPillFace(label)
         }
     }

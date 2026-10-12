@@ -15,6 +15,29 @@ import org.junit.Test
 
 class QueueBrowsingTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun largeQueueSelectorStartsAtPlaybackAndTruncatesConfirmationNames() {
+        val queues = (0..99).map { ListeningQueue(name = "Queue $it with a deliberately very long descriptive name that will not fit", entries = emptyList()) }
+        val state = QueueUiState(QueueLibrary(queues, queues[90].id), loading = false)
+        compose.setContent { LocalicaTheme { QueueScreen(state, null) } }
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Select queue").performClick()
+        // Assert the first frame that exposes panel content, before any settled-state wait.
+        for (frame in 0..60) {
+            compose.mainClock.advanceTimeByFrame()
+            if (compose.onAllNodesWithText("Playback queue").fetchSemanticsNodes().isNotEmpty()) break
+        }
+        compose.onNodeWithText("Playback queue").assertIsDisplayed()
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        compose.onNodeWithText("Remove all other queues").performClick()
+        compose.onNodeWithText("Delete queues?").assertIsDisplayed()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        compose.onNodeWithText(queues.first().name).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertTrue(layouts.isNotEmpty())
+        assertEquals(1, layouts.single().lineCount)
+        assertTrue("Long queue names end in ellipses", layouts.single().isLineEllipsized(0))
+    }
     @Test fun currentRowHiddenBySearchPillHasAnUpwardReturnButton() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = context.getSharedPreferences("browse-style", 0)

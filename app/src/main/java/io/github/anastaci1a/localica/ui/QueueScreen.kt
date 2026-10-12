@@ -16,6 +16,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -39,6 +40,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
     val menuAnchor = rememberGlassAnchor()
+    val removeOthersAnchor = rememberGlassAnchor()
+    var deletionOrigin by remember { mutableStateOf<GlassAnchor?>(null) }
     var renameId by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Set<String>?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -77,7 +80,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
                             Box(Modifier.fillMaxWidth().height(CompactControlSize)
-                                .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { SelectorFace() }
+                                .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
 
                         }
                         ActionIcon(R.drawable.ic_close, "Delete current queue", enabled = active != null) { deleting = setOfNotNull(active?.id) }
@@ -109,14 +112,17 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center) {
-        ConnectedSelectionHost {
+        val playingIndex = state.library.queues.indexOfFirst { it.id == state.library.activeId }.coerceAtLeast(0)
+        val queueList = rememberLazyListState(initialFirstVisibleItemIndex = playingIndex)
+        LaunchedEffect(selector) { if (selector) queueList.requestScrollToItem(playingIndex) }
         Box(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
             Column(Modifier.padding(vertical = 12.dp)) {
                 Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(painterResource(R.drawable.ic_queue), null, Modifier.size(24.dp))
                     Text("Queues", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.titleLarge)
                 }
-                LazyColumn(Modifier.weight(1f, fill = false).selectableGroup().padding(horizontal = 8.dp)) {
+                SelectionViewport(Modifier.weight(1f, fill = false)) { overscroll ->
+                LazyColumn(Modifier.selectableGroup().padding(horizontal = 8.dp), state = queueList, overscrollEffect = overscroll) {
                     itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { index, queue ->
                         val chosen = queue.id == active?.id
                         Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
@@ -133,18 +139,22 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                                         if (queue.id == state.library.activeId) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
-                                ActionIcon(R.drawable.ic_edit, "Rename " + queue.name) { renameId = queue.id }
-                                ActionIcon(R.drawable.ic_close, "Delete " + queue.name) { deleting = setOf(queue.id) }
+                                ActionIcon(R.drawable.ic_edit, "Rename " + queue.name, glass = false, quiet = true) { renameId = queue.id }
+                                ActionIcon(R.drawable.ic_close, "Delete " + queue.name, glass = false, quiet = true) { deleting = setOf(queue.id) }
                             }
                         }
                     }
                 }
-                TextButton(enabled = state.library.queues.size > 1, onClick = {
+                }
+                SideEffect { removeOthersAnchor.face = { Text("Remove all other queues", maxLines = 1, overflow = TextOverflow.Ellipsis) } }
+                GlassActionButton(R.drawable.ic_trash, "Remove all other queues",
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp).glassAnchor(removeOthersAnchor),
+                    enabled = state.library.queues.size > 1, onClick = {
+                    deletionOrigin = removeOthersAnchor
                     deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet()
-                }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("Remove all other queues") }
+                })
             }
         }
-    }
     }
     state.library.queues.firstOrNull { it.id == renameId }?.let { queue ->
         var name by remember(queue.id) { mutableStateOf(queue.name) }
@@ -153,10 +163,17 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
             confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renameId = null }) { Text("Save") } },
             dismissButton = { TextButton(onClick = { renameId = null }) { Text("Cancel") } })
     }
-    deleting?.let { ids -> GlassAlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete queues?") },
-        text = { Text(state.library.queues.filter { it.id in ids }.joinToString("\n") { it.name }) },
-        confirmButton = { TextButton(onClick = { controller?.removeQueues(ids); deleting = null }) { Text("Delete") } },
-        dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }) }
+    deleting?.let { ids -> CompositionLocalProvider(LocalGlassOrigin provides deletionOrigin) {
+        fun dismissDeletion() { deleting = null; deletionOrigin = null }
+        GlassAlertDialog(onDismissRequest = ::dismissDeletion, title = { Text("Delete queues?") },
+            text = { LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(state.library.queues.filter { it.id in ids }, key = { _, queue -> queue.id }) { _, queue ->
+                    Text(queue.name, Modifier.fillMaxWidth(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            } },
+            confirmButton = { TextButton(onClick = { controller?.removeQueues(ids); dismissDeletion() }) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = ::dismissDeletion) { Text("Cancel") } })
+    } }
 }
 
 @Composable

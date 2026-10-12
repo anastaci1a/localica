@@ -25,6 +25,7 @@ internal class ConnectedLensOptics {
         uniform float rasterScale;
         uniform float band;
         uniform float strength;
+        uniform float thickness;
         float depth(float2 p) { return float(field.eval((p - fieldOrigin) * rasterScale).r); }
         half4 main(float2 p) {
             half4 base = scene.eval(p);
@@ -34,9 +35,10 @@ internal class ConnectedLensOptics {
             float2 gradient = float2(depth(p + float2(3,0)) - depth(p - float2(3,0)),
                 depth(p + float2(0,3)) - depth(p - float2(0,3)));
             float2 normal = -gradient / max(length(gradient), 0.0001);
-            float t = 1.0 - smoothstep(0.0, 1.0, d);
-            float slope = t * t / sqrt(max(1.05 - t * t, 0.12));
-            float bend = min(band * 0.30, slope * band * 0.18) * strength;
+            float t = clamp(1.0 - d, 0.0, 1.0);
+            float slope = t / sqrt(max(1.04 - t * t, 0.12));
+            float curve = slope * thickness * 0.52;
+            float bend = band * 0.72 * curve / sqrt(1.0 + curve * curve) * strength;
             // Keep horizontal text baselines readable while the side walls act as lenses.
             bend *= 0.35 + 0.65 * abs(normal.x);
             half4 glass = scene.eval(p - normal * bend);
@@ -54,12 +56,18 @@ internal class ConnectedLensOptics {
     private var cached: RenderEffect? = null
     private var fieldOrigin = Offset.Zero
     private var previousOrigin = Offset(Float.NaN, Float.NaN)
+    private var previousStrength = Float.NaN
+    private var previousThickness = Float.NaN
     internal var rasterizations = 0
         private set
 
-    fun effect(regions: List<SelectionRegion>, path: Path, band: Float, strength: Float, origin: Offset = Offset.Zero): RenderEffect? {
+    fun effect(regions: List<SelectionRegion>, path: Path, band: Float, strength: Float, origin: Offset = Offset.Zero, thickness: Float = 1.35f): RenderEffect? {
+        val opticsChanged = strength != previousStrength || thickness != previousThickness
+        previousStrength = strength; previousThickness = thickness
+        shader.setFloatUniform("strength", strength)
+        shader.setFloatUniform("thickness", thickness)
         if (regions == previous && band == previousBand) {
-            if (origin != previousOrigin) {
+            if (origin != previousOrigin || opticsChanged) {
                 previousOrigin = origin
                 shader.setFloatUniform("fieldOrigin", fieldOrigin.x + origin.x, fieldOrigin.y + origin.y)
                 cached = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene").asComposeRenderEffect()

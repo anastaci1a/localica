@@ -31,7 +31,7 @@ class GlassAppearanceTest {
         val prefs = InterfacePreferences(context)
         val original = prefs.read()
         try {
-            val glass = GlassAppearance(.73f, .18f, .04f, .91f, .67f, TabLensStyle.Overlay, .81f, .23f)
+            val glass = GlassAppearance(.73f, .18f, .04f, .91f, .67f, TabLensStyle.Overlay, .81f, .23f, 3f, 1.7f)
             prefs.write(original.copy(glass = glass))
             assertEquals(glass, InterfacePreferences(context).read().glass)
             prefs.write(original.copy(glass = GlassAppearance(-1f, 2f, Float.NaN, Float.POSITIVE_INFINITY)))

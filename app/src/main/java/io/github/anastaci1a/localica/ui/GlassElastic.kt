@@ -8,32 +8,34 @@ import kotlin.math.*
 /** Bounded pressure from travel beyond an edge: more pull always adds less compression. */
 internal fun glassEdgePressure(excess: Float) = -.22f * (1f - exp(-abs(excess) * 2.4f))
 
-/** Shared input-driven elastic response. The clock sleeps completely when settled. */
+/** One interruptible shape clock; live tuning preserves its current displacement and velocity. */
 @Composable
-internal fun rememberGlassElastic(position: () -> Float, pressure: () -> Float = { 0f }): State<Float> {
-    val result = remember { mutableFloatStateOf(0f) }
+internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 0f }, contact: () -> Float = { 0f }): State<GlassShape> {
+    val result = remember { mutableStateOf(GlassShape()) }
     val reduced = LocalReducedMotion.current
-    val speed = LocalMotionSpeed.current
+    val speed by rememberUpdatedState(LocalMotionSpeed.current)
+    val damping by rememberUpdatedState(LocalGlassAppearance.current.shapeDamping)
     val input by rememberUpdatedState(position)
     val force by rememberUpdatedState(pressure)
-    LaunchedEffect(reduced, speed) {
-        val body = GlassMomentum()
+    val touch by rememberUpdatedState(contact)
+    LaunchedEffect(reduced) {
+        val body = GlassMomentum(damping)
         var previous = input()
         var runner: Job? = null
-        snapshotFlow { input() to force() }.collect {
-            if (reduced) { result.floatValue = 0f; previous = input(); return@collect }
+        snapshotFlow { listOf(input(), force(), touch(), damping) }.collect {
+            if (reduced) { result.value = GlassShape(); previous = input(); return@collect }
             if (runner?.isActive != true) runner = launch {
-                var last = withFrameNanos { it }
+                var last = 0L
                 do {
                     val frame = withFrameNanos { it }
-                    val dt = ((frame - last) / 1e9f).coerceIn(.001f, .05f)
+                    val dt = if (last == 0L) 1f / 60f else ((frame - last) / 1e9f).coerceIn(.001f, .1f)
                     last = frame
                     val current = input()
-                    body.advance(((current - previous) / dt / speed).coerceIn(-20f, 20f), dt * speed, force())
+                    body.damping = damping
+                    body.advance(((current - previous) / dt / speed).coerceIn(-20f, 20f), dt * speed, force(), touch())
                     previous = current
-                    result.floatValue = body.strain
+                    result.value = body.shape
                 } while (!body.settled)
-                result.floatValue = force()
             }
         }
     }

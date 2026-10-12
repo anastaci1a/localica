@@ -31,6 +31,9 @@ internal class ArtworkSwipe {
     var previous: ArtworkNeighbor? = null
     var next: ArtworkNeighbor? = null
     var cancelled = false
+    var dragging = false
+    var animation: kotlinx.coroutines.Job? = null
+    var arrived = false
     var pending by mutableStateOf<String?>(null)
     var handoff by mutableStateOf<String?>(null)
     val active: Boolean get() = source != null
@@ -45,6 +48,7 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
     val swipe = remember { ArtworkSwipe() }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val currentVisit by rememberUpdatedState(visit)
     val currentVisual by rememberUpdatedState(visual)
     val currentPrevious by rememberUpdatedState(previous)
     val currentNext by rememberUpdatedState(next)
@@ -59,22 +63,24 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
             val changed = displayed.artwork != visual.artwork &&
                 (displayed.contentKey == null || displayed.contentKey != visual.contentKey)
             if (arrivedBySwipe) {
-                swipe.handoff = visit; swipe.offset.snapTo(0f); swipe.clear()
+                swipe.arrived = true
+                if (!swipe.dragging && swipe.animation?.isActive != true) {
+                    swipe.handoff = visit; swipe.offset.snapTo(0f); swipe.clear()
+                }
             } else if (changed && !swipe.active && enabled && !motion.reducedMotion) {
                 swipe.source = displayed
                 swipe.origin = visit
                 swipe.destination = ArtworkNeighbor(visit.orEmpty(), visual)
                 swipe.pending = visit
                 swipe.offset.snapTo(0f)
-                try {
+                swipe.arrived = true
+                swipe.animation?.cancel()
+                swipe.animation = scope.launch {
                     swipe.offset.animateTo(if (visit == priorVisit) stride else -stride,
                         androidx.compose.animation.core.tween(motion.motionDuration(550),
                             easing = androidx.compose.animation.core.FastOutSlowInEasing))
                     swipe.handoff = visit
-                } finally {
-                    swipe.clear()
-                    // Reset even when a newer song interrupts this animation.
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { swipe.offset.snapTo(0f) }
+                    swipe.offset.snapTo(0f); swipe.clear()
                 }
             }
             displayed = visual; priorVisit = currentPrevious?.visit
@@ -90,11 +96,14 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
     LaunchedEffect(visit, enabled) {
         if (swipe.active && ((swipe.origin != visit && swipe.pending != visit) || !enabled && swipe.pending == null)) {
             swipe.cancelled = true
+            swipe.animation?.cancel()
             swipe.offset.snapTo(0f)
             swipe.clear()
         }
     }
-    fun finish(velocity: Float) { scope.launch(start = CoroutineStart.UNDISPATCHED) {
+    fun finish(velocity: Float) {
+        swipe.dragging = false
+        swipe.animation = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             if (!swipe.cancelled && swipe.pending == null) {
                 val amount = swipe.offset.value
                 val target = swipe.destination
@@ -103,12 +112,20 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                 } else abs(amount) > width * .24f
                 if (commit) {
                     swipe.pending = target!!.visit
-                    settle(sign(amount) * stride)
-                    if (swipe.pending == target.visit) currentNavigate?.invoke(target.visit) { accepted ->
-                        if (!accepted && swipe.pending == target.visit) scope.launch {
-                            swipe.pending = null
-                            settle(0f)
-                            swipe.clear()
+                    swipe.arrived = false
+                    // Playback advances on release, independently of decorative settling.
+                    currentNavigate?.invoke(target.visit) { accepted ->
+                        if (!accepted && swipe.pending == target.visit) {
+                            swipe.animation?.cancel()
+                            swipe.animation = scope.launch {
+                                swipe.pending = null; settle(0f); swipe.clear()
+                            }
+                        }
+                    }
+                    if (swipe.pending == target.visit) {
+                        settle(sign(amount) * stride)
+                        if (swipe.arrived && swipe.pending == target.visit && !swipe.dragging) {
+                            swipe.handoff = target.visit; swipe.offset.snapTo(0f); swipe.clear()
                         }
                     }
                 } else {
@@ -117,8 +134,8 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                 }
             }
     } }
-    val modifier = Modifier.pointerInput(visit, width, enabled, navigate != null, swipe.pending != null) {
-        if (enabled && currentNavigate != null && swipe.pending == null) {
+    val modifier = Modifier.pointerInput(width, enabled, navigate != null) {
+        if (enabled && currentNavigate != null) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 // Claim at the initial pass before the parent's vertical recognizer. A
@@ -137,15 +154,30 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                 if (start != null) {
                     val velocity = VelocityTracker()
                     velocity.addPosition(down.uptimeMillis, down.position)
-                    swipe.source = currentVisual
-                    swipe.origin = visit
-                    swipe.previous = currentPrevious
-                    swipe.next = currentNext
+                    swipe.animation?.cancel()
+                    swipe.dragging = true
+                    val committed = swipe.pending
+                    val rebase = if (committed != null && committed == currentVisit)
+                        swipe.offset.value - sign(swipe.offset.value) * stride else swipe.offset.value
+                    if (committed == null || committed == currentVisit) {
+                        swipe.source = if (committed != null) swipe.destination?.visual ?: currentVisual else swipe.source ?: currentVisual
+                        swipe.origin = currentVisit
+                        swipe.pending = null
+                        swipe.previous = currentPrevious
+                        swipe.next = currentNext
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) { swipe.offset.snapTo(rebase) }
+                    }
                     swipe.cancelled = false
-                    scope.launch(start = CoroutineStart.UNDISPATCHED) { swipe.offset.stop() }
                     fun drag(change: androidx.compose.ui.input.pointer.PointerInputChange, delta: Float) {
                         change.consume()
                         velocity.addPosition(change.uptimeMillis, change.position)
+                        if (swipe.pending != null && swipe.pending == currentVisit) {
+                            val rebased = swipe.offset.value - sign(swipe.offset.value) * stride
+                            swipe.source = swipe.destination?.visual ?: currentVisual
+                            swipe.origin = currentVisit; swipe.pending = null
+                            swipe.previous = currentPrevious; swipe.next = currentNext
+                            scope.launch(start = CoroutineStart.UNDISPATCHED) { swipe.offset.snapTo(rebased) }
+                        }
                         if (!swipe.cancelled && swipe.pending == null) {
                             val raw = swipe.offset.value + delta
                             val destination = if (raw < 0f) swipe.next else swipe.previous
@@ -171,6 +203,7 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                             finish(velocity.calculateVelocity().x)
                         }
                     } finally {
+                        swipe.dragging = false
                         if (!released && swipe.pending == null) {
                             swipe.cancelled = true
                             scope.launch { settle(0f); swipe.clear() }

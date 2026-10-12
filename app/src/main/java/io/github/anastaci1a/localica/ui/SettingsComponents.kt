@@ -20,7 +20,13 @@ import io.github.anastaci1a.localica.R
 
 @Composable
 internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit = onBack,
-    backLabel: String = "Back from settings", content: @Composable ColumnScope.() -> Unit) {
+    backLabel: String = "Back from settings", navigationDepth: Int = 0, content: @Composable ColumnScope.() -> Unit) {
+    var previousDepth by remember { mutableIntStateOf(navigationDepth) }
+    var direction by remember { mutableFloatStateOf(1f) }
+    if (navigationDepth != previousDepth) {
+        direction = if (navigationDepth < previousDepth) -1f else 1f
+        previousDepth = navigationDepth
+    }
     GlassDialog(onBack, GlassPlacement.Page) {
         Surface(Modifier.fillMaxSize()) {
             val reduced = LocalReducedMotion.current
@@ -40,7 +46,7 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
                     LaunchedEffect(Unit) { entered = true }
                     val reveal by androidx.compose.animation.core.animateFloatAsState(if (entered) 1f else 0f,
                         androidx.compose.animation.core.tween(if (reduced) 0 else (240 / speed).toInt()), label = "Settings page")
-                    Column(Modifier.weight(1f).graphicsLayer { alpha = reveal; translationX = 16.dp.toPx() * (1f - reveal) }, content = content)
+                    Column(Modifier.weight(1f).graphicsLayer { alpha = reveal; translationX = direction * 16.dp.toPx() * (1f - reveal) }, content = content)
                 }
             }
         }

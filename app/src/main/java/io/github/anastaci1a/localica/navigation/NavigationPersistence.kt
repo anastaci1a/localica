@@ -22,7 +22,8 @@ class InterfacePreferences(context: Context) {
                 preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f),
                 preferences.getFloat("glass-contrast", .4f),
                 preferences.enumValue<TabLensStyle>("tab-lens-style") ?: TabLensStyle.Adjustable,
-                preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f)).normalized(),
+                preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f),
+                preferences.getFloat("glass-shape-damping", 8f), preferences.getFloat("glass-depth", 1.35f)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone())
     }
     fun write(value: InterfaceSettings) {
@@ -38,6 +39,7 @@ class InterfacePreferences(context: Context) {
             .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)
             .putFloat("glass-contrast", glass.contrast).putString("tab-lens-style", glass.tabStyle.name)
             .putFloat("tab-lens-blur", glass.tabBlur).putFloat("tab-lens-tint", glass.tabWhiteTint)
+            .putFloat("glass-shape-damping", glass.shapeDamping).putFloat("glass-depth", glass.depth)
             .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()
     }
 }

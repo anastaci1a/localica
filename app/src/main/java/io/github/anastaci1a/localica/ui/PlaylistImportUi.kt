@@ -73,6 +73,7 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
     }
     Box(modifier) {
         LiquidGlassSurface(Modifier.size(CompactControlSize).glassAnchor(menuAnchor).clickable { menu = true }) {
+            menuAnchor.captureInk()
             Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), "Add playlist", Modifier.size(24.dp))
             }

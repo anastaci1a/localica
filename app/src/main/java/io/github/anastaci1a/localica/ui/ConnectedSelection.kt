@@ -2,9 +2,14 @@ package io.github.anastaci1a.localica.ui
 
 import android.os.Build
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.OverscrollEffect
+import androidx.compose.foundation.overscroll
+import androidx.compose.foundation.rememberOverscrollEffect
+import androidx.compose.foundation.withoutVisualEffect
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
@@ -24,6 +29,16 @@ internal class SelectionEntry { var coordinates: LayoutCoordinates? = null; var 
 }
 internal val LocalSelectionScene = staticCompositionLocalOf<SelectionScene?> { null }
 
+/** Scrolling content and its lenses share a single clip, fade and overscroll transform. */
+@Composable
+internal fun SelectionViewport(modifier: Modifier = Modifier, content: @Composable (OverscrollEffect?) -> Unit) {
+    val overscroll = rememberOverscrollEffect()
+    val events = remember(overscroll) { overscroll?.withoutVisualEffect() }
+    ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier)) {
+        content(events)
+    }
+}
+
 /** Record the content once; the lens samples that recording, never its own output. */
 @Composable
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -36,6 +51,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
     val geometry = remember { SelectionPathCache() }
     val edgeLighting = remember { SelectionEdgeLighting() }
     val optics = remember { if (Build.VERSION.SDK_INT >= 33) ConnectedLensOptics() else null }
+    val depth = LocalGlassAppearance.current.depth
     CompositionLocalProvider(LocalSelectionScene provides scene) {
         Box(modifier.onPlaced { coordinates = it }.drawWithContent {
             // Placement runs before drawing; query live coordinates instead of copying
@@ -66,11 +82,14 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                     this@drawWithContent.drawContent()
                 }
                 val crop = path.getBounds().translate(origin).inflate(2f).intersect(Rect(Offset.Zero, size))
-                drawLayer(layer)
+                // The backing is a lens input, not a replacement for the viewport.
+                // Painting it across unselected space creates rectangular seams over
+                // parallax artwork and translucent parent surfaces.
+                this@drawWithContent.drawContent()
                 if (!crop.isEmpty) {
                     val at = Offset(floor(crop.left), floor(crop.top))
                     val extent = androidx.compose.ui.unit.IntSize(ceil(crop.right - at.x).toInt(), ceil(crop.bottom - at.y).toInt())
-                    output.renderEffect = optics.effect(local, path, 22.dp.toPx(), strength, origin - at)
+                    output.renderEffect = optics.effect(local, path, 22.dp.toPx(), strength, origin - at, depth)
                     output.record(size = extent) { translate(-at.x, -at.y) { drawLayer(layer) } }
                     translate(origin.x, origin.y) { clipPath(path) {
                         translate(at.x - origin.x, at.y - origin.y) { drawLayer(output) }

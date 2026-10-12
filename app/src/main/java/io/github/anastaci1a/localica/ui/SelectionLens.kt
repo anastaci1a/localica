@@ -13,13 +13,15 @@ import kotlin.math.exp
 @Composable
 internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, AnimationVector1D>,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, preserveAppearance: Boolean = false,
-    vertical: Boolean = false, pressure: () -> Float = { 0f }) {
-    val strain = rememberGlassElastic({ motion.value }, pressure)
+    vertical: Boolean = false, pressure: () -> Float = { 0f }, wall: () -> Float = { 0f }) {
+    val body = rememberGlassBody({ motion.value }, pressure)
     CompositionLocalProvider(LocalGlassAppearance provides if (preserveAppearance) LocalGlassAppearance.current else LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, shadowStrength = .04f, contrast = 0f)) {
         LiquidGlassSurface(modifier.graphicsLayer {
-            val value = strain.value * if (vertical) -1f else 1f
-            scaleX = exp(value); scaleY = exp(-value)
+            scaleX = body.value.scaleX(vertical); scaleY = body.value.scaleY(vertical)
+            translationX = if (vertical) 0f else glassWallTranslation(size.width, scaleX, wall())
+            translationY = if (vertical) glassWallTranslation(size.height, scaleY, wall()) else 0f
         }, source = source, pressFeedback = false, shadow = false,
+            body = { body.value },
             inkOverride = if (preserveAppearance) androidx.compose.ui.graphics.Color.Black else null,
             protectCenter = preserveAppearance && LocalGlassAppearance.current.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Overlay) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
     }

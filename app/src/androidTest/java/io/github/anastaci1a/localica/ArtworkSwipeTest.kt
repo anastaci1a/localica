@@ -32,6 +32,37 @@ class ArtworkSwipeTest {
     private val green = visual(Color.Green)
     private val state = PlaybackState(connected = true, title = "Swipe", durationMs = 120000)
 
+    @Test fun rapidDiagonalSwipesRegrabTheSettlingCarouselWithoutOpeningAnotherSurface() {
+        var index by mutableIntStateOf(0)
+        val pictures = listOf(red, blue, green)
+        val calls = mutableListOf<String>()
+        var queueOpens = 0
+        var closes = 0
+        var lyricOpens = 0
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            PlayerSurface(state, true, { if (!it) closes++ }, InterfaceSettings(), remember { Animatable(1f) },
+                {}, {}, {}, {}, { queueOpens++ }, {}, onLyrics = { lyricOpens++ },
+                visual = pictures[index], artworkVisit = "$index",
+                previousArtwork = if (index > 0) ArtworkNeighbor("${index - 1}", pictures[index - 1]) else null,
+                nextArtwork = if (index < 2) ArtworkNeighbor("${index + 1}", pictures[index + 1]) else null,
+                onArtworkVisit = { token, complete -> calls += token; index = token.toInt(); complete(true) })
+        } } }
+        compose.mainClock.autoAdvance = false
+        val art = compose.onNodeWithTag("artwork-gesture")
+        repeat(2) {
+            art.performTouchInput {
+                swipe(Offset(width * .85f, height * .35f), Offset(width * .1f, height * .65f), 96)
+            }
+            // The next touch starts well before a carousel transition can finish.
+            compose.mainClock.advanceTimeBy(48)
+        }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        assertEquals(listOf("1", "2"), calls)
+        assertEquals(0, queueOpens); assertEquals(0, closes); assertEquals(0, lyricOpens)
+        compose.onNodeWithTag("player-neighbor-artwork", true).assertDoesNotExist()
+    }
+
     @Test fun preparedSmallerWashKeepsTheOriginalTextureCoordinates() {
         val original = Bitmap.createBitmap(128, 320, Bitmap.Config.ARGB_8888)
         val colors = listOf(Color.Red, Color.Green, Color.Blue, Color.Yellow)

@@ -109,6 +109,7 @@ internal fun LibraryFilterBubbles(filters: List<LibraryFilter>, selected: MediaK
                 LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(menuAnchor),
                     tint = if (filter.kind == selected) androidx.compose.ui.graphics.Color.Black.copy(alpha = .07f)
                         else androidx.compose.ui.graphics.Color.Transparent) {
+                    menuAnchor.captureInk()
                     Text(filter.label, Modifier.align(Alignment.Center), style = style, maxLines = 1)
                 }
                 GlassMenu(menu == filter, menuAnchor, { menu = null }) {

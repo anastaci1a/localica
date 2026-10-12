@@ -23,8 +23,8 @@ internal fun ListViewOptions(route: BrowseRoute, value: BrowseStyle, overridden:
     val albumSongs = route.collection?.kind == MediaKind.Album
     val albumCatalog = route.collection == null && (route.tab == MainTab.Albums || route.filter == MediaKind.Album)
     val width = LocalConfiguration.current.screenWidthDp.toFloat()
-    SettingsPage("List view options", onDismiss, backLabel = "Back from view options") {
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("List view options") }, text = {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingsHeading(route.title ?: route.filter?.label ?: route.tab.label)
             ChoicePreference("View mode", edited.presentation != Presentation.List, listOf(false, true), { if (it) "Gallery" else "List" }) {
                 edited = edited.copy(presentation = if (it) Presentation.Standard else Presentation.List,
@@ -54,11 +54,8 @@ internal fun ListViewOptions(route: BrowseRoute, value: BrowseStyle, overridden:
             }
             Text(if (override) "This collection only." else "All lists of this type.", style = MaterialTheme.typography.bodySmall)
         }
-        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-            Button(onClick = { onSave(edited, override) }) { Text("Save") }
-        }
-    }
+    }, confirmButton = { TextButton(onClick = { onSave(edited, override) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 private fun extraInfoLabel(info: ExtraInfo) = when (info) {

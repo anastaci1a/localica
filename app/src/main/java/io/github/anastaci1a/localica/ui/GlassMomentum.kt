@@ -2,39 +2,58 @@ package io.github.anastaci1a.localica.ui
 
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.tanh
 
-/** A damped elastic body driven by changes in travel velocity, not a second animation. */
-internal class GlassMomentum {
-    var strain = 0f
-        private set
-    private var motionStrain = 0f
-    private var pressureStrain = 0f
-    private var pressureVelocity = 0f
-    private var pressureTarget = 0f
-    private var strainVelocity = 0f
+/** Logarithmic deformation of an approximate constant-volume cap, not a fluid simulation. */
+internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f) {
+    fun scaleX(vertical: Boolean = false) = exp((if (vertical) -strain else strain) - depth / 2)
+    fun scaleY(vertical: Boolean = false) = exp((if (vertical) strain else -strain) - depth / 2)
+    val thickness get() = exp(depth)
+}
+
+/** Compensation for center-based scaling: the contacting edge stays on its wall. */
+internal fun glassWallTranslation(extent: Float, scale: Float, wall: Float): Float =
+    wall.coerceIn(-1f, 1f) * extent * (1f - scale) / 2
+
+/** Position is owned by the gesture; acceleration, contact and pressure drive its shape. */
+internal class GlassMomentum(var damping: Float = 8f) {
+    private class Spring {
+        var value = 0f
+        var velocity = 0f
+        var target = 0f
+        val settled get() = abs(value - target) < .0003f && abs(velocity) < .003f
+        fun advance(dt: Float, damping: Float) {
+            velocity += (380f * (target - value) - damping * velocity) * dt
+            value += velocity * dt
+        }
+        fun reset() { value = 0f; velocity = 0f; target = 0f }
+    }
+    private val motion = Spring()
+    private val pressure = Spring()
+    private val depth = Spring()
     private var travelVelocity = 0f
-    val settled get() = abs(motionStrain) < .0002f && abs(strainVelocity) < .002f &&
-        abs(pressureStrain - pressureTarget) < .0002f && abs(pressureVelocity) < .002f
-    val scaleX get() = exp(strain)
-    val scaleY get() = exp(-strain) // Constant projected area during squash/stretch.
+    val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
+    val shape get() = GlassShape(strain, .24f * tanh(depth.value / .24f))
+    val scaleX get() = shape.scaleX()
+    val scaleY get() = shape.scaleY()
+    val settled get() = motion.settled && pressure.settled && depth.settled
 
-    fun reset() { strain = 0f; motionStrain = 0f; pressureStrain = 0f; pressureVelocity = 0f; pressureTarget = 0f; strainVelocity = 0f; travelVelocity = 0f }
+    fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f }
 
-    fun advance(velocity: Float, seconds: Float, pressure: Float = 0f) {
-        if (seconds <= 0f) return
-        // An acceleration impulse stretches the body; stopping produces the opposite
-        // compression. Clamp impulses for interruptions and dropped/paused frames.
-        strainVelocity += ((velocity - travelVelocity) * .11f).coerceIn(-.7f, .7f)
-        travelVelocity = velocity
-        pressureTarget = pressure.coerceIn(-.22f, .12f)
-        var remaining = seconds.coerceAtMost(.064f)
+    fun advance(velocity: Float, seconds: Float, pressure: Float = 0f, contact: Float = 0f) {
+        if (!seconds.isFinite() || seconds <= 0f) return
+        val speed = if (velocity.isFinite()) velocity.coerceIn(-30f, 30f) else 0f
+        motion.velocity += ((speed - travelVelocity) * .11f).coerceIn(-.7f, .7f)
+        // Acceleration flattens the cap; braking lets it rise. Contact sustains flattening.
+        depth.velocity -= ((abs(speed) - abs(travelVelocity)) * .035f).coerceIn(-.35f, .35f)
+        travelVelocity = speed
+        this.pressure.target = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
+        depth.target = -.14f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) + abs(this.pressure.target) * .18f
+        val drag = if (damping.isFinite()) damping.coerceIn(2f, 40f) else 8f
+        var remaining = seconds.coerceAtMost(.1f)
         while (remaining > 0f) {
             val dt = minOf(remaining, 1f / 240f)
-            strainVelocity += (-380f * motionStrain - 24f * strainVelocity) * dt
-            motionStrain = (motionStrain + strainVelocity * dt).coerceIn(-.065f, .065f)
-            pressureVelocity += (380f * (pressureTarget - pressureStrain) - 24f * pressureVelocity) * dt
-            pressureStrain += pressureVelocity * dt
-            strain = motionStrain + pressureStrain
+            motion.advance(dt, drag); this.pressure.advance(dt, drag); depth.advance(dt, drag)
             remaining -= dt
         }
     }
