@@ -77,8 +77,8 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
         Text("Albums", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "all-albums") {
-                Column(Modifier.width(120.dp).selectionLens(selectedIds.isEmpty(), false).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
-                    .semantics { selected = selectedIds.isEmpty() }.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.width(136.dp).selectionLens(selectedIds.isEmpty(), false).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
+                    .semantics { selected = selectedIds.isEmpty() }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(112.dp)) {
                         Icon(painterResource(R.drawable.ic_albums), null, Modifier.align(Alignment.Center).size(36.dp))
                     }
@@ -87,9 +87,9 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
             }
             items(albums, key = { it.id }) { album ->
                 val selected = album.id in selectedIds
-                Column(Modifier.width(120.dp).selectionLens(selected, false).toggleable(selected, role = Role.Checkbox, onValueChange = {
+                Column(Modifier.width(136.dp).selectionLens(selected, false).toggleable(selected, role = Role.Checkbox, onValueChange = {
                     onSelection(if (selected) selectedIds - album.id else selectedIds + album.id)
-                }).semantics { this.selected = selected }.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                }).semantics { this.selected = selected }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     MediaArtwork(album.tracks.map { it.uri }, Modifier.size(112.dp))
                     Text(album.title, Modifier.padding(top = 8.dp), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
