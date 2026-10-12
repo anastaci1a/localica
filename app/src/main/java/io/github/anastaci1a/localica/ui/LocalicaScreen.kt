@@ -208,15 +208,16 @@ fun LocalicaScreen(
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
     PlayerSystemBars(hasPlayer && progress.value >= .99f || insideCollection && browseInk == androidx.compose.ui.graphics.Color.White)
+    val bottomShadows = remember { GlassShadowGroup() }
     LocalicaTheme(grayTone = settings.grayTone) {
-    CompositionLocalProvider(LocalGlassAppearance provides settings.glass, LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache,
         LocalMotionSpeed provides if (settings.fasterMotion) 1.5f else 1f,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
             (if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome) + if (session.active) selectionHeight else 0.dp)) {
-    BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+    BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
         Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(pageBackground).statusBarsPadding()
@@ -281,7 +282,7 @@ fun LocalicaScreen(
             .then(if (insideCollection || hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill")) {
-                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], pager.currentPage + pager.currentPageOffsetFraction, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value) { tab ->
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], pager.currentPage + pager.currentPageOffsetFraction, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, shadowOpacity = { chromeVisibility * (1f - progress.value) }) { tab ->
                     navigation = navigation.resetTab(tab)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
                     keyboard?.hide(); focusManager.clearFocus()
@@ -300,7 +301,7 @@ fun LocalicaScreen(
                     Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_more), null, Modifier.size(24.dp)) }
                 }
             } }
-            LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().glassAnchor(utilityAnchor).testTag("utility-pill"), source = browseBackdrop) {
+            LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().glassAnchor(utilityAnchor).testTag("utility-pill").bottomGlassShadow(opacity = { chromeVisibility * (1f - progress.value) }), source = browseBackdrop, shadow = false, pressFeedback = false) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 ActionIcon(R.drawable.ic_search, "Search library", glass = false) {
                     navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true))

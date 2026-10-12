@@ -11,6 +11,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import io.github.anastaci1a.localica.navigation.TabLensStyle
@@ -40,13 +47,14 @@ internal fun magneticTabPosition(raw: Float): Float {
 }
 
 @Composable
-internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, onSelect: (MainTab) -> Unit) {
+internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onSelect: (MainTab) -> Unit) {
     val reduced = LocalReducedMotion.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val lens = remember { Animatable(page) }
     var dragging by remember { mutableStateOf(false) }
     var raw by remember { mutableFloatStateOf(page) }
+    var pressure by remember { mutableFloatStateOf(0f) }
     var chosen by remember { mutableIntStateOf(tabs.indexOf(active).coerceAtLeast(0)) }
     val selected by rememberUpdatedState(onSelect)
     val view = LocalView.current
@@ -62,7 +70,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
         focus(index)
         scope.launch {
             if (reduced) lens.snapTo(index.toFloat())
-            else lens.animateTo(index.toFloat(), spring(1f, 500f))
+            else lens.animateTo(index.toFloat(), spring(1f, 650f))
         }
     }
     LaunchedEffect(page, dragging, pageDragging) {
@@ -80,21 +88,44 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
         val width = if (fits) maxWidth / tabs.size else 68.dp
         val pixels = with(density) { width.toPx() }
         val scroll = rememberScrollState()
-        Box(Modifier.fillMaxHeight().horizontalScroll(scroll, enabled = !fits && !dragging)
-            .draggable(rememberDraggableState { delta ->
-                raw = (raw + delta / pixels).coerceIn(0f, tabs.lastIndex.toFloat())
-                val position = magneticTabPosition(raw)
-                scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
-                val candidate = position.roundToInt().coerceIn(tabs.indices)
-                if (candidate != chosen && abs(position - chosen) > .52f) {
-                    focus(candidate)
+        val viewport = with(density) { maxWidth.toPx() }
+        LiquidGlassSurface(Modifier.fillMaxSize().bottomGlassShadow(opacity = shadowOpacity), source, pressFeedback = false, shadow = false, inkOverride = Color.Black) {}
+        Box(Modifier.fillMaxSize().clip(CircleShape)) {
+        Box(Modifier.fillMaxHeight().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll, enabled = !fits && !dragging)
+            .testTag("tab-scroll").pointerInput(tabs, pixels, viewport) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val left = pixels * lens.value
+                    // Coordinates are in the scrolled content. Empty track remains a
+                    // normal scroll gesture, even when it crosses the selector later.
+                    if (down.position.x < left || down.position.x > left + pixels) return@awaitEachGesture
+                    var started = false
+                    fun move(delta: Float) {
+                        raw += delta / pixels
+                        val low = scroll.value / pixels
+                        val high = ((scroll.value + viewport) / pixels - 1f).coerceAtLeast(low).coerceAtMost(tabs.lastIndex.toFloat())
+                        val bounded = raw.coerceIn(low, high)
+                        pressure = glassEdgePressure(raw - bounded)
+                        val position = magneticTabPosition(bounded).coerceIn(low, high)
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
+                        val candidate = position.roundToInt().coerceIn(tabs.indices)
+                        if (candidate != chosen && abs(position - chosen) > .52f) focus(candidate)
+                    }
+                    val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
+                        change.consume(); started = true; requested = null; raw = lens.value; dragging = true
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.stop() }
+                        move(over)
+                    }
+                    try {
+                        if (drag != null) horizontalDrag(drag.id) { change -> move(change.positionChange().x); change.consume() }
+                    } finally {
+                        if (started) {
+                            pressure = 0f; requested = chosen; dragging = false
+                            scope.launch { if (reduced) lens.snapTo(chosen.toFloat()) else lens.animateTo(chosen.toFloat(), spring(1f, 650f)) }
+                        }
+                    }
                 }
-            }, Orientation.Horizontal, onDragStarted = {
-                requested = null; lens.stop(); raw = lens.value; dragging = true
-            }, onDragStopped = {
-                requested = chosen; dragging = false
-                lens.animateTo(chosen.toFloat(), spring(1f, 450f))
-            })) {
+            }) {
             @Composable fun Labels(color: Color, interactive: Boolean) {
                 Row(Modifier.width(width * tabs.size).fillMaxHeight().then(if (interactive) Modifier else
                     Modifier.clearAndSetSemantics {}.drawWithContent {
@@ -126,21 +157,22 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
                     contrast = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.contrast)) {
                     SelectionLens(modifier, lens, chosen.toFloat(),
-                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true)
+                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, pressure = { pressure })
                 }
             }
             Box(Modifier.width(width * tabs.size).fillMaxHeight().recordFrostedBackdrop(composite)) {
-                LiquidGlassSurface(Modifier.matchParentSize(), source, pressFeedback = false, inkOverride = Color.Black) {}
+
                 if (appearance.tabStyle != TabLensStyle.Overlay) Lens()
                 Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
                 Labels(NavigationAccent, false)
             }
             if (appearance.tabStyle == TabLensStyle.Overlay) Lens()
         }
+        }
         LaunchedEffect(active, width, reduced) {
             val index = tabs.indexOf(active)
             if (!fits && index >= 0 && !dragging) {
-                val target = (scroll.maxValue * index.toFloat() / tabs.lastIndex.coerceAtLeast(1)).toInt()
+                val target = (pixels * (index + .5f) - viewport / 2).roundToInt().coerceIn(0, scroll.maxValue)
                 if (reduced) scroll.scrollTo(target) else scroll.animateScrollTo(target)
             }
         }

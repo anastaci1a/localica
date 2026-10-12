@@ -77,7 +77,7 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
                         onClick = { chosen = list.id; expanded = false }) }
                 }
             }
-            if (chosen == null) OutlinedTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true)
+            if (chosen == null) GlassTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true)
             state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = { TextButton(enabled = !state.loading && (chosen != null || name.isNotBlank()), onClick = {

@@ -14,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
@@ -39,14 +41,20 @@ internal fun Modifier.glassPress(onPressed: (Boolean) -> Unit = {}): Modifier {
     val notify by rememberUpdatedState(onPressed)
     val reduced = LocalReducedMotion.current
     var pressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (pressed && !reduced) 1.035f else 1f,
-        spring(dampingRatio = .42f, stiffness = 550f), label = "Glass pressure")
-    return graphicsLayer { scaleX = scale; scaleY = 1f - (scale - 1f) * .85f }.pointerInput(Unit) {
+    var travel by remember { mutableFloatStateOf(0f) }
+    val strain = rememberGlassElastic({ travel }, { if (pressed) .035f else 0f })
+    return drawWithContent {
+        val value = if (reduced) 0f else strain.value
+        scale(kotlin.math.exp(value), kotlin.math.exp(-value)) { this@drawWithContent.drawContent() }
+    }.pointerInput(Unit) {
         awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            travel = 0f
             pressed = true; notify(true)
             try {
-                do { val event = awaitPointerEvent(PointerEventPass.Final) }
+                do { val event = awaitPointerEvent(PointerEventPass.Final)
+                    event.changes.firstOrNull { it.id == down.id }?.let { travel = (it.position.x - down.position.x) / size.width.coerceAtLeast(1) }
+                }
                 while (event.changes.any { it.pressed })
             } finally { pressed = false; notify(false) }
         }
@@ -57,7 +65,7 @@ internal fun Modifier.glassPress(onPressed: (Boolean) -> Unit = {}): Modifier {
 @Composable
 internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, tint: Color = Color.Transparent,
-    cornerRadius: Dp? = null, frostProgress: Float = 0f, pressFeedback: Boolean = true, refraction: Float = 1f, inkOverride: Color? = null, protectCenter: Boolean = false,
+    cornerRadius: Dp? = null, frostProgress: Float = 0f, pressFeedback: Boolean = true, refraction: Float = 1f, inkOverride: Color? = null, protectCenter: Boolean = false, shadow: Boolean = true,
     content: @Composable BoxScope.() -> Unit = {}) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     val view = LocalView.current
@@ -78,29 +86,24 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val lens = remember { if (Build.VERSION.SDK_INT >= 33) GlassLens() else null }
     // Keep the outer shadow outside the press layer: pre-Android 10 ViewLayer clips
     // drawing beyond its bounds even when the Compose layer itself is not clipped.
-    Box(modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius)
-        .then(if (pressFeedback) Modifier.glassPress { pressed = it } else Modifier)
+    Box(modifier.then(if (pressFeedback) Modifier.glassPress { pressed = it } else Modifier)
+        .then(if (shadow) Modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius) else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
         .onGloballyPositioned { origin = it.backdropPosition(view) }) {
         if (source != null && Build.VERSION.SDK_INT >= 31) {
-            // A padded backdrop must never participate in the surface's intrinsic size.
-            // Measure it only after foreground content determines the actual bounds.
-            BoxWithConstraints(Modifier.matchParentSize()) {
-            // Padding supplies actual neighboring pixels along the curved silhouette.
-            val padding = 48.dp
-            Canvas(Modifier.requiredSize(maxWidth + padding * 2, maxHeight + padding * 2)
-                .graphicsLayer {
-                    val blur = 22.dp.toPx() * (appearance.blur + (1f - appearance.blur) * frost)
-                    val radius = (cornerRadius?.toPx() ?: ((size.minDimension - 2 * padding.toPx()) / 2))
-                        .coerceIn(0f, (size.minDimension / 2 - padding.toPx()).coerceAtLeast(0f))
-                    renderEffect = if (Build.VERSION.SDK_INT >= 33) lens?.effect(size.width, size.height, padding.toPx(), blur, radius, appearance.contrast * (1f - frost), dark, refraction, protectCenter)
-                        else if (blur > 0f) BlurEffect(blur, blur, TileMode.Clamp) else null
-                }) {
-                val offset = source.origin - origin + Offset(padding.toPx(), padding.toPx())
-                translate(offset.x, offset.y) { if (!source.layer.isReleased) drawLayer(source.layer) }
-            }
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
+            val padding = with(density) { 32.dp.toPx() }
+            FilteredBackdrop(Modifier.matchParentSize(), source, { origin }, if (blur > 1f) .5f else 1f, padding) { extent, resolution ->
+                val pad = padding * resolution
+                val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
+                    ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
+                if (Build.VERSION.SDK_INT >= 33) lens?.effect(extent.width, extent.height, pad, blur * resolution,
+                    radius, appearance.contrast * (1f - frost), dark, refraction, protectCenter)
+                else if (blur > 0f) BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp) else null
             }
         }
+
         if (source != null && Build.VERSION.SDK_INT < 31 && (appearance.blur > 0f || frost > 0f)) {
             Canvas(Modifier.matchParentSize()) {
                 val offset = source.origin - origin
@@ -126,20 +129,6 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 cornerRadius = CornerRadius((radius - inset).coerceAtLeast(0f)), style = Stroke(2.dp.toPx()))
         }
         CompositionLocalProvider(LocalContentColor provides (inkOverride ?: if (dark) Color.White else Color(0xFF202124))) { content() }
-    }
-}
-
-/** Ordinary elevation paints a dark silhouette through a transparent center. Exclude it. */
-private fun Modifier.clearGlassShadow(strength: Float, width: Float, cornerRadius: Dp?) = drawBehind {
-    val radius = (cornerRadius?.toPx() ?: (size.minDimension / 2)).coerceIn(0f, size.minDimension / 2)
-    val body = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(radius))) }
-    clipPath(body, ClipOp.Difference) {
-        for (step in 24 downTo 1) {
-            val spread = ((2f + width * 22f) * step / 24f).dp.toPx()
-            val opacity = strength * .045f * (1f - step / 25f)
-            drawRoundRect(Color.Black.copy(alpha = opacity), Offset(-spread, 2.dp.toPx() - spread),
-                androidx.compose.ui.geometry.Size(size.width + 2 * spread, size.height + 2 * spread), CornerRadius(radius + spread))
-        }
     }
 }
 

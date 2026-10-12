@@ -102,7 +102,7 @@ private fun PlaylistNameDialog(controller: PlaylistController?, onDismiss: () ->
     var failed by remember { mutableStateOf(false) }
     GlassAlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("New playlist") }, text = {
         Column {
-            OutlinedTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true, enabled = !saving)
+            GlassTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true, enabled = !saving)
             if (failed) Text("Couldn’t save the playlist. Try again.", color = MaterialTheme.colorScheme.error)
         }
     }, confirmButton = { TextButton(enabled = name.isNotBlank() && !saving && controller != null, onClick = {
@@ -119,7 +119,7 @@ internal fun PlaylistImportDialog(preview: PlaylistImportPreview, controller: Pl
     val missing = preview.entries.size - found.size
     GlassAlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("Import playlist") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true, enabled = !saving)
+            GlassTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true, enabled = !saving)
             Text("${found.size} matched · $missing unresolved. Song order and repeated entries are preserved.")
             if (missing > 0) Text("Unresolved entries will be skipped. Scan missing folders first if you want to include them.")
             if (preview.entries.any { it.nameOnly }) Text("Some songs matched by unique filename. Review them below.")
