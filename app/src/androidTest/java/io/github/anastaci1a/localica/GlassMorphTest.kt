@@ -66,6 +66,35 @@ class GlassMorphTest {
         compose.onNodeWithTag("trigger").assertIsDisplayed()
     }
 
+    @Test fun interruptedMorphKeepsItsSurfaceAndRestoresTheTriggerOnce() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            anchor = rememberGlassAnchor()
+            Box(Modifier.align(Alignment.BottomEnd).padding(20.dp).size(CompactControlSize).glassAnchor(anchor).testTag("reversal-trigger"))
+            GlassMorphPopup(open, anchor, { open = false }) {
+                Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Reversible menu") }
+            }
+        } } }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { open = true }
+        compose.mainClock.advanceTimeBy(176)
+        compose.onNodeWithTag("glass-morph-surface").assertExists()
+        compose.runOnIdle { open = false }
+        compose.mainClock.advanceTimeBy(96)
+        assertTrue(anchor.hidden)
+        compose.runOnIdle { open = true }
+        compose.mainClock.advanceTimeBy(96)
+        assertTrue("Reopening cannot reveal a duplicate trigger", anchor.hidden)
+        compose.onNodeWithTag("glass-morph-surface").assertExists()
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithText("Reversible menu").assertIsDisplayed()
+        compose.runOnIdle { open = false }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
+        assertFalse(anchor.hidden)
+    }
+
     @Test fun popupSamplesTheCorrectScreenCoordinatesAndNestedControlsSampleItsMaterial() {
         var open by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
