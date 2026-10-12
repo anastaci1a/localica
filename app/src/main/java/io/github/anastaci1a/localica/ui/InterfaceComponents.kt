@@ -16,7 +16,7 @@ import io.github.anastaci1a.localica.navigation.MainTab
 internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, anchor: GlassAnchor? = null,
     glass: Boolean = true, quiet: Boolean = false, onClick: () -> Unit) {
     val source = LocalFrostedBackdrop.current
-    SideEffect { anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(24.dp)) } }
+    SideEffect { anchor?.quiet = quiet; anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(24.dp)) } }
     val modifier = Modifier.size(if (glass) CompactControlSize else 48.dp).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)
     if (quiet) {
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -25,7 +25,9 @@ internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, a
             androidx.compose.animation.core.tween(if (LocalReducedMotion.current) 0 else 120), label = "Overflow glass")
         Box(modifier.glassPress().clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
             interactionSource = interaction, indication = null, onClick = onClick), contentAlignment = androidx.compose.ui.Alignment.Center) {
-            LiquidGlassSurface(Modifier.matchParentSize().alpha(reveal), pressFeedback = false)
+            CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
+                LiquidGlassSurface(Modifier.matchParentSize().alpha(reveal), pressFeedback = false, refraction = reveal)
+            }
             Icon(painterResource(resource), label, Modifier.size(24.dp))
         }
     } else if (glass) LiquidGlassSurface(modifier.alpha(if (enabled) 1f else .38f), pressFeedback = enabled) {
@@ -68,6 +70,7 @@ internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () 
         label.contains("Settings", true) || label.contains("Configure", true) -> R.drawable.ic_settings
         else -> R.drawable.ic_more
     }
-    DropdownMenuItem(text = { Text(label) }, onClick = onClick, enabled = enabled,
-        leadingIcon = { Icon(painterResource(icon), null, Modifier.size(24.dp)) })
+    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).alpha(if (enabled) 1f else .38f)) {
+        GlassActionButton(icon, label, Modifier.fillMaxWidth(), enabled = enabled, onClick = onClick)
+    }
 }

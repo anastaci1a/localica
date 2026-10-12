@@ -29,7 +29,10 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                 Text("Changes the saved order; keeps the current song and playback position.", style = MaterialTheme.typography.bodySmall)
             }
             Text("Sort by")
-            fields.forEach { field -> OptionRow(sortLabel(field), edited.sort == field, onClick = { edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending) }) }
+            GlassChoices(fields.map(::sortLabel), fields.indexOf(edited.sort).coerceAtLeast(0)) { index ->
+                val field = fields[index]
+                edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending)
+            }
             SortDirection(edited.ascending, reducedMotion) { edited = edited.copy(ascending = it) }
             if (route.collection != null) {
                 BooleanPreference("Only for this collection", override) { override = it }

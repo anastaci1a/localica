@@ -47,8 +47,14 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
     val queueNumber = state.library.queues.indexOfFirst { it.id == active?.id } + 1
     val selectorLabel = active?.let { "$queueNumber. ${it.name}" } ?: "Queues"
-    SideEffect { selectorAnchor.face = { Text(selectorLabel, Modifier.padding(horizontal = 12.dp),
-        style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
+    @Composable fun SelectorFace() {
+        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(selectorLabel, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(painterResource(R.drawable.ic_down), "Select queue", Modifier.size(24.dp))
+        }
+    }
+    SideEffect { selectorAnchor.face = { SelectorFace() } }
     val playingThisQueue = active?.id == state.library.activeId && isPlaying
     val position = active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
     val duration = active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
@@ -68,18 +74,15 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
             playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId, header = {
                 Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
-                            Row(Modifier.clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }
-                                .heightIn(min = CompactControlSize).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(selectorLabel, Modifier.weight(1f),
-                                    style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Icon(painterResource(R.drawable.ic_down), "Select queue", Modifier.size(24.dp))
-                            }
+                            Box(Modifier.fillMaxWidth().height(CompactControlSize)
+                                .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { SelectorFace() }
+
                         }
                         ActionIcon(R.drawable.ic_close, "Delete current queue", enabled = active != null) { deleting = setOfNotNull(active?.id) }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         ActionIcon(if (playingThisQueue) R.drawable.ic_pause else R.drawable.ic_play,
                             if (playingThisQueue) "Pause queue" else "Play queue", enabled = enabled && active?.entries?.isNotEmpty() == true) {
                             if (playingThisQueue) controller?.togglePlayback() else active?.id?.let { controller?.playQueue(it) }
@@ -106,6 +109,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center) {
+        ConnectedSelectionHost {
         Box(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
             Column(Modifier.padding(vertical = 12.dp)) {
                 Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -115,14 +119,13 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 LazyColumn(Modifier.weight(1f, fill = false).selectableGroup().padding(horizontal = 8.dp)) {
                     itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { index, queue ->
                         val chosen = queue.id == active?.id
-                        Surface(shape = Corners.card, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (chosen) .08f else 0f),
-                            modifier = Modifier.padding(vertical = 2.dp)) {
+                        Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
+                            modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 ReorderHandle("Reorder " + queue.name) { controller?.moveQueue(queue.id, it) }
                                 Row(Modifier.weight(1f).selectable(chosen, role = Role.RadioButton,
                                     onClick = { controller?.switchTo(queue.id); selector = false }).heightIn(min = 56.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
-                                    InterfaceCheckbox(chosen, null, Modifier.size(32.dp))
                                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
                                         if (chosen) MarqueeTitle("${index + 1}. ${queue.name}", reducedMotion,
                                             style = MaterialTheme.typography.bodyLarge)
@@ -141,6 +144,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("Remove all other queues") }
             }
         }
+    }
     }
     state.library.queues.firstOrNull { it.id == renameId }?.let { queue ->
         var name by remember(queue.id) { mutableStateOf(queue.name) }

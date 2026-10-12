@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.*
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
@@ -57,16 +59,25 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
 
 /** The containing preference row owns the toggle's semantics and full-width tap target. */
 @Composable
-internal fun InterfaceSwitch(checked: Boolean) {
+internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = null) {
     val speed = LocalMotionSpeed.current
     val reduced = LocalReducedMotion.current
     val position = remember { androidx.compose.animation.core.Animatable(if (checked) 1f else 0f) }
     LaunchedEffect(checked, reduced) {
         if (reduced) position.snapTo(if (checked) 1f else 0f)
-        else position.animateTo(if (checked) 1f else 0f, spring(.58f, 500f * speed * speed))
+        else position.animateTo(if (checked) 1f else 0f, spring(1f, 500f * speed * speed))
     }
     val neutral = MaterialTheme.colorScheme.onSurface.copy(alpha = .18f)
-    Box(Modifier.size(52.dp, 32.dp)) {
+    val scope = rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    Box(Modifier.size(52.dp, 32.dp).then(if (onChange == null) Modifier else Modifier.draggable(
+        rememberDraggableState { dx -> scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            position.snapTo((position.value + dx / with(density) { 20.dp.toPx() }).coerceIn(0f, 1f))
+        } }, Orientation.Horizontal, onDragStarted = { position.stop() }, onDragStopped = {
+            val next = position.value >= .5f
+            onChange(next)
+            position.animateTo(if (next) 1f else 0f, spring(1f, 500f))
+        }))) {
         Canvas(Modifier.matchParentSize()) {
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 cornerRadius = CornerRadius(size.height / 2))
@@ -82,15 +93,18 @@ internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> 
         tween(if (LocalReducedMotion.current) 0 else (160 / LocalMotionSpeed.current).toInt()), label = "Checkmark")
     val foreground = LocalContentColor.current
     val ink = if (foreground.luminance() > .5f) Color.Black else Color.White
-    Canvas(modifier.size(48.dp).then(if (onCheckedChange != null)
+    Box(modifier.size(48.dp).then(if (onCheckedChange != null)
         Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange) else Modifier)
-        .graphicsLayer { alpha = if (enabled) 1f else .38f }) {
+        .graphicsLayer { alpha = if (enabled) 1f else .38f }, contentAlignment = Alignment.Center) {
+        SelectionPane(Modifier.size(26.dp))
+        Canvas(Modifier.fillMaxSize()) {
         val radius = 10.dp.toPx()
         drawCircle(foreground.copy(alpha = .45f), radius, style = Stroke(1.5.dp.toPx()))
-        drawCircle(foreground.copy(alpha = progress), radius)
+
         val d = 1.dp.toPx()
         val check = Path().apply { moveTo(center.x - 4.5f * d, center.y); lineTo(center.x - 1f * d, center.y + 3.5f * d); lineTo(center.x + 5f * d, center.y - 4f * d) }
-        drawPath(check, ink.copy(alpha = progress), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(check, foreground.copy(alpha = progress), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
     }
 }
 
