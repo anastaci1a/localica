@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Review glass performance, overflowing navigation and text focus on the user's phone. Implement the [Liquid Glass specification](liquid-glass/specification.md) in the next design pass: faster motion, configurable low damping, and coupled depth/footprint/lensing. Its proposals are not yet shipped behavior. Revisit selection entrance motion separately ([#107](https://github.com/anastaci1a/localica/issues/107)). Preserve accessibility, playback continuity and older-Android support.
+Review the [Liquid Glass specification](liquid-glass/specification.md) on the user’s phone: low-damping depth response, rapid interrupted gestures, large collections and material handoffs. Emulator checks do not establish physical-device frame rates. Revisit selection entrance motion separately ([#107](https://github.com/anastaci1a/localica/issues/107)). Preserve accessibility, playback continuity and older-Android support.
 
 ## Deferred capabilities
 
