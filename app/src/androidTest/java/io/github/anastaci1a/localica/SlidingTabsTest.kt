@@ -39,17 +39,47 @@ class SlidingTabsTest {
         compose.onAllNodesWithContentDescription("Library").assertCountEquals(1)
     }
 
-    @Test fun draggingOutsideTheLensScrollsOverflowTabsWithoutSelectingThem() {
+    @Test fun everyOverflowDragScrollsTabsIncludingADragFromTheLens() {
         val tabs = MainTab.entries.take(8)
         val calls = mutableListOf<MainTab>()
         compose.setContent { LocalicaTheme { Box(Modifier.size(260.dp, 64.dp)) {
             SlidingTabs(tabs, tabs.first(), 0f) { calls += it }
         } } }
         val strip = compose.onNodeWithTag("tab-scroll")
+        strip.performTouchInput { swipe(Offset(width * .18f, centerY), Offset(width * .02f, centerY), 400) }
+        compose.waitForIdle()
+        assertTrue("Dragging the selected overflow tab cannot move its lens", calls.isEmpty())
+        assertTrue(strip.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value() > 0f)
         strip.performTouchInput { swipe(Offset(width * .8f, centerY), Offset(width * .25f, centerY), 400) }
         compose.waitForIdle()
         assertTrue("Scrolling the track cannot switch pages", calls.isEmpty())
         val range = strip.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange]
         assertTrue("Extra tabs must be reachable by scrolling", range.value() > 0f)
+    }
+
+    @Test fun fittedTabsAcceptSelectorDragsBeginningAwayFromTheLens() {
+        val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)
+        var active by mutableStateOf(MainTab.Home)
+        compose.setContent { LocalicaTheme { Box(Modifier.size(300.dp, 64.dp).testTag("tabs")) {
+            SlidingTabs(tabs, active, tabs.indexOf(active).toFloat()) { active = it }
+        } } }
+        compose.onNodeWithTag("tabs").performTouchInput {
+            swipe(Offset(width * .5f, centerY), Offset(width * .88f, centerY), 400)
+        }
+        compose.runOnIdle { assertEquals("A track drag moves the lens relatively without teleporting it", MainTab.Library, active) }
+    }
+
+    @Test fun longestLabelFitsInsideItsSelectorWithRoundedEndPadding() {
+        val tabs = listOf(MainTab.Home, MainTab.AlbumArtists, MainTab.Albums)
+        compose.setContent { LocalicaTheme { Box(Modifier.size(300.dp, 64.dp)) {
+            SlidingTabs(tabs, MainTab.AlbumArtists, 1f) {}
+        } } }
+        val label = compose.onNode(hasText(MainTab.AlbumArtists.label) and hasAnyAncestor(isSelected()), useUnmergedTree = true)
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        label.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertFalse("Cell width follows the full label", layouts.single().isLineEllipsized(0))
+        val text = label.fetchSemanticsNode().boundsInRoot
+        val lens = compose.onNodeWithTag("tab-selector", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("The label stays inside the curved selector", text.left > lens.left && text.right < lens.right)
     }
 }

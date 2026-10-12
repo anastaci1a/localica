@@ -23,6 +23,8 @@ internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseSt
 internal class BrowsePinchMotion {
     val progress = Animatable(1f)
     var held by mutableStateOf(false)
+    var fingerProgress = 0f
+    var tracking: kotlinx.coroutines.Job? = null
     var source by mutableStateOf<BrowseStyle?>(null)
     var bounds: Map<Any, Rect> = emptyMap()
     var focusKey: Any? = null
@@ -75,7 +77,13 @@ internal fun Modifier.pinchToChangeView(enabled: Boolean, onProgress: ((Float) -
                                 committed = true; outward = scale > 1f
                                 step(outward, event.calculateCentroid())
                             }
-                            if (committed) progress?.invoke(pinchProgress(scale, outward))
+                            if (committed) {
+                                // Consume recognition slop, not a visible fraction of the
+                                // layout transition. Return to the original span still cancels.
+                                val adjusted = if (outward) 1f + (scale - 1.04f).coerceAtLeast(0f)
+                                    else 1f - (1f / 1.04f - scale).coerceAtLeast(0f)
+                                progress?.invoke(pinchProgress(adjusted, outward))
+                            }
                         }
                         event.changes.forEach { it.consume() }
                     }

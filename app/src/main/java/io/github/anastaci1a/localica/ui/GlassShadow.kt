@@ -27,11 +27,12 @@ internal val LocalBottomShadows = staticCompositionLocalOf<GlassShadowGroup?> { 
 internal class GlassShadowGeometry {
     private var previous = emptyList<RoundRect>()
     private var previousReach = -1f
+    private var previousShift = Float.NaN
     var body = Path(); private set
     var rings = emptyList<Path>(); private set
     fun update(bodies: List<RoundRect>, reach: Float, shift: Float) {
-        if (bodies == previous && reach == previousReach) return
-        previous = bodies; previousReach = reach
+        if (bodies == previous && reach == previousReach && shift == previousShift) return
+        previous = bodies; previousReach = reach; previousShift = shift
         fun outline(expansion: Float, y: Float = 0f): Path = Path().apply {
             bodies.forEach { r ->
                 val other = Path().apply { addRoundRect(RoundRect(r.left - expansion, r.top - expansion + y,

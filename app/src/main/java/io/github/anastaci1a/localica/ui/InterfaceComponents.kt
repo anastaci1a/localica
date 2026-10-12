@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.alpha
@@ -14,26 +13,23 @@ import io.github.anastaci1a.localica.navigation.MainTab
 
 @Composable
 internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, anchor: GlassAnchor? = null,
-    glass: Boolean = true, quiet: Boolean = false, onClick: () -> Unit) {
+    glass: Boolean = true, quiet: Boolean = false, iconSize: androidx.compose.ui.unit.Dp = 24.dp, onClick: () -> Unit) {
     val source = LocalFrostedBackdrop.current
-    SideEffect { anchor?.quiet = quiet; anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(24.dp)) } }
+    SideEffect { anchor?.quiet = quiet; anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(iconSize)) } }
     val modifier = Modifier.size(if (glass) CompactControlSize else 48.dp).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)
     if (quiet) {
+        anchor?.captureInk()
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-        val pressed by interaction.collectIsPressedAsState()
-        val reveal by androidx.compose.animation.core.animateFloatAsState(if (pressed) 1f else 0f,
-            androidx.compose.animation.core.tween(if (LocalReducedMotion.current) 0 else 120), label = "Overflow glass")
-        Box(modifier.glassPress().clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
+        Box(modifier.clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
             interactionSource = interaction, indication = null, onClick = onClick), contentAlignment = androidx.compose.ui.Alignment.Center) {
-            CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
-                LiquidGlassSurface(Modifier.matchParentSize().alpha(reveal), pressFeedback = false, refraction = reveal)
-            }
-            Icon(painterResource(resource), label, Modifier.size(24.dp))
+            Icon(painterResource(resource), label, Modifier.size(iconSize))
         }
     } else if (glass) LiquidGlassSurface(modifier.alpha(if (enabled) 1f else .38f), pressFeedback = enabled) {
-        IconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(resource), label, Modifier.size(24.dp)) }
+        anchor?.captureInk()
+        IconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(resource), label, Modifier.size(iconSize)) }
     } else IconButton(onClick, modifier, enabled = enabled) {
-        Icon(painterResource(resource), label, Modifier.size(24.dp))
+        anchor?.captureInk()
+        Icon(painterResource(resource), label, Modifier.size(iconSize))
     }
 }
 internal fun MainTab.icon() = when (this) {
@@ -51,6 +47,8 @@ internal fun MainTab.icon() = when (this) {
 @Composable
 internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     val icon = when {
+        label == "Sort" -> R.drawable.ic_sort
+        label == "View options" -> R.drawable.ic_eye
         label.contains("Information", true) -> R.drawable.ic_info
         label.startsWith("Delete") || label.startsWith("Remove") -> R.drawable.ic_trash
         label.startsWith("Close") -> R.drawable.ic_close

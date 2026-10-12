@@ -139,6 +139,7 @@ fun LocalicaScreen(
     }
     val indexedTrack = currentTrack?.let { saved -> library.snapshot.tracks.firstOrNull { it.id == saved.id }
         ?: saved.copy(playCount = library.snapshot.trackPlays[saved.id] ?: 0) }
+    val lyricsAvailable = rememberLyrics(indexedTrack)?.sources?.isNotEmpty() == true
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
         navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title))
         queueOpen = false; expanded = false; songInfo = false
@@ -207,7 +208,7 @@ fun LocalicaScreen(
     LocalicaTheme(grayTone = settings.grayTone) {
     CompositionLocalProvider(LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache,
-        LocalMotionSpeed provides if (settings.fasterMotion) 1.5f else 1f,
+        LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
@@ -292,17 +293,20 @@ fun LocalicaScreen(
             val utilityAnchor = rememberGlassAnchor()
             SideEffect { utilityAnchor.source = browseBackdrop; utilityAnchor.face = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null, Modifier.size(24.dp)) }
-                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_more), null, Modifier.size(24.dp)) }
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null, Modifier.size(28.dp)) }
+                    Box(Modifier.height(24.dp).width(1.dp).background(LocalContentColor.current.copy(alpha = .2f)))
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_more), null, Modifier.size(28.dp)) }
                 }
             } }
             LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().glassAnchor(utilityAnchor).testTag("utility-pill").bottomGlassShadow(opacity = { chromeVisibility * (1f - progress.value) }), source = browseBackdrop, shadow = false, pressFeedback = false) {
+                utilityAnchor.captureInk()
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                ActionIcon(R.drawable.ic_search, "Search library", glass = false) {
+                ActionIcon(R.drawable.ic_search, "Search library", glass = false, iconSize = 28.dp) {
                     navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true))
                 }
+                Box(Modifier.height(24.dp).width(1.dp).background(LocalContentColor.current.copy(alpha = .2f)))
                 Box {
-                    ActionIcon(R.drawable.ic_more, "More", glass = false) { moreOpen = true }
+                    ActionIcon(R.drawable.ic_more, "More", glass = false, iconSize = 28.dp) { moreOpen = true }
                     GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
                         ActionMenuItem("Scan music", onClick = {
                             moreOpen = false; scannerOpen = true
@@ -326,7 +330,7 @@ fun LocalicaScreen(
             lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
-            bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
+            bottomChrome = bottomChrome, miniForeground = miniInk, lyricsAvailable = lyricsAvailable, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
@@ -335,7 +339,7 @@ fun LocalicaScreen(
                 PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
             } }, ::playerAction, { customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
-                lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
+                lyricsOpen = lyricsOpen, lyricsAvailable = lyricsAvailable, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
                 onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
@@ -394,7 +398,8 @@ fun LocalicaScreen(
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            PlayerAction.entries.filterNot { it == PlayerAction.More }.forEach { action -> TextButton(onClick = { playerMore = false; playerAction(action) }) { Text(action.label) } }
+            PlayerAction.entries.filterNot { it == PlayerAction.More || it == PlayerAction.Lyrics && !lyricsAvailable }
+                .forEach { action -> TextButton(onClick = { playerMore = false; playerAction(action) }) { Text(action.label) } }
         }
     }
     QueueDialogs(queues, queueController)

@@ -33,6 +33,7 @@ class GlassPressureTest {
         compose.mainClock.advanceTimeBy(300)
         val held = lens.fetchSemanticsNode().boundsInRoot
         assertTrue("A held overdrag compresses the vertical lens: $initial -> $held", held.height < initial.height * .97f)
+        assertEquals("Compression pins the contacting top edge", initial.top, held.top, 1f)
         compose.onNodeWithText("Title").performTouchInput { up() }
         compose.mainClock.advanceTimeBy(1200)
         assertEquals(initial.height, lens.fetchSemanticsNode().boundsInRoot.height, 1f)

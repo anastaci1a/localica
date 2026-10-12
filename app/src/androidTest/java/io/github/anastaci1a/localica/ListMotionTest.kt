@@ -21,6 +21,27 @@ class ListMotionTest {
     @get:Rule val compose = createComposeRule()
     private val heights = List(100) { if (it % 7 == 0) 180 else if (it % 3 == 0) 80 else 30 }
 
+    @Test fun returningFromThousandsOfAlbumsHasABoundedDuration() {
+        lateinit var grid: LazyGridState
+        lateinit var scope: CoroutineScope
+        compose.setContent { LocalicaTheme {
+            grid = rememberLazyGridState(9000); scope = rememberCoroutineScope()
+            LazyVerticalGrid(GridCells.Fixed(3), Modifier.height(360.dp), state = grid) {
+                items(10000) { Text("Album $it", Modifier.height(120.dp)) }
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        lateinit var job: Job
+        compose.runOnIdle { job = scope.launch { grid.easeToTop(false) } }
+        repeat(36) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        compose.runOnIdle {
+            assertTrue("Large collections must finish within about half a second", job.isCompleted)
+            assertEquals(0, grid.firstVisibleItemIndex)
+            assertEquals(0, grid.firstVisibleItemScrollOffset)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
     private fun follow(scope: CoroutineScope, position: () -> Float, destination: suspend () -> Unit) {
         compose.mainClock.autoAdvance = false
         lateinit var job: Job

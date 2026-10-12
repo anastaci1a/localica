@@ -43,6 +43,30 @@ private val LightColors = lightColorScheme(
     surfaceTint = Color(0xFF777980),
 )
 
+/** Popup controls and explicit secondary labels must agree with the material's ink. */
+@Composable
+internal fun GlassPanelTheme(dark: Boolean, content: @Composable () -> Unit) {
+    val colors = if (dark) androidx.compose.material3.darkColorScheme(
+        primary = Color.White, onPrimary = Color(0xFF202124),
+        primaryContainer = Color(0xFF414249), onPrimaryContainer = Color.White,
+        secondary = Color(0xFFE4E4E8), onSecondary = Color(0xFF202124),
+        secondaryContainer = Color(0xFF414249), onSecondaryContainer = Color.White,
+        tertiary = Color(0xFFE4E4E8), onTertiary = Color(0xFF202124),
+        tertiaryContainer = Color(0xFF414249), onTertiaryContainer = Color.White,
+        background = Color(0xFF242528), onBackground = Color.White,
+        surface = Color(0xFF242528), onSurface = Color.White, onSurfaceVariant = Color(0xFFE4E4E8),
+        surfaceContainer = Color(0xFF303136), surfaceContainerLow = Color(0xFF242528),
+        surfaceContainerHigh = Color(0xFF414249), surfaceContainerHighest = Color(0xFF4A4B50),
+        outline = Color(0xFFA6A7AD), outlineVariant = Color(0xFF61636A), surfaceTint = Color.White,
+    ) else MaterialTheme.colorScheme.takeIf { it.onSurface.red < .5f } ?: LightColors
+    MaterialTheme(colorScheme = colors) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides colors.onSurface,
+            androidx.compose.material3.LocalTextStyle provides androidx.compose.material3.LocalTextStyle.current.copy(color = Color.Unspecified),
+            content = content)
+    }
+}
+
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun LocalicaTheme(grayTone: Float = .4f, content: @Composable () -> Unit) {

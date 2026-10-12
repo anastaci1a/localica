@@ -28,15 +28,22 @@ import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.lyrics.*
 
 @Composable
-internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null) {
+internal fun rememberLyrics(track: Track?): LyricsResult? {
     val context = LocalContext.current
     val repository = remember(context) { (context.applicationContext as? LocalicaApplication)?.lyrics ?: LyricsRepository(context) }
     val revision by ArtworkCache.revision.collectAsState()
-    val loaded by produceState<Pair<String?, LyricsResult>?>(null, track?.id, track?.uri, revision) {
-        value = track?.id to (track?.let { repository.load(it, revision) } ?: LyricsResult())
+    // A new key starts empty: never expose the preceding song's availability.
+    return key(track?.id, track?.uri, track?.locations, revision) {
+        val result by produceState<LyricsResult?>(null) { value = track?.let { repository.load(it, revision) } ?: LyricsResult() }
+        result
     }
-    val result = loaded?.second
+}
+
+@Composable
+internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null) {
+    val context = LocalContext.current
+    val result = rememberLyrics(track)
     val preferences = remember { context.getSharedPreferences("lyric-sources", 0) }
     var chosen by rememberSaveable(track?.id) { mutableStateOf(preferences.getString(track?.id ?: "", null)) }
     val source = result?.sources?.firstOrNull { it.id == chosen } ?: result?.sources?.firstOrNull()
@@ -66,7 +73,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                 }
                 else -> key(shown.id, shown.document) {
                     var shownPosition by remember { mutableLongStateOf(positionMs) }
-                    SideEffect { if (shown == source && loaded?.first == track?.id) shownPosition = positionMs }
+                    SideEffect { if (shown == source) shownPosition = positionMs }
                     LyricsLines(shown.document, shownPosition, reducedMotion, onSeek, Modifier.fillMaxSize())
                 }
             }

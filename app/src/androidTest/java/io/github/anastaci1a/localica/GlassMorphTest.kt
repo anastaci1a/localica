@@ -24,6 +24,51 @@ import org.junit.Test
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun recordedTriggersReturnWhileStationaryAndClosingWindowsReleaseInput() {
+        var open by mutableStateOf(false)
+        var presses = 0
+        lateinit var anchor: GlassAnchor
+        compose.setContent { LocalicaTheme {
+            val recorded = rememberFrostedBackdrop(Unit, dark = false)
+            Box(Modifier.fillMaxSize().recordFrostedBackdrop(recorded)) {
+                anchor = rememberGlassAnchor()
+                Canvas(Modifier.fillMaxSize()) { drawRect(Color.White) }
+                Canvas(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(104.dp, 64.dp)
+                    .glassAnchor(anchor).testTag("stationary-trigger")) { drawRect(Color.Red) }
+                Box(Modifier.align(Alignment.TopStart).padding(24.dp).size(80.dp).testTag("next-action").clickable { presses++ }) {
+                    Text("Next action")
+                }
+                GlassMorphPopup(open, anchor, { open = false }) { Box(Modifier.fillMaxWidth().height(240.dp)) { Text("Options") } }
+            }
+        } }
+        val windowInset = anchor.bounds.top - compose.onNodeWithTag("stationary-trigger").fetchSemanticsNode().boundsInRoot.top
+        compose.runOnIdle { open = true }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { open = false }
+        compose.mainClock.advanceTimeBy(48)
+        compose.waitForIdle()
+        compose.onNodeWithTag("glass-morph-surface").assertExists()
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        val target = compose.onNodeWithTag("next-action").fetchSemanticsNode().boundsInRoot.center
+        val device = androidx.test.uiautomator.UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
+        device.click(target.x.toInt(), (target.y + windowInset).toInt())
+        compose.waitUntil(5000) { presses == 1 }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
+        // Screen capture does not invalidate the Compose tree. A semantics-only assertion
+        // would miss a trigger that exists but stays absent from its recorded parent.
+        compose.waitUntil(5000) {
+            val screenshot = automation.takeScreenshot()
+            try {
+                val pixel = screenshot.getPixel(anchor.bounds.center.x.toInt(), anchor.bounds.center.y.toInt())
+                android.graphics.Color.red(pixel) > 240 && android.graphics.Color.green(pixel) < 20
+            } finally { screenshot.recycle() }
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun oneSurfaceExpandsFromTheTriggerAndReturnsBeforeRestoringIt() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
