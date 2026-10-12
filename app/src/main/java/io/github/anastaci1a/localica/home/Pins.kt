@@ -14,7 +14,7 @@ object PinEdits {
     fun move(pins: List<MediaRef>, ref: MediaRef, offset: Int): List<MediaRef> {
         val index = pins.indexOf(ref)
         if (index < 0) return pins
-        return pins.toMutableList().apply { add((index + offset).coerceIn(0, lastIndex), removeAt(index)) }
+        return io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(pins, index, offset)
     }
 }
 

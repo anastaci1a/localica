@@ -183,11 +183,6 @@ fun LocalicaScreen(
     val previousVisual = rememberNeighborArtwork(neighbors.getOrNull(1))
     val nextArtwork = journey?.next?.let { visit -> nextVisual?.let { ArtworkNeighbor(visit.token, it) } }
     val previousArtwork = journey?.previous?.let { visit -> previousVisual?.let { ArtworkNeighbor(visit.token, it) } }
-    val previewTracks = library.snapshot.tracks
-    val currentPreviewTrack = previewTracks.firstOrNull { it.uri == player.trackUri }
-    val previewUris = (listOfNotNull(player.trackUri) + previewTracks.filterNot {
-        currentPreviewTrack != null && it.album == currentPreviewTrack.album && it.albumArtist == currentPreviewTrack.albumArtist
-    }.distinctBy { it.album to it.albumArtist }.map { it.uri } + neighbors.filterNotNull()).distinct().take(8)
     // Older Android snapshots must never capture the expanding mini-player's
     // light browsing glass and stretch it into the Queue's dark material.
     val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded && progress.value >= .99f, glassBlur = settings.glass.blur)
@@ -210,7 +205,7 @@ fun LocalicaScreen(
     PlayerSystemBars(hasPlayer && progress.value >= .99f || insideCollection && browseInk == androidx.compose.ui.graphics.Color.White)
     val bottomShadows = remember { GlassShadowGroup() }
     LocalicaTheme(grayTone = settings.grayTone) {
-    CompositionLocalProvider(LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkPreviewUris provides previewUris, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache,
         LocalMotionSpeed provides if (settings.fasterMotion) 1.5f else 1f,
         LocalModalBackdrop provides modalBackdrop,

@@ -11,7 +11,7 @@ import kotlin.math.exp
 
 /** One deformation model for tab, sort and settings selectors, including edge pressure. */
 @Composable
-internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, AnimationVector1D>, target: Float,
+internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, AnimationVector1D>,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, preserveAppearance: Boolean = false,
     vertical: Boolean = false, pressure: () -> Float = { 0f }) {
     val strain = rememberGlassElastic({ motion.value }, pressure)

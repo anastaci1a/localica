@@ -46,7 +46,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, horizontal: Boole
         SelectionLens(Modifier.testTag("choice-lens").offset { androidx.compose.ui.unit.IntOffset(
             if (horizontal) (stride * position.value).roundToInt() else 0,
             if (horizontal) 0 else (stride * position.value).roundToInt()) }.width(width).height(height),
-            position, selected.toFloat(), vertical = !horizontal, pressure = { pressure })
+            position, vertical = !horizontal, pressure = { pressure })
         @Composable fun Item(index: Int, modifier: Modifier) {
             Box(modifier.height(height).selectable(index == selected, role = Role.RadioButton,
                 interactionSource = null, indication = null, onClick = { change(index) })
@@ -73,4 +73,20 @@ internal fun SelectionPane(modifier: Modifier = Modifier) {
     CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
         LiquidGlassSurface(modifier, cornerRadius = 20.dp, pressFeedback = false)
     }
+}
+
+/** Full-row choice treatment shared by sorting and settings dialogs. */
+@Composable
+internal fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        if (selected) SelectionPane(Modifier.matchParentSize())
+        Text(label, Modifier.fillMaxWidth().selectable(selected, role = Role.RadioButton, interactionSource = null,
+            indication = null, onClick = onClick).heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically)
+            .padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@Composable
+internal fun SortDirection(ascending: Boolean, onSelect: (Boolean) -> Unit) {
+    GlassChoices(listOf("Ascending", "Descending"), if (ascending) 0 else 1, horizontal = true) { onSelect(it == 0) }
 }

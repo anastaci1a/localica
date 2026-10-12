@@ -18,10 +18,10 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
                 Text(filter.label, style = MaterialTheme.typography.titleMedium)
                 FlowRow {
                     TextButton(enabled = index > 0, onClick = {
-                        onChange(value.copy(visible = value.visible.toMutableList().apply { add(index - 1, removeAt(index)) }))
+                        onChange(value.copy(visible = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.visible, index, -1)))
                     }) { Text("Move up") }
                     TextButton(enabled = index < value.visible.lastIndex, onClick = {
-                        onChange(value.copy(visible = value.visible.toMutableList().apply { add(index + 1, removeAt(index)) }))
+                        onChange(value.copy(visible = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.visible, index, 1)))
                     }) { Text("Move down") }
                     TextButton(onClick = { onChange(value.copy(visible = value.visible - filter)) }) { Text("Remove") }
                 }

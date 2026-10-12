@@ -74,3 +74,10 @@ internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () 
         GlassActionButton(icon, label, Modifier.fillMaxWidth(), enabled = enabled, onClick = onClick)
     }
 }
+
+internal fun formatTime(milliseconds: Long?): String {
+    if (milliseconds == null) return "–:––"
+    val seconds = milliseconds.coerceAtLeast(0) / 1000
+    return if (seconds >= 3600) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+    else String.format(java.util.Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60)
+}

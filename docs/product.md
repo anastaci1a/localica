@@ -26,7 +26,13 @@ A dependable offline Android player for audio on the device: Musicolet-inspired 
 | Previous | Below five seconds, go to the previous song; otherwise restart. Settings: threshold 1–60 seconds, always previous, always restart. Without a previous visit, restart. Preserve paused/playing state across app/system/headset controls. |
 | Continuity | Preload roughly five seconds of the actual next song under repeat/shuffle, enabled by default. Preserve intentional silence and encoder timing; no overlapping audio. Format/device limits are in [Build](build.md#compatibility-and-dependencies). |
 
-Repeat and Shuffle are global persisted modes, initially off. Shuffle traverses occurrence IDs without altering visible order or repeating before exhaustion. Each queue retains its visited membership, history cursor and concrete future, shared by transport, preloading and artwork. Back/forward retrace the same visits, including across repeat cycles and restarts. Explicit selection replaces forward history without making already-visited occurrences eligible again; selecting after exhaustion starts a fresh cycle. Mode changes preserve history and reconcile future traversal; reordering preserves shuffled plans, additions join them, and removals drop invalid visits. **Randomize queue order** instead persists a new order, displays Manual ascending, and preserves the current occurrence/cursor/playing state.
+Repeat and Shuffle are global persisted modes, initially off:
+
+- Shuffle traverses occurrence IDs without changing visible order or repeating before exhaustion.
+- Each queue retains visited membership, history cursor and concrete future, shared by transport, preloading and artwork. Back/forward retrace visits across repeat cycles and restarts.
+- Explicit selection replaces forward history without re-enabling visited occurrences; selection after exhaustion starts a new cycle.
+- Mode changes preserve history and reconcile future traversal. Reordering preserves shuffled plans, additions join them, and removals drop invalid visits.
+- **Randomize queue order** instead persists a new order, displays Manual ascending, and preserves current occurrence/cursor/playing state.
 
 Advanced Repeat supports song-end Stop / Load next paused / Next / Repeat and queue-end Stop / Next queue / Repeat, with reset-to-first and reshuffle options. The player's [action controls](interface.md#player-actions) expose these settings.
 

@@ -156,7 +156,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                     blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
                     contrast = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.contrast)) {
-                    SelectionLens(modifier, lens, chosen.toFloat(),
+                    SelectionLens(modifier, lens,
                         if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, pressure = { pressure })
                 }
             }

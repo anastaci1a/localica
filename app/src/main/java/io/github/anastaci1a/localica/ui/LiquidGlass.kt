@@ -84,8 +84,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     var pressed by remember { mutableStateOf(false) }
     val energy by animateFloatAsState(if (pressed) 1f else 0f, spring(stiffness = 650f), label = "Glass illumination")
     val lens = remember { if (Build.VERSION.SDK_INT >= 33) GlassLens() else null }
-    // Keep the outer shadow outside the press layer: pre-Android 10 ViewLayer clips
-    // drawing beyond its bounds even when the Compose layer itself is not clipped.
+    // Transform the surface and its shadow together in the draw pass; a legacy
+    // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress { pressed = it } else Modifier)
         .then(if (shadow) Modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius) else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)

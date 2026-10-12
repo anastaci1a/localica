@@ -19,7 +19,7 @@ class ChoiceControlsTest {
     @Test fun sortChoicesExposeSelectionAndSaveDirection() {
         var saved: BrowseStyle? = null
         compose.setContent { LocalicaTheme {
-            BrowseSortDialog(BrowseRoute(MainTab.Songs), BrowseStyle(), false, {}, { value, _ -> saved = value }, {}, reducedMotion = true)
+            BrowseSortDialog(BrowseRoute(MainTab.Songs), BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
         } }
         compose.onNodeWithText("Title").assertIsSelected()
         compose.onNodeWithText("Year").performScrollTo().performClick().assertIsSelected()

@@ -31,7 +31,7 @@ internal object ArtworkWash {
         }
         val levels = listOf(pixels) + listOf(2, 5, 12, 24).map { radius ->
             var blurred = pixels
-            repeat(3) { blurred = blur(blurred, radius) }
+            repeat(3) { blurred = boxBlur(blurred, WIDTH, HEIGHT, radius) }
             blurred
         }
         val output = IntArray(pixels.size) { i ->
@@ -54,27 +54,4 @@ internal object ArtworkWash {
 
     private fun smooth(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
-    /** Separable sliding box filter, with clamped edges; three passes approximate a Gaussian. */
-    private fun blur(input: IntArray, radius: Int): IntArray {
-        fun pass(source: IntArray, horizontal: Boolean): IntArray {
-            val output = IntArray(source.size)
-            val length = if (horizontal) WIDTH else HEIGHT
-            val lines = if (horizontal) HEIGHT else WIDTH
-            val count = radius * 2 + 1
-            for (line in 0 until lines) {
-                fun index(p: Int) = if (horizontal) line * WIDTH + p.coerceIn(0, length - 1)
-                    else p.coerceIn(0, length - 1) * WIDTH + line
-                var r = 0; var g = 0; var b = 0
-                fun add(color: Int, sign: Int) { r += Color.red(color) * sign; g += Color.green(color) * sign; b += Color.blue(color) * sign }
-                for (p in -radius..radius) add(source[index(p)], 1)
-                for (p in 0 until length) {
-                    output[index(p)] = Color.rgb(r / count, g / count, b / count)
-                    add(source[index(p - radius)], -1)
-                    add(source[index(p + radius + 1)], 1)
-                }
-            }
-            return output
-        }
-        return pass(pass(input, true), false)
-    }
 }

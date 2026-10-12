@@ -1,26 +1,27 @@
 package io.github.anastaci1a.localica.queue
 
+import io.github.anastaci1a.localica.library.enumValue
 import android.content.Context
 import io.github.anastaci1a.localica.library.SongListView
 
 class QueuePreferences(context: Context) {
     private val preferences = context.getSharedPreferences("queue-settings", Context.MODE_PRIVATE)
     fun read() = QueueSettings(
-        songTap = SongTap.entries.firstOrNull { it.name == preferences.getString("tap", null) } ?: SongTap.NewQueue,
-        switching = QueueSwitch.entries.firstOrNull { it.name == preferences.getString("switch-browse", null) } ?: QueueSwitch.Browse,
+        songTap = preferences.enumValue<SongTap>("tap") ?: SongTap.NewQueue,
+        switching = preferences.enumValue<QueueSwitch>("switch-browse") ?: QueueSwitch.Browse,
         tapOverrides = SongListView.entries.mapNotNull { view ->
-            SongTap.entries.firstOrNull { it.name == preferences.getString("tap.${view.name}", null) }?.let { view to it }
+            preferences.enumValue<SongTap>("tap.${view.name}")?.let { view to it }
         }.toMap(),
         maximum = preferences.getInt("maximum", 0).takeIf { it > 0 },
         preloadNext = preferences.getBoolean("preload-next", true),
         shuffle = preferences.getBoolean("shuffle", false),
-        repeat = QueueRepeat.entries.firstOrNull { it.name == preferences.getString("repeat", null) } ?: QueueRepeat.Off,
-        previousBehavior = PreviousBehavior.entries.firstOrNull { it.name == preferences.getString("previous-behavior", null) }
+        repeat = preferences.enumValue<QueueRepeat>("repeat") ?: QueueRepeat.Off,
+        previousBehavior = preferences.enumValue<PreviousBehavior>("previous-behavior")
             ?: PreviousBehavior.RestartAfterThreshold,
         previousThresholdSeconds = preferences.getInt("previous-threshold-seconds", 5).coerceIn(1, 60),
         advancedRepeat = if (preferences.getBoolean("advanced-repeat", false)) AdvancedRepeat(
-            SongEnd.entries.firstOrNull { it.name == preferences.getString("song-end", null) } ?: SongEnd.Next,
-            QueueEnd.entries.firstOrNull { it.name == preferences.getString("queue-end", null) } ?: QueueEnd.Stop,
+            preferences.enumValue<SongEnd>("song-end") ?: SongEnd.Next,
+            preferences.enumValue<QueueEnd>("queue-end") ?: QueueEnd.Stop,
             preferences.getBoolean("queue-reset-first", false), preferences.getBoolean("queue-reshuffle", true)) else null,
     )
     fun migratePlaybackModes(active: ListeningQueue?) {

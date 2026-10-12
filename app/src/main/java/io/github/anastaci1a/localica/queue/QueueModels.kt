@@ -88,8 +88,7 @@ object QueueEdits {
     fun move(queue: ListeningQueue, entryId: String, offset: Int): ListeningQueue {
         val from = queue.entries.indexOfFirst { it.id == entryId }
         if (from < 0) return queue
-        val to = (from + offset).coerceIn(0, queue.entries.lastIndex)
-        val entries = queue.entries.toMutableList().apply { add(to, removeAt(from)) }
+        val entries = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(queue.entries, from, offset)
         return queue.copy(entries = entries)
     }
     fun moveBefore(queue: ListeningQueue, ids: Set<String>, beforeId: String?) = queue.copy(

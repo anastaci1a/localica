@@ -6,6 +6,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OccurrenceMovesTest {
+    @Test fun offsetMovesClampAtEndsAndRetainIndividualDuplicateOccurrences() {
+        val items = listOf("a", "b", "a", "c")
+        assertEquals(listOf("a", "a", "c", "b"), OccurrenceMoves.byOffset(items, 1, 20))
+        assertEquals(listOf("c", "a", "b", "a"), OccurrenceMoves.byOffset(items, 3, -20))
+        assertEquals(items, OccurrenceMoves.byOffset(items, 2, 0))
+        assertSame(items, OccurrenceMoves.byOffset(items, -1, 1))
+        assertEquals(emptyList<String>(), OccurrenceMoves.byOffset(emptyList<String>(), 0, 1))
+    }
+
     @Test fun nonconsecutiveSelectionsKeepSourceOrderRegardlessOfSelectionOrder() {
         val items = listOf("a", "b", "c", "d", "e", "f")
         assertEquals(listOf("a", "c", "e", "b", "d", "f"), OccurrenceMoves.before(items, linkedSetOf("d", "b"), "f") { it })

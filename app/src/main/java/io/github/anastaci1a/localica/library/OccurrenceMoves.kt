@@ -2,6 +2,11 @@ package io.github.anastaci1a.localica.library
 
 /** The insertion anchor is in the remaining list; selected occurrences retain source order. */
 object OccurrenceMoves {
+    fun <T> byOffset(items: List<T>, index: Int, offset: Int): List<T> {
+        if (index !in items.indices) return items
+        return items.toMutableList().apply { add((index + offset).coerceIn(0, lastIndex), removeAt(index)) }
+    }
+
     fun <T> before(items: List<T>, selected: Set<String>, beforeId: String?, id: (T) -> String): List<T> {
         val known = items.map(id).toHashSet()
         require(selected.isNotEmpty() && known.containsAll(selected))

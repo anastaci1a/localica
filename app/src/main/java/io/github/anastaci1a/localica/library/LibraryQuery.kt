@@ -18,13 +18,7 @@ object LibraryQueries {
 
     fun rows(rows: List<SongRow>, query: LibraryQuery): List<SongRow> {
         val terms = query.text.trim().lowercase(Locale.ROOT).split(Regex("\\s+")).filter { it.isNotEmpty() }
-        val direction = if (query.ascending) 1 else -1
-        fun <T : Comparable<T>> compare(a: T?, b: T?): Int = when {
-            a == null && b == null -> 0
-            a == null -> 1
-            b == null -> -1
-            else -> a.compareTo(b) * direction
-        }
+        fun <T : Comparable<T>> compare(a: T?, b: T?) = compareKnown(a, b, query.ascending)
         fun key(value: String?) = value?.lowercase(Locale.ROOT)
         val order = Comparator<Track> { a, b ->
             val primary = when (query.sort) {
@@ -67,4 +61,12 @@ object LibraryQueries {
         }.sortedWith { a, b -> order.compare(a.track, b.track) }.toList()
         return if (query.sort == TrackSort.Manual && !query.ascending) result.reversed() else result
     }
+}
+
+/** Unknown metadata stays last in either direction. */
+internal fun <T : Comparable<T>> compareKnown(a: T?, b: T?, ascending: Boolean): Int = when {
+    a == null && b == null -> 0
+    a == null -> 1
+    b == null -> -1
+    else -> a.compareTo(b) * if (ascending) 1 else -1
 }

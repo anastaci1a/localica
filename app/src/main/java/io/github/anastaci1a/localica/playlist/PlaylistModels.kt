@@ -14,8 +14,7 @@ object PlaylistEdits {
     fun move(playlist: ManualPlaylist, id: String, offset: Int): ManualPlaylist {
         val from = playlist.entries.indexOfFirst { it.id == id }
         if (from < 0) return playlist
-        val to = (from + offset).coerceIn(0, playlist.entries.lastIndex)
-        return playlist.copy(entries = playlist.entries.toMutableList().apply { add(to, removeAt(from)) })
+        return playlist.copy(entries = OccurrenceMoves.byOffset(playlist.entries, from, offset))
     }
     fun moveBefore(playlist: ManualPlaylist, ids: Set<String>, beforeId: String?) = playlist.copy(
         entries = OccurrenceMoves.before(playlist.entries, ids, beforeId) { it.id })
