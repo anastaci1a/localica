@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Verify glass rendering, overflowing navigation and text focus on the user's phone. After the optimization release, compile an Apple-sourced Liquid Glass design guide, then consolidate source and documentation while preserving the released behavior. Keep research-driven redesign proposals separate from that refactor; selection entrance motion awaits a new design review. Preserve accessibility, playback continuity and older-Android support.
+Review glass performance, overflowing navigation and text focus on the user's phone. Implement the [Liquid Glass specification](liquid-glass/specification.md) in the next design pass: faster motion, configurable low damping, and coupled depth/footprint/lensing. Its proposals are not yet shipped behavior. Revisit selection entrance motion separately ([#107](https://github.com/anastaci1a/localica/issues/107)). Preserve accessibility, playback continuity and older-Android support.
 
 ## Deferred capabilities
 
@@ -16,5 +16,3 @@ These do not gate visual work. Issues own detailed acceptance criteria.
 | Lyric editor | Manual `.lrc` editing and playback-assisted line timestamp taps, with correction/undo, preview and recoverable explicit save/export. |
 | Visualizers | Player button for Poweramp-compatible presets. Review [specification](https://github.com/maxmpz/powerampapi/blob/master/poweramp_vis_presets_example/readme.md): MilkDrop v1/v2, shaders/textures, extensions/packaging, licensing and device performance. |
 | Other candidates | Crossfades, more shuffle modes, sleep timer, equalizer, system/light/dark themes, reduced transparency with solid fallback, multilingual UI, custom playlist covers, smart playlists, bookmarks/favorites, widgets, Android Auto and backup/export. Prioritize explicitly before implementation. |
-
-Deliver agreed outcomes in small verified APK releases; remove completed roadmap items rather than adding historical summaries.

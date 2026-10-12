@@ -452,7 +452,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     translationX = (old.left - position.x) * (1f - pinchMotion.progress.value)
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
-                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionOutline(selectedCount > 0, partiallySelected, MaterialTheme.colorScheme.primary)
+                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionLens(selectedCount > 0, partiallySelected)
                             .retainPinchItem(item.key, pinchMotion, pinchGraphics).testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
@@ -586,7 +586,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 preferences.write(route, style, true)
                 dismissSorting()
             } }
-        }) else null, reducedMotion = reducedMotion) }
+        }) else null) }
     if (renaming) {
         var name by remember { mutableStateOf(playlists.playlists.firstOrNull { it.id == route.collection?.id }?.name.orEmpty()) }
         GlassAlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename playlist") }, text = {

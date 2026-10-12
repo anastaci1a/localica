@@ -7,7 +7,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.*
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
@@ -23,7 +22,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -39,8 +37,6 @@ import kotlin.math.exp
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0) {
     val interaction = remember { MutableInteractionSource() }
-    val speed = LocalMotionSpeed.current
-    val dragged by interaction.collectIsDraggedAsState()
     var pressure by remember { mutableFloatStateOf(0f) }
     val current by rememberUpdatedState(value)
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
@@ -109,7 +105,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 cornerRadius = CornerRadius(size.height / 2))
         }
-        SelectionLens(Modifier.offset(x = 2.dp + 20.dp * position.value, y = 2.dp).size(28.dp), position, if (checked) 1f else 0f, pressure = { pressure })
+        SelectionLens(Modifier.offset(x = 2.dp + 20.dp * position.value, y = 2.dp).size(28.dp), position, pressure = { pressure })
     }
 }
 
@@ -119,7 +115,6 @@ internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> 
     val progress by animateFloatAsState(if (checked) 1f else 0f,
         tween(if (LocalReducedMotion.current) 0 else (160 / LocalMotionSpeed.current).toInt()), label = "Checkmark")
     val foreground = LocalContentColor.current
-    val ink = if (foreground.luminance() > .5f) Color.Black else Color.White
     Box(modifier.size(48.dp).then(if (onCheckedChange != null)
         Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange) else Modifier)
         .graphicsLayer { alpha = if (enabled) 1f else .38f }, contentAlignment = Alignment.Center) {

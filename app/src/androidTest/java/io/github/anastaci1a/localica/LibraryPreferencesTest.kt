@@ -11,6 +11,21 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class LibraryPreferencesTest {
+    @Test fun storedEnumNamesPreserveFallbackAndRejectUnknownValues() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = context.getSharedPreferences("enum-reader-test", Context.MODE_PRIVATE)
+        try {
+            store.edit().clear().commit()
+            assertEquals(TrackSort.Album, store.enumValue<TrackSort>("sort", "Album"))
+            store.edit().putString("sort", "Year").commit()
+            assertEquals(TrackSort.Year, store.enumValue<TrackSort>("sort", "Album"))
+            store.edit().putString("sort", "UnknownFutureName").commit()
+            assertEquals(null, store.enumValue<TrackSort>("sort", "Album"))
+            store.edit().putString("sort", "year").commit()
+            assertEquals(null, store.enumValue<TrackSort>("sort"))
+        } finally { store.edit().clear().commit() }
+    }
+
     @Test fun viewQueriesAndTapOverridesPersistIndependentlyAndResetToInheritance() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val preferences = AndroidLibraryQueryPreferences(context)

@@ -172,7 +172,7 @@ class SelectionLensTest {
         val path = connectedSelectionPath(regions, 16f)
         val optics = ConnectedLensOptics()
         repeat(120) { index ->
-            optics.effect(regions, path, androidx.compose.ui.geometry.Size(500f, 800f), 22f, 1f,
+            optics.effect(regions, path, 22f, 1f,
                 androidx.compose.ui.geometry.Offset(0f, -index.toFloat()))
         }
         assertEquals("Scrolling must not rasterize/upload a field every frame", 1, optics.rasterizations)

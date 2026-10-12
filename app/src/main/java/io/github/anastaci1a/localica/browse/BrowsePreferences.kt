@@ -41,13 +41,13 @@ class BrowsePreferences(context: Context) {
         val compatible = !route.search && route.collection?.kind != MediaKind.Queue &&
             (route.collection != null || route.tab == MainTab.Songs || route.filter == MediaKind.Song)
         val default = if (compatible && legacyStore.contains(legacyKey)) legacy.read(view) else BrowseQueries.defaultQuery(route)
-        return BrowseStyle(TrackSort.entries.firstOrNull { it.name == store.getString("$key.sort", null) } ?: default.sort,
+        return BrowseStyle(store.enumValue<TrackSort>("$key.sort") ?: default.sort,
             store.getBoolean("$key.ascending", default.ascending),
-            Presentation.entries.firstOrNull { it.name == store.getString("$key.presentation", null) } ?: Presentation.List,
-            ExtraInfo.entries.firstOrNull { it.name == store.getString("$key.info", null) } ?: ExtraInfo.Automatic,
+            store.enumValue<Presentation>("$key.presentation") ?: Presentation.List,
+            store.enumValue<ExtraInfo>("$key.info") ?: ExtraInfo.Automatic,
             store.getBoolean("$key.quick-search", true),
-            SongGrouping.entries.firstOrNull { it.name == store.getString("$key.group", if (route.collection?.kind == MediaKind.Album)
-                store.getString("catalog.Album.group", null) else null) } ?: SongGrouping.None,
+            store.enumValue<SongGrouping>("$key.group", if (route.collection?.kind == MediaKind.Album)
+                store.getString("catalog.Album.group", null) else null) ?: SongGrouping.None,
             store.getInt("$key.columns", 0).takeIf { it in 1..5 }).let {
             if (route.collection?.kind == MediaKind.Album && it.songGrouping != SongGrouping.None) it.copy(presentation = Presentation.List) else it
         }
