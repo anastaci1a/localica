@@ -13,9 +13,9 @@ internal object Corners {
 }
 internal fun InterfaceSettings.motionDuration(normal: Int) = when {
     reducedMotion -> 0
-    fasterMotion -> normal * 2 / 3
-    else -> normal
+    fasterMotion -> normal / 2
+    else -> normal * 3 / 4
 }
 
 internal val LocalReducedMotion = androidx.compose.runtime.staticCompositionLocalOf { false }
-internal val LocalMotionSpeed = androidx.compose.runtime.staticCompositionLocalOf { 1f }
+internal val LocalMotionSpeed = androidx.compose.runtime.staticCompositionLocalOf { 4f / 3f }

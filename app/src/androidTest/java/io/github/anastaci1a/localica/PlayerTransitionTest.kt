@@ -28,6 +28,29 @@ class PlayerTransitionTest {
     @get:Rule val compose = createComposeRule()
     private val state = PlaybackState(connected = true, title = "Evening", artist = "Artist", album = "Album", durationMs = 120000)
 
+    @Test fun lightArtworkContinuationDoesNotRevealADarkTemporaryPalette() {
+        // A dark blue average and light lower artwork exaggerate the BA3 handoff.
+        val wash = Bitmap.createBitmap(ArtworkWash.WIDTH, ArtworkWash.HEIGHT, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.LTGRAY)
+        }
+        val blue = Color(0xFF102050)
+        val visual = PlayerVisual(palette = PlayerPalette(blue, blue, blue, wash = wash, softWash = wash))
+        val progress = Animatable(0f)
+        lateinit var scope: CoroutineScope
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().background(Color.White)) {
+            scope = rememberCoroutineScope()
+            PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground),
+                progress, {}, {}, {}, {}, {}, {}, visual = visual)
+        } } }
+        for (phase in listOf(.6f, .75f, .85f, .94f, 1f, .85f, .6f)) {
+            compose.runOnIdle { scope.launch { progress.snapTo(phase) } }
+            val pixels = compose.onNodeWithTag("player-surface").captureToImage().toPixelMap()
+            val color = pixels[(pixels.width * .94f).toInt(), (pixels.height * .72f).toInt()]
+            assertTrue("The final light continuation is already present at $phase: $color", color.red > .65f)
+            assertTrue("No temporary blue cast at $phase: $color", kotlin.math.abs(color.red - color.blue) < .08f)
+        }
+    }
+
     @Test fun heldLyricsCollapseAlreadyRestoresArtworkBeforeRelease() {
         val cover = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }.asImageBitmap()
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -149,6 +172,11 @@ class PlayerTransitionTest {
         val softened = contrasts()
         assertTrue("Center retains detail", softened.second > .8f)
         assertTrue("Edge loses sharp detail while expanding: $softened", softened.first < softened.second * .65f)
+        for (phase in listOf(.88f, .94f, .98f, 1f, .94f)) {
+            compose.runOnIdle { scope.launch { progress.snapTo(phase) } }
+            val late = contrasts()
+            assertTrue("No hard edge returns at the final handoff or its reversal ($phase): $late", late.first < late.second * .65f)
+        }
         compose.runOnIdle { layout = ArtworkLayout.Floating }
         val floating = contrasts()
         assertTrue("Floating artwork keeps a defined edge: $floating", floating.first > floating.second * .8f)

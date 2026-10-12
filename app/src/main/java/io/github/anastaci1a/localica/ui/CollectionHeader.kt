@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -32,13 +33,14 @@ internal fun collectionIsLight(visual: PlayerVisual): Boolean = visual.palette.m
 internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: Modifier = Modifier) {
     val light = collectionIsLight(visual)
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val pictureTop = artTop * if (LocalReducedMotion.current) 1f else .65f
     BoxWithConstraints(modifier.then(Modifier.clipToBounds())) {
         val imageHeight = maxWidth
         PlayerBackdrop(visual.palette, Modifier.fillMaxSize(), fullArtBlend = 1f,
-            artHeight = with(density) { imageHeight.toPx() }, artTop = artTop, softness = 1f)
+            artHeight = with(density) { imageHeight.toPx() }, artTop = pictureTop, softness = 1f)
         Box(Modifier.matchParentSize().background(if (light) Color.White.copy(alpha = .58f) else Color.Black.copy(alpha = .16f)))
         visual.artwork?.let { image ->
-            Image(image, null, Modifier.offset(y = with(density) { artTop.toDp() }).fillMaxWidth().height(imageHeight)
+            Image(image, null, Modifier.offset(y = with(density) { pictureTop.toDp() }).fillMaxWidth().height(imageHeight)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
                     drawContent()
                     drawRect(Brush.verticalGradient(0f to Color.Black, .58f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
@@ -75,7 +77,9 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
 internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<String>, onSelection: (List<String>) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Text("Albums", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        SelectionViewport(Modifier.fillMaxWidth()) { overscroll ->
+        LazyRow(Modifier.nestedScroll(HorizontalGestureOwner), overscrollEffect = overscroll,
+            contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "all-albums") {
                 Column(Modifier.width(136.dp).selectionLens(selectedIds.isEmpty(), false).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
                     .semantics { selected = selectedIds.isEmpty() }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -95,6 +99,7 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
                         style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
                 }
             }
+        }
         }
         HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), color = LocalContentColor.current.copy(alpha = .18f))
     }

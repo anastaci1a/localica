@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -120,7 +121,6 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     val dark = source?.dark == true
     val base = if (dark) Color.Black else MaterialTheme.colorScheme.surface
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
-    val grain = remember { frostGrain }
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
     val material = rememberFrostedBackdrop(source?.fallback, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
@@ -141,17 +141,23 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             }
         }
         Canvas(Modifier.matchParentSize()) {
-            drawRect(base.copy(alpha = if (dark) { if (compact) .22f else darkening } else { if (compact) .18f else .42f }))
-            drawRect(tint)
-            drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .075f), Color.Transparent),
-                center = Offset(size.width * .12f, 0f), radius = maxOf(size.width, size.height) * .9f))
-            drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .055f), Color.Transparent, Color.Black.copy(alpha = .08f))))
-            drawImage(grain, dstSize = IntSize(size.width.toInt().coerceAtLeast(1), size.height.toInt().coerceAtLeast(1)),
-                filterQuality = FilterQuality.Medium, alpha = if (dark) .5f else .3f)
+            drawFrostCoating(dark, base, tint, darkening, 1f, compact)
         }
         }
         CompositionLocalProvider(LocalContentColor provides foreground, LocalFrostedBackdrop provides material) { content() }
     }
+}
+
+/** Identical panel finish for static frost and the continuous end of a glass morph. */
+internal fun DrawScope.drawFrostCoating(dark: Boolean, base: Color, tint: Color, darkening: Float,
+    amount: Float, compact: Boolean = false) {
+    drawRect(base.copy(alpha = amount * if (dark) { if (compact) .22f else darkening } else { if (compact) .18f else .42f }))
+    drawRect(tint.copy(alpha = tint.alpha * amount))
+    drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .075f * amount), Color.Transparent),
+        center = Offset(size.width * .12f, 0f), radius = maxOf(size.width, size.height) * .9f))
+    drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .055f * amount), Color.Transparent, Color.Black.copy(alpha = .08f * amount))))
+    drawImage(frostGrain, dstSize = IntSize(size.width.toInt().coerceAtLeast(1), size.height.toInt().coerceAtLeast(1)),
+        filterQuality = FilterQuality.Medium, alpha = amount * if (dark) .5f else .3f)
 }
 
 private val frostGrain: ImageBitmap by lazy {

@@ -19,6 +19,42 @@ class CollectionDetailTest {
         fileName = "$it.mp3", relativePath = "$it.mp3") }
     private val snapshot = LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks)
 
+    @Test fun artistSubmenusShareOneSurfaceAndReturnToTheCollectionTrigger() {
+        val artist = LibraryViews.groups(snapshot, SongListView.Artists, LibraryQuery()).single()
+        compose.setContent { LocalicaTheme {
+            BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(),
+                BrowseRoute(MainTab.Artists, MediaRef(MediaKind.Artist, artist.id), "Artist"), {}, {}, {},
+                { _, _, _ -> }, null, null, true, false, queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+        } }
+        val trigger = compose.onNodeWithContentDescription("Collection actions").fetchSemanticsNode().boundsInRoot
+        val rootWidth = compose.onRoot().fetchSemanticsNode().boundsInRoot.width
+        for (label in listOf("Sort", "View options")) {
+            compose.onNodeWithContentDescription("Collection actions").performClick()
+            val menu = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            assertTrue("Short action labels wrap below a full-width dialog", menu.width < rootWidth * .9f)
+            compose.onNodeWithText(label).performClick()
+            compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
+            compose.onNodeWithText(if (label == "Sort") "Sort by" else "View mode").assertIsDisplayed()
+            if (label == "View options") {
+                compose.onNodeWithText("View mode").performClick()
+                compose.onNodeWithText("Gallery").assertIsDisplayed().performClick()
+                compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
+            }
+            compose.mainClock.autoAdvance = false
+            compose.onNodeWithText("Cancel").performClick()
+            var returning = menu
+            repeat(40) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().singleOrNull()?.let { returning = it.boundsInRoot }
+            }
+            assertTrue("Returns to the persistent collection overflow", kotlin.math.abs(returning.center.x - trigger.center.x) < trigger.width)
+            compose.mainClock.advanceTimeBy(1500)
+            compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
+            compose.onNodeWithContentDescription("Collection actions").assertIsDisplayed()
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
     @Test fun artistAlbumsFilterThePlayedSnapshotAndLastDeselectionRestoresAll() {
         val artist = LibraryViews.groups(snapshot, SongListView.Artists, LibraryQuery()).single()
         var played = emptyList<Track>()

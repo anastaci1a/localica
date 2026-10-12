@@ -50,7 +50,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     actionRows: Int = 1, queueProgress: Animatable<Float, *>? = null, frostedBackdrop: FrostedBackdrop? = null,
     glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null,
     artworkVisit: String? = null, previousArtwork: ArtworkNeighbor? = null, nextArtwork: ArtworkNeighbor? = null,
-    onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black, actions: @Composable () -> Unit = {}) {
+    onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black,
+    lyricsAvailable: Boolean = false, actions: @Composable () -> Unit = {}) {
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
     val playerScroll = rememberScrollState()
@@ -120,11 +121,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 if (open) onQueue()
                 else scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }
             } else settle(settleOpen(travelDp, velocityDp, progress.value, !startExpanded,
-                velocityThreshold = if (startExpanded) 400f else 450f,
-                distanceThreshold = if (startExpanded) 72f else CompactControlSize.value * .55f))
+                velocityThreshold = if (startExpanded) 320f else 280f,
+                distanceThreshold = if (startExpanded) 60f else CompactControlSize.value * .42f))
         })
-    // Resolve the full-cover feather and its color continuation together before the cover
-    // separates from the screen edges. The wash must not turn into a second miniature cover.
+    // Finish the cover mask late, independently of the backing's color. Delaying the
+    // color continuation too would reveal a dark average palette before light artwork.
     val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)
     val coverBlend = backgroundProgress * reveal * reveal * (3f - 2f * reveal)
     val surfaceWidth = windowWidth - 24.dp * (1f - p)
@@ -136,7 +137,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val fullArt = floatingWidth + (windowWidth - floatingWidth) * backgroundProgress
     val fullArtHeight = floatingHeight + (windowWidth / palette.aspect - floatingHeight) * backgroundProgress
     // Leave space for metadata to pass below the growing cover, then catch up smoothly.
-    val artProgress = p * (.78f + .22f * p)
+    val artProgress = p * (.58f + .42f * p)
     val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
     val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
     val artX = 16.dp + ((windowWidth - fullArt) / 2 - 16.dp) * p * p
@@ -162,7 +163,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val handleReveal = smoothReveal((p - .72f) / .28f)
     val glassFrost = smoothReveal((p - .08f) / .8f)
     val surfaceCorner = CompactControlSize / 2 * (1f - smoothReveal((p - .8f) / .2f))
-    val edgeSoftness = backgroundProgress * smoothReveal(p / .18f) * (1f - smoothReveal((p - .9f) / .1f))
+    // This feather belongs to the cover, including its final full-background state.
+    // Removing it during the handoff briefly reveals the square beneath the wash.
+    val edgeSoftness = backgroundProgress * smoothReveal(p / .18f)
     val edgeBand = .02f + .24f * smoothReveal(p / .75f)
     val fullControlsReveal = smoothReveal((p - .8f) / .2f)
     val contentInset = 32.dp
@@ -175,7 +178,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val artPixels = with(density) { artWidth.toPx() }
     val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork,
-        artPixels, expanded && p >= .99f && !lyricsOpen && !artwork.loading && (queueProgress?.value ?: 0f) == 0f,
+        artPixels, expanded && p >= .99f && !lyricsOpen && (queueProgress?.value ?: 0f) == 0f,
         settings, onArtworkVisit)
     val swipeOffset = artSwipe.offset.value
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
@@ -207,13 +210,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
                 if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }
                     .then(if (lyricsOpen) Modifier.recordFrostedBackdrop(lyricBackdrop) else Modifier)) {
-                    PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), coverBlend * (1f - lyricProgress),
+                    PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), backgroundProgress * (1f - lyricProgress),
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = swipeFeather / .9f)
+                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f))
                     if (destination != null) PlayerBackdrop(destination.visual.palette,
-                        Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, coverBlend,
+                        Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, backgroundProgress,
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                        with(density) { artX.toPx() } + neighborOffset, artPixels, softness = swipeFeather / .9f)
+                        with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f))
                 }
                 @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
                     Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer {
@@ -268,7 +271,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp).testTag("player-handle")
                         .background(Color.White.copy(alpha = .42f), RoundedCornerShape(2.dp)))
                 }
-                if (lyricProgress > 0f) Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp).graphicsLayer { alpha = lyricProgress }) {
+                if (lyricProgress > 0f && lyricsAvailable) Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp).graphicsLayer { alpha = lyricProgress }) {
                     CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
                         ActionIcon(R.drawable.ic_lyrics, "Lyrics sources", anchor = sourcesAnchor) { sourcesRequest++ }
                     }

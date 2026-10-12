@@ -83,22 +83,25 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
         if (!dragging && requested != null && abs(page - requested!!) < .001f) requested = null
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
+    val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val minimumWidth = maxOf(68.dp, with(density) {
+        tabs.maxOf { textMeasurer.measure(androidx.compose.ui.text.AnnotatedString(it.label), labelStyle,
+            maxLines = 1, softWrap = false).size.width }.toDp() + 32.dp
+    })
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val fits = maxWidth >= 68.dp * tabs.size
-        val width = if (fits) maxWidth / tabs.size else 68.dp
+        val fits = maxWidth >= minimumWidth * tabs.size
+        val width = if (fits) maxWidth / tabs.size else minimumWidth
         val pixels = with(density) { width.toPx() }
         val scroll = rememberScrollState()
         val viewport = with(density) { maxWidth.toPx() }
         LiquidGlassSurface(Modifier.fillMaxSize().bottomGlassShadow(opacity = shadowOpacity), source, pressFeedback = false, shadow = false, inkOverride = Color.Black) {}
         Box(Modifier.fillMaxSize().clip(CircleShape)) {
         Box(Modifier.fillMaxHeight().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll, enabled = !fits && !dragging)
-            .testTag("tab-scroll").pointerInput(tabs, pixels, viewport) {
+            .testTag("tab-scroll").pointerInput(tabs, pixels, viewport, fits) {
+                if (!fits) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    val left = pixels * lens.value
-                    // Coordinates are in the scrolled content. Empty track remains a
-                    // normal scroll gesture, even when it crosses the selector later.
-                    if (down.position.x < left || down.position.x > left + pixels) return@awaitEachGesture
                     var started = false
                     fun move(delta: Float) {
                         raw += delta / pixels
@@ -112,7 +115,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                         if (candidate != chosen && abs(position - chosen) > .52f) focus(candidate)
                     }
                     val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
-                        change.consume(); started = true; requested = null; raw = lens.value; dragging = true
+                        change.consume(); started = true; requested = null
+                        raw = lens.value; dragging = true
                         scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.stop() }
                         move(over)
                     }
@@ -140,8 +144,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                                 interactionSource = null, indication = null, role = Role.Tab, onClick = { tap(tabs.indexOf(tab)) }) else Modifier),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Icon(painterResource(tab.icon()), if (interactive) tab.label else null, Modifier.size(29.dp), tint = color)
-                            Text(tab.label, color = color, maxLines = 1, style = MaterialTheme.typography.labelMedium.copy(
-                                fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium), overflow = TextOverflow.Ellipsis)
+                            Text(tab.label, color = color, maxLines = 1, style = labelStyle, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -150,6 +153,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                 val modifier = Modifier.offset { androidx.compose.ui.unit.IntOffset(
                     (pixels * lens.value + with(density) { 4.dp.toPx() }).roundToInt(), with(density) { 4.dp.roundToPx() }) }
                     .width(width - 8.dp).height(NavigationPillHeight - 8.dp)
+                    .testTag("tab-selector")
                 if (appearance.tabStyle == TabLensStyle.Classic) {
                     Box(modifier.background(Color.Black.copy(alpha = .10f), androidx.compose.foundation.shape.CircleShape))
                 } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
@@ -157,7 +161,13 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
                     contrast = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.contrast)) {
                     SelectionLens(modifier, lens,
-                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, pressure = { pressure })
+                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, pressure = { pressure }, wall = {
+                            when {
+                                lens.value <= scroll.value / pixels + .001f -> -1f
+                                lens.value >= minOf(tabs.lastIndex.toFloat(), (scroll.value + viewport) / pixels - 1f) - .001f -> 1f
+                                else -> 0f
+                            }
+                        })
                 }
             }
             Box(Modifier.width(width * tabs.size).fillMaxHeight().recordFrostedBackdrop(composite)) {

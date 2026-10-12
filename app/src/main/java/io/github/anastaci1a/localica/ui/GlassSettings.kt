@@ -41,6 +41,15 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
     GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong") { onChange(value.copy(shadowStrength = it)) }
     GlassSlider("Shadow spread", value.shadowSpread, "Tight", "Broad") { onChange(value.copy(shadowSpread = it)) }
     GlassSlider("Adaptive contrast", value.contrast, "Off", "Strong") { onChange(value.copy(contrast = it)) }
+    SettingsHeading("Shape and motion")
+    Text("Hold the preview to flatten it; release to let it rebound.", style = MaterialTheme.typography.bodySmall)
+    Text("Shape damping · ${value.shapeDamping.roundToInt()}", style = MaterialTheme.typography.titleMedium)
+    InterfaceSlider(value.shapeDamping, { onChange(value.copy(shapeDamping = it)) },
+        Modifier.semantics { contentDescription = "Shape damping" }, valueRange = 2f..40f)
+    Text("Lower is squishier; higher settles sooner.", style = MaterialTheme.typography.bodySmall)
+    Text("Resting depth · ${"%.2f".format(java.util.Locale.ROOT, value.depth)}", style = MaterialTheme.typography.titleMedium)
+    InterfaceSlider(value.depth, { onChange(value.copy(depth = it)) },
+        Modifier.semantics { contentDescription = "Resting depth" }, valueRange = .6f..2f)
     SettingsHeading("Navigation selector")
     ChoicePreference("Selector style", value.tabStyle, io.github.anastaci1a.localica.navigation.TabLensStyle.entries, { it.label }) {
         onChange(value.copy(tabStyle = it))

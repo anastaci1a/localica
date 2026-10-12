@@ -22,6 +22,27 @@ import androidx.compose.ui.unit.dp
 class SelectionLensTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun lensBackdropNeverReplacesUnselectedViewportPixels() {
+        var chosen by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            val source = rememberFrostedBackdrop(Unit, dark = true)
+            Box(Modifier.size(220.dp).testTag("selection-backing")) {
+                Box(Modifier.fillMaxSize().recordFrostedBackdrop(source).background(Color.Red))
+                Box(Modifier.fillMaxSize().background(Color.Blue))
+                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+                    ConnectedSelectionHost(Modifier.fillMaxSize()) {
+                        Box(Modifier.padding(40.dp).size(100.dp).selectionLens(chosen, false))
+                    }
+                }
+            }
+        } }
+        val before = compose.onNodeWithTag("selection-backing").captureToImage().toPixelMap()
+        compose.runOnIdle { chosen = true }
+        val after = compose.onNodeWithTag("selection-backing").captureToImage().toPixelMap()
+        val x = after.width - 10
+        assertEquals("Sampling a background cannot repaint unselected space", before[x, 10], after[x, 10])
+    }
+
     @Test fun firstSelectionRedrawsTheLensAndPartialSelectionRemovesIt() {
         var chosen by mutableStateOf(false)
         var partial by mutableStateOf(false)

@@ -40,7 +40,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     var pressure by remember { mutableFloatStateOf(0f) }
     val current by rememberUpdatedState(value)
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
-    val deformation = rememberGlassElastic({ (value - valueRange.start) / span }, { pressure })
+    val deformation = rememberGlassBody({ (value - valueRange.start) / span }, { pressure })
     val inset = with(LocalDensity.current) { 14.dp.toPx() }
     val touch = Modifier.pointerInput(valueRange) {
         awaitEachGesture {
@@ -60,7 +60,11 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val color = MaterialTheme.colorScheme.onSurface
     Slider(value, onValueChange, modifier.then(touch), valueRange = valueRange, steps = steps, interactionSource = interaction,
         thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f)) {
-            LiquidGlassSurface(Modifier.size(28.dp).graphicsLayer { scaleX = exp(deformation.value); scaleY = exp(-deformation.value) }, pressFeedback = false)
+            LiquidGlassSurface(Modifier.size(28.dp).graphicsLayer {
+                scaleX = deformation.value.scaleX(); scaleY = deformation.value.scaleY()
+                val fraction = (value - valueRange.start) / span
+                translationX = glassWallTranslation(size.width, scaleX, when { fraction <= .001f -> -1f; fraction >= .999f -> 1f; else -> 0f })
+            }, pressFeedback = false, body = { deformation.value })
         } },
         track = {
             Canvas(Modifier.fillMaxWidth().height(48.dp)) {
@@ -105,7 +109,8 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 cornerRadius = CornerRadius(size.height / 2))
         }
-        SelectionLens(Modifier.offset(x = 2.dp + 20.dp * position.value, y = 2.dp).size(28.dp), position, pressure = { pressure })
+        SelectionLens(Modifier.offset(x = 2.dp + 20.dp * position.value, y = 2.dp).size(28.dp), position, pressure = { pressure },
+            wall = { when { position.value <= .001f -> -1f; position.value >= .999f -> 1f; else -> 0f } })
     }
 }
 

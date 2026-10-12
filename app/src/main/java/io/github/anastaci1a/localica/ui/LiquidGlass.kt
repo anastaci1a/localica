@@ -35,28 +35,37 @@ internal val NavigationPillHeight = 64.dp
 internal val CompactControlSize = NavigationPillHeight * .8f
 internal val MiniArtworkSize = 32.dp
 
+@Stable
+internal class GlassContact {
+    var pressed by mutableStateOf(false)
+    var travel by mutableFloatStateOf(0f)
+    lateinit var body: State<GlassShape>
+}
+
+@Composable
+internal fun rememberGlassContact(): GlassContact {
+    val contact = remember { GlassContact() }
+    contact.body = rememberGlassBody({ contact.travel }, contact = { if (contact.pressed) 1f else 0f })
+    return contact
+}
+
 /** Observe touch without consuming it; children retain gesture and accessibility ownership. */
 @Composable
-internal fun Modifier.glassPress(onPressed: (Boolean) -> Unit = {}): Modifier {
+internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(), onPressed: (Boolean) -> Unit = {}): Modifier {
     val notify by rememberUpdatedState(onPressed)
-    val reduced = LocalReducedMotion.current
-    var pressed by remember { mutableStateOf(false) }
-    var travel by remember { mutableFloatStateOf(0f) }
-    val strain = rememberGlassElastic({ travel }, { if (pressed) .035f else 0f })
     return drawWithContent {
-        val value = if (reduced) 0f else strain.value
-        scale(kotlin.math.exp(value), kotlin.math.exp(-value)) { this@drawWithContent.drawContent() }
+        scale(contact.body.value.scaleX(), contact.body.value.scaleY()) { this@drawWithContent.drawContent() }
     }.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            travel = 0f
-            pressed = true; notify(true)
+            contact.travel = 0f
+            contact.pressed = true; notify(true)
             try {
                 do { val event = awaitPointerEvent(PointerEventPass.Final)
-                    event.changes.firstOrNull { it.id == down.id }?.let { travel = (it.position.x - down.position.x) / size.width.coerceAtLeast(1) }
+                    event.changes.firstOrNull { it.id == down.id }?.let { contact.travel = (it.position.x - down.position.x) / size.width.coerceAtLeast(1) }
                 }
                 while (event.changes.any { it.pressed })
-            } finally { pressed = false; notify(false) }
+            } finally { contact.pressed = false; notify(false) }
         }
     }
 }
@@ -66,30 +75,47 @@ internal fun Modifier.glassPress(onPressed: (Boolean) -> Unit = {}): Modifier {
 internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, tint: Color = Color.Transparent,
     cornerRadius: Dp? = null, frostProgress: Float = 0f, pressFeedback: Boolean = true, refraction: Float = 1f, inkOverride: Color? = null, protectCenter: Boolean = false, shadow: Boolean = true,
+    body: () -> GlassShape = { GlassShape() }, panelProgress: Float = 0f, panelDark: Boolean? = null,
     content: @Composable BoxScope.() -> Unit = {}) {
     var origin by remember { mutableStateOf(Offset.Zero) }
+    var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
     val appearance = LocalGlassAppearance.current.normalized()
     val samplePixels = remember(source?.snapshot) { source?.snapshot?.toPixelMap() }
-    val sample = samplePixels?.let { pixels -> remember(pixels, origin, source?.size) {
+    val sample = samplePixels?.let { pixels -> remember(pixels, origin, surfaceSize, source?.size) {
         source?.let { source ->
-            val x = ((origin.x - source.origin.x) / source.size.width.coerceAtLeast(1) * pixels.width).toInt().coerceIn(0, pixels.width - 1)
-            val y = ((origin.y - source.origin.y) / source.size.height.coerceAtLeast(1) * pixels.height).toInt().coerceIn(0, pixels.height - 1)
-            pixels[x, y].luminance()
+            var total = 0f
+            for (dy in 1..3) for (dx in 1..3) {
+                val x = ((origin.x + surfaceSize.width * dx / 4f - source.origin.x) / source.size.width.coerceAtLeast(1) * pixels.width).toInt().coerceIn(0, pixels.width - 1)
+                val y = ((origin.y + surfaceSize.height * dy / 4f - source.origin.y) / source.size.height.coerceAtLeast(1) * pixels.height).toInt().coerceIn(0, pixels.height - 1)
+                total += pixels[x, y].luminance()
+            }
+            total / 9
         }
     } }
+    var sampledDark by remember(source) { mutableStateOf(source?.dark == true) }
+    val filteredLight by animateFloatAsState(sample ?: if (sampledDark) 0f else 1f,
+        tween(if (LocalReducedMotion.current) 0 else 120), label = "Glass contrast sampling")
+    SideEffect {
+        if (sample != null) {
+            if (filteredLight < .25f) sampledDark = true
+            else if (filteredLight > .55f) sampledDark = false
+        }
+    }
     val dark = inkOverride?.let { it.luminance() > .5f } ?: if (appearance.whiteTint >= .45f) false
-        else if (appearance.contrast > 0f) sample?.let { it < .35f } ?: (source?.dark == true) else source?.dark == true
+        else if (appearance.contrast > 0f && panelProgress == 0f) sampledDark else source?.dark == true
     val frost = frostProgress.coerceIn(0f, 1f)
-    var pressed by remember { mutableStateOf(false) }
-    val energy by animateFloatAsState(if (pressed) 1f else 0f, spring(stiffness = 650f), label = "Glass illumination")
+    val panel = panelProgress.coerceIn(0f, 1f)
+    val coatingDark = panelDark ?: dark
+    val panelBase = if (coatingDark) Color.Black else androidx.compose.material3.MaterialTheme.colorScheme.surface
+    val contact = rememberGlassContact()
     val lens = remember { if (Build.VERSION.SDK_INT >= 33) GlassLens() else null }
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
-    Box(modifier.then(if (pressFeedback) Modifier.glassPress { pressed = it } else Modifier)
+    Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact) else Modifier)
         .then(if (shadow) Modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius) else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
-        .onGloballyPositioned { origin = it.backdropPosition(view) }) {
+        .onGloballyPositioned { origin = it.backdropPosition(view); surfaceSize = it.size }) {
         if (source != null && Build.VERSION.SDK_INT >= 31) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
@@ -99,7 +125,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
                 if (Build.VERSION.SDK_INT >= 33) lens?.effect(extent.width, extent.height, pad, blur * resolution,
-                    radius, appearance.contrast * (1f - frost), dark, refraction, protectCenter)
+                    radius, appearance.contrast * (1f - frost), dark, refraction, protectCenter,
+                    appearance.depth * body().thickness * (if (pressFeedback) contact.body.value.thickness else 1f))
                 else if (blur > 0f) BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp) else null
             }
         }
@@ -116,15 +143,16 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             }
         }
         Canvas(Modifier.matchParentSize()) {
-            drawRect(Color.White.copy(alpha = appearance.whiteTint))
+            drawRect(Color.White.copy(alpha = appearance.whiteTint * (1f - panel)))
             drawRect(tint)
+            if (panel > 0f) drawFrostCoating(coatingDark, panelBase, Color.Transparent, .5f, panel)
             if (Build.VERSION.SDK_INT < 33) drawRect((if (dark) Color.Black else Color.White)
                 .copy(alpha = appearance.contrast * .26f * (1f - frost)))
             val radius = (cornerRadius?.toPx() ?: (size.minDimension / 2)).coerceIn(0f, size.minDimension / 2)
-            drawRoundRect(Brush.linearGradient(listOf(Color.White.copy(alpha = .85f + .15f * energy), Color.White.copy(alpha = .06f),
+            drawRoundRect(Brush.linearGradient(listOf(Color.White.copy(alpha = .85f), Color.White.copy(alpha = .06f),
                 Color.Black.copy(alpha = .2f), Color.White.copy(alpha = .7f))), cornerRadius = CornerRadius(radius), style = Stroke(1.dp.toPx()))
             val inset = 2.dp.toPx()
-            drawRoundRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .28f + .3f * energy), Color.Transparent, Color.White.copy(alpha = .13f))),
+            drawRoundRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .28f), Color.Transparent, Color.White.copy(alpha = .13f))),
                 topLeft = Offset(inset, inset), size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), (size.height - 2 * inset).coerceAtLeast(0f)),
                 cornerRadius = CornerRadius((radius - inset).coerceAtLeast(0f)), style = Stroke(2.dp.toPx()))
         }
@@ -143,6 +171,7 @@ private class GlassLens {
         uniform float darkInk;
         uniform float power;
         uniform float flatCenter;
+        uniform float thickness;
         half4 main(float2 p) {
             float2 center = extent * 0.5;
             float2 halfSize = center - padding;
@@ -151,10 +180,10 @@ private class GlassLens {
             float2 axis = clamp(local, -max(halfSize-radius, float2(0)), max(halfSize-radius, float2(0)));
             float2 radial = local - axis;
             float len = max(length(radial), 0.001);
-            float depth = radius - len;
-            float t = clamp(1.0 - depth / max(radius * 0.64, 1.0), 0.0, 1.0);
-            float slope = t * t / sqrt(max(1.02 - t * t, 0.08));
-            float bend = min(radius * 0.8, slope * radius * 0.42);
+            float t = clamp(len / radius, 0.0, 1.0);
+            float slope = t / sqrt(max(1.04 - t * t, 0.12));
+            float curve = slope * thickness * 0.52;
+            float bend = radius * 0.72 * curve / sqrt(1.0 + curve * curve);
             float2 normal = radial / len;
             float safeCenter = mix(1.0, smoothstep(halfSize.x * 0.28, halfSize.x * 0.72, abs(local.x)), flatCenter);
             half4 color = scene.eval(p - normal * bend * power * safeCenter);
@@ -163,16 +192,16 @@ private class GlassLens {
             color.rgb = mix(color.rgb, half3(color.a), half(max(light, 0.0) * rim * 0.55));
             color.rgb *= half(1.0 - max(-light, 0.0) * rim * 0.16);
             float luminance = dot(float3(color.rgb), float3(0.2126, 0.7152, 0.0722));
-            float correction = contrast * 0.65 * (darkInk > 0.5 ? 1.0 - luminance : luminance);
+            float correction = contrast * 0.88 * (darkInk > 0.5 ? 1.0 - luminance : luminance);
             color.rgb = mix(color.rgb, half3(darkInk * float(color.a)), half(correction));
             return color;
         }
     """.trimIndent())
     private var dimensions = listOf<Float>()
     private var cached: RenderEffect? = null
-    fun effect(width: Float, height: Float, padding: Float, blur: Float, radius: Float, contrast: Float, dark: Boolean, power: Float, protectCenter: Boolean): RenderEffect? {
+    fun effect(width: Float, height: Float, padding: Float, blur: Float, radius: Float, contrast: Float, dark: Boolean, power: Float, protectCenter: Boolean, thickness: Float): RenderEffect? {
         if (width <= padding * 2 || height <= padding * 2) return null
-        val next = listOf(width, height, padding, blur, radius, contrast, if (dark) 0f else 1f, power, if (protectCenter) 1f else 0f)
+        val next = listOf(width, height, padding, blur, radius, contrast, if (dark) 0f else 1f, power, if (protectCenter) 1f else 0f, thickness)
         if (next != dimensions) {
             dimensions = next
             shader.setFloatUniform("extent", width, height)
@@ -180,6 +209,7 @@ private class GlassLens {
             shader.setFloatUniform("corner", radius)
             shader.setFloatUniform("contrast", contrast)
             shader.setFloatUniform("power", power)
+            shader.setFloatUniform("thickness", thickness)
             shader.setFloatUniform("flatCenter", if (protectCenter) 1f else 0f)
             shader.setFloatUniform("darkInk", if (dark) 0f else 1f)
             val refraction = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")

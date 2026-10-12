@@ -61,7 +61,7 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?, small
 internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction) -> String,
     onAction: (PlayerAction) -> Unit, onCustomize: () -> Unit, shuffle: Boolean = false, repeat: QueueRepeat = QueueRepeat.Off,
     lyricsOpen: Boolean = false, pinned: Boolean = false, count: String = "0 / 0", onRepeatOptions: (() -> Unit)? = null,
-    advancedRepeat: AdvancedRepeat? = null) {
+    advancedRepeat: AdvancedRepeat? = null, lyricsAvailable: Boolean = true) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columnWidth = if (value.centered) (maxWidth / value.columns.size).coerceAtLeast(48.dp) else if (value.small) 48.dp else 64.dp
         Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).testTag("player-action-slots")) {
@@ -69,6 +69,10 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                 kotlin.repeat(value.rows) { row ->
                     val slot = ActionSlot(row, column)
                     val action = value.slots[slot]
+                    if (action == PlayerAction.Lyrics && !lyricsAvailable) {
+                        Spacer(Modifier.fillMaxWidth().height(48.dp))
+                        return@repeat
+                    }
                     val active = when (action) {
                         PlayerAction.Shuffle -> shuffle
                         PlayerAction.Repeat -> repeat != QueueRepeat.Off || advancedRepeat != null

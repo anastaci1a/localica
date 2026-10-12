@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,8 +33,15 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
             Text("${chosen.size} selected", Modifier.weight(1f))
             TextButton(onClick = { onAll?.invoke() ?: onSelection(rows.map { it.id }.toSet()) }) { Text("All") }
             if (onRange != null) TextButton(onClick = onRange) { Text("Range") }
-            if (onCollapse != null) ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_down, "Collapse selection", onClick = onCollapse)
-            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Close selection") { onSelection(emptySet()) }
+            LiquidGlassSurface(pressFeedback = false) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onCollapse != null) {
+                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_down, "Collapse selection", glass = false, onClick = onCollapse)
+                        Box(Modifier.height(24.dp).width(1.dp).background(LocalContentColor.current.copy(alpha = .2f)))
+                    }
+                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Close selection", glass = false) { onSelection(emptySet()) }
+                }
+            }
         }
         FlowRow(Modifier.fillMaxWidth()) {
             if (editTags != null) TextButton(enabled = chosen.isNotEmpty(), onClick = {
@@ -65,6 +73,7 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
             SideEffect { pickerAnchor.face = { Text(pickerLabel, Modifier.padding(horizontal = 12.dp), maxLines = 1) } }
             Box {
                 LiquidGlassSurface(Modifier.glassAnchor(pickerAnchor)) {
+                    pickerAnchor.captureInk()
                     TextButton(onClick = { expanded = true }) { Text(pickerLabel) }
                 }
                 GlassMenu(expanded, pickerAnchor, { expanded = false }) {

@@ -30,8 +30,10 @@ class LyricsInteractionTest {
                 PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title),
                 {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) } }
             compose.onNodeWithText("Song").performClick()
+            compose.onNodeWithContentDescription("Show lyrics").assertDoesNotExist()
             compose.onNodeWithTag("player-artwork").performClick()
             compose.onNodeWithTag("lyrics-panel").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Lyrics sources").assertDoesNotExist()
             pressSystemBack()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("lyrics-panel").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("lyrics-panel").assertDoesNotExist()
