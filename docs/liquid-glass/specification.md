@@ -2,13 +2,13 @@
 
 [Guide home](README.md) · [Apple evidence](sources.md) · [Motion lab](lab.html)
 
-**Status: proposed design target, not a description of shipped behavior.** The [interface contract](../interface.md) owns the current app. The source consolidation following v0.20.2 must preserve that release's behavior; applying this specification is a separate future design change. Selection entrance motion remains deferred in [#107](https://github.com/anastaci1a/localica/issues/107).
+**Status: implementation specification.** The [interface contract](../interface.md) owns released behavior; the checks below remain verification criteria, not a claim that every device meets them. Selection entrance motion remains deferred in [#107](https://github.com/anastaci1a/localica/issues/107).
 
-This is our translation of the [Apple evidence](sources.md) into testable Android behavior. The equations below are proposed engineering models, not Apple's private formulas. They need device profiling and perceptual tuning.
+This is our translation of the [Apple evidence](sources.md) into testable Android behavior. The equations below are Localica engineering models, not Apple's private formulas. They need device profiling and perceptual tuning.
 
 ## Surface roles
 
-| Role | Proposed treatment | Localica examples |
+| Role | Treatment | Localica examples |
 | --- | --- | --- |
 | Content | Artwork, text and ordinary backgrounds; no permanent lens over every item | Songs, album cards, collection heroes |
 | Floating control | One adaptive refracting surface with sharp foreground content | Mini-player, navigation, filter/search pills, return buttons |
@@ -16,7 +16,7 @@ This is our translation of the [Apple evidence](sources.md) into testable Androi
 | Transient selection | Explicit exception to the usual content/control separation | User-requested lenses over selected media |
 | Nested control | Prefer a light overlay inside the parent's material, with one coherent backdrop | Sort choices, menu actions |
 
-Apple's preference against layered glass conflicts with some requested Localica treatments. Preserve the existing selection lenses, frosted dialogs and bubble actions during consolidation. A future review should compare those with a single-material alternative; do not silently replace them because a guideline differs. Likewise, keep configurable overflow tabs and detail-page tab hiding.
+Apple's preference against layered glass conflicts with some requested Localica treatments. Preserve the requested selection lenses, frosted dialogs and bubble actions; ordinary song overflow and queue-row rename/delete remain plain icons. A future review should compare those with a single-material alternative; do not silently replace them because a guideline differs. Likewise, keep configurable overflow tabs and detail-page tab hiding.
 
 Treat blur, refraction, illumination, contrast support and shadow as separate parameters. An element may be clear yet need strong edge curvature; a text-heavy panel may need scattering without a heavy border. The current glass sliders remain user controls, not claims that every combination is equally legible.
 
@@ -57,17 +57,18 @@ Advance with a stable integrator and bounded substeps, or an analytic solution. 
 
 ### Shape carries impact
 
-Use a separate damped strain state driven by changes in travel velocity and held edge pressure. For an initial cheap model:
+Use a separate damped strain state driven by changes in travel velocity and held edge pressure. The inexpensive cap approximation includes a separate logarithmic thickness state:
 
 ```text
 pressure(excess) = -limit * (1 - exp(-abs(excess) / distanceScale))
-scaleAlong      = exp(strain)
-scaleAcross     = exp(-strain)
+scaleAlong      = exp(strain - depthStrain / 2)
+scaleAcross     = exp(-strain - depthStrain / 2)
+scaleDepth      = exp(depthStrain)
 ```
 
-The two scales multiply to one: **projected area is preserved**, not perimeter or three-dimensional volume. A genuine volume-conserving cap model would also need thickness, surface normals and optical path length; that is an experiment, not an assertion about Apple or our current solver.
+The three scales multiply to one: **approximate volume is preserved** while the footprint and thickness change together. Contact flattens and widens the cap; release can make it taller and narrower. Thickness also changes the rounded optical profile. This is not a fluid simulation or a reconstruction of Apple’s private renderer. Shape damping is independent of constrained travel; [Glass settings](../interface.md#appearance-and-settings) own its defaults/range and resting optical depth. Motion clocks sleep after settling.
 
-Map strain to the motion axis. A horizontal stop compresses width and expands height; a vertical one does the reverse. Keep the constrained edge pinned while deforming inward so the apparent contact does not slide through the wall. Additional pull produces diminishing compression. Release removes pressure and lets the same body settle. Reversal during settling changes its response immediately.
+Map strain to the motion axis. A horizontal stop compresses width and expands height; a vertical one does the reverse. Keep the contacting edge pinned (not the center) while deforming inward so the apparent contact does not slide through the wall. Additional pull produces diminishing compression. Release removes pressure and lets the same body settle. Reversal during settling changes its response immediately.
 
 Acceptance: a slow drag, fast flick, abrupt reversal and long boundary hold must yield distinguishable shapes. Replaying the same wiggle on all four fails the model. Reduced Motion removes decorative strain while preserving immediate tracking and state feedback.
 
@@ -86,9 +87,9 @@ content/backdrop → padded sample → distortion/scattering → contrast suppor
 outline + elevation → one shadow field behind the surface group
 ```
 
-Neighboring glass should share a coherent source without recursively sampling its own output. Sampling a larger region prevents clamped edge streaks. Merged selection shapes preserve unselected holes; diagonal gallery bridges remain disabled. During a future materialization experiment, vary edge height/refraction continuously from flat to curved. The current release intentionally skips that entrance animation.
+Neighboring glass should share a coherent source without recursively sampling its own output. Sampling a larger region prevents clamped edge streaks. Merged selection shapes preserve unselected holes; diagonal gallery bridges remain disabled. During a future materialization experiment, vary edge height/refraction continuously from flat to curved. Selections intentionally skip that entrance animation until #107 is reviewed.
 
-Contrast adaptation needs to assess what lies beneath the **glyph area**, not merely the album's average color. Test a white icon over alternating white/black text, a checkerboard and bright moving artwork. Proposed safeguards:
+Contrast adaptation needs to assess what lies beneath the **glyph area**, not merely the album's average color. Test a white icon over alternating white/black text, a checkerboard and bright moving artwork. Safeguards to verify:
 
 1. Choose foreground polarity and supporting tint together.
 2. Add hysteresis and a short response filter so a scrolling edge does not flicker between black and white.

@@ -12,16 +12,16 @@
 <p id="instructions"><small>Drag the lens, or focus the illustration and use Left/Right. Home/End move to a boundary. Buttons below provide the same actions. Keyboard steps settle with the same spring.</small></p>
 <div class="controls"><button id="left">Move left</button><button id="right">Move right</button><button id="menu" aria-pressed="false">Expand surface</button><button id="reset">Reset</button></div>
 <p><output id="readout" aria-live="off"></output></p>
-<div class="controls"><label>Shape damping <input id="damping" type="range" min="12" max="45" value="24"><output id="dampingValue">24</output></label><label><input id="reduce" type="checkbox"> Reduce motion</label></div>
+<div class="controls"><label>Shape damping <input id="damping" type="range" min="2" max="40" value="8"><output id="dampingValue">8</output></label><label>Resting depth <input id="depth" type="range" min="0.6" max="2" step="0.05" value="1.35"><output id="depthValue">1.35</output></label><label><input id="reduce" type="checkbox"> Reduce motion</label></div>
 </section>
-<details><summary>What this demonstrates</summary><p>A bounded center uses a critically damped spring after release. A second spring responds to velocity changes and edge pressure. Opposing exponential scales preserve projected area. Expansion changes the target geometry without queuing a separate flourish. This is a small Localica proposal, not Apple's code, a fluid-volume simulation, or a production glass shader. The drawing intentionally uses simple gradients so you can focus on behavior.</p><p>Read the <a href="specification.md#shape-carries-impact">model and its limitations</a> and the <a href="sources.md#interaction-foundations">Apple interaction evidence</a>. The current Android release is unchanged by this prototype.</p></details>
+<details><summary>What this demonstrates</summary><p>A bounded center uses a critically damped spring after release. A second spring responds to velocity changes and edge pressure. Coupled footprint and thickness scales preserve approximate cap volume. The contacting edge stays pinned during compression. Expansion changes the target geometry without queuing a separate flourish. This is a small Localica proposal, not Apple's code, a fluid-volume simulation, or a production glass shader. The drawing intentionally uses simple gradients so you can focus on behavior.</p><p>Read the <a href="specification.md#shape-carries-impact">model and its limitations</a> and the <a href="sources.md#interaction-foundations">Apple interaction evidence</a>. The current Android release is unchanged by this prototype.</p></details>
 <footer>Original illustration · no Apple imagery or font files · no dependencies or network requests</footer>
 <script>
 'use strict';
 const canvas=document.querySelector('#scene'),ctx=canvas.getContext('2d');
 const reduce=document.querySelector('#reduce');reduce.checked=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const damping=document.querySelector('#damping'),readout=document.querySelector('#readout');
-let x=250,v=0,target=x,strain=0,sv=0,previousV=0,pressure=0,drag=null,expanded=false,w=126,h=66,wv=0,hv=0,last=0,frame=0;
+let x=250,v=0,target=x,strain=0,sv=0,depth=0,dv=0,previousV=0,pressure=0,drag=null,expanded=false,w=126,h=66,wv=0,hv=0,last=0,frame=0;
 const clamp=(a,lo,hi)=>Math.max(lo,Math.min(hi,a));
 function limits(){return [45+w/2,835-w/2]}
 function wake(){if(!frame){last=performance.now();frame=requestAnimationFrame(tick)}}
@@ -33,23 +33,24 @@ function draw(){
  ctx.strokeStyle='#cce7f51a';ctx.lineWidth=1;for(let i=45;i<850;i+=50){ctx.beginPath();ctx.moveTo(i,38);ctx.lineTo(i,250);ctx.stroke()}
  ctx.fillStyle='#edf6ff7a';ctx.font='13px system-ui';ctx.fillText('TRACK / BOUNDED POSITION',45,30);
  ctx.strokeStyle='#bdd8ed66';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(44,55,792,210,24);ctx.stroke();
- const q=reduce.checked?0:strain,sx=Math.exp(q),sy=Math.exp(-q),sw=w*sx,sh=h*sy;
+ const q=reduce.checked?0:strain,z=reduce.checked?0:.24*Math.tanh(depth/.24),sx=Math.exp(q-z/2),sy=Math.exp(-q-z/2),sz=Math.exp(z),sw=w*sx,sh=h*sy;
  // Keep the outer silhouette inside the track while it bulges.
  const [leftLimit,rightLimit]=limits();
  const cx=x>=rightLimit-.01?835-sw/2:x<=leftLimit+.01?45+sw/2:clamp(x,45+sw/2,835-sw/2),cy=160;
  ctx.save();ctx.translate(cx,cy);ctx.shadowColor='#00000055';ctx.shadowBlur=24;ctx.shadowOffsetY=8;
- const g=ctx.createLinearGradient(0,-sh/2,0,sh/2);g.addColorStop(0,'#c5eeff66');g.addColorStop(.3,'#daecff18');g.addColorStop(.8,'#ffffff12');g.addColorStop(1,'#cce8ff40');ctx.fillStyle=g;ctx.beginPath();ctx.roundRect(-sw/2,-sh/2,sw,sh,Math.min(32,sh/2));ctx.fill();ctx.shadowColor='transparent';ctx.strokeStyle='#e7f5ffc0';ctx.lineWidth=1.5;ctx.stroke();
+ const g=ctx.createLinearGradient(0,-sh/2,0,sh/2);g.addColorStop(0,'#c5eeff66');g.addColorStop(.3,'#daecff18');g.addColorStop(.8,'#ffffff12');g.addColorStop(1,'#cce8ff40');ctx.fillStyle=g;ctx.beginPath();ctx.roundRect(-sw/2,-sh/2,sw,sh,Math.min(32,sh/2));ctx.fill();ctx.shadowColor='transparent';ctx.strokeStyle='#e7f5ffc0';ctx.lineWidth=1.5*sz*Number(document.querySelector('#depth').value);ctx.stroke();
  ctx.fillStyle='#f3f8ff';ctx.textAlign='center';ctx.font='600 17px system-ui';ctx.fillText(expanded?'One continuing surface':'Drag me',0,expanded?-18:6);
  if(expanded){ctx.font='14px system-ui';ctx.fillStyle='#dce7f0';ctx.fillText('Same position, velocity and identity',0,17);ctx.fillText('Re-grab while settling',0,44)}ctx.restore();
  const [lo,hi]=limits();const pct=Math.round((x-lo)/(hi-lo)*100);canvas.setAttribute('aria-valuenow',String(clamp(pct,0,100)));
- readout.value=`velocity ${v.toFixed(0)} px/s · strain ${strain.toFixed(3)} · area ratio ${(sx*sy).toFixed(3)}${drag?' · tracking':' · settling / rest'}`;
+ readout.value=`velocity ${v.toFixed(0)} px/s · strain ${strain.toFixed(3)} · depth ${sz.toFixed(3)} · volume ratio ${(sx*sy*sz).toFixed(3)}${drag?' · tracking':' · settling / rest'}`;
 }
 function tick(now){frame=0;let dt=Math.min((now-last)/1000,.04);last=now;const tw=expanded?370:126,th=expanded?160:66;
- if(reduce.checked){w=tw;h=th;wv=hv=strain=sv=0;if(!drag){x=target;v=0}}
+ if(reduce.checked){w=tw;h=th;wv=hv=strain=sv=depth=dv=0;if(!drag){x=target;v=0}}
  else{while(dt>0){const d=Math.min(dt,1/240);wv+=(420*(tw-w)-41*wv)*d;hv+=(420*(th-h)-41*hv)*d;w+=wv*d;h+=hv*d;
  const [lo,hi]=limits();target=clamp(target,lo,hi);if(!drag){v+=(420*(target-x)-41*v)*d;x+=v*d}x=clamp(x,lo,hi);
- sv+=clamp((v-previousV)/600*.11,-.7,.7);previousV=v;sv+=(380*(pressure-strain)-Number(damping.value)*sv)*d;strain=clamp(strain+sv*d,-.24,.12);dt-=d}}
- draw();if(drag||Math.abs(x-target)>.03||Math.abs(v)>.03||Math.abs(w-tw)>.03||Math.abs(h-th)>.03||Math.abs(strain-pressure)>.0002||Math.abs(sv)>.002)wake();
+ sv+=clamp((v-previousV)/600*.11,-.7,.7);previousV=v;sv+=(380*(pressure-strain)-Number(damping.value)*sv)*d;strain=clamp(strain+sv*d,-.24,.12);
+ const depthTarget=(drag?-.14:0)+Math.abs(pressure)*.18;dv+=(380*(depthTarget-depth)-Number(damping.value)*dv)*d;depth+=dv*d;dt-=d}}
+ draw();if(drag||Math.abs(x-target)>.03||Math.abs(v)>.03||Math.abs(w-tw)>.03||Math.abs(h-th)>.03||Math.abs(strain-pressure)>.0002||Math.abs(sv)>.002||Math.abs(depth)>.0002||Math.abs(dv)>.002)wake();
 }
 canvas.addEventListener('pointerdown',e=>{const p=point(e);if(Math.abs(p.x-x)>w/2+16||Math.abs(p.y-160)>h/2+16)return;canvas.setPointerCapture(e.pointerId);canvas.focus();drag={offset:p.x-x,last:p.x,time:e.timeStamp};v=0;wake()});
 canvas.addEventListener('pointermove',e=>{if(!drag)return;const p=point(e),[lo,hi]=limits(),raw=p.x-drag.offset;const nx=clamp(raw,lo,hi);v=clamp((nx-x)/Math.max(.008,(e.timeStamp-drag.time)/1000),-1800,1800);x=nx;target=x;pressure=-.22*(1-Math.exp(-Math.abs(raw-nx)/85));drag.time=e.timeStamp;wake()});
@@ -59,5 +60,6 @@ canvas.addEventListener('keydown',e=>{const [lo,hi]=limits();const next={ArrowLe
 document.querySelector('#left').onclick=()=>setTarget(limits()[0]);document.querySelector('#right').onclick=()=>setTarget(limits()[1]);
 document.querySelector('#menu').onclick=e=>{expanded=!expanded;e.target.setAttribute('aria-pressed',String(expanded));e.target.textContent=expanded?'Collapse surface':'Expand surface';wake()};
 document.querySelector('#reset').onclick=()=>{expanded=false;target=250;v=0;pressure=0;document.querySelector('#menu').textContent='Expand surface';document.querySelector('#menu').setAttribute('aria-pressed','false');wake()};
+document.querySelector('#depth').oninput=e=>{document.querySelector('#depthValue').value=e.target.value;wake()};
 damping.oninput=()=>{document.querySelector('#dampingValue').value=damping.value;wake()};reduce.onchange=()=>wake();draw();
 </script></html>

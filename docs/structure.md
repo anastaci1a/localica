@@ -56,8 +56,8 @@ Bound/orient imported images; the zoom viewer decodes separately. Resolve lyric 
 ### Surfaces and windows
 
 - The theme owns modal lifetimes and retains caller state/locals through exit. Restore caller locals before creating each window so view/focus ownership stays correct; nested windows sample the completed parent panel.
-- Measure glass from foreground content, then fit its padded backdrop independently. Uniformly scale fixed menu layout into the moving viewport. Retain the returning modal until its trigger has drawn; settled menus stop drawing the transitional lens.
-- Morphs and controls share damped acceleration/pressure response; idle elastic clocks stop. [Visible motion contract](interface.md#motion-and-access).
+- Measure glass from foreground content, then fit its padded backdrop independently. Uniformly scale fixed menu layout into the moving viewport. Retain the returning modal through its trigger handoff, releasing input at dismissal. One continuous material changes its scattering/tint; no endpoint surface swap. Trigger visibility invalidates recorded drawing, not only a child layer’s alpha.
+- Morphs and controls share damped acceleration/contact/pressure response with coupled footprint/depth; idle elastic clocks stop. [Visible motion contract](interface.md#motion-and-access).
 - Record browsing content, panel material, lists, player and lyrics separately to prevent sampling cycles. Inline lenses exclude themselves; modal windows may sample the complete screen using global coordinates. The optional navbar overlay records the finished bar/labels without itself.
 - Connected selection lenses query placement coordinates during drawing, normalize translations before caching distance fields, and filter only visible selected bounds with clear centers. Foregrounds stay sharp except in explicitly composite selection lenses.
 
