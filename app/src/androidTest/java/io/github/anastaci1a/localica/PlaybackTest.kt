@@ -25,6 +25,10 @@ class PlaybackTest {
             val savedSettings = playback.queues.state.value.settings
             try {
                 await { playback.state.value.connected }
+                // A preceding test may leave a live service. Do not mistake its state
+                // for the new tone while the queued play command is still pending.
+                instrumentation.runOnMainSync { playback.clear() }
+                await { playback.state.value.trackUri == null }
                 playback.queues.settings(io.github.anastaci1a.localica.queue.QueueSettings())
                 await { playback.queues.state.value.settings == io.github.anastaci1a.localica.queue.QueueSettings() }
                 for (extension in listOf("mp3", "m4a", "wav")) {
@@ -32,7 +36,7 @@ class PlaybackTest {
                     instrumentation.context.assets.open("tone.$extension").use { input -> file.outputStream().use(input::copyTo) }
                     val track = Track(Uri.fromFile(file).toString(), "Tone $extension", fileName = file.name, relativePath = file.name, id = "stable:$extension")
                     instrumentation.runOnMainSync { playback.play(track) }
-                    await { playback.state.value.isPlaying && playback.state.value.durationMs != null }
+                    await { playback.state.value.trackId == track.id && playback.state.value.isPlaying && playback.state.value.durationMs != null }
                     assertNull(playback.state.value.problem)
                     instrumentation.runOnMainSync { playback.toggle() }
                     await { !playback.state.value.isPlaying }

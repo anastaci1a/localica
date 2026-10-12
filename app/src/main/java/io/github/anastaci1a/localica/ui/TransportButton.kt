@@ -28,14 +28,15 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
         tween(if (reducedMotion) 0 else 260, easing = FastOutSlowInEasing), label = "Play pause morph")
     val travel = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    var animation by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     Box(modifier.semantics { contentDescription = label }
         .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null) {
             onClick()
-            if (glyph != TransportGlyph.PlayPause && !reducedMotion) scope.launch {
+            if (glyph != TransportGlyph.PlayPause && !reducedMotion) { animation?.cancel(); animation = scope.launch {
                 travel.snapTo(0f)
-                travel.animateTo(1f, tween(300, easing = FastOutSlowInEasing))
+                travel.animateTo(1f, tween(550, easing = LinearEasing))
                 travel.snapTo(0f)
-            }
+            } }
         }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(iconSize)) {
             val color = tint.copy(alpha = tint.alpha * if (enabled) 1f else .38f)
@@ -54,15 +55,24 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
                 polygon(listOf(Offset(.5f,.3f), Offset(.8f,.5f), Offset(.8f,.5f), Offset(.5f,.7f)),
                     listOf(Offset(.6f,.1f), Offset(.8f,.1f), Offset(.8f,.9f), Offset(.6f,.9f)), pause)
             } else scale(if (glyph == TransportGlyph.Previous) -1f else 1f, 1f) {
-                val t = travel.value
-                for (i in -1..1) {
-                    val x = .05f + (i + t) * .36f
-                    val opacity = when (i) { -1 -> t; 1 -> 1f - t; else -> 1f }
-                    val points = listOf(Offset(x,.18f), Offset(x+.36f,.5f), Offset(x,.82f))
-                    polygon(points, points, 0f, opacity)
+                // Rounded Heroicons wedges; directional keyframes adapted from lucide-animated.
+                // Keep both wedges opaque and stagger their nudge instead of replacing/fading them.
+                for (i in 0..1) {
+                    val phase = ((travel.value - i * .12f) / .88f).coerceIn(0f, 1f)
+                    val wave = if (phase < .4f) FastOutSlowInEasing.transform(phase / .4f)
+                        else 1f - FastOutSlowInEasing.transform((phase - .4f) / .6f)
+                    val x = .08f + i * .40f + .08f * wave
+                    val path = Path().apply {
+                        moveTo((x + .045f) * size.width, .21f * size.height)
+                        quadraticTo(x * size.width, .18f * size.height, x * size.width, .25f * size.height)
+                        lineTo(x * size.width, .75f * size.height)
+                        quadraticTo(x * size.width, .82f * size.height, (x + .045f) * size.width, .79f * size.height)
+                        lineTo((x + .39f) * size.width, .54f * size.height)
+                        quadraticTo((x + .44f) * size.width, .5f * size.height, (x + .39f) * size.width, .46f * size.height)
+                        close()
+                    }
+                    drawPath(path, color)
                 }
-                drawRoundRect(color, Offset(size.width * .82f, size.height * .18f),
-                    Size(size.width * .08f, size.height * .64f), androidx.compose.ui.geometry.CornerRadius(size.width * .025f))
             }
         }
     }
