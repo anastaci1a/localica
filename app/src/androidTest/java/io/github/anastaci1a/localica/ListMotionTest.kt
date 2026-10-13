@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import org.junit.Assert.*
 import org.junit.Rule
@@ -20,6 +21,43 @@ import org.junit.Test
 class ListMotionTest {
     @get:Rule val compose = createComposeRule()
     private val heights = List(100) { if (it % 7 == 0) 180 else if (it % 3 == 0) 80 else 30 }
+
+    @Test fun initialLyricsFollowWaitsForLayout() = initialFollow(grid = false, reducedMotion = false)
+    @Test fun initialReducedMotionLyricsFollowWaitsForLayout() = initialFollow(grid = false, reducedMotion = true)
+    @Test fun initialQueueFollowWaitsForLayout() = initialFollow(grid = true, reducedMotion = false)
+    @Test fun initialReducedMotionQueueFollowWaitsForLayout() = initialFollow(grid = true, reducedMotion = true)
+
+    private fun initialFollow(grid: Boolean, reducedMotion: Boolean) {
+        val listState = LazyListState()
+        val gridState = LazyGridState()
+        lateinit var scope: CoroutineScope
+        var showList by mutableStateOf(false)
+        lateinit var job: Job
+        compose.setContent { LocalicaTheme {
+            scope = rememberCoroutineScope()
+            if (showList) {
+                if (grid) LazyVerticalGrid(GridCells.Fixed(1), Modifier.height(300.dp), state = gridState) {
+                    items(50) { Text("Song $it", Modifier.height(48.dp)) }
+                } else LazyColumn(Modifier.height(300.dp), state = listState) {
+                    items(50) { Text("Line $it", Modifier.height(48.dp)) }
+                }
+            }
+        } }
+        // Request before any layout exists, independently of test/device scheduling.
+        compose.runOnIdle {
+            job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                if (grid) gridState.easeToItem(25, reducedMotion)
+                else listState.easeToItem(25, reducedMotion)
+            }
+            assertFalse("Initial request must wait for layout", job.isCompleted)
+            showList = true
+        }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertTrue(job.isCompleted)
+            assertEquals(25, if (grid) gridState.firstVisibleItemIndex else listState.firstVisibleItemIndex)
+        }
+    }
 
     @Test fun returningFromThousandsOfAlbumsHasABoundedDuration() {
         lateinit var grid: LazyGridState
