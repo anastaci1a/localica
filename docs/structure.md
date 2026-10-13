@@ -65,6 +65,8 @@ Bound/orient imported images; the zoom viewer decodes separately. Resolve lyric 
 
 Controls, panels and selections use one [lens model](liquid-glass/specification.md#geometry-and-readability), executed by platform-specific adapters without retaining an older visual style. Share outline geometry across clipping, refraction, illumination and shadow. White tint uses the same monotonic tone curve on both adapters; readability records sharp foreground silhouettes separately. Older devices independently blend prepared blur/tint endpoints without filtering fresh bitmaps each frame.
 
+Floating list controls sample the finished viewport after its fade and scrolling transforms, with the parent backing beneath transparent pixels. Keep those controls outside their own source recording.
+
 | Platform / layer | Treatment |
 | --- | --- |
 | Android 13+ optics | Padded AGSL rounded-surface refraction; small shared scene samples guide foreground polarity, never per-lens readback. |
