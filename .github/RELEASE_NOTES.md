@@ -1,45 +1,33 @@
-<!-- Release: v0.21.0 -->
+<!-- Release: v0.22.0 -->
 
 Development APK for Android 8 or newer. Signed with the project development key; uses a separate `.debug` application ID. Production distribution signing is not configured.
 
 ## Changes
 
-- Apply the Apple-sourced glass specification: deeper rounded lenses, adjustable low damping and depth, pressure-driven deformation, pinned contact edges and faster transitions.
-- Keep glass attached to scrolling content; improve player gestures, artwork handoff, bounded auto-scroll and pinch continuity.
-- Polish collection flyouts, queue navigation, lyrics availability, title fades, Info artwork access and Settings Back motion. Update the illustrated glass guide and interactive lab.
-- Reuse collection thumbnails immediately, fade in larger artwork and retain tab/Home artwork through two Back destinations. Center lyrics transport between the seek track and queue shelf; restore minimize arrows and a smoothly expanding lyrics/source pill.
-- Combine Sort/View into one tabbed flyout, favor vertical list scrolling, refine clear settings sliders/switches and add release-on-X scrub cancellation.
-- Expand the Apple-sourced controls guide and refine cancellation, disabled feedback and right-to-left tracking. Add default blur-through button/autoplay artwork changes, an optional carousel, and an independent artwork swipe toggle. Gate every lyrics entry point on local sources.
+- Rework curved glass optics, contact compression and release rebound; slow visible morphs, strengthen magnetic controls, and add a draggable/morphing settings preview.
+- Unify playlist destinations and collection menus, add playlist images, prevent duplicate playlist names, and reuse search catalogs for faster results.
+- Standardize staged settings pickers and text clearing; seed album colors/metadata from cached content, improve bright-artwork contrast, and add saved lyric timing correction.
+- Refresh Localica’s rendered icon and Android music-player discovery. Physical Bluetooth timing and phone frame rates still require device review.
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/110 - Tunable glass physics, optics and queue controls.
-- https://github.com/anastaci1a/localica/issues/111 - Popup flashes, disappearing triggers and closing input delays.
-- https://github.com/anastaci1a/localica/issues/112 - Selection clipping and shared overscroll.
-- https://github.com/anastaci1a/localica/issues/113 - Collection parallax and album-carousel gesture ownership.
-- https://github.com/anastaci1a/localica/issues/114 - Continuous feathering and background colors during player expansion.
-- https://github.com/anastaci1a/localica/issues/115 - Pinch recognition and fast gesture continuity.
-- https://github.com/anastaci1a/localica/issues/116 - Bounded long-list return scrolling.
-- https://github.com/anastaci1a/localica/issues/117 - Interruptible artwork swipes and easier player expansion/collapse.
-- https://github.com/anastaci1a/localica/issues/118 - Collection submenu anchors, compact sizing and tint continuity.
-- https://github.com/anastaci1a/localica/issues/119 - Lyrics availability, Settings Back, record icons, title fades and Info artwork access.
-- https://github.com/anastaci1a/localica/issues/121 - Browse artwork retention, detail resolution fades and Home caching.
-- https://github.com/anastaci1a/localica/issues/122 - Lyrics transport alignment.
-- https://github.com/anastaci1a/localica/issues/124 - Player and Queue minimize controls, morphing lyrics pill and shared dividers.
-- https://github.com/anastaci1a/localica/issues/125 - Deeper mini-player/menu triggers, flatter tab navigation and tighter compact typography.
-- https://github.com/anastaci1a/localica/issues/126 - Subtle shadow-weighted glass tint that preserves bright artwork.
-- https://github.com/anastaci1a/localica/issues/127 - Whole-pill Sort/View panel with a shared draft.
-- https://github.com/anastaci1a/localica/issues/128 - Vertical-biased main-tab gesture recognition.
-- https://github.com/anastaci1a/localica/issues/129 - Apple-sourced slider/switch specification and controls.
-- https://github.com/anastaci1a/localica/issues/130 - Playback scrub cancellation target.
-- https://github.com/anastaci1a/localica/issues/131 - Interactive control specification and implementation review.
-- https://github.com/anastaci1a/localica/issues/132 - Blur-through transitions and artwork swipe toggle.
-- https://github.com/anastaci1a/localica/issues/133 - Current-song lyrics gating across entry points.
-- https://github.com/anastaci1a/localica/issues/134 - Deterministic pause/seek and natural-end verification.
-- https://github.com/anastaci1a/localica/issues/135 - Search focus across keyboard/window handoffs.
+- https://github.com/anastaci1a/localica/issues/120 - Bright-artwork player contrast.
+- https://github.com/anastaci1a/localica/issues/123 - Lyric clock interpolation and manual output correction.
+- https://github.com/anastaci1a/localica/issues/136 - Curved droplet optics, held contact and release motion.
+- https://github.com/anastaci1a/localica/issues/137 - Magnetic selectors and constrained edge pressure.
+- https://github.com/anastaci1a/localica/issues/138 - Queue actions and clipped glass dismissal.
+- https://github.com/anastaci1a/localica/issues/139 - Inline playlist destinations and unique names.
+- https://github.com/anastaci1a/localica/issues/140 - Shared collection actions and playlist artwork.
+- https://github.com/anastaci1a/localica/issues/141 - Cached search and shared clear/refocus fields.
+- https://github.com/anastaci1a/localica/issues/142 - Fixed Sort/View panels, staged choices and settings alignment.
+- https://github.com/anastaci1a/localica/issues/143 - Capitalized app identity, rendered icon and music discovery.
+- https://github.com/anastaci1a/localica/issues/144 - Scroll-to-top only on current-tab reselection.
+- https://github.com/anastaci1a/localica/issues/145 - Monotonic adaptive glass tint.
+- https://github.com/anastaci1a/localica/issues/146 - Immediate cached album colors/metadata and sequential track reveal.
+- https://github.com/anastaci1a/localica/issues/147 - Solid paused Play triangle at both player sizes.
 
 ## Install
 
-1. Download `localica-v0.21.0-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.22.0-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. It updates the existing development app.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
