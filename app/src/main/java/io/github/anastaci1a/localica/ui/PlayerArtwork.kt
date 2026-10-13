@@ -8,6 +8,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
 import androidx.compose.ui.layout.ContentScale
@@ -45,11 +46,16 @@ internal fun rememberCollectionVisual(uri: String?, provider: CoverProvider = Em
     val revision by ArtworkCache.revision.collectAsState()
     val request = uri to revision
     val initial = remember(request, provider, retention) {
-        retention?.visual(uri) ?: uri?.let { PlayerVisualCache.peek(it) } ?: PlayerVisual(
-            (retention?.preview()?.bitmap ?: ArtworkCache.peek(listOfNotNull(uri), 768)?.bitmap)?.asImageBitmap())
+        retention?.visual(uri) ?: uri?.let { PlayerVisualCache.peek(it) } ?: run {
+            val thumbnail = retention?.preview()?.bitmap ?: ArtworkCache.peek(listOfNotNull(uri), 768)?.bitmap
+            if (thumbnail == null) PlayerVisual() else PlayerVisual(thumbnail.asImageBitmap(), thumbnailPalette(thumbnail))
+        }
     }
     val loaded by produceState<Pair<Pair<String?, Long>, PlayerVisual>?>(null, request, provider) {
         if (uri != null) {
+            if (initial.artwork != null && initial.palette.wash == null) {
+                value = request to initial.copy(palette = playerPalette(initial.artwork.asAndroidBitmap()))
+            }
             val visual = retention?.visual(uri) ?: PlayerVisualCache.read(context, uri, provider)
             currentCoroutineContext().ensureActive()
             retention?.keepVisual(uri, visual)

@@ -24,7 +24,8 @@ class LocalicaApplication : Application() {
     val lyrics by lazy { io.github.anastaci1a.localica.lyrics.LyricsRepository(this) }
     val tagEditing by lazy { io.github.anastaci1a.localica.editing.TagEditingController(this, library, queues, playlists) }
     val playlists by lazy {
-        PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").addMigrations(PlaylistDatabase.MIGRATION_1_2).build().playlists())
+        PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").addMigrations(PlaylistDatabase.MIGRATION_1_2, PlaylistDatabase.MIGRATION_2_3).build().playlists(),
+            coverDirectory = java.io.File(filesDir, "playlist-covers"))
     }
     val queues by lazy {
         QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5).build().queues(),

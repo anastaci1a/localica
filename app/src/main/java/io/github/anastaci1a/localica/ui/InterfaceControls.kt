@@ -30,22 +30,36 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.onSizeChanged
 import kotlin.math.exp
+
+/** Captions share the real slider-track inset and remain visually attached to it. */
+@Composable internal fun SliderEndpoints(low: String, high: String) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).offset(y = (-6).dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(low, style = MaterialTheme.typography.bodySmall)
+        Text(high, style = MaterialTheme.typography.bodySmall)
+    }
+}
 
 /** Shared drawing/motion, retaining Slider's keyboard, touch and accessibility behavior. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true) {
+    val actualSteps = if (steps == 0 && valueRange.start == 0f && valueRange.endInclusive == 1f) 19 else steps
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val direction = if (rtl) -1f else 1f
     val interaction = remember { MutableInteractionSource() }
     var pressure by remember { mutableFloatStateOf(0f) }
     val current by rememberUpdatedState(value)
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
+    var fingerFraction by remember { mutableStateOf<Float?>(null) }
+    var controlWidth by remember { mutableFloatStateOf(0f) }
+    val shownFraction by animateFloatAsState(fingerFraction ?: ((value - valueRange.start) / span),
+        if (fingerFraction != null || LocalReducedMotion.current) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Magnetic slider")
     val pressed by interaction.collectIsPressedAsState()
     val dragged by interaction.collectIsDraggedAsState()
-    val deformation = rememberGlassBody({ (value - valueRange.start) / span }, { pressure }, { if (pressed || dragged) 1f else 0f })
+    val deformation = rememberGlassBody({ shownFraction }, { pressure }, { if (pressed || dragged) 1f else 0f })
     val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f)
     val inset = with(LocalDensity.current) { 20.dp.toPx() }
     val touch = if (!enabled) Modifier else Modifier.pointerInput(valueRange, rtl) {
@@ -62,29 +76,32 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
                     event.changes.firstOrNull { it.id == down.id }?.let {
                         val raw = start + direction * (it.position.x - down.position.x) / extent
                         pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
+                        fingerFraction = if (actualSteps > 0) magneticChoicePosition(raw.coerceIn(0f, 1f) * (actualSteps + 1)) / (actualSteps + 1)
+                            else raw.coerceIn(0f, 1f)
                     }
                 } while (event.changes.any { it.pressed })
-            } finally { pressure = 0f }
+            } finally { pressure = 0f; fingerFraction = null }
         }
     }
     val color = NavigationAccent
-    Slider(value, onValueChange, modifier.then(touch), enabled = enabled, valueRange = valueRange, steps = steps, interactionSource = interaction,
+    Slider(value, onValueChange, modifier.onSizeChanged { controlWidth = it.width.toFloat() }.then(touch), enabled = enabled, valueRange = valueRange, steps = actualSteps, interactionSource = interaction,
         thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
             LiquidGlassSurface(Modifier.size(40.dp, 26.dp).testTag("settings-slider-thumb").graphicsLayer {
                 scaleX = deformation.value.scaleX(); scaleY = deformation.value.scaleY()
                 val fraction = (value - valueRange.start) / span
-                translationX = glassWallTranslation(size.width, scaleX, direction * when { fraction <= .001f -> -1f; fraction >= .999f -> 1f; else -> 0f })
+                translationX = direction * (shownFraction - fraction) * (controlWidth - 2 * inset).coerceAtLeast(0f) +
+                    glassWallTranslation(size.width, scaleX, direction * when { shownFraction <= .001f -> -1f; shownFraction >= .999f -> 1f; else -> 0f })
             }, source = trackSource, cornerRadius = 13.dp, pressFeedback = false, shadow = false, body = { deformation.value })
         } },
         track = {
             Canvas(Modifier.fillMaxWidth().height(48.dp).recordFrostedBackdrop(trackSource)) {
                 val h = 5.dp.toPx()
-                val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
+                val fraction = shownFraction.coerceIn(0f, 1f)
                 val top = (size.height - h) / 2
                 drawRoundRect(color.copy(alpha = if (enabled) .16f else .08f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
                 if (fraction > 0f) drawRoundRect(color.copy(alpha = if (enabled) .8f else .3f), Offset(if (rtl) size.width * (1f - fraction) else 0f, top), Size(size.width * fraction, h), CornerRadius(h / 2))
-                if (steps > 0) for (index in 0..steps + 1) drawCircle(color.copy(alpha = .4f), 2.dp.toPx(),
-                    Offset(size.width * index / (steps + 1), size.height / 2))
+                if (actualSteps > 0) for (index in 0..actualSteps + 1) drawCircle(color.copy(alpha = .4f), 1.dp.toPx(),
+                    Offset(size.width * index / (actualSteps + 1), size.height / 2))
             }
         })
 }
@@ -119,7 +136,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
         onDelta = { dx ->
             raw += direction * dx / with(density) { 24.dp.toPx() }
             pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.snapTo(raw.coerceIn(0f, 1f)) }
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(raw.coerceIn(0f, 1f))) }
         }, onEnd = { cancelled ->
             pressure = 0f; dragging = false; settleRequest++
             if (!cancelled) onChange(position.value >= .5f)

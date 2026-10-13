@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.*
 
 /** Serial writes publish only committed state; failed restore never overwrites saved collections. */
 class PlaylistController(private val dao: PlaylistDao,
-    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) {
+    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    private val coverDirectory: java.io.File? = null) {
     private data class Edit(val change: (List<ManualPlaylist>) -> List<ManualPlaylist>, val complete: (Boolean) -> Unit)
     private val mutable = MutableStateFlow(PlaylistState())
     val state = mutable.asStateFlow()
@@ -27,8 +28,26 @@ class PlaylistController(private val dao: PlaylistDao,
                 val after = edit.change(before)
                 withContext(Dispatchers.IO) { dao.save(before, after) }
                 mutable.value = PlaylistState(after, loading = false)
+                // Only unreferenced copies owned by this app are disposable, and only
+                // after the database has committed the replacement/deletion.
+                coverDirectory?.let { directory -> withContext(Dispatchers.IO) {
+                    val retained = after.mapNotNull { it.coverUri }.toSet()
+                    before.mapNotNull { it.coverUri }.distinct().filterNot { it in retained }.forEach { uri ->
+                        runCatching {
+                            val parsed = android.net.Uri.parse(uri)
+                            if (parsed.scheme == "file") parsed.path?.let { path ->
+                                val file = java.io.File(path).canonicalFile
+                                if (file.parentFile == directory.canonicalFile) file.delete()
+                            }
+                        }
+                    }
+                } }
                 edit.complete(true)
             } catch (cancelled: CancellationException) { throw cancelled }
+            catch (invalid: IllegalArgumentException) {
+                mutable.update { it.copy(problem = invalid.message ?: "This playlist change is invalid.") }
+                edit.complete(false)
+            }
             catch (_: Exception) {
                 mutable.update { it.copy(problem = "Couldn’t save this playlist change. Try again.") }
                 edit.complete(false)
@@ -40,13 +59,21 @@ class PlaylistController(private val dao: PlaylistDao,
     }
     fun create(name: String, tracks: List<Track> = emptyList(), complete: (Boolean) -> Unit = {}) {
         if (name.isBlank()) { complete(false); return }
-        submit(complete) { it + PlaylistEdits.append(ManualPlaylist(name = name.trim()), tracks) }
+        addToDestinations(emptySet(), name, tracks, complete)
     }
     fun rename(id: String, name: String, complete: (Boolean) -> Unit = {}) {
         if (name.isBlank()) { complete(false); return }
-        edit(id, complete) { it.copy(name = name.trim()) }
+        submit(complete) { playlists ->
+            require(PlaylistEdits.nameAvailable(playlists, name, id)) { "A playlist with this name already exists." }
+            require(playlists.any { it.id == id }) { "This playlist is no longer available." }
+            playlists.map { if (it.id == id && it.name != name.trim())
+                it.copy(name = name.trim(), modifiedAt = System.currentTimeMillis()) else it }
+        }
     }
+    fun addToDestinations(ids: Set<String>, name: String, tracks: List<Track>, complete: (Boolean) -> Unit = {}) =
+        submit(complete) { PlaylistEdits.addToDestinations(it, ids, name, tracks) }
     fun append(id: String, tracks: List<Track>, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.append(it, tracks) }
+    fun cover(id: String, uri: String, complete: (Boolean) -> Unit = {}) = edit(id, complete) { it.copy(coverUri = uri) }
     fun removeEntries(id: String, entries: Set<String>, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.remove(it, entries) }
     fun move(id: String, entry: String, offset: Int, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.move(it, entry, offset) }
     fun moveBefore(id: String, entries: Set<String>, beforeId: String?, complete: (Boolean) -> Unit = {}) =

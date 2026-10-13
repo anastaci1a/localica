@@ -55,9 +55,9 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     fun back() { if (path.isEmpty()) onDismiss() else path = path.dropLast(1) }
     SettingsPage(page ?: "Settings", ::back, onDismiss, navigationDepth = path.size) {
         if (page == null) GlassSearchField(search, { search = it }, "Search settings",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp))
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
-            Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+            Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (page == null) {
                     val shown = settingsDestinations.filter {

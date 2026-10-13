@@ -22,7 +22,8 @@ import kotlinx.coroutines.withContext
 internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins: List<MediaRef>,
     onSettings: () -> Unit, onBrowse: () -> Unit, onOpen: (BrowserItem, List<SongRow>) -> Unit,
     onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
-    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default) {
+    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default,
+    playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null, queues: io.github.anastaci1a.localica.queue.QueueController? = null) {
     val cache = LocalBrowsePresentationCache.current
     val cached = remember(library.snapshot, playlists.playlists, pins, cache) { cache?.home(library.snapshot, playlists.playlists, pins) }
     val items by produceState(cached.orEmpty(), library.snapshot, playlists.playlists, pins) {
@@ -63,19 +64,19 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         } }
         item { LazyRow(state = carousel, modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
-                Column(Modifier.width(160.dp).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
+                val anchor = rememberGlassAnchor()
+                Column(Modifier.width(160.dp).contextMenuAnchor(anchor).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {
                     MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f), shape = artworkShape(item.ref.kind))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
-                GlassMenu(menu == item.ref, rememberGlassAnchor(), { menu = null }) {
+                CollectionActions(menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null }, extra = {
                     ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
                     ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,
                         onClick = { onMove(item.ref, 1); menu = null })
-                    ActionMenuItem("Unpin", onClick = { onPin(item.ref); menu = null })
-                }
+                })
             } }
         } }
     }

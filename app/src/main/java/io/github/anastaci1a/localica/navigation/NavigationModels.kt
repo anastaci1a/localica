@@ -77,6 +77,7 @@ data class InterfaceSettings(
     val artworkSwipe: Boolean = true,
     val glass: GlassAppearance = GlassAppearance(),
     val grayTone: Float = .4f,
+    val lyricDelayMs: Int = 0,
 )
 
 fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f

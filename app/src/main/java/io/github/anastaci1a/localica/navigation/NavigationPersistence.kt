@@ -25,7 +25,8 @@ class InterfacePreferences(context: Context) {
                 preferences.enumValue<TabLensStyle>("tab-lens-style") ?: TabLensStyle.Adjustable,
                 preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f),
                 preferences.getFloat("glass-shape-damping", 8f), preferences.getFloat("glass-depth", 1.35f)).normalized(),
-            grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone())
+            grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone(),
+            lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000))
     }
     fun write(value: InterfaceSettings) {
         require(value.tabs.isNotEmpty() && value.tabs.distinct() == value.tabs)
@@ -36,6 +37,7 @@ class InterfacePreferences(context: Context) {
             .putBoolean("faster-motion", value.fasterMotion).putString("artwork-layout", value.artworkLayout.name)
             .putString("artwork-transition", value.artworkTransition.name).putBoolean("artwork-swipe", value.artworkSwipe)
             .putFloat("gray-tone", value.grayTone.normalizedGrayTone())
+            .putInt("lyric-delay-ms", value.lyricDelayMs.coerceIn(-2000, 2000))
             .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
             .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)
             .putFloat("glass-contrast", glass.contrast).putString("tab-lens-style", glass.tabStyle.name)

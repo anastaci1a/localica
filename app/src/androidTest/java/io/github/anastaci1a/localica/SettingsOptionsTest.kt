@@ -41,6 +41,7 @@ class SettingsOptionsTest {
             // This is the tenth option: scroll it clear of the dialog footer on
             // shorter viewports before injecting an actual touch.
             compose.onNodeWithText("Album Artist").performScrollTo().performClick()
+            compose.onNodeWithText("Select", substring = false).performClick()
             // Dialog windows finish removal asynchronously on Android 16. Wait for the old
             // radio group to close before opening another with overlapping option labels.
             compose.waitUntil(5000) { compose.onAllNodes(hasText("Album Artist") and
@@ -48,6 +49,7 @@ class SettingsOptionsTest {
                     androidx.compose.ui.semantics.Role.RadioButton)).fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("Group album songs").performClick()
             compose.onNodeWithText("Artist").performClick()
+            compose.onNodeWithText("Select", substring = false).performClick()
             compose.onNodeWithText("Quick-search box").assertDoesNotExist()
             compose.onNodeWithText("Only for this collection").performScrollTo().performClick()
             compose.onNodeWithText("Save").performClick()

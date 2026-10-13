@@ -13,6 +13,12 @@ import kotlinx.coroutines.withContext
 class ArtworkReader(private val context: Context) {
     suspend fun read(uri: String, edge: Int = 768): Bitmap? = withContext(Dispatchers.IO) {
         try {
+            val parsed = Uri.parse(uri)
+            if (parsed.scheme == "file") {
+                val file = java.io.File(parsed.path.orEmpty())
+                if (file.canonicalFile.parentFile == java.io.File(context.filesDir, "playlist-covers").canonicalFile && file.length() <= 16 * 1024 * 1024)
+                    return@withContext decodeArtwork(file.readBytes(), edge)
+            }
             val bytes = platformPicture(uri) ?: supplementalPicture(uri)
                 ?: runCatching { ContainerTags.read(context, uri)?.firstArtwork?.binaryData }.getOrNull()
             bytes?.let { decodeArtwork(it, edge) }

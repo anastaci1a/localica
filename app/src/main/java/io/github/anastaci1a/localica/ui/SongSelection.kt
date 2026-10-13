@@ -60,37 +60,45 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
         onDismiss = { adding = null }, onAdded = { adding = null; onSelection(emptySet()) }) }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, controller: PlaylistController?,
     onDismiss: () -> Unit, onAdded: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var chosen by remember { mutableStateOf<String?>(null) }
-    var expanded by remember { mutableStateOf(false) }
-    GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Add ${tracks.size} songs to playlist") }, text = {
-        Column {
-            val pickerAnchor = rememberGlassAnchor()
-            val pickerLabel = state.playlists.firstOrNull { it.id == chosen }?.name ?: "New playlist"
-            SideEffect { pickerAnchor.face = { Text(pickerLabel, Modifier.padding(horizontal = 12.dp), maxLines = 1) } }
-            Box {
-                LiquidGlassSurface(Modifier.glassAnchor(pickerAnchor)) {
-                    pickerAnchor.captureInk()
-                    TextButton(onClick = { expanded = true }) { Text(pickerLabel) }
-                }
-                GlassMenu(expanded, pickerAnchor, { expanded = false }) {
-                    DropdownMenuItem(text = { Text("New playlist") }, onClick = { chosen = null; expanded = false })
-                    state.playlists.forEach { list ->
-                        val contains = tracks.size == 1 && list.entries.any { it.track.id == tracks.single().id }
-                        DropdownMenuItem(text = { Text(list.name,
-                            fontWeight = if (contains) androidx.compose.ui.text.font.FontWeight.Bold else null,
-                            modifier = Modifier.semantics { if (contains) contentDescription = list.name + ", already contains this song" }) },
-                        onClick = { chosen = list.id; expanded = false }) }
+    var name by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var chosen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var saving by remember { mutableStateOf(false) }
+    val duplicate = name.isNotBlank() && !PlaylistEdits.nameAvailable(state.playlists, name)
+    val valid = controller != null && !saving && !state.loading && !duplicate && (name.isNotBlank() || chosen.isNotEmpty())
+    fun add() {
+        if (!valid) return
+        saving = true
+        controller?.addToDestinations(chosen.toSet(), name, tracks) { success -> saving = false; if (success) onAdded() }
+    }
+    GlassAlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("Add to playlists") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            GlassSearchField(name, { name = it }, "New playlist name", enabled = !saving,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }))
+            if (duplicate) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
+            SelectionViewport(Modifier.fillMaxWidth().heightIn(max = 320.dp)) { overscroll ->
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth(), overscrollEffect = overscroll) {
+                items(state.playlists.size, key = { state.playlists[it].id }) { index ->
+                    val playlist = state.playlists[index]
+                    val selected = playlist.id in chosen
+                    Row(Modifier.fillMaxWidth().selectionLens(selected, false)
+                        .then(Modifier.combinedClickable(enabled = !saving, onClick = {
+                            chosen = if (selected) chosen - playlist.id else chosen + playlist.id
+                        })).padding(vertical = 8.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MediaArtwork(listOfNotNull(playlist.coverUri) + playlist.entries.map { it.track.uri }, Modifier.size(44.dp))
+                        Text(playlist.name, Modifier.weight(1f), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        InterfaceCheckbox(selected, null, enabled = !saving)
+                    }
                 }
             }
-            if (chosen == null) GlassTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true)
+            }
             state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-    }, confirmButton = { TextButton(enabled = !state.loading && (chosen != null || name.isNotBlank()), onClick = {
-        val complete: (Boolean) -> Unit = { if (it) onAdded() }
-        chosen?.let { controller?.append(it, tracks, complete) } ?: controller?.create(name, tracks, complete)
-    }) { Text("Add") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    }, confirmButton = { TextButton(enabled = valid, onClick = ::add) { Text("Add") } },
+        dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
 }

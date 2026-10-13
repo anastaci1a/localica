@@ -50,10 +50,20 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
                 path.close(); drawPath(path, color.copy(alpha = color.alpha * alpha))
             }
             if (glyph == TransportGlyph.PlayPause) {
+                if (pause == 0f) {
+                    // One contour avoids a shared antialiased edge in the settled triangle.
+                    drawPath(Path().apply {
+                        moveTo(.2f * size.width, .1f * size.height)
+                        lineTo(.8f * size.width, .5f * size.height)
+                        lineTo(.2f * size.width, .9f * size.height)
+                        close()
+                    }, color)
+                } else {
                 polygon(listOf(Offset(.2f,.1f), Offset(.5f,.3f), Offset(.5f,.7f), Offset(.2f,.9f)),
                     listOf(Offset(.2f,.1f), Offset(.4f,.1f), Offset(.4f,.9f), Offset(.2f,.9f)), pause)
                 polygon(listOf(Offset(.5f,.3f), Offset(.8f,.5f), Offset(.8f,.5f), Offset(.5f,.7f)),
                     listOf(Offset(.6f,.1f), Offset(.8f,.1f), Offset(.8f,.9f), Offset(.6f,.9f)), pause)
+                }
             } else scale(if (glyph == TransportGlyph.Previous) -1f else 1f, 1f) {
                 // Rounded Heroicons wedges; directional keyframes adapted from lucide-animated.
                 // Keep both wedges opaque and stagger their nudge instead of replacing/fading them.

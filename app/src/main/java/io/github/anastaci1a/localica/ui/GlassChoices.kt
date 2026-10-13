@@ -51,7 +51,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
         SelectionLens(Modifier.testTag("choice-lens").offset { androidx.compose.ui.unit.IntOffset(
             if (horizontal) (stride * position.value).roundToInt() else 0,
             if (horizontal) 0 else (stride * position.value).roundToInt()) }.width(width).height(height),
-            position, vertical = !horizontal, pressure = { pressure }, wall = {
+            position, vertical = !horizontal, pressure = { pressure }, contact = { if (dragging) 1f else 0f }, wall = {
                 direction * when { position.value <= .001f -> -1f; position.value >= labels.lastIndex - .001f -> 1f; else -> 0f }
             })
         @Composable fun Item(index: Int, modifier: Modifier) {
@@ -63,7 +63,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                         raw += direction * delta / stride
                         val next = raw.coerceIn(0f, labels.lastIndex.toFloat())
                         pressure = glassEdgePressure(raw - next)
-                        scope.launch(start = CoroutineStart.UNDISPATCHED) { position.snapTo(next) }
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(next)) }
                     }, onEnd = { cancelled ->
                         val next = position.value.roundToInt().coerceIn(labels.indices)
                         pressure = 0f; dragging = false; settleRequest++
