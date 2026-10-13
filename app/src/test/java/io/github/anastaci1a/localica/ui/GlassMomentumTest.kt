@@ -5,6 +5,34 @@ import org.junit.Test
 import kotlin.math.abs
 
 class GlassMomentumTest {
+    @Test fun pressingStoresStrainWithoutAnyBounceAndReleaseOscillatesDepth() {
+        val body = GlassMomentum(2f)
+        var previous = 1f
+        repeat(180) {
+            body.advance(0f, 1f / 120, contact = 1f)
+            assertTrue("Contact must not rebound under the finger", body.shape.thickness <= previous + .000001f)
+            previous = body.shape.thickness
+        }
+        var roseAboveRest = false
+        repeat(120) {
+            body.advance(0f, 1f / 120)
+            roseAboveRest = roseAboveRest || body.shape.thickness > 1.01f
+        }
+        assertTrue("Release returns stored strain through depth", roseAboveRest)
+    }
+
+    @Test fun magneticWellsAreContinuousOrderedAndStrongNearEachOption() {
+        var previous = magneticChoicePosition(-2f)
+        for (i in -1999..5000) {
+            val raw = i / 1000f
+            val next = magneticChoicePosition(raw)
+            assertTrue(next >= previous)
+            assertTrue(next - previous < .004f)
+            previous = next
+        }
+        assertTrue(magneticChoicePosition(.2f) < .05f)
+        assertEquals(.5f, magneticChoicePosition(.5f), .00001f)
+    }
     @Test fun shapeConservesVolumeAndRespondsToStoppingWithoutPositionOvershoot() {
         val body = GlassMomentum()
         var maximum = 0f

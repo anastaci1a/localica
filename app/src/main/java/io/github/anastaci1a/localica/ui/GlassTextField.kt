@@ -1,36 +1,64 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.semantics.error
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.R
 
-/** Shared editable semantics/IME behavior with a wrapping label and glass decoration. */
+/** All editors share clear/focus/keyboard behavior; the trailing action is never a bubble. */
+@Composable internal fun ClearableTextField(value: String, onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier, label: @Composable (() -> Unit)? = null,
+    placeholder: @Composable (() -> Unit)? = null, leadingIcon: @Composable (() -> Unit)? = null,
+    singleLine: Boolean = false,
+    minLines: Int = 1, maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    isError: Boolean = false, enabled: Boolean = true,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    colors: TextFieldColors = TextFieldDefaults.colors()) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val visible by animateFloatAsState(if (value.isEmpty()) 0f else 1f,
+        tween(if (LocalReducedMotion.current) 0 else 140), label = "Clear input")
+    TextField(value, onValueChange, modifier.focusRequester(focus).clearTextFocusOnBack(),
+        label = label, placeholder = placeholder, leadingIcon = leadingIcon,
+        trailingIcon = {
+            if (value.isNotEmpty() || visible > 0f) IconButton(enabled = enabled && value.isNotEmpty(),
+                onClick = { onValueChange(""); focus.requestFocus(); keyboard?.show() },
+                modifier = Modifier.graphicsLayer { alpha = visible }) {
+                Icon(painterResource(R.drawable.ic_close), "Clear text", Modifier.size(22.dp))
+            }
+        }, singleLine = singleLine, minLines = minLines, maxLines = maxLines,
+        isError = isError, enabled = enabled, keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions, colors = colors)
+}
+
 @Composable internal fun GlassTextField(value: String, onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier, label: @Composable (() -> Unit)? = null, singleLine: Boolean = false,
     minLines: Int = 1, maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
-    isError: Boolean = false, enabled: Boolean = true, keyboardOptions: KeyboardOptions = KeyboardOptions.Default) {
+    isError: Boolean = false, enabled: Boolean = true, keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default) {
     val ink = LocalContentColor.current
-    BasicTextField(value, onValueChange, modifier.fillMaxWidth().clearTextFocusOnBack().semantics { if (isError) error("Invalid value") },
-        enabled = enabled, singleLine = singleLine, minLines = minLines, maxLines = maxLines,
-        keyboardOptions = keyboardOptions, textStyle = MaterialTheme.typography.bodyLarge.copy(color = ink),
-        cursorBrush = SolidColor(ink), decorationBox = { input ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (label != null) Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                    CompositionLocalProvider(LocalContentColor provides if (isError) MaterialTheme.colorScheme.error else ink) {
-                        ProvideTextStyle(MaterialTheme.typography.bodyMedium) { label() }
-                    }
-                }
-                LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = 20.dp, pressFeedback = false, shadow = false) {
-                    Box(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 14.dp)) { input() }
-                }
-            }
-        })
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = 28.dp, pressFeedback = false, shadow = false) {
+            ClearableTextField(value, onValueChange, Modifier.fillMaxWidth(), label = label, singleLine = singleLine,
+                minLines = minLines, maxLines = maxLines, isError = isError, enabled = enabled,
+                keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
+                colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent, focusedTextColor = ink, unfocusedTextColor = ink))
+        }
+    }
 }

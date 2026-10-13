@@ -23,6 +23,30 @@ import org.junit.Test
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun adaptiveContrastPreservesBlackToGrayOrderingAtEveryStrength() {
+        org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 33)
+        var strength by mutableFloatStateOf(0f)
+        var whiteTint by mutableFloatStateOf(0f)
+        var dark by mutableStateOf(false)
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
+            io.github.anastaci1a.localica.navigation.GlassAppearance(blur = 0f, whiteTint = whiteTint, contrast = strength, shadowStrength = 0f)) {
+            Box(Modifier.fillMaxSize()) {
+                val source = rememberFrostedBackdrop(Unit, dark = dark)
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    repeat(16) { i -> drawRect(Color(i / 15f, i / 15f, i / 15f), Offset(size.width * i / 16f, 0f), Size(size.width / 16f, size.height)) }
+                }
+                LiquidGlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(80.dp).testTag("ramp"), source,
+                    refraction = 0f, inkOverride = if (dark) Color.White else Color.Black)
+            }
+        } } }
+        for (polarity in listOf(false, true)) for (tint in listOf(0f, .2f, .6f, 1f)) for (contrast in listOf(0f, .4f, 1f)) {
+            compose.runOnIdle { dark = polarity; whiteTint = tint; strength = contrast }
+            val pixels = compose.onNodeWithTag("ramp").captureToImage().toPixelMap()
+            val ramp = (0..15).map { pixels[(pixels.width * (it + .5f) / 16).toInt(), pixels.height / 2].red }
+            assertTrue("No tonal reversal (dark=$polarity tint=$tint contrast=$contrast): $ramp", ramp.zipWithNext().all { (a, b) -> a <= b + .005f })
+        }
+    }
+
     @Test fun tintLiftsShadowsMoreThanHighlightsWithoutBleachingYellow() {
         org.junit.Assume.assumeTrue("Per-pixel tone mapping requires runtime shaders", Build.VERSION.SDK_INT >= 33)
         var tint by mutableFloatStateOf(0f)

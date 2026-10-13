@@ -8,12 +8,12 @@
 
 | Intent | Control and layout | Localica rule |
 | --- | --- | --- |
-| Perform an action | Button with a short verb or familiar symbol | Give contact feedback immediately; activate on valid release. Dragging away or losing the gesture cancels feedback and activation. Keep destructive actions distinct from the ordinary primary action. |
+| Perform an action | Button with a short verb or familiar symbol | Give contact feedback immediately; activate on valid release. Dragging away cancels activation but retains visual pressure until release. Keep destructive actions distinct from the ordinary primary action. |
 | Turn something on/off | Switch at the trailing end of a descriptive row | Make the row tappable and expose one switch to accessibility. Thumb position communicates state as well as track color. A gesture previews the thumb; release commits, cancellation restores the existing state. |
-| Pick one of a few related values | Consistent, equally sized segments | Keep all segments the same kind of choice. Labels describe options; the lens moves between them. Do not combine a command and a selected setting in one group. |
+| Pick one of a few related values | Consistent, equally sized segments | Use inline segments for 2–3 choices when measured labels fit. Keep commands separate from settings. |
 | Switch closely related views | Segmented tabs with a persistent header | Use tab semantics. Sort/View changes the editor beneath it, retaining one shared draft; the choice controls within that editor use selection semantics. |
 | Adjust a bounded quantity | Slider with a label, current value and meaningful endpoints | Track continuously and expose the range/steps to accessibility. Snap only when the setting is discrete. Preserve native keyboard adjustment. Offer a precise entry method when the range requires it. |
-| Choose from a long set | Contextual choice list/picker | Preserve predictable ordering, the selected value and scroll position. Do not squeeze a long list into tiny horizontal segments. |
+| Choose from a long set | Contextual choice list/picker | Stage a draft until Select; Cancel discards it. Both actions sit at bottom right. An enclosing editor retains its separate Save action. |
 | Enter text or an exact number | Labeled field; appropriate keyboard | Keep the label after typing begins, preserve the draft on Back, and report invalid values near the field. Let long labels wrap without escaping the surface. |
 
 Apple's examples favor clear hierarchy and restraint: related buttons have consistent sizing, while prominence comes from treatment rather than an arbitrary size jump. The HIG generally recommends a 44-point iOS button target; Localica retains its **48 dp minimum Android target**. These units and platform conventions are not interchangeable. See the linked [HIG evidence](sources.md#choosing-and-arranging-controls).
@@ -27,7 +27,7 @@ Apple's examples favor clear hierarchy and restraint: related buttons have consi
 | Tracking | Preserve the grabbed point; allow reversal | Position follows input. Changes in momentum drive width/height/depth together; the material samples the track/content beneath it. |
 | Limit | The value stays at its valid endpoint | The contacting edge stays pinned. Additional pull increases compression with diminishing response; it cannot advance the value beyond the range. |
 | Release | Commit according to the control's meaning | Value/action takes effect before the rebound finishes. Continue from the current geometry; a new interaction can interrupt settling. |
-| Cancel | Release outside a button, lose gesture ownership, or receive system cancellation | Remove contact/pressure and recover. A switch/choice restores its committed value. A continuously updating settings slider keeps its last valid value; the playback scrubber has its own explicit cancel-to-live-position rule. |
+| Cancel | Release outside a button, cancel a drag, or receive system cancellation | Remove contact/pressure and recover. A switch/choice restores its committed value. A continuously updating settings slider keeps its last valid value; the playback scrubber has its own explicit cancel-to-live-position rule. |
 | Disabled | No activation or adjustment | Expose disabled semantics and a quiet disabled appearance. Do not react with an active press deformation. |
 
 The general [spring/strain model](specification.md#shape-carries-impact) owns the equations. Control implementations supply position, contact, pressure and orientation; they must not each invent a separate bounce. User damping affects shape recovery, while travel remains constrained. The faster-motion preference changes pacing without creating positional overshoot.
@@ -39,7 +39,7 @@ Apple's WWDC25 demonstration enlarges the thumb into a transparent rounded lens 
 - Use a wide rounded rectangle, a continuous thin track, and crisp nearby value text. Do not obscure the endpoint with blur, a white plate or contrast coating inside the thumb. Sample the track without recursively sampling the thumb itself.
 - A thumb grab preserves its offset. A tap elsewhere on the track can choose a new value using the platform slider behavior; pressure must start from that new location, not the previous value.
 - Match fill, thumb travel, endpoint labels and boundary compression. Horizontal ranges run from logical leading minimum to trailing maximum, including right-to-left layouts. Vertical ranges run from bottom minimum to top maximum.
-- Discrete controls expose ticks, valid steps and matching accessible increments. Continuous controls must not visibly step because values were prematurely rounded for their labels.
+- Discrete controls expose ticks and matching accessible increments, with strong shared magnetic wells between valid stops. Percentage settings use 5% increments; other continuous ranges retain their precision. Thumb motion may preview travel between stops while the saved value stays valid.
 - Reduced Motion keeps direct tracking and state changes, but removes decorative strain and depth changes. Do not substitute a blur animation for the removed movement.
 
 The playback track remains a separate thumbless-at-rest control. Dragging it previews a seek; its shared X target explicitly cancels that preview without pausing playback. Do not silently apply that rollback behavior to every settings slider.
@@ -57,13 +57,13 @@ An actual app capture on Android 16. The still image shows resting optics and la
 
 Switches use a colored capsule track and a rounded thumb. The thumb becomes clear while manipulated or travelling; its quiet white rest finish returns continuously. An interrupted move begins at the visible position. Preserve one semantic on/off value while a drag previews the potential destination; commit once on release. Keep tap and keyboard alternatives equivalent.
 
-Choice lenses use the same motion body, with horizontal or vertical orientation. Pressing another option retargets immediately. Dragging to either end deforms inward from that boundary. Reversing or cancelling must not leave a stranded lens between options. Match the lens footprint, inner padding and target geometry so no gap or clipping appears at rest.
+Choice lenses use the same motion body and magnetic mapping in either orientation, including navigation following a manually swiped page. Pressing another option retargets immediately. At an endpoint, pin the touching edge and cap cross-axis expansion to the container's inset. Reversal/cancellation cannot strand the lens. For fitted navigation tabs, further overdrag also stretches the outer pill toward the pull, fixing its opposite edge and reducing height/depth.
 
 Use one backdrop and avoid a second shadow for an inner thumb/lens when its parent already supplies the control's elevation. Foreground text stays sharp and outside the optical filter. The [surface-role exceptions](specification.md#surface-roles) still apply: Localica's user-requested nested glass is not Apple's general recommendation.
 
 ## Buttons and their destinations
 
-A button's visible shape, press feedback, touch target and accessible action belong to one control. A finger leaving the target—or a parent list winning a drag—ends the press. Retaining an active squish until that finger lifts makes a cancelled control look engaged.
+A button's visible shape, press feedback, touch target and accessible action belong to one control. For non-draggable glass buttons, visual pressure persists when the initiating finger leaves the target and ends on lift/system cancellation. Activation remains independent: releasing outside or losing the tap to a parent gesture must not invoke the action.
 
 For a morphing button, keep the same material identity, source tint and outline throughout expansion and return. A useful destination must not wait for a preliminary bounce. A dismissed panel stops owning input promptly; its visual return may continue while another control responds. Nested destinations return to the persistent ancestor trigger when their temporary source has closed.
 

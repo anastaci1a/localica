@@ -62,6 +62,26 @@ class GlassPressureTest {
     }
 
     @OptIn(ExperimentalLayoutApi::class)
+    @Test fun clearingAnUnfocusedFieldRefocusesAndOpensTheKeyboard() {
+        var value by mutableStateOf("Initial draft")
+        var keyboardVisible = false
+        compose.setContent { LocalicaTheme { Box(Modifier.width(260.dp).padding(top = 60.dp)) {
+            keyboardVisible = WindowInsets.isImeVisible
+            GlassTextField(value, { value = it }, label = { androidx.compose.material3.Text("Draft") })
+        } } }
+        compose.onNodeWithText("Draft").assertIsNotFocused()
+        compose.onNodeWithContentDescription("Clear text").performClick()
+        compose.waitUntil(5000) { keyboardVisible }
+        compose.onNodeWithText("Draft").assertIsFocused()
+        compose.onNodeWithContentDescription("Clear text").assertDoesNotExist()
+        compose.runOnIdle { assertEquals("", value) }
+        compose.onNodeWithText("Draft").performTextInput("Again")
+        compose.onNodeWithContentDescription("Clear text").performClick()
+        compose.onNodeWithText("Draft").assertIsFocused()
+        compose.runOnIdle { assertEquals("", value); assertTrue(keyboardVisible) }
+    }
+
+    @OptIn(ExperimentalLayoutApi::class)
     @Test fun backEndsEditingBeforeClosingItsDialog() {
         var open by mutableStateOf(true)
         var value by mutableStateOf("")

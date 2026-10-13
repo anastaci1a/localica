@@ -260,6 +260,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 // Soft edges reveal the two blended color continuations in the space between covers.
                 cover(frame, swipeOffset)
                 if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
+                // Contrast belongs to the artwork frame so song changes and expansion
+                // blend it with the cover, without a separate one-frame dark backing.
+                if (backgroundProgress > 0f) androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                    val shade = frame.palette.controlShade + ((destination?.visual?.palette?.controlShade ?: frame.palette.controlShade) - frame.palette.controlShade) * swipeFraction
+                    val opacity = shade * backgroundProgress * backgroundReveal * (1f - lyricProgress)
+                    drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = opacity)),
+                        startY = (metadataY - 72.dp).toPx(), endY = (metadataY - 8.dp).toPx()))
+                }
             }
             Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).testTag("artwork-gesture")
                 .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
@@ -310,7 +318,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
                     .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
-                    .graphicsLayer { alpha = lyricProgress * p }, sourcesRequest = sourcesRequest, sourcesAnchor = sourcesAnchor) }
+                    .graphicsLayer { alpha = lyricProgress * p }, sourcesRequest = sourcesRequest, sourcesAnchor = sourcesAnchor,
+                sampledAtMs = state.sampledAtMs, playing = state.isPlaying, speed = state.playbackSpeed,
+                delayMs = settings.lyricDelayMs, durationMs = state.durationMs) }
             val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value
             val subtitleScale = 11f / MaterialTheme.typography.bodyLarge.fontSize.value
             MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f),

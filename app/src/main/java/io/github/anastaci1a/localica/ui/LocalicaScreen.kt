@@ -154,7 +154,7 @@ fun LocalicaScreen(
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
         val route = BrowseRoute(navigation.active, item.ref, item.title)
         artworkStore.seed(route.key, artworkStore.scope(navigation.route.key)?.peek(item.coverUris)
-            ?: io.github.anastaci1a.localica.library.ArtworkCache.peek(item.coverUris))
+            ?: io.github.anastaci1a.localica.library.ArtworkCache.peek(item.coverUris), item)
         navigation = navigation.open(route)
         queueOpen = false; expanded = false; songInfo = false
         navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
@@ -261,7 +261,7 @@ fun LocalicaScreen(
                         { item, songs ->
                             if (item.row != null) queueController?.tap(songs.map { it.track }, songs.indexOfFirst { it.id == item.row.id }, sourceName = "Pinned songs")
                             else openCollection(item)
-                        }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) }, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion)
+                        }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) }, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, playlistController = playlistController, queues = queueController)
                 } else BrowserScreen(library, playlist, route, { navigation = navigation.update(it) },
                     ::openCollection,
                     { settingsCategory = "Folders to scan"; settingsOpen = true }, { rows, index, scope ->
@@ -286,9 +286,10 @@ fun LocalicaScreen(
             .then(if (insideCollection || hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill")) {
-                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], pager.currentPage + pager.currentPageOffsetFraction, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, shadowOpacity = { chromeVisibility * (1f - progress.value) }) { tab ->
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], pager.currentPage + pager.currentPageOffsetFraction, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->
                     navigation = navigation.resetTab(tab)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
+                }) { tab ->
                     keyboard?.hide(); focusManager.clearFocus()
                     navigationScope.launch {
                         val index = settings.tabs.indexOf(tab)

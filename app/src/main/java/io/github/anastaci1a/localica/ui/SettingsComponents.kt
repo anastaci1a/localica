@@ -54,9 +54,11 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
 }
 
 @Composable
-internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = null, enabled: Boolean = true,
+internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = null, enabled: Boolean = true, anchor: GlassAnchor? = null,
     onClick: () -> Unit) {
-    LiquidGlassSurface(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f), cornerRadius = 20.dp, pressFeedback = enabled) {
+    anchor?.captureInk()
+    LiquidGlassSurface(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f)
+        .then(if (anchor == null) Modifier else Modifier.glassAnchor(anchor)), cornerRadius = 20.dp, pressFeedback = enabled) {
         ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } },
             leadingContent = icon?.let { { Icon(painterResource(it), null, Modifier.size(24.dp)) } },
             trailingContent = { Icon(painterResource(R.drawable.ic_back), null, Modifier.size(20.dp).rotate(180f)) },
@@ -68,22 +70,37 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = n
 @Composable
 internal fun SettingsHeading(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp, start = 8.dp))
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp))
 }
 
 @Composable
 internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, label: (T) -> String,
     onDismiss: () -> Unit, onSelect: (T) -> Unit) {
+    var draft by remember { mutableStateOf(choices.firstOrNull { it == selected } ?: choices.firstOrNull() ?: selected) }
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
-            GlassChoices(choices.map(label), choices.indexOf(selected).coerceAtLeast(0)) { index -> onSelect(choices[index]); onDismiss() }
+            GlassChoices(choices.map(label), choices.indexOf(draft).coerceAtLeast(0)) { index -> draft = choices[index] }
         }
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    }, confirmButton = { TextButton(enabled = choices.isNotEmpty(), onClick = { onSelect(draft); onDismiss() }) { Text("Select") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable
 internal fun <T> ChoicePreference(title: String, selected: T, choices: List<T>, label: (T) -> String, onSelect: (T) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    SettingsLink(title, label(selected)) { open = true }
-    if (open) ChoiceDialog(title, choices, selected, label, { open = false }, onSelect)
+    val anchor = rememberGlassAnchor()
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val labels = choices.map(label)
+    val style = MaterialTheme.typography.bodyLarge
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val required = with(density) { (labels.maxOfOrNull { measurer.measure(androidx.compose.ui.text.AnnotatedString(it), style).size.width } ?: 0).toDp() + 32.dp }
+        if (choices.size in 2..3 && required * choices.size <= maxWidth) Column {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            GlassChoices(labels, choices.indexOf(selected).coerceAtLeast(0), horizontal = true) { onSelect(choices[it]) }
+        } else SettingsLink(title, label(selected), anchor = anchor) { open = true }
+    }
+    if (open) CompositionLocalProvider(LocalGlassOrigin provides anchor) {
+        ChoiceDialog(title, choices, selected, label, { open = false }, onSelect)
+    }
 }

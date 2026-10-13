@@ -50,6 +50,15 @@ class QueuePlaybackTest {
                 assertEquals(third.id, queues.state.value.library.activeId)
                 assertEquals("Three", playback.state.value.trackId)
                 assertTrue(playback.state.value.isPlaying)
+                val appended = java.util.concurrent.atomic.AtomicBoolean(false)
+                queues.appendTo(first.id, listOf(io.github.anastaci1a.localica.library.SongRow("extra", tracks[1], "playlist-origin"))) { appended.set(it) }
+                await { appended.get() }
+                val edited = queues.state.value.library.queues.first { it.id == first.id }
+                assertEquals(listOf("One", "Two"), edited.entries.map { it.track.id })
+                assertEquals("playlist-origin", edited.entries.last().sourcePlaylistId)
+                assertEquals(third.id, queues.state.value.library.activeId)
+                assertEquals("Three", playback.state.value.trackId)
+                assertTrue("Appending to an inactive destination preserves playback", playback.state.value.isPlaying)
                 queues.rename(first.id, "Renamed")
                 queues.moveQueue(first.id, 2)
                 await { queues.state.value.library.queues.last().id == first.id }

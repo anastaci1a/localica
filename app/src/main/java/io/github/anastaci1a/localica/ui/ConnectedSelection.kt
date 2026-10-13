@@ -89,7 +89,9 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                 if (!crop.isEmpty) {
                     val at = Offset(floor(crop.left), floor(crop.top))
                     val extent = androidx.compose.ui.unit.IntSize(ceil(crop.right - at.x).toInt(), ceil(crop.bottom - at.y).toInt())
-                    output.renderEffect = optics.effect(local, path, 22.dp.toPx(), strength, origin - at, depth)
+                    val band = (local.minOf { min(it.bounds.width, it.bounds.height) } / 2f).coerceIn(16.dp.toPx(), 72.dp.toPx())
+                    output.renderEffect = optics.effect(local, path, band, strength, origin - at, depth)
+                    output.clip = true
                     output.record(size = extent) { translate(-at.x, -at.y) { drawLayer(layer) } }
                     translate(origin.x, origin.y) { clipPath(path) {
                         translate(at.x - origin.x, at.y - origin.y) { drawLayer(output) }

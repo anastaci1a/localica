@@ -98,21 +98,24 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
 
 @Composable
 private fun PlaylistNameDialog(controller: PlaylistController?, onDismiss: () -> Unit) {
+    val playlists = controller?.state?.collectAsState()?.value ?: PlaylistState()
     var name by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     GlassAlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("New playlist") }, text = {
         Column {
             GlassTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true, enabled = !saving)
+            if (name.isNotBlank() && !PlaylistEdits.nameAvailable(playlists.playlists, name)) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
             if (failed) Text("Couldn’t save the playlist. Try again.", color = MaterialTheme.colorScheme.error)
         }
-    }, confirmButton = { TextButton(enabled = name.isNotBlank() && !saving && controller != null, onClick = {
+    }, confirmButton = { TextButton(enabled = PlaylistEdits.nameAvailable(playlists.playlists, name) && !saving && controller != null, onClick = {
         saving = true; controller?.create(name) { success -> saving = false; failed = !success; if (success) onDismiss() }
     }) { Text("Create") } }, dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable
 internal fun PlaylistImportDialog(preview: PlaylistImportPreview, controller: PlaylistController?, onDismiss: () -> Unit) {
+    val playlists = controller?.state?.collectAsState()?.value ?: PlaylistState()
     var name by remember(preview) { mutableStateOf(preview.name) }
     var saving by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
@@ -134,9 +137,10 @@ internal fun PlaylistImportDialog(preview: PlaylistImportPreview, controller: Pl
                     }
                 }
             }
+            if (name.isNotBlank() && !PlaylistEdits.nameAvailable(playlists.playlists, name)) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
             if (failed) Text("Couldn’t save the playlist. Try again.", color = MaterialTheme.colorScheme.error)
         }
-    }, confirmButton = { TextButton(enabled = name.isNotBlank() && found.isNotEmpty() && !saving && controller != null, onClick = {
+    }, confirmButton = { TextButton(enabled = PlaylistEdits.nameAvailable(playlists.playlists, name) && found.isNotEmpty() && !saving && controller != null, onClick = {
         saving = true; controller?.create(name, found) { success -> saving = false; failed = !success; if (success) onDismiss() }
     }) { Text("Import ${found.size} songs") } }, dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
 }

@@ -60,6 +60,8 @@ class PlayerActionSlotsTest {
         compose.onNodeWithText("Small").performClick()
         compose.onNodeWithTag("custom-slot-1:2").performClick()
         compose.onNode(hasText("Artwork") and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.RadioButton)).performClick()
+        compose.runOnIdle { assertNull(settings.slots[ActionSlot(1, 2)]) }
+        compose.onNodeWithText("Select", substring = false).performClick()
         compose.onNodeWithText("2 rows").performClick()
         compose.runOnIdle { assertEquals(PlayerAction.Artwork, settings.slots[ActionSlot(1, 2)]) }
     }

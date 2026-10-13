@@ -12,6 +12,8 @@ internal class BrowseArtworkScope {
         private set
     private var active = false
     private var prepared: Pair<String, PlayerVisual>? = null
+    var collection: io.github.anastaci1a.localica.browse.BrowserItem? = null
+        private set
 
     private fun current() {
         if (revision != ArtworkCache.revision.value) {
@@ -24,7 +26,9 @@ internal class BrowseArtworkScope {
         if (active && !value) { retained = visible.values.toList(); visible.clear() }
         active = value
     }
-    fun seed(artwork: ArtworkCache.CachedArtwork?) { current(); preview = artwork }
+    fun seed(artwork: ArtworkCache.CachedArtwork?, item: io.github.anastaci1a.localica.browse.BrowserItem? = null) {
+        current(); preview = artwork; collection = item
+    }
     fun peek(uris: List<String>): ArtworkCache.CachedArtwork? {
         current()
         return (visible.values.asSequence() + retained.asSequence()).filter { it.first == uris }
@@ -52,8 +56,8 @@ internal class BrowseArtworkStore {
         keys.forEach { scopes.getOrPut(it) { BrowseArtworkScope() }.activate(it == active) }
     }
     fun scope(key: String) = scopes[key]
-    fun seed(key: String, artwork: ArtworkCache.CachedArtwork?) {
-        scopes.getOrPut(key) { BrowseArtworkScope() }.seed(artwork)
+    fun seed(key: String, artwork: ArtworkCache.CachedArtwork?, item: io.github.anastaci1a.localica.browse.BrowserItem? = null) {
+        scopes.getOrPut(key) { BrowseArtworkScope() }.seed(artwork, item)
     }
 }
 

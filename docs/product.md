@@ -9,7 +9,7 @@ A dependable offline Android player for audio on the device: Musicolet-inspired 
 - Combine user-selected folder trees. Overlapping roots share song identity while retaining alternate access paths. Removing a root never deletes audio or saved playlist/queue occurrences; inaccessible songs remain visible.
 - Albums group by title plus Album Artist, falling back to track Artist. Normalize case and surrounding whitespace; missing metadata forms distinct unknown groups. Artist views use track Artist; folders group by root and relative parent directory. Keep Artist and Album Artist distinct, including compilations.
 - Shared queries provide deterministic search/filter/sort results. Unknown values sort last with stable ties. Collection summaries use earliest known year and summed known duration, marked when partial; date/count rules are [below](#dates-and-listening-statistics).
-- Manual playlists support creation, rename, ordered duplicate occurrences, additions/removals, deletion, and reviewed local M3U/M3U8/PLS imports. Resolve imports against indexed music; review ambiguous/unresolved entries before skipping them. Never fetch remote audio.
+- Manual playlists support unique trimmed, case-insensitive names, ordered duplicate song occurrences, and reviewed local M3U/M3U8/PLS imports. Creation, rename and import reject duplicate names without rewriting legacy duplicates. Add to playlists atomically appends to selected existing destinations and an optional new named playlist. Custom covers are required square crops stored privately; replacement/deletion removes only unreferenced app-owned copies. Resolve imports against indexed music; review ambiguous/unresolved entries before skipping them. Never fetch remote audio.
 - Available playlist songs use current library metadata; unavailable songs retain saved metadata/references. Display search/sort never rewrites saved order. Manual reordering requires the complete, unfiltered saved order.
 
 ## Queues and playback
@@ -52,13 +52,15 @@ Read embedded synced/plain lyrics and same-basename `.lrc` sidecars in the song'
 
 LRC supports offsets/repeated timestamps; ID3 SYLT supports millisecond timing. Frame-count SYLT is unsupported. Use word timing only when a supported source actually supplies it. Presentation and gesture rules: [Artwork and lyrics](interface.md#artwork-and-lyrics).
 
+Timed lyrics interpolate Media3's latency-aware position between samples, freezing during pause/buffering and bounding stale extrapolation. A persisted −2000…+2000 ms correction (50 ms steps; positive means later) changes only lyric highlighting, never seek targets or audio. Do not add a guessed Bluetooth delay: [Media3 already tracks available output timestamps/latency](https://github.com/androidx/media/blob/1.10.1/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/audio/AudioTrackPositionTracker.java); [Android timestamps can be unavailable for a route](https://developer.android.com/reference/android/media/AudioTrack#getTimestamp(android.media.AudioTimestamp)). Physical-device calibration remains necessary for inaccurate outputs.
+
 ## Dates and listening statistics
 
 | Value | Rule |
 | --- | --- |
 | Song added date | First successful indexing; retained on rescan. Existing migrated songs use migration date. Removing and reindexing starts a new date. |
 | Collection dates | Albums/Artists/Album Artists/Folders use earliest added and latest known modification among current distinct songs. |
-| Playlist dates | Creation/import date; modification changes on rename or membership/order edits, not metadata refresh or no-ops. Migrated playlists initially use creation for both. |
+| Playlist dates | Creation/import date; modification changes on rename, cover or membership/order edits, not metadata refresh or no-ops. Migrated playlists initially use creation for both. |
 | Qualified play | Actual listening for 30 seconds or half the duration, whichever is shorter, once per traversal. Exclude paused time and seek jumps. |
 | Traversal | Pauses resume it; automatic repeats, occurrence switches, and explicit restarts at zero begin another. Unqualified partial listening lasts only while the service lives. |
 | Aggregation | Collections sum current distinct songs' counts. Playlist counts follow each queue occurrence's originating playlist, even after queue switches; legacy unknown origins remain unknown. |

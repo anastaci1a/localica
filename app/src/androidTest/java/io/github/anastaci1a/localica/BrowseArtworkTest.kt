@@ -55,7 +55,10 @@ class BrowseArtworkTest {
         var prepared = false
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalBrowseArtwork provides retention) {
             val visual = rememberCollectionVisual("test:delayed-detail", provider)
-            SideEffect { prepared = visual.contentKey != null }
+            SideEffect {
+                prepared = visual.contentKey != null
+                if (!prepared) assertTrue("Thumbnail also seeds the initial gradient", visual.palette.bottom.red > visual.palette.bottom.blue + .3f)
+            }
             ArtworkBlend(visual, Modifier.size(120.dp).testTag("detail"), 240, opacityBlend = true) { frame ->
                 ArtworkImage(frame.artwork, false, Modifier.fillMaxSize())
             }

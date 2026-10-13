@@ -10,8 +10,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 internal data class PlayerPalette(val top: Color, val middle: Color, val bottom: Color, val aspect: Float = 1f,
-    val wash: android.graphics.Bitmap? = null, val softWash: android.graphics.Bitmap? = null)
+    val wash: android.graphics.Bitmap? = null, val softWash: android.graphics.Bitmap? = null, val controlShade: Float = 0f)
 internal val NeutralPalette = PlayerPalette(Color(0xFF424C56), Color(0xFF343C47), Color(0xFF242B34))
+
+/** A bounded memory-only seed: 108 pixels, no resize, decode or blur on the UI thread. */
+internal fun thumbnailPalette(bitmap: android.graphics.Bitmap): PlayerPalette {
+    fun band(part: Int): Color {
+        var r = 0; var g = 0; var b = 0; var count = 0
+        for (y in 0 until 6) for (x in 0 until 6) {
+            val pixel = bitmap.getPixel(((x + .5f) * bitmap.width / 6).toInt().coerceAtMost(bitmap.width - 1),
+                ((part + (y + .5f) / 6) * bitmap.height / 3).toInt().coerceAtMost(bitmap.height - 1))
+            if (android.graphics.Color.alpha(pixel) >= 128) {
+                r += android.graphics.Color.red(pixel); g += android.graphics.Color.green(pixel)
+                b += android.graphics.Color.blue(pixel); count++
+            }
+        }
+        return if (count == 0) Color.DarkGray else lerp(Color(r / count, g / count, b / count), Color.Black, .4f)
+    }
+    return PlayerPalette(band(0), band(1), band(2), bitmap.width.toFloat() / bitmap.height)
+}
 
 @Composable
 internal fun animatedPlayerPalette(palette: PlayerPalette, duration: Int): PlayerPalette {
@@ -40,8 +57,14 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
         return lerp(Color((red / count).toInt(), (green / count).toInt(), (blue / count).toInt()), Color.Black, 0.4f)
     }
     val wash = ArtworkWash.create(sample)
+    var peak = 0f
+    for (y in wash.height / 2 until wash.height step 3) for (x in 0 until wash.width step 3) {
+        val color = wash.getPixel(x, y)
+        peak = maxOf(peak, maxOf(android.graphics.Color.red(color), android.graphics.Color.green(color), android.graphics.Color.blue(color)) / 255f)
+    }
+    val shade = if (peak > .42f) (1f - .42f / peak).coerceAtMost(.6f) else 0f
     PlayerPalette(band(0f, .3f), band(.3f, .7f), band(.7f, 1f), bitmap.width.toFloat() / bitmap.height,
-        wash, blurGlassSnapshot(wash.asImageBitmap(), ArtworkWash.WIDTH * .12f).asAndroidBitmap())
+        wash, blurGlassSnapshot(wash.asImageBitmap(), ArtworkWash.WIDTH * .12f).asAndroidBitmap(), shade)
 }
 
 /** Low-frequency artwork colors and fixed fine grain give a matte surface without a blur dependency. */

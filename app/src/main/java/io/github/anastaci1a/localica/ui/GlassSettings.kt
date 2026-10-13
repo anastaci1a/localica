@@ -14,6 +14,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.graphicsLayer
 
 internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 
@@ -21,7 +23,7 @@ internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
     CompositionLocalProvider(LocalGlassAppearance provides value) {
-        Box(Modifier.fillMaxWidth().height(128.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                 drawRect(Color(0xFFBCDCE7))
@@ -31,9 +33,7 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
                         Offset(i * stripe, 0f), Size(stripe, size.height))
                 }
             }
-            LiquidGlassSurface(Modifier.size(220.dp, 64.dp), source) {
-                Text("Glass preview", Modifier.align(Alignment.Center), style = MaterialTheme.typography.titleMedium)
-            }
+            GlassPreview(source)
         }
     }
     GlassSlider("Blur", value.blur, "Clear", "Frosted") { onChange(value.copy(blur = it)) }
@@ -64,13 +64,53 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
 }
 
 @Composable
+private fun GlassPreview(source: FrostedBackdrop) {
+    var expanded by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
+    var settling by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var raw by remember { mutableFloatStateOf(0f) }
+    val anchor = rememberGlassAnchor()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val travel = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val reduced = LocalReducedMotion.current
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val limit = with(density) { ((maxWidth - 180.dp) / 2).toPx().coerceAtLeast(1f) }
+        val body = rememberGlassBody({ travel.value / limit },
+            pressure = { glassEdgePressure((raw - raw.coerceIn(-limit, limit)) / limit) },
+            contact = { if (pressed) 1f else 0f })
+        SideEffect { anchor.source = source; anchor.face = { Text("Drag preview") } }
+        LiquidGlassSurface(Modifier.offset { androidx.compose.ui.unit.IntOffset(travel.value.toInt(), 0) }
+            .size(180.dp, 56.dp).glassAnchor(anchor).observeGlassContact { pressed = it }
+            .elasticControlDrag(true,
+                onStart = { settling?.cancel(); raw = travel.value }, onDelta = { delta ->
+                    raw += delta
+                    scope.launch { travel.snapTo(raw.coerceIn(-limit, limit)) }
+                }, onEnd = { _ -> raw = raw.coerceIn(-limit, limit)
+                    settling = scope.launch { if (reduced) travel.snapTo(0f) else travel.animateTo(0f, glassMorphSpring(1f)); raw = 0f }
+                }).graphicsLayer {
+                    scaleX = body.value.scaleX(); scaleY = body.value.scaleY()
+                    translationX = (1f - scaleX) * size.width / 2f * (travel.value / limit).coerceIn(-1f, 1f)
+                }, source, pressFeedback = false, body = { body.value }) {
+            anchor.captureInk()
+            Text("Drag preview", Modifier.align(Alignment.Center))
+        }
+        TextButton({ expanded = true }, Modifier.align(Alignment.BottomCenter)) { Text("Expand preview") }
+        GlassMorphPopup(expanded, anchor, { expanded = false }, GlassPlacement.Center) {
+            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Glass preview", style = MaterialTheme.typography.titleLarge)
+                Text("The same surface expands into this panel. Your glass and motion settings apply here too.")
+                TextButton({ expanded = false }, Modifier.align(Alignment.End)) { Text("Collapse preview") }
+            }
+        }
+    }
+}
+
+@Composable
 private fun GlassSlider(label: String, value: Float, low: String, high: String, onChange: (Float) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Text("$label · ${(value * 100).roundToInt()}%", style = MaterialTheme.typography.titleMedium)
         InterfaceSlider(value, onChange, Modifier.semantics { contentDescription = label })
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(low, style = MaterialTheme.typography.bodySmall)
-            Text(high, style = MaterialTheme.typography.bodySmall)
-        }
+        SliderEndpoints(low, high)
     }
 }

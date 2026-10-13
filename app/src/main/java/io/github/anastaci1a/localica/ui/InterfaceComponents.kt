@@ -50,6 +50,7 @@ internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () 
     val icon = when {
         label == "Sort" -> R.drawable.ic_sort
         label == "View options" -> R.drawable.ic_eye
+        label == "Set playlist image" -> R.drawable.ic_albums
         label.contains("Information", true) -> R.drawable.ic_info
         label.startsWith("Delete") || label.startsWith("Remove") -> R.drawable.ic_trash
         label.startsWith("Close") -> R.drawable.ic_close

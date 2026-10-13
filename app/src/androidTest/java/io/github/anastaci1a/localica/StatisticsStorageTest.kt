@@ -44,7 +44,8 @@ class StatisticsStorageTest {
             old.execSQL("INSERT INTO playlist_entries VALUES ('entry','mix',0,?)", arrayOf(TrackSnapshot.encode(song)))
             old.version = 1
         }
-        val db = Room.databaseBuilder(context, PlaylistDatabase::class.java, name).addMigrations(PlaylistDatabase.MIGRATION_1_2).build()
+        val db = Room.databaseBuilder(context, PlaylistDatabase::class.java, name)
+            .addMigrations(PlaylistDatabase.MIGRATION_1_2, PlaylistDatabase.MIGRATION_2_3).build()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         try {
             val controller = PlaylistController(db.playlists(), scope)

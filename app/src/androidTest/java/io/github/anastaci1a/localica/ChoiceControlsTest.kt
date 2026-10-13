@@ -21,8 +21,10 @@ class ChoiceControlsTest {
         compose.setContent { LocalicaTheme {
             BrowseSortDialog(BrowseRoute(MainTab.Songs), BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
         } }
+        compose.onNodeWithText("Sort by").performClick()
         compose.onNodeWithText("Title").assertIsSelected()
         compose.onNodeWithText("Year").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("Select", substring = false).performClick()
         compose.onNodeWithText("Descending").performScrollTo().performClick().assertIsSelected()
         compose.onNodeWithText("Ascending").assertIsNotSelected()
         compose.onNodeWithText("Save").performClick()
@@ -35,13 +37,14 @@ class ChoiceControlsTest {
         compose.setContent { LocalicaTheme {
             BrowseSortDialog(BrowseRoute(MainTab.Albums), BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
         } }
+        compose.onNodeWithText("Sort by").performClick()
         compose.onNodeWithText("Year").performScrollTo().performClick()
+        compose.onNodeWithText("Select", substring = false).performClick()
         compose.onNodeWithText("View", substring = false).performClick().assertIsSelected()
-        compose.onNodeWithText("View mode").performClick()
         compose.onNodeWithText("Gallery", substring = false).performClick()
         compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
         compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
-        compose.onNodeWithText("Year").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("Year").assertIsDisplayed()
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle {
             assertEquals(TrackSort.Year, saved!!.sort)

@@ -55,6 +55,18 @@ internal fun rememberGlassAnchor(): GlassAnchor {
     return remember { GlassAnchor().also { it.ink = ink } }
 }
 
+/** Gallery long-press uses a compact contextual origin, without hiding its whole tile. */
+@Composable internal fun Modifier.contextMenuAnchor(anchor: GlassAnchor): Modifier {
+    val view = LocalView.current
+    val source = LocalFrostedBackdrop.current
+    val edge = with(LocalDensity.current) { 40.dp.toPx() }
+    SideEffect { anchor.source = source; anchor.quiet = true }
+    return onGloballyPositioned {
+        val origin = it.backdropPosition(view)
+        anchor.bounds = Rect(origin + Offset(it.size.width - edge, 0f), Size(edge, edge))
+    }
+}
+
 @Composable
 internal fun GlassAnchor.captureInk() {
     val color = LocalContentColor.current
@@ -117,7 +129,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
         if (reduced) progress.snapTo(if (visible) 1f else 0f)
         else progress.animateTo(if (visible) 1f else 0f,
-            spring(dampingRatio = 1f, stiffness = 650f * speed * speed))
+            glassMorphSpring(speed))
         if (!visible) {
             // The underlying window must draw its restored trigger before the modal
             // disappears. Keep the identical returned surface across that handoff.
@@ -165,7 +177,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 LaunchedEffect(targetHeight, reduced, speed) {
                     if (targetHeight > 0) {
                         if (expandedHeight.value < 0f || reduced) expandedHeight.snapTo(targetHeight.toFloat())
-                        else expandedHeight.animateTo(targetHeight.toFloat(), spring(dampingRatio = .9f, stiffness = 450f * speed * speed))
+                        else expandedHeight.animateTo(targetHeight.toFloat(), glassMorphSpring(speed))
                     }
                 }
                 val page = placement == GlassPlacement.Page
@@ -181,7 +193,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 LaunchedEffect(measuredWidth, reduced, speed) {
                     if (measuredWidth <= 0) return@LaunchedEffect
                     if (expandedWidth.value < 0f || reduced) expandedWidth.snapTo(measuredWidth.toFloat())
-                    else expandedWidth.animateTo(measuredWidth.toFloat(), spring(1f, 650f * speed * speed))
+                    else expandedWidth.animateTo(measuredWidth.toFloat(), glassMorphSpring(speed))
                 }
                 val targetWidth = (expandedWidth.value.takeIf { it > 0f } ?: measuredWidth.takeIf { it > 0 }?.toFloat() ?: widthLimit.toFloat()).roundToInt()
                 val maxHeight = (availableHeight - margin * 2).roundToInt().coerceAtLeast(1)

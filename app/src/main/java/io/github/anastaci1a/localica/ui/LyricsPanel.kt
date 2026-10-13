@@ -41,7 +41,15 @@ internal fun rememberLyrics(track: Track?): LyricsResult? {
 
 @Composable
 internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null) {
+    modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null,
+    sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null) {
+    val lyricClock by produceState(positionMs, positionMs, sampledAtMs, playing, speed, delayMs, durationMs) {
+        do {
+            value = lyricPosition(positionMs, sampledAtMs, android.os.SystemClock.elapsedRealtime(), playing, speed, delayMs, durationMs)
+            if (!playing || sampledAtMs == 0L) break
+            kotlinx.coroutines.delay(32)
+        } while (true)
+    }
     val context = LocalContext.current
     val result = rememberLyrics(track)
     val preferences = remember { context.getSharedPreferences("lyric-sources", 0) }
@@ -69,8 +77,8 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                 // The player closes unavailable lyrics; do not flash an empty-state panel.
                 shown == null -> Spacer(Modifier.fillMaxSize())
                 else -> key(shown.id, shown.document) {
-                    var shownPosition by remember { mutableLongStateOf(positionMs) }
-                    SideEffect { if (shown == source) shownPosition = positionMs }
+                    var shownPosition by remember { mutableLongStateOf(lyricClock) }
+                    SideEffect { if (shown == source) shownPosition = lyricClock }
                     LyricsLines(shown.document, shownPosition, reducedMotion, onSeek, Modifier.fillMaxSize())
                 }
             }

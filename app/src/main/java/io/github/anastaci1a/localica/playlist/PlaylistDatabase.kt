@@ -5,7 +5,8 @@ import io.github.anastaci1a.localica.library.SongRow
 import io.github.anastaci1a.localica.library.TrackSnapshot
 
 @Entity(tableName = "playlists")
-data class PlaylistRecord(@PrimaryKey val id: String, val name: String, val createdAt: Long, @ColumnInfo(defaultValue = "0") val modifiedAt: Long = createdAt)
+data class PlaylistRecord(@PrimaryKey val id: String, val name: String, val createdAt: Long, @ColumnInfo(defaultValue = "0") val modifiedAt: Long = createdAt,
+    val coverUri: String? = null)
 @Entity(tableName = "playlist_entries", foreignKeys = [ForeignKey(entity = PlaylistRecord::class,
     parentColumns = ["id"], childColumns = ["playlistId"], onDelete = ForeignKey.CASCADE)], indices = [Index("playlistId")])
 data class PlaylistEntryRecord(@PrimaryKey val id: String, val playlistId: String, val ordinal: Int, val track: String)
@@ -21,7 +22,7 @@ abstract class PlaylistDao {
     @Query("DELETE FROM playlists WHERE id = :id") protected abstract suspend fun delete(id: String)
     @Transaction open suspend fun read(): List<ManualPlaylist> = readAll().map { stored ->
         ManualPlaylist(stored.playlist.id, stored.playlist.name, stored.playlist.createdAt,
-            stored.entries.sortedBy { it.ordinal }.map { SongRow(it.id, TrackSnapshot.decode(it.track)) }, stored.playlist.modifiedAt)
+            stored.entries.sortedBy { it.ordinal }.map { SongRow(it.id, TrackSnapshot.decode(it.track)) }, stored.playlist.modifiedAt, stored.playlist.coverUri)
     }
     @Transaction open suspend fun save(before: List<ManualPlaylist>, after: List<ManualPlaylist>) {
         val previous = before.associateBy { it.id }
@@ -30,7 +31,7 @@ abstract class PlaylistDao {
         after.forEach { playlist ->
             val old = previous[playlist.id]
             if (old != playlist) {
-                upsert(PlaylistRecord(playlist.id, playlist.name, playlist.createdAt, playlist.modifiedAt))
+                upsert(PlaylistRecord(playlist.id, playlist.name, playlist.createdAt, playlist.modifiedAt, playlist.coverUri))
                 if (old?.entries != playlist.entries) {
                     clear(playlist.id)
                     insert(playlist.entries.mapIndexed { index, row ->
@@ -40,10 +41,15 @@ abstract class PlaylistDao {
         }
     }
 }
-@Database(entities = [PlaylistRecord::class, PlaylistEntryRecord::class], version = 2, exportSchema = true)
+@Database(entities = [PlaylistRecord::class, PlaylistEntryRecord::class], version = 3, exportSchema = true)
 abstract class PlaylistDatabase : RoomDatabase() {
     abstract fun playlists(): PlaylistDao
     companion object {
+        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE playlists ADD COLUMN coverUri TEXT")
+            }
+        }
         val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE playlists ADD COLUMN modifiedAt INTEGER NOT NULL DEFAULT 0")

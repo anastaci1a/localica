@@ -66,7 +66,7 @@ scaleAcross     = exp(-strain - depthStrain / 2)
 scaleDepth      = exp(depthStrain)
 ```
 
-The three scales multiply to one: **approximate volume is preserved** while the footprint and thickness change together. Contact flattens and widens the cap; release can make it taller and narrower. Thickness also changes the rounded optical profile. This is not a fluid simulation or a reconstruction of Apple’s private renderer. Shape damping is independent of constrained travel; [Glass settings](../interface.md#appearance-and-settings) own its defaults/range and resting optical depth. Motion clocks sleep after settling.
+The three scales multiply to one: **approximate volume is preserved** while the footprint and thickness change together. Held contact approaches a shallower, wider cap monotonically, with critical damping; only release permits the user's low-damping rebound. Depth, footprint and refraction oscillate together. This is not a fluid simulation or a reconstruction of Apple’s private renderer. Shape damping is independent of constrained travel; [Glass settings](../interface.md#appearance-and-settings) own its defaults/range and resting optical depth. Motion clocks sleep after settling.
 
 Map strain to the motion axis. A horizontal stop compresses width and expands height; a vertical one does the reverse. Keep the contacting edge pinned (not the center) while deforming inward so the apparent contact does not slide through the wall. Additional pull produces diminishing compression. Release removes pressure and lets the same body settle. Reversal during settling changes its response immediately.
 
@@ -91,13 +91,15 @@ content/backdrop → padded sample → distortion/scattering → contrast suppor
 outline + elevation → one shadow field behind the surface group
 ```
 
-Neighboring glass should share a coherent source without recursively sampling its own output. Sampling a larger region prevents clamped edge streaks. Merged selection shapes preserve unselected holes; diagonal gallery bridges remain disabled. During a future materialization experiment, vary edge height/refraction continuously from flat to curved. Selections intentionally skip that entrance animation until #107 is reviewed.
+Modern lenses derive a normal from a continuous rounded height field, refract through that normal using Snell's law, and offset sampling by the ray's travel through the cap. Resting depth changes curvature as well as displacement; a uniform zoom is insufficient. Use normal-based Fresnel illumination without an inset plate-shaped highlight. Localica uses a water-like refractive index near 1.33 as an artistic starting point, following [PBRT's optics derivation](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission), not an Apple parameter.
+
+Neighboring glass shares a coherent source without recursively sampling its own output. Sample required padding but clip recording and filtered output to their bounds. Merged selections preserve unselected holes; diagonal gallery bridges remain disabled. Selections appear immediately until #107 is reviewed.
 
 Contrast adaptation needs to assess what lies beneath the **glyph area**, not merely the album's average color. Test a white icon over alternating white/black text, a checkerboard and bright moving artwork. Safeguards to verify:
 
 1. Choose foreground polarity and supporting tint together.
 2. Add hysteresis and a short response filter so a scrolling edge does not flicker between black and white.
-3. Bound local tint changes; avoid whole-panel polarity flips on large menus.
+3. Preserve tonal ordering: black must never become lighter than gray under identical settings. Shadow-biased white tint uses a monotonic highlight roll-off; contrast support blends a bounded uniform coating for the chosen ink polarity. Avoid whole-panel polarity flips on large menus.
 4. Offer a robust high-contrast fallback. User customization must not remove accessible semantics or hide selection state.
 
 These are acceptance targets; the existing shader's local brightness adjustment is not proof that they all pass. The [evidence atlas](sources.md#hig--materials-and-color) explains why a universal zero-blur treatment is insufficient.

@@ -25,7 +25,7 @@ class QueueBrowsingTest {
         compose.onNodeWithContentDescription("Minimize queue").performClick()
         compose.runOnIdle { assertTrue(minimized) }
         compose.onNodeWithContentDescription("Queue actions").performClick()
-        compose.onNodeWithText("Delete current queue").assertIsDisplayed()
+        compose.onNodeWithText("Delete", substring = false).assertIsDisplayed()
     }
 
     @Test fun largeQueueSelectorStartsAtPlaybackAndTruncatesConfirmationNames() {
@@ -94,16 +94,21 @@ class QueueBrowsingTest {
             UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).takeScreenshot(java.io.File(context.getExternalFilesDir(null), "queue-selector.png"))
             pressSystemBack()
             compose.onNodeWithContentDescription("Save queue to playlist").performClick()
-            compose.onNodeWithText("New playlist").assertIsDisplayed()
+            compose.onNodeWithText("New playlist name").assertIsDisplayed()
             compose.onNodeWithText("Cancel").performClick()
             compose.onNodeWithTag("list-search-pill").performClick()
             compose.onNode(hasSetTextAction()).performTextInput("First")
             compose.onNodeWithTag("media-${queue.entries[1].id}").assertIsDisplayed()
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Close list search").performClick()
+            pressSystemBack()
+            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
+            pressSystemBack()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertIsDisplayed()
             compose.onNodeWithContentDescription("Sort queue").performClick()
+            compose.onNodeWithText("Sort by").performClick()
             compose.onNodeWithText("Title").performClick()
+            compose.onNodeWithText("Select", substring = false).performClick()
             compose.onNodeWithText("Save").performClick()
             compose.onNodeWithContentDescription("Actions for Second").performClick()
             compose.onNodeWithText("Move up").assertIsNotEnabled()

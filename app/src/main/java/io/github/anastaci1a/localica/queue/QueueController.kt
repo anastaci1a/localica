@@ -187,6 +187,18 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         } catch (failure: Exception) { complete(false); throw failure }
     }
 
+    fun appendTo(id: String, rows: List<io.github.anastaci1a.localica.library.SongRow>, complete: (Boolean) -> Unit = {}) = submit {
+        try {
+            capture()
+            val target = state.value.library.queues.firstOrNull { it.id == id }
+            if (target == null) { complete(false); return@submit }
+            val next = QueueEdits.insert(target, rows.map { it.track }, SongTap.Append, rows.map { it.sourcePlaylistId })
+            save(state.value.library.update(next))
+            if (state.value.library.active?.id == id) activate(null)
+            complete(true)
+        } catch (failure: Exception) { complete(false); throw failure }
+    }
+
     /** Randomize the saved visible order without enabling traversal shuffle. */
     fun randomizedQueue(tracks: List<Track>, sourceName: String, playlistOrigins: List<String?> = emptyList()) = submit {
         val order = tracks.indices.shuffled()

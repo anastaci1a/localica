@@ -40,14 +40,10 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-internal fun magneticTabPosition(raw: Float): Float {
-    val center = raw.roundToInt().toFloat()
-    val delta = raw - center
-    return center + delta * (.12f + 1.76f * abs(delta))
-}
+internal fun magneticTabPosition(raw: Float): Float = magneticChoicePosition(raw)
 
 @Composable
-internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onSelect: (MainTab) -> Unit) {
+internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, onSelect: (MainTab) -> Unit) {
     val reduced = LocalReducedMotion.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -66,6 +62,9 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
         if (notify) selected(tabs[index])
     }
     fun tap(index: Int) {
+        if (tabs[index] == active && abs(page - index) < .001f && !pageDragging) {
+            onReselect(tabs[index]); return
+        }
         requested = index
         focus(index)
         scope.launch {
@@ -95,7 +94,14 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
         val pixels = with(density) { width.toPx() }
         val scroll = rememberScrollState()
         val viewport = with(density) { maxWidth.toPx() }
-        LiquidGlassSurface(Modifier.fillMaxSize().bottomGlassShadow(opacity = shadowOpacity), source, pressFeedback = false, shadow = false, inkOverride = Color.Black, depthScale = BottomPillDepthScale) {}
+        val shell = rememberGlassBody({ 0f }, contact = { if (dragging) 1f else 0f }, pressure = { pressure })
+        LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer {
+            val stretch = if (reduced || !fits) 0f else (-shell.value.strain).coerceIn(0f, .16f) * .25f
+            scaleX = 1f + stretch
+            scaleY = 1f / (1f + stretch)
+            translationX = (if (raw < 0f) -1f else 1f) * size.width * stretch / 2f
+        }.bottomGlassShadow(opacity = shadowOpacity), source, pressFeedback = false, shadow = false,
+            body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale) {}
         Box(Modifier.fillMaxSize().clip(CircleShape)) {
         Box(Modifier.fillMaxHeight().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll, enabled = !fits && !dragging)
             .testTag("tab-scroll").pointerInput(tabs, pixels, viewport, fits) {
@@ -161,7 +167,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
                     contrast = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.contrast)) {
                     SelectionLens(modifier, lens,
-                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, depthScale = BottomPillDepthScale, pressure = { pressure }, wall = {
+                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, depthScale = BottomPillDepthScale,
+                        pressure = { pressure }, contact = { if (dragging) 1f else 0f }, wall = {
                             when {
                                 lens.value <= scroll.value / pixels + .001f -> -1f
                                 lens.value >= minOf(tabs.lastIndex.toFloat(), (scroll.value + viewport) / pixels - 1f) - .001f -> 1f

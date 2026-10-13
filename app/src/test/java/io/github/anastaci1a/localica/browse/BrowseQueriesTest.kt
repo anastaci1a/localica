@@ -7,6 +7,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BrowseQueriesTest {
+    @Test fun successiveSearchEditsMatchCompleteQueriesAndInvalidateWithLibraryMetadata() {
+        val tracks = (0 until 12000).map { index -> Track("$index", "Song $index", artist = "Artist ${index % 31}",
+            album = "Album ${index % 100}", comment = "rare ${index % 23}", fileName = "$index.mp3", relativePath = "Disc/$index.mp3") }
+        val snapshot = LibrarySnapshot(tracks = tracks)
+        val route = BrowseRoute(MainTab.Songs, search = true)
+        val query = LibraryQuery(sort = TrackSort.Title)
+        BrowseQueries.evaluate(snapshot, emptyList(), route, query)
+        val started = System.nanoTime()
+        val answers = listOf("s", "Song 10", "Artist 7 rare 3", "Disc/999", "absent").associateWith {
+            BrowseQueries.evaluate(snapshot, emptyList(), route.copy(text = it), query).rows
+        }
+        println("Five warm 12,000-song searches: ${(System.nanoTime() - started) / 1_000_000} ms")
+        answers.forEach { (text, actual) ->
+            assertEquals(LibraryQueries.rows(tracks.map { SongRow(it.id, it) }, query.copy(text = text)).map { it.id }, actual.map { it.id })
+        }
+        val changed = snapshot.copy(tracks = listOf(tracks.first().copy(title = "Changed")))
+        assertEquals("Changed", BrowseQueries.evaluate(changed, emptyList(), route.copy(text = "Changed"), query).rows.single().track.title)
+    }
     private val tracks = listOf(
         Track("one", "First", album = "Album", albumArtist = "Group", trackNumber = 2, fileName = "one.mp3", relativePath = "one.mp3"),
         Track("two", "Second", album = "Album", albumArtist = "Group", trackNumber = 1, fileName = "two.mp3", relativePath = "two.mp3"))

@@ -55,25 +55,25 @@ internal fun rememberGlassContact(): GlassContact {
 /** Observe touch without consuming it; children retain gesture and accessibility ownership. */
 @Composable
 internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(), onPressed: (Boolean) -> Unit = {}): Modifier {
-    val notify by rememberUpdatedState(onPressed)
     return drawWithContent {
         scale(contact.body.value.scaleX(), contact.body.value.scaleY()) { this@drawWithContent.drawContent() }
-    }.pointerInput(Unit) {
+    }.observeGlassContact { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+}
+
+/** Shared contact lifetime for ordinary buttons and independently draggable glass bodies. */
+@Composable
+internal fun Modifier.observeGlassContact(onPressed: (Boolean) -> Unit): Modifier {
+    val notify by rememberUpdatedState(onPressed)
+    return pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            contact.travel = 0f
-            contact.pressed = true; notify(true)
+            notify(true)
             try {
-                do { val event = awaitPointerEvent(PointerEventPass.Final)
-                    event.changes.firstOrNull { it.id == down.id }?.let { change ->
-                        val outside = change.position.x !in 0f..size.width.toFloat() || change.position.y !in 0f..size.height.toFloat()
-                        val taken = change.isConsumed && change.positionChangeIgnoreConsumed() != Offset.Zero
-                        if (contact.pressed && (outside || taken)) { contact.pressed = false; notify(false) }
-                        if (contact.pressed) contact.travel = (change.position.x - down.position.x) / size.width.coerceAtLeast(1)
-                    }
-                }
-                while (event.changes.any { it.pressed })
-            } finally { contact.pressed = false; notify(false) }
+                // Visual pressure belongs to the initiating finger until it lifts.
+                // Clickable still cancels activation when that finger leaves the target.
+                do { val event = awaitPointerEvent(PointerEventPass.Final) }
+                while (event.changes.any { it.id == down.id && it.pressed })
+            } finally { notify(false) }
         }
     }
 }
@@ -160,10 +160,6 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val radius = (cornerRadius?.toPx() ?: (size.minDimension / 2)).coerceIn(0f, size.minDimension / 2)
             drawRoundRect(Brush.linearGradient(listOf(Color.White.copy(alpha = .85f), Color.White.copy(alpha = .06f),
                 Color.Black.copy(alpha = .2f), Color.White.copy(alpha = .7f))), cornerRadius = CornerRadius(radius), style = Stroke(1.dp.toPx()))
-            val inset = 2.dp.toPx()
-            drawRoundRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .28f), Color.Transparent, Color.White.copy(alpha = .13f))),
-                topLeft = Offset(inset, inset), size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), (size.height - 2 * inset).coerceAtLeast(0f)),
-                cornerRadius = CornerRadius((radius - inset).coerceAtLeast(0f)), style = Stroke(2.dp.toPx()))
         }
         CompositionLocalProvider(LocalContentColor provides (inkOverride ?: if (dark) Color.White else Color(0xFF202124))) { content() }
     }
@@ -171,7 +167,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 
 @RequiresApi(33)
 private class GlassLens {
-    private val shader = android.graphics.RuntimeShader("""
+    private val shader = android.graphics.RuntimeShader(WaterCapOptics + """
         uniform shader scene;
         uniform float2 extent;
         uniform float padding;
@@ -191,25 +187,34 @@ private class GlassLens {
             float2 radial = local - axis;
             float len = max(length(radial), 0.001);
             float t = clamp(len / radius, 0.0, 1.0);
-            float slope = t / sqrt(max(1.04 - t * t, 0.12));
-            float curve = slope * thickness * 0.52;
-            float bend = radius * 0.72 * curve / sqrt(1.0 + curve * curve);
+            // A rounded cap plus a shallow axial crown: no flat plateau or bevel.
+            // Height and its analytic derivative own both refraction and illumination.
+            float2 q = local / max(halfSize, float2(1));
+            float f = max(1.0 - t * t, 0.0004);
+            float g = max(1.0 - 0.125 * dot(q, q), 0.5);
+            float cap = radius * thickness * 0.55;
+            float height = cap * sqrt(f * g);
+            float2 gradient = cap * (g * (-2.0 * radial / (radius * radius))
+                - f * 0.25 * local / max(halfSize * halfSize, float2(1))) / (2.0 * sqrt(f * g));
+            float3 surfaceNormal = normalize(float3(-gradient, 1.0));
+            // Air-to-water Snell refraction, projected onto the backdrop plane.
+            float2 displacement = capDisplacement(surfaceNormal, height);
             float2 normal = radial / len;
             float safeCenter = mix(1.0, smoothstep(halfSize.x * 0.28, halfSize.x * 0.72, abs(local.x)), flatCenter);
-            half4 color = scene.eval(p - normal * bend * power * safeCenter);
-            // A monotonic cubic lifts shadows and protects highlights while retaining
-            // the clear/white endpoints, without another texture or expensive power lookup.
+            half4 color = scene.eval(p + displacement * power * safeCenter);
+            // Monotonic shadow lift. Luma-dependent alpha blending can fold a ramp
+            // back on itself; use an ordered transfer curve, then preserve chroma.
             float backdropLuma = dot(float3(color.rgb), float3(0.2126, 0.7152, 0.0722)) / max(float(color.a), 0.001);
-            float tintWeight = 0.15 + 1.35 * (1.0 - smoothstep(0.05, 0.85, backdropLuma));
-            float lift = whiteTint * (tintWeight + (1.0 - tintWeight) * whiteTint * whiteTint);
-            color.rgb = mix(color.rgb, half3(color.a), half(lift));
-            float light = dot(normal, normalize(float2(-0.55, -1.0)));
-            float rim = pow(t, 12.0) * power;
-            color.rgb = mix(color.rgb, half3(color.a), half(max(light, 0.0) * rim * 0.55));
-            color.rgb *= half(1.0 - max(-light, 0.0) * rim * 0.16);
-            float luminance = dot(float3(color.rgb), float3(0.2126, 0.7152, 0.0722));
-            float correction = contrast * 0.88 * (darkInk > 0.5 ? 1.0 - luminance : luminance);
-            color.rgb = mix(color.rgb, half3(darkInk * float(color.a)), half(correction));
+            float luma = clamp(backdropLuma, 0.0, 1.0);
+            float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
+            float lift = (lifted - luma) / max(1.0 - luma, 0.001);
+            color.rgb = mix(color.rgb, half3(color.a), half(clamp(lift, 0.0, 1.0)));
+            float light = dot(surfaceNormal, normalize(float3(-0.55, -1.0, 1.2)));
+            float fresnel = capFresnel(surfaceNormal);
+            color.rgb = mix(color.rgb, half3(color.a), half(max(light, 0.0) * fresnel * power * 0.55));
+            color.rgb *= half(1.0 - max(-light, 0.0) * fresnel * power * 0.12);
+            // Constant bounded support preserves ordering, including translucent pixels.
+            color.rgb = mix(color.rgb, half3(darkInk * float(color.a)), half(contrast * 0.72));
             return color;
         }
     """.trimIndent())

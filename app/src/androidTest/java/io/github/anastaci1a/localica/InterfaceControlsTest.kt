@@ -105,7 +105,7 @@ class InterfaceControlsTest {
         compose.runOnIdle { assertEquals(4f, value) }
     }
 
-    @Test fun leavingAButtonEndsPressFeedbackBeforeRelease() {
+    @Test fun leavingAButtonKeepsPressureUntilReleaseWithoutActivatingIt() {
         lateinit var contact: GlassContact
         var clicks = 0
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize().padding(40.dp)) {
@@ -116,8 +116,8 @@ class InterfaceControlsTest {
         compose.onNodeWithTag("press").performTouchInput { down(center) }
         compose.runOnIdle { assertTrue(contact.pressed) }
         compose.onNodeWithTag("press").performTouchInput { moveBy(Offset(width * 2f, 0f)) }
-        compose.runOnIdle { assertFalse(contact.pressed) }
+        compose.runOnIdle { assertTrue(contact.pressed) }
         compose.onNodeWithTag("press").performTouchInput { up() }
-        compose.runOnIdle { assertEquals(0, clicks); assertEquals(1f, contact.body.value.scaleX(), .001f) }
+        compose.runOnIdle { assertFalse(contact.pressed); assertEquals(0, clicks); assertEquals(1f, contact.body.value.scaleX(), .001f) }
     }
 }
