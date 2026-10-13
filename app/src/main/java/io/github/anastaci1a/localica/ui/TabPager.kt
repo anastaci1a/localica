@@ -9,7 +9,7 @@ import io.github.anastaci1a.localica.navigation.MainTab
 
 /** Only page navigation waits longer for horizontal intent. Child lists/shelves keep normal slop. */
 @Composable
-internal fun TabPager(state: PagerState, tabs: List<MainTab>, modifier: Modifier = Modifier,
+internal fun TabPager(state: PagerState, tabs: () -> List<MainTab>, modifier: Modifier = Modifier,
     userScrollEnabled: Boolean = true, content: @Composable PagerScope.(Int) -> Unit) {
     val normal = LocalViewConfiguration.current
     val deliberate = remember(normal) { object : ViewConfiguration by normal {
@@ -17,7 +17,7 @@ internal fun TabPager(state: PagerState, tabs: List<MainTab>, modifier: Modifier
     } }
     CompositionLocalProvider(LocalViewConfiguration provides deliberate) {
         HorizontalPager(state, modifier, userScrollEnabled = userScrollEnabled,
-            beyondViewportPageCount = 1, key = { tabs[it].name }) { page ->
+            beyondViewportPageCount = 1, key = { tabs()[it].name }) { page ->
             CompositionLocalProvider(LocalViewConfiguration provides normal) { content(page) }
         }
     }
