@@ -45,13 +45,24 @@ internal class LensRenderer {
             float2 middle = (bounds.xy + bounds.zw) * 0.5;
             float2 halfSize = (bounds.zw - bounds.xy) * 0.5;
             float2 local = p - middle;
-            float2 q = abs(local) - halfSize + corner;
-            float2 positive = max(q, 0.0);
-            float outside = length(positive);
-            float distance = corner - outside - min(max(q.x, q.y), 0.0);
-            float2 inward = outside > 0.0001 ? -sign(local) * positive / outside
-                : (q.x > q.y ? float2(-sign(local.x), 0) : float2(0, -sign(local.y)));
-            return float3(distance, inward);
+            float2 q = abs(local);
+            if (dot(q, q) < 0.0000001) return float3(span, 0, 0);
+            float2 core = halfSize - corner;
+            float t;
+            float2 gradient;
+            if (q.y * halfSize.x <= q.x * core.y) {
+                t = q.x / halfSize.x; gradient = float2(1.0 / halfSize.x, 0);
+            } else if (q.x * halfSize.y <= q.y * core.x) {
+                t = q.y / halfSize.y; gradient = float2(0, 1.0 / halfSize.y);
+            } else {
+                float b = dot(q, core);
+                float c = dot(q, q);
+                float a = dot(core, core) - corner * corner;
+                t = c / max(b + sqrt(max(b * b - a * c, 0.0)), 0.000001);
+                float2 normal = q - core * t;
+                gradient = normal / max(dot(normal, core) + t * corner * corner, 0.000001);
+            }
+            return float3(span * (1.0 - t), -sign(local) * gradient * span);
         }
         half4 main(float2 p) {
             if (foregroundOffset > 0.0 && (p.x >= outputSize.x || p.y >= outputSize.y)) return half4(0);
@@ -61,7 +72,8 @@ internal class LensRenderer {
             float root = sqrt(max(1.0 - u * u, 0.0004));
             float opticalDepth = depth / sqrt(1.0 + depth * depth / 4.0);
             float crown = span * 0.62 * opticalDepth;
-            float slope = crown / max(span, 0.001) * u / root;
+            float height = crown * root * (1.0 + 0.4 * u * u);
+            float slope = crown / max(span, 0.001) * u / root * (0.2 + 1.2 * u * u);
             float3 normal = normalize(float3(-f.yz * slope, 1.0));
             // A selected row is foreground on the lens, like a button's label.
             // Its atlas entry stays sharp while the separate backing refracts.
@@ -71,7 +83,7 @@ internal class LensRenderer {
                 float3 ray = refract(float3(0, 0, -1), normal, 1.0 / 1.33);
                 float2 exiting = ray.xy * 1.33;
                 float exitZ = sqrt(max(1.0 - dot(exiting, exiting), 0.01));
-                float2 displacement = (ray.xy * crown * root / max(-ray.z, 0.12)
+                float2 displacement = (ray.xy * height / max(-ray.z, 0.12)
                     + exiting * span * 0.32 * opticalDepth / exitZ) * power;
                 float2 lookup = p + displacement;
                 if (foregroundOffset > 0.0) {

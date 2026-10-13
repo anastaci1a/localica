@@ -1,15 +1,20 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import io.github.anastaci1a.localica.navigation.MainTab
+import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.TabLensStyle
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -17,6 +22,35 @@ import org.junit.Test
 
 class SlidingTabsTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun overlayLensDoesNotRefractOrDuplicateItsForegroundLabels() {
+        var style by mutableStateOf(TabLensStyle.Classic)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style, whiteTint = 0f,
+                blur = 0f, contrast = 0f, shadowStrength = 0f)) {
+                val source = rememberFrostedBackdrop(Unit)
+                Box(Modifier.size(300.dp, 64.dp).testTag("tabs")) {
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(source).background(Color.White))
+                    CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+                        SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, 0f) {}
+                    }
+                }
+            }
+        } }
+        val node = compose.onNodeWithTag("tabs")
+        val before = node.captureToImage().toPixelMap()
+        compose.runOnIdle { style = TabLensStyle.Overlay }
+        val after = node.captureToImage().toPixelMap()
+        fun accent(c: Color) = c.red - c.green > .2f && c.red - c.blue > .15f
+        var ink = 0
+        var disagreement = 0
+        for (y in 0 until before.height) for (x in 0 until before.width / 2) {
+            val old = accent(before[x, y]); val next = accent(after[x, y])
+            if (old || next) ink++
+            if (old != next) disagreement++
+        }
+        assertTrue("Fixture must contain a visible selected icon and label", ink > 100)
+        assertTrue("Glass must not move or duplicate accent ink: $disagreement/$ink", disagreement < ink * .03f)
+    }
     @Test fun onlyTappingTheSettledCurrentTabRequestsReselection() {
         val tabs = listOf(MainTab.Home, MainTab.Library)
         var active by mutableStateOf(MainTab.Home)

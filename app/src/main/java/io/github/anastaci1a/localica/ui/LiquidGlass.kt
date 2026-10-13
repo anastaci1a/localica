@@ -90,7 +90,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     cornerRadius: Dp? = null, frostProgress: Float = 0f, pressFeedback: Boolean = true, refraction: Float = 1f, inkOverride: Color? = null, shadow: Boolean = true,
     body: () -> GlassShape = { GlassShape() }, panelProgress: Float = 0f, panelDark: Boolean? = null, depthScale: Float = modifier.glassDepthScale(),
     homeSource: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
-    content: @Composable BoxScope.() -> Unit = {}) {
+    content: (@Composable BoxScope.() -> Unit)? = null) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
@@ -165,17 +165,35 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 (cornerRadius?.toPx() ?: size.minDimension / 2f).coerceIn(0f, size.minDimension / 2f))
             val depth = appearance.depth * depthScale * body().thickness *
                 (if (pressFeedback || anchor != null) contact.body.value.thickness else 1f)
-            val offset = origin - (source?.origin ?: origin)
             val home = if (homeSource?.lensSnapshot != null || homeSource?.snapshot != null) homeWeight().coerceIn(0f, 1f) else 0f
-            val blendSources = home > 0f && home < 1f
-            if (blendSources) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
+            // Blur and tint are independent endpoints. Premultiplied addition
+            // preserves opacity while either varies, including a source handoff.
+            val samples = mutableListOf<Triple<FrostedBackdrop, ImageBitmap, Float>>()
+            fun samples(backing: FrostedBackdrop?, weight: Float) {
+                if (backing == null || weight <= 0f) return
+                val clear = backing.glassFallback ?: backing.snapshot ?: return
+                val tinted = backing.lensSnapshot ?: clear
+                val frosted = backing.fallback ?: clear
+                val tintedFrost = backing.lensFrostSnapshot ?: frosted
+                val images = linkedMapOf<ImageBitmap, Float>()
+                fun add(image: ImageBitmap, amount: Float) {
+                    if (amount > 0f) images[image] = (images[image] ?: 0f) + amount * weight
+                }
+                add(tinted, (1f - frost) * (1f - panel))
+                add(clear, (1f - frost) * panel)
+                add(tintedFrost, frost * (1f - panel))
+                add(frosted, frost * panel)
+                images.forEach { (image, amount) -> samples += Triple(backing, image, amount) }
+            }
+            samples(source, 1f - home); samples(homeSource, home)
+            val blending = samples.size > 1
+            if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
             with(mesh) {
-                draw(shape, source?.lensSnapshot ?: source?.snapshot, source?.size ?: androidx.compose.ui.unit.IntSize.Zero,
-                    offset, depth, refraction, 1f - home, lighting = false)
-                if (home > 0f && homeSource != null) draw(shape, homeSource.lensSnapshot ?: homeSource.snapshot, homeSource.size,
-                    origin - homeSource.origin, depth, refraction, home, lighting = false, additive = blendSources)
-                if (blendSources) drawContext.canvas.restore()
-                if (frost > 0f && source?.fallback != null) draw(shape, source.fallback, source.size, offset, depth, refraction, frost, lighting = false)
+                samples.forEachIndexed { index, (backing, image, amount) ->
+                    draw(shape, image, backing.size, origin - backing.origin, depth, refraction,
+                        amount, lighting = false, additive = index > 0)
+                }
+                if (blending) drawContext.canvas.restore()
                 draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth, refraction)
             }
         }
@@ -185,7 +203,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 
         }
         val ink = inkOverride ?: if (dark) Color.White else Color(0xFF202124)
-        CompositionLocalProvider(LocalContentColor provides ink) {
+        if (content != null) CompositionLocalProvider(LocalContentColor provides ink) {
             Box(Modifier.lensInkSupport(ink, appearance.contrast * (1f - panel)), content = content)
         }
     }

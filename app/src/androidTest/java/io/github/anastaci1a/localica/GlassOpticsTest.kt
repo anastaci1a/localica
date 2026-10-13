@@ -39,6 +39,9 @@ class GlassOpticsTest {
                 Column(Modifier.align(Alignment.Center), verticalArrangement = Arrangement.spacedBy(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     LiquidGlassSurface(Modifier.size(260.dp, 64.dp), source, pressFeedback = false) { Text("Curved pill", Modifier.align(Alignment.Center)) }
                     LiquidGlassSurface(Modifier.size(96.dp), source, pressFeedback = false) { Text("Lens", Modifier.align(Alignment.Center)) }
+                    LiquidGlassSurface(Modifier.size(260.dp, 160.dp), source, cornerRadius = 24.dp, pressFeedback = false) {
+                        Text("Panel crown", Modifier.align(Alignment.Center))
+                    }
                 }
             }
         } } }

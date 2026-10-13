@@ -20,31 +20,31 @@ internal fun curvedLensMesh(shape: LensGeometry, density: Float): LensMeshGeomet
     var cursor = 0
     for (ring in 0..rings) {
         val fraction = ring.toFloat() / rings
-        val distance = shape.span * fraction * fraction
-        val r = (radius - distance).coerceAtLeast(0f)
-        val left = bounds.left + distance; val right = bounds.right - distance
-        val top = bounds.top + distance; val bottom = bounds.bottom - distance
-        fun point(x: Float, y: Float, nx: Float, ny: Float) {
+        val scale = 1f - fraction * fraction
+        val r = radius * scale
+        val left = bounds.center.x - bounds.width * scale / 2f; val right = bounds.center.x + bounds.width * scale / 2f
+        val top = bounds.center.y - bounds.height * scale / 2f; val bottom = bounds.center.y + bounds.height * scale / 2f
+        fun point(x: Float, y: Float) {
             vertices[cursor++] = x; vertices[cursor++] = y
-            fields += LensField(distance, Offset(nx, ny))
+            fields += shape.field(Offset(x, y))
         }
-        fun line(x: Float, y: Float, dx: Float, dy: Float, count: Int, nx: Float, ny: Float) {
-            for (i in 0 until count) point(x + dx * i / count, y + dy * i / count, nx, ny)
+        fun line(x: Float, y: Float, dx: Float, dy: Float, count: Int) {
+            for (i in 0 until count) point(x + dx * i / count, y + dy * i / count)
         }
         fun corner(x: Float, y: Float, quadrant: Int) {
             for (i in 0 until arc) {
                 val angle = (quadrant + i.toFloat() / arc) * PI.toFloat() / 2
                 val nx = cos(angle); val ny = sin(angle)
-                point(x + r * nx, y + r * ny, -nx, -ny)
+                point(x + r * nx, y + r * ny)
             }
         }
-        line(left + r, top, right - left - 2 * r, 0f, horizontal, 0f, 1f)
+        line(left + r, top, right - left - 2 * r, 0f, horizontal)
         corner(right - r, top + r, -1)
-        line(right, top + r, 0f, bottom - top - 2 * r, vertical, -1f, 0f)
+        line(right, top + r, 0f, bottom - top - 2 * r, vertical)
         corner(right - r, bottom - r, 0)
-        line(right - r, bottom, -(right - left - 2 * r), 0f, horizontal, 0f, -1f)
+        line(right - r, bottom, -(right - left - 2 * r), 0f, horizontal)
         corner(left + r, bottom - r, 1)
-        line(left, bottom - r, 0f, -(bottom - top - 2 * r), vertical, 1f, 0f)
+        line(left, bottom - r, 0f, -(bottom - top - 2 * r), vertical)
         corner(left + r, top + r, 2)
     }
     val indices = ShortArray(rings * perimeter * 6)
