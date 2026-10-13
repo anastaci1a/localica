@@ -145,7 +145,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                         val path = Path().apply { addRoundRect(RoundRect(left, 4.dp.toPx(),
                             left + pixels - 8.dp.toPx(), size.height - 4.dp.toPx(), CornerRadius(size.height / 2))) }
                         clipPath(path, if (interactive) ClipOp.Difference else ClipOp.Intersect) { this@drawWithContent.drawContent() }
-                    }) {
+                    }.lensInkSupport(color, appearance.contrast)) {
                     tabs.forEach { tab ->
                         Column(Modifier.width(width).padding(4.dp).fillMaxHeight()
                             .then(if (interactive) Modifier.selectable(active == tab,
