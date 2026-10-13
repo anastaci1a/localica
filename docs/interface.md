@@ -15,7 +15,7 @@ Use the supplied `localica-reference` screenshots for structure: Apple Music nav
 
 - Gestures track slow drags, reversals and interruptions, settling by distance/velocity. Keep the original owner until release: sliders, lyrics, reordering, carousels and overflow bars must not swipe the parent, even at an edge. Short-screen scrolling takes precedence; one gesture changes one surface level.
 - Presses, morphs and selectors share interruptible deformation driven by acceleration and held pressure. Position stops at the destination; width/height/depth convey impact at approximately constant volume. Edge compression pins the contacting edge, saturates smoothly and relaxes on release. Contact flattens the lens; release rebounds with the same damping. Reduced motion removes deformation.
-- Glass shape morphs remain visible for roughly 500 ms at normal speed and 350 ms with Faster animations; Reduce motion removes the morph. Other surfaces use about 300 ms and lyrics 260 ms. Retain exit drawing until handoff, but dismissed menus immediately release input. Full settings/editor/artwork pages slide/fade. Programmatic scrolling stops without overshoot; long journeys skip their distant middle and finish within about 500 ms. Touch cancels scrolling.
+- Glass shape morphs remain visible for roughly 500 ms at normal speed and 350 ms with Faster animations; Reduce motion removes the morph. Other surfaces use about 300 ms and lyrics 260 ms. Retain exit drawing until handoff, but dismissed menus immediately release input. Full settings/editor/artwork pages slide/fade. Programmatic scrolling stops without overshoot; long journeys virtualize each frame’s crossed distance along one continuous ease and finish within about 500 ms. Touch cancels scrolling.
 - Keep focus stable, accessible/tap alternatives available, and layouts usable in landscape, large fonts and short screens. Long titles pause, scroll and fade at their edges; reduced motion uses ellipsis. Shared glass text fields wrap labels and retain native editing semantics. A plain trailing X fades in only for nonempty text; clearing keeps or restores focus and the keyboard.
 
 ### Appearance and settings
@@ -31,7 +31,7 @@ Settings categories are Interface, Playback and queues, Library and tags, About/
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |
-| Adaptive contrast | White/black tint supports the chosen foreground on floating controls/navbar; media selections remain untinted. |
+| Adaptive contrast | Stable ink polarity and soft glyph-local white/black support preserve foreground readability; media selections remain untinted. |
 | Navigation selector | Adjustable glass has independent blur/tint; Clear overlay refracts the finished bar/labels and disables but retains those values; Classic gray pill has no glass deformation. |
 
 These controls affect floating glass. Queue frost remains independent.

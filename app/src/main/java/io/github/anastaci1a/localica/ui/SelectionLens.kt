@@ -28,7 +28,6 @@ internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, Animati
             translationY = if (vertical) glassWallTranslation(size.height, scaleY, wall()) else 0f
         }, source = source, pressFeedback = false, shadow = false,
             body = { body.value }, depthScale = depthScale,
-            inkOverride = if (preserveAppearance) androidx.compose.ui.graphics.Color.Black else null,
-            protectCenter = preserveAppearance && LocalGlassAppearance.current.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Overlay) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
+            inkOverride = if (preserveAppearance) androidx.compose.ui.graphics.Color.Black else null) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
     }
 }

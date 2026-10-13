@@ -78,8 +78,13 @@ class GlassAppearanceTest {
         val blurred = nearBoundary()
         assertTrue("Frost scatters both sides: $blurred", blurred.red > .2f && blurred.blue > .2f)
         compose.runOnIdle { appearance = appearance.copy(whiteTint = .5f) }
+        compose.waitUntil(5000) { nearBoundary().green > blurred.green + .3f }
         val tinted = nearBoundary()
-        assertTrue("White tint is independent of scattering: $tinted", tinted.green > .45f)
+        val luminance = .2126f * blurred.red + .7152f * blurred.green + .0722f * blurred.blue
+        val lifted = 1f - (1f - luminance) * .5f / (1f - .5f * luminance)
+        val mix = (lifted - luminance) / (1f - luminance)
+        assertEquals("White tint follows the ordered shadow lift independently of scattering",
+            blurred.green + (1f - blurred.green) * mix, tinted.green, .025f)
         val adaptive = compose.onNodeWithTag("adaptive-ink").captureToImage().toPixelMap()
         val contrasting = adaptive[adaptive.width / 2, adaptive.height / 4]
         assertTrue("Heavy white tint needs dark foreground contrast: $contrasting", contrasting.red < .2f)
@@ -87,6 +92,9 @@ class GlassAppearanceTest {
         val black = ink[ink.width / 2, ink.height * 3 / 4]
         assertTrue("Foreground is never blurred or tinted: $black", black.red + black.green + black.blue < .03f)
         compose.runOnIdle { appearance = GlassAppearance(0f, 0f, 1f, 1f, contrast = 0f) }
+        // Older adapters prepare a shared optical snapshot off Main. Wait for
+        // the requested clear material, as above for blur/tint, before comparing.
+        compose.waitUntil(5000) { nearBoundary().red > .95f && nearBoundary().blue < .05f }
         assertTrue("Shadow cannot darken the clear center", nearBoundary().red > .95f)
         fun outsideBrightness(): Float {
             val scene = compose.onNodeWithTag("scene").captureToImage().toPixelMap()

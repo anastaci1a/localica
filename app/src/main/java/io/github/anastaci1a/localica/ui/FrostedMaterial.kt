@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -30,14 +31,17 @@ import kotlinx.coroutines.withContext
 /** A recorded scene, independent of every surface that samples it. Never record a surface
  * into its own source: the player and its lyric background use separate sources. */
 @Stable
-internal class FrostedBackdrop(val layer: GraphicsLayer, val dark: Boolean) {
+internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
+    var dark by mutableStateOf(dark)
     var origin by mutableStateOf(Offset.Zero)
     var size by mutableStateOf(IntSize.Zero)
     var fallback by mutableStateOf<ImageBitmap?>(null)
     var snapshot by mutableStateOf<ImageBitmap?>(null)
+    var contrastPixels by mutableStateOf<PixelMap?>(null)
     var glassFallback by mutableStateOf<ImageBitmap?>(null)
+    var lensSnapshot by mutableStateOf<ImageBitmap?>(null)
     var revision by mutableIntStateOf(0)
-    fun refresh() { if (Build.VERSION.SDK_INT < 31) revision++ }
+    fun refresh() { revision++ }
 }
 internal val LocalFrostedBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
 internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
@@ -46,19 +50,34 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true,
     glassBlur: Float = LocalGlassAppearance.current.blur): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
-    val source = remember(layer, dark) { FrostedBackdrop(layer, dark) }
+    // A shared scene is sampled by many lenses. Retain its raster, not just its
+    // display list, so every lens does not replay all of the scene's drawing.
+    SideEffect { layer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen }
+    val contrastLayer = rememberGraphicsLayer()
+    val source = remember(layer) { FrostedBackdrop(layer, dark) }
+    SideEffect { source.dark = dark }
     // Android 8–11 have no RenderEffect. Read back only when the scene/size changes,
     // then scatter a small snapshot off the main thread; never blur on each gesture frame.
     LaunchedEffect(source, key, source.size, source.revision, enabled) {
-        if (Build.VERSION.SDK_INT < 31 && enabled && source.size != IntSize.Zero) {
+        if (enabled && source.size != IntSize.Zero) {
             suspend fun capture() {
                 withFrameNanos { }; withFrameNanos { }
                 // Layout can exist before the first recorded draw, or survive a restored
                 // player layer briefly. ImageReader rejects a zero-sized recording.
                 if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return
-                val snapshot = source.layer.toImageBitmap()
-                source.snapshot = snapshot
-                source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
+                if (Build.VERSION.SDK_INT >= 33) {
+                    val extent = IntSize(48, (48f * source.size.height / source.size.width).toInt().coerceIn(1, 96))
+                    contrastLayer.record(androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr, extent) {
+                        scale(extent.width.toFloat() / source.size.width,
+                            extent.height.toFloat() / source.size.height, Offset.Zero) { drawLayer(source.layer) }
+                    }
+                    source.contrastPixels = contrastLayer.toImageBitmap().toPixelMap()
+                } else {
+                    val snapshot = source.layer.toImageBitmap()
+                    source.contrastPixels = withContext(Dispatchers.Default) { snapshot.toPixelMap() }
+                    source.snapshot = snapshot
+                    source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
+                }
             }
             capture()
             // Artwork/lyrics may still be easing when the new scene key is published.
@@ -68,14 +87,17 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
         }
     }
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() } * glassBlur.coerceIn(0f, 1f)
-    LaunchedEffect(source, source.snapshot, blurRadius) {
-        if (Build.VERSION.SDK_INT < 31) {
+    val whiteTint = LocalGlassAppearance.current.whiteTint
+    LaunchedEffect(source, source.snapshot, blurRadius, whiteTint) {
+        if (Build.VERSION.SDK_INT < 33) {
             val snapshot = source.snapshot
-            if (blurRadius == 0f || snapshot == null) source.glassFallback = null
+            if (snapshot == null) { source.glassFallback = null; source.lensSnapshot = null }
             else {
                 // Coalesce slider movement; each recorded source shares one prepared bitmap.
                 kotlinx.coroutines.delay(32)
-                source.glassFallback = withContext(Dispatchers.Default) { blurGlassSnapshot(snapshot, blurRadius) }
+                val blurred = if (blurRadius == 0f) snapshot else withContext(Dispatchers.Default) { blurGlassSnapshot(snapshot, blurRadius) }
+                source.glassFallback = blurred.takeIf { blurRadius > 0f }
+                source.lensSnapshot = withContext(Dispatchers.Default) { tintLensSnapshot(blurred, whiteTint) }
             }
         }
     }
@@ -94,6 +116,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
     enabled: Boolean = true): Modifier {
     val view = LocalView.current
     return onGloballyPositioned { source.origin = it.backdropPosition(view); source.size = it.size }
+        .graphicsLayer()
         .drawWithContent {
             if (!enabled) {
                 drawContent()

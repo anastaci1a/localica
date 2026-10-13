@@ -25,12 +25,12 @@ class GlassOpticsTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched() {
-        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)
         var depth by mutableFloatStateOf(.6f)
+        lateinit var source: FrostedBackdrop
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
             GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f, depth = depth)) {
             Box(Modifier.size(320.dp, 420.dp).testTag("optics")) {
-                val source = rememberFrostedBackdrop(Unit)
+                source = rememberFrostedBackdrop(Unit)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     val cell = 16.dp.toPx()
                     for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt())
@@ -43,6 +43,7 @@ class GlassOpticsTest {
             }
         } } }
         val node = compose.onNodeWithTag("optics")
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.lensSnapshot != null }
         val before = node.captureToImage().toPixelMap()
         compose.runOnIdle { depth = 2f }
         val image = node.captureToImage()
