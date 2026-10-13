@@ -9,33 +9,43 @@ import kotlin.math.*
 internal data class LensGeometry(val bounds: Rect, val corner: Float) {
     val span get() = min(bounds.width, bounds.height) / 2f
 
-    /** Crown coordinate and its gradient. Homothetic rounded contours avoid the
-     * diagonal medial-axis ridges of an extruded nearest-edge distance field. */
+    /** A single smooth membrane across the face, constrained by its rectangular
+     * sides and circular corners. A radial gauge partitions a box into directional
+     * wedges: even continuous normals then leave visible changes in curvature. */
     fun field(point: Offset): LensField {
         val p = point - bounds.center
         if (span <= 0f || p.getDistanceSquared() < .0000001f) return LensField(span, Offset.Zero)
         val r = corner.coerceIn(0f, span)
         val half = Offset(bounds.width / 2f, bounds.height / 2f)
         val core = half - Offset(r, r)
-        val q = Offset(abs(p.x), abs(p.y))
-        val t: Float
+        val q = Offset(max(abs(p.x) - core.x, 0f), max(abs(p.y) - core.y, 0f))
+        val outside = max(max(abs(p.x) - half.x, abs(p.y) - half.y), q.getDistance() - r)
+        val sx = (1f - p.x * p.x / (half.x * half.x)).coerceAtLeast(0f)
+        val sy = (1f - p.y * p.y / (half.y * half.y)).coerceAtLeast(0f)
+        val rectangle = sx * sy
+        val rectangleGradient = Offset(-2f * p.x * sy / (half.x * half.x), -2f * p.y * sx / (half.y * half.y))
+        val roundWeight = r * r / (half.x * half.y)
+        val rounded = if (r > 0f) (1f - q.getDistanceSquared() / (r * r)).coerceAtLeast(0f) else 1f
+        val roundedGradient = if (r > 0f) Offset(-2f * sign(p.x) * q.x, -2f * sign(p.y) * q.y) / (r * r) else Offset.Zero
+        // Weighted harmonic mean preserves either boundary's zero without a min,
+        // max or angular switch across the interior. A circle stays exactly radial.
+        val denominator = (1f - roundWeight) * rounded + roundWeight * rectangle
+        val potential: Float
         val gradient: Offset
-        if (q.y * half.x <= q.x * core.y) {
-            t = q.x / half.x; gradient = Offset(1f / half.x, 0f)
-        } else if (q.x * half.y <= q.y * core.x) {
-            t = q.y / half.y; gradient = Offset(0f, 1f / half.y)
+        if (denominator > .0000001f) {
+            potential = rectangle * rounded / denominator
+            gradient = (rectangleGradient * ((1f - roundWeight) * rounded * rounded) +
+                roundedGradient * (roundWeight * rectangle * rectangle)) / (denominator * denominator)
         } else {
-            // Intersect a ray from the center with the rounded corner. The
-            // rationalized quadratic root avoids subtracting two close values.
-            val b = q.x * core.x + q.y * core.y
-            val c = q.getDistanceSquared()
-            val a = core.getDistanceSquared() - r * r
-            t = c / (b + sqrt(max(b * b - a * c, 0f))).coerceAtLeast(.000001f)
-            val normal = q - core * t
-            val denominator = (normal.x * core.x + normal.y * core.y + t * r * r).coerceAtLeast(.000001f)
-            gradient = normal / denominator
+            potential = 0f
+            // At a shared side both vanish; take their inward limiting derivative.
+            val a = rectangleGradient.getDistance()
+            val b = roundedGradient.getDistance()
+            gradient = if (a > 0f && b > 0f) (rectangleGradient / a + roundedGradient / b) *
+                (.5f * a * b / ((1f - roundWeight) * b + roundWeight * a)) else rectangleGradient
         }
-        return LensField(span * (1f - t), Offset(-sign(p.x) * gradient.x * span, -sign(p.y) * gradient.y * span))
+        val radial = sqrt((1f - potential).coerceAtLeast(.0000001f))
+        return LensField(if (outside > 0f) -outside else span * (1f - radial), gradient * (span / (2f * radial)))
     }
 }
 internal data class LensField(val distance: Float, val inward: Offset)
@@ -43,7 +53,7 @@ internal data class LensRay(val offset: Offset, val normalZ: Float, val height: 
 
 /** Shared mathematical model for both execution adapters. Shape depth changes the
  * surface normal and ray path together; there is no zoom transform or inset plate. */
-internal fun lensRay(field: LensField, span: Float, depth: Float): LensRay {
+internal fun lensRay(field: LensField, span: Float, depth: Float, flattening: Float = 0f): LensRay {
     if (field.distance < 0f || span <= 0f) return LensRay(Offset.Zero, 1f, 0f)
     val u = (1f - field.distance / span).coerceIn(0f, 1f)
     val root = sqrt(max(1f - u * u, .0004f))
@@ -54,7 +64,7 @@ internal fun lensRay(field: LensField, span: Float, depth: Float): LensRay {
     // center retains finite curvature without magnifying the whole face like a
     // thick spherical lens. This is the derivative of the same height field,
     // not an independent rim displacement or a flat-center mask.
-    val shoulder = .4f
+    val shoulder = .4f + .06f * flattening.coerceIn(0f, 1f)
     val height = crown * root * (1f + shoulder * u * u)
     val slope = crown / span * u / root * (1f - 2f * shoulder + 3f * shoulder * u * u)
     val gx = -field.inward.x * slope
