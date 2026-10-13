@@ -67,7 +67,7 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                 if (!swipe.dragging && swipe.animation?.isActive != true) {
                     swipe.handoff = visit; swipe.offset.snapTo(0f); swipe.clear()
                 }
-            } else if (changed && !swipe.active && enabled && !motion.reducedMotion) {
+            } else if (changed && !swipe.active && enabled && motion.artworkTransition == io.github.anastaci1a.localica.navigation.ArtworkTransition.Carousel && !motion.reducedMotion) {
                 swipe.source = displayed
                 swipe.origin = visit
                 swipe.destination = ArtworkNeighbor(visit.orEmpty(), visual)
@@ -134,8 +134,9 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                 }
             }
     } }
-    val modifier = Modifier.pointerInput(width, enabled, navigate != null) {
-        if (enabled && currentNavigate != null) {
+    val gestureEnabled = enabled && settings.artworkSwipe
+    val modifier = Modifier.pointerInput(width, gestureEnabled, navigate != null) {
+        if (gestureEnabled && currentNavigate != null) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 // Claim at the initial pass before the parent's vertical recognizer. A

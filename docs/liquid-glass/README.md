@@ -2,7 +2,7 @@
 
 **An Apple-sourced design reference for Localica.** How surfaces should respond, how light establishes their shape, and how to keep the result readable and fast.
 
-[Apple evidence](sources.md) · [Localica specification](specification.md) · [Interactive motion lab](lab.html) · [Project docs](../README.md)
+[Apple evidence](sources.md) · [Localica specification](specification.md) · [Interactive controls](controls.md) · [Interactive motion lab](lab.html) · [Project docs](../README.md)
 
 ![An original diagram of a lens meeting a boundary and compressing while its position stays constrained](assets/pressure.png)
 
@@ -13,6 +13,7 @@
 | Understand the feeling we are aiming for | [Fluid interaction foundations](sources.md#interaction-foundations) |
 | Check what Apple actually says | [Evidence atlas with video timestamps](sources.md) |
 | See our implementation rules | [Localica specification](specification.md) |
+| Design settings, sliders, switches and buttons | [Control roles, states and review exercises](controls.md) |
 | Drag, reverse and press against an edge | [Motion lab](lab.html) — download/open locally; GitHub shows its source |
 | Review motion without running anything | Expand the demonstrations below |
 | Check what the app currently promises | [Current interface contract](../interface.md) |
@@ -45,6 +46,6 @@ A persistent identity connects the two sizes. The production design also needs m
 
 The specification defines the shared system and its acceptance checks. Physical-device performance still needs review; optical materialization remains deferred. Current selection lenses intentionally appear immediately; their entrance motion awaits [#107](https://github.com/anastaci1a/localica/issues/107). Requested glass-on-content and nested controls remain explicit departures from Apple's usual layer guidance.
 
-The guide was compiled from primary sources before its illustration/formatting pass. Sources were reviewed on **12 October 2026**. Update the relevant evidence and specification together when Apple's guidance or our design decisions change; keep release history in Git and Releases. The lab and diagrams are original project assets, with no Apple video frames or font files included.
+The guide was compiled from primary sources before its illustration/formatting pass. Sources were reviewed on **13 October 2026**. Update the relevant evidence and specification together when Apple's guidance or our design decisions change; keep release history in Git and Releases. The lab and diagrams are original project assets, with no Apple video frames or font files included.
 
 [Main repository](../../README.md) · [Evidence atlas](sources.md) · [Acceptance checks](specification.md#acceptance-checks)

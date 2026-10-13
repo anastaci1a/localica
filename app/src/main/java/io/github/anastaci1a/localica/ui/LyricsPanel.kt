@@ -65,12 +65,9 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         androidx.compose.animation.Crossfade(source, Modifier.weight(1f),
             animationSpec = tween(if (reducedMotion) 0 else 300), label = "Song lyrics") { shown ->
             when {
-                result == null -> Spacer(Modifier.fillMaxSize())
-                shown == null -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-                    Text("No local lyrics found", style = MaterialTheme.typography.titleMedium)
-                    Text("Use embedded lyrics or a matching .lrc file in the song’s folder.", style = MaterialTheme.typography.bodySmall)
-                    result?.problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
+                // Let the outgoing document finish fading while the next source loads.
+                // The player closes unavailable lyrics; do not flash an empty-state panel.
+                shown == null -> Spacer(Modifier.fillMaxSize())
                 else -> key(shown.id, shown.document) {
                     var shownPosition by remember { mutableLongStateOf(positionMs) }
                     SideEffect { if (shown == source) shownPosition = positionMs }

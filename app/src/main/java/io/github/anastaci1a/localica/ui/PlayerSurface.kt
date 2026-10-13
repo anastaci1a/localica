@@ -90,7 +90,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     var artworkMenu by remember { mutableStateOf(false) }
     var configureTap by remember { mutableStateOf(false) }
     fun artworkAction(value: ArtworkAction) { when (value) {
-        ArtworkAction.Lyrics -> onLyrics(!lyricsOpen)
+        ArtworkAction.Lyrics -> if (lyricsAvailable) onLyrics(!lyricsOpen)
         ArtworkAction.Menu -> artworkMenu = true
         ArtworkAction.View -> viewing = true
         ArtworkAction.Change -> onEditTags?.invoke()
@@ -213,7 +213,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
             ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration,
-                immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = true) { frame ->
+                immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough) { frame ->
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
                 if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
@@ -263,8 +263,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).testTag("artwork-gesture")
                 .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
-                    onClickLabel = settings.artworkTap.label, onClick = { artworkAction(settings.artworkTap) },
-                    onLongClickLabel = settings.artworkHold.label, onLongClick = { artworkAction(settings.artworkHold) }) else Modifier)) {
+                    onClickLabel = settings.artworkTap.takeUnless { it == ArtworkAction.Lyrics && !lyricsAvailable }?.label,
+                    onClick = { artworkAction(settings.artworkTap) },
+                    onLongClickLabel = settings.artworkHold.takeUnless { it == ArtworkAction.Lyrics && !lyricsAvailable }?.label,
+                    onLongClick = { artworkAction(settings.artworkHold) }) else Modifier)) {
                 GlassMenu(artworkMenu, rememberGlassAnchor(), { artworkMenu = false }) {
                     ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
                     if (onEditTags != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; onEditTags() })

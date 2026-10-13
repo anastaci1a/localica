@@ -74,12 +74,7 @@ Acceptance: a slow drag, fast flick, abrupt reversal and long boundary hold must
 
 ## Settings sliders and switches
 
-Based on [Apple's control demonstrations](sources.md#sliders-and-switches--wwdc25), with these explicit Localica choices:
-
-- Settings sliders use a clear, wide rounded-rectangle thumb over a continuous thin track. Its center reveals the active track endpoint; no blur, white wash or contrast plate obscures that value. Keep the lens clear at rest too, rather than copying Apple's quiet white resting thumb. Discrete settings retain ticks and snapping. The playback scrubber is a separate control.
-- On/off switches have a colored capsule track and a rounded thumb. Thumb position and semantic on/off state communicate the value together. Tap changes state; drag permits reversal before release. During manipulation/travel the thumb becomes clear; its quiet white resting finish returns continuously after settling.
-- Both sample their own track beneath the thumb, excluding the thumb itself. Reuse the shared acceleration/contact/pressure model; move the endpoint immediately, keep the touching edge pinned at limits, and let width/height/depth recover without delaying input. Keep the existing motion and accessibility preferences.
-- Preserve adjustable-slider and switch semantics, keyboard/tap alternatives, disabled behavior and minimum touch targets. Test reversal, cancellation, both limits, discrete steps and value visibility. Optical similarity is an approximation, not use of Apple's renderer.
+The [control specification](controls.md) owns button, switch, slider and choice behavior, including cancellation, clear-thumb optics, accessibility and layout. It uses the shared motion model above; individual controls supply their interaction state instead of replaying independent bounce sequences.
 
 ## Geometry and readability
 
@@ -128,7 +123,7 @@ Capture reproducible interaction traces on representative physical devices, sepa
 | Re-grab an opening/closing menu | One continuous surface, no missing frame or label jump |
 | Pull a selector beyond either end | Stable edge, bounded strain, recovery without position overshoot |
 | Scroll a selected list, reverse, fling | Lens and content share the same frame and coordinates |
-| Overflowing tabs | Drag lens to select; drag outside it to scroll; no clipping outside capsule |
+| Overflowing tabs | Every drag scrolls the strip; the selector cannot be dragged. When tabs fit, dragging anywhere moves the selector. No clipping outside the capsule. |
 | Expand/collapse mini-player slowly | Matched corners/shadow; artwork and material blend reversibly |
 | Swipe artwork diagonally, then reverse | Same gesture owner; no queue opening or player dismissal |
 | Change text size or use long labels | Wrapping/ellipsis by role, preserved target size and spacing |

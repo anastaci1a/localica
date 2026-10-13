@@ -144,7 +144,13 @@ fun LocalicaScreen(
     }
     val indexedTrack = currentTrack?.let { saved -> library.snapshot.tracks.firstOrNull { it.id == saved.id }
         ?: saved.copy(playCount = library.snapshot.trackPlays[saved.id] ?: 0) }
-    val lyricsAvailable = rememberLyrics(indexedTrack)?.sources?.isNotEmpty() == true
+    val lyricResult = rememberLyrics(indexedTrack)
+    val lyricsAvailable = lyricResult?.sources?.isNotEmpty() == true
+    // Keep an existing lyrics view stable while a new song's local sources load,
+    // but close it when that lookup establishes there is no source to display.
+    LaunchedEffect(indexedTrack?.id, lyricResult) {
+        if (lyricResult != null && !lyricsAvailable) lyricsOpen = false
+    }
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
         val route = BrowseRoute(navigation.active, item.ref, item.title)
         artworkStore.seed(route.key, artworkStore.scope(navigation.route.key)?.peek(item.coverUris)
@@ -159,7 +165,7 @@ fun LocalicaScreen(
             PlayerAction.Info, PlayerAction.Count -> songInfo = true
             PlayerAction.Edit -> editTags?.invoke(listOf(track)) {}
             PlayerAction.Artwork -> viewArt = true
-            PlayerAction.Lyrics -> lyricsOpen = !lyricsOpen
+            PlayerAction.Lyrics -> if (lyricsAvailable) lyricsOpen = !lyricsOpen
             PlayerAction.Playlist -> addPlaying = true
             PlayerAction.Pin -> pin(MediaRef(MediaKind.Song, track.id))
             PlayerAction.Shuffle -> queueController?.shuffle()
@@ -329,7 +335,7 @@ fun LocalicaScreen(
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
             if (currentTrack != null && editTags != null) ({ editTags(listOf(library.snapshot.tracks.firstOrNull { it.id == currentTrack.id } ?: currentTrack)) {} }) else null,
-            lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
+            lyricsOpen, { if (!it || lyricsAvailable) lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             bottomChrome = bottomChrome, miniForeground = miniInk, lyricsAvailable = lyricsAvailable, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {

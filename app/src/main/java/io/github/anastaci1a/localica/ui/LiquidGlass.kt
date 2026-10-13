@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -64,7 +65,12 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
             contact.pressed = true; notify(true)
             try {
                 do { val event = awaitPointerEvent(PointerEventPass.Final)
-                    event.changes.firstOrNull { it.id == down.id }?.let { contact.travel = (it.position.x - down.position.x) / size.width.coerceAtLeast(1) }
+                    event.changes.firstOrNull { it.id == down.id }?.let { change ->
+                        val outside = change.position.x !in 0f..size.width.toFloat() || change.position.y !in 0f..size.height.toFloat()
+                        val taken = change.isConsumed && change.positionChangeIgnoreConsumed() != Offset.Zero
+                        if (contact.pressed && (outside || taken)) { contact.pressed = false; notify(false) }
+                        if (contact.pressed) contact.travel = (change.position.x - down.position.x) / size.width.coerceAtLeast(1)
+                    }
                 }
                 while (event.changes.any { it.pressed })
             } finally { contact.pressed = false; notify(false) }

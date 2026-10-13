@@ -20,12 +20,46 @@ import org.junit.Test
 class ArtworkWashTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun blurBuildsAndResolvesWithoutMovingTheCoverOrReanimatingIdenticalArt() {
+        fun striped(color: Int, key: String): PlayerVisual {
+            val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+            for (y in 0 until 64) for (x in 0 until 64) bitmap.setPixel(x, y, if (x / 4 % 2 == 0) color else android.graphics.Color.BLACK)
+            val image = bitmap.asImageBitmap()
+            return PlayerVisual(image, softArtwork = kotlinx.coroutines.runBlocking { blurGlassSnapshot(image, 4f) }, contentKey = key)
+        }
+        val red = striped(android.graphics.Color.RED, "red")
+        val blue = striped(android.graphics.Color.BLUE, "blue")
+        var current by mutableStateOf(red)
+        compose.setContent { LocalicaTheme {
+            PlayerArtwork(current, Modifier.size(160.dp).testTag("blur-cover"), Corners.artwork, ContentScale.Crop, 800)
+        } }
+        val node = compose.onNodeWithTag("blur-cover")
+        val bounds = node.fetchSemanticsNode().boundsInRoot
+        fun contrast(channel: (Color) -> Float): Float {
+            val pixels = node.captureToImage().toPixelMap()
+            val values = (pixels.width / 4 until pixels.width * 3 / 4).map { channel(pixels[it, pixels.height / 2]) }
+            return values.max() - values.min()
+        }
+        val sharp = contrast { it.red }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { current = blue }
+        compose.mainClock.advanceTimeBy(256)
+        assertTrue("Outgoing detail softens before the replacement resolves", contrast { it.red } < sharp * .85f)
+        assertEquals(bounds, node.fetchSemanticsNode().boundsInRoot)
+        compose.mainClock.advanceTimeBy(640)
+        assertTrue("Incoming detail resolves fully", contrast { it.blue } > sharp * .95f)
+        compose.runOnIdle { current = striped(android.graphics.Color.BLUE, "blue") }
+        compose.mainClock.advanceTimeBy(256)
+        assertTrue("Identical cover bytes do not trigger another blur", contrast { it.blue } > sharp * .95f)
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun everyStyleStaysOpaqueAcrossRapidInterruptedChanges() {
         fun visual(color: Int) = PlayerVisual(Bitmap.createBitmap(24,24,Bitmap.Config.ARGB_8888).apply { eraseColor(color) }.asImageBitmap())
         val red = visual(android.graphics.Color.RED)
         val blue = visual(android.graphics.Color.BLUE)
         var current by mutableStateOf(red)
-        var style by mutableStateOf(ArtworkTransition.SoftWash)
+        var style by mutableStateOf(ArtworkTransition.BlurThrough)
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalArtworkTransition provides style) {
                 Box(Modifier.size(160.dp).background(Color.White).testTag("frame")) {
@@ -56,9 +90,13 @@ class ArtworkWashTest {
         val preferences = InterfacePreferences(context)
         val old = preferences.read()
         try {
+            context.getSharedPreferences("interface", 0).edit().putString("artwork-transition", "SoftWash").remove("artwork-swipe").commit()
+            assertEquals(ArtworkTransition.BlurThrough, preferences.read().artworkTransition)
+            assertTrue(preferences.read().artworkSwipe)
             for (style in ArtworkTransition.entries) {
-                preferences.write(old.copy(artworkTransition = style))
+                preferences.write(old.copy(artworkTransition = style, artworkSwipe = false))
                 assertEquals(style, InterfacePreferences(context).read().artworkTransition)
+                assertFalse(InterfacePreferences(context).read().artworkSwipe)
             }
         } finally { preferences.write(old) }
     }

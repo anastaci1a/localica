@@ -9,6 +9,7 @@ Development APK for Android 8 or newer. Signed with the project development key;
 - Polish collection flyouts, queue navigation, lyrics availability, title fades, Info artwork access and Settings Back motion. Update the illustrated glass guide and interactive lab.
 - Reuse collection thumbnails immediately, fade in larger artwork and retain tab/Home artwork through two Back destinations. Center lyrics transport between the seek track and queue shelf; restore minimize arrows and a smoothly expanding lyrics/source pill.
 - Combine Sort/View into one tabbed flyout, favor vertical list scrolling, refine clear settings sliders/switches and add release-on-X scrub cancellation.
+- Expand the Apple-sourced controls guide and refine cancellation, disabled feedback and right-to-left tracking. Add default blur-through button/autoplay artwork changes, an optional carousel, and an independent artwork swipe toggle. Gate every lyrics entry point on local sources.
 
 ## Resolved issues
 
@@ -31,6 +32,11 @@ Development APK for Android 8 or newer. Signed with the project development key;
 - https://github.com/anastaci1a/localica/issues/128 - Vertical-biased main-tab gesture recognition.
 - https://github.com/anastaci1a/localica/issues/129 - Apple-sourced slider/switch specification and controls.
 - https://github.com/anastaci1a/localica/issues/130 - Playback scrub cancellation target.
+- https://github.com/anastaci1a/localica/issues/131 - Interactive control specification and implementation review.
+- https://github.com/anastaci1a/localica/issues/132 - Blur-through transitions and artwork swipe toggle.
+- https://github.com/anastaci1a/localica/issues/133 - Current-song lyrics gating across entry points.
+- https://github.com/anastaci1a/localica/issues/134 - Deterministic pause/seek and natural-end verification.
+- https://github.com/anastaci1a/localica/issues/135 - Search focus across keyboard/window handoffs.
 
 ## Install
 
