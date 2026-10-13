@@ -16,6 +16,18 @@ import org.junit.Test
 class QueueBrowsingTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun drawerArrowMinimizesAndDeletionLivesInActions() {
+        var minimized = false
+        compose.setContent { LocalicaTheme {
+            QueueScreen(QueueUiState(loading = false), null, onMinimize = { minimized = true })
+        } }
+        compose.onNodeWithContentDescription("Delete current queue").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Minimize queue").performClick()
+        compose.runOnIdle { assertTrue(minimized) }
+        compose.onNodeWithContentDescription("Queue actions").performClick()
+        compose.onNodeWithText("Delete current queue").assertIsDisplayed()
+    }
+
     @Test fun largeQueueSelectorStartsAtPlaybackAndTruncatesConfirmationNames() {
         val queues = (0..99).map { ListeningQueue(name = "Queue $it with a deliberately very long descriptive name that will not fit", entries = emptyList()) }
         val state = QueueUiState(QueueLibrary(queues, queues[90].id), loading = false)

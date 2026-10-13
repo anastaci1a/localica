@@ -35,7 +35,7 @@ import io.github.anastaci1a.localica.library.SongListView
 fun QueueScreen(state: QueueUiState, controller: QueueController?, library: LibraryUiState = LibraryUiState(loading = false),
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
-    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}) {
+    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null) {
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
@@ -83,7 +83,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                                 .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
 
                         }
-                        ActionIcon(R.drawable.ic_close, "Delete current queue", enabled = active != null) { deleting = setOfNotNull(active?.id) }
+                        onMinimize?.let { ActionIcon(R.drawable.ic_down, "Minimize queue", onClick = it) }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         ActionIcon(if (playingThisQueue) R.drawable.ic_pause else R.drawable.ic_play,
@@ -99,6 +99,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                         Box {
                             ActionIcon(R.drawable.ic_more, "Queue actions", anchor = menuAnchor) { menu = true }
                             GlassMenu(menu, menuAnchor, { menu = false }) {
+                                ActionMenuItem("Delete current queue", enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
                                 ActionMenuItem("Rename", enabled = active != null, onClick = { menu = false; renameId = active?.id })
                                 ActionMenuItem("Remove others", enabled = state.library.queues.size > 1,
                                     onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })

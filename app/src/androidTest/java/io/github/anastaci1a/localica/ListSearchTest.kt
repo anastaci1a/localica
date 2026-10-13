@@ -30,6 +30,10 @@ class ListSearchTest {
                 if (pass == 1) compose.onNodeWithTag("browser-list").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, 20f) }
                 val before = compose.onNodeWithText("Album 000").fetchSemanticsNode().boundsInRoot
                 compose.onNodeWithTag("list-search-pill").performClick()
+                // Native dialog focus may arrive after the Compose morph has settled.
+                compose.waitUntil(5000) {
+                    compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
+                }
                 compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("Album")
                 compose.onNodeWithContentDescription("Close list search").performClick()
                 compose.onNodeWithTag("list-search-popup").assertDoesNotExist()

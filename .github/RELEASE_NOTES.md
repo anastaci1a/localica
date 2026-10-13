@@ -7,6 +7,8 @@ Development APK for Android 8 or newer. Signed with the project development key;
 - Apply the Apple-sourced glass specification: deeper rounded lenses, adjustable low damping and depth, pressure-driven deformation, pinned contact edges and faster transitions.
 - Keep glass attached to scrolling content; improve player gestures, artwork handoff, bounded auto-scroll and pinch continuity.
 - Polish collection flyouts, queue navigation, lyrics availability, title fades, Info artwork access and Settings Back motion. Update the illustrated glass guide and interactive lab.
+- Reuse collection thumbnails immediately, fade in larger artwork and retain tab/Home artwork through two Back destinations. Center lyrics transport between the seek track and queue shelf; restore minimize arrows and a smoothly expanding lyrics/source pill.
+- Combine Sort/View into one tabbed flyout, favor vertical list scrolling, refine clear settings sliders/switches and add release-on-X scrub cancellation.
 
 ## Resolved issues
 
@@ -20,6 +22,15 @@ Development APK for Android 8 or newer. Signed with the project development key;
 - https://github.com/anastaci1a/localica/issues/117 - Interruptible artwork swipes and easier player expansion/collapse.
 - https://github.com/anastaci1a/localica/issues/118 - Collection submenu anchors, compact sizing and tint continuity.
 - https://github.com/anastaci1a/localica/issues/119 - Lyrics availability, Settings Back, record icons, title fades and Info artwork access.
+- https://github.com/anastaci1a/localica/issues/121 - Browse artwork retention, detail resolution fades and Home caching.
+- https://github.com/anastaci1a/localica/issues/122 - Lyrics transport alignment.
+- https://github.com/anastaci1a/localica/issues/124 - Player and Queue minimize controls, morphing lyrics pill and shared dividers.
+- https://github.com/anastaci1a/localica/issues/125 - Deeper mini-player/menu triggers, flatter tab navigation and tighter compact typography.
+- https://github.com/anastaci1a/localica/issues/126 - Subtle shadow-weighted glass tint that preserves bright artwork.
+- https://github.com/anastaci1a/localica/issues/127 - Whole-pill Sort/View panel with a shared draft.
+- https://github.com/anastaci1a/localica/issues/128 - Vertical-biased main-tab gesture recognition.
+- https://github.com/anastaci1a/localica/issues/129 - Apple-sourced slider/switch specification and controls.
+- https://github.com/anastaci1a/localica/issues/130 - Playback scrub cancellation target.
 
 ## Install
 

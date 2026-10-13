@@ -62,7 +62,7 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
                 if (artist) LiquidGlassSurface(Modifier.height(64.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onPlay, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), "Play selected albums", Modifier.size(30.dp)) }
-                        Box(Modifier.height(24.dp).width(1.dp).background(LocalContentColor.current.copy(alpha = .2f)))
+                        GlassPillDivider()
                         IconButton(onShuffle, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_shuffle), "Shuffle selected albums", Modifier.size(30.dp)) }
                     }
                 } else LiquidGlassSurface(Modifier.size(64.dp)) {

@@ -129,15 +129,8 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         }
     } }
     if (!drag.dropping) {
-        val color by animateColorAsState(if (drag.overCancel) MaterialTheme.colorScheme.error.copy(alpha = .7f) else Color.Transparent,
-            tween(if (reducedMotion) 0 else 160), label = "Cancel target")
-        LiquidGlassSurface(Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() }).size(CompactControlSize).zIndex(10f)
-            .testTag("cancel-drag").semantics { contentDescription = "Release to cancel move"; stateDescription = if (drag.overCancel) "Cancel move" else "Drag here to cancel" },
-            tint = color) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_close), null,
-                    Modifier.size(26.dp), tint = if (drag.overCancel) MaterialTheme.colorScheme.onError else LocalContentColor.current)
-            }
-        }
+        DragCancelTarget(drag.overCancel, "move",
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() })
+                .zIndex(10f).testTag("cancel-drag"))
     }
 }

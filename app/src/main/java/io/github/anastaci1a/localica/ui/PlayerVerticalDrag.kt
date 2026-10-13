@@ -13,14 +13,16 @@ import kotlinx.coroutines.launch
 /** Resolve direction after children; once claimed, one finger owns one surface until up. */
 @Composable
 internal fun Modifier.playerVerticalDrag(onDelta: (Float) -> Unit, onStart: suspend () -> Unit,
-    onStop: suspend (Float) -> Unit): Modifier {
+    onStop: suspend (Float) -> Unit, canStart: () -> Boolean = { true }): Modifier {
     val delta by rememberUpdatedState(onDelta)
     val start by rememberUpdatedState(onStart)
     val stop by rememberUpdatedState(onStop)
+    val allowed by rememberUpdatedState(canStart)
     val scope = rememberCoroutineScope()
     return pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
+            if (!allowed()) return@awaitEachGesture
             var total = Offset.Zero
             var owned = false
             val velocity = VelocityTracker()

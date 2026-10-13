@@ -37,7 +37,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (onCollapse != null) {
                         ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_down, "Collapse selection", glass = false, onClick = onCollapse)
-                        Box(Modifier.height(24.dp).width(1.dp).background(LocalContentColor.current.copy(alpha = .2f)))
+                        GlassPillDivider()
                     }
                     ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Close selection", glass = false) { onSelection(emptySet()) }
                 }

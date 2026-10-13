@@ -85,8 +85,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
     }
     val panelReady = LocalGlassPanelReady.current
-    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady) {
-        if (!panelReady) return@LaunchedEffect
+    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused) {
+        // Dialog attachment and IME focus happen outside Compose's animation clock.
+        // Do not consume an autofocus request while the returning window still owns input.
+        if (!panelReady || !windowFocused) return@LaunchedEffect
         if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
             withFrameNanos { } // Wait until the newly keyed field is attached.
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
@@ -143,7 +146,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val heroUri = if (artistDetail) albums.sortedWith(compareByDescending<LibraryGroup> { it.tracks.mapNotNull(Track::year).maxOrNull() ?: 0 }
         .thenByDescending { it.tracks.mapNotNull(Track::addedAt).maxOrNull() ?: 0 }.thenBy { it.id }).firstOrNull()?.tracks?.firstOrNull()?.uri
         else sourceResult.rows.firstOrNull()?.track?.uri
-    val hero = if (artDetail) rememberPlayerVisual(heroUri) else PlayerVisual()
+    val hero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
     val lightCollection = collectionIsLight(hero)
     val collectionInk = if (lightCollection) androidx.compose.ui.graphics.Color(0xFF202124) else androidx.compose.ui.graphics.Color.White
     SideEffect { if (selectionVisible) onAppearance(if (artDetail) collectionInk else androidx.compose.ui.graphics.Color.Black,
@@ -278,7 +281,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val top = scroll.update(gridState.layoutInfo.visibleItemsInfo.map {
             CollectionScroll.Item(it.key, it.index, it.offset.y, it.size.height)
         }, gridState.firstVisibleItemIndex == 0)
-        CollectionBackdrop(hero, top, Modifier.matchParentSize().recordFrostedBackdrop(collectionSource))
+        ArtworkBlend(hero, Modifier.matchParentSize().recordFrostedBackdrop(collectionSource),
+            duration = if (reducedMotion) 120 else 240, opacityBlend = true) { frame ->
+            CollectionBackdrop(frame, top, Modifier.fillMaxSize())
+        }
     }
     Column(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
