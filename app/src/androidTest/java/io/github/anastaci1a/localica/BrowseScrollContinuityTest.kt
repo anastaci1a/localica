@@ -18,7 +18,7 @@ class BrowseScrollContinuityTest {
 
     @Test fun slowHeldScrollMovesRowsAndTheirContentsTogetherAcrossVirtualization() = follow(BrowseStyle(), 54)
 
-    @Test fun galleryScrollMovesArtworkAndLabelsWithoutAnIndependentCatchUp() = follow(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 3), 57)
+    @Test fun galleryScrollMovesArtworkAndLabelsWithoutAnIndependentCatchUp() = follow(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 3), 54)
 
     private fun follow(style: BrowseStyle, target: Int) {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
@@ -42,6 +42,9 @@ class BrowseScrollContinuityTest {
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val row = compose.onNodeWithTag("media-slow:$target", useUnmergedTree = true)
             val text = compose.onNodeWithTag("browse-text-slow:$target", useUnmergedTree = true)
+            // A row's artwork may be visible while its label is below the viewport.
+            // Measuring that clipped label produces a zero rectangle, not its motion.
+            text.assertIsDisplayed()
             var previousRow = row.fetchSemanticsNode().boundsInRoot.top
             var previousText = text.fetchSemanticsNode().boundsInRoot.top
             repeat(80) {
