@@ -33,20 +33,25 @@ class PlaybackTest {
                 await { playback.queues.state.value.settings == io.github.anastaci1a.localica.queue.QueueSettings() }
                 for (extension in listOf("mp3", "m4a", "wav")) {
                     val file = File(context.cacheDir, "test-tone.$extension")
-                    instrumentation.context.assets.open("tone.$extension").use { input -> file.outputStream().use(input::copyTo) }
+                    val fixture = if (extension == "mp3") "queue-tone.mp3" else "playback-tone.$extension"
+                    instrumentation.context.assets.open(fixture).use { input -> file.outputStream().use(input::copyTo) }
                     val track = Track(Uri.fromFile(file).toString(), "Tone $extension", fileName = file.name, relativePath = file.name, id = "stable:$extension")
                     instrumentation.runOnMainSync { playback.play(track) }
                     await { playback.state.value.trackId == track.id && playback.state.value.isPlaying && playback.state.value.durationMs != null }
                     assertNull(playback.state.value.problem)
                     instrumentation.runOnMainSync { playback.toggle() }
-                    await { !playback.state.value.isPlaying }
+                    await { playback.state.value.let { !it.playWhenReady && !it.isPlaying && !it.isBuffering && !it.ended } }
                     instrumentation.runOnMainSync { playback.seekTo(500) }
                     await { playback.state.value.positionMs in 450..600 }
-                    assertFalse(playback.state.value.isPlaying)
+                    assertFalse("Seeking a paused $extension must stay paused: ${playback.state.value}", playback.state.value.isPlaying)
+                    assertFalse(playback.state.value.playWhenReady)
                     instrumentation.runOnMainSync { playback.toggle() }
                     await { playback.state.value.isPlaying }
                     // Leaving the activity must not release the service's player.
                     scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+                    // Leave time for transport commands on slower emulators, then test
+                    // a real natural end while the Activity is already in the background.
+                    instrumentation.runOnMainSync { playback.seekTo(playback.state.value.durationMs!! - 500) }
                     await { playback.state.value.ended }
                     assertFalse(playback.state.value.isPlaying)
                     assertEquals(track.uri, playback.state.value.trackUri)

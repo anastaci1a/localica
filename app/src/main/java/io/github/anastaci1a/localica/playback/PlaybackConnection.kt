@@ -39,6 +39,8 @@ data class PlaybackState(
     val ended: Boolean = false,
     val problem: PlaybackProblem? = null,
     val hasNext: Boolean = false,
+    /** Playback intent remains true during buffering; distinct from audible progress. */
+    val playWhenReady: Boolean = false,
 )
 
 interface PlaybackActions {
@@ -65,7 +67,7 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
         .setListener(object : MediaController.Listener {
             override fun onDisconnected(controller: MediaController) {
                 mutableState.value = mutableState.value.copy(connected = false, isPlaying = false,
-                    isBuffering = false, problem = PlaybackProblem.Connection)
+                    isBuffering = false, playWhenReady = false, problem = PlaybackProblem.Connection)
             }
         }).buildAsync()
 
@@ -120,6 +122,7 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
             ended = player.playbackState == Player.STATE_ENDED,
             problem = player.playerError?.toProblem(),
             hasNext = player.hasNextMediaItem(),
+            playWhenReady = player.playWhenReady,
         )
     }
 
