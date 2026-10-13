@@ -91,7 +91,7 @@ content/backdrop → padded sample → distortion/scattering → contrast suppor
 outline + elevation → one shadow field behind the surface group
 ```
 
-Modern lenses derive a normal from a continuous rounded height field, refract through that normal using Snell's law, and offset sampling by the ray's travel through the cap. Resting depth changes curvature as well as displacement; a uniform zoom is insufficient. Use normal-based Fresnel illumination without an inset plate-shaped highlight. Localica uses a water-like refractive index near 1.33 as an artistic starting point, following [PBRT's optics derivation](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission), not an Apple parameter.
+Lenses derive a normal from a rounded height field, refract through the entry and exit interfaces using Snell's law, and offset sampling by the ray's travel. Resting depth changes curvature as well as displacement; a uniform zoom is insufficient. Derive illumination from the same normal without an inset plate-shaped highlight or a uniform reflection floor. Separate the outline corner radius from the optical crown span so expanded panels retain curvature across their face. Localica uses a water-like refractive index near 1.33 as an artistic starting point, following [PBRT's optics derivation](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission), not an Apple parameter.
 
 Neighboring glass shares a coherent source without recursively sampling its own output. Sample required padding but clip recording and filtered output to their bounds. Merged selections preserve unselected holes; diagonal gallery bridges remain disabled. Selections appear immediately until #107 is reviewed.
 
@@ -99,7 +99,7 @@ Contrast adaptation needs to assess what lies beneath the **glyph area**, not me
 
 1. Choose foreground polarity and supporting tint together.
 2. Add hysteresis and a short response filter so a scrolling edge does not flicker between black and white.
-3. Preserve tonal ordering: black must never become lighter than gray under identical settings. Shadow-biased white tint uses a monotonic highlight roll-off; contrast support blends a bounded uniform coating for the chosen ink polarity. Avoid whole-panel polarity flips on large menus.
+3. Preserve tonal ordering: black must never become lighter than gray under identical settings. User white tint uses a monotonic highlight roll-off. Readability support follows the actual foreground silhouette instead of coating the entire scene; ink polarity has hysteresis. Avoid whole-panel polarity flips on large menus.
 4. Offer a robust high-contrast fallback. User customization must not remove accessible semantics or hide selection state.
 
 These are acceptance targets; the existing shader's local brightness adjustment is not proof that they all pass. The [evidence atlas](sources.md#hig--materials-and-color) explains why a universal zero-blur treatment is insufficient.

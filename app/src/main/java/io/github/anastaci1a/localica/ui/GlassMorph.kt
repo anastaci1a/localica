@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.Layout
@@ -39,12 +40,16 @@ import kotlin.math.roundToInt
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
 @Stable
 internal class GlassAnchor {
+    val contact = GlassContact()
+    var triggerMounted = false
+    var restoredDrawn = false
     var bounds by mutableStateOf(Rect.Zero)
     var hidden by mutableStateOf(false)
     var modalPresent by mutableStateOf(false)
     var source: FrostedBackdrop? = null
     var face: (@Composable () -> Unit)? = null
     var depthScale = RaisedGlassDepthScale
+    var cornerRadius: androidx.compose.ui.unit.Dp? = null
     var quiet = false
     var ink by mutableStateOf(Color.Unspecified)
 }
@@ -76,15 +81,19 @@ internal fun GlassAnchor.captureInk() {
 @Composable
 internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
     val view = LocalView.current
+    DisposableEffect(anchor) { anchor.triggerMounted = true; onDispose { anchor.triggerMounted = false } }
     return then(GlassDepthMarker(anchor)).onGloballyPositioned { anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat())) }
         // Read visibility in drawing, not only in a child RenderNode's alpha. Recorded
         // backdrop parents must re-record the restored trigger even while stationary.
-        .drawWithContent { if (!anchor.hidden) drawContent() }
+        .drawWithContent { if (!anchor.hidden) { drawContent(); anchor.restoredDrawn = true } }
         .then(if (anchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)
 }
 
 /** Carry the material profile with its trigger, including wrappers around shared buttons. */
 private data class GlassDepthMarker(val anchor: GlassAnchor) : Modifier.Element
+internal fun Modifier.glassSurfaceAnchor(): GlassAnchor? = foldIn<GlassAnchor?>(null) { anchor, element ->
+    if (element is GlassDepthMarker) element.anchor else anchor
+}
 internal fun Modifier.glassDepthScale(): Float = foldIn(1f) { depth, element ->
     if (element is GlassDepthMarker) element.anchor.depthScale else depth
 }
@@ -94,6 +103,13 @@ internal val LocalGlassPanelReady = compositionLocalOf { true }
 // Only separate modal windows may read this scene. Inline lenses must keep using
 // LocalFrostedBackdrop, whose recordings exclude their own foreground controls.
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
+
+private fun android.view.Window.glassInput(enabled: Boolean) {
+    val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+        android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+    if (attributes.flags and flags == if (enabled) 0 else flags) return
+    if (enabled) clearFlags(flags) else addFlags(flags)
+}
 
 @Composable
 internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
@@ -109,12 +125,23 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     fitContent: Boolean = placement == GlassPlacement.Menu, content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
-    val progress = remember { Animatable(0f) }
-    val body = rememberGlassBody({ progress.value })
+    val progress = anchor.contact.expansion
+    val body = rememberGlassBody({ anchor.contact.travel + progress.value },
+        contact = { if (anchor.contact.pressed) 1f else 0f }, state = anchor.contact.state,
+        active = { anchor.contact.modal })
     var present by remember { mutableStateOf(false) }
     var surfaceReady by remember { mutableStateOf(false) }
     var origin by remember { mutableStateOf(Rect.Zero) }
     var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
+    var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
+    var dismissalAttempt by remember { mutableIntStateOf(0) }
+    val dismissNow: () -> Unit = {
+        // Release hit testing in the dismissal event itself. Waiting for the next
+        // composition can swallow a quick tap on a neighboring trigger.
+        modalWindow?.glassInput(false)
+        onDismiss()
+        dismissalAttempt++
+    }
     val ambientSource = LocalModalBackdrop.current
     LaunchedEffect(visible, reduced, speed) {
         if (!visible && !present) { anchor.hidden = false; return@LaunchedEffect }
@@ -122,7 +149,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             if (!present && anchor.bounds == Rect.Zero) withFrameNanos { }
             if (!present) { origin = anchor.bounds; source = ambientSource ?: anchor.source }
             source?.refresh()
-            present = true; anchor.modalPresent = true
+            present = true; anchor.modalPresent = true; anchor.contact.modal = true
             // Keep the origin visible until the modal has a measured surface.
             withFrameNanos { }; withFrameNanos { }
             anchor.hidden = true; surfaceReady = true
@@ -133,33 +160,49 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         if (!visible) {
             // The underlying window must draw its restored trigger before the modal
             // disappears. Keep the identical returned surface across that handoff.
-            anchor.hidden = false; surfaceReady = false
-            withFrameNanos { }; withFrameNanos { }
+            anchor.restoredDrawn = false
+            anchor.hidden = false
+            // The same body continues rebounding in the trigger. Wait for actual
+            // drawing acknowledgement, keeping the modal material visible meanwhile.
+            var frames = 0
+            while (anchor.triggerMounted && !anchor.restoredDrawn && frames++ < 6) withFrameNanos { }
             present = false; surfaceReady = false; anchor.modalPresent = false
+            anchor.contact.modal = false
         }
     }
-    DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false } }
+    DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false; anchor.contact.modal = false } }
     if (!present) return
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { TextEditingFocusHost {
+    Dialog(onDismissRequest = dismissNow, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { TextEditingFocusHost {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
+        DisposableEffect(window) {
+            modalWindow = window
+            // We draw our own animated scrim. A zero-alpha native dim layer still
+            // blocks touches as an untrusted occluder during return on Android 16.
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            window?.setWindowAnimations(0)
+            onDispose { if (modalWindow === window) modalWindow = null }
+        }
+        DisposableEffect(window, visible, dismissalAttempt) {
+            // A busy editor may refuse dismissal; Settings Back may only change
+            // the page. Reconcile with the actual state after that callback.
+            window?.glassInput(visible)
+            onDispose { }
+        }
         @Suppress("DEPRECATION")
-        SideEffect {
+        val windowDark = darkOverride ?: (source?.dark == true)
+        LaunchedEffect(window, windowDark) {
             window?.let {
-                it.setWindowAnimations(0); it.setDimAmount(0f)
                 // A dismissed panel may finish drawing, but no longer owns input.
                 // Otherwise its transparent full-screen window blocks the next action.
-                val closingFlags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                if (visible) it.clearFlags(closingFlags) else it.addFlags(closingFlags)
                 it.statusBarColor = android.graphics.Color.TRANSPARENT
                 it.navigationBarColor = android.graphics.Color.TRANSPARENT
                 if (android.os.Build.VERSION.SDK_INT >= 29) {
                     it.isStatusBarContrastEnforced = false; it.isNavigationBarContrastEnforced = false
                 }
                 androidx.core.view.WindowCompat.getInsetsController(it, view).apply {
-                    isAppearanceLightStatusBars = !(darkOverride ?: (source?.dark == true))
-                    isAppearanceLightNavigationBars = !(darkOverride ?: (source?.dark == true))
+                    isAppearanceLightStatusBars = !windowDark
+                    isAppearanceLightNavigationBars = !windowDark
                 }
             }
         }
@@ -168,7 +211,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val p = progress.value.coerceIn(0f, 1f)
         val geometry = if (anchor.quiet) ((p - .14f) / .86f).coerceIn(0f, 1f) else p
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
-            .pointerInput(visible) { detectTapGestures { if (visible) onDismiss() } }) {
+            .pointerInput(visible) { detectTapGestures { if (visible) dismissNow() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
                 val density = LocalDensity.current
                 var windowOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -202,7 +245,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val detached = page || (origin == Rect.Zero && anchor.bounds == Rect.Zero)
                 val startWidth = start.width.takeIf { it > 0f } ?: targetWidth.toFloat()
                 val startHeight = start.height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
-                val radius = if (page) 0.dp else if (detached) 28.dp else with(density) { (startHeight / 2 * (1f - p)).toDp() } + 28.dp * p
+                val homeRadius = anchor.cornerRadius ?: with(density) { (startHeight / 2).toDp() }
+                val radius = if (page) 0.dp else if (detached) 28.dp else homeRadius * (1f - p) + 28.dp * p
+                SideEffect { anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
                 val dark = darkOverride ?: (source?.dark == true)
                 val material = rememberFrostedBackdrop(source?.fallback to (p == 1f), dark = dark)
                 val completePanel = rememberFrostedBackdrop(p == 1f, dark = dark)
@@ -226,13 +271,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             mix(if (detached) y + margin * 2 else start.top, y).roundToInt())
                     }.graphicsLayer {
                         alpha = if (detached) p else if (surfaceReady) 1f else 0f
-                        val direction = if (kotlin.math.abs(targetWidth - startWidth) >= kotlin.math.abs(targetHeight - startHeight)) 1f else -1f
-                        // The returning trigger has its resting footprint. Fade deformation
-                        // with travel near home rather than waiting for a low-damping tail.
-                        val shape = if (reduced || page) GlassShape() else body.value.let {
-                            GlassShape(it.strain * p, it.depth * p)
+                    }.drawWithContent {
+                        // Match the trigger's draw-space deformation. A layout-layer
+                        // scale changes global sampling coordinates, causing a small
+                        // optical jump when the same body returns to its trigger.
+                        val shape = if (reduced || page) GlassShape() else body.value
+                        scale(shape.scaleX(anchor.contact.vertical), shape.scaleY(anchor.contact.vertical)) {
+                            this@drawWithContent.drawContent()
                         }
-                        scaleX = shape.scaleX(direction < 0); scaleY = shape.scaleY(direction < 0)
                     }
                         .clearGlassShadow(LocalGlassAppearance.current.shadowStrength *
                             (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else if (detached) p else 1f),
@@ -243,11 +289,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
+                                    homeSource = anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
                                     cornerRadius = radius, frostProgress = p, panelProgress = p, panelDark = dark,
                                     inkOverride = anchor.ink.takeIf { it != Color.Unspecified }
                                         ?: if (dark) Color.White else Color(0xFF202124),
                                     pressFeedback = false, shadow = false,
-                                    body = { body.value.let { GlassShape(it.strain * p, it.depth * p) } },
+                                    body = { body.value },
                                     depthScale = anchor.depthScale,
                                     refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
                             }
@@ -263,7 +310,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 GlassPanelTheme(dark, content)
                             }
                         }
-                        Box(Modifier.graphicsLayer { alpha = (1f - p / .32f).coerceIn(0f, 1f) }.clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.graphicsLayer { alpha = (1f - p / .32f).coerceIn(0f, 1f) }
+                            .lensInkSupport(anchor.ink.takeIf { it != Color.Unspecified } ?: if (dark) Color.White else Color(0xFF202124),
+                                LocalGlassAppearance.current.contrast)
+                            .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                             CompositionLocalProvider(LocalContentColor provides (anchor.ink.takeIf { it != Color.Unspecified }
                                 ?: if (dark) Color.White else Color(0xFF202124))) { anchor.face?.invoke() }
                         }

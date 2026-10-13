@@ -24,6 +24,100 @@ import org.junit.Test
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun dismissalReleasesInputPromptlyAndRespectsRefusedRequests() {
+        var open by mutableStateOf(false)
+        var acceptDismiss by mutableStateOf(true)
+        var refused = 0
+        var presses = 0
+        lateinit var anchor: GlassAnchor
+        lateinit var modalWindow: android.view.Window
+        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            anchor = rememberGlassAnchor()
+            Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
+                .glassAnchor(anchor).testTag("input-trigger"))
+            Box(Modifier.align(Alignment.TopStart).padding(24.dp).size(80.dp)
+                .testTag("immediate-action").clickable { presses++ }) { Text("Next") }
+            GlassMorphPopup(open, anchor, { if (acceptDismiss) open = false else refused++ }) {
+                val view = androidx.compose.ui.platform.LocalView.current
+                SideEffect { modalWindow = (view.parent as androidx.compose.ui.window.DialogWindowProvider).window }
+                Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Dismiss me") }
+            }
+        } } }
+        val inset = anchor.bounds.top - compose.onNodeWithTag("input-trigger").fetchSemanticsNode().boundsInRoot.top
+        val target = compose.onNodeWithTag("immediate-action").fetchSemanticsNode().boundsInRoot.center
+        compose.runOnIdle { open = true }
+        compose.waitForIdle()
+        assertEquals("An invisible native dim layer must not occlude touches during return", 0,
+            modalWindow.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        compose.mainClock.autoAdvance = false
+        val device = androidx.test.uiautomator.UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
+        device.click(target.x.toInt(), (target.y + inset).toInt())
+        compose.waitUntil(3000) { !open }
+        // The dismissal event requests the handoff before a Compose frame. Android
+        // still needs a traversal to apply that window change to hit testing.
+        assertTrue(modalWindow.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0)
+        compose.mainClock.advanceTimeBy(32)
+        device.click(target.x.toInt(), (target.y + inset).toInt())
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitUntil(3000) { presses == 1 }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        compose.runOnIdle { acceptDismiss = false; open = true }
+        compose.waitForIdle()
+        device.click(target.x.toInt(), (target.y + inset).toInt())
+        compose.waitUntil(3000) { refused == 1 }
+        compose.waitForIdle()
+        assertTrue(open)
+        assertEquals("A refused dismissal cannot leave a busy editor untouchable", 0,
+            modalWindow.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+    }
+
+    @Test fun returnedTriggerKeepsTheSameLowDampingRebound() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides
+                io.github.anastaci1a.localica.navigation.GlassAppearance(shapeDamping = 2f)) {
+                Box(Modifier.fillMaxSize()) {
+                    anchor = rememberGlassAnchor()
+                    LiquidGlassSurface(Modifier.align(Alignment.BottomEnd).padding(24.dp)
+                        .size(CompactControlSize).glassAnchor(anchor)) { }
+                    GlassMorphPopup(open, anchor, { open = false }) {
+                        Box(Modifier.fillMaxWidth().height(220.dp)) { Text("Persistent surface") }
+                    }
+                }
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { open = true }
+        compose.mainClock.advanceTimeBy(1600)
+        compose.runOnIdle { open = false }
+        var previous = anchor.contact.body.value
+        var returned = false
+        repeat(180) {
+            if (!returned) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                val current = anchor.contact.body.value
+                if (!anchor.modalPresent) {
+                    assertTrue("The body must not reset its depth at the window handoff",
+                        kotlin.math.abs(current.depth - previous.depth) < .03f)
+                    assertTrue("The body must not reset its strain at the window handoff",
+                        kotlin.math.abs(current.strain - previous.strain) < .03f)
+                    assertFalse("Low-damping return continues settling in the trigger", anchor.contact.state.momentum.settled)
+                    returned = true
+                }
+                previous = current
+            }
+        }
+        assertTrue("Closing must complete without waiting for decorative settling", returned)
+        compose.mainClock.advanceTimeBy(12000)
+        compose.waitForIdle()
+        assertTrue("The shared clock eventually sleeps", anchor.contact.state.momentum.settled)
+        assertEquals(0f, anchor.contact.body.value.depth, .001f)
+        assertEquals(0f, anchor.contact.body.value.strain, .001f)
+    }
+
     @Test fun recordedTriggersReturnWhileStationaryAndClosingWindowsReleaseInput() {
         var open by mutableStateOf(false)
         var presses = 0
@@ -77,7 +171,6 @@ class GlassMorphTest {
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(0xFFB4D8C8)) }
             CompositionLocalProvider(LocalFrostedBackdrop provides source) {
-                SideEffect { anchor.source = source }
                 LiquidGlassSurface(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
                     .glassAnchor(anchor).clickable { open = true }.testTag("trigger")) { }
                 GlassMorphPopup(open, anchor, { open = false }) {
@@ -89,6 +182,7 @@ class GlassMorphTest {
                 }
             }
         } } }
+        assertNotNull("Direct surfaces must carry their backing into the returning morph", anchor.source)
         val start = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { open = true }

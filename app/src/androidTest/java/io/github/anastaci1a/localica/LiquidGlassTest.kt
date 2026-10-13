@@ -23,6 +23,19 @@ import org.junit.Test
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun restoredSelectorStartsAtRestAndOnlyDeformsWhenItMoves() {
+        var position by mutableFloatStateOf(2f)
+        lateinit var shape: State<GlassShape>
+        compose.mainClock.autoAdvance = false
+        compose.setContent { LocalicaTheme { shape = rememberGlassBody({ position }) } }
+        compose.mainClock.advanceTimeBy(64)
+        assertEquals("Restoring a selected option must not invent an arrival impulse", GlassShape(), shape.value)
+        compose.runOnIdle { position = 1.6f }
+        compose.mainClock.advanceTimeBy(32)
+        assertNotEquals("Actual movement still drives deformation", GlassShape(), shape.value)
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun adaptiveContrastPreservesBlackToGrayOrderingAtEveryStrength() {
         org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 33)
         var strength by mutableFloatStateOf(0f)
@@ -104,8 +117,11 @@ class LiquidGlassTest {
         } } }
         val pixels = compose.onNodeWithTag("transparent-lens").captureToImage().toPixelMap()
         val edge = pixels[(pixels.width * .02f).toInt(), pixels.height / 2]
+        val interior = pixels[pixels.width / 4, pixels.height / 2]
         assertTrue("Transparent source pixels must preserve the immediate red backdrop: $edge",
-            edge.red > .97f && edge.green < .01f && edge.blue < .01f)
+            edge.red > .97f && edge.green < .04f && edge.blue < .04f)
+        assertTrue("Curved edge reflection must not become a coating across the transparent face: $interior",
+            interior.red > .97f && interior.green < .01f && interior.blue < .01f)
     }
 
     private fun verifyLens(dark: Boolean) {

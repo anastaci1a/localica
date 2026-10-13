@@ -63,7 +63,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     val dark = MaterialTheme.colorScheme.onSurface.luminance() > .5f
     val entry = remember { GlassDialogEntry(origin, locals, onDismiss, dark, placement, content) }
     SideEffect {
-        origin.source = source
+        if (origin.source == null) origin.source = source
         entry.locals = locals; entry.dismiss = onDismiss; entry.dark = dark; entry.content = content
     }
     DisposableEffect(host, entry) {

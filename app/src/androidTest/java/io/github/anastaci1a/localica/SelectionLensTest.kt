@@ -22,6 +22,58 @@ import androidx.compose.ui.unit.dp
 class SelectionLensTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun selectionRefractsItsBackingOnBothRenderers() {
+        var chosen by mutableStateOf(false)
+        lateinit var source: FrostedBackdrop
+        compose.setContent { LocalicaTheme {
+            source = rememberFrostedBackdrop(Unit)
+            Box(Modifier.size(300.dp, 220.dp).testTag("selection-optics")) {
+                androidx.compose.foundation.Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    val cell = 8.dp.toPx()
+                    for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt()) {
+                        drawRect(if ((x + y) % 2 == 0) Color.Red else Color.Blue,
+                            androidx.compose.ui.geometry.Offset(x * cell, y * cell), androidx.compose.ui.geometry.Size(cell, cell))
+                    }
+                }
+                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+                    ConnectedSelectionHost(Modifier.fillMaxSize()) {
+                        Box(Modifier.padding(20.dp).size(260.dp, 180.dp).selectionLens(chosen, false))
+                    }
+                }
+            }
+        } }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
+        val before = compose.onNodeWithTag("selection-optics").captureToImage().toPixelMap()
+        compose.runOnIdle { chosen = true }
+        val after = compose.onNodeWithTag("selection-optics").captureToImage().toPixelMap()
+        val density = before.width / 300f
+        var changed = 0; var samples = 0
+        for (y in (40 * density).toInt() until (180 * density).toInt() step 3)
+            for (x in (40 * density).toInt() until (260 * density).toInt() step 3) {
+                samples++
+                if (kotlin.math.abs(before[x, y].red - after[x, y].red) > .25f) changed++
+            }
+        assertTrue("A selected lens needs spatial refraction across its body, not only an illuminated outline: $changed / $samples", changed > samples / 5)
+    }
+
+    @Test fun selectedContentIsRecordedOnceAndStillUpdates() {
+        var color by mutableStateOf(Color.Red)
+        val draws = java.util.concurrent.atomic.AtomicInteger()
+        compose.setContent { LocalicaTheme {
+            ConnectedSelectionHost(Modifier.size(180.dp).testTag("single-recording")) {
+                androidx.compose.foundation.Canvas(Modifier.fillMaxSize().selectionLens(true, false)) {
+                    draws.incrementAndGet(); drawRect(color)
+                }
+            }
+        } }
+        compose.waitForIdle()
+        compose.runOnIdle { draws.set(0); color = Color.Blue }
+        compose.waitForIdle()
+        assertEquals("The viewport and lens must share one content recording", 1, draws.get())
+        val pixels = compose.onNodeWithTag("single-recording").captureToImage().toPixelMap()
+        assertTrue("A retained layer cannot freeze live content", pixels[pixels.width / 2, pixels.height / 2].blue > .9f)
+    }
+
     @Test fun lensBackdropNeverReplacesUnselectedViewportPixels() {
         var chosen by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
@@ -101,7 +153,7 @@ class SelectionLensTest {
         assertTrue("Deselecting removes the lens immediately", energy() < 1f)
     }
 
-    @Test fun lensLeavesCentralDetailCrispOnBothRenderers() {
+    @Test fun lensLeavesForegroundDetailInPlaceOnBothRenderers() {
         var chosen by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
             ConnectedSelectionHost(Modifier.size(220.dp).testTag("detail-lens")) {
@@ -119,15 +171,13 @@ class SelectionLensTest {
         val selectedImage = compose.onNodeWithTag("detail-lens").captureToImage()
         val selected = selectedImage.toPixelMap()
         val d = original.width / 220f
-        fun sharpEdges(pixels: androidx.compose.ui.graphics.PixelMap): Int {
-            var count = 0
-            for (y in (60*d).toInt()..(110*d).toInt()) for (x in (65*d).toInt()..(155*d).toInt())
-                if (kotlin.math.abs(pixels[x,y].red - pixels[x + 2,y].red) > .7f) count++
-            return count
+        var displaced = 0
+        for (y in (40*d).toInt()..(140*d).toInt()) for (x in (35*d).toInt()..(185*d).toInt()) {
+            if ((selected[x,y].red > .5f) != (original[x,y].red > .5f)) displaced++
         }
-        // The new continuous cap may refract interior stripes, but cannot blur away
-        // their detail. Pixel-for-pixel equality would require the old flat center.
-        assertTrue("Fine detail remains sharp under the curved lens", sharpEdges(selected) >= sharpEdges(original) * .8f)
+        // Background bends, but row content is on the front surface. Test across
+        // the curved shoulders as well as the center; sharp-but-magnified text fails.
+        assertTrue("Foreground stripes cannot move or duplicate under selection: $displaced", displaced < 4)
         assertEquals("Outside the selection is untouched", original[5, 5], selected[5, 5])
     }
 
@@ -191,12 +241,29 @@ class SelectionLensTest {
         org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)
         val regions = listOf(SelectionRegion(Rect(0f, 0f, 300f, 200f)))
         val path = connectedSelectionPath(regions, 16f)
-        val optics = ConnectedLensOptics()
+        val optics = LensSelectionRenderer()
         repeat(120) { index ->
-            optics.effect(regions, path, 22f, 1f,
-                androidx.compose.ui.geometry.Offset(0f, -index.toFloat()))
+            optics.effect(regions, path, 16f,
+                androidx.compose.ui.geometry.Offset(0f, -index.toFloat()), 1.35f)
         }
-        assertEquals("Scrolling must not rasterize/upload a field every frame", 1, optics.rasterizations)
+        assertEquals("Simple shapes need no distance texture while scrolling", 0, optics.rasterizations)
+    }
+
+    @Test fun translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)
+        val regions = listOf(SelectionRegion(Rect(0f, 0f, 80f, 80f)),
+            SelectionRegion(Rect(88f, 0f, 168f, 80f)), SelectionRegion(Rect(0f, 88f, 80f, 168f)))
+        val optics = LensSelectionRenderer()
+        val path = connectedSelectionPath(regions, 16f)
+        repeat(120) { index ->
+            optics.effect(regions, path, 16f,
+                androidx.compose.ui.geometry.Offset(.37f, -index * 1.13f), 1.35f)
+        }
+        assertEquals("Translation must reuse the irregular shape's numeric field", 1, optics.rasterizations)
+        val changed = regions.dropLast(1) + SelectionRegion(Rect(88f, 88f, 168f, 168f))
+        optics.effect(changed, connectedSelectionPath(changed, 16f), 16f,
+            androidx.compose.ui.geometry.Offset.Zero, 1.35f)
+        assertEquals("A changed hole cannot reuse stale geometry", 2, optics.rasterizations)
     }
 
     @Test fun lensFollowsPlacementWithoutASecondLayoutCallback() {

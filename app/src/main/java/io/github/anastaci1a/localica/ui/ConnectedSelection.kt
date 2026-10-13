@@ -39,18 +39,19 @@ internal fun SelectionViewport(modifier: Modifier = Modifier, content: @Composab
     }
 }
 
-/** Record the content once; the lens samples that recording, never its own output. */
+/** Record content once and keep it sharp above the separately refracted backing. */
 @Composable
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val scene = remember { SelectionScene() }
-    val layer = rememberGraphicsLayer()
+    val contentLayer = rememberGraphicsLayer()
     val output = rememberGraphicsLayer()
     val backing = LocalFrostedBackdrop.current
     val view = LocalView.current
     var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
     val geometry = remember { SelectionPathCache() }
-    val edgeLighting = remember { SelectionEdgeLighting() }
-    val optics = remember { if (Build.VERSION.SDK_INT >= 33) ConnectedLensOptics() else null }
+    val mesh = remember { LensMeshRenderer() }
+    val meshShape = remember { LensSelectionShape() }
+    val optics = remember { if (Build.VERSION.SDK_INT >= 33) LensSelectionRenderer() else null }
     val depth = LocalGlassAppearance.current.depth
     CompositionLocalProvider(LocalSelectionScene provides scene) {
         Box(modifier.onPlaced { coordinates = it }.drawWithContent {
@@ -69,39 +70,59 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             // Normalize translation: scrolling moves the cached shape instead of
             // rasterizing a distance field and uploading another texture every frame.
             val origin = regions.first().bounds.topLeft
-            val local = regions.map { it.copy(bounds = it.bounds.translate(-origin)) }
+            val local = localLensRegions(regions, origin)
             val path = geometry.path(local, 16.dp.toPx())
-            val strength = 1f
             if (Build.VERSION.SDK_INT >= 33 && optics != null) {
-                layer.record {
-                    // Translucent menus need their separate backing beneath recorded content.
-                    if (backing != null && !backing.layer.isReleased) {
-                        val offset = backing.origin - host.backdropPosition(view)
-                        translate(offset.x, offset.y) { drawLayer(backing.layer) }
-                    }
-                    this@drawWithContent.drawContent()
-                }
+                contentLayer.record { this@drawWithContent.drawContent() }
                 val crop = path.getBounds().translate(origin).inflate(2f).intersect(Rect(Offset.Zero, size))
                 // The backing is a lens input, not a replacement for the viewport.
                 // Painting it across unselected space creates rectangular seams over
                 // parallax artwork and translucent parent surfaces.
-                this@drawWithContent.drawContent()
+                translate(origin.x, origin.y) { clipPath(path, ClipOp.Difference) {
+                    translate(-origin.x, -origin.y) { drawLayer(contentLayer) }
+                } }
                 if (!crop.isEmpty) {
+                    // Keep the complete backdrop once, then only the visible ink.
+                    // Padding each half by the lens radius wastes several screenfuls
+                    // of pixels for a long selection without adding source detail.
                     val at = Offset(floor(crop.left), floor(crop.top))
-                    val extent = androidx.compose.ui.unit.IntSize(ceil(crop.right - at.x).toInt(), ceil(crop.bottom - at.y).toInt())
-                    val band = (local.minOf { min(it.bounds.width, it.bounds.height) } / 2f).coerceIn(16.dp.toPx(), 72.dp.toPx())
-                    output.renderEffect = optics.effect(local, path, band, strength, origin - at, depth)
+                    val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
+                    val source = backing?.takeUnless { it.layer.isReleased }
+                    val backdropSize = source?.size ?: androidx.compose.ui.unit.IntSize.Zero
+                    val foregroundY = backdropSize.height + 2f
+                    val atlas = LensAtlas(visible, Size(backdropSize.width.toFloat(), backdropSize.height.toFloat()),
+                        at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero), foregroundY)
+                    val extent = androidx.compose.ui.unit.IntSize(max(visible.width.toInt(), backdropSize.width + 2),
+                        foregroundY.toInt() + visible.height.toInt())
+                    output.renderEffect = optics.effect(local, path, 16.dp.toPx(), origin - at, depth, atlas)
                     output.clip = true
-                    output.record(size = extent) { translate(-at.x, -at.y) { drawLayer(layer) } }
+                    output.record(size = extent) {
+                        clipRect(left = 1f, top = 1f, right = backdropSize.width + 1f, bottom = backdropSize.height + 1f) {
+                            if (source != null) translate(1f, 1f) { drawLayer(source.layer) }
+                        }
+                        clipRect(top = foregroundY) {
+                            translate(-at.x, foregroundY - at.y) { drawLayer(contentLayer) }
+                        }
+                    }
                     translate(origin.x, origin.y) { clipPath(path) {
                         translate(at.x - origin.x, at.y - origin.y) { drawLayer(output) }
                     } }
                 }
-                translate(origin.x, origin.y) { drawPath(path, Brush.linearGradient(listOf(Color.White.copy(alpha = .65f * strength),
-                    Color.White.copy(alpha = .08f * strength), Color.White.copy(alpha = .25f * strength))), style = Stroke(.7.dp.toPx())) }
+
             } else {
+                meshShape.update(local, path, 16.dp.toPx())
+                val shape = meshShape.geometry ?: return@drawWithContent drawContent()
+                val source = backing
+                val image = source?.snapshot
+                if (image != null) translate(origin.x, origin.y) { clipPath(path) {
+                    with(mesh) { draw(shape, image, source.size, origin + host.backdropPosition(view) - source.origin, depth,
+                        field = meshShape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = meshShape.map, lighting = false) }
+                } }
                 drawContent()
-                edgeLighting.image(local, path, size, density)?.let { drawImage(it, topLeft = edgeLighting.origin + origin) }
+                translate(origin.x, origin.y) { clipPath(path) {
+                    with(mesh) { draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth,
+                        field = meshShape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = meshShape.map) }
+                } }
             }
         }) { content() }
     }
