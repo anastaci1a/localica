@@ -183,14 +183,24 @@ class PlayerTransitionTest {
     @Test fun glassFillsTheSharedRoundedOutlineDuringHeldExpansionAndReversal() {
         val progress = Animatable(0f)
         lateinit var scope: CoroutineScope
+        lateinit var backdrop: FrostedBackdrop
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(whiteTint = 1f, shadowStrength = 0f)) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.Magenta)) {
                     scope = rememberCoroutineScope()
-                    PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = PlayerVisual())
+                    backdrop = rememberFrostedBackdrop(Unit)
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop).background(Color.Magenta))
+                    PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {},
+                        visual = PlayerVisual(), glassBackdrop = backdrop)
                 }
             }
         } }
+        // The material now colors its sampled scene rather than painting an
+        // unrelated coating; supply the same recorded backing as the real player.
+        compose.waitUntil(5000) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) backdrop.layer.size.width > 0
+            else backdrop.lensSnapshot != null
+        }
         for (p in listOf(.15f, .5f, .15f)) {
             compose.runOnIdle { scope.launch { progress.snapTo(p) } }
             val pixels = compose.onNodeWithTag("player-surface").captureToImage().toPixelMap()

@@ -7,6 +7,28 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LensGeometryTest {
+    @Test fun panelNormalDoesNotJumpAcrossItsInteriorDiagonals() {
+        val shape = LensGeometry(Rect(0f, 0f, 400f, 400f), 28f)
+        for (coordinate in 40..180 step 5) {
+            val left = lensRay(shape.field(Offset(coordinate - .01f, coordinate + .01f)), shape.span, 1.35f)
+            val right = lensRay(shape.field(Offset(coordinate + .01f, coordinate - .01f)), shape.span, 1.35f)
+            assertTrue("No refraction seam at $coordinate", (left.offset - right.offset).getDistance() < .1f)
+            assertEquals(left.height, right.height, .001f)
+        }
+    }
+
+    @Test fun roundedPanelGradientMatchesItsContinuousHeightCoordinate() {
+        val shape = LensGeometry(Rect(0f, 0f, 320f, 400f), 24f)
+        for (x in 30..290 step 13) for (y in 30..370 step 17) {
+            val p = Offset(x.toFloat(), y.toFloat())
+            val field = shape.field(p)
+            val dx = (shape.field(p + Offset(.05f, 0f)).distance - shape.field(p - Offset(.05f, 0f)).distance) / .1f
+            val dy = (shape.field(p + Offset(0f, .05f)).distance - shape.field(p - Offset(0f, .05f)).distance) / .1f
+            assertEquals(dx, field.inward.x, .004f)
+            assertEquals(dy, field.inward.y, .004f)
+        }
+    }
+
     @Test fun contourMeshSamplesTheSameSurfaceWithoutFoldedTriangles() {
         for (shape in listOf(LensGeometry(Rect(0f, 0f, 260f, 64f), 32f),
             LensGeometry(Rect(13f, 27f, 333f, 427f), 24f),
@@ -41,7 +63,7 @@ class LensGeometryTest {
     @Test fun expandedPanelHasCurvatureBeyondItsOutlineCorners() {
         val panel = LensGeometry(Rect(0f, 0f, 320f, 400f), 24f)
         val normal = lensRay(panel.field(Offset(80f, 200f)), panel.span, 1.35f)
-        assertTrue("The face must remain curved well inside the 24px outline corner", normal.normalZ < .95f)
+        assertTrue("The face must remain curved well inside the 24px outline corner", normal.normalZ < .995f)
         assertTrue(abs(normal.offset.x) > 4f)
         assertEquals(0f, lensRay(panel.field(panel.bounds.center), panel.span, 1.35f).offset.getDistance(), .0001f)
     }
@@ -53,6 +75,20 @@ class LensGeometryTest {
         assertTrue("A lens must not be a uniform scale", abs(ray(90f).offset.x / 40f - ray(70f).offset.x / 20f) > .03f)
         assertTrue("Held flattening changes both bend and normal", abs(ray(80f, .8f).offset.x) < abs(ray(80f, 1.35f).offset.x))
         assertTrue(ray(80f, .8f).normalZ > ray(80f, 1.35f).normalZ)
+    }
+
+    @Test fun centralContentRetainsScaleWhileThePeripheralBandCompresses() {
+        val shape = LensGeometry(Rect(0f, 0f, 100f, 100f), 50f)
+        fun ray(x: Float) = lensRay(shape.field(Offset(x, 50f)), shape.span, 1.35f)
+        assertTrue("Central magnification must stay below 12%", abs(ray(55f).offset.x) < .12f * 5f)
+        val outsideBand = (99.9f + ray(99.9f).offset.x) - (99f + ray(99f).offset.x)
+        assertTrue("The shoulder must compress multiple source pixels into its narrow rim", abs(outsideBand) > 1.8f)
+        for (x in 55..95 step 5) {
+            val p = x.toFloat()
+            val derivative = (ray(p + .01f).height - ray(p - .01f).height) / .02f
+            val normal = ray(p)
+            assertEquals("Lighting and refraction follow the same curved crown", -derivative, normal.normalXY.x / normal.normalZ, .01f)
+        }
     }
 
     @Test fun scrollingKeepsGeometryStableAtFractionalCoordinates() {

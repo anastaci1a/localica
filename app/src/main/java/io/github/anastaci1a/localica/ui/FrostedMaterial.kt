@@ -40,6 +40,7 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
     var contrastPixels by mutableStateOf<PixelMap?>(null)
     var glassFallback by mutableStateOf<ImageBitmap?>(null)
     var lensSnapshot by mutableStateOf<ImageBitmap?>(null)
+    var lensFrostSnapshot by mutableStateOf<ImageBitmap?>(null)
     var revision by mutableIntStateOf(0)
     fun refresh() { revision++ }
 }
@@ -88,16 +89,21 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     }
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() } * glassBlur.coerceIn(0f, 1f)
     val whiteTint = LocalGlassAppearance.current.whiteTint
-    LaunchedEffect(source, source.snapshot, blurRadius, whiteTint) {
+    LaunchedEffect(source, source.snapshot, source.fallback, blurRadius, whiteTint) {
         if (Build.VERSION.SDK_INT < 33) {
             val snapshot = source.snapshot
-            if (snapshot == null) { source.glassFallback = null; source.lensSnapshot = null }
+            if (snapshot == null) { source.glassFallback = null; source.lensSnapshot = null; source.lensFrostSnapshot = null }
             else {
                 // Coalesce slider movement; each recorded source shares one prepared bitmap.
                 kotlinx.coroutines.delay(32)
                 val blurred = if (blurRadius == 0f) snapshot else withContext(Dispatchers.Default) { blurGlassSnapshot(snapshot, blurRadius) }
+                val frosted = source.fallback ?: blurred
+                val tinted = withContext(Dispatchers.Default) {
+                    tintLensSnapshot(blurred, whiteTint) to tintLensSnapshot(frosted, whiteTint)
+                }
                 source.glassFallback = blurred.takeIf { blurRadius > 0f }
-                source.lensSnapshot = withContext(Dispatchers.Default) { tintLensSnapshot(blurred, whiteTint) }
+                source.lensSnapshot = tinted.first
+                source.lensFrostSnapshot = tinted.second
             }
         }
     }
@@ -122,8 +128,10 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 drawContent()
                 return@drawWithContent
             }
-            source.layer.record {
-                clipRect {
+            val viewport = size
+            val extent = IntSize(size.width.toInt(), size.height.toInt())
+            source.layer.record(size = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent) {
+                clipRect(right = viewport.width, bottom = viewport.height) {
                 if (backing != null && !backing.layer.isReleased) {
                     val offset = backing.origin - source.origin
                     clipRect { translate(offset.x, offset.y) { drawLayer(backing.layer) } }
