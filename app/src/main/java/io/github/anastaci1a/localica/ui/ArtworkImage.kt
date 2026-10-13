@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.*
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -30,8 +31,10 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
             ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
             if (!loading && artwork == null && emptyText != null) Text(emptyText)
         }
-        artwork?.let { image -> Image(image, stringResource(R.string.album_artwork),
-            Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = contentScale) }
+        if (artwork != null) Crossfade(artwork, Modifier.matchParentSize().graphicsLayer { alpha = reveal },
+            animationSpec = tween(if (reducedMotion) 0 else 240), label = "Artwork resolution") { image ->
+            Image(image, stringResource(R.string.album_artwork), Modifier.fillMaxSize(), contentScale = contentScale)
+        }
     }
 }
 

@@ -72,6 +72,15 @@ Map strain to the motion axis. A horizontal stop compresses width and expands he
 
 Acceptance: a slow drag, fast flick, abrupt reversal and long boundary hold must yield distinguishable shapes. Replaying the same wiggle on all four fails the model. Reduced Motion removes decorative strain while preserving immediate tracking and state feedback.
 
+## Settings sliders and switches
+
+Based on [Apple's control demonstrations](sources.md#sliders-and-switches--wwdc25), with these explicit Localica choices:
+
+- Settings sliders use a clear, wide rounded-rectangle thumb over a continuous thin track. Its center reveals the active track endpoint; no blur, white wash or contrast plate obscures that value. Keep the lens clear at rest too, rather than copying Apple's quiet white resting thumb. Discrete settings retain ticks and snapping. The playback scrubber is a separate control.
+- On/off switches have a colored capsule track and a rounded thumb. Thumb position and semantic on/off state communicate the value together. Tap changes state; drag permits reversal before release. During manipulation/travel the thumb becomes clear; its quiet white resting finish returns continuously after settling.
+- Both sample their own track beneath the thumb, excluding the thumb itself. Reuse the shared acceleration/contact/pressure model; move the endpoint immediately, keep the touching edge pinned at limits, and let width/height/depth recover without delaying input. Keep the existing motion and accessibility preferences.
+- Preserve adjustable-slider and switch semantics, keyboard/tap alternatives, disabled behavior and minimum touch targets. Test reversal, cancellation, both limits, discrete steps and value visibility. Optical similarity is an approximation, not use of Apple's renderer.
+
 ## Geometry and readability
 
 Maintain one authoritative outline per displayed surface. Clip, refract, illuminate and shadow that outline in the same frame. Use its actual transformed coordinates for overlays; do not lag list movement through a later bounds callback. Hit regions may be larger for accessibility, but must remain attached to the visible control.

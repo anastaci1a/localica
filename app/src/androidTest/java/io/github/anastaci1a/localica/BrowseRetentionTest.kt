@@ -19,6 +19,30 @@ import kotlin.coroutines.CoroutineContext
 class BrowseRetentionTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun returningHomeKeepsPinnedResultsWithoutRepeatingTheQuery() {
+        val tasks = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { tasks.add(block) }
+        }
+        val track = Track("song:1", "Pinned song", fileName = "song.mp3", relativePath = "song.mp3")
+        val library = LibraryUiState(LibrarySnapshot(tracks = listOf(track)), loading = false)
+        val playlists = PlaylistState(loading = false)
+        val pins = listOf(MediaRef(MediaKind.Song, track.id))
+        val cache = BrowsePresentationCache()
+        var mounted by mutableStateOf(true)
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalBrowsePresentationCache provides cache) {
+            if (mounted) PinnedHome(library, playlists, pins, {}, {}, { _, _ -> }, {}, { _, _ -> }, queryDispatcher = dispatcher)
+        } } }
+        compose.waitUntil(5000) { tasks.isNotEmpty() }
+        requireNotNull(tasks.poll(5, TimeUnit.SECONDS)).run()
+        compose.onNodeWithText("Pinned song").assertIsDisplayed()
+        compose.runOnIdle { mounted = false }
+        compose.waitForIdle()
+        compose.runOnIdle { mounted = true }
+        compose.onNodeWithText("Pinned song").assertIsDisplayed()
+        assertTrue("Home should reuse the completed query immediately", tasks.isEmpty())
+    }
+
     @Test fun returningPageHasResultsBeforeAnyNewQueryAndLibraryChangesInvalidateThem() {
         InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("browse-style", 0).edit().clear().commit()
         val tasks = LinkedBlockingQueue<Runnable>()

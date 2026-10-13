@@ -6,7 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.*
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import kotlin.math.exp
 
 /** Shared drawing/motion, retaining Slider's keyboard, touch and accessibility behavior. */
@@ -40,8 +41,11 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     var pressure by remember { mutableFloatStateOf(0f) }
     val current by rememberUpdatedState(value)
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
-    val deformation = rememberGlassBody({ (value - valueRange.start) / span }, { pressure })
-    val inset = with(LocalDensity.current) { 14.dp.toPx() }
+    val pressed by interaction.collectIsPressedAsState()
+    val dragged by interaction.collectIsDraggedAsState()
+    val deformation = rememberGlassBody({ (value - valueRange.start) / span }, { pressure }, { if (pressed || dragged) 1f else 0f })
+    val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f)
+    val inset = with(LocalDensity.current) { 20.dp.toPx() }
     val touch = Modifier.pointerInput(valueRange) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -57,17 +61,17 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
             } finally { pressure = 0f }
         }
     }
-    val color = MaterialTheme.colorScheme.onSurface
+    val color = NavigationAccent
     Slider(value, onValueChange, modifier.then(touch), valueRange = valueRange, steps = steps, interactionSource = interaction,
-        thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f)) {
-            LiquidGlassSurface(Modifier.size(28.dp).graphicsLayer {
+        thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
+            LiquidGlassSurface(Modifier.size(40.dp, 26.dp).testTag("settings-slider-thumb").graphicsLayer {
                 scaleX = deformation.value.scaleX(); scaleY = deformation.value.scaleY()
                 val fraction = (value - valueRange.start) / span
                 translationX = glassWallTranslation(size.width, scaleX, when { fraction <= .001f -> -1f; fraction >= .999f -> 1f; else -> 0f })
-            }, pressFeedback = false, body = { deformation.value })
+            }, source = trackSource, cornerRadius = 13.dp, pressFeedback = false, body = { deformation.value })
         } },
         track = {
-            Canvas(Modifier.fillMaxWidth().height(48.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(48.dp).recordFrostedBackdrop(trackSource)) {
                 val h = 5.dp.toPx()
                 val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
                 val top = (size.height - h) / 2
@@ -94,23 +98,37 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val neutral = MaterialTheme.colorScheme.onSurface.copy(alpha = .18f)
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
-    Box(Modifier.size(52.dp, 32.dp).then(if (onChange == null) Modifier else Modifier.draggable(
+    val interaction = remember { MutableInteractionSource() }
+    val dragged by interaction.collectIsDraggedAsState()
+    val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f)
+    val body = rememberGlassBody({ position.value }, { pressure }, { if (dragged) 1f else 0f })
+    val active by animateFloatAsState(if (dragged || position.isRunning) 1f else 0f,
+        tween(if (reduced) 0 else 100), label = "Switch lens")
+    Box(Modifier.size(60.dp, 32.dp).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.draggable(
         rememberDraggableState { dx -> scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-            raw += dx / with(density) { 20.dp.toPx() }
+            raw += dx / with(density) { 24.dp.toPx() }
             pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
             position.snapTo(raw.coerceIn(0f, 1f))
-        } }, Orientation.Horizontal, onDragStarted = { position.stop(); raw = position.value }, onDragStopped = {
+        } }, Orientation.Horizontal, interactionSource = interaction,
+        onDragStarted = { position.stop(); raw = position.value }, onDragStopped = {
             pressure = 0f
             val next = position.value >= .5f
             onChange(next)
-            position.animateTo(if (next) 1f else 0f, spring(1f, 500f))
+            if (reduced) position.snapTo(if (next) 1f else 0f)
+            else position.animateTo(if (next) 1f else 0f, spring(1f, 500f * speed * speed))
         }))) {
-        Canvas(Modifier.matchParentSize()) {
+        Canvas(Modifier.matchParentSize().recordFrostedBackdrop(trackSource)) {
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 cornerRadius = CornerRadius(size.height / 2))
         }
-        SelectionLens(Modifier.offset(x = 2.dp + 20.dp * position.value, y = 2.dp).size(28.dp), position, pressure = { pressure },
-            wall = { when { position.value <= .001f -> -1f; position.value >= .999f -> 1f; else -> 0f } })
+        CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
+            LiquidGlassSurface(Modifier.offset { androidx.compose.ui.unit.IntOffset((2.dp + 24.dp * position.value).roundToPx(), 2.dp.roundToPx()) }.size(32.dp, 28.dp).graphicsLayer {
+                scaleX = body.value.scaleX(); scaleY = body.value.scaleY()
+                translationX = glassWallTranslation(size.width, scaleX, when { position.value <= .001f -> -1f; position.value >= .999f -> 1f; else -> 0f })
+            }, source = trackSource, cornerRadius = 14.dp, pressFeedback = false, body = { body.value }) {
+                Canvas(Modifier.matchParentSize()) { drawRoundRect(Color.White.copy(alpha = 1f - active), cornerRadius = CornerRadius(size.height / 2)) }
+            }
+        }
     }
 }
 

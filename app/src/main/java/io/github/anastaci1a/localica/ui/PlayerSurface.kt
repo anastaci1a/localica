@@ -16,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
@@ -78,6 +80,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     var movement by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     var owner by remember { mutableStateOf(VerticalOwner.Undecided) }
+    var scrubDragging by remember { mutableStateOf(false) }
+    var scrubOverCancel by remember { mutableStateOf(false) }
+    var scrubCancelBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var sourcesRequest by remember { mutableIntStateOf(0) }
     val sourcesAnchor = rememberGlassAnchor()
     LaunchedEffect(lyricsOpen) { if (!lyricsOpen) sourcesRequest = 0 }
@@ -108,7 +113,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             } else progress.snapTo((startProgress - movement / distance).coerceIn(0f, 1f))
         }
     }
-    val drag = Modifier.playerVerticalDrag(onDelta = { dragState.dispatchRawDelta(it) },
+    val drag = Modifier.playerVerticalDrag(canStart = { !scrubDragging }, onDelta = { dragState.dispatchRawDelta(it) },
         onStart = { startExpanded = expanded; startProgress = progress.value; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f
             owner = VerticalOwner.Undecided; dragging = true; progress.stop(); queueProgress?.stop() },
         onStop = { velocity ->
@@ -152,11 +157,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val metadataY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
     val seekY = metadataY + 64.dp
     val normalTransport = ordinarySeekY + 184.dp + extraActions
-    val lyricTransport = virtualHeight - navigationInset - 152.dp
+    val lyricBarCenter = maxOf(ordinarySeekY, lyricSeekY) + 64.dp + 20.dp
+    val shelfTop = virtualHeight - navigationInset - CollapsedQueueHeight
+    val lyricTransport = (lyricBarCenter + shelfTop) / 2 - 32.dp
     val transportMotion = p * p * (3f - 2f * p)
     fun smoothReveal(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
-    val titleY = 5.dp + (metadataY - 5.dp) * p
-    val subtitleY = 26.dp + (metadataY + 34.dp - 26.dp) * p
+    val titleY = 7.dp + (metadataY - 7.dp) * p
+    val subtitleY = 24.dp + (metadataY + 34.dp - 24.dp) * p
     val transportY = (CompactControlSize - 48.dp) / 2 +
         (normalTransport + (lyricTransport - normalTransport) * lyricProgress - (CompactControlSize - 48.dp) / 2) * transportMotion
     val backgroundReveal = smoothReveal((p - .38f) / .59f)
@@ -200,16 +207,16 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = RoundedCornerShape(surfaceCorner), color = Color.Transparent, contentColor = foreground) {
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
-            cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false)
+            cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
+            depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
-            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize(), duration = paletteDuration,
+            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = true) { frame ->
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
-                if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }
-                    .then(if (lyricsOpen) Modifier.recordFrostedBackdrop(lyricBackdrop) else Modifier)) {
+                if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
                     PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), backgroundProgress * (1f - lyricProgress),
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                         with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f))
@@ -267,13 +274,34 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {
                 Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
                     .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { settle(false) }
-                    .semantics { contentDescription = "Collapse player" }) {
+                    .semantics { contentDescription = "Player handle" }) {
                     Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp).testTag("player-handle")
                         .background(Color.White.copy(alpha = .42f), RoundedCornerShape(2.dp)))
                 }
-                if (lyricProgress > 0f && lyricsAvailable) Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp).graphicsLayer { alpha = lyricProgress }) {
-                    CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
-                        ActionIcon(R.drawable.ic_lyrics, "Lyrics sources", anchor = sourcesAnchor) { sourcesRequest++ }
+                CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
+                    Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {
+                        ActionIcon(R.drawable.ic_down, "Collapse player") { settle(false) }
+                    }
+                    if (lyricsAvailable) Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
+                        LiquidGlassSurface(Modifier.width(CompactControlSize * (1f + lyricProgress) + 1.dp * lyricProgress)
+                            .height(CompactControlSize).testTag("player-lyrics-pill"), pressFeedback = false, depthScale = RaisedGlassDepthScale) {
+                            Box(Modifier.align(Alignment.CenterStart).size(CompactControlSize), contentAlignment = Alignment.Center) {
+                                ActionIcon(R.drawable.ic_lyrics, if (lyricsOpen) "Lyrics sources" else "Show lyrics",
+                                    anchor = sourcesAnchor, glass = false) {
+                                    if (lyricsOpen) sourcesRequest++ else onLyrics(true)
+                                }
+                            }
+                            if (lyricProgress > 0f) {
+                                Box(Modifier.fillMaxSize()
+                                    .graphicsLayer { alpha = ((lyricProgress - .25f) / .75f).coerceIn(0f, 1f) }
+                                    .then(if (!lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
+                                    GlassPillDivider(Modifier.align(Alignment.Center).graphicsLayer { alpha = ((lyricProgress - .4f) / .6f).coerceIn(0f, 1f) })
+                                    Box(Modifier.align(Alignment.CenterEnd).size(CompactControlSize), contentAlignment = Alignment.Center) {
+                                        ActionIcon(R.drawable.ic_eye_off, "Hide lyrics", glass = false) { onLyrics(false) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -281,8 +309,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
                     .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
                     .graphicsLayer { alpha = lyricProgress * p }, sourcesRequest = sourcesRequest, sourcesAnchor = sourcesAnchor) }
-            val titleScale = MaterialTheme.typography.titleSmall.fontSize.value / MaterialTheme.typography.headlineSmall.fontSize.value
-            val subtitleScale = MaterialTheme.typography.bodySmall.fontSize.value / MaterialTheme.typography.bodyLarge.fontSize.value
+            val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value
+            val subtitleScale = 11f / MaterialTheme.typography.bodyLarge.fontSize.value
             MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f),
                 Modifier.offset(textX, titleY).width(textWidth).scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title"),
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
@@ -302,7 +330,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 PlayerSeekBar((seeking ?: state.positionMs.toFloat()).coerceIn(0f, duration), { seeking = it },
                     valueRange = 0f..duration, onValueChangeFinished = { seeking?.let { onSeek(it.toLong()) }; seeking = null },
                     enabled = state.connected && (state.durationMs ?: 0) > 0,
-                    modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = "Seek" })
+                    modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = "Seek" },
+                    cancelBounds = scrubCancelBounds, onCancel = { seeking = null },
+                    onDrag = { active, hovered -> scrubDragging = active; scrubOverCancel = hovered })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(formatTime(seeking?.toLong() ?: state.positionMs), style = MaterialTheme.typography.labelSmall)
                     Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelSmall)
@@ -324,7 +354,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     Modifier.size(48.dp), 24.dp + 10.dp * transportMotion, foreground, state.connected, settings.reducedMotion)
             }
 
-
+        }
+    }
+    if (scrubDragging) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
+        Box(Modifier.fillMaxSize()) {
+            DragCancelTarget(scrubOverCancel, "seek",
+                Modifier.align(Alignment.BottomCenter).padding(bottom = navigationInset + CollapsedQueueHeight + 20.dp)
+                    .onGloballyPositioned { scrubCancelBounds = it.boundsInRoot() }.testTag("cancel-seek"))
         }
     }
     }

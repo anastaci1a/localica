@@ -92,6 +92,11 @@ fun LocalicaScreen(
     }
     val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val presentationCache = remember { BrowsePresentationCache() }
+    val artworkStore = remember { BrowseArtworkStore() }
+    val retainedRoutes = navigation.stacks.values.mapNotNull { it.lastOrNull()?.key }.toMutableSet()
+    var backDestination = navigation
+    repeat(2) { backDestination.back(settings.tabHistory)?.let { backDestination = it; retainedRoutes += it.route.key } }
+    artworkStore.keep(retainedRoutes, navigation.route.key)
     val actionPreferences = remember(context) { PlayerActionPreferences(context) }
     var playerActions by remember { mutableStateOf(actionPreferences.read()) }
     var customizeActions by remember { mutableStateOf(false) }
@@ -141,7 +146,10 @@ fun LocalicaScreen(
         ?: saved.copy(playCount = library.snapshot.trackPlays[saved.id] ?: 0) }
     val lyricsAvailable = rememberLyrics(indexedTrack)?.sources?.isNotEmpty() == true
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
-        navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title))
+        val route = BrowseRoute(navigation.active, item.ref, item.title)
+        artworkStore.seed(route.key, artworkStore.scope(navigation.route.key)?.peek(item.coverUris)
+            ?: io.github.anastaci1a.localica.library.ArtworkCache.peek(item.coverUris))
+        navigation = navigation.open(route)
         queueOpen = false; expanded = false; songInfo = false
         navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
     }
@@ -218,8 +226,7 @@ fun LocalicaScreen(
         val queueSelectionMaxHeight = maxHeight / 3
         Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(pageBackground).statusBarsPadding()
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
-            HorizontalPager(pager, Modifier.weight(1f), userScrollEnabled = !expanded,
-                beyondViewportPageCount = 1, key = { settings.tabs[it].name }) { page ->
+            TabPager(pager, settings.tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
@@ -233,18 +240,13 @@ fun LocalicaScreen(
                         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))
                     }
                     if (route.tab != MainTab.Queues && (route.tab != MainTab.Home || route.search || route.collection != null)) {
-                        LiquidGlassSurface(Modifier.height(CompactControlSize), pressFeedback = false) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ActionIcon(R.drawable.ic_sort, "Sort", anchor = sortAnchor, glass = false) { viewOptions = false; sortingRoute = route.key }
-                                ActionIcon(R.drawable.ic_eye, "View options", glass = false) { viewOptions = true; sortingRoute = route.key }
-                            }
-                        }
+                        BrowseOptionsPill(sortAnchor) { view -> viewOptions = view; sortingRoute = route.key }
                     }
                 }
                 Box(Modifier.weight(1f)) {
             // Routes retain saved state, but must not recycle live drawing/focus nodes from
             // a different grid or text field through SaveableStateProvider's ReusableContent.
-            key(route.key) { holder.SaveableStateProvider(route.key) {
+            key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides artworkStore.scope(route.key)) { holder.SaveableStateProvider(route.key) {
                 if (route.tab == MainTab.Queues && !route.search && (route.collection == null || route.collection.kind == MediaKind.Queue)) QueueScreen(queues, queueController, library,
                     playlist, playlistController, playback.connected, pins, ::pin, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage, isPlaying = playback.isPlaying, onOpen = ::openCollection)
                 else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
@@ -252,10 +254,10 @@ fun LocalicaScreen(
                         { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) },
                         { item, songs ->
                             if (item.row != null) queueController?.tap(songs.map { it.track }, songs.indexOfFirst { it.id == item.row.id }, sourceName = "Pinned songs")
-                            else navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title))
+                            else openCollection(item)
                         }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) }, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion)
                 } else BrowserScreen(library, playlist, route, { navigation = navigation.update(it) },
-                    { item -> navigation = navigation.open(BrowseRoute(navigation.active, item.ref, item.title)) },
+                    ::openCollection,
                     { settingsCategory = "Folders to scan"; settingsOpen = true }, { rows, index, scope ->
                         if (index >= 0) {
                             if (queueController != null) queueController.tap(rows.map { it.track }, index, scope, io.github.anastaci1a.localica.browse.queueSourceName(route, rows.map { it.track }), rows.map { it.sourcePlaylistId })
@@ -265,8 +267,8 @@ fun LocalicaScreen(
                     sortingRoute == route.key, { sortingRoute = null }, playingTrackId = playback.trackId, presentationOnly = viewOptions, selectionVisible = page == pager.settledPage,
                     onSearchEdit = { navigation = navigation.editSearch(it) }, onSearchCommit = { navigation = navigation.commitSearch() },
                     libraryFilters = libraryFilters, onFilterSettings = { settingsCategory = "Library filters"; settingsOpen = true },
-                    scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, sortOrigin = if (viewOptions) null else sortAnchor, onBack = ::back, onAppearance = { ink, background -> browseInk = ink; pageBackground = background })
-            } }
+                    scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, sortOrigin = sortAnchor, onBack = ::back, onAppearance = { ink, background -> browseInk = ink; pageBackground = background })
+            } } }
                 }
             }
             }
@@ -294,17 +296,17 @@ fun LocalicaScreen(
             SideEffect { utilityAnchor.source = browseBackdrop; utilityAnchor.face = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null, Modifier.size(28.dp)) }
-                    Box(Modifier.height(24.dp).width(1.dp).background(LocalContentColor.current.copy(alpha = .2f)))
+                    GlassPillDivider()
                     Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_more), null, Modifier.size(28.dp)) }
                 }
             } }
-            LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().glassAnchor(utilityAnchor).testTag("utility-pill").bottomGlassShadow(opacity = { chromeVisibility * (1f - progress.value) }), source = browseBackdrop, shadow = false, pressFeedback = false) {
+            LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().glassAnchor(utilityAnchor).testTag("utility-pill").bottomGlassShadow(opacity = { chromeVisibility * (1f - progress.value) }), source = browseBackdrop, shadow = false, pressFeedback = false, depthScale = RaisedGlassDepthScale) {
                 utilityAnchor.captureInk()
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 ActionIcon(R.drawable.ic_search, "Search library", glass = false, iconSize = 28.dp) {
                     navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true))
                 }
-                Box(Modifier.height(24.dp).width(1.dp).background(LocalContentColor.current.copy(alpha = .2f)))
+                GlassPillDivider()
                 Box {
                     ActionIcon(R.drawable.ic_more, "More", glass = false, iconSize = 28.dp) { moreOpen = true }
                     GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
@@ -353,7 +355,7 @@ fun LocalicaScreen(
             onSurface = androidx.compose.ui.graphics.Color.White, onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFDBDFE6))) {
         QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = progress.value) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
-                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection) } }
+                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false }) } }
             SelectionPanelVisibility(session.active && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).verticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)

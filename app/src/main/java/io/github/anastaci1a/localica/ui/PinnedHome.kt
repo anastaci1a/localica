@@ -21,13 +21,19 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins: List<MediaRef>,
     onSettings: () -> Unit, onBrowse: () -> Unit, onOpen: (BrowserItem, List<SongRow>) -> Unit,
-    onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false) {
-    val items by produceState(emptyList<BrowserItem>(), library.snapshot, playlists.playlists, pins) {
-        value = withContext(Dispatchers.Default) {
+    onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
+    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default) {
+    val cache = LocalBrowsePresentationCache.current
+    val cached = remember(library.snapshot, playlists.playlists, pins, cache) { cache?.home(library.snapshot, playlists.playlists, pins) }
+    val items by produceState(cached.orEmpty(), library.snapshot, playlists.playlists, pins) {
+        if (cached != null) { value = cached; return@produceState }
+        val result = withContext(queryDispatcher) {
             val catalog = BrowseQueries.evaluate(library.snapshot, playlists.playlists,
                 BrowseRoute(MainTab.Home, globalSearch = true)).items.associateBy { it.ref }
             pins.mapNotNull { catalog[it] }
         }
+        cache?.putHome(library.snapshot, playlists.playlists, pins, result)
+        value = result
     }
     var menu by remember { mutableStateOf<MediaRef?>(null) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -53,7 +59,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             TextButton(onClick = onBrowse) { Text("Browse all music") }
             if (library.snapshot.folders.isEmpty()) TextButton(onClick = onSettings) { Text("Add music folders") }
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
-            if (items.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
+            if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
         item { LazyRow(state = carousel, modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {

@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -78,4 +79,10 @@ internal fun formatTime(milliseconds: Long?): String {
     val seconds = milliseconds.coerceAtLeast(0) / 1000
     return if (seconds >= 3600) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
     else String.format(java.util.Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60)
+}
+
+/** Shared separator for two-action glass pills. */
+@Composable
+internal fun GlassPillDivider(modifier: Modifier = Modifier) {
+    Box(modifier.height(24.dp).width(1.dp).background(LocalContentColor.current.copy(alpha = .2f)))
 }

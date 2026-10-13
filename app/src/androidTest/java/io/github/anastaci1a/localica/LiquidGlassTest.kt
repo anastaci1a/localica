@@ -23,6 +23,34 @@ import org.junit.Test
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun tintLiftsShadowsMoreThanHighlightsWithoutBleachingYellow() {
+        org.junit.Assume.assumeTrue("Per-pixel tone mapping requires runtime shaders", Build.VERSION.SDK_INT >= 33)
+        var tint by mutableFloatStateOf(0f)
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
+            io.github.anastaci1a.localica.navigation.GlassAppearance(blur = 0f, whiteTint = tint, contrast = 0f, shadowStrength = 0f)) {
+            Box(Modifier.fillMaxSize()) {
+                val source = rememberFrostedBackdrop(Unit)
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    val colors = listOf(Color(.03f, .03f, .03f), Color(.4f, .4f, .4f), Color(.9f, .9f, .9f), Color.Yellow)
+                    colors.forEachIndexed { i, color -> drawRect(color, Offset(size.width * i / 4f, 0f), Size(size.width / 4f, size.height)) }
+                }
+                LiquidGlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(96.dp).testTag("tonal-lens"), source, refraction = 0f)
+            }
+        } } }
+        fun colors() = compose.onNodeWithTag("tonal-lens").captureToImage().toPixelMap().let { pixels ->
+            (0..3).map { pixels[(pixels.width * (it + .5f) / 4).toInt(), pixels.height / 2] }
+        }
+        val original = colors()
+        compose.runOnIdle { tint = .18f }
+        val toned = colors()
+        val lift = (0..2).map { toned[it].red - original[it].red }
+        assertTrue("Shadows receive a visible, stronger lift: $lift", lift[0] > .15f && lift[0] > lift[1] && lift[1] > lift[2])
+        assertTrue("Highlights remain close to their original brightness", lift[2] < .02f)
+        assertTrue("Bright yellow retains saturation: ${toned[3]}", toned[3].blue < .04f)
+        compose.runOnIdle { tint = 1f }
+        assertTrue("Full tint remains available", colors().all { it.red > .98f && it.green > .98f && it.blue > .98f })
+    }
+
     @Test fun paddedBackdropDoesNotExpandAContentSizedControl() {
         compose.setContent { ClearGlassTheme { Box(Modifier.fillMaxSize()) {
             val source = rememberFrostedBackdrop(Unit)

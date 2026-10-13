@@ -44,6 +44,7 @@ internal class GlassAnchor {
     var modalPresent by mutableStateOf(false)
     var source: FrostedBackdrop? = null
     var face: (@Composable () -> Unit)? = null
+    var depthScale = RaisedGlassDepthScale
     var quiet = false
     var ink by mutableStateOf(Color.Unspecified)
 }
@@ -63,11 +64,17 @@ internal fun GlassAnchor.captureInk() {
 @Composable
 internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
     val view = LocalView.current
-    return onGloballyPositioned { anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat())) }
+    return then(GlassDepthMarker(anchor)).onGloballyPositioned { anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat())) }
         // Read visibility in drawing, not only in a child RenderNode's alpha. Recorded
         // backdrop parents must re-record the restored trigger even while stationary.
         .drawWithContent { if (!anchor.hidden) drawContent() }
         .then(if (anchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)
+}
+
+/** Carry the material profile with its trigger, including wrappers around shared buttons. */
+private data class GlassDepthMarker(val anchor: GlassAnchor) : Modifier.Element
+internal fun Modifier.glassDepthScale(): Float = foldIn(1f) { depth, element ->
+    if (element is GlassDepthMarker) element.anchor.depthScale else depth
 }
 
 internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
@@ -229,6 +236,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                         ?: if (dark) Color.White else Color(0xFF202124),
                                     pressFeedback = false, shadow = false,
                                     body = { body.value.let { GlassShape(it.strain * p, it.depth * p) } },
+                                    depthScale = anchor.depthScale,
                                     refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
                             }
                         }

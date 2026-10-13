@@ -33,13 +33,15 @@ import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
+internal val CollapsedQueueHeight = 64.dp
+
 @Composable
 internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>, settings: InterfaceSettings,
     onSettled: (Boolean) -> Unit, playerProgress: Float = 1f, content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val top = maxHeight - inset - 64.dp
+    val top = maxHeight - inset - CollapsedQueueHeight
     val density = LocalDensity.current
     val distance = with(density) { (top - status).toPx().coerceAtLeast(1f) }
     var start by remember { mutableFloatStateOf(1f) }
@@ -83,7 +85,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.scrim) {}
     }
     FrostedSurface(Modifier.offset(y = top + (status - top) * p + 80.dp * (1f - playerProgress))
-        .width(maxWidth).height(64.dp + inset + (maxHeight - status - inset - 64.dp) * p)
+        .width(maxWidth).height(CollapsedQueueHeight + inset + (maxHeight - status - inset - CollapsedQueueHeight) * p)
         .graphicsLayer { alpha = ((playerProgress - .4f) / .6f).coerceIn(0f, 1f) }
         .then(if (playerProgress < .99f) Modifier.clearAndSetSemantics {} else Modifier)
         .draggable(rememberDraggableState { dy ->
@@ -93,7 +95,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             onDragStopped = { velocity -> settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f)) })
         .nestedScroll(listPull).testTag("queue-surface"), shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), darkening = .22f + .28f * p) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
-            Box(Modifier.fillMaxWidth().height(64.dp).clickable(onClickLabel = if (p == 0f) "Open queue" else "Close queue") { settle(p < .5f) }
+            Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (p == 0f) "Open queue" else "Close queue") { settle(p < .5f) }
                 .semantics { contentDescription = if (p == 0f) "Open queue" else "Close queue" }) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)
                     .background(Color.White.copy(alpha = .38f), RoundedCornerShape(2.dp)))

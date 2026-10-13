@@ -28,6 +28,82 @@ class PlayerTransitionTest {
     @get:Rule val compose = createComposeRule()
     private val state = PlaybackState(connected = true, title = "Evening", artist = "Artist", album = "Album", durationMs = 120000)
 
+    @Test fun scrubbingCanCancelAtTheLivePositionWithoutSeekingOrInterruptingPlayback() {
+        var position by mutableStateOf(20000L)
+        var seeks = 0
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            PlayerSurface(state.copy(positionMs = position, isPlaying = true), true, {}, InterfaceSettings(), remember { Animatable(1f) },
+                {}, { seeks++ }, {}, {}, {}, {}, visual = PlayerVisual())
+        } } }
+        val seek = compose.onNodeWithContentDescription("Seek")
+        val bounds = seek.fetchSemanticsNode().boundsInRoot
+        seek.performTouchInput { down(center); moveBy(Offset(60f, 0f), delayMillis = 48) }
+        val cancel = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle { position = 23000L }
+        seek.performTouchInput { moveTo(cancel.center - bounds.topLeft, delayMillis = 160); up() }
+        compose.onNodeWithTag("cancel-seek").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Pause").assertIsDisplayed()
+        compose.onNodeWithText("0:23").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, seeks) }
+        seek.performTouchInput { down(center) }
+        val secondCancel = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
+        seek.performTouchInput { moveTo(secondCancel.center - bounds.topLeft, delayMillis = 160); up() }
+        compose.onNodeWithTag("cancel-seek").assertDoesNotExist()
+        compose.onNodeWithText("0:23").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, seeks) }
+        seek.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40000f) }
+        compose.runOnIdle { assertEquals("An accessible seek still works after cancellation", 1, seeks) }
+        seek.performTouchInput { swipe(center, Offset(width * .8f, center.y), durationMillis = 250) }
+        compose.runOnIdle { assertEquals(2, seeks) }
+    }
+
+    @Test fun lyricsBubbleWidensContinuouslyAndReversesWithPersistentSourceIcon() {
+        var lyrics by mutableStateOf(false)
+        var collapsed = false
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            PlayerSurface(state, true, { collapsed = !it }, InterfaceSettings(), remember { Animatable(1f) },
+                {}, {}, {}, {}, {}, {}, lyricsOpen = lyrics, onLyrics = { lyrics = it },
+                lyricsAvailable = true, visual = PlayerVisual())
+        } } }
+        fun pill() = compose.onNodeWithTag("player-lyrics-pill").fetchSemanticsNode().boundsInRoot
+        val circle = pill()
+        val originalIcon = compose.onNodeWithContentDescription("Show lyrics").fetchSemanticsNode().boundsInRoot
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Show lyrics").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val partial = pill()
+        assertTrue("The same bubble widens gradually", partial.width > circle.width && partial.width < circle.width * 2)
+        assertEquals("Right edge remains anchored", circle.right, partial.right, 1f)
+        compose.mainClock.advanceTimeBy(400)
+        val expanded = pill()
+        val source = compose.onNodeWithContentDescription("Lyrics sources").fetchSemanticsNode().boundsInRoot
+        assertTrue("Persistent lyrics icon moves left", source.center.x < originalIcon.center.x - circle.width * .8f)
+        compose.onNodeWithContentDescription("Hide lyrics").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        assertTrue("Closing retains an intermediate pill", pill().width > circle.width && pill().width < expanded.width)
+        compose.mainClock.advanceTimeBy(400)
+        assertEquals(circle.width, pill().width, 1f)
+        compose.onNodeWithContentDescription("Show lyrics").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Hide lyrics").assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithContentDescription("Collapse player").performClick()
+        compose.runOnIdle { assertTrue(collapsed) }
+    }
+
+    @Test fun lyricsTransportCentersOnTrackAndShelfRatherThanTimestampLabels() {
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            PlayerSurface(state, true, {}, InterfaceSettings(), remember { Animatable(1f) },
+                {}, {}, {}, {}, {}, {}, lyricsOpen = true, visual = PlayerVisual())
+            QueueSurface(remember { Animatable(0f) }, InterfaceSettings(), {}) {}
+        } } }
+        val seek = compose.onNodeWithContentDescription("Seek").fetchSemanticsNode().boundsInRoot
+        val shelf = compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot
+        for (label in listOf("Previous", "Play", "Next")) {
+            val control = compose.onNodeWithContentDescription(label).fetchSemanticsNode().boundsInRoot
+            assertEquals("$label centers between the track and shelf", (seek.center.y + shelf.top) / 2, control.center.y, 1.5f)
+        }
+    }
+
     @Test fun lightArtworkContinuationDoesNotRevealADarkTemporaryPalette() {
         // A dark blue average and light lower artwork exaggerate the BA3 handoff.
         val wash = Bitmap.createBitmap(ArtworkWash.WIDTH, ArtworkWash.HEIGHT, Bitmap.Config.ARGB_8888).apply {

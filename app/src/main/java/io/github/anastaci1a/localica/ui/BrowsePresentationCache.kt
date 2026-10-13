@@ -4,6 +4,7 @@ import androidx.compose.runtime.compositionLocalOf
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.navigation.BrowseRoute
+import io.github.anastaci1a.localica.navigation.MediaRef
 import io.github.anastaci1a.localica.playlist.ManualPlaylist
 import io.github.anastaci1a.localica.queue.ListeningQueue
 
@@ -14,6 +15,14 @@ internal class BrowsePresentationCache {
     private data class Entry(val library: LibrarySnapshot, val playlists: List<ManualPlaylist>,
         val queues: List<ListeningQueue>, val filters: LibraryFilters, val presentation: PresentedBrowse)
     private val entries = mutableListOf<Entry>()
+    private data class HomeEntry(val library: LibrarySnapshot, val playlists: List<ManualPlaylist>,
+        val pins: List<MediaRef>, val items: List<BrowserItem>)
+    private var home: HomeEntry? = null
+    fun home(library: LibrarySnapshot, playlists: List<ManualPlaylist>, pins: List<MediaRef>): List<BrowserItem>? =
+        home?.takeIf { it.library === library && it.playlists === playlists && it.pins == pins }?.items
+    fun putHome(library: LibrarySnapshot, playlists: List<ManualPlaylist>, pins: List<MediaRef>, items: List<BrowserItem>) {
+        home = HomeEntry(library, playlists, pins, items)
+    }
     fun get(library: LibrarySnapshot, playlists: List<ManualPlaylist>, queues: List<ListeningQueue>,
         filters: LibraryFilters, route: BrowseRoute, style: BrowseStyle): PresentedBrowse? {
         val index = entries.indexOfFirst { it.library === library && it.playlists === playlists && it.queues === queues &&

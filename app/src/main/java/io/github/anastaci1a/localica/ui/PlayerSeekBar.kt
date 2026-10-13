@@ -12,6 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -19,11 +25,55 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRange: ClosedFloatingPointRange<Float>,
-    onValueChangeFinished: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier) {
+    onValueChangeFinished: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier,
+    cancelBounds: Rect? = null, onCancel: () -> Unit = {}, onDrag: (Boolean, Boolean) -> Unit = { _, _ -> }) {
     val interaction = remember { MutableInteractionSource() }
     val dragging by interaction.collectIsDraggedAsState()
     val thickness by animateDpAsState(if (dragging) 9.dp else 5.dp, tween(if (LocalReducedMotion.current) 0 else 160), label = "Seek thickness")
-    Slider(value, onValueChange, modifier, enabled, valueRange = valueRange, onValueChangeFinished = onValueChangeFinished,
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    var pointerActive by remember { mutableStateOf(false) }
+    var cancelRelease by remember { mutableStateOf(false) }
+    val target by rememberUpdatedState(cancelBounds)
+    val report by rememberUpdatedState(onDrag)
+    val cancel by rememberUpdatedState(onCancel)
+    val touch = if (!enabled) Modifier else Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            cancelRelease = false
+            pointerActive = true
+            report(true, false)
+            var released = false
+            try {
+                do {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    if (change != null) {
+                        val over = target?.contains(origin + change.position) == true
+                        cancelRelease = over
+                        report(change.pressed, over)
+                        released = !change.pressed
+                        if (released) {
+                            if (over) cancel()
+                            // Keep touch-origin updates distinct from subsequent keyboard/TalkBack edits.
+                            awaitPointerEvent(PointerEventPass.Final)
+                        }
+                    }
+                } while (!released && event.changes.any { it.pressed })
+            } finally {
+                pointerActive = false
+                report(false, false)
+                if (!released) { cancelRelease = true; cancel() }
+            }
+        }
+    }
+    Slider(value, { next ->
+        if (!pointerActive) cancelRelease = false
+        onValueChange(next)
+    }, modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(touch), enabled,
+        valueRange = valueRange, onValueChangeFinished = {
+            if (cancelRelease) onCancel() else onValueChangeFinished()
+            cancelRelease = false
+        },
         interactionSource = interaction,
         thumb = { Box(Modifier.width(0.dp).height(40.dp)) },
         track = {

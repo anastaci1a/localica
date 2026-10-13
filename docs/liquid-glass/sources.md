@@ -68,6 +68,14 @@ The custom-view documentation also warns that excessive separate containers/effe
 
 **Localica implication:** translate these responsibilities into Compose abstractions; SwiftUI/UIKit APIs do not run on Android. Sharing a backdrop does not require joining unrelated controls, and joining selections does not require rectangularly filling their entire bounding box. See [rendering](specification.md#rendering-and-measurement).
 
+### Sliders and switches · WWDC25
+
+Apple explicitly describes control thumbs temporarily becoming Liquid Glass during interaction. The transparent lens keeps the value beneath visible. Sliders preserve momentum and stretch during travel; UIKit also supports discrete ticks and a neutral fill origin. [Meet Liquid Glass, dynamics](https://developer.apple.com/videos/play/wwdc2025/219/?time=89) · [UIKit controls, 17:24–18:38](https://developer.apple.com/videos/play/wwdc2025/284/?time=1044) · [SwiftUI controls](https://developer.apple.com/videos/play/wwdc2025/323/?time=55).
+
+**Visual observation of Apple's demonstration:** slider thumbs are wider than tall, with strongly rounded ends. The quiet white thumb becomes a larger transparent lens while held; the colored track ends visibly beneath its center. A switch likewise exposes its colored track through the moving lens, then returns to a quieter solid thumb. These observations describe the WWDC25 demonstration, not every iOS version or an exact radius/duration specification.
+
+**Localica adaptation:** retain clear settings slider thumbs at rest as requested; switches use the demonstrated quiet-rest/clear-interaction distinction. Preserve accessible values, on/off semantics, tap alternatives and reduced motion. Playback keeps its separate scrubber design. See [settings controls](specification.md#settings-sliders-and-switches).
+
 ### Render-loop performance · Apple Tech Talks
 
 A hitch means a frame misses its display deadline. Both application updates and later rendering can cause it. Apple measures the time lost across an interaction, not merely a best-case or average frame rate. [Explore UI animation hitches and the render loop, 3:00](https://developer.apple.com/videos/play/tech-talks/10855/?time=180).
