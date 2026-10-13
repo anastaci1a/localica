@@ -15,16 +15,11 @@ class ListSearchTest {
     @get:Rule val compose = createComposeRule()
 
     private fun awaitSearchFocus() {
-        // Window/IME attachment is independent of Compose's animation clock.
-        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        automation.serviceInfo = automation.serviceInfo.apply {
-            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-        }
+        // Window focus arrives outside Compose's animation clock. Assert the editor's
+        // state directly: a visible IME isn't guaranteed to appear in the accessibility
+        // window list. GlassPressureTest separately exercises IME-owned Back via insets.
         compose.waitUntil(5000) {
-            compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 &&
-                automation.windows.any {
-                    it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
-                }
+            compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
         }
     }
 
