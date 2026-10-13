@@ -13,7 +13,7 @@ Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The pr
 
 Verify affected contracts: migrations/recovery and failed operations; occurrence/cursor/metadata preservation; navigation/search restoration and gesture ownership; playback/lyrics/artwork boundaries; accessibility, short/landscape screens, large fonts and reduced motion. Physical-device review supplements automation. Docs-only edits require content/link review, not Android tests.
 
-Local and CI verification use the same tests. Use focused tests during iteration, then run the complete build/check commands and instrumentation suite on both API 26 and 36 against the final candidate before pushing. Match the emulator configuration below; code, test or build-configuration changes after that gate require another full run. CI repeats verification in a fresh environment on the pushed commit before release.
+Local and CI verification use the same tests and Gradle launcher. Use focused tests during iteration, then run the complete build/check commands and `connectedDebugAndroidTest` on both API 26 and 36 against the final candidate before pushing. Match the emulator configuration below; code, test or build-configuration changes after that gate require another full run. CI repeats verification in a fresh environment on the pushed commit before release.
 
 ## Compatibility and dependencies
 
