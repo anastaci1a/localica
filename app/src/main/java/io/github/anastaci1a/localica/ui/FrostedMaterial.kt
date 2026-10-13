@@ -42,6 +42,7 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
     var lensSnapshot by mutableStateOf<ImageBitmap?>(null)
     var lensFrostSnapshot by mutableStateOf<ImageBitmap?>(null)
     var revision by mutableIntStateOf(0)
+    var recorded by mutableStateOf(false)
     fun refresh() { revision++ }
 }
 internal val LocalFrostedBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
@@ -49,11 +50,12 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true,
-    glassBlur: Float = LocalGlassAppearance.current.blur): FrostedBackdrop {
+    glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     // A shared scene is sampled by many lenses. Retain its raster, not just its
     // display list, so every lens does not replay all of the scene's drawing.
-    SideEffect { layer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen }
+    SideEffect { layer.compositingStrategy = if (retainRaster) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+        else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto }
     val contrastLayer = rememberGraphicsLayer()
     val source = remember(layer) { FrostedBackdrop(layer, dark) }
     SideEffect { source.dark = dark }
@@ -139,6 +141,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 this@drawWithContent.drawContent()
                 }
             }
+            source.recorded = true
             drawLayer(source.layer)
         }
 }
