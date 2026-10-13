@@ -53,15 +53,26 @@ private suspend fun LazyLayoutScrollScope.approachItem(index: Int, offset: Int, 
 internal suspend fun LazyGridState.easeToTop(reducedMotion: Boolean) = easeToItem(0, reducedMotion)
 
 internal suspend fun LazyListState.easeToItem(index: Int, reducedMotion: Boolean, duration: Int = 350) {
-    if (index !in 0 until layoutInfo.totalItemsCount) return
-    if (reducedMotion) { scrollToItem(index); return }
-    scroll { listScrollScope(this@easeToItem, this).approachItem(index, 0, duration,
-        { layoutInfo.viewportSize.height }, { 1 }) }
+    if (index < 0) return
+    // scroll waits for the first layout. Before that, a populated list reports
+    // zero items and would silently discard an initial follow-current request.
+    scroll {
+        val scope = listScrollScope(this@easeToItem, this)
+        if (index < scope.itemCount) {
+            if (reducedMotion) scope.snapToItem(index, 0)
+            else scope.approachItem(index, 0, duration, { layoutInfo.viewportSize.height }, { 1 })
+        }
+    }
 }
 
 internal suspend fun LazyGridState.easeToItem(index: Int, reducedMotion: Boolean, topInset: Float = 0f) {
-    if (index !in 0 until layoutInfo.totalItemsCount) return
-    if (reducedMotion) { scrollToItem(index, -topInset.toInt()); return }
-    scroll { gridScrollScope(this@easeToItem, this).approachItem(index, -topInset.roundToInt(), 500,
-        { layoutInfo.viewportSize.height }, { (layoutInfo.visibleItemsInfo.maxOfOrNull { it.column } ?: 0) + 1 }) }
+    if (index < 0) return
+    scroll {
+        val scope = gridScrollScope(this@easeToItem, this)
+        if (index < scope.itemCount) {
+            if (reducedMotion) scope.snapToItem(index, -topInset.roundToInt())
+            else scope.approachItem(index, -topInset.roundToInt(), 500,
+                { layoutInfo.viewportSize.height }, { (layoutInfo.visibleItemsInfo.maxOfOrNull { it.column } ?: 0) + 1 })
+        }
+    }
 }
