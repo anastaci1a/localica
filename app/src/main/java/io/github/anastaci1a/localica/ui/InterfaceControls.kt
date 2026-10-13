@@ -36,7 +36,9 @@ import kotlin.math.exp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
-    valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0) {
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true) {
+    val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    val direction = if (rtl) -1f else 1f
     val interaction = remember { MutableInteractionSource() }
     var pressure by remember { mutableFloatStateOf(0f) }
     val current by rememberUpdatedState(value)
@@ -46,15 +48,19 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val deformation = rememberGlassBody({ (value - valueRange.start) / span }, { pressure }, { if (pressed || dragged) 1f else 0f })
     val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f)
     val inset = with(LocalDensity.current) { 20.dp.toPx() }
-    val touch = Modifier.pointerInput(valueRange) {
+    val touch = if (!enabled) Modifier else Modifier.pointerInput(valueRange, rtl) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            val start = (current - valueRange.start) / span
+            val extent = (size.width - 2 * inset).coerceAtLeast(1f)
+            val fraction = (current - valueRange.start) / span
+            val pointer = if (rtl) size.width - down.position.x else down.position.x
+            val thumb = inset + fraction * extent
+            val start = if (kotlin.math.abs(pointer - thumb) <= inset) fraction else ((pointer - inset) / extent).coerceIn(0f, 1f)
             try {
                 do {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     event.changes.firstOrNull { it.id == down.id }?.let {
-                        val raw = start + (it.position.x - down.position.x) / (size.width - 2 * inset).coerceAtLeast(1f)
+                        val raw = start + direction * (it.position.x - down.position.x) / extent
                         pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
                     }
                 } while (event.changes.any { it.pressed })
@@ -62,21 +68,21 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
         }
     }
     val color = NavigationAccent
-    Slider(value, onValueChange, modifier.then(touch), valueRange = valueRange, steps = steps, interactionSource = interaction,
+    Slider(value, onValueChange, modifier.then(touch), enabled = enabled, valueRange = valueRange, steps = steps, interactionSource = interaction,
         thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
             LiquidGlassSurface(Modifier.size(40.dp, 26.dp).testTag("settings-slider-thumb").graphicsLayer {
                 scaleX = deformation.value.scaleX(); scaleY = deformation.value.scaleY()
                 val fraction = (value - valueRange.start) / span
-                translationX = glassWallTranslation(size.width, scaleX, when { fraction <= .001f -> -1f; fraction >= .999f -> 1f; else -> 0f })
-            }, source = trackSource, cornerRadius = 13.dp, pressFeedback = false, body = { deformation.value })
+                translationX = glassWallTranslation(size.width, scaleX, direction * when { fraction <= .001f -> -1f; fraction >= .999f -> 1f; else -> 0f })
+            }, source = trackSource, cornerRadius = 13.dp, pressFeedback = false, shadow = false, body = { deformation.value })
         } },
         track = {
             Canvas(Modifier.fillMaxWidth().height(48.dp).recordFrostedBackdrop(trackSource)) {
                 val h = 5.dp.toPx()
                 val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
                 val top = (size.height - h) / 2
-                drawRoundRect(color.copy(alpha = .16f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
-                if (fraction > 0f) drawRoundRect(color.copy(alpha = .8f), Offset(0f, top), Size(size.width * fraction, h), CornerRadius(h / 2))
+                drawRoundRect(color.copy(alpha = if (enabled) .16f else .08f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
+                if (fraction > 0f) drawRoundRect(color.copy(alpha = if (enabled) .8f else .3f), Offset(if (rtl) size.width * (1f - fraction) else 0f, top), Size(size.width * fraction, h), CornerRadius(h / 2))
                 if (steps > 0) for (index in 0..steps + 1) drawCircle(color.copy(alpha = .4f), 2.dp.toPx(),
                     Offset(size.width * index / (steps + 1), size.height / 2))
             }
@@ -89,7 +95,10 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val speed = LocalMotionSpeed.current
     val reduced = LocalReducedMotion.current
     val position = remember { androidx.compose.animation.core.Animatable(if (checked) 1f else 0f) }
-    LaunchedEffect(checked, reduced) {
+    var dragging by remember { mutableStateOf(false) }
+    var settleRequest by remember { mutableIntStateOf(0) }
+    LaunchedEffect(checked, reduced, speed, dragging, settleRequest) {
+        if (dragging) return@LaunchedEffect
         if (reduced) position.snapTo(if (checked) 1f else 0f)
         else position.animateTo(if (checked) 1f else 0f, spring(1f, 500f * speed * speed))
     }
@@ -98,24 +107,22 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val neutral = MaterialTheme.colorScheme.onSurface.copy(alpha = .18f)
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val interaction = remember { MutableInteractionSource() }
-    val dragged by interaction.collectIsDraggedAsState()
+    val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    val direction = if (rtl) -1f else 1f
     val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f)
-    val body = rememberGlassBody({ position.value }, { pressure }, { if (dragged) 1f else 0f })
-    val active by animateFloatAsState(if (dragged || position.isRunning) 1f else 0f,
+    val body = rememberGlassBody({ position.value }, { pressure }, { if (dragging) 1f else 0f })
+    val active by animateFloatAsState(if (dragging || position.isRunning) 1f else 0f,
         tween(if (reduced) 0 else 100), label = "Switch lens")
-    Box(Modifier.size(60.dp, 32.dp).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.draggable(
-        rememberDraggableState { dx -> scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-            raw += dx / with(density) { 24.dp.toPx() }
+    Box(Modifier.size(60.dp, 32.dp).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.elasticControlDrag(
+        horizontal = true,
+        onStart = { dragging = true; scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.stop(); raw = position.value } },
+        onDelta = { dx ->
+            raw += direction * dx / with(density) { 24.dp.toPx() }
             pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
-            position.snapTo(raw.coerceIn(0f, 1f))
-        } }, Orientation.Horizontal, interactionSource = interaction,
-        onDragStarted = { position.stop(); raw = position.value }, onDragStopped = {
-            pressure = 0f
-            val next = position.value >= .5f
-            onChange(next)
-            if (reduced) position.snapTo(if (next) 1f else 0f)
-            else position.animateTo(if (next) 1f else 0f, spring(1f, 500f * speed * speed))
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.snapTo(raw.coerceIn(0f, 1f)) }
+        }, onEnd = { cancelled ->
+            pressure = 0f; dragging = false; settleRequest++
+            if (!cancelled) onChange(position.value >= .5f)
         }))) {
         Canvas(Modifier.matchParentSize().recordFrostedBackdrop(trackSource)) {
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
@@ -124,8 +131,8 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
         CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
             LiquidGlassSurface(Modifier.offset { androidx.compose.ui.unit.IntOffset((2.dp + 24.dp * position.value).roundToPx(), 2.dp.roundToPx()) }.size(32.dp, 28.dp).graphicsLayer {
                 scaleX = body.value.scaleX(); scaleY = body.value.scaleY()
-                translationX = glassWallTranslation(size.width, scaleX, when { position.value <= .001f -> -1f; position.value >= .999f -> 1f; else -> 0f })
-            }, source = trackSource, cornerRadius = 14.dp, pressFeedback = false, body = { body.value }) {
+                translationX = glassWallTranslation(size.width, scaleX, direction * when { position.value <= .001f -> -1f; position.value >= .999f -> 1f; else -> 0f })
+            }, source = trackSource, cornerRadius = 14.dp, pressFeedback = false, shadow = false, body = { body.value }) {
                 Canvas(Modifier.matchParentSize()) { drawRoundRect(Color.White.copy(alpha = 1f - active), cornerRadius = CornerRadius(size.height / 2)) }
             }
         }
@@ -161,5 +168,20 @@ internal fun GlassFilterChoice(checked: Boolean, onClick: () -> Unit, label: Str
             tint = Color.Black.copy(alpha = if (checked) .09f else 0f), pressFeedback = enabled) {
             Text(label, Modifier.align(Alignment.Center).padding(horizontal = 14.dp), style = MaterialTheme.typography.labelLarge)
         }
+    }
+}
+
+/** Native directional recognition with an explicit cancellation path shared by value lenses. */
+@Composable
+internal fun Modifier.elasticControlDrag(horizontal: Boolean, onStart: () -> Unit,
+    onDelta: (Float) -> Unit, onEnd: (cancelled: Boolean) -> Unit): Modifier {
+    val start by rememberUpdatedState(onStart)
+    val delta by rememberUpdatedState(onDelta)
+    val end by rememberUpdatedState(onEnd)
+    return pointerInput(horizontal) {
+        if (horizontal) detectHorizontalDragGestures(onDragStart = { start() },
+            onDragEnd = { end(false) }, onDragCancel = { end(true) }) { _, amount -> delta(amount) }
+        else detectVerticalDragGestures(onDragStart = { start() },
+            onDragEnd = { end(false) }, onDragCancel = { end(true) }) { _, amount -> delta(amount) }
     }
 }

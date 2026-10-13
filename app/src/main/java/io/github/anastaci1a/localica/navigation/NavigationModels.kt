@@ -73,7 +73,8 @@ data class InterfaceSettings(
     val artworkHold: ArtworkAction = ArtworkAction.Menu,
     val fasterMotion: Boolean = false,
     val artworkLayout: ArtworkLayout = ArtworkLayout.FullBackground,
-    val artworkTransition: ArtworkTransition = ArtworkTransition.SoftWash,
+    val artworkTransition: ArtworkTransition = ArtworkTransition.BlurThrough,
+    val artworkSwipe: Boolean = true,
     val glass: GlassAppearance = GlassAppearance(),
     val grayTone: Float = .4f,
 )
@@ -108,4 +109,4 @@ enum class ArtworkAction(val label: String) {
 
 enum class ArtworkLayout(val label: String) { FullBackground("Full-background artwork"), Floating("Floating artwork with matte background") }
 
-enum class ArtworkTransition(val label: String) { SoftWash("Soft Wash"), FlowingDissolve("Flowing Dissolve"), GentleRipple("Gentle Ripple") }
+enum class ArtworkTransition(val label: String) { BlurThrough("Blur through"), Carousel("Carousel") }

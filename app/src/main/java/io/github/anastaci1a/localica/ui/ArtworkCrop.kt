@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -82,7 +84,8 @@ internal fun ArtworkCrop(uri: String, onDismiss: () -> Unit, onCropped: (String)
             }
             failure?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text("Zoom", style = MaterialTheme.typography.labelLarge)
-            InterfaceSlider(zoom, { if (!saving) { zoom = it; bitmap?.let(::constrain) } }, valueRange = 1f..8f)
+            InterfaceSlider(zoom, { zoom = it; bitmap?.let(::constrain) },
+                Modifier.semantics { contentDescription = "Crop zoom" }, valueRange = 1f..8f, enabled = !saving)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") }
                 TextButton(onClick = { zoom = 1f; centerX = .5f; centerY = .5f }, enabled = !saving) { Text("Reset crop") }
