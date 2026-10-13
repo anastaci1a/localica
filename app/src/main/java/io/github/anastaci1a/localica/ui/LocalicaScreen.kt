@@ -73,7 +73,10 @@ fun LocalicaScreen(
         save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
         mutableStateOf(NavigationState.fresh(settings.tabs))
     }
-    val pager = rememberPagerState(initialPage = settings.tabs.indexOf(navigation.active).coerceAtLeast(0)) { settings.tabs.size }
+    // Count and item keys both read the same live snapshot. A captured List in the
+    // key callback can outlive a settings update and disagree with the new count.
+    val tabs = { settings.tabs }
+    val pager = rememberPagerState(initialPage = settings.tabs.indexOf(navigation.active).coerceAtLeast(0)) { tabs().size }
     val navigationScope = rememberCoroutineScope()
     var scrollRequests by rememberSaveable { mutableStateOf(emptyMap<MainTab, Int>()) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -232,7 +235,7 @@ fun LocalicaScreen(
         val queueSelectionMaxHeight = maxHeight / 3
         Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(pageBackground).statusBarsPadding()
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
-            TabPager(pager, settings.tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->
+            TabPager(pager, tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute

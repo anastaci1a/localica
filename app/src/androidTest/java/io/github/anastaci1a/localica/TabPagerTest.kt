@@ -27,7 +27,7 @@ class TabPagerTest {
             pager = rememberPagerState { 2 }
             list = rememberLazyListState()
             shelf = rememberLazyListState()
-            TabPager(pager, listOf(MainTab.Library, MainTab.Albums), Modifier.fillMaxSize()) { page ->
+            TabPager(pager, { listOf(MainTab.Library, MainTab.Albums) }, Modifier.fillMaxSize()) { page ->
                 if (page == 0) Column {
                     LazyRow(Modifier.height(120.dp).testTag("shelf"), state = shelf) {
                         items(30) { Text("Album $it", Modifier.width(130.dp).fillMaxHeight()) }
