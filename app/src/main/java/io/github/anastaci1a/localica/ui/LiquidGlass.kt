@@ -151,11 +151,13 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
+                val thickness = body().thickness * (if (pressFeedback || anchor != null) contact.body.value.thickness else 1f)
                 if (Build.VERSION.SDK_INT >= 33) lens?.effect(
                     LensGeometry(androidx.compose.ui.geometry.Rect(pad, pad, extent.width - pad, extent.height - pad), radius),
                     blur * resolution,
-                    appearance.depth * depthScale * body().thickness * (if (pressFeedback || anchor != null) contact.body.value.thickness else 1f),
-                    power = refraction, whiteTint = appearance.whiteTint * (1f - panel))
+                    appearance.depth * depthScale * thickness,
+                    power = refraction, whiteTint = appearance.whiteTint * (1f - panel),
+                    flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f))
                 else if (blur > 0f) BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp) else null
             }
         }
@@ -163,8 +165,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         if (Build.VERSION.SDK_INT < 33) Canvas(Modifier.matchParentSize()) {
             val shape = LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, size),
                 (cornerRadius?.toPx() ?: size.minDimension / 2f).coerceIn(0f, size.minDimension / 2f))
-            val depth = appearance.depth * depthScale * body().thickness *
-                (if (pressFeedback || anchor != null) contact.body.value.thickness else 1f)
+            val thickness = body().thickness * (if (pressFeedback || anchor != null) contact.body.value.thickness else 1f)
+            val depth = appearance.depth * depthScale * thickness
+            val flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f)
             val home = if (homeSource?.lensSnapshot != null || homeSource?.snapshot != null) homeWeight().coerceIn(0f, 1f) else 0f
             // Blur and tint are independent endpoints. Premultiplied addition
             // preserves opacity while either varies, including a source handoff.
@@ -191,10 +194,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             with(mesh) {
                 samples.forEachIndexed { index, (backing, image, amount) ->
                     draw(shape, image, backing.size, origin - backing.origin, depth, refraction,
-                        amount, lighting = false, additive = index > 0)
+                        amount, lighting = false, additive = index > 0, flattening = flattening)
                 }
                 if (blending) drawContext.canvas.restore()
-                draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth, refraction)
+                draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth, refraction, flattening = flattening)
             }
         }
         Canvas(Modifier.matchParentSize()) {
