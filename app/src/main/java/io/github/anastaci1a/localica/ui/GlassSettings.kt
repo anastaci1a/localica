@@ -26,11 +26,12 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
         Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
-                drawRect(Color(0xFFBCDCE7))
-                val stripe = 12.dp.toPx()
-                for (i in 0..(size.width / stripe).toInt()) {
-                    drawRect(if (i % 2 == 0) Color(0xFF729EB6) else Color(0xFFE1AB94),
-                        Offset(i * stripe, 0f), Size(stripe, size.height))
+                val light = listOf(Color(0xFFF1D8BC), Color(0xFFBCD9CE), Color(0xFFCDC8E5), Color(0xFFE9B9AC))
+                val dark = listOf(Color(0xFF294D60), Color(0xFF68566F), Color(0xFF3C6962), Color(0xFF8B514D))
+                val cell = 24.dp.toPx()
+                for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt()) {
+                    val palette = if ((x + y) % 2 == 0) light else dark
+                    drawRect(palette[(x / 2 + y) % palette.size], Offset(x * cell, y * cell), Size(cell, cell))
                 }
             }
             GlassPreview(source)
@@ -58,7 +59,7 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
         GlassSlider("Selector blur", value.tabBlur, "Clear", "Frosted") { onChange(value.copy(tabBlur = it)) }
         GlassSlider("Selector white tint", value.tabWhiteTint, "None", "White") { onChange(value.copy(tabWhiteTint = it)) }
     } else Text(if (value.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Overlay)
-        "The clear lens bends the finished bar and its labels. Selector blur and tint are saved but inactive."
+        "The clear lens bends the bar beneath sharp labels. Selector blur and tint are saved but inactive."
         else "A simple gray pill, without glass deformation.", style = MaterialTheme.typography.bodySmall)
     TextButton(onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") }
 }
