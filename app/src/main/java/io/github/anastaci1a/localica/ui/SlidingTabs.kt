@@ -95,7 +95,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
         val pixels = with(density) { width.toPx() }
         val scroll = rememberScrollState()
         val viewport = with(density) { maxWidth.toPx() }
-        LiquidGlassSurface(Modifier.fillMaxSize().bottomGlassShadow(opacity = shadowOpacity), source, pressFeedback = false, shadow = false, inkOverride = Color.Black) {}
+        LiquidGlassSurface(Modifier.fillMaxSize().bottomGlassShadow(opacity = shadowOpacity), source, pressFeedback = false, shadow = false, inkOverride = Color.Black, depthScale = BottomPillDepthScale) {}
         Box(Modifier.fillMaxSize().clip(CircleShape)) {
         Box(Modifier.fillMaxHeight().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll, enabled = !fits && !dragging)
             .testTag("tab-scroll").pointerInput(tabs, pixels, viewport, fits) {
@@ -161,7 +161,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
                     contrast = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.contrast)) {
                     SelectionLens(modifier, lens,
-                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, pressure = { pressure }, wall = {
+                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, depthScale = BottomPillDepthScale, pressure = { pressure }, wall = {
                             when {
                                 lens.value <= scroll.value / pixels + .001f -> -1f
                                 lens.value >= minOf(tabs.lastIndex.toFloat(), (scroll.value + viewport) / pixels - 1f) - .001f -> 1f

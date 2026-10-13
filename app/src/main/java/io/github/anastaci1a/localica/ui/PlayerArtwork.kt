@@ -37,6 +37,28 @@ internal fun rememberPlayerVisual(uri: String?, provider: CoverProvider = Embedd
     return loaded.second.copy(loading = uri != null && loaded.first != request)
 }
 
+/** A collection starts with its tapped thumbnail; preparing its large wash never blocks that frame. */
+@Composable
+internal fun rememberCollectionVisual(uri: String?, provider: CoverProvider = EmbeddedCoverProvider): PlayerVisual {
+    val context = LocalContext.current.applicationContext
+    val retention = LocalBrowseArtwork.current
+    val revision by ArtworkCache.revision.collectAsState()
+    val request = uri to revision
+    val initial = remember(request, provider, retention) {
+        retention?.visual(uri) ?: uri?.let { PlayerVisualCache.peek(it) } ?: PlayerVisual(
+            (retention?.preview()?.bitmap ?: ArtworkCache.peek(listOfNotNull(uri), 768)?.bitmap)?.asImageBitmap())
+    }
+    val loaded by produceState<Pair<Pair<String?, Long>, PlayerVisual>?>(null, request, provider) {
+        if (uri != null) {
+            val visual = retention?.visual(uri) ?: PlayerVisualCache.read(context, uri, provider)
+            currentCoroutineContext().ensureActive()
+            retention?.keepVisual(uri, visual)
+            value = request to visual
+        }
+    }
+    return loaded?.takeIf { it.first == request }?.second ?: initial
+}
+
 @Composable
 internal fun PlayerArtwork(visual: PlayerVisual, modifier: Modifier, shape: Shape, contentScale: ContentScale, duration: Int) {
     ArtworkBlend(visual, modifier.clip(shape), duration) { frame ->

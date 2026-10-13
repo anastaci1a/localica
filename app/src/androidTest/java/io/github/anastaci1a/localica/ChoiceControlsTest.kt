@@ -30,14 +30,34 @@ class ChoiceControlsTest {
         assertFalse(saved!!.ascending)
     }
 
+    @Test fun sortAndViewTabsKeepOneDraftAndSaveBothTogether() {
+        var saved: BrowseStyle? = null
+        compose.setContent { LocalicaTheme {
+            BrowseSortDialog(BrowseRoute(MainTab.Albums), BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
+        } }
+        compose.onNodeWithText("Year").performScrollTo().performClick()
+        compose.onNodeWithText("View", substring = false).performClick().assertIsSelected()
+        compose.onNodeWithText("View mode").performClick()
+        compose.onNodeWithText("Gallery", substring = false).performClick()
+        compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
+        compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
+        compose.onNodeWithText("Year").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle {
+            assertEquals(TrackSort.Year, saved!!.sort)
+            assertEquals(Presentation.Standard, saved!!.presentation)
+            assertEquals(3, saved!!.itemsPerRow)
+        }
+    }
+
     @Test fun galleryCountSnapsPersistsAndOverridesWidthPresets() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val route = BrowseRoute(MainTab.Albums)
         val preferences = BrowsePreferences(context)
         val previous = preferences.read(route)
         compose.setContent { LocalicaTheme {
-            ListViewOptions(route, BrowseStyle(presentation = Presentation.Standard), false, {},
-                { value, override -> preferences.write(route, value, override) }, {})
+            BrowseSortDialog(route, BrowseStyle(presentation = Presentation.Standard), false, {},
+                { value, override -> preferences.write(route, value, override) }, {}, presentationOnly = true)
         } }
         try {
             compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(4.1f) }

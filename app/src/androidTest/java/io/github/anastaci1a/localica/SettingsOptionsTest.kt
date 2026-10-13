@@ -34,9 +34,9 @@ class SettingsOptionsTest {
         val route = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "album-a"), "Album A")
         var saved: BrowseStyle? = null
         try {
-            compose.setContent { LocalicaTheme { ListViewOptions(route, prefs.read(route), false, {}, { style, override ->
+            compose.setContent { LocalicaTheme { BrowseSortDialog(route, prefs.read(route), false, {}, { style, override ->
                 prefs.write(route, style, override); saved = style
-            }, {}) } }
+            }, {}, presentationOnly = true) } }
             compose.onNodeWithText("Extra information").performClick()
             // This is the tenth option: scroll it clear of the dialog footer on
             // shorter viewports before injecting an actual touch.

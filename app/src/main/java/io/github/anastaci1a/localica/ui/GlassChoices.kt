@@ -16,13 +16,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** One moving lens, with the same targets for tapping, dragging and accessibility. */
 @Composable
-internal fun GlassChoices(labels: List<String>, selected: Int, horizontal: Boolean = false, onSelect: (Int) -> Unit) {
+internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifier = Modifier, horizontal: Boolean = false, icons: List<Int>? = null, role: Role = Role.RadioButton, onSelect: (Int) -> Unit) {
     if (labels.isEmpty()) return
     val position = remember { Animatable(selected.toFloat()) }
     val scope = rememberCoroutineScope()
@@ -37,7 +38,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, horizontal: Boole
             else position.animateTo(selected.toFloat(), spring(1f, 650f))
         }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = 4.dp)
         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .045f), RoundedCornerShape(24.dp))
         .padding(4.dp).selectableGroup()) {
         val width = if (horizontal) maxWidth / labels.size else maxWidth
@@ -50,7 +51,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, horizontal: Boole
                 when { position.value <= .001f -> -1f; position.value >= labels.lastIndex - .001f -> 1f; else -> 0f }
             })
         @Composable fun Item(index: Int, modifier: Modifier) {
-            Box(modifier.height(height).selectable(index == selected, role = Role.RadioButton,
+            Box(modifier.height(height).selectable(index == selected, role = role,
                 interactionSource = null, indication = null, onClick = { change(index) })
                 .then(if (index == selected) Modifier.draggable(rememberDraggableState { delta ->
                     raw += delta / stride
@@ -62,7 +63,11 @@ internal fun GlassChoices(labels: List<String>, selected: Int, horizontal: Boole
                         val next = position.value.roundToInt().coerceIn(labels.indices)
                         pressure = 0f; dragging = false; change(next)
                     }) else Modifier), contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
-                Text(labels[index], Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    icons?.getOrNull(index)?.let { Icon(painterResource(it), null, Modifier.size(24.dp)) }
+                    Text(labels[index], style = if (role == Role.Tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                        maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
             }
         }
         if (horizontal) Row { labels.indices.forEach { Item(it, Modifier.width(width)) } }
