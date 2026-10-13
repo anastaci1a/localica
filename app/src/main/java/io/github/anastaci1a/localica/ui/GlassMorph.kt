@@ -250,7 +250,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 SideEffect { anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
                 val dark = darkOverride ?: (source?.dark == true)
                 val material = rememberFrostedBackdrop(source?.fallback to (p == 1f), dark = dark)
-                val completePanel = rememberFrostedBackdrop(p == 1f, dark = dark)
+                // This recording is sampled only by a later nested modal. Its
+                // material already has a shared raster; don't allocate and redraw
+                // another full-panel texture throughout every opening/closing.
+                val completePanel = rememberFrostedBackdrop(p == 1f, dark = dark, retainRaster = false)
                 fun mix(a: Float, b: Float) = a + (b - a) * geometry
                 Box(Modifier.fillMaxSize().onGloballyPositioned { windowOrigin = it.backdropPosition(view) }) {
                     Layout(modifier = Modifier.offset {

@@ -33,7 +33,10 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
     // Isolate unchanged filters from ancestor recordings; source RenderNode changes
     // still invalidate the sampled result, while sibling motion reuses this drawing.
     Canvas(modifier.graphicsLayer()) {
-        if (source.layer.isReleased || source.layer.size.width <= 0) return@Canvas
+        // A list may load after this floating control's first draw. Observe the
+        // first recording explicitly: GraphicsLayer.size is not snapshot state,
+        // and returning before drawLayer otherwise installs no dependency.
+        if (!source.recorded || source.layer.isReleased || source.layer.size.width <= 0) return@Canvas
         val r = resolution.coerceIn(.25f, 1f)
         val extent = IntSize(ceil((size.width + 2 * padding) * r).toInt().coerceAtLeast(1),
             ceil((size.height + 2 * padding) * r).toInt().coerceAtLeast(1))
