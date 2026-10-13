@@ -42,6 +42,33 @@ class ListMotionTest {
         compose.mainClock.autoAdvance = true
     }
 
+    @Test fun distantReturnDoesNotTeleportAfterAShortIntroAnimation() {
+        lateinit var grid: LazyGridState
+        lateinit var scope: CoroutineScope
+        compose.setContent { LocalicaTheme {
+            grid = rememberLazyGridState(9000); scope = rememberCoroutineScope()
+            LazyVerticalGrid(GridCells.Fixed(3), Modifier.height(360.dp), state = grid) {
+                items(10000) { Text("Album $it", Modifier.height(120.dp)) }
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        val positions = mutableListOf<Float>()
+        lateinit var job: Job
+        compose.runOnIdle { job = scope.launch { grid.easeToTop(false) } }
+        repeat(36) {
+            compose.runOnIdle { positions += grid.firstVisibleItemIndex / 3f + grid.firstVisibleItemScrollOffset.toFloat() / grid.layoutInfo.visibleItemsInfo.first().size.height }
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+        }
+        compose.runOnIdle {
+            assertTrue(job.isCompleted)
+            val travel = positions.zipWithNext { a, b -> a - b }
+            assertTrue("No single frame may jump over the distant middle: $travel", travel.max() < 600f)
+            assertTrue("The journey should occupy multiple advancing frames", travel.count { it > 1f } >= 10)
+            assertEquals(0, grid.firstVisibleItemIndex)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
     private fun follow(scope: CoroutineScope, position: () -> Float, destination: suspend () -> Unit) {
         compose.mainClock.autoAdvance = false
         lateinit var job: Job
