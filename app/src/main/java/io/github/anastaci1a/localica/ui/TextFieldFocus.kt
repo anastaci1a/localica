@@ -5,6 +5,8 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.imeAnimationSource
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,16 +41,21 @@ private val LocalRestingTextFocus = staticCompositionLocalOf<FocusRequester> { e
     var focused by remember { mutableStateOf(false) }
     var sawKeyboard by remember { mutableStateOf(false) }
     val keyboardVisible = WindowInsets.isImeVisible
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val keyboardSettled = WindowInsets.imeAnimationSource.getBottom(density) == WindowInsets.imeAnimationTarget.getBottom(density)
+    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     // Keep native window focus, but move Compose focus out of the editor. Clearing
     // the window owner can immediately focus its first editor again in key mode.
     val restingFocus = LocalRestingTextFocus.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun endEditing() { restingFocus.requestFocus(); keyboard?.hide() }
     BackHandler(focused) { endEditing() }
-    LaunchedEffect(focused, keyboardVisible) {
-        if (!focused) sawKeyboard = false
-        else if (keyboardVisible) sawKeyboard = true
-        else if (sawKeyboard) { sawKeyboard = false; endEditing() }
+    LaunchedEffect(focused, keyboardVisible, keyboardSettled, windowFocused) {
+        if (!focused || !windowFocused) sawKeyboard = false
+        // A newly focused popup may inherit the previous window's closing IME.
+        // Only a settled keyboard belongs to this editing session.
+        else if (keyboardVisible && keyboardSettled) sawKeyboard = true
+        else if (!keyboardVisible && sawKeyboard) { sawKeyboard = false; endEditing() }
     }
     return onFocusChanged { focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
         if (focused && event.key == Key.Back) {

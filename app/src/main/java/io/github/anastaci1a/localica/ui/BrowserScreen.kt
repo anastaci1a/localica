@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, route: BrowseRoute,
     onRoute: (BrowseRoute) -> Unit, onOpen: (BrowserItem) -> Unit, onSettings: () -> Unit,
@@ -86,18 +86,22 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val panelReady = LocalGlassPanelReady.current
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused) {
+    val keyboardClosing = WindowInsets.ime.getBottom(density) > 0 && WindowInsets.imeAnimationTarget.getBottom(density) == 0
+    var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
+    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing) {
         // Dialog attachment and IME focus happen outside Compose's animation clock.
         // Do not consume an autofocus request while the returning window still owns input.
-        if (!panelReady || !windowFocused) return@LaunchedEffect
+        if (!panelReady || !windowFocused || keyboardClosing) return@LaunchedEffect
         if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
             withFrameNanos { } // Wait until the newly keyed field is attached.
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
-        } else if (route.search && route.queryCommitted && !playerOpen) {
+            restoreResultsFocus = false
+        } else if (restoreResultsFocus && !playerOpen) {
             // Replacing a focused field can transfer focus to the restored field even without
             // requestFocus. Back restores results, so explicitly end that input session.
             withFrameNanos { }
             resultsFocus.requestFocus(); keyboard?.hide()
+            restoreResultsFocus = false
         }
     }
     LaunchedEffect(libraryFilters.visible, route.key, route.filter, selectionVisible) {
