@@ -14,6 +14,20 @@ import org.junit.Test
 class ListSearchTest {
     @get:Rule val compose = createComposeRule()
 
+    private fun awaitSearchFocus() {
+        // Window/IME attachment is independent of Compose's animation clock.
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        compose.waitUntil(5000) {
+            compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 &&
+                automation.windows.any {
+                    it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                }
+        }
+    }
+
     @Test fun visibleSearchVacancyRestoresWithoutCumulativeListMovement() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
@@ -30,10 +44,7 @@ class ListSearchTest {
                 if (pass == 1) compose.onNodeWithTag("browser-list").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, 20f) }
                 val before = compose.onNodeWithText("Album 000").fetchSemanticsNode().boundsInRoot
                 compose.onNodeWithTag("list-search-pill").performClick()
-                // Native dialog focus may arrive after the Compose morph has settled.
-                compose.waitUntil(5000) {
-                    compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
-                }
+                awaitSearchFocus()
                 compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("Album")
                 compose.onNodeWithContentDescription("Close list search").performClick()
                 compose.onNodeWithTag("list-search-popup").assertDoesNotExist()
@@ -67,6 +78,7 @@ class ListSearchTest {
             val before = compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithTag("list-search-pill").performClick()
             compose.onNodeWithTag("list-search-popup").assertIsDisplayed()
+            awaitSearchFocus()
             compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("Album")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.waitUntil(5000) { InstrumentationRegistry.getInstrumentation().uiAutomation.windows.none {
@@ -87,6 +99,7 @@ class ListSearchTest {
             compose.onNodeWithContentDescription("Close list search").performClick()
             assertEquals(before, compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot)
             compose.onNodeWithTag("list-search-pill").performClick()
+            awaitSearchFocus()
             compose.onNode(hasSetTextAction()).assertIsFocused().assertTextContains("Album")
             compose.onNode(hasSetTextAction()).performTextReplacement("061")
             compose.onNode(hasSetTextAction()).performImeAction()
