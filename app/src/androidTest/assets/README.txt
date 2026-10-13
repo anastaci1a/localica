@@ -9,6 +9,10 @@ include a generated solid teal 1800x1200 JPEG cover to verify bounded decoding.
 The Ogg and Opus variants intentionally have no cover to exercise the fallback.
 queue-tone.mp3 is an original 20-second quiet sine tone used to exercise live
 queue edits without the track ending during the assertions.
+playback-tone.m4a/wav are original 20-second 660/220 Hz tones (AAC 64 kbps
+and mono 44.1 kHz PCM), generated with FFmpeg. The transport test uses them
+alongside queue-tone.mp3 so pause/seek commands cannot race a two-second end;
+it seeks near the end explicitly to verify background completion.
 
 The tone.lrc sidecar and lyrics.opus lyric metadata contain original synthetic
 lines for local lyric discovery, source selection, and timing tests.
