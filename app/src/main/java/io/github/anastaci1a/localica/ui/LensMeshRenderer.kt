@@ -20,6 +20,7 @@ internal class LensMeshRenderer {
     private var geometryKey: List<Any> = emptyList()
     private var opticalDepth = Float.NaN
     private var opticalPower = Float.NaN
+    private var opticalFlattening = Float.NaN
     private var fields = emptyList<LensField>()
     private var generation = 0
     private var vertices = FloatArray(0)
@@ -45,7 +46,8 @@ internal class LensMeshRenderer {
 
     fun DrawScope.draw(shape: LensGeometry, snapshot: ImageBitmap?, sourceSize: IntSize,
         sourceOffset: Offset, depth: Float, power: Float = 1f, alpha: Float = 1f,
-        field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false) {
+        field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false,
+        flattening: Float = 0f) {
         val next = listOf(shape, density, fieldKey ?: Unit)
         val geometryChanged = geometryKey != next
         if (geometryChanged) {
@@ -56,14 +58,14 @@ internal class LensMeshRenderer {
             // Android 8 JNI validates colors against coordinate count (2/vertex).
             highlights = IntArray(vertices.size)
         }
-        if (geometryChanged || depth != opticalDepth || power != opticalPower) {
-            opticalDepth = depth; opticalPower = power; generation++
+        if (geometryChanged || depth != opticalDepth || power != opticalPower || flattening != opticalFlattening) {
+            opticalDepth = depth; opticalPower = power; opticalFlattening = flattening; generation++
             for (i in fields.indices) {
                 val f = fields[i]
                 // Boundary triangles include vertices just outside a rounded clip.
                 // Extend the boundary normal there; zeroing their ray introduces
                 // a sawtooth along the curve when those triangles interpolate.
-                val ray = lensRay(f.copy(distance = f.distance.coerceAtLeast(0f)), shape.span, depth)
+                val ray = lensRay(f.copy(distance = f.distance.coerceAtLeast(0f)), shape.span, depth, flattening)
                 rays[2 * i] = ray.offset.x * power; rays[2 * i + 1] = ray.offset.y * power
                 val facing = (ray.normalXY.x * -.45f + ray.normalXY.y * -.75f + ray.normalZ * .6f) / 1.06066f
                 val grazing = 1f - ray.normalZ

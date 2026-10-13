@@ -7,6 +7,48 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LensGeometryTest {
+    @Test fun boxCrownHasNoDirectionalWedgesThroughItsCenter() {
+        val shape = LensGeometry(Rect(0f, 0f, 400f, 400f), 28f)
+        fun ray(x: Float, y: Float) = lensRay(shape.field(shape.bounds.center + Offset(x, y)), shape.span, 1.35f)
+        for (distance in listOf(2f, 5f, 10f)) {
+            val axial = ray(distance, 0f).offset.x
+            val diagonal = ray(distance, distance).offset.x
+            assertEquals("Smooth central curvature cannot depend on an angular sector", axial, diagonal, kotlin.math.abs(axial) * .05f)
+        }
+    }
+
+    @Test fun circularCrownRetainsItsRadialProfile() {
+        val shape = LensGeometry(Rect(0f, 0f, 100f, 100f), 50f)
+        for (radius in 1..49) for (angle in 0..360 step 15) {
+            val radians = angle * kotlin.math.PI.toFloat() / 180f
+            val p = Offset(kotlin.math.cos(radians), kotlin.math.sin(radians)) * radius.toFloat()
+            val field = shape.field(shape.bounds.center + p)
+            assertEquals(50f - radius, field.distance, .0002f)
+            assertEquals(-p.x / radius, field.inward.x, .0003f)
+            assertEquals(-p.y / radius, field.inward.y, .0003f)
+        }
+    }
+
+    @Test fun compressionFlattensTheCenterAndConcentratesRemainingPowerAtTheRim() {
+        val circle = LensGeometry(Rect(0f, 0f, 100f, 100f), 50f)
+        fun bend(x: Float, pressed: Boolean) = lensRay(circle.field(Offset(x, 50f)), circle.span,
+            if (pressed) 1.12f else 1.35f, if (pressed) 1f else 0f).offset.getDistance()
+        assertTrue(bend(60f, true) < bend(60f, false) * .5f)
+        assertTrue(bend(98f, true) < bend(98f, false))
+        assertTrue(bend(60f, true) / bend(98f, true) < bend(60f, false) / bend(98f, false) * .6f)
+    }
+
+    @Test fun boundaryNormalsSurviveMeshRounding() {
+        val shape = LensGeometry(Rect(0f, 0f, 320f, 400f), 24f)
+        for (y in listOf(40f, 120f, 200f)) {
+            val inside = shape.field(Offset(319.999f, y))
+            val boundary = shape.field(Offset(320f, y))
+            val outside = shape.field(Offset(320.00003f, y))
+            assertEquals(inside.inward.x, boundary.inward.x, .003f)
+            assertEquals(boundary.inward.x, outside.inward.x, .003f)
+        }
+    }
+
     @Test fun panelNormalDoesNotJumpAcrossItsInteriorDiagonals() {
         val shape = LensGeometry(Rect(0f, 0f, 400f, 400f), 28f)
         for (coordinate in 40..180 step 5) {

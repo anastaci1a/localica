@@ -26,6 +26,7 @@ internal class LensRenderer {
         uniform float corner;
         uniform float span;
         uniform float depth;
+        uniform float flattening;
         uniform float power;
         uniform float whiteTint;
         uniform float illumination;
@@ -45,24 +46,33 @@ internal class LensRenderer {
             float2 middle = (bounds.xy + bounds.zw) * 0.5;
             float2 halfSize = (bounds.zw - bounds.xy) * 0.5;
             float2 local = p - middle;
-            float2 q = abs(local);
-            if (dot(q, q) < 0.0000001) return float3(span, 0, 0);
+            if (dot(local, local) < 0.0000001) return float3(span, 0, 0);
             float2 core = halfSize - corner;
-            float t;
+            float2 q = max(abs(local) - core, float2(0));
+            float outside = max(max(abs(local.x) - halfSize.x, abs(local.y) - halfSize.y), length(q) - corner);
+            if (outside > 0.0) return float3(-outside, 0, 0);
+            float2 side = max(1.0 - local * local / (halfSize * halfSize), float2(0));
+            float rectangle = side.x * side.y;
+            float2 rectangleGradient = -2.0 * local * side.yx / (halfSize * halfSize);
+            float roundWeight = corner * corner / (halfSize.x * halfSize.y);
+            float rounded = corner > 0.0 ? max(1.0 - dot(q, q) / (corner * corner), 0.0) : 1.0;
+            float2 roundedGradient = corner > 0.0 ? -2.0 * sign(local) * q / (corner * corner) : float2(0);
+            float denominator = (1.0 - roundWeight) * rounded + roundWeight * rectangle;
+            float potential;
             float2 gradient;
-            if (q.y * halfSize.x <= q.x * core.y) {
-                t = q.x / halfSize.x; gradient = float2(1.0 / halfSize.x, 0);
-            } else if (q.x * halfSize.y <= q.y * core.x) {
-                t = q.y / halfSize.y; gradient = float2(0, 1.0 / halfSize.y);
+            if (denominator > 0.0000001) {
+                potential = rectangle * rounded / denominator;
+                gradient = (rectangleGradient * ((1.0 - roundWeight) * rounded * rounded)
+                    + roundedGradient * (roundWeight * rectangle * rectangle)) / (denominator * denominator);
             } else {
-                float b = dot(q, core);
-                float c = dot(q, q);
-                float a = dot(core, core) - corner * corner;
-                t = c / max(b + sqrt(max(b * b - a * c, 0.0)), 0.000001);
-                float2 normal = q - core * t;
-                gradient = normal / max(dot(normal, core) + t * corner * corner, 0.000001);
+                potential = 0.0;
+                float a = length(rectangleGradient);
+                float b = length(roundedGradient);
+                gradient = a > 0.0 && b > 0.0 ? (rectangleGradient / a + roundedGradient / b)
+                    * (0.5 * a * b / ((1.0 - roundWeight) * b + roundWeight * a)) : rectangleGradient;
             }
-            return float3(span * (1.0 - t), -sign(local) * gradient * span);
+            float radial = sqrt(max(1.0 - potential, 0.0000001));
+            return float3(span * (1.0 - radial), gradient * (span / (2.0 * radial)));
         }
         half4 main(float2 p) {
             if (foregroundOffset > 0.0 && (p.x >= outputSize.x || p.y >= outputSize.y)) return half4(0);
@@ -72,8 +82,9 @@ internal class LensRenderer {
             float root = sqrt(max(1.0 - u * u, 0.0004));
             float opticalDepth = depth / sqrt(1.0 + depth * depth / 4.0);
             float crown = span * 0.62 * opticalDepth;
-            float height = crown * root * (1.0 + 0.4 * u * u);
-            float slope = crown / max(span, 0.001) * u / root * (0.2 + 1.2 * u * u);
+            float shoulder = 0.4 + 0.06 * flattening;
+            float height = crown * root * (1.0 + shoulder * u * u);
+            float slope = crown / max(span, 0.001) * u / root * (1.0 - 2.0 * shoulder + 3.0 * shoulder * u * u);
             float3 normal = normalize(float3(-f.yz * slope, 1.0));
             // A selected row is foreground on the lens, like a button's label.
             // Its atlas entry stays sharp while the separate backing refracts.
@@ -125,20 +136,21 @@ internal class LensRenderer {
 
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, power: Float = 1f,
         whiteTint: Float = 0f, illumination: Float = 1f, map: LensDistanceMap? = null,
-        origin: Offset = Offset.Zero, atlas: LensAtlas? = null): RenderEffect {
+        origin: Offset = Offset.Zero, atlas: LensAtlas? = null, flattening: Float = 0f): RenderEffect {
         val r = geometry.bounds
         val state = listOf(r.left, r.top, r.right, r.bottom, geometry.corner, geometry.span, blur,
             depth.coerceIn(.05f, 4f), power, whiteTint, illumination, origin.x, origin.y,
             map?.scale ?: 1f, map?.range ?: 1f, atlas?.foregroundY ?: 0f,
             atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f,
             atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f,
-            atlas?.backdropOffset?.x ?: 0f, atlas?.backdropOffset?.y ?: 0f)
+            atlas?.backdropOffset?.x ?: 0f, atlas?.backdropOffset?.y ?: 0f, flattening)
         if (state == last && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
         shader.setFloatUniform("corner", geometry.corner.coerceIn(0f, geometry.span))
         shader.setFloatUniform("span", geometry.span)
         shader.setFloatUniform("depth", state[7])
+        shader.setFloatUniform("flattening", flattening.coerceIn(0f, 1f))
         shader.setFloatUniform("power", power)
         shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)
