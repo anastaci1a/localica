@@ -114,7 +114,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                         val common = state.tracks.map(field::value).distinct().size == 1
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             InterfaceCheckbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name }, enabled = !state.busy)
-                            TextField(JSONObject(values).getString(field.name), { text ->
+                            ClearableTextField(JSONObject(values).getString(field.name), { text ->
                                 values = JSONObject(values).put(field.name, text).toString()
                                 if (field.name !in changed) changed = changed + field.name
                             }, enabled = !state.busy, label = { Text(field.label) }, placeholder = { if (!common) Text("Mixed values — unchanged") },

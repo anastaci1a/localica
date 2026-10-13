@@ -41,6 +41,8 @@ data class PlaybackState(
     val hasNext: Boolean = false,
     /** Playback intent remains true during buffering; distinct from audible progress. */
     val playWhenReady: Boolean = false,
+    val sampledAtMs: Long = 0,
+    val playbackSpeed: Float = 1f,
 )
 
 interface PlaybackActions {
@@ -123,6 +125,8 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
             problem = player.playerError?.toProblem(),
             hasNext = player.hasNextMediaItem(),
             playWhenReady = player.playWhenReady,
+            sampledAtMs = android.os.SystemClock.elapsedRealtime(),
+            playbackSpeed = player.playbackParameters.speed,
         )
     }
 

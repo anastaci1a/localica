@@ -36,17 +36,17 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
             HorizontalDivider(Modifier.padding(top = 8.dp), color = LocalContentColor.current.copy(alpha = .12f))
         }
     }, text = {
-        Crossfade(tab, animationSpec = androidx.compose.animation.core.tween(if (LocalReducedMotion.current) 0 else 140), label = "Browse options page") { page ->
-            Column(Modifier.verticalScroll(if (page == 0) sortScroll else viewScroll)) {
+        val panelHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * .53f).coerceAtMost(460.dp)
+        Crossfade(tab, modifier = Modifier.height(panelHeight), animationSpec = androidx.compose.animation.core.tween(if (LocalReducedMotion.current) 0 else 140), label = "Browse options page") { page ->
+            val scroll = if (page == 0) sortScroll else viewScroll
+            Column(Modifier.fillMaxSize().scrollEdgeFade(scroll).verticalScroll(scroll)) {
                 if (page == 1) ListViewFields(route, edited) { edited = it }
                 else {
                     if (onRandomize != null) {
                         TextButton(onClick = onRandomize) { Text("Randomize queue order") }
                         Text("Changes the saved order; keeps the current song and playback position.", style = MaterialTheme.typography.bodySmall)
                     }
-                    Text("Sort by")
-                    GlassChoices(fields.map(::sortLabel), fields.indexOf(edited.sort).coerceAtLeast(0)) { index ->
-                        val field = fields[index]
+                    ChoicePreference("Sort by", edited.sort, fields, ::sortLabel) { field ->
                         edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending)
                     }
                     SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }

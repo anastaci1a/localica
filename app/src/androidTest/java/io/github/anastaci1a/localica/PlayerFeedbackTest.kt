@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,6 +22,28 @@ import org.junit.Test
 
 class PlayerFeedbackTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun pausedTriangleHasNoInternalSeamAtMiniAndFullPlayerSizes() {
+        var playing by mutableStateOf(true)
+        compose.setContent { LocalicaTheme {
+            Row {
+                listOf(24, 40).forEach { side ->
+                    TransportButton(TransportGlyph.PlayPause, playing, "Transport $side", {},
+                        Modifier.size(side.dp).background(Color.White).testTag("triangle-$side"),
+                        side.dp, Color.Black, true, false)
+                }
+            }
+        } }
+        compose.runOnIdle { playing = false }
+        compose.waitForIdle()
+        for (side in listOf(24, 40)) {
+            val pixels = compose.onNodeWithTag("triangle-$side").captureToImage().toPixelMap()
+            // Interior crosses the shared edge of the old two-polygon triangle.
+            for (y in (pixels.height * .4f).toInt()..(pixels.height * .6f).toInt())
+                for (x in (pixels.width * .36f).toInt()..(pixels.width * .57f).toInt())
+                    assertTrue("Solid paused triangle at $side dp, pixel $x,$y", pixels[x, y].red < .02f)
+        }
+    }
 
     @Test fun artworkRemainsVisibleUntilReplacementIsReadyAndObsoleteLoadsCannotWin() {
         val red = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }

@@ -100,11 +100,13 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 return@drawWithContent
             }
             source.layer.record {
+                clipRect {
                 if (backing != null && !backing.layer.isReleased) {
                     val offset = backing.origin - source.origin
                     clipRect { translate(offset.x, offset.y) { drawLayer(backing.layer) } }
                 }
                 this@drawWithContent.drawContent()
+                }
             }
             drawLayer(source.layer)
         }

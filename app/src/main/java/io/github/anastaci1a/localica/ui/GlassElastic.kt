@@ -8,6 +8,16 @@ import kotlin.math.*
 /** Bounded pressure from travel beyond an edge: more pull always adds less compression. */
 internal fun glassEdgePressure(excess: Float) = -.22f * (1f - exp(-abs(excess) * 2.4f))
 
+/** Continuous strong wells, shared by direct dragging and page-driven selectors. */
+internal fun magneticChoicePosition(raw: Float): Float {
+    val center = round(raw)
+    val delta = raw - center
+    return center + delta * (0.04f + 3.84f * delta * delta)
+}
+
+/** Deliberately slower than transport/page motion, even in Faster animations mode. */
+internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.spring<Float>(1f, 90f * speed * speed)
+
 /** One interruptible shape clock; live tuning preserves its current displacement and velocity. */
 @Composable
 internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 0f }, contact: () -> Float = { 0f }): State<GlassShape> {

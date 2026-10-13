@@ -23,6 +23,15 @@ class ListSearchTest {
         }
     }
 
+    private fun dismissSearch() {
+        if (compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isNotEmpty()) {
+            pressSystemBack()
+            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
+        }
+        pressSystemBack()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+    }
+
     @Test fun visibleSearchVacancyRestoresWithoutCumulativeListMovement() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
@@ -41,7 +50,7 @@ class ListSearchTest {
                 compose.onNodeWithTag("list-search-pill").performClick()
                 awaitSearchFocus()
                 compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("Album")
-                compose.onNodeWithContentDescription("Close list search").performClick()
+                dismissSearch()
                 compose.onNodeWithTag("list-search-popup").assertDoesNotExist()
                 assertEquals("Restore both full and partially visible pill space", before,
                     compose.onNodeWithText("Album 000").fetchSemanticsNode().boundsInRoot)
@@ -91,7 +100,7 @@ class ListSearchTest {
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 061").fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(hasSetTextAction()).assertTextContains("Album")
             assertEquals(resultPosition, compose.onNodeWithText("Album 061").fetchSemanticsNode().boundsInRoot)
-            compose.onNodeWithContentDescription("Close list search").performClick()
+            dismissSearch()
             assertEquals(before, compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot)
             compose.onNodeWithTag("list-search-pill").performClick()
             awaitSearchFocus()

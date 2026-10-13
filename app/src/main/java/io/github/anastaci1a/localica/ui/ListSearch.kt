@@ -55,12 +55,11 @@ private fun SearchPillFace(label: String) {
 internal fun GlassSearchField(value: String, onValue: (String) -> Unit, label: String,
     modifier: Modifier = Modifier, fieldModifier: Modifier = Modifier, enabled: Boolean = true,
     keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
-    keyboardActions: androidx.compose.foundation.text.KeyboardActions = androidx.compose.foundation.text.KeyboardActions.Default,
-    trailingIcon: (@Composable () -> Unit)? = null) {
+    keyboardActions: androidx.compose.foundation.text.KeyboardActions = androidx.compose.foundation.text.KeyboardActions.Default) {
     LiquidGlassSurface(modifier, cornerRadius = 28.dp, pressFeedback = false) {
-        TextField(value, onValue, fieldModifier.fillMaxWidth().clearTextFocusOnBack().semantics { contentDescription = "$label input" }, enabled = enabled,
+        ClearableTextField(value, onValue, fieldModifier.fillMaxWidth().clearTextFocusOnBack().semantics { contentDescription = "$label input" }, enabled = enabled,
             singleLine = true, placeholder = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            leadingIcon = { Icon(painterResource(R.drawable.ic_search), null, Modifier.size(22.dp)) }, trailingIcon = trailingIcon,
+            leadingIcon = { Icon(painterResource(R.drawable.ic_search), null, Modifier.size(22.dp)) },
             keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
             colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
                 disabledContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent,
@@ -76,6 +75,21 @@ internal fun Modifier.listTopFade() = graphicsLayer { compositingStrategy = Comp
         val height = 80.dp.toPx().coerceAtMost(size.height)
         drawRect(Brush.verticalGradient(*Array(17) { i -> val t = i / 16f; t to Color.Black.copy(alpha = t * t * (3f - 2f * t)) }, endY = height),
             size = Size(size.width, height), blendMode = BlendMode.DstIn)
+    }
+
+/** Reveal a scroll affordance only as content actually leaves that viewport edge. */
+internal fun Modifier.scrollEdgeFade(scroll: androidx.compose.foundation.ScrollState) =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+        drawContent()
+        val band = 24.dp.toPx().coerceAtMost(size.height / 2)
+        if (band > 0f) {
+            val top = (scroll.value / band).coerceIn(0f, 1f)
+            val bottom = ((scroll.maxValue - scroll.value) / band).coerceIn(0f, 1f)
+            drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 1f - top), Color.Black), endY = band),
+                size = Size(size.width, band), blendMode = BlendMode.DstIn)
+            drawRect(Brush.verticalGradient(listOf(Color.Black, Color.Black.copy(alpha = 1f - bottom)), startY = size.height - band, endY = size.height),
+                topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - band), size = Size(size.width, band), blendMode = BlendMode.DstIn)
+        }
     }
 
 @Composable

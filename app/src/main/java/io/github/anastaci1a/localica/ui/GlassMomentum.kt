@@ -22,9 +22,15 @@ internal class GlassMomentum(var damping: Float = 8f) {
         var velocity = 0f
         var target = 0f
         val settled get() = abs(value - target) < .0003f && abs(velocity) < .003f
-        fun advance(dt: Float, damping: Float) {
+        fun advance(dt: Float, damping: Float, held: Boolean = false) {
+            val before = value
             velocity += (380f * (target - value) - damping * velocity) * dt
             value += velocity * dt
+            // A held finger constrains the surface: it stores strain, never rings.
+            if (held) {
+                value = value.coerceIn(minOf(before, target), maxOf(before, target))
+                if (value == target || value == before) velocity = 0f
+            }
         }
         fun reset() { value = 0f; velocity = 0f; target = 0f }
     }
@@ -48,12 +54,14 @@ internal class GlassMomentum(var damping: Float = 8f) {
         depth.velocity -= ((abs(speed) - abs(travelVelocity)) * .035f).coerceIn(-.35f, .35f)
         travelVelocity = speed
         this.pressure.target = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
-        depth.target = -.14f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) + abs(this.pressure.target) * .18f
+        val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f
+        depth.target = -.24f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) - abs(this.pressure.target) * .3f
         val drag = if (damping.isFinite()) damping.coerceIn(2f, 40f) else 8f
         var remaining = seconds.coerceAtMost(.1f)
         while (remaining > 0f) {
             val dt = minOf(remaining, 1f / 240f)
-            motion.advance(dt, drag); this.pressure.advance(dt, drag); depth.advance(dt, drag)
+            val resistance = if (held) maxOf(40f, drag) else drag
+            motion.advance(dt, resistance, held); this.pressure.advance(dt, resistance, held); depth.advance(dt, resistance, held)
             remaining -= dt
         }
     }

@@ -36,7 +36,6 @@ class CollectionDetailTest {
             compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
             compose.onNodeWithText(if (label == "Sort") "Sort by" else "View mode").assertIsDisplayed()
             if (label == "View options") {
-                compose.onNodeWithText("View mode").performClick()
                 compose.onNodeWithText("Gallery").assertIsDisplayed().performClick()
                 compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
             }

@@ -17,6 +17,23 @@ import org.junit.Test
 
 class SlidingTabsTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun onlyTappingTheSettledCurrentTabRequestsReselection() {
+        val tabs = listOf(MainTab.Home, MainTab.Library)
+        var active by mutableStateOf(MainTab.Home)
+        val selections = mutableListOf<MainTab>()
+        val reselections = mutableListOf<MainTab>()
+        compose.setContent { LocalicaTheme { Box(Modifier.size(300.dp, 64.dp)) {
+            SlidingTabs(tabs, active, tabs.indexOf(active).toFloat(), onReselect = { reselections += it }) {
+                active = it; selections += it
+            }
+        } } }
+        compose.onNodeWithContentDescription("Library").performClick()
+        compose.runOnIdle { assertEquals(listOf(MainTab.Library), selections); assertTrue(reselections.isEmpty()) }
+        compose.onNodeWithContentDescription("Library").performClick()
+        compose.runOnIdle { assertEquals(listOf(MainTab.Library), reselections) }
+        compose.onNodeWithContentDescription("Home").performClick()
+        compose.runOnIdle { assertEquals(listOf(MainTab.Library, MainTab.Home), selections); assertEquals(1, reselections.size) }
+    }
     @Test fun draggingSwitchesOnlyAfterTheLensCrossesAndKeepsTheContainerFixed() {
         val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)
         var active by mutableStateOf(MainTab.Home)

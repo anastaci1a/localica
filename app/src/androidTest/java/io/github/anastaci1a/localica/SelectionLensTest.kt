@@ -119,16 +119,16 @@ class SelectionLensTest {
         val selectedImage = compose.onNodeWithTag("detail-lens").captureToImage()
         val selected = selectedImage.toPixelMap()
         val d = original.width / 220f
-        var changed = 0
-        for (y in (60*d).toInt()..(110*d).toInt()) for (x in (65*d).toInt()..(155*d).toInt())
-            if (kotlin.math.abs(original[x,y].red - selected[x,y].red) > .02f) changed++
-        if (changed > 0) {
-            val dir = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
-            for ((name, image) in listOf("selection-original" to originalImage, "selection-chosen" to selectedImage)) {
-                java.io.File(dir, "$name.png").outputStream().use { image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-            }
+        fun sharpEdges(pixels: androidx.compose.ui.graphics.PixelMap): Int {
+            var count = 0
+            for (y in (60*d).toInt()..(110*d).toInt()) for (x in (65*d).toInt()..(155*d).toInt())
+                if (kotlin.math.abs(pixels[x,y].red - pixels[x + 2,y].red) > .7f) count++
+            return count
         }
-        assertEquals("Only the curved edge can bend fine content (${original.width}x${original.height})", 0, changed)
+        // The new continuous cap may refract interior stripes, but cannot blur away
+        // their detail. Pixel-for-pixel equality would require the old flat center.
+        assertTrue("Fine detail remains sharp under the curved lens", sharpEdges(selected) >= sharpEdges(original) * .8f)
+        assertEquals("Outside the selection is untouched", original[5, 5], selected[5, 5])
     }
 
     private fun region(vararg rectangles: Rect): Region {
