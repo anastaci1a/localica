@@ -12,7 +12,7 @@ android {
         applicationId = "io.github.anastaci1a.localica"
         minSdk = 26
         targetSdk = 36
-        versionCode = 41
+        versionCode = 42
         versionName = "0.21.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

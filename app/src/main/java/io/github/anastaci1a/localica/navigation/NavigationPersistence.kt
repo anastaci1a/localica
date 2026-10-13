@@ -17,7 +17,8 @@ class InterfacePreferences(context: Context) {
             preferences.enumValue<ArtworkAction>("artwork-hold") ?: ArtworkAction.Menu,
             fasterMotion = preferences.getBoolean("faster-motion", false),
             artworkLayout = preferences.enumValue<ArtworkLayout>("artwork-layout") ?: ArtworkLayout.FullBackground,
-            artworkTransition = preferences.enumValue<ArtworkTransition>("artwork-transition") ?: ArtworkTransition.SoftWash,
+            artworkTransition = preferences.enumValue<ArtworkTransition>("artwork-transition") ?: ArtworkTransition.BlurThrough,
+            artworkSwipe = preferences.getBoolean("artwork-swipe", true),
             glass = GlassAppearance(preferences.getFloat("glass-blur", .2f), preferences.getFloat("glass-white-tint", .06f),
                 preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f),
                 preferences.getFloat("glass-contrast", .4f),
@@ -33,7 +34,7 @@ class InterfacePreferences(context: Context) {
             .putBoolean("confirm-exit", value.confirmExit).putBoolean("expand-on-play", value.expandOnPlay)
             .putBoolean("album-artist", value.albumArtistFirst).putBoolean("reduced-motion", value.reducedMotion)
             .putBoolean("faster-motion", value.fasterMotion).putString("artwork-layout", value.artworkLayout.name)
-            .putString("artwork-transition", value.artworkTransition.name)
+            .putString("artwork-transition", value.artworkTransition.name).putBoolean("artwork-swipe", value.artworkSwipe)
             .putFloat("gray-tone", value.grayTone.normalizedGrayTone())
             .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
             .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)

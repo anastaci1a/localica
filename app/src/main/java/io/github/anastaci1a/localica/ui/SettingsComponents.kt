@@ -56,12 +56,12 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
 @Composable
 internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = null, enabled: Boolean = true,
     onClick: () -> Unit) {
-    LiquidGlassSurface(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f), cornerRadius = 20.dp) {
+    LiquidGlassSurface(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f), cornerRadius = 20.dp, pressFeedback = enabled) {
         ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } },
             leadingContent = icon?.let { { Icon(painterResource(it), null, Modifier.size(24.dp)) } },
             trailingContent = { Icon(painterResource(R.drawable.ic_back), null, Modifier.size(20.dp).rotate(180f)) },
             colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-            modifier = Modifier.clickable(enabled, onClick = onClick).heightIn(min = 64.dp))
+            modifier = Modifier.clickable(enabled, role = Role.Button, onClick = onClick).heightIn(min = 64.dp))
     }
 }
 

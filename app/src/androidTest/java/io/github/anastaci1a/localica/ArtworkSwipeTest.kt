@@ -32,6 +32,38 @@ class ArtworkSwipeTest {
     private val green = visual(Color.Green)
     private val state = PlaybackState(connected = true, title = "Swipe", durationMs = 120000)
 
+    @Test fun disablingArtworkSwipesLeavesBothButtonTransitionChoicesAvailable() {
+        var index by mutableIntStateOf(0)
+        var transition by mutableStateOf(io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough)
+        var swipeCalls = 0
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            PlayerSurface(state, true, {}, InterfaceSettings(artworkSwipe = false, artworkTransition = transition),
+                remember { Animatable(1f) }, {}, {}, { index = 0 }, { index = 1 }, {}, {},
+                visual = if (index == 0) red else blue, artworkVisit = "$index",
+                previousArtwork = if (index == 1) ArtworkNeighbor("0", red) else null,
+                nextArtwork = if (index == 0) ArtworkNeighbor("1", blue) else null,
+                onArtworkVisit = { _, complete -> swipeCalls++; complete(false) })
+        } } }
+        compose.onNodeWithTag("artwork-gesture").performTouchInput {
+            swipe(Offset(width * .8f, centerY), Offset(width * .2f, centerY), 300)
+        }
+        compose.runOnIdle { assertEquals(0, index); assertEquals(0, swipeCalls) }
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Next").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        compose.onNodeWithTag("player-neighbor-artwork", true).assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
+        compose.runOnIdle { assertEquals(1, index); transition = io.github.anastaci1a.localica.navigation.ArtworkTransition.Carousel }
+        compose.onNodeWithContentDescription("Previous").performClick()
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Next").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        compose.onNodeWithTag("player-neighbor-artwork", true).assertExists()
+        compose.mainClock.autoAdvance = true
+        compose.runOnIdle { assertEquals(1, index); assertEquals(0, swipeCalls) }
+    }
+
     @Test fun rapidDiagonalSwipesRegrabTheSettlingCarouselWithoutOpeningAnotherSurface() {
         var index by mutableIntStateOf(0)
         val pictures = listOf(red, blue, green)
