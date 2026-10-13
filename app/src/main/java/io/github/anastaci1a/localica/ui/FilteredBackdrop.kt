@@ -15,6 +15,12 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.ceil
 
+/** Allocation dimensions only. Optical bounds and clipping retain their exact size. */
+internal fun glassLayerExtent(size: IntSize): IntSize {
+    fun capacity(value: Int) = if (value <= 0) 0 else ((value + 63) / 64) * 64
+    return IntSize(capacity(size.width), capacity(size.height))
+}
+
 /** Filter only a bounded low-resolution backing; sharp foregrounds never enter this pass. */
 @Composable
 internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origin: () -> Offset,
@@ -31,6 +37,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
         val r = resolution.coerceIn(.25f, 1f)
         val extent = IntSize(ceil((size.width + 2 * padding) * r).toInt().coerceAtLeast(1),
             ceil((size.height + 2 * padding) * r).toInt().coerceAtLeast(1))
+        val allocation = glassLayerExtent(extent)
         layer.renderEffect = effect(Size(extent.width.toFloat(), extent.height.toFloat()), r)
         fun androidx.compose.ui.graphics.drawscope.DrawScope.scene(backing: FrostedBackdrop) {
             clipRect { scale(r, r, Offset.Zero) {
@@ -41,12 +48,12 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
         val blend = if (homeSource != null && !homeSource.layer.isReleased && homeSource.layer.size.width > 0)
             homeWeight().coerceIn(0f, 1f) else 0f
         if (primary != null && home != null && homeSource != null && blend > 0f && blend < 1f) {
-            primary.record(size = extent) { scene(source) }
-            home.record(size = extent) { scene(homeSource) }
+            primary.record(size = allocation) { scene(source) }
+            home.record(size = allocation) { scene(homeSource) }
             primary.alpha = 1f - blend; home.alpha = blend
             home.blendMode = androidx.compose.ui.graphics.BlendMode.Plus
         }
-        layer.record(size = extent) {
+        layer.record(size = allocation) {
             if (blend >= 1f && homeSource != null) scene(homeSource)
             else if (blend > 0f && primary != null && home != null) { drawLayer(primary); drawLayer(home) }
             else scene(source)

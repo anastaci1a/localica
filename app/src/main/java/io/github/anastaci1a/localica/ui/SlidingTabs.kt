@@ -25,6 +25,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -95,13 +96,13 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
         val scroll = rememberScrollState()
         val viewport = with(density) { maxWidth.toPx() }
         val shell = rememberGlassBody({ 0f }, contact = { if (dragging) 1f else 0f }, pressure = { pressure })
-        LiquidGlassSurface(Modifier.fillMaxSize().graphicsLayer {
+        LiquidGlassSurface(Modifier.fillMaxSize().recordFrostedBackdrop(composite).graphicsLayer {
             val stretch = if (reduced || !fits) 0f else (-shell.value.strain).coerceIn(0f, .16f) * .25f
             scaleX = 1f + stretch
             scaleY = 1f / (1f + stretch)
             translationX = (if (raw < 0f) -1f else 1f) * size.width * stretch / 2f
         }.bottomGlassShadow(opacity = shadowOpacity), source, pressFeedback = false, shadow = false,
-            body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale) {}
+            body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale)
         Box(Modifier.fillMaxSize().clip(CircleShape)) {
         Box(Modifier.fillMaxHeight().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll, enabled = !fits && !dragging)
             .testTag("tab-scroll").pointerInput(tabs, pixels, viewport, fits) {
@@ -137,13 +138,14 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                 }
             }) {
             @Composable fun Labels(color: Color, interactive: Boolean) {
-                Row(Modifier.width(width * tabs.size).fillMaxHeight().then(if (interactive) Modifier else
-                    Modifier.clearAndSetSemantics {}.drawWithContent {
+                Row(Modifier.width(width * tabs.size).fillMaxHeight()
+                    .then(if (interactive) Modifier else Modifier.clearAndSetSemantics {})
+                    .drawWithContent {
                         val left = pixels * lens.value + 4.dp.toPx()
                         val path = Path().apply { addRoundRect(RoundRect(left, 4.dp.toPx(),
                             left + pixels - 8.dp.toPx(), size.height - 4.dp.toPx(), CornerRadius(size.height / 2))) }
-                        clipPath(path) { this@drawWithContent.drawContent() }
-                    })) {
+                        clipPath(path, if (interactive) ClipOp.Difference else ClipOp.Intersect) { this@drawWithContent.drawContent() }
+                    }) {
                     tabs.forEach { tab ->
                         Column(Modifier.width(width).padding(4.dp).fillMaxHeight()
                             .then(if (interactive) Modifier.selectable(active == tab,
@@ -177,13 +179,11 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
                         })
                 }
             }
-            Box(Modifier.width(width * tabs.size).fillMaxHeight().recordFrostedBackdrop(composite)) {
-
-                if (appearance.tabStyle != TabLensStyle.Overlay) Lens()
+            Box(Modifier.width(width * tabs.size).fillMaxHeight()) {
+                Lens()
                 Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
                 Labels(NavigationAccent, false)
             }
-            if (appearance.tabStyle == TabLensStyle.Overlay) Lens()
         }
         }
         LaunchedEffect(active, width, reduced) {
