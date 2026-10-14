@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expanded: Boolean, onExpanded: (Boolean) -> Unit,
     settings: InterfaceSettings, progress: Animatable<Float, *>, onToggle: () -> Unit, onSeek: (Long) -> Unit,
     onPrevious: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit, onLibrary: () -> Unit,
-    onEditTags: (() -> Unit)? = null, lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {},
+    lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {},
     track: Track? = null, onSettings: (InterfaceSettings) -> Unit = {},
     actionRows: Int = 1, queueProgress: Animatable<Float, *>? = null, frostedBackdrop: FrostedBackdrop? = null,
     glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null,
