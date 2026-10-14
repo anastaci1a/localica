@@ -93,7 +93,9 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!state.artworkOnly) Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    val artworkBackdrop = rememberFrostedBackdrop(cover to removeImage, dark = LocalFrostedBackdrop.current?.dark == true)
                     Box(Modifier.align(Alignment.CenterHorizontally).size(180.dp)) {
+                        Box(Modifier.matchParentSize().recordFrostedBackdrop(artworkBackdrop, LocalFrostedBackdrop.current)) {
                         if (!removeImage) {
                             val image = cover
                             if (image == null) AlbumArtwork(state.tracks.first().uri, Modifier.fillMaxSize())
@@ -102,9 +104,12 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                                 Image(bitmap.asImageBitmap(), "New artwork preview", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
                             }
                         }
+                        }
+                        CompositionLocalProvider(LocalFrostedBackdrop provides artworkBackdrop) {
                         Row(Modifier.align(Alignment.BottomCenter).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_edit, "Choose artwork", enabled = !state.busy) { choosing = true }
                             ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_trash, "Remove artwork from selected songs", enabled = !state.busy) { removeImage = true; imageUri = null }
+                        }
                         }
                     }
                     TextButton(onClick = { viewing = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("View current artwork") }

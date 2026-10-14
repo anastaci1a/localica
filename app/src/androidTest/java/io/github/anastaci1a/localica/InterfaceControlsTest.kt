@@ -21,6 +21,36 @@ import org.junit.Test
 class InterfaceControlsTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun restingThumbIsWhiteAndVerticalContactKeepsSliderOwnership() {
+        var value by mutableFloatStateOf(.5f)
+        compose.setContent { LocalicaTheme { Box(Modifier.background(Color.White).padding(32.dp)) {
+            InterfaceSlider(value, { value = it }, Modifier.width(300.dp).testTag("owned-slider"))
+        } } }
+        val thumb = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true)
+        val pixels = thumb.captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertTrue("Resting thumb is opaque white: $center", center.red > .98f && center.green > .98f && center.blue > .98f)
+        compose.onNodeWithTag("owned-slider").performTouchInput {
+            down(this.center)
+            moveBy(Offset(0f, 60f))
+            moveTo(Offset(width.toFloat(), centerY + 60f))
+            up()
+        }
+        compose.runOnIdle { assertEquals(1f, value, .001f) }
+    }
+
+    @Test fun verticalContactKeepsSwitchOwnership() {
+        var checked by mutableStateOf(false)
+        compose.setContent { LocalicaTheme { BooleanPreference("Owned switch", checked) { checked = it } } }
+        compose.onNodeWithTag("settings-switch", useUnmergedTree = true).performTouchInput {
+            down(Offset(8f, centerY))
+            moveBy(Offset(0f, 60f))
+            moveTo(Offset(width.toFloat(), centerY + 60f))
+            up()
+        }
+        compose.runOnIdle { assertTrue(checked) }
+    }
+
     @Test fun trackRemainsContinuousDuringMovementBetweenDiscreteStops() {
         var value by mutableFloatStateOf(.5f)
         compose.setContent { LocalicaTheme { Box(Modifier.background(Color.White).padding(32.dp)) {
@@ -49,11 +79,14 @@ class InterfaceControlsTest {
             InterfaceSlider(value, { value = it }, Modifier.width(300.dp).testTag("slider"))
         } } }
         val thumb = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true)
+        compose.onNodeWithTag("slider").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(240)
         val bounds = thumb.fetchSemanticsNode().boundsInRoot
         assertTrue(bounds.width > bounds.height * 1.3f)
         val pixels = thumb.captureToImage().toPixelMap()
         val active = pixels[(pixels.width * .4f).toInt(), pixels.height / 2]
         assertTrue("Active track remains visible through the clear center: $active", active.red > active.green + .12f)
+        compose.onNodeWithTag("slider").performTouchInput { up() }
         compose.onNodeWithTag("slider").performSemanticsAction(SemanticsActions.SetProgress) { it(.8f) }
         compose.runOnIdle { assertEquals(.8f, value, .001f) }
     }
@@ -62,7 +95,10 @@ class InterfaceControlsTest {
         compose.setContent { LocalicaTheme { Box(Modifier.background(Color.White).padding(32.dp)) {
             InterfaceSlider(2f, {}, Modifier.width(300.dp), valueRange = 1f..3f)
         } } }
+        compose.onNodeWithTag("settings-slider-scene", useUnmergedTree = true).performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(240)
         val pixels = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true).captureToImage().toPixelMap()
+        compose.onNodeWithTag("settings-slider-scene", useUnmergedTree = true).performTouchInput { up() }
         for (percent in 20..40 step 5) {
             val ink = pixels[pixels.width * percent / 100, pixels.height / 2]
             assertTrue("The active track must still refract through the thumb: $ink", ink.red > ink.green + .12f)
@@ -131,7 +167,10 @@ class InterfaceControlsTest {
                 }
             }
         } }
+        compose.onNodeWithTag("rtl-slider").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(240)
         val pixels = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true).captureToImage().toPixelMap()
+        compose.onNodeWithTag("rtl-slider").performTouchInput { up() }
         val active = pixels[(pixels.width * .6f).toInt(), pixels.height / 2]
         assertTrue("RTL active track is visible on the right: $active", active.red > active.green + .12f)
         compose.onNodeWithTag("rtl-slider").performTouchInput { swipe(center, Offset(4f, center.y), 350) }

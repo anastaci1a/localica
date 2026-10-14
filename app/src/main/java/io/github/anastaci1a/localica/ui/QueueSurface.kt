@@ -100,8 +100,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo((start - delta / distance).coerceIn(0f, 1f)) }
         }, Orientation.Vertical, onDragStarted = { progress.stop(); start = progress.value; delta = 0f },
             onDragStopped = { velocity -> settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f)) })
-        .nestedScroll(listPull).testTag("queue-surface"), shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), darkening = .22f + .28f * p) {
-        Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
+        .nestedScroll(listPull).testTag("queue-surface"), shape = rememberDeviceCorners().shape(), darkening = .22f + .28f * p) {
+        GlassShadowColumn(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (p == 0f) "Open queue" else "Close queue") { settle(p < .5f) }
                 .semantics { contentDescription = if (p == 0f) "Open queue" else "Close queue" }) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)

@@ -148,7 +148,9 @@ class GlassMorphTest {
         val device = androidx.test.uiautomator.UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
         device.click(target.x.toInt(), (target.y + windowInset).toInt())
         compose.waitUntil(5000) { presses == 1 }
-        compose.mainClock.advanceTimeBy(1000)
+        // Geometry now settles to subpixel precision before the window handoff.
+        compose.mainClock.advanceTimeUntil(2000) { !anchor.modalPresent }
+        compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
         // Screen capture does not invalidate the Compose tree. A semantics-only assertion

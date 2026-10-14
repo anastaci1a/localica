@@ -42,6 +42,9 @@ import io.github.anastaci1a.localica.playback.PlaybackState
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
+internal fun playerHandleColor(ink: Color): Color =
+    lerp(Color(0xFFD6D6D6), Color(0xFF484848), ink.luminance()).copy(alpha = .75f)
+
 /** The surface, gesture owner, artwork, metadata and transport retain identity at every progress value. */
 @Composable
 internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expanded: Boolean, onExpanded: (Boolean) -> Unit,
@@ -170,7 +173,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val backgroundReveal = smoothReveal((p - .38f) / .59f)
     val handleReveal = smoothReveal((p - .72f) / .28f)
     val glassFrost = smoothReveal((p - .08f) / .8f)
-    val surfaceCorner = CompactControlSize / 2 * (1f - smoothReveal((p - .8f) / .2f))
+    val deviceCorners = rememberDeviceCorners()
+    val cornerProgress = smoothReveal((p - .8f) / .2f)
+    val surfaceCorner = CompactControlSize / 2 * (1f - cornerProgress) + deviceCorners.maximum * cornerProgress
     // This feather belongs to the cover, including its final full-background state.
     // Removing it during the handoff briefly reveals the square beneath the wash.
     val edgeSoftness = backgroundProgress * smoothReveal(p / .18f)
@@ -206,7 +211,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // The Queue must never sample the light browsing glass. Delaying readback alone
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
-        shape = RoundedCornerShape(surfaceCorner), color = Color.Transparent, contentColor = foreground) {
+        shape = deviceCorners.shape(CompactControlSize / 2, cornerProgress), color = Color.Transparent, contentColor = foreground) {
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
@@ -287,7 +292,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { settle(false) }
                     .semantics { contentDescription = "Player handle" }) {
                     Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp).testTag("player-handle")
-                        .background(Color.White.copy(alpha = .42f), RoundedCornerShape(2.dp)))
+                        .background(playerHandleColor(foreground), RoundedCornerShape(2.dp)))
                 }
                 CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
                     Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {

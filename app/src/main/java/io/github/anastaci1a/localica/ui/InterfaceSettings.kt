@@ -16,11 +16,9 @@ import io.github.anastaci1a.localica.navigation.*
 internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String = "Navigation", onChange: (InterfaceSettings) -> Unit) {
     when (section) {
         "Appearance" -> {
-            SettingsHeading("Interface gray · ${kotlin.math.round(value.grayTone * 100).toInt()}%")
             Text("Adjust secondary text and inactive icons throughout the app.")
-            InterfaceSlider(value.grayTone, { onChange(value.copy(grayTone = it)) },
-                Modifier.semantics { contentDescription = "Gray tone" })
-            SliderEndpoints("Darker", "Lighter")
+            SliderPreference("Interface gray · ${kotlin.math.round(value.grayTone * 100).toInt()}%", value.grayTone,
+                { onChange(value.copy(grayTone = it)) }, Modifier.semantics { contentDescription = "Gray tone" }, low = "Darker", high = "Lighter")
             Row(Modifier.fillMaxWidth().height(64.dp), horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically) {
                 Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_library), null,
@@ -41,11 +39,10 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             BooleanPreference("Expand player when a song starts", value.expandOnPlay) { onChange(value.copy(expandOnPlay = it)) }
             BooleanPreference("Show Album Artist first", value.albumArtistFirst) { onChange(value.copy(albumArtistFirst = it)) }
             SettingsHeading("Lyrics timing")
-            Text("Correction: ${value.lyricDelayMs} ms", style = MaterialTheme.typography.bodyLarge)
-            InterfaceSlider(value.lyricDelayMs.toFloat(), { onChange(value.copy(lyricDelayMs = (it / 50).toInt() * 50)) },
-                valueRange = -2000f..2000f, steps = 79)
-            SliderEndpoints("Earlier", "Later")
-            Text("If lyrics lead the sound, move them later. This adjusts lyrics only; use 0 ms for normal output timing.", style = MaterialTheme.typography.bodySmall)
+            SliderPreference("Correction: ${value.lyricDelayMs} ms", value.lyricDelayMs.toFloat(),
+                { onChange(value.copy(lyricDelayMs = kotlin.math.round(it / 50).toInt() * 50)) },
+                valueRange = -2000f..2000f, steps = 79, low = "Earlier", high = "Later",
+                description = "If lyrics lead the sound, move them later. This adjusts lyrics only; use 0 ms for normal output timing.")
             TextButton(onClick = { onChange(value.copy(lyricDelayMs = 0)) }) { Text("Reset lyrics timing") }
             SettingsHeading("Artwork")
             ChoicePreference("Player artwork", value.artworkLayout, ArtworkLayout.entries, { it.label }) { onChange(value.copy(artworkLayout = it)) }
