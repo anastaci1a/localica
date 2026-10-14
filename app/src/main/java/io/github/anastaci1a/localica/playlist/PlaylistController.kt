@@ -25,7 +25,7 @@ class PlaylistController(private val dao: PlaylistDao,
             }
             for (edit in commands) try {
                 val before = state.value.playlists
-                val after = edit.change(before)
+                val after = withContext(Dispatchers.Default) { edit.change(before) }
                 withContext(Dispatchers.IO) { dao.save(before, after) }
                 mutable.value = PlaylistState(after, loading = false)
                 // Only unreferenced copies owned by this app are disposable, and only
@@ -78,10 +78,15 @@ class PlaylistController(private val dao: PlaylistDao,
     fun move(id: String, entry: String, offset: Int, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.move(it, entry, offset) }
     fun moveBefore(id: String, entries: Set<String>, beforeId: String?, complete: (Boolean) -> Unit = {}) =
         edit(id, complete) { PlaylistEdits.moveBefore(it, entries, beforeId) }
+    fun applySort(id: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
+        edit(id, complete) { PlaylistEdits.sort(it, method, ascending) }
+    fun randomize(id: String, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.randomize(it) }
     fun delete(id: String, complete: (Boolean) -> Unit = {}) { submit(complete) { playlists -> playlists.filterNot { it.id == id } } }
-    fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = submit(complete) { playlists ->
+    fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = refreshTracks(listOf(track), complete)
+    fun refreshTracks(tracks: List<Track>, complete: (Boolean) -> Unit) = submit(complete) { playlists ->
+        val byId = tracks.associateBy { it.id }
         playlists.map { list -> list.copy(entries = list.entries.map { entry ->
-            if (entry.track.id == track.id) entry.copy(track = track) else entry
+            byId[entry.track.id]?.let { entry.copy(track = it) } ?: entry
         }) }
     }
     private fun edit(id: String, complete: (Boolean) -> Unit, change: (ManualPlaylist) -> ManualPlaylist) {

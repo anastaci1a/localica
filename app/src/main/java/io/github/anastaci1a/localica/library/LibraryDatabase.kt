@@ -70,6 +70,7 @@ abstract class LibraryDao {
         val saved = track(track.id) ?: return
         updateTrack(track.copy(addedAt = saved.addedAt))
     }
+    @Transaction open suspend fun updateMetadataBatch(tracks: List<TrackRecord>) { tracks.forEach { updateMetadata(it) } }
     @Insert protected abstract suspend fun insertLocations(locations: List<FolderTrackRecord>)
     @Query("DELETE FROM folder_tracks WHERE folderUri = :uri") protected abstract suspend fun clearLocations(uri: String)
     @Query("DELETE FROM folders WHERE uri = :uri") protected abstract suspend fun deleteFolder(uri: String)
@@ -162,6 +163,7 @@ interface LibraryStore {
     suspend fun replaceRoot(result: ScanResult)
     suspend fun removeRoot(uri: String)
     suspend fun updateMetadata(track: Track)
+    suspend fun updateMetadataBatch(tracks: List<Track>) { tracks.forEach { updateMetadata(it) } }
 }
 
 class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
@@ -174,9 +176,11 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
         }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })
     }
     override suspend fun removeRoot(uri: String) = dao.removeRoot(uri)
-    override suspend fun updateMetadata(track: Track) = dao.updateMetadata(TrackRecord(track.id, track.title,
-        track.artist, track.album, track.durationMs, track.fileName, track.albumArtist, track.trackNumber,
-        track.discNumber, track.year, track.genre, track.comment, track.composer, track.lyricist, track.modifiedAt))
+    override suspend fun updateMetadata(track: Track) = updateMetadataBatch(listOf(track))
+    override suspend fun updateMetadataBatch(tracks: List<Track>) = dao.updateMetadataBatch(tracks.map { track ->
+        TrackRecord(track.id, track.title, track.artist, track.album, track.durationMs, track.fileName, track.albumArtist,
+            track.trackNumber, track.discNumber, track.year, track.genre, track.comment, track.composer, track.lyricist, track.modifiedAt)
+    })
 }
 
 private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {

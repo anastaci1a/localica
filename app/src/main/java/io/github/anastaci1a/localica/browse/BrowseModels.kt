@@ -101,12 +101,12 @@ object BrowseQueries {
                 else -> return emptyList()
             }
             return LibraryViews.groups(snapshot, view, LibraryViews.defaults(view)).map { group ->
-                BrowserItem(MediaRef(kind, group.id), group.title, group.subtitle ?: "${group.tracks.size} songs",
+                BrowserItem(MediaRef(kind, group.id), group.title, group.subtitle ?: songCountLabel(group.tracks.size),
                     group.tracks.map { SongRow(it.id, it) })
             }
         }
         fun playlistItems() = playlists.map { playlist -> BrowserItem(MediaRef(MediaKind.Playlist, playlist.id), playlist.name,
-            "${playlist.entries.size} songs", PlaylistEdits.rows(playlist, snapshot, LibraryViews.defaults(SongListView.Playlists)),
+            songCountLabel(playlist.entries.size), PlaylistEdits.rows(playlist, snapshot, LibraryViews.defaults(SongListView.Playlists)),
             addedAt = playlist.createdAt, modifiedAt = playlist.modifiedAt, playCount = snapshot.playlistPlays[playlist.id] ?: 0, coverUri = playlist.coverUri) }
         fun catalog(kind: MediaKind): List<BrowserItem> = when (kind) {
             MediaKind.Song -> songItems(LibraryQueries.rows(snapshot.tracks.map { SongRow(it.id, it) }, effective))
@@ -114,14 +114,15 @@ object BrowseQueries {
             MediaKind.Queue -> {
                 val current = snapshot.tracks.associateBy { it.id }
                 queues.map { queue -> BrowserItem(MediaRef(MediaKind.Queue, queue.id), queue.name,
-                    "${queue.entries.size} songs", queue.entries.map { SongRow(it.id, current[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), it.sourcePlaylistId) }) }
+                    songCountLabel(queue.entries.size), queue.entries.map { SongRow(it.id, current[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), it.sourcePlaylistId) }) }
             }
             else -> groups(kind)
         }
         val collection = route.collection.takeUnless { route.globalSearch }
         if (collection != null) {
             val source = catalog(collection.kind).firstOrNull { it.ref == collection }?.songs.orEmpty()
-            return BrowseResult(songItems(LibraryQueries.rows(source, effective)), scope(route))
+            val order = if (collection.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) effective.copy(sort = TrackSort.Manual, ascending = true) else effective
+            return BrowseResult(songItems(LibraryQueries.rows(source, order)), scope(route))
         }
         val kinds = if (route.globalSearch) route.filter?.let(::listOf) ?: libraryKinds else when (route.tab) {
             MainTab.Library -> route.filter?.let(::listOf) ?: libraryKinds.filter { it in allCollections && it != MediaKind.Song }
@@ -172,7 +173,7 @@ internal fun BrowserItem.information(style: BrowseStyle): String? {
         ExtraInfo.entries.firstOrNull { it.name == style.sort.name } ?: return subtitle
     return when (info) {
         ExtraInfo.None -> null
-        ExtraInfo.Count -> "${songs.size} songs"
+        ExtraInfo.Count -> songCountLabel(songs.size)
         ExtraInfo.Duration -> duration()?.let { "${it / 60000}:${(it / 1000 % 60).toString().padStart(2, '0')}${if (songs.any { row -> row.track.durationMs == null }) " (partial)" else ""}" }
         ExtraInfo.Year -> songs.mapNotNull { it.track.year }.minOrNull()?.toString()
         ExtraInfo.MostPlayed -> "$playCount ${if (playCount == 1L) "play" else "plays"}"
@@ -182,3 +183,5 @@ internal fun BrowserItem.information(style: BrowseStyle): String? {
         ExtraInfo.Automatic -> subtitle
     }
 }
+
+internal fun songCountLabel(count: Int) = "$count ${if (count == 1) "song" else "songs"}"

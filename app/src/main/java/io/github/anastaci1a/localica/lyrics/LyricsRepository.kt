@@ -29,7 +29,6 @@ class LyricsRepository(private val context: Context) {
         fun add(id: String, label: String, parsed: ParsedLyrics, sidecar: Boolean = false) {
             if (parsed.lines.isEmpty()) return
             sources += LyricSource(id, label, parsed, sidecar)
-            if (parsed.synced) sources += LyricSource("$id:plain", "$label · plain text", ParsedLyrics(parsed.plain, parsed.plain), sidecar)
         }
         suspend fun attempt(message: String = "An embedded lyric source could not be read.", block: suspend () -> Unit) {
             try { block() } catch (cancelled: CancellationException) { throw cancelled }

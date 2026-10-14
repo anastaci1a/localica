@@ -19,13 +19,18 @@ class TagEditingController(private val context: Context, private val library: Li
     private val documents = AndroidDocuments(context)
     private val writer = RecoverableTagWriter(File(context.filesDir, "tag-recovery"), AndroidEditableDocuments(context))
     private val history = TagJobHistory(context)
+    private val refreshJournal = MetadataRefreshJournal(File(context.filesDir, "pending-metadata-refresh.json"))
     private val mutable = MutableStateFlow(TagEditorState(jobs = history.read()))
     private var pendingPatch: TagPatch? = null
     private var activeJob: String? = null
     val state = mutable.asStateFlow()
     private var stopped = false
     private var completion: ((Boolean) -> Unit)? = null
-    init { scope.launch { checkRecovery() } }
+    init { scope.launch {
+        checkRecovery()
+        try { library.withExclusiveFiles { flushMetadata() } }
+        catch (failure: Exception) { mutable.update { it.copy(error = "Saved tags need refreshing: ${failure.message}") } }
+    } }
     fun open(tracks: List<Track>, complete: (Boolean) -> Unit = {}) {
         if (state.value.busy) { showJobs(); return }
         completion?.invoke(false); completion = complete
@@ -80,8 +85,9 @@ class TagEditingController(private val context: Context, private val library: Li
                         try {
                             check(writer.canWrite(track)) { "Grant write access to this song’s folder first." }
                             token = await { queues.beginFileEdit(track.id, it) }
+                            withContext(Dispatchers.IO) { refreshJournal.include(track) }
                             val written = writer.edit(track, patch)
-                            refresh(written)
+                            withContext(Dispatchers.IO) { refreshJournal.include(written) }
                             writer.complete()
                             EditResult(track, true, "Saved and verified")
                         } catch (failure: Exception) {
@@ -95,6 +101,8 @@ class TagEditingController(private val context: Context, private val library: Li
             } catch (failure: Exception) { mutable.update { it.copy(error = it.error ?: if (failure is CancellationException) "Editing interrupted." else failure.message ?: "Editing stopped.") } }
             finally { withContext(NonCancellable) {
                 checkRecovery()
+                try { library.withExclusiveFiles { flushMetadata() } }
+                catch (failure: Exception) { mutable.update { it.copy(error = "Saved tags need refreshing: ${failure.message}") } }
                 val current = state.value
                 recordJob(when {
                     current.error != null -> "Stopped: ${current.error}"
@@ -124,16 +132,25 @@ class TagEditingController(private val context: Context, private val library: Li
             try { library.withExclusiveFiles {
                 val pending = withContext(Dispatchers.IO) { writer.pending() } ?: return@withExclusiveFiles
                 val token = await<QueueController.EditPlayback?> { queues.beginFileEdit(pending.track.id, it) }
-                try { refresh(writer.recover()) } finally { await<Boolean> { queues.endFileEdit(token, it) } }
+                try {
+                    val restored = writer.recover()
+                    withContext(Dispatchers.IO) { refreshJournal.include(restored) }
+                    flushMetadata()
+                } finally { await<Boolean> { queues.endFileEdit(token, it) } }
             } } catch (failure: Exception) { mutable.update { it.copy(error = failure.message) } }
             finally { mutable.update { it.copy(busy = false) }; checkRecovery() }
         }
     }
-    private suspend fun refresh(track: Track) {
-        val refreshed = library.refreshMetadata(track, documents.metadata(track.uri, track.fileName))
-        check(await<Boolean> { playlists.refreshTrack(refreshed, it) }) { "File saved; playlist refresh failed. Recovery copy retained." }
-        check(await<Boolean> { queues.refreshTrack(refreshed, it) }) { "File saved; queue refresh failed. Recovery copy retained." }
+    private suspend fun flushMetadata() = withContext(Dispatchers.IO) {
+        val pending = refreshJournal.read()
+        val recovering = writer.pending()?.track?.id
+        val ready = pending.filterNot { it.id == recovering }
+        if (ready.isEmpty()) return@withContext
+        val refreshed = library.refreshMetadataBatch(ready.map { it to documents.metadata(it.uri, it.fileName) })
+        check(await<Boolean> { playlists.refreshTracks(refreshed, it) }) { "Playlist refresh failed; pending refresh retained." }
+        check(await<Boolean> { queues.refreshTracks(refreshed, it) }) { "Queue refresh failed; pending refresh retained." }
         ArtworkCache.invalidate()
+        refreshJournal.write(pending.filter { it.id == recovering })
     }
     private suspend fun checkRecovery() {
         val name = withContext(Dispatchers.IO) { runCatching { writer.pending()?.track?.fileName }.getOrElse { "Unreadable recovery record" } }

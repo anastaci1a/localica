@@ -47,14 +47,16 @@ class BrowseQueriesTest {
         assertEquals(listOf("two", "one"), BrowseQueries.evaluate(library, emptyList(), detail).rows.map { it.id })
         assertEquals(listOf("one"), BrowseQueries.evaluate(library, emptyList(), detail.copy(search = true, text = "First")).rows.map { it.id })
     }
-    @Test fun playlistDuplicatesRetainOccurrenceIdentityAndSavedOrderWhenSorted() {
+    @Test fun playlistQueriesKeepPhysicalOrderUntilAnExplicitSortOperation() {
         val playlist = PlaylistEdits.append(ManualPlaylist(name = "Mix"), tracks + tracks.first())
         val route = BrowseRoute(MainTab.Library, MediaRef(MediaKind.Playlist, playlist.id))
         val rows = BrowseQueries.evaluate(library, listOf(playlist), route).rows
         assertEquals(playlist.entries.map { it.id }, rows.map { it.id })
         val sorted = BrowseQueries.evaluate(library, listOf(playlist), route, LibraryQuery(sort = TrackSort.Title))
         assertEquals(3, sorted.rows.map { it.id }.distinct().size)
-        assertEquals(listOf("one", "one", "two"), sorted.rows.map { it.track.id })
+        assertEquals(listOf("one", "two", "one"), sorted.rows.map { it.track.id })
+        val applied = PlaylistEdits.sort(playlist, TrackSort.Title, true)
+        assertEquals(listOf("one", "one", "two"), BrowseQueries.evaluate(library, listOf(applied), route).rows.map { it.track.id })
         assertEquals(listOf("one", "two", "one"), playlist.entries.map { it.track.id })
     }
 }

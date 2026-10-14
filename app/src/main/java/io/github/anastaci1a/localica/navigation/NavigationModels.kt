@@ -4,7 +4,8 @@ import java.util.UUID
 
 enum class MainTab(val label: String) {
     Home("Home"), Library("Library"), Songs("Songs"), Albums("Albums"), Artists("Artists"),
-    AlbumArtists("Album Artists"), Folders("Folders"), Playlists("Playlists"), Queues("Queues"), MostPlayed("Most played")
+    AlbumArtists("Album Artists"), Folders("Folders"), Playlists("Playlists"), Queues("Queues"), MostPlayed("Most played");
+    companion object { val available get() = entries.filterNot { it == MostPlayed } }
 }
 enum class MediaKind(val label: String) {
     Song("Songs"), Album("Albums"), Artist("Artists"), AlbumArtist("Album Artists"), Folder("Folders"), Playlist("Playlists"), Queue("Queues")
@@ -31,9 +32,9 @@ data class NavigationState(
     val route: BrowseRoute get() = stacks.getValue(active).last()
     fun switch(tab: MainTab): NavigationState = if (tab == active) this else copy(active = tab,
         stacks = if (tab in stacks) stacks else stacks + (tab to listOf(BrowseRoute(tab))), history = history + active)
-    fun resetTab(tab: MainTab): NavigationState {
+    fun resetTab(tab: MainTab, clearLibraryFilter: Boolean = true): NavigationState {
         val root = stacks[tab]?.firstOrNull() ?: BrowseRoute(tab)
-        return copy(stacks = stacks + (tab to listOf(if (tab == MainTab.Library) root.copy(filter = null) else root)))
+        return copy(stacks = stacks + (tab to listOf(if (tab == MainTab.Library && clearLibraryFilter) root.copy(filter = null) else root)))
     }
     fun open(route: BrowseRoute) = copy(stacks = stacks + (active to (stacks.getValue(active) + route)))
     fun update(route: BrowseRoute) = copy(stacks = stacks + (active to (stacks.getValue(active).dropLast(1) + route)))

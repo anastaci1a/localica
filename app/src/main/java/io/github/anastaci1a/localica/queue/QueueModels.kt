@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica.queue
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.SongListView
 import java.util.UUID
+import io.github.anastaci1a.localica.library.*
 
 data class QueueEntry(val id: String = UUID.randomUUID().toString(), val track: Track, val sourcePlaylistId: String? = null)
 data class ListeningQueue(
@@ -17,6 +18,7 @@ data class ListeningQueue(
     val repeat: QueueRepeat = QueueRepeat.Off,
     val lastActivatedAt: Long = createdAt,
     val journey: QueueJourney? = null,
+    val order: SavedOrder = SavedOrder(entries.map { it.id }),
 )
 enum class QueueRepeat { Off, All, One }
 enum class SongEnd(val label: String) { Stop("Stop here"), NextPaused("Load next song and pause"), Next("Play next song"), Repeat("Repeat this song") }
@@ -58,7 +60,8 @@ object QueueEdits {
     fun randomize(queue: ListeningQueue, keepPlayingFirst: Boolean, random: kotlin.random.Random = kotlin.random.Random.Default): ListeningQueue {
         val playing = queue.entries.firstOrNull { keepPlayingFirst && it.id == queue.currentEntryId }
         val remaining = queue.entries.filterNot { it.id == playing?.id }.shuffled(random)
-        return queue.copy(entries = if (playing == null) remaining else listOf(playing) + remaining)
+        val entries = if (playing == null) remaining else listOf(playing) + remaining
+        return queue.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
     }
 
     fun create(tracks: List<Track>, selectedId: String, name: String): ListeningQueue {
@@ -79,7 +82,8 @@ object QueueEdits {
         val position = if (action == SongTap.Append) queue.entries.size else (current + 1).coerceAtLeast(0)
         val entries = queue.entries.toMutableList().apply { addAll(position, added) }
         val select = action == SongTap.PlayNow || queue.currentEntryId == null
-        return queue.copy(entries = entries, currentEntryId = if (select) added.first().id else queue.currentEntryId,
+        return queue.copy(entries = entries, order = if (action == SongTap.Append) queue.order.copy(manual = queue.order.manual + added.map { it.id })
+                else queue.order.reconcile(entries.map { it.id }), currentEntryId = if (select) added.first().id else queue.currentEntryId,
             positionMs = if (select) 0 else queue.positionMs)
     }
     fun remove(queue: ListeningQueue, entryId: String): ListeningQueue {
@@ -87,7 +91,7 @@ object QueueEdits {
         if (index < 0) return queue
         val entries = queue.entries.filterNot { it.id == entryId }
         val currentRemoved = queue.currentEntryId == entryId
-        return queue.copy(entries = entries,
+        return queue.copy(entries = entries, order = queue.order.reconcile(entries.map { it.id }),
             currentEntryId = if (currentRemoved) entries.getOrNull(index.coerceAtMost(entries.lastIndex))?.id else queue.currentEntryId,
             positionMs = if (currentRemoved) 0 else queue.positionMs)
     }
@@ -95,10 +99,17 @@ object QueueEdits {
         val from = queue.entries.indexOfFirst { it.id == entryId }
         if (from < 0) return queue
         val entries = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(queue.entries, from, offset)
-        return queue.copy(entries = entries)
+        return reordered(queue, entries)
     }
-    fun moveBefore(queue: ListeningQueue, ids: Set<String>, beforeId: String?) = queue.copy(
-        entries = io.github.anastaci1a.localica.library.OccurrenceMoves.before(queue.entries, ids, beforeId) { it.id })
+    private fun reordered(queue: ListeningQueue, entries: List<QueueEntry>) = if (entries == queue.entries) queue
+        else queue.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
+    fun moveBefore(queue: ListeningQueue, ids: Set<String>, beforeId: String?) = reordered(queue,
+        OccurrenceMoves.before(queue.entries, ids, beforeId) { it.id })
+    fun sort(queue: ListeningQueue, method: TrackSort, ascending: Boolean): ListeningQueue {
+        val byId = queue.entries.associateBy { it.id }
+        val ids = queue.order.apply(queue.entries.map { SongRow(it.id, it.track) }, method, ascending)
+        return queue.copy(entries = ids.map { byId.getValue(it) }, order = queue.order.copy(sort = method, ascending = ascending))
+    }
     fun oldestInactive(library: QueueLibrary): String? = library.queues.filterNot { it.id == library.activeId }
         .minWithOrNull(compareBy<ListeningQueue> { it.createdAt }.thenBy { it.id })?.id
     fun canCreate(library: QueueLibrary, maximum: Int?, removals: Set<String>): Boolean =

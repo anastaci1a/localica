@@ -27,6 +27,7 @@ class LyricsReaderTest {
             val track = Track(Uri.fromFile(file).toString(), "Song", fileName = file.name, relativePath = file.name)
             val result = LyricsRepository(context).load(track, 0)
             assertTrue(result.toString(), result.sources.first().document.synced)
+            assertFalse(result.sources.any { it.id.endsWith(":plain") })
             assertEquals("An original test line", result.sources.first().document.lines.first().text)
         } finally { file.delete() }
     }
@@ -50,6 +51,7 @@ class LyricsReaderTest {
             val reader = LyricsRepository(context)
             val result = reader.load(track, 0)
             assertTrue(result.toString(), result.sources.first().document.synced)
+            assertFalse(result.sources.any { it.id.endsWith(":plain") })
             assertEquals(1000L, result.sources.first().document.lines.first().timeMs)
             assertTrue(result.sources.any { it.document.lines.first().text == "Plain lyrics" })
             AudioFileIO.read(file).apply { tag.setField(FieldKey.LYRICS, "Updated lyrics"); commit() }
