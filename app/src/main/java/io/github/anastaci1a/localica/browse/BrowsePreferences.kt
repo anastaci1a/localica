@@ -60,6 +60,13 @@ class BrowsePreferences(context: Context) {
             .putInt("$key.columns", value.itemsPerRow?.coerceIn(1, 5) ?: 0).apply()
         if (!override) reset(route)
     }
+    fun observe(route: BrowseRoute, onChange: (BrowseStyle) -> Unit): () -> Unit {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || key.startsWith(type(route) + ".")) onChange(read(route))
+        }
+        store.registerOnSharedPreferenceChangeListener(listener)
+        return { store.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     fun reset(route: BrowseRoute) {
         val key = collectionKey(route) ?: return
         store.edit().remove("$key.sort").remove("$key.ascending").remove("$key.presentation").remove("$key.info")

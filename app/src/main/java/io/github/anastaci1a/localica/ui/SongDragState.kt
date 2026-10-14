@@ -164,7 +164,7 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
 
 /** Own the held pointer at Initial pass so item clicks/scrolling cannot take over mid-drag. */
 internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: MediaRef?, selection: SessionSelection,
-    reducedMotion: Boolean, trailingActions: Boolean, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier = if (!enabled) this else pointerInput(state, source, reducedMotion, trailingActions) {
+    reducedMotion: Boolean, trailingActions: Boolean, onContext: (BrowserItem) -> Unit, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier = if (!enabled) this else pointerInput(state, source, reducedMotion, trailingActions) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val item = state.hit(down.position) ?: return@awaitEachGesture
@@ -182,9 +182,6 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
             @Suppress("UNREACHABLE_CODE") false
         }
         if (held != null) return@awaitEachGesture
-        selection.select(source, listOf(row))
-        val selected = selection.entries.takeIf { entries -> entries.all { it.source == source && state.items.any { item -> item.key == it.row.id } } }
-            ?.map { it.row.id }?.toSet()
         var moving = false
         try {
             while (true) {
@@ -198,12 +195,15 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
                     if (moving) {
                         if (!canceled) state.move(change.position)
                         state.finish(canceled || state.drag?.overCancel == true, reducedMotion, selection::clear, commit)
-                    }
+                    } else if (!canceled) onContext(item)
                     break
                 }
                 change.consume()
-                if (!moving && selected != null && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
-                    moving = state.begin(item, selected, down.position)
+                if (!moving && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                    selection.select(source, listOf(row))
+                    val selected = selection.entries.takeIf { entries -> entries.all { it.source == source && state.items.any { item -> item.key == it.row.id } } }
+                        ?.map { it.row.id }?.toSet()
+                    if (selected != null) moving = state.begin(item, selected, down.position)
                 }
                 if (moving) state.move(change.position)
             }

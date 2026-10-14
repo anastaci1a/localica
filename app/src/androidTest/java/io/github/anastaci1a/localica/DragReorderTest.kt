@@ -69,6 +69,7 @@ class DragReorderTest {
     @Test fun backClearsMutableListSelectionWithoutLeavingTheList() = fixture { _, playlist ->
         val id = playlist.entries[1].id
         compose.onNodeWithTag("media-$id").performTouchInput { longClick() }
+        compose.onNodeWithText("Select song").performClick()
         compose.runOnIdle { assertTrue(selection.active); backDispatcher.onBackPressed() }
         compose.onNodeWithTag("media-$id").assertIsDisplayed().assertIsNotSelected()
         compose.runOnIdle { assertFalse(selection.active); assertTrue(selection.entries.isEmpty()) }
@@ -76,6 +77,7 @@ class DragReorderTest {
     @Test fun disjointSelectionLiftsIntoStackAndMovesInSourceOrder() = fixture { controller, playlist ->
         val ids = playlist.entries.map { it.id }
         compose.onNodeWithTag("media-${ids[2]}").performTouchInput { longClick() }
+        compose.onNodeWithText("Select song").performClick()
         compose.onNodeWithTag("media-${ids[0]}").performClick()
         compose.onAllNodes(isToggleable()).assertCountEquals(0)
         compose.onNodeWithTag("media-${ids[0]}").assertIsSelected()
@@ -115,6 +117,7 @@ class DragReorderTest {
     @Test fun trailingCardsStayCloseAndStackDrawsOverBottomActions() = fixture(foregroundFooter = true) { _, playlist ->
         val ids = playlist.entries.map { it.id }
         compose.onNodeWithTag("media-${ids[1]}").performTouchInput { longClick() }
+        compose.onNodeWithText("Select song").performClick()
         compose.onNodeWithTag("media-${ids[2]}").performClick()
         compose.onNodeWithTag("media-${ids[3]}").performClick()
         compose.onNodeWithTag("media-${ids[1]}").performTouchInput {

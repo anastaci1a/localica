@@ -33,6 +33,8 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     var origin by remember { mutableStateOf(Offset.Zero) }
     var pointerActive by remember { mutableStateOf(false) }
     var cancelRelease by remember { mutableStateOf(false) }
+    var wasOver by remember { mutableStateOf(false) }
+    val view = androidx.compose.ui.platform.LocalView.current
     val target by rememberUpdatedState(cancelBounds)
     val report by rememberUpdatedState(onDrag)
     val cancel by rememberUpdatedState(onCancel)
@@ -41,6 +43,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             cancelRelease = false
             pointerActive = true
+            wasOver = false
             report(true, false)
             var released = false
             try {
@@ -49,6 +52,10 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                     val change = event.changes.firstOrNull { it.id == down.id }
                     if (change != null) {
                         val over = target?.contains(origin + change.position) == true
+                        if (over != wasOver) {
+                            view.performHapticFeedback(if (over) android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK)
+                            wasOver = over
+                        }
                         cancelRelease = over
                         report(change.pressed, over)
                         released = !change.pressed
@@ -67,8 +74,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
         }
     }
     Slider(value, { next ->
-        if (!pointerActive) cancelRelease = false
-        onValueChange(next)
+        if (!cancelRelease) onValueChange(next)
     }, modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(touch), enabled,
         valueRange = valueRange, onValueChangeFinished = {
             if (cancelRelease) onCancel() else onValueChangeFinished()

@@ -56,9 +56,12 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             var pulling = false
             var pulled = 0f
             fun move(dy: Float): Offset {
+                val before = pulled
                 pulled = (pulled + dy).coerceIn(0f, distance)
+                val consumed = pulled - before
+                if (pulled == 0f) pulling = false
                 scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(1f - pulled / distance) }
-                return Offset(0f, dy)
+                return Offset(0f, consumed)
             }
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
                 if (pulling && source == NestedScrollSource.UserInput) move(available.y) else Offset.Zero

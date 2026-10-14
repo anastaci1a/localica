@@ -23,10 +23,12 @@ import org.json.JSONObject
 
 internal val LocalTagEdit = staticCompositionLocalOf<((List<Track>, (Boolean) -> Unit) -> Unit)?> { null }
 
+internal val LocalArtworkEdit = staticCompositionLocalOf<((Track) -> Unit)?> { null }
+
 @Composable
 internal fun TagEditorHost(controller: TagEditingController, content: @Composable () -> Unit) {
     val state by controller.state.collectAsState()
-    CompositionLocalProvider(LocalTagEdit provides controller::open) { content() }
+    CompositionLocalProvider(LocalTagEdit provides controller::open, LocalArtworkEdit provides controller::openArtwork) { content() }
     if (state.tracks.isNotEmpty() && !state.background) TagEditorDialog(state, controller)
     if (state.jobsVisible) TagJobsDialog(state, controller)
     var recoveryDismissed by remember(state.recovery) { mutableStateOf(false) }
@@ -61,7 +63,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
     var changed by rememberSaveable(identity) { mutableStateOf(emptyList<String>()) }
     var imageUri by rememberSaveable(identity) { mutableStateOf<String?>(null) }
     var removeImage by rememberSaveable(identity) { mutableStateOf(false) }
-    var choosing by remember { mutableStateOf(false) }
+    var choosing by remember(identity, state.artworkOnly) { mutableStateOf(state.artworkOnly) }
     var viewing by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf(false) }
     var imageError by remember { mutableStateOf<String?>(null) }
@@ -81,15 +83,15 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
     }
     fun patch() = TagPatch(changed.associate { name -> EditField.valueOf(name) to JSONObject(values).getString(name) },
         if (removeImage) ArtworkChange.Remove else cover?.let { ArtworkChange.Replace(it) } ?: ArtworkChange.Keep)
-    GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Sheet) {
+    if (!state.artworkOnly || !choosing) GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Sheet) {
         Surface(Modifier.fillMaxWidth().fillMaxHeight(.94f), color = androidx.compose.ui.graphics.Color.Transparent) {
             Column(Modifier.fillMaxSize().imePadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Edit ${state.tracks.size} ${if (state.tracks.size == 1) "song" else "songs"}", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                    Text(if (state.artworkOnly) "Change artwork" else "Edit ${state.tracks.size} ${if (state.tracks.size == 1) "song" else "songs"}", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     TextButton(enabled = !state.busy, onClick = controller::close) { Text("Close editor") }
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
+                    if (!state.artworkOnly) Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     Box(Modifier.align(Alignment.CenterHorizontally).size(180.dp)) {
                         if (!removeImage) {
@@ -110,7 +112,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                     if (removeImage) Text("Artwork will be removed", Modifier.align(Alignment.CenterHorizontally))
                     if (imageUri != null || removeImage) TextButton(enabled = !state.busy,
                         onClick = { imageUri = null; removeImage = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Keep existing artwork") }
-                    EditField.entries.forEach { field ->
+                    if (!state.artworkOnly) EditField.entries.forEach { field ->
                         val common = state.tracks.map(field::value).distinct().size == 1
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             InterfaceCheckbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name }, enabled = !state.busy)
@@ -146,7 +148,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
             }
         }
     }
-    if (choosing) ImageChooser({ choosing = false }) { imageUri = it; removeImage = false; choosing = false }
+    if (choosing) ImageChooser({ choosing = false; if (state.artworkOnly && imageUri == null) controller.close() }) { imageUri = it; removeImage = false; choosing = false }
     if (viewing) ArtworkViewer(state.tracks.first().uri) { viewing = false }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Save changes to ${state.tracks.size} files?") },
         text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }

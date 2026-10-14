@@ -40,24 +40,31 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
         }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(iconSize)) {
             val color = tint.copy(alpha = tint.alpha * if (enabled) 1f else .38f)
-            fun polygon(from: List<Offset>, to: List<Offset>, progress: Float, alpha: Float = 1f) {
-                val path = Path()
-                from.indices.forEach { i ->
-                    val point = from[i] + (to[i] - from[i]) * progress
-                    if (i == 0) path.moveTo(point.x * size.width, point.y * size.height)
-                    else path.lineTo(point.x * size.width, point.y * size.height)
+            fun roundedPolygon(points: List<Offset>, alpha: Float = 1f) {
+                val vertices = points.fold(mutableListOf<Offset>()) { result, p ->
+                    if (result.lastOrNull() != p) result += p
+                    result
                 }
-                path.close(); drawPath(path, color.copy(alpha = color.alpha * alpha))
+                val path = Path()
+                val radius = .045f
+                vertices.forEachIndexed { i, point ->
+                    val before = vertices[(i + vertices.size - 1) % vertices.size] - point
+                    val after = vertices[(i + 1) % vertices.size] - point
+                    val a = point + before * (radius / before.getDistance().coerceAtLeast(.001f)).coerceAtMost(.45f)
+                    val b = point + after * (radius / after.getDistance().coerceAtLeast(.001f)).coerceAtMost(.45f)
+                    if (i == 0) path.moveTo(a.x * size.width, a.y * size.height)
+                    else path.lineTo(a.x * size.width, a.y * size.height)
+                    path.quadraticTo(point.x * size.width, point.y * size.height, b.x * size.width, b.y * size.height)
+                }
+                path.close()
+                drawPath(path, color.copy(alpha = color.alpha * alpha))
             }
+            fun polygon(from: List<Offset>, to: List<Offset>, progress: Float) =
+                roundedPolygon(from.indices.map { from[it] + (to[it] - from[it]) * progress })
             if (glyph == TransportGlyph.PlayPause) {
                 if (pause == 0f) {
                     // One contour avoids a shared antialiased edge in the settled triangle.
-                    drawPath(Path().apply {
-                        moveTo(.2f * size.width, .1f * size.height)
-                        lineTo(.8f * size.width, .5f * size.height)
-                        lineTo(.2f * size.width, .9f * size.height)
-                        close()
-                    }, color)
+                    roundedPolygon(listOf(Offset(.2f, .1f), Offset(.8f, .5f), Offset(.2f, .9f)))
                 } else {
                 polygon(listOf(Offset(.2f,.1f), Offset(.5f,.3f), Offset(.5f,.7f), Offset(.2f,.9f)),
                     listOf(Offset(.2f,.1f), Offset(.4f,.1f), Offset(.4f,.9f), Offset(.2f,.9f)), pause)

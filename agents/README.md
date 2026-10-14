@@ -14,6 +14,11 @@ Read the relevant page in the [documentation map](../docs/README.md) before edit
 - Before committing docs, review the diff for duplicated facts, stale tense/current-vs-planned ambiguity and unnecessary growth; check moved headings/links. Touch only affected documents. A docs-only change needs these checks, not an Android build.
 - Keep the public README short with current real-app previews. Follow [preview maintenance](../docs/build.md#previews) during release preparation.
 
+## Shared interface controls
+
+- Build app-owned choices, switches, sliders, text fields, dialogs and drag visuals from the shared `ui` controls documented in [Interface](../docs/interface.md). Update the abstraction when behavior is missing; do not reintroduce raw Material segmented buttons/radio rows or a parallel visual implementation. System permissions and external pickers remain native.
+- Keep shared gesture, selection and material regression tests with changes to those abstractions.
+
 ## Issues and commits
 
 - [GitHub Issues](https://github.com/anastaci1a/localica/issues) track bugs/actionable work. Use the [bug](../.github/ISSUE_TEMPLATE/bug_report.md) or [feature](../.github/ISSUE_TEMPLATE/feature_request.md) template, including for CLI/API submissions; omit irrelevant optional fields.

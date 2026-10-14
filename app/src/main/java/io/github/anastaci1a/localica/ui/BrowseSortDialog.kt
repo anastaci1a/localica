@@ -21,6 +21,7 @@ import io.github.anastaci1a.localica.navigation.*
 internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden: Boolean,
     onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: (() -> Unit)? = null) {
     var tab by remember { mutableIntStateOf(if (presentationOnly) 1 else 0) }
+    val shadowInset = glassShadowInset().coerceAtLeast(12.dp)
     val sortScroll = rememberScrollState()
     val viewScroll = rememberScrollState()
     var edited by remember { mutableStateOf(value) }
@@ -39,12 +40,13 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
         val panelHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * .53f).coerceAtMost(460.dp)
         Crossfade(tab, modifier = Modifier.height(panelHeight), animationSpec = androidx.compose.animation.core.tween(if (LocalReducedMotion.current) 0 else 140), label = "Browse options page") { page ->
             val scroll = if (page == 0) sortScroll else viewScroll
-            Column(Modifier.fillMaxSize().scrollEdgeFade(scroll).verticalScroll(scroll)) {
+            Column(Modifier.fillMaxSize().scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = shadowInset, vertical = shadowInset),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (page == 1) ListViewFields(route, edited) { edited = it }
                 else {
                     if (onRandomize != null) {
-                        TextButton(onClick = onRandomize) { Text("Randomize queue order") }
-                        Text("Changes the saved order; keeps the current song and playback position.", style = MaterialTheme.typography.bodySmall)
+                        GlassActionButton(R.drawable.ic_shuffle, "Randomize queue order", onClick = onRandomize)
+                        Text("Shuffles the saved order. While playing, the current song stays first and playback continues.", style = MaterialTheme.typography.bodySmall)
                     }
                     ChoicePreference("Sort by", edited.sort, fields, ::sortLabel) { field ->
                         edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending)

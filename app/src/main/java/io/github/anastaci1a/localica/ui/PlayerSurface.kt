@@ -86,6 +86,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     var sourcesRequest by remember { mutableIntStateOf(0) }
     val sourcesAnchor = rememberGlassAnchor()
     LaunchedEffect(lyricsOpen) { if (!lyricsOpen) sourcesRequest = 0 }
+    val editArtwork = LocalArtworkEdit.current
     var viewing by remember { mutableStateOf(false) }
     var artworkMenu by remember { mutableStateOf(false) }
     var configureTap by remember { mutableStateOf(false) }
@@ -93,15 +94,15 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         ArtworkAction.Lyrics -> if (lyricsAvailable) onLyrics(!lyricsOpen)
         ArtworkAction.Menu -> artworkMenu = true
         ArtworkAction.View -> viewing = true
-        ArtworkAction.Change -> onEditTags?.invoke()
+        ArtworkAction.Change -> track?.let { editArtwork?.invoke(it) }
         ArtworkAction.None -> Unit
     } }
     LaunchedEffect(expanded, settings.reducedMotion, settings.fasterMotion) {
-        if (!dragging) progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400)))
+        if (!dragging) progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
     }
     fun settle(target: Boolean) {
         onExpanded(target)
-        scope.launch { progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400))) }
+        scope.launch { progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing)) }
     }
     val dragState = rememberDraggableState { delta ->
         if (owner == VerticalOwner.Undecided) owner = if (startExpanded && (delta < 0f || startQueueProgress > 0f)) VerticalOwner.Queue else VerticalOwner.Player
@@ -126,8 +127,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 if (open) onQueue()
                 else scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }
             } else settle(settleOpen(travelDp, velocityDp, progress.value, !startExpanded,
-                velocityThreshold = if (startExpanded) 320f else 280f,
-                distanceThreshold = if (startExpanded) 60f else CompactControlSize.value * .42f))
+                velocityThreshold = if (startExpanded) VerticalReleaseVelocity else 240f,
+                distanceThreshold = if (startExpanded) VerticalReleaseDistance else CompactControlSize.value * .42f))
         })
     // Finish the cover mask late, independently of the backing's color. Delaying the
     // color continuation too would reveal a dark average palette before light artwork.
@@ -277,7 +278,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     onLongClick = { artworkAction(settings.artworkHold) }) else Modifier)) {
                 GlassMenu(artworkMenu, rememberGlassAnchor(), { artworkMenu = false }) {
                     ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
-                    if (onEditTags != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; onEditTags() })
+                    if (editArtwork != null && track != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; editArtwork(track) })
                     ActionMenuItem("Configure tap action", onClick = { artworkMenu = false; configureTap = true })
                 }
             }

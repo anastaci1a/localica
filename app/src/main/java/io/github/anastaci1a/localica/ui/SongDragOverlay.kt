@@ -102,12 +102,11 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         fun cardWidth() = stackWidth + ((destination?.width ?: stackWidth) - stackWidth) * drag.landing.value
         val alpha by animateFloatAsState(if (drag.destinations != null && destination == null) 0f else 1f,
             tween(if (reducedMotion) 0 else 300), label = "Song landing")
-        Surface(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
+        GlassDragBubble(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
             .graphicsLayer { translationX = displayed().x; translationY = displayed().y }
-            .width(with(density) { cardWidth().toDp() }).height(height).graphicsLayer { this.alpha = alpha * (1f - drag.handoff.value) }
+            .width(with(density) { cardWidth().toDp() }).height(height).graphicsLayer { this.alpha = alpha }
             .testTag(if (index == 0) "drag-stack" else "drag-card-${item.key}"),
-            shape = Corners.card, color = if (index == 0) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.secondaryContainer,
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))) {
+            landing = { drag.handoff.value }, shadow = false) {
             if (index == 0 || !lifted || drag.dropping) Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MediaArtwork(item.coverUris, Modifier.size(48.dp), shape = artworkShape(item.ref.kind))
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {

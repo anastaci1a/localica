@@ -233,14 +233,16 @@ fun LocalicaScreen(
     BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
-        Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(pageBackground).statusBarsPadding()
+        Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(pageBackground)
             .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
             TabPager(pager, tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
             val sortAnchor = rememberGlassAnchor()
-            Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                .then(if (route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search)
+                    Modifier else Modifier.statusBarsPadding())) {
                 if (route.search || route.collection?.kind !in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist)) Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }

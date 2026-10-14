@@ -1,10 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -42,6 +40,7 @@ private class ActionDrag(val action: PlayerAction, val origin: Offset, point: Of
     var remove by mutableStateOf(false)
     var landing by mutableStateOf(false)
     val position = Animatable(point, Offset.VectorConverter)
+    val handoff = Animatable(0f)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,7 +79,10 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
         }
         scope.launch {
             d.position.snapTo(d.point)
-            if (!reducedMotion) d.position.animateTo(destination, tween(180))
+            if (!reducedMotion) {
+                d.position.animateTo(destination, tween(180))
+                d.handoff.animateTo(1f, tween(220))
+            }
             if (drag === d) drag = null
         }
     }
@@ -123,7 +125,7 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
     }
     GlassDialog(onDismiss, GlassPlacement.Sheet) {
         Box(Modifier.fillMaxWidth().fillMaxHeight(.88f).testTag("player-action-editor").onGloballyPositioned { rootOrigin = it.positionInRoot() }) {
-            Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Player actions", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     ActionIcon(R.drawable.ic_close, "Close customization", onClick = onDismiss)
@@ -141,9 +143,7 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
                                 val slot = ActionSlot(row, column)
                                 val action = value.slots[slot]
                                 val hovered = drag?.target == slot && drag?.landing == false
-                                val color by animateColorAsState(if (hovered) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    tween(if (reducedMotion) 0 else 120), label = "Drop slot")
-                                Surface(Modifier.fillMaxWidth().height(56.dp).padding(3.dp)
+                                LiquidGlassSurface(Modifier.fillMaxWidth().height(56.dp).padding(3.dp)
                                     .onGloballyPositioned { slots[slot] = it.boundsInRoot() }
                                     .testTag("custom-slot-${slot.key}").clip(Corners.card)
                                     .then(if (action != null) Modifier.dragAction(action) else Modifier)
@@ -151,8 +151,7 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
                                         selected?.let { onChange(value.place(it, slot)); selected = null; haptic() } ?: run { choosing = slot }
                                     }, onLongClick = null)
                                     .semantics { contentDescription = "${slot.label}: ${action?.label ?: "Empty"}" },
-                                    shape = Corners.card, color = color,
-                                    border = BorderStroke(if (hovered) 2.dp else 1.dp, if (hovered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
+                                    cornerRadius = 16.dp, tint = if (hovered) MaterialTheme.colorScheme.primary.copy(alpha = .12f) else androidx.compose.ui.graphics.Color.Transparent, pressFeedback = false) {
                                     Box(contentAlignment = Alignment.Center) {
                                         if (action != null) Box(Modifier.graphicsLayer { alpha = if (drag?.action == action) .25f else 1f }) {
                                             PlayerActionGlyph(action, null, value.small)
@@ -166,8 +165,8 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
                 if (value.hiddenCount > 0) Text("${value.hiddenCount} assigned actions are hidden by this layout.", style = MaterialTheme.typography.bodySmall)
                 Text(if (selected == null) "Hold and drag an action, or tap an action then a slot." else "Choose a slot for ${selected!!.label}.",
                     Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-                if (drag != null) Surface(Modifier.fillMaxWidth().height(48.dp).onGloballyPositioned { removeBounds = it.boundsInRoot() }.testTag("remove-player-action"),
-                    shape = Corners.card, color = if (drag?.remove == true) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh) {
+                if (drag != null) LiquidGlassSurface(Modifier.fillMaxWidth().height(48.dp).onGloballyPositioned { removeBounds = it.boundsInRoot() }.testTag("remove-player-action"),
+                    cornerRadius = 16.dp, tint = if (drag?.remove == true) MaterialTheme.colorScheme.error.copy(alpha = .3f) else androidx.compose.ui.graphics.Color.Transparent, pressFeedback = false) {
                     Box(contentAlignment = Alignment.Center) { Text("Release here to remove") }
                 } else SideEffect { removeBounds = Rect.Zero }
                 LazyVerticalGrid(GridCells.Adaptive(88.dp), Modifier.weight(1f).testTag("action-palette"),
@@ -189,13 +188,12 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
                 TextButton(onClick = { onChange(PlayerActionSettings()); selected = null }, enabled = drag == null) { Text("Reset player actions") }
             }
             drag?.let { d ->
-                Surface(Modifier.size(52.dp).graphicsLayer {
+                GlassDragBubble(Modifier.size(52.dp).graphicsLayer {
                     val position = if (d.landing) d.position.value else d.point
                     translationX = position.x - rootOrigin.x - size.width / 2
                     translationY = position.y - rootOrigin.y - size.height / 2
                     scaleX = 1.08f; scaleY = 1.08f
-                }.zIndex(10f).testTag("drag-player-action"), shape = Corners.card, shadowElevation = 12.dp,
-                    color = MaterialTheme.colorScheme.primaryContainer) {
+                }.zIndex(10f).testTag("drag-player-action"), landing = { d.handoff.value }) {
                     Box(contentAlignment = Alignment.Center) { PlayerActionGlyph(d.action, d.action.label) }
                 }
             }

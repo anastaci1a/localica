@@ -22,7 +22,7 @@ import io.github.anastaci1a.localica.browse.*
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, dense: Boolean,
-    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null) {
+    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null) {
     val gallery = style.presentation != Presentation.List
     val from = pinch?.source
     val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
@@ -37,7 +37,8 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, dense: Bool
     } else if (dense) 16f else 24f, tween(duration), label = "Browse title line")
     fun Modifier.morph() = if (from != null) this else animateBounds(lookahead, boundsTransform = { _, _ -> tween(duration) })
     Layout(modifier = Modifier.fillMaxWidth(), content = {
-        Box(Modifier.morph().testTag("browse-art-${item.key}")) {
+        Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
+            item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).testTag("browse-art-${item.key}")) {
             if (trackNumber != null && !gallery) Text(trackNumber, Modifier.fillMaxSize().wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             else MediaArtwork(item.coverUris, Modifier.fillMaxSize(), shape = artworkShape(item.ref.kind))
@@ -70,7 +71,9 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, dense: Bool
         val actions = children[2].measure(Constraints.fixed(menuWidth, 48.dp.roundToPx()))
         val oldHeight = if (oldGallery) oldArt + text.height else maxOf(oldArt, text.height, actions.height)
         val targetHeight = if (gallery) targetArt + text.height else maxOf(targetArt, text.height, actions.height)
-        val height = mix(oldHeight, targetHeight)
+        // The grid must lay out its final rows once. Interpolating row height here
+        // feeds the animation back into lazy virtualization and shifts every anchor.
+        val height = if (from != null) targetHeight else mix(oldHeight, targetHeight)
         layout(width, height) {
             art.placeRelative(0, mix(if (oldGallery) 0 else (oldHeight - oldArt) / 2, if (gallery) 0 else (targetHeight - targetArt) / 2))
             text.placeRelative(mix(if (oldGallery) 0 else oldArt + oldGap, if (gallery) 0 else targetArt + targetGap),

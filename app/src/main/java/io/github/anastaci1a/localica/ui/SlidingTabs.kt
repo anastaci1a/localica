@@ -90,7 +90,10 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, sour
             maxLines = 1, softWrap = false).size.width }.toDp() + 32.dp
     })
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val fits = maxWidth >= minimumWidth * tabs.size
+        // Four destinations fit the normal phone shelf. Preserve larger font targets
+        // by allowing the strip to overflow rather than shrinking accessible text.
+        val fits = maxWidth >= minimumWidth * tabs.size ||
+            (tabs.size <= 4 && density.fontScale <= 1.15f && maxWidth / tabs.size >= 48.dp)
         val width = if (fits) maxWidth / tabs.size else minimumWidth
         val pixels = with(density) { width.toPx() }
         val scroll = rememberScrollState()

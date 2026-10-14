@@ -16,6 +16,37 @@ import org.junit.Test
 
 class PlayerGestureTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun matchingShortFlickClosesQueueAndPlayerAndCanInterruptExpansion() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.getSharedPreferences("interface", 0).edit().clear().commit()
+        val track = Track("missing", "Evening", fileName = "song.mp3", relativePath = "song.mp3")
+        val queue = QueueEdits.create(listOf(track), 0, "Evening queue")
+        compose.setContent { LocalicaTheme { LocalicaScreen(
+            LibraryUiState(LibrarySnapshot(tracks = listOf(track)), loading = false),
+            PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title),
+            {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) } }
+        val art = compose.onNodeWithTag("player-artwork", useUnmergedTree = true)
+        val mini = art.fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("player-surface").performClick()
+        compose.onNodeWithContentDescription("Open queue").performClick()
+        compose.onNodeWithContentDescription("Close queue").performTouchInput {
+            swipe(center, center + Offset(0f, 85f), durationMillis = 60)
+        }
+        compose.onNodeWithContentDescription("Close queue").assertDoesNotExist()
+        compose.onNodeWithTag("player-surface").performTouchInput {
+            swipe(Offset(8f, centerY), Offset(8f, centerY + 85f), durationMillis = 60)
+        }
+        assertEquals(mini, art.fetchSemanticsNode().boundsInRoot)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("player-surface").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        compose.onNodeWithTag("player-surface").performTouchInput {
+            swipe(Offset(8f, centerY), Offset(8f, centerY + 85f), durationMillis = 60)
+        }
+        compose.mainClock.autoAdvance = true
+        assertEquals("A closing flick must interrupt expansion", mini, art.fetchSemanticsNode().boundsInRoot)
+    }
+
     @Test fun slowDragMovesTheSameArtworkThenExpandedSwipeOpensQueue() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
@@ -57,6 +88,18 @@ class PlayerGestureTest {
             swipe(Offset(8f, centerY), Offset(8f, centerY - 240f), durationMillis = 1200)
         }
         compose.onNodeWithContentDescription("Queue actions").assertIsDisplayed()
+        // One held gesture must return from drawer dismissal to ordinary list scrolling.
+        compose.onNodeWithTag("browser-list").performTouchInput {
+            down(Offset(centerX, height * .45f))
+            moveBy(Offset(0f, -120f), delayMillis = 250)
+            moveBy(Offset(0f, 220f), delayMillis = 350)
+            moveBy(Offset(0f, -200f), delayMillis = 350)
+            up()
+        }
+        compose.onNodeWithContentDescription("Close queue").assertIsDisplayed()
+        val listRange = compose.onNodeWithTag("browser-list").fetchSemanticsNode().config[
+            androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange]
+        assertTrue("Reopening the drawer must hand unused upward motion back to its list", listRange.value() > 0f)
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Queue song 30"))
         compose.onNodeWithTag("browser-list").performTouchInput {
             swipe(Offset(centerX, height * .35f), Offset(centerX, height * .55f), durationMillis = 700)

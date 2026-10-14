@@ -64,6 +64,7 @@ class BrowsePinchTest {
             list.performScrollToIndex(57)
             val item = compose.onNodeWithTag("media-pinch:60")
             item.performTouchInput { longClick() }
+            compose.onNodeWithText("Select song").performClick()
             val original = item.fetchSemanticsNode().boundsInRoot
             val viewport = list.fetchSemanticsNode().boundsInRoot
             list.performTouchInput { pinch(true, original.center.y - viewport.top) }
@@ -195,6 +196,47 @@ class BrowsePinchTest {
             assertEquals(gallery.presentation, prefs.read(route).presentation)
             assertEquals(5, prefs.read(route).itemsPerRow)
             compose.onNodeWithTag("media-reverse:0").assertIsDisplayed()
+        } finally { compose.mainClock.autoAdvance = true; prefs.write(route, original, false) }
+    }
+
+    @Test fun galleryDensityChangesRetainLowerItemsWhenReversedRepeatedly() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val route = BrowseRoute(MainTab.Songs)
+        val prefs = BrowsePreferences(context)
+        val original = prefs.read(route)
+        val tracks = (0..99).map { Track("density:$it", "Song ${it.toString().padStart(3, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
+        try {
+            prefs.write(route, BrowseStyle(presentation = Presentation.Compact, itemsPerRow = 5), false)
+            compose.setContent { LocalicaTheme {
+                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                    queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+            } }
+            for (columns in 5 downTo 2) {
+                compose.runOnIdle { prefs.write(route, BrowseStyle(presentation = Presentation.Compact, itemsPerRow = columns), false) }
+                waitForView("Gallery, $columns columns")
+                val list = compose.onNodeWithTag("browser-list")
+                val before = list.captureToImage().toPixelMap()
+                compose.mainClock.autoAdvance = false
+                list.performTouchInput { down(0, Offset(centerX - 50, 200f)); down(1, Offset(centerX + 50, 200f)) }
+                repeat(2) {
+                    list.performTouchInput { moveTo(0, Offset(centerX - 78, 200f)); moveTo(1, Offset(centerX + 78, 200f)) }
+                    compose.mainClock.advanceTimeBy(240)
+                    list.performTouchInput { moveTo(0, Offset(centerX - 50, 200f)); moveTo(1, Offset(centerX + 50, 200f)) }
+                    compose.mainClock.advanceTimeBy(240)
+                }
+                val restored = list.captureToImage().toPixelMap()
+                var error = 0f; var count = 0
+                for (y in before.height / 3 until before.height * 3 / 4 step 4)
+                    for (x in 8 until before.width - 8 step 4) {
+                        error += kotlin.math.abs(before[x,y].red - restored[x,y].red); count++
+                    }
+                assertTrue("Gallery $columns reversal must retain lower items: ${error / count}", error / count < .08f)
+                list.performTouchInput { up(0); up(1) }
+                compose.mainClock.autoAdvance = true
+                waitForView("Gallery, $columns columns")
+                assertEquals(columns, prefs.read(route).itemsPerRow)
+            }
         } finally { compose.mainClock.autoAdvance = true; prefs.write(route, original, false) }
     }
 
