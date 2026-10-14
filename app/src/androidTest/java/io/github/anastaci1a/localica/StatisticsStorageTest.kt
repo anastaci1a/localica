@@ -45,7 +45,7 @@ class StatisticsStorageTest {
             old.version = 1
         }
         val db = Room.databaseBuilder(context, PlaylistDatabase::class.java, name)
-            .addMigrations(PlaylistDatabase.MIGRATION_1_2, PlaylistDatabase.MIGRATION_2_3).build()
+            .addMigrations(PlaylistDatabase.MIGRATION_1_2, PlaylistDatabase.MIGRATION_2_3, PlaylistDatabase.MIGRATION_3_4).build()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         try {
             val controller = PlaylistController(db.playlists(), scope)

@@ -19,14 +19,20 @@ class LibraryRepository(
     private val scanLock = Mutex()
     suspend fun <T> withExclusiveFiles(block: suspend () -> T): T = withContext(io) { scanLock.withLock { block() } }
     suspend fun refreshMetadata(track: Track, metadata: AudioMetadata): Track {
-        val refreshed = track.copy(title = metadata.title?.takeIf { it.isNotBlank() } ?: track.fileName.substringBeforeLast('.'),
+        val refreshed = metadataTrack(track, metadata)
+        store.updateMetadata(refreshed)
+        return refreshed
+    }
+    suspend fun refreshMetadataBatch(tracks: List<Pair<Track, AudioMetadata>>): List<Track> {
+        val refreshed = tracks.map { (track, metadata) -> metadataTrack(track, metadata) }
+        store.updateMetadataBatch(refreshed)
+        return refreshed
+    }
+    private fun metadataTrack(track: Track, metadata: AudioMetadata) = track.copy(title = metadata.title?.takeIf { it.isNotBlank() } ?: track.fileName.substringBeforeLast('.'),
             artist = metadata.artist, album = metadata.album, albumArtist = metadata.albumArtist,
             year = metadata.year, discNumber = metadata.discNumber, trackNumber = metadata.trackNumber,
             genre = metadata.genre, comment = metadata.comment, composer = metadata.composer, lyricist = metadata.lyricist,
             modifiedAt = metadata.modifiedAt ?: track.modifiedAt, durationMs = metadata.durationMs)
-        store.updateMetadata(refreshed)
-        return refreshed
-    }
 
     fun hasAccess(folder: FolderSelection) = permissions.hasReadAccess(folder.uri)
 

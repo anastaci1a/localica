@@ -62,7 +62,7 @@ class QueueEditsTest {
         assertEquals(expected, QueueEdits.randomize(queue, false, kotlin.random.Random(3)).entries)
         val only = QueueEdits.create(listOf(song("a")), 0, "Only")
         assertEquals(only, QueueEdits.randomize(only, true))
-        val empty = only.copy(entries = emptyList(), currentEntryId = null)
+        val empty = QueueEdits.remove(only, only.entries.single().id)
         assertEquals(empty, QueueEdits.randomize(empty, true))
     }
     @Test fun `cap requires enough inactive removals and never permits current removal`() {

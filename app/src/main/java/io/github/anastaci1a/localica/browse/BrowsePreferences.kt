@@ -33,11 +33,48 @@ class BrowsePreferences(context: Context) {
             else -> route.tab.name
         }}"
     }
-    // Preserve existing collection keys. Tab overrides distinguish the same media
-    // kind in Library, a dedicated tab and Search, but never include query text.
+    init { migrateCatalogScopes() }
+    // Collection identities remain independent; roots share their catalog type.
+    fun allowsOverride(route: BrowseRoute) = route.collection != null || route.search
+    private fun migrateCatalogScopes() {
+        if (store.getBoolean("shared-catalog-scopes", false)) return
+        val edit = store.edit()
+        val all = store.all
+        val dedicated = mapOf(MediaKind.Song to MainTab.Songs, MediaKind.Album to MainTab.Albums,
+            MediaKind.Artist to MainTab.Artists, MediaKind.AlbumArtist to MainTab.AlbumArtists,
+            MediaKind.Folder to MainTab.Folders, MediaKind.Playlist to MainTab.Playlists)
+        fun move(from: String?, to: String) {
+            if (from == null) return
+            all.filterKeys { it.startsWith("$from.") }.forEach { (key, value) ->
+                val target = to + key.removePrefix(from)
+                when (value) {
+                    is String -> edit.putString(target, value)
+                    is Boolean -> edit.putBoolean(target, value)
+                    is Int -> edit.putInt(target, value)
+                }
+            }
+        }
+        dedicated.forEach { (kind, tab) ->
+            val type = "catalog.$kind"
+            val library = "$type.tab.Library.$kind"
+            val separate = "$type.tab.$tab.All"
+            move(when {
+                store.contains("$library.sort") -> library
+                store.contains("$separate.sort") -> separate
+                else -> null
+            }, type)
+        }
+        listOf(MainTab.Home, MainTab.Library, MainTab.Queues).forEach { tab ->
+            val type = "catalog.$tab"
+            val old = "$type.tab.$tab.All"
+            if (store.contains("$old.sort")) move(old, type)
+        }
+        all.keys.filter { it.startsWith("catalog.") && ".tab." in it }.forEach { edit.remove(it) }
+        edit.putBoolean("shared-catalog-scopes", true).apply()
+    }
     private fun listKey(route: BrowseRoute): String = route.collection?.let { "${type(route)}.${it.kind}.${it.id.length}:${it.id}" }
         ?: "${type(route)}.tab.${route.tab}.${route.filter?.name ?: "All"}"
-    fun overridden(route: BrowseRoute) = store.contains("${listKey(route)}.sort")
+    fun overridden(route: BrowseRoute) = allowsOverride(route) && store.contains("${listKey(route)}.sort")
     fun read(route: BrowseRoute): BrowseStyle {
         val key = if (overridden(route)) listKey(route) else type(route)
         val view = BrowseQueries.scope(route)
@@ -53,12 +90,10 @@ class BrowsePreferences(context: Context) {
             store.enumValue<SongGrouping>("$key.group", if (route.collection?.kind == MediaKind.Album)
                 store.getString("catalog.Album.group", null) else null) ?: SongGrouping.None,
             store.getInt("$key.columns", 0).takeIf { it in 1..5 },
-            store.enumValue<ListSize>("$key.list-size") ?: ListSize.Normal).let {
-            if (!route.search && route.collection?.kind == MediaKind.Album) it.copy(sort = TrackSort.Album, ascending = true, presentation = Presentation.List, songGrouping = SongGrouping.None, listSize = ListSize.Normal) else it
-        }
+            store.enumValue<ListSize>("$key.list-size") ?: ListSize.Normal)
     }
     fun write(route: BrowseRoute, value: BrowseStyle, override: Boolean) {
-        val key = if (override) listKey(route) else type(route)
+        val key = if (override && allowsOverride(route)) listKey(route) else type(route)
         val edit = store.edit()
         if (!override) clearOverride(edit, route)
         edit.putString("$key.sort", value.sort.name).putBoolean("$key.ascending", value.ascending)

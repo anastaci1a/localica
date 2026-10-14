@@ -25,7 +25,7 @@ class PlaylistDatabaseTest {
         old.execSQL("INSERT INTO playlists VALUES ('a', 'Mix', 1, 2), ('b', 'mix', 3, 4)")
         old.execSQL("INSERT INTO playlist_entries VALUES ('one', 'a', 0, ?), ('two', 'a', 1, ?)", arrayOf(TrackSnapshot.encode(track), TrackSnapshot.encode(track)))
         old.version = 2; old.close()
-        val database = Room.databaseBuilder(context, PlaylistDatabase::class.java, name).addMigrations(PlaylistDatabase.MIGRATION_2_3).build()
+        val database = Room.databaseBuilder(context, PlaylistDatabase::class.java, name).addMigrations(PlaylistDatabase.MIGRATION_2_3, PlaylistDatabase.MIGRATION_3_4).build()
         try {
             val saved = database.playlists().read()
             assertEquals(listOf("Mix", "mix"), saved.map { it.name })

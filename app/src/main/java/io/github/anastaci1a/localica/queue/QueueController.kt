@@ -340,7 +340,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun randomize(queueId: String, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { queue ->
         QueueEdits.randomize(queue, queue.id == state.value.library.activeId && player?.isPlaying == true)
     }
-    private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: (ListeningQueue) -> ListeningQueue) = submit {
+    fun applySort(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
+        editQueue(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.sort(queue, method, ascending) } }
+    private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: suspend (ListeningQueue) -> ListeningQueue) = submit {
         try {
         capture()
         val active = state.value.library.queues.firstOrNull { it.id == (queueId ?: state.value.library.activeId) } ?: return@submit complete(false)
@@ -481,11 +483,13 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             complete(true)
         } catch (failure: Exception) { complete(false); throw failure }
     }
-    fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = submit {
+    fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = refreshTracks(listOf(track), complete)
+    fun refreshTracks(tracks: List<Track>, complete: (Boolean) -> Unit) = submit {
+        val byId = tracks.associateBy { it.id }
         try {
             capture()
             save(state.value.library.copy(queues = state.value.library.queues.map { queue ->
-                queue.copy(entries = queue.entries.map { entry -> if (entry.track.id == track.id) entry.copy(track = track) else entry })
+                queue.copy(entries = queue.entries.map { entry -> byId[entry.track.id]?.let { entry.copy(track = it) } ?: entry })
             }))
             activate(null); complete(true)
         } catch (failure: Exception) { complete(false); throw failure }

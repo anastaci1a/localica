@@ -8,7 +8,7 @@ import org.json.JSONObject
 class InterfacePreferences(context: Context) {
     private val preferences = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
     fun read(): InterfaceSettings {
-        val tabs = preferences.getString("tabs", null)?.split(',')?.mapNotNull { name -> MainTab.entries.firstOrNull { it.name == name } }
+        val tabs = preferences.getString("tabs", null)?.split(',')?.mapNotNull { name -> MainTab.available.firstOrNull { it.name == name } }
             ?.distinct()?.takeIf { it.isNotEmpty() } ?: InterfaceSettings().tabs
         return InterfaceSettings(tabs, preferences.getBoolean("history", true), preferences.getBoolean("confirm-exit", false),
             preferences.getBoolean("expand-on-play", true), preferences.getBoolean("album-artist", true),
