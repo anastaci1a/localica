@@ -23,7 +23,7 @@ import io.github.anastaci1a.localica.browse.*
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, dense: Boolean,
-    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null) {
+    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true) {
     val gallery = style.presentation != Presentation.List
     val from = pinch?.source
     val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
@@ -43,30 +43,38 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, dense: Bool
     val informationAlpha by animateFloatAsState(if (from != null)
         (if (fromCompact) 0f else 1f) + ((if (compact) 0f else 1f) - (if (fromCompact) 0f else 1f)) * progress
         else if (compact) 0f else 1f, tween(duration), label = "Browse detail visibility")
+    fun numbered(value: BrowseStyle) = trackNumber != null && value.presentation == Presentation.List && value.listSize != ListSize.Large
+    val numberAlpha = if (from == null) { if (numbered(style)) 1f else 0f } else
+        (if (numbered(from)) 1f else 0f) + ((if (numbered(style)) 1f else 0f) - (if (numbered(from)) 1f else 0f)) * progress
     fun Modifier.morph() = if (from != null) this else animateBounds(lookahead, boundsTransform = { _, _ -> tween(duration) })
     Layout(modifier = Modifier.fillMaxWidth(), content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
             item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).testTag("browse-art-${item.key}")) {
-            if (trackNumber != null && !gallery) Text(trackNumber, Modifier.fillMaxSize().wrapContentSize(),
+            if (numberAlpha > 0f) Text(requireNotNull(trackNumber), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-            else if (!compact || informationAlpha > 0f || from != null)
-                MediaArtwork(item.coverUris, Modifier.fillMaxSize(), shape = artworkShape(item.ref.kind))
+            if (numberAlpha < 1f && (!compact || informationAlpha > 0f || from != null))
+                MediaArtwork(item.coverUris, Modifier.fillMaxSize().graphicsLayer { alpha = 1f - numberAlpha }, shape = artworkShape(item.ref.kind))
         }
         Column(Modifier.morph().testTag("browse-text-${item.key}")) {
             Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (trackNumber != null) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
-                maxLines = if (compact && from == null) 1 else 2, overflow = TextOverflow.Ellipsis)
-            if (informationAlpha > 0f) item.information(style)?.let { Text(it, Modifier.graphicsLayer { alpha = informationAlpha },
-                style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis)
+            if (showInformation && informationAlpha > 0f) item.information(style)?.let { Text(it, Modifier.graphicsLayer { alpha = informationAlpha },
+                style = MaterialTheme.typography.bodySmall, maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis) }
         }
         Box { menu(!gallery) }
     }) { children, constraints ->
         val width = constraints.maxWidth
         val oldGallery = from?.presentation?.let { it != Presentation.List } ?: gallery
-        val oldWidth = if (from != null) (requireNotNull(pinch).viewportWidth / pinch.sourceColumns - (if (oldGallery && pinch.sourceColumns >= 3) 16.dp.toPx() else 32.dp.toPx())).toInt().coerceAtLeast(1) else width
+        val oldWidth = if (from != null) (requireNotNull(pinch).viewportWidth / pinch.sourceColumns - 24.dp.toPx()).toInt().coerceAtLeast(1) else width
         fun mix(a: Int, b: Int) = (a + (b - a) * progress).toInt().coerceAtLeast(0)
         fun coverWidth(value: BrowseStyle, width: Int) = if (value.presentation != Presentation.List) width else
-            (if (trackNumber != null) 28.dp else when (value.listSize) { ListSize.Compact -> 0.dp; ListSize.Normal -> 48.dp; ListSize.Large -> 64.dp }).roundToPx().coerceAtMost(width)
+            if (numbered(value)) 28.dp.roundToPx().coerceAtMost(width)
+            else when (value.listSize) {
+                ListSize.Compact -> 0
+                ListSize.Normal -> ((width + 24.dp.toPx()) / 5 - 24.dp.toPx()).toInt().coerceIn(0, width)
+                ListSize.Large -> ((width + 24.dp.toPx()) / 4 - 24.dp.toPx()).toInt().coerceIn(0, width)
+            }
         val oldArt = coverWidth(from ?: style, oldWidth)
         val targetArt = coverWidth(style, width)
         val artWidth = mix(oldArt, targetArt)

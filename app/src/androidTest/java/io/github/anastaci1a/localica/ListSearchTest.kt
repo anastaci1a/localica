@@ -49,6 +49,14 @@ class ListSearchTest {
                 val before = compose.onNodeWithText("Album 000").fetchSemanticsNode().boundsInRoot
                 compose.onNodeWithTag("list-search-pill").performClick()
                 awaitSearchFocus()
+                compose.onNode(hasSetTextAction()).assert(SemanticsMatcher.expectValue(
+                    androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
+                if (pass == 0) {
+                    pressSystemBack()
+                    compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+                    compose.onNodeWithTag("list-search-pill").performClick()
+                    awaitSearchFocus()
+                }
                 compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("Album")
                 dismissSearch()
                 compose.onNodeWithTag("list-search-popup").assertDoesNotExist()
@@ -104,17 +112,14 @@ class ListSearchTest {
             assertEquals(before, compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot)
             compose.onNodeWithTag("list-search-pill").performClick()
             awaitSearchFocus()
-            compose.onNode(hasSetTextAction()).assertIsFocused().assertTextContains("Album")
+            compose.onNode(hasSetTextAction()).assertIsFocused().assert(SemanticsMatcher.expectValue(
+                androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
             compose.onNode(hasSetTextAction()).performTextReplacement("061")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.onNode(hasSetTextAction()).assertIsNotFocused()
             compose.waitUntil(5000) { InstrumentationRegistry.getInstrumentation().uiAutomation.windows.none {
                 it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
             } }
-            pressSystemBack()
-            compose.waitUntil(5000) { runCatching { compose.onNode(hasSetTextAction()).assertTextContains("Album") }.isSuccess }
-            compose.onNodeWithText("Album 061").assertIsDisplayed()
-            compose.onNode(hasSetTextAction()).assertIsNotFocused()
             pressSystemBack()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
             assertEquals(before, compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot)

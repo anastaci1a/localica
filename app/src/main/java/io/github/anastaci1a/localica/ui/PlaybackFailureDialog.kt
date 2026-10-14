@@ -31,10 +31,10 @@ internal fun PlaybackFailureDialog(state: PlaybackState, canSkip: Boolean, onRet
         } },
         confirmButton = {
             if (state.connected && problem != PlaybackProblem.Unsupported) FilledTonalButton(onClick = { dismissed = true; onRetry() }) { Text("Try again") }
-            else TextButton(onClick = { dismissed = true }) { Text("Close") }
+            else ActionTextButton(onClick = { dismissed = true }) { Text("Close") }
         },
         dismissButton = { Row {
-            if (state.connected && problem != PlaybackProblem.Unsupported) TextButton(onClick = { dismissed = true }) { Text("Close") }
-            if (state.connected && canSkip) TextButton(onClick = { dismissed = true; onSkip() }) { Text("Skip song") }
+            if (state.connected && problem != PlaybackProblem.Unsupported) ActionTextButton(onClick = { dismissed = true }) { Text("Close") }
+            if (state.connected && canSkip) ActionTextButton(onClick = { dismissed = true; onSkip() }) { Text("Skip song") }
         } })
 }

@@ -36,8 +36,8 @@ internal fun TagEditorHost(controller: TagEditingController, content: @Composabl
         onDismissRequest = { recoveryDismissed = true }, title = { Text("Interrupted tag edit") },
         text = { Column { Text("An original copy of ${state.recovery} is retained. Restore it to undo the interrupted edit. You can also recover from Settings.")
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) } } },
-        confirmButton = { TextButton(enabled = !state.busy, onClick = controller::recover) { Text("Restore original") } },
-        dismissButton = { TextButton(onClick = { recoveryDismissed = true }) { Text("Later") } })
+        confirmButton = { ActionTextButton(enabled = !state.busy, onClick = controller::recover) { Text("Restore original") } },
+        dismissButton = { ActionTextButton(onClick = { recoveryDismissed = true }) { Text("Later") } })
 }
 
 @Composable
@@ -46,11 +46,11 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
     var confirming by remember { mutableStateOf(false) }
     SettingsLink("Tag editing jobs", if (state.busy) "${state.results.size} of ${state.tracks.size} files checked" else "Recent outcomes and interrupted work",
         icon = io.github.anastaci1a.localica.R.drawable.ic_edit, onClick = controller::showJobs)
-    if (state.recovery != null) TextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
+    if (state.recovery != null) ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Restore original file?") },
         text = { Text("This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
-        confirmButton = { TextButton(onClick = { confirming = false; controller.recover() }) { Text("Restore original") } },
-        dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
+        confirmButton = { ActionTextButton(onClick = { confirming = false; controller.recover() }) { Text("Restore original") } },
+        dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }
 
 @Composable
@@ -88,7 +88,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
             Column(Modifier.fillMaxSize().imePadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (state.artworkOnly) "Change artwork" else "Edit ${state.tracks.size} ${if (state.tracks.size == 1) "song" else "songs"}", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                    TextButton(enabled = !state.busy, onClick = controller::close) { Text("Close editor") }
+                    ActionTextButton(enabled = !state.busy, onClick = controller::close) { Text("Close editor") }
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!state.artworkOnly) Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
@@ -112,10 +112,10 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                         }
                         }
                     }
-                    TextButton(onClick = { viewing = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("View current artwork") }
+                    ActionTextButton(onClick = { viewing = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("View current artwork") }
                     imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     if (removeImage) Text("Artwork will be removed", Modifier.align(Alignment.CenterHorizontally))
-                    if (imageUri != null || removeImage) TextButton(enabled = !state.busy,
+                    if (imageUri != null || removeImage) ActionTextButton(enabled = !state.busy,
                         onClick = { imageUri = null; removeImage = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Keep existing artwork") }
                     if (!state.artworkOnly) EditField.entries.forEach { field ->
                         val common = state.tracks.map(field::value).distinct().size == 1
@@ -131,7 +131,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                         }
                     }
                     state.tracks.flatMap { it.locations }.distinctBy { it.folderUri }.forEach { location ->
-                        TextButton(enabled = !state.busy, onClick = { grant.launch(Uri.parse(location.folderUri)) }) {
+                        ActionTextButton(enabled = !state.busy, onClick = { grant.launch(Uri.parse(location.folderUri)) }) {
                             Text("Grant write access: ${Uri.parse(location.folderUri).lastPathSegment.orEmpty().substringAfterLast(':').substringAfterLast('/').ifBlank { "music folder" }}")
                         }
                     }
@@ -140,12 +140,12 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                     if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     state.results.forEach { result -> Text("${result.track.fileName}: ${result.message}",
                         color = if (result.saved) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error) }
-                    if (state.recovery != null) TextButton(enabled = !state.busy, onClick = { controller.close() }) { Text("Close editor to recover interrupted edit") }
+                    if (state.recovery != null) ActionTextButton(enabled = !state.busy, onClick = { controller.close() }) { Text("Close editor to recover interrupted edit") }
                 }
                 FlowRow(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End) {
                     if (state.busy) {
-                        TextButton(onClick = controller::continueInBackground) { Text("Continue in background") }
-                        TextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
+                        ActionTextButton(onClick = controller::continueInBackground) { Text("Continue in background") }
+                        ActionTextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
                     }
                     Button(enabled = !state.busy && state.recovery == null && imageError == null && (imageUri == null || cover != null) &&
                         (changed.isNotEmpty() || cover != null || removeImage), onClick = { confirming = true }) { Text("Review changes") }
@@ -159,8 +159,8 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
         text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }
             if (removeImage) Text("Remove artwork") else if (cover != null) Text("Replace artwork")
             Text("Changes are written to the audio files. Playback pauses while editing a file in the active queue, then resumes after verification.") } },
-        confirmButton = { TextButton(onClick = { confirming = false; controller.save(patch()) }) { Text("Save changes") } },
-        dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
+        confirmButton = { ActionTextButton(onClick = { confirming = false; controller.save(patch()) }) { Text("Save changes") } },
+        dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }
 
 @Composable
@@ -171,7 +171,7 @@ private fun TagJobsDialog(state: TagEditorState, controller: TagEditingControlle
             if (state.busy) {
                 Text("${state.results.size} of ${state.tracks.size} files checked")
                 LinearProgressIndicator(progress = { state.results.size.toFloat() / state.tracks.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
-                TextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
+                ActionTextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
             }
             if (state.jobs.isEmpty()) Text("No tag editing jobs yet.")
             state.jobs.forEach { job ->
@@ -180,7 +180,7 @@ private fun TagJobsDialog(state: TagEditorState, controller: TagEditingControlle
                 job.outcomes.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             if (state.recovery != null) Text("An original file is retained. Use Tag jobs and recovery in Settings before retrying.")
-            TextButton(onClick = controller::hideJobs, modifier = Modifier.align(Alignment.End)) { Text("Close") }
+            ActionTextButton(onClick = controller::hideJobs, modifier = Modifier.align(Alignment.End)) { Text("Close") }
         }
     }
 }

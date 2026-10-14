@@ -52,8 +52,9 @@ internal class GlassContact {
 @Composable
 internal fun rememberGlassContact(shared: GlassContact? = null): GlassContact {
     val contact = shared ?: remember { GlassContact() }
+    val visible = LocalGlassVisible.current
     rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },
-        state = contact.state, active = { !contact.modal })
+        state = contact.state, active = { visible && !contact.modal })
     return contact
 }
 
@@ -90,8 +91,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     cornerRadius: Dp? = null, frostProgress: Float = 0f, pressFeedback: Boolean = true, refraction: Float = 1f, inkOverride: Color? = null, shadow: Boolean = true,
     body: () -> GlassShape = { GlassShape() }, panelProgress: Float = 0f, panelDark: Boolean? = null, depthScale: Float = modifier.glassDepthScale(),
     homeSource: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
+    homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     content: (@Composable BoxScope.() -> Unit)? = null) {
-    if (Build.VERSION.SDK_INT < 33) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
+    val visible = LocalGlassVisible.current
+    if (visible && Build.VERSION.SDK_INT < 33) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
@@ -110,8 +113,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         anchor.source = source; anchor.cornerRadius = cornerRadius; anchor.depthScale = depthScale
         anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
     } }
-    val lens = remember { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null }
-    val mesh = remember { LensMeshRenderer() }
+    val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
+    val mesh = remember { lazy { LensMeshRenderer() } }
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact) else if (anchor != null) Modifier.drawWithContent {
@@ -120,7 +123,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         .then(if (shadow) Modifier.surfaceGlassShadow(cornerRadius, anchor) else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
-        if (source != null && Build.VERSION.SDK_INT >= 33) {
+        if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
             val padding = with(density) { 32.dp.toPx() }
@@ -130,22 +133,22 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             FilteredBackdrop(Modifier.matchParentSize(), source, location::position, resolution, padding,
-                homeSource, homeWeight) { extent, resolution ->
+                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds) { extent, resolution, flatWeight ->
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
                 val thickness = body().thickness * (if (pressFeedback || anchor != null) contact.body.value.thickness else 1f)
-                if (Build.VERSION.SDK_INT >= 33) lens?.effect(
+                if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(
                     LensGeometry(androidx.compose.ui.geometry.Rect(pad, pad, extent.width - pad, extent.height - pad), radius),
                     blur * resolution,
                     appearance.depth * depthScale * thickness,
-                    power = refraction, whiteTint = appearance.whiteTint * (1f - panel),
+                    power = refraction, whiteTint = appearance.whiteTint * (1f - panel), illumination = 1f - flatWeight,
                     flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f), tone = tone)
                 else if (blur > 0f) BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp) else null
             }
         }
 
-        if (Build.VERSION.SDK_INT < 33) {
+        if (visible && Build.VERSION.SDK_INT < 33) {
         val endpointTone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
         @Composable fun prepared(backing: FrostedBackdrop?): List<ImageBitmap?> {
             val clear = backing?.glassFallback ?: backing?.snapshot
@@ -184,7 +187,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             samples(source, sourceImages, 1f - home); samples(homeSource, homeImages, home)
             val blending = samples.size > 1
             if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
-            with(mesh) {
+            with(mesh.value) {
                 samples.forEachIndexed { index, (backing, image, amount) ->
                     draw(shape, image, backing.size, location.position() - backing.origin, depth, refraction,
                         amount, lighting = false, additive = index > 0, flattening = flattening)

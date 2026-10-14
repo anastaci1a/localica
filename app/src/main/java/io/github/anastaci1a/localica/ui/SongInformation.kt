@@ -18,11 +18,11 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> 
     GlassDialog(onDismiss, GlassPlacement.Sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AlbumArtwork(track.uri, Modifier.size(144.dp).align(androidx.compose.ui.Alignment.CenterHorizontally)
-                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "View artwork",
+                .ownButtonDrag().clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "View artwork",
                     interactionSource = null, indication = null) { viewingArtwork = true })
             Text(track.title, style = MaterialTheme.typography.headlineSmall)
-            Text(track.fileName); Text(track.relativePath, style = MaterialTheme.typography.bodySmall)
-            Text(track.uri, style = MaterialTheme.typography.bodySmall)
+            Text(android.net.Uri.decode(track.fileName)); Text(android.net.Uri.decode(track.relativePath), style = MaterialTheme.typography.bodySmall)
+            Text(android.net.Uri.decode(track.uri), style = MaterialTheme.typography.bodySmall)
             Text("Duration: " + formatTime(track.durationMs))
             track.modifiedAt?.let { Text("Modified: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it))) }
             track.addedAt?.let { Text("Added to library: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it))) }
@@ -34,8 +34,8 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> 
                 GlassActionButton(action.icon, action.label, Modifier.fillMaxWidth()) { onDismiss(); onAction(action) }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Row { TextButton(onClick = { onDismiss(); onEdit() }) { Text("Edit tags") }
-                TextButton(onClick = onDismiss) { Text("Done") } }
+            Row { ActionTextButton(onClick = { onDismiss(); onEdit() }) { Text("Edit tags") }
+                ActionTextButton(onClick = onDismiss) { Text("Done") } }
         }
     }
     if (viewingArtwork) ArtworkViewer(track.uri) { viewingArtwork = false }

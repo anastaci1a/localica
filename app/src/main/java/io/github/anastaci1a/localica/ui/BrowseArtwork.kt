@@ -62,3 +62,16 @@ internal class BrowseArtworkStore {
 }
 
 internal val LocalBrowseArtwork = compositionLocalOf<BrowseArtworkScope?> { null }
+
+/** Long automatic scrolls visit transient rows, not new browsing destinations.
+ * Keep cached covers, but defer uncached I/O until the scroll settles or is interrupted. */
+@Stable internal class ArtworkTransit {
+    private var owners by mutableIntStateOf(0)
+    val active get() = owners > 0
+    suspend fun <T> during(far: Boolean, action: suspend () -> T): T {
+        if (!far) return action()
+        owners++
+        try { return action() } finally { owners-- }
+    }
+}
+internal val LocalArtworkTransit = staticCompositionLocalOf<ArtworkTransit?> { null }

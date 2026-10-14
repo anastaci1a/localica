@@ -65,19 +65,19 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
                 LinearProgressIndicator(Modifier.fillMaxWidth())
                 Text("${state.scannedCount} files checked · ${state.scanStatus.completedFolders}/${state.scanStatus.totalFolders} folders")
                 state.snapshot.folders.firstOrNull { it.uri == state.scanningFolderUri }?.let { Text(it.name) }
-                TextButton(onClick = onCancel) { Text("Cancel scan") }
+                ActionTextButton(onClick = onCancel) { Text("Cancel scan") }
             }
             state.scanStatus.message?.let { Text(it) }
             Text("${state.snapshot.tracks.size} songs in your library")
             SettingsLink("Folders to scan", "${state.snapshot.folders.size} selected", R.drawable.ic_folder) { onSettings("Folders to scan") }
             SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs") { failuresOpen = true }
         }
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } })
+    }, confirmButton = { ActionTextButton(onClick = onDismiss) { Text("Close") } })
     if (backgroundHelp) GlassAlertDialog(onDismissRequest = { backgroundHelp = false }, title = { Text("Background scanning") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!notifications) {
                 Text("Notifications are off. Scanning can continue, but its progress and Cancel button won’t appear in the notification drawer.")
-                if (Build.VERSION.SDK_INT >= 33 && !asked) TextButton(onClick = { permission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }) { Text("Enable notifications") }
+                if (Build.VERSION.SDK_INT >= 33 && !asked) ActionTextButton(onClick = { permission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }) { Text("Enable notifications") }
                 SettingsLink("Notification settings", "Open Localica’s notification controls") { openLocalicaSystemSettings(context, true) }
             }
             if (restricted) {
@@ -85,8 +85,8 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
                 SettingsLink("App settings", "Open Localica directly") { openLocalicaSystemSettings(context) }
             }
         }
-    }, confirmButton = { TextButton(onClick = { backgroundHelp = false; onDismiss() }) { Text("Continue in background") } },
-        dismissButton = { TextButton(onClick = { backgroundHelp = false }) { Text("Stay here") } })
+    }, confirmButton = { ActionTextButton(onClick = { backgroundHelp = false; onDismiss() }) { Text("Continue in background") } },
+        dismissButton = { ActionTextButton(onClick = { backgroundHelp = false }) { Text("Stay here") } })
     if (failuresOpen) SettingsPage("Metadata read failures", { failuresOpen = false }, { failuresOpen = false }) {
         Text("These files remain in the library using available metadata or their filenames. A successful rescan clears their errors.", Modifier.padding(16.dp))
         if (state.snapshot.metadataFailures.isEmpty()) Text("No metadata read failures.", Modifier.padding(16.dp))

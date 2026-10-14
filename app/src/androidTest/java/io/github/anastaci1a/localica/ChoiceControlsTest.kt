@@ -41,10 +41,10 @@ class ChoiceControlsTest {
         compose.onNodeWithText("Year").performScrollTo().performClick()
         compose.onNodeWithText("Select", substring = false).performClick()
         val body = compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot
-        compose.onNodeWithText("Save only for this list").assertIsDisplayed().performClick().assertIsOn()
+        compose.onNodeWithText("Save only for this list").assertDoesNotExist()
         compose.onNodeWithText("View", substring = false).performClick().assertIsSelected()
         assertEquals(body, compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot)
-        compose.onNodeWithText("Save only for this list").assertIsOn()
+        compose.onNodeWithText("Save only for this list").assertDoesNotExist()
         compose.onNodeWithText("Gallery", substring = false).performClick()
         compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
         compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
@@ -55,6 +55,37 @@ class ChoiceControlsTest {
             assertEquals(Presentation.Standard, saved!!.presentation)
             assertEquals(3, saved!!.itemsPerRow)
         }
+    }
+
+    @Test fun mutableSortingAppliesWithoutClosingAndViewKeepsItsOwnSaveScope() {
+        var order by mutableStateOf(io.github.anastaci1a.localica.library.SavedOrder(listOf("b", "a")))
+        var closed = false
+        var saves = 0
+        var randomizations = 0
+        compose.setContent { LocalicaTheme {
+            BrowseSortDialog(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, "mix")), BrowseStyle(), false,
+                { closed = true }, { _, _ -> saves++ }, {},
+                onRandomize = { done -> randomizations++; order = order.copy(sort = TrackSort.Manual); done(true) },
+                mutableOrder = order, onApplySort = { method, ascending, done ->
+                    order = order.copy(sort = method, ascending = ascending); done(true)
+                })
+        } }
+        compose.onNodeWithText("Apply").assertIsNotEnabled()
+        compose.onNodeWithText("Save only for this list").assertDoesNotExist()
+        compose.onNodeWithText("Sort by").performClick()
+        compose.onNodeWithText("Title").performClick()
+        compose.onNodeWithText("Select", substring = false).performClick()
+        compose.runOnIdle { assertEquals(TrackSort.Manual, order.sort) }
+        compose.onNodeWithText("Apply").assertIsEnabled().performClick().assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(TrackSort.Title, order.sort); assertFalse(closed) }
+        compose.onNodeWithText("Randomize", substring = false).performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, randomizations); assertEquals(TrackSort.Manual, order.sort); assertFalse(closed) }
+        val body = compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("View", substring = false).performClick()
+        assertEquals(body, compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithText("Save only for this list").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle { assertEquals(1, saves) }
     }
 
     @Test fun galleryCountSnapsPersistsAndOverridesWidthPresets() {

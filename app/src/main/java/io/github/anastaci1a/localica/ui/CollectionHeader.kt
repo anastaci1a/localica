@@ -12,6 +12,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
@@ -62,12 +65,12 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
                 subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center) }
                 if (artist) LiquidGlassSurface(Modifier.height(64.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onPlay, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), "Play selected albums", Modifier.size(30.dp)) }
+                        ActionIconButton(onPlay, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), "Play selected albums", Modifier.size(30.dp)) }
                         GlassPillDivider()
-                        IconButton(onShuffle, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_shuffle), "Shuffle selected albums", Modifier.size(30.dp)) }
+                        ActionIconButton(onShuffle, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_shuffle), "Shuffle selected albums", Modifier.size(30.dp)) }
                     }
                 } else LiquidGlassSurface(Modifier.size(64.dp)) {
-                    IconButton(onPlay, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), "Play album", Modifier.size(30.dp)) }
+                    ActionIconButton(onPlay, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), "Play album", Modifier.size(30.dp)) }
                 }
             }
         }
@@ -103,5 +106,44 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
         }
         }
         HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), color = LocalContentColor.current.copy(alpha = .18f))
+    }
+}
+
+/** Scroll-driven decoration owns its frame reads; the collection/query tree stays stable. */
+@Composable
+internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, source: FrostedBackdrop,
+    reducedMotion: Boolean, modifier: Modifier) {
+    val scroll = remember(grid) { CollectionScroll() }
+    val top = scroll.update(grid.layoutInfo.visibleItemsInfo.map {
+        CollectionScroll.Item(it.key, it.index, it.offset.y, it.size.height)
+    }, grid.firstVisibleItemIndex == 0)
+    ArtworkBlend(visual, modifier.recordFrostedBackdrop(source),
+        duration = if (reducedMotion) 120 else 240, opacityBlend = true) { frame ->
+        CollectionBackdrop(frame, top, Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: String, anchor: GlassAnchor,
+    onBack: () -> Unit, onOptions: (Boolean) -> Unit, menu: @Composable () -> Unit) {
+    val fade = remember(grid, width) { derivedStateOf {
+        val header = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "browser-notice" }
+        val cover = width.toFloat().coerceAtLeast(1f)
+        if (header == null && grid.firstVisibleItemIndex > 0) 1f
+        else ((-(header?.offset?.y ?: 0) - cover * .65f) / (cover * .35f)).coerceIn(0f, 1f)
+    } }
+    val titled by remember(fade) { derivedStateOf { fade.value >= .1f } }
+    val surface = MaterialTheme.colorScheme.surface
+    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(100.dp).drawBehind {
+        drawRect(Brush.verticalGradient(listOf(surface.copy(alpha = .7f * fade.value), Color.Transparent)))
+    })
+    Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        ActionIcon(R.drawable.ic_back, "Back", onClick = onBack)
+        Text(title, Modifier.weight(1f).graphicsLayer { alpha = fade.value }
+            .then(if (!titled) Modifier.clearAndSetSemantics {} else Modifier), maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+        BrowseOptionsPill(anchor, onOptions)
+        menu()
     }
 }

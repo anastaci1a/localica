@@ -14,12 +14,18 @@ internal class SessionSelection : ViewModel() {
         private set
     var collapsed by mutableStateOf(false)
     val entries = mutableStateListOf<SelectedSong>()
+    private val occurrences by derivedStateOf { entries.mapTo(hashSetOf()) { it.source to it.row.id } }
+    val trackIds by derivedStateOf { entries.mapTo(hashSetOf()) { it.row.track.id } }
     var visible: List<SongRow> = emptyList()
     var source: MediaRef? = null
-    fun contains(source: MediaRef?, id: String) = entries.any { it.source == source && it.row.id == id }
+    fun contains(source: MediaRef?, id: String) = source to id in occurrences
     fun select(source: MediaRef?, rows: List<SongRow>) {
-        active = true; collapsed = false
-        rows.forEach { row -> if (!contains(source, row.id)) entries.add(SelectedSong(source = source, row = row)) }
+        if (!active) collapsed = false
+        active = true
+        val known = occurrences.toMutableSet()
+        entries.addAll(rows.mapNotNull { row ->
+            if (known.add(source to row.id)) SelectedSong(source = source, row = row) else null
+        })
     }
     fun toggle(source: MediaRef?, row: SongRow) {
         if (contains(source, row.id)) entries.removeAll { it.source == source && it.row.id == row.id }
@@ -40,9 +46,8 @@ internal fun SessionSelectionPanel(session: SessionSelection, queues: io.github.
     var retained by remember { mutableStateOf(session.entries.toList()) }
     if (session.active) SideEffect { retained = session.entries.toList() }
     val entries = if (session.active) session.entries.toList() else retained
-    if (session.collapsed) androidx.compose.material3.TextButton(onClick = { session.collapsed = false }) {
-        androidx.compose.material3.Text("Selection: " + session.entries.size)
-    } else {
+    if (session.collapsed) GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_queue,
+        "Selection: " + session.entries.size, onClick = { session.collapsed = false }) else {
         val rows = entries.map { it.row.copy(id = it.id) }
         val source = entries.map { it.source }.distinct().singleOrNull()
         val remove: (((Boolean) -> Unit) -> Unit)? = when {

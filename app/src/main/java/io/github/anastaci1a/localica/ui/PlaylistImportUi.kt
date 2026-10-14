@@ -88,12 +88,12 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
     }
     if (loading) GlassAlertDialog(onDismissRequest = { loadJob?.cancel() }, title = { Text("Reading playlist") },
         text = { LinearProgressIndicator(Modifier.fillMaxWidth()) }, confirmButton = {
-            TextButton(onClick = { loadJob?.cancel() }) { Text("Cancel") }
+            ActionTextButton(onClick = { loadJob?.cancel() }) { Text("Cancel") }
         })
     if (naming) PlaylistNameDialog(controller, { naming = false })
     preview?.let { found -> PlaylistImportDialog(found, controller, { preview = null }) }
     error?.let { message -> GlassAlertDialog(onDismissRequest = { error = null }, title = { Text("Playlist import") }, text = { Text(message) },
-        confirmButton = { TextButton(onClick = { error = null }) { Text("Close") } }) }
+        confirmButton = { ActionTextButton(onClick = { error = null }) { Text("Close") } }) }
 }
 
 @Composable
@@ -108,9 +108,9 @@ private fun PlaylistNameDialog(controller: PlaylistController?, onDismiss: () ->
             if (name.isNotBlank() && !PlaylistEdits.nameAvailable(playlists.playlists, name)) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
             if (failed) Text("Couldn’t save the playlist. Try again.", color = MaterialTheme.colorScheme.error)
         }
-    }, confirmButton = { TextButton(enabled = PlaylistEdits.nameAvailable(playlists.playlists, name) && !saving && controller != null, onClick = {
+    }, confirmButton = { ActionTextButton(enabled = PlaylistEdits.nameAvailable(playlists.playlists, name) && !saving && controller != null, onClick = {
         saving = true; controller?.create(name) { success -> saving = false; failed = !success; if (success) onDismiss() }
-    }) { Text("Create") } }, dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
+    }) { Text("Create") } }, dismissButton = { ActionTextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable
@@ -140,7 +140,7 @@ internal fun PlaylistImportDialog(preview: PlaylistImportPreview, controller: Pl
             if (name.isNotBlank() && !PlaylistEdits.nameAvailable(playlists.playlists, name)) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
             if (failed) Text("Couldn’t save the playlist. Try again.", color = MaterialTheme.colorScheme.error)
         }
-    }, confirmButton = { TextButton(enabled = PlaylistEdits.nameAvailable(playlists.playlists, name) && found.isNotEmpty() && !saving && controller != null, onClick = {
+    }, confirmButton = { ActionTextButton(enabled = PlaylistEdits.nameAvailable(playlists.playlists, name) && found.isNotEmpty() && !saving && controller != null, onClick = {
         saving = true; controller?.create(name, found) { success -> saving = false; failed = !success; if (success) onDismiss() }
-    }) { Text("Import ${found.size} songs") } }, dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
+    }) { Text("Import ${found.size} songs") } }, dismissButton = { ActionTextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
 }

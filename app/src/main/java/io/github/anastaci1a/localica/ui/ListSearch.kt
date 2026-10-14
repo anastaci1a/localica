@@ -32,7 +32,7 @@ internal fun ListSearchPill(label: String, onClick: () -> Unit, modifier: Modifi
     val interaction = remember { MutableInteractionSource() }
     val source = LocalFrostedBackdrop.current
     SideEffect { anchor?.source = source; anchor?.face = { SearchPillFace(label) } }
-    Box(modifier.fillMaxWidth().height(listPillTargetHeight()).clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+    Box(modifier.fillMaxWidth().height(listPillTargetHeight()).ownButtonDrag().clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
         .testTag("list-search-pill"), contentAlignment = Alignment.Center) {
         LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)) {
             anchor?.captureInk()
@@ -57,7 +57,7 @@ internal fun GlassSearchField(value: String, onValue: (String) -> Unit, label: S
     keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
     keyboardActions: androidx.compose.foundation.text.KeyboardActions = androidx.compose.foundation.text.KeyboardActions.Default) {
     LiquidGlassSurface(modifier, cornerRadius = 28.dp, pressFeedback = false) {
-        ClearableTextField(value, onValue, fieldModifier.fillMaxWidth().clearTextFocusOnBack().semantics { contentDescription = "$label input" }, enabled = enabled,
+        ClearableTextField(value, onValue, fieldModifier.fillMaxWidth().semantics { contentDescription = "$label input" }, enabled = enabled,
             singleLine = true, placeholder = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(painterResource(R.drawable.ic_search), null, Modifier.size(22.dp)) },
             keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,

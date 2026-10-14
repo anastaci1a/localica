@@ -26,13 +26,14 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     val context = LocalContext.current.applicationContext
     val revision by ArtworkCache.revision.collectAsState()
     val retention = LocalBrowseArtwork.current.takeIf { provider === EmbeddedCoverProvider }
+    val deferred = LocalArtworkTransit.current?.active == true
     var pixels by remember { mutableIntStateOf(0) }
     val request = Triple(uris, pixels, revision)
     val cached = remember(request, provider, retention) {
         retention?.peek(uris) ?: if (provider === EmbeddedCoverProvider) ArtworkCache.peek(uris, pixels) else null
     }
-    val loaded by produceState<Pair<Triple<List<String>, Int, Long>?, ArtworkCache.CachedArtwork?>>(null to null, request, provider) {
-        if (pixels > 0) value = request to (cached?.takeIf { it.edge >= pixels || it.bitmap == null }
+    val loaded by produceState<Pair<Triple<List<String>, Int, Long>?, ArtworkCache.CachedArtwork?>>(null to null, request, provider, deferred) {
+        if (pixels > 0 && !deferred) value = request to (cached?.takeIf { it.edge >= pixels || it.bitmap == null }
             ?: ArtworkCache.CachedArtwork(provider.load(context, uris, pixels), pixels))
     }
     val sameContent = loaded.first?.first == uris && loaded.first?.third == revision
@@ -44,7 +45,7 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     }
     val artwork = remember(retained?.bitmap) { retained?.bitmap?.asImageBitmap() }
     val measured = modifier.clip(shape).onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
-    val loading = cached == null && uris.isNotEmpty() && artwork == null && (pixels == 0 || loaded.first != request)
+    val loading = !deferred && cached == null && uris.isNotEmpty() && artwork == null && (pixels == 0 || loaded.first != request)
     ArtworkImage(artwork, loading, measured, shape, contentScale)
 }
 

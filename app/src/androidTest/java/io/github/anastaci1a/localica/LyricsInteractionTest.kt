@@ -20,7 +20,7 @@ import org.junit.Test
 
 class LyricsInteractionTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun missingLyricsCannotBeOpenedAndOtherArtworkActionsStillPersist() {
+    @Test fun missingLyricsCanBeOpenedAndOtherArtworkActionsStillPersist() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
         val track = Track("file:///missing.mp3", "Song", fileName = "missing.mp3", relativePath = "missing.mp3")
@@ -30,10 +30,12 @@ class LyricsInteractionTest {
                 PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title),
                 {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) } }
             compose.onNodeWithText("Song").performClick()
-            compose.onNodeWithContentDescription("Show lyrics").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Show lyrics").assertIsDisplayed()
             compose.onNodeWithTag("player-artwork").performClick()
-            compose.onNodeWithTag("lyrics-panel").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Lyrics sources").assertDoesNotExist()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("empty-lyrics").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("lyrics-panel").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Hide lyrics").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("lyrics-panel").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
             compose.onNodeWithTag("player-artwork").performTouchInput { longClick() }
             compose.onNodeWithText("Configure tap action").performClick()
@@ -46,7 +48,7 @@ class LyricsInteractionTest {
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
         } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
     }
-    @Test fun localLyricsPersistAcrossAvailableSongsButCloseForOneWithoutSources() {
+    @Test fun lyricsRemainOpenAcrossSongsWithAndWithoutSources() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
@@ -75,10 +77,11 @@ class LyricsInteractionTest {
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
             compose.onAllNodesWithContentDescription("Show lyrics").onFirst().performClick()
             compose.runOnIdle { track = without }
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("empty-lyrics").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("lyrics-panel").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Hide lyrics").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("lyrics-panel").fetchSemanticsNodes().isEmpty() }
-            compose.onNodeWithTag("player-artwork").performClick()
-            compose.onNodeWithTag("lyrics-panel").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Show lyrics").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Show lyrics").assertIsDisplayed()
         } finally { file.delete(); context.getSharedPreferences("interface", 0).edit().clear().commit() }
     }
     @Test fun timedLinesFollowPlaybackAndCanSeekAfterManualScroll() {

@@ -82,7 +82,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         onMinimize?.let { ActionIcon(R.drawable.ic_down, "Minimize queue", onClick = it) }
                         LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
-                            Box(Modifier.fillMaxWidth().height(CompactControlSize)
+                            Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())
                                 .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
 
                         }
@@ -161,8 +161,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         var name by remember(queue.id) { mutableStateOf(queue.name) }
         GlassAlertDialog(onDismissRequest = { renameId = null }, title = { Text("Rename queue") },
             text = { GlassTextField(name, { name = it }, label = { Text("Queue name") }) },
-            confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renameId = null }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { renameId = null }) { Text("Cancel") } })
+            confirmButton = { ActionTextButton(enabled = name.isNotBlank(), onClick = { controller?.rename(queue.id, name); renameId = null }) { Text("Save") } },
+            dismissButton = { ActionTextButton(onClick = { renameId = null }) { Text("Cancel") } })
     }
     deleting?.let { ids -> CompositionLocalProvider(LocalGlassOrigin provides deletionOrigin) {
         fun dismissDeletion() { deleting = null; deletionOrigin = null }
@@ -172,8 +172,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     Text(queue.name, Modifier.fillMaxWidth(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             } },
-            confirmButton = { TextButton(onClick = { controller?.removeQueues(ids); dismissDeletion() }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = ::dismissDeletion) { Text("Cancel") } })
+            confirmButton = { ActionTextButton(onClick = { controller?.removeQueues(ids); dismissDeletion() }) { Text("Delete") } },
+            dismissButton = { ActionTextButton(onClick = ::dismissDeletion) { Text("Cancel") } })
     } }
 }
 
@@ -196,16 +196,16 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
                             Text(queue.name, Modifier.weight(1f))
                         }
                     }
-                    TextButton(onClick = { removals = inactive.map { it.id }.toSet() }) { Text("Select all except current") }
+                    ActionTextButton(onClick = { removals = inactive.map { it.id }.toSet() }) { Text("Select all except current") }
                 }
             },
-            confirmButton = { TextButton(enabled = QueueEdits.canCreate(state.library, state.settings.maximum, removals),
+            confirmButton = { ActionTextButton(enabled = QueueEdits.canCreate(state.library, state.settings.maximum, removals),
                 onClick = { controller?.confirmCreation(removals) }) { Text("Remove and create") } },
-            dismissButton = { TextButton(onClick = { controller?.cancelCreation() }) { Text("Cancel") } })
+            dismissButton = { ActionTextButton(onClick = { controller?.cancelCreation() }) { Text("Cancel") } })
     }
     if (state.problem != null && state.pending == null) GlassAlertDialog(onDismissRequest = { controller?.dismissProblem() },
         title = { Text("Queue change failed") }, text = { Text(state.problem) },
-        confirmButton = { TextButton(onClick = { controller?.dismissProblem() }) { Text("Close") } })
+        confirmButton = { ActionTextButton(onClick = { controller?.dismissProblem() }) { Text("Close") } })
 }
 
 @Composable
@@ -222,7 +222,7 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
                 onChange(settings.copy(tapOverrides = if (action == null) settings.tapOverrides - view else settings.tapOverrides + (view to action)))
             }
         }
-        TextButton(onClick = { onChange(settings.copy(tapOverrides = emptyMap())) }) { Text("Reset all tap overrides") }
+        ActionTextButton(onClick = { onChange(settings.copy(tapOverrides = emptyMap())) }) { Text("Reset all tap overrides") }
     } else {
         SettingsHeading("Playback")
         BooleanPreference("Preload next track", settings.preloadNext) { onChange(settings.copy(preloadNext = it)) }
@@ -243,9 +243,9 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
             GlassTextField(seconds, { seconds = it }, label = { Text("Seconds (1–60)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = !valid)
-        }, confirmButton = { TextButton(enabled = valid, onClick = {
+        }, confirmButton = { ActionTextButton(enabled = valid, onClick = {
             onChange(settings.copy(previousThresholdSeconds = seconds.toInt())); thresholdOpen = false
-        }) { Text("Save") } }, dismissButton = { TextButton(onClick = { thresholdOpen = false }) { Text("Cancel") } })
+        }) { Text("Save") } }, dismissButton = { ActionTextButton(onClick = { thresholdOpen = false }) { Text("Cancel") } })
     }
     if (limitOpen) {
         var limit by remember(settings.maximum) { mutableStateOf(settings.maximum?.toString().orEmpty()) }
@@ -253,9 +253,9 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
             GlassTextField(limit, { limit = it }, label = { Text("Maximum queues (blank = unlimited)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
-        }, confirmButton = { TextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0, onClick = {
+        }, confirmButton = { ActionTextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0, onClick = {
             onChange(settings.copy(maximum = limit.toIntOrNull())); limitOpen = false
-        }) { Text("Save queue limit") } }, dismissButton = { TextButton(onClick = { limitOpen = false }) { Text("Cancel") } })
+        }) { Text("Save queue limit") } }, dismissButton = { ActionTextButton(onClick = { limitOpen = false }) { Text("Cancel") } })
     }
 }
 internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"

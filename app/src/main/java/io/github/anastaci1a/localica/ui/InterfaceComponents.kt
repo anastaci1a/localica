@@ -21,14 +21,14 @@ internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, a
     if (quiet) {
         anchor?.captureInk()
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-        Box(modifier.clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
+        Box(modifier.ownButtonDrag(enabled).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
             interactionSource = interaction, indication = null, onClick = onClick), contentAlignment = androidx.compose.ui.Alignment.Center) {
             Icon(painterResource(resource), label, Modifier.size(iconSize))
         }
     } else if (glass) LiquidGlassSurface(modifier.alpha(if (enabled) 1f else .38f), pressFeedback = enabled) {
         anchor?.captureInk()
-        IconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(resource), label, Modifier.size(iconSize)) }
-    } else IconButton(onClick, modifier, enabled = enabled) {
+        ActionIconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(resource), label, Modifier.size(iconSize)) }
+    } else ActionIconButton(onClick, modifier, enabled = enabled) {
         anchor?.captureInk()
         Icon(painterResource(resource), label, Modifier.size(iconSize))
     }

@@ -1,6 +1,9 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.ui.test.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.SemanticsProperties
+import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -15,6 +18,24 @@ import org.junit.Test
 
 class BrowsePositionTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun libraryReselectionScrollsBeforeSeparatelyClearingItsFilter() {
+        val tracks = (0..99).map { Track("reselect:$it", "Song ${it.toString().padStart(3, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
+        var route by mutableStateOf(BrowseRoute(MainTab.Library, filter = MediaKind.Song))
+        var request by mutableIntStateOf(0)
+        compose.setContent { LocalicaTheme {
+            BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                PlaylistState(), route, { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false,
+                scrollToTopRequest = request, reducedMotion = true, queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+        } }
+        val list = compose.onNodeWithTag("browser-list")
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("media-reselect:0").fetchSemanticsNodes().isNotEmpty() }
+        list.performScrollToIndex(65)
+        compose.runOnIdle { request++ }
+        compose.waitUntil(5000) { list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value() == 0f }
+        compose.runOnIdle { assertEquals(MediaKind.Song, route.filter); request++ }
+        compose.waitUntil(5000) { route.filter == null }
+    }
+
     @Test fun bothBackControlsRestoreEveryCollectionCatalogPosition() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()

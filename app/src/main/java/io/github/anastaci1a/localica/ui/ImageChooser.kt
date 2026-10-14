@@ -71,6 +71,6 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
             }
             GlassActionButton(R.drawable.ic_folder, "Browse files", Modifier.fillMaxWidth()) { files.launch(arrayOf("image/*")) }
         }
-    }, confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    }, confirmButton = {}, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
     cropUri?.let { uri -> ArtworkCrop(uri, { cropUri = null }, onChosen) }
 }

@@ -38,6 +38,8 @@ import kotlinx.coroutines.withContext
 @Stable
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
     var parent: FrostedBackdrop? = null
+    var materialOnly by mutableStateOf(false)
+    var materialCorner by mutableFloatStateOf(0f)
     var consumers by mutableIntStateOf(0)
     var dark by mutableStateOf(dark)
     val location = BackdropLocation()
@@ -201,7 +203,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
 @Composable
 internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corners.panel,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
-    tint: Color = Color.Transparent, darkening: Float = .5f, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
+    tint: Color = Color.Transparent, darkening: () -> Float = { .5f }, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     if (Build.VERSION.SDK_INT < 31) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val dark = source?.dark == true
@@ -210,7 +212,8 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
     val material = rememberFrostedBackdrop(source?.fallback, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
-    SideEffect { material.parent = source }
+    val density = LocalDensity.current
+    SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { 28.dp.toPx() } }
     Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)
         .backdropLocation(location)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) .38f else .8f),
@@ -219,7 +222,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
         if (source != null) {
             if (Build.VERSION.SDK_INT >= 31) {
                 val blur = with(LocalDensity.current) { 22.dp.toPx() }
-                FilteredBackdrop(Modifier.matchParentSize(), source, location::position, .5f, blur * 1.5f) { _, resolution ->
+                FilteredBackdrop(Modifier.matchParentSize(), source, location::position, .5f, blur * 1.5f) { _, resolution, _ ->
                     BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp)
                 }
             } else Canvas(Modifier.matchParentSize()) {
@@ -228,7 +231,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             }
         }
         Canvas(Modifier.matchParentSize()) {
-            drawFrostCoating(dark, base, tint, darkening, 1f, compact)
+            drawFrostCoating(dark, base, tint, darkening(), 1f, compact)
         }
         }
         CompositionLocalProvider(LocalContentColor provides foreground, LocalFrostedBackdrop provides material) { content() }

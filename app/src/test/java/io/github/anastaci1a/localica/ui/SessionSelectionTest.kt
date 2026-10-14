@@ -12,7 +12,7 @@ class SessionSelectionTest {
         val first = MediaRef(MediaKind.Playlist, "one")
         val second = MediaRef(MediaKind.Playlist, "two")
         val rows = listOf(SongRow("entry1", track), SongRow("entry2", track))
-        state.select(first, rows)
+        state.select(first, rows + rows)
         state.select(second, rows)
         state.select(first, rows)
         assertEquals(4, state.entries.size)
@@ -31,6 +31,16 @@ class SessionSelectionTest {
         state.clear()
         assertFalse(state.active)
         assertFalse(SessionSelection().active)
+    }
+    @Test fun addingToACollapsedSelectionDoesNotReopenItsPanel() {
+        val state = SessionSelection()
+        state.select(null, listOf(SongRow("one", track)))
+        state.collapsed = true
+        state.select(null, listOf(SongRow("two", track)))
+        assertTrue(state.collapsed)
+        state.clear()
+        state.select(null, listOf(SongRow("three", track)))
+        assertFalse(state.collapsed)
     }
     @Test fun rangeAppendsMissingOccurrencesWithoutReorderingExistingSelection() {
         val state = SessionSelection()

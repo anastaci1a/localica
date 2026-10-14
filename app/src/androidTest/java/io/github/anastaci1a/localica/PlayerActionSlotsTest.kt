@@ -15,21 +15,21 @@ import org.junit.Test
 
 class PlayerActionSlotsTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun onlyEmptySlotsOpenCustomizationAndAssignmentsSurviveLayoutChanges() {
+    @Test fun ordinaryActionHoldsOpenCustomizationAndAssignmentsSurviveLayoutChanges() {
         var settings by mutableStateOf(PlayerActionSettings())
         var opens = 0
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxWidth().height(96.dp)) {
             PlayerActionStrip(settings, { it.label }, {}, { opens++ })
         } } }
         compose.onNodeWithTag("player-slot-0:0").performTouchInput { longClick() }
-        compose.runOnIdle { assertEquals(0, opens) }
+        compose.runOnIdle { assertEquals(1, opens) }
         compose.onNodeWithTag("player-slot-0:4").performTouchInput { longClick() }
         compose.runOnIdle {
-            assertEquals(1, opens)
+            assertEquals(2, opens)
             settings = settings.place(PlayerAction.Lyrics, ActionSlot(0, 4))
         }
         compose.onNodeWithTag("player-slot-0:4").performTouchInput { longClick() }
-        compose.runOnIdle { assertEquals(1, opens) }
+        compose.runOnIdle { assertEquals(3, opens) }
     }
     @Test fun dragFromPaletteFollowsPointerAndDropsIntoSlotWhileCancelKeepsAssignments() {
         var settings by mutableStateOf(PlayerActionSettings())
@@ -57,7 +57,7 @@ class PlayerActionSlotsTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { assertEquals(saved, settings) }
         compose.onNodeWithText("2 rows").performClick()
-        compose.onNodeWithText("Small").performClick()
+        compose.onNodeWithText("Compact").performClick()
         compose.onNodeWithTag("custom-slot-1:2").performClick()
         compose.onNode(hasText("Artwork") and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.RadioButton)).performClick()
         compose.runOnIdle { assertNull(settings.slots[ActionSlot(1, 2)]) }
@@ -65,6 +65,26 @@ class PlayerActionSlotsTest {
         compose.onNodeWithText("2 rows").performClick()
         compose.runOnIdle { assertEquals(PlayerAction.Artwork, settings.slots[ActionSlot(1, 2)]) }
     }
+    @Test fun poolReflowsDuringPickupAndAssignedActionCanReturnToIt() {
+        var settings by mutableStateOf(PlayerActionSettings())
+        compose.setContent { LocalicaTheme { PlayerActionCustomizer(settings, { settings = it }, {}) } }
+        val editor = compose.onNodeWithTag("player-action-editor")
+        val origin = editor.fetchSemanticsNode().boundsInRoot.topLeft
+        val source = compose.onNodeWithTag("custom-slot-0:0").fetchSemanticsNode().boundsInRoot.center
+        val pool = compose.onNodeWithTag("action-palette").fetchSemanticsNode().boundsInRoot.center
+        editor.performTouchInput { down(source - origin); advanceEventTime(650); moveTo(pool - origin); up() }
+        compose.waitUntil(5000) { PlayerAction.Info !in settings.slots.values }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("palette-Info").assertIsDisplayed()
+        val item = compose.onNodeWithTag("palette-Info").fetchSemanticsNode().boundsInRoot.center
+        editor.performTouchInput { down(item - origin); advanceEventTime(650); moveBy(Offset(0f, -20f)) }
+        compose.onNodeWithTag("palette-Info").assertDoesNotExist()
+        compose.onNodeWithTag("drag-player-action").assertExists()
+        editor.performTouchInput { cancel() }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("palette-Info").assertIsDisplayed()
+    }
+
     @Test fun holdingRepeatOpensItsPopupAndAppliesAdvancedPolicy() {
         var open by mutableStateOf(false)
         var settings by mutableStateOf(io.github.anastaci1a.localica.queue.QueueSettings())

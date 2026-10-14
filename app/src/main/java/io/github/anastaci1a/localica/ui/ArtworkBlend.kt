@@ -49,12 +49,14 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
             frozen = null; frozenSoft = null; outgoing = incoming
         }
     }
-    val p = if (immediate) 1f else progress.value
+    val transitioning by remember(immediate) { derivedStateOf { !immediate && progress.value < 1f } }
+    fun phase() = if (immediate) 1f else progress.value
     fun smooth(value: Float) = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
-    val blur = if (blurThrough) smooth(2f * minOf(p, 1f - p)) else 0f
-    val reveal = if (blurThrough) smooth((p - .35f) / .3f) else smooth(p)
+    fun blur() = if (blurThrough) phase().let { smooth(2f * minOf(it, 1f - it)) } else 0f
+    fun reveal() = if (blurThrough) smooth((phase() - .35f) / .3f) else smooth(phase())
     @Composable fun Frame(frame: PlayerVisual, image: ImageBitmap? = null, soft: ImageBitmap? = null) {
         Box(Modifier.fillMaxSize().graphicsLayer {
+            val blur = blur()
             renderEffect = if (Build.VERSION.SDK_INT >= 31 && blur > .001f) {
                 val radius = minOf(size.width, size.height) * .045f * blur
                 BlurEffect(radius, radius, TileMode.Clamp)
@@ -62,17 +64,21 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
         }) {
             if (image != null) Canvas(Modifier.matchParentSize()) { drawImage(image, dstSize = IntSize(size.width.toInt(), size.height.toInt())) }
             else content(frame)
-            if (Build.VERSION.SDK_INT < 31 && blur > 0f) Box(Modifier.matchParentSize().graphicsLayer { alpha = blur }.clearAndSetSemantics {}) {
+            if (Build.VERSION.SDK_INT < 31 && blurThrough && transitioning) Box(Modifier.matchParentSize().graphicsLayer { alpha = blur() }.clearAndSetSemantics {}) {
                 if (soft != null) Canvas(Modifier.matchParentSize()) { drawImage(soft, dstSize = IntSize(size.width.toInt(), size.height.toInt())) }
                 else if (image == null && frame.softArtwork != null) content(frame.copy(artwork = frame.softArtwork))
             }
         }
     }
     Box(modifier.drawWithContent {
-        layer.record { this@drawWithContent.drawContent() }
-        drawLayer(layer)
+        // Only an interruptible crossfade needs a snapshot source. Settled artwork
+        // draws directly, and animation phases invalidate layers rather than content.
+        if (transitioning) {
+            layer.record { this@drawWithContent.drawContent() }
+            drawLayer(layer)
+        } else drawContent()
     }) {
-        if (!immediate && p < 1f) Box(Modifier.matchParentSize().clearAndSetSemantics {}) { Frame(outgoing, frozen, frozenSoft) }
-        Box(Modifier.matchParentSize().graphicsLayer { alpha = reveal }) { Frame(if (immediate) target else incoming) }
+        if (transitioning) Box(Modifier.matchParentSize().clearAndSetSemantics {}) { Frame(outgoing, frozen, frozenSoft) }
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = reveal() }) { Frame(if (immediate) target else incoming) }
     }
 }

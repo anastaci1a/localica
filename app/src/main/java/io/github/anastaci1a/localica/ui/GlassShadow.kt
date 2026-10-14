@@ -9,9 +9,12 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.offset
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.pow
@@ -19,6 +22,14 @@ import kotlinx.coroutines.*
 
 /** Reserve the same extent that the shadow renderer actually draws. */
 @Composable internal fun glassShadowInset(): Dp = (6f + 28f * LocalGlassAppearance.current.shadowSpread).dp
+
+/** Expand a scrolling strip's clip, without changing its content's layout slot.
+ * Pair with equal inner vertical padding after horizontalScroll. */
+internal fun Modifier.shadowViewportOutset(inset: Dp): Modifier = layout { measurable, constraints ->
+    val pad = inset.roundToPx()
+    val child = measurable.measure(constraints.offset(vertical = pad * 2))
+    layout(child.width, (child.height - pad * 2).coerceAtLeast(0)) { child.place(0, -pad) }
+}
 
 internal class GlassShadowEntry {
     var coordinates: LayoutCoordinates? = null
@@ -33,19 +44,12 @@ internal class GlassShadowEntry {
 internal val LocalBottomShadows = staticCompositionLocalOf<GlassShadowGroup?> { null }
 internal val LocalSurfaceShadows = staticCompositionLocalOf<GlassShadowGroup?> { null }
 
-/** Shadow extents belong to the page/window, not a clipped row or filter strip. */
+/** Only group siblings sharing a transform, opacity and visibility lifetime.
+ * Never hoist a scrolling page or modal's descendants into a window-wide group. */
 @Composable internal fun GlassShadowScope(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
     val group = remember { GlassShadowGroup() }
     CompositionLocalProvider(LocalSurfaceShadows provides group) {
         androidx.compose.foundation.layout.Box(modifier.bottomGlassShadowHost(group), content = content)
-    }
-}
-
-@Composable internal fun GlassShadowColumn(modifier: Modifier = Modifier,
-    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    val group = remember { GlassShadowGroup() }
-    CompositionLocalProvider(LocalSurfaceShadows provides group) {
-        androidx.compose.foundation.layout.Column(modifier.bottomGlassShadowHost(group), content = content)
     }
 }
 
@@ -179,7 +183,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     val latest by rememberUpdatedState(opacity)
     SideEffect { entry.radius = radius; entry.anchor = anchor; entry.opacity = { latest() }; group.entries[entry] = entry }
     DisposableEffect(group) { onDispose { group.entries.remove(entry) } }
-    return onPlaced { entry.coordinates = it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { group.revision++ } }
+    return onGloballyPositioned { entry.coordinates = it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { group.revision++ } }
 }
 
 @Composable internal fun Modifier.bottomGlassShadowHost(group: GlassShadowGroup): Modifier {

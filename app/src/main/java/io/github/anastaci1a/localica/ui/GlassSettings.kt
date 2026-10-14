@@ -76,7 +76,7 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
     SliderPreference("Control expansion · ${"%.2f".format(java.util.Locale.ROOT, value.controlExpansion)}×", value.controlExpansion,
         { onChange(value.copy(controlExpansion = it)) }, Modifier.semantics { contentDescription = "Control expansion" },
         valueRange = 1f..2f, steps = 19, low = "1×", high = "2×")
-    TextButton(onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") }
+    ActionTextButton(onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") }
 }
 
 @Composable
@@ -111,12 +111,12 @@ private fun GlassPreview(source: FrostedBackdrop) {
             anchor.captureInk()
             Text("Drag preview", Modifier.align(Alignment.Center))
         }
-        TextButton({ expanded = true }, Modifier.align(Alignment.BottomCenter)) { Text("Expand preview") }
+        ActionTextButton({ expanded = true }, Modifier.align(Alignment.BottomCenter)) { Text("Expand preview") }
         GlassMorphPopup(expanded, anchor, { expanded = false }, GlassPlacement.Center) {
             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Glass preview", style = MaterialTheme.typography.titleLarge)
                 Text("The same surface expands into this panel. Your glass and motion settings apply here too.")
-                TextButton({ expanded = false }, Modifier.align(Alignment.End)) { Text("Collapse preview") }
+                ActionTextButton({ expanded = false }, Modifier.align(Alignment.End)) { Text("Collapse preview") }
             }
         }
     }

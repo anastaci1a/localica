@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ControlGeometryTest {
+    @Test fun wallContactIsContinuousAndMirrorSymmetricForExpandedThumbs() {
+        for (step in 0..1000) {
+            val p = step / 1000f
+            assertEquals(-glassWallAffinity(1f - p, 1f), glassWallAffinity(p, 1f), .00001f)
+        }
+        val before = glassWallTranslation(49f, 1.15f, glassWallAffinity(.9999f, 1f))
+        val end = glassWallTranslation(49f, 1.15f, glassWallAffinity(1f, 1f))
+        assertEquals("No endpoint anchor jump while expanded", before, end, .001f)
+    }
     @Test fun playerHandleUsesInverseInkPolarity() {
         val dark = playerHandleColor(androidx.compose.ui.graphics.Color.White)
         val light = playerHandleColor(androidx.compose.ui.graphics.Color.Black)

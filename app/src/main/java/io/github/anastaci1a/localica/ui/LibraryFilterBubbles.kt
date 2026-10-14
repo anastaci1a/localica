@@ -27,95 +27,102 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Keep configured order independent of the transient leading selection. */
 @Composable
 internal fun LibraryFilterBubbles(filters: List<LibraryFilter>, selected: MediaKind?,
     reducedMotion: Boolean, onSelect: (MediaKind?) -> Unit, onConfigure: () -> Unit) {
+    var menu by remember { mutableStateOf<LibraryFilter?>(null) }
+    OrderedGlassBubbles(filters, filters.filter { it.kind == selected }.toSet(), { it.label },
+        reducedMotion, Modifier.testTag("library-filters"), role = Role.Tab,
+        tag = { "filter-${it.name}" }, onSelect = { onSelect(it.kind.takeUnless { kind -> kind == selected }) },
+        onLongClick = { menu = it }) { filter, anchor ->
+        GlassMenu(menu == filter, anchor, { menu = null }) {
+            ActionMenuItem("Edit library filters and order", onClick = { menu = null; onConfigure() })
+        }
+    }
+}
+
+/** Selected and unselected groups retain their canonical order, with yielding neighbors. */
+internal fun <T> orderedBubbleGroups(items: List<T>, selected: Set<T>) =
+    items.filter { it in selected } + items.filterNot { it in selected }
+
+@Composable
+internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, label: (T) -> String,
+    reducedMotion: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true,
+    role: Role = Role.Checkbox, horizontalInset: androidx.compose.ui.unit.Dp = 12.dp, tag: (T) -> String = { it.toString() }, onSelect: (T) -> Unit,
+    onLongClick: ((T) -> Unit)? = null, overlay: @Composable (T, GlassAnchor) -> Unit = { _, _ -> }) {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val style = MaterialTheme.typography.labelLarge
-    val widths = filters.associateWith { with(density) { measurer.measure(it.label, style).size.width.toDp() + 32.dp } }
+    val widths = items.associateWith { with(density) { measurer.measure(label(it), style).size.width.toDp() + 32.dp } }
     val gap = with(density) { 8.dp.toPx() }
     val widthPx = widths.mapValues { with(density) { it.value.toPx() } }
-    fun positions(order: List<LibraryFilter>): Map<LibraryFilter, Float> {
-        var x = 0f
-        return order.associateWith { val start = x; x += widthPx.getValue(it) + gap; start }
-    }
-    val active = filters.firstOrNull { it.kind == selected }
-    val order = listOfNotNull(active) + filters.filterNot { it == active }
-    val targets = positions(order)
-    val offsets = remember { mutableMapOf<LibraryFilter, Animatable<Float, AnimationVector1D>>() }
-    filters.forEach { offsets.getOrPut(it) { Animatable(targets.getValue(it)) } }
-    var previous by remember { mutableStateOf(active) }
-    var moving by remember { mutableStateOf(emptySet<LibraryFilter>()) }
-    var menu by remember { mutableStateOf<LibraryFilter?>(null) }
+    val order = orderedBubbleGroups(items, selected)
+    var x = 0f
+    val targets = order.associateWith { val start = x; x += widthPx.getValue(it) + gap; start }
+    val offsets = remember { mutableMapOf<T, Animatable<Float, AnimationVector1D>>() }
+    items.forEach { offsets.getOrPut(it) { Animatable(targets.getValue(it)) } }
+    var previous by remember { mutableStateOf(selected) }
+    var moving by remember { mutableStateOf(emptySet<T>()) }
     val scroll = rememberScrollState()
-    LaunchedEffect(active, filters, widthPx, reducedMotion) {
-        val travelers = setOfNotNull(active, previous).intersect(filters.toSet())
-        previous = active
+    LaunchedEffect(selected, items, widthPx, reducedMotion) {
+        val travelers = ((selected - previous) + (previous - selected)).intersect(items.toSet())
+        val follow = items.firstOrNull { it in selected && it !in previous }
+        previous = selected
         moving = travelers
-        val starts = filters.associateWith { offsets.getValue(it).value }
+        val starts = items.associateWith { offsets.getValue(it).value }
         val startScroll = scroll.value
         if (reducedMotion) {
-            filters.forEach { offsets.getValue(it).snapTo(targets.getValue(it)) }
+            items.forEach { offsets.getValue(it).snapTo(targets.getValue(it)) }
             scroll.scrollTo(0)
         } else coroutineScope {
-            filters.forEach { filter -> launch {
-                // Neighbors yield when a traveling bubble reaches them, like a dragged row.
-                // Both the new selection and the former selection travel continuously.
-                val crossing = if (filter in travelers) 0f else travelers.mapNotNull { traveler ->
+            val animations = items.map { item -> launch {
+                val crossing = if (item in travelers) 0f else travelers.mapNotNull { traveler ->
                     val from = starts.getValue(traveler)
                     val to = targets.getValue(traveler)
                     if (abs(to - from) < 1f) null else {
-                        val center = starts.getValue(filter) + widthPx.getValue(filter) / 2
-                        ((center - (from + widthPx.getValue(traveler) / 2)) / (to - from))
-                            .takeIf { it in 0f..1f }
+                        val center = starts.getValue(item) + widthPx.getValue(item) / 2
+                        ((center - (from + widthPx.getValue(traveler) / 2)) / (to - from)).takeIf { it in 0f..1f }
                     }
                 }.minOrNull() ?: 0f
                 delay((crossing * 120).toLong())
-                offsets.getValue(filter).animateTo(targets.getValue(filter),
-                    if (filter in travelers) spring(dampingRatio = 1f, stiffness = 440f)
-                    else spring(dampingRatio = 1f, stiffness = 700f))
+                offsets.getValue(item).animateTo(targets.getValue(item),
+                    spring(dampingRatio = 1f, stiffness = if (item in travelers) 440f else 700f))
             } }
-            active?.let { filter -> launch {
-                snapshotFlow { offsets.getValue(filter).value }.collect { x ->
-                    // Follow from the current viewport without jumping to center on tap.
-                    scroll.scrollTo((startScroll + x - starts.getValue(filter)).roundToInt().coerceAtLeast(0))
+            val follower = follow?.let { item -> launch {
+                snapshotFlow { offsets.getValue(item).value }.collect { position ->
+                    scroll.scrollTo((startScroll + position - starts.getValue(item)).roundToInt().coerceAtLeast(0))
                 }
-            } }?.let { follower ->
-                // Children have bounded animations; only the frame follower is unbounded.
-                delay(900)
-                follower.cancel()
-            }
+            } }
+            animations.forEach { it.join() }
+            follower?.cancel()
         }
         moving = emptySet()
     }
-    val total = widths.values.fold(0.dp) { sum, width -> sum + width } + 8.dp * (filters.size - 1).coerceAtLeast(0)
-    Box(Modifier.testTag("library-filters").padding(vertical = ListPillVerticalInset)
-        .nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll).padding(horizontal = 12.dp)
-        .width(total).height(listPillTargetHeight())) {
-        filters.forEach { filter -> key(filter) {
-            val menuAnchor = rememberGlassAnchor()
+    val total = widths.values.fold(0.dp) { sum, width -> sum + width } + 8.dp * (items.size - 1).coerceAtLeast(0)
+    val shadowInset = glassShadowInset()
+    Box(modifier.fillMaxWidth().padding(vertical = ListPillVerticalInset).nestedScroll(HorizontalGestureOwner)
+        .shadowViewportOutset(shadowInset).horizontalScroll(scroll)
+        .padding(vertical = shadowInset).padding(horizontal = horizontalInset).width(total).height(listPillTargetHeight())) {
+        GlassShadowScope(Modifier.fillMaxSize()) {
+        items.forEach { item -> key(item) {
+            val anchor = rememberGlassAnchor()
             val source = LocalFrostedBackdrop.current
-            SideEffect { menuAnchor.source = source; menuAnchor.face = { Text(filter.label, style = style, maxLines = 1) } }
-            Box(Modifier.offset { IntOffset(offsets.getValue(filter).value.roundToInt(), 0) }
-                .zIndex(if (filter == active) 2f else if (filter in moving) 1f else 0f)
-                .width(widths.getValue(filter)).fillMaxHeight()
-                .testTag("filter-${filter.name}")
-                .combinedClickable(role = Role.Tab,
-                    onClick = { onSelect(filter.kind.takeUnless { it == selected }) },
-                    onLongClickLabel = "Configure library filters", onLongClick = { menu = filter })
-                .semantics { this.selected = filter.kind == selected }, contentAlignment = Alignment.Center) {
-                LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(menuAnchor),
-                    tint = if (filter.kind == selected) androidx.compose.ui.graphics.Color.Black.copy(alpha = .07f)
+            SideEffect { anchor.source = source; anchor.face = { Text(label(item), style = style, maxLines = 1) } }
+            Box(Modifier.offset { IntOffset(offsets.getValue(item).value.roundToInt(), 0) }
+                .zIndex(if (item in moving) 2f else if (item in selected) 1f else 0f)
+                .width(widths.getValue(item)).fillMaxHeight().testTag(tag(item))
+                .ownButtonDrag(enabled && role != Role.Checkbox).combinedClickable(enabled = enabled, role = role, onClick = { onSelect(item) },
+                    onLongClick = onLongClick?.let { callback -> { callback(item) } })
+                .semantics { this.selected = item in selected }, contentAlignment = Alignment.Center) {
+                LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(anchor),
+                    tint = if (item in selected) androidx.compose.ui.graphics.Color.Black.copy(alpha = .07f)
                         else androidx.compose.ui.graphics.Color.Transparent) {
-                    menuAnchor.captureInk()
-                    Text(filter.label, Modifier.align(Alignment.Center), style = style, maxLines = 1)
+                    anchor.captureInk()
+                    Text(label(item), Modifier.align(Alignment.Center), style = style, maxLines = 1)
                 }
-                GlassMenu(menu == filter, menuAnchor, { menu = null }) {
-                    ActionMenuItem("Edit library filters and order", onClick = { menu = null; onConfigure() })
-                }
+                overlay(item, anchor)
             }
         } }
+        }
     }
 }

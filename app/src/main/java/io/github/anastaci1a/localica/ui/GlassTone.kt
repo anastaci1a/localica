@@ -55,3 +55,20 @@ private object ToneImages {
     }
     return if (image == null || tone.trim == 0f) image else cached ?: result ?: image
 }
+
+/** Shared post-optics mapping, also used by the material-only average. */
+internal const val GlassColorShader = """
+    float3 glassColor(float3 color, float whiteTint, float3 tone) {
+        float luma = clamp(dot(color, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+        float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
+        float tint = clamp((lifted - luma) / max(1.0 - luma, 0.0001), 0.0, 1.0);
+        color = mix(color, float3(1), tint);
+        color = clamp(color, 0.0, 1.0);
+        if (tone.x > 0.0) {
+            float3 end = tone.z > 0.5 ? color : 1.0 - color;
+            float3 weighted = tone.y == 2.0 ? end * end : tone.y == 1.0 ? end : pow(end, float3(tone.y));
+            color += weighted * (tone.z > 0.5 ? -tone.x : tone.x);
+        }
+        return color;
+    }
+"""

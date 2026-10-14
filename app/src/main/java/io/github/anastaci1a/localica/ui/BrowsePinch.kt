@@ -28,7 +28,7 @@ import io.github.anastaci1a.localica.navigation.BrowseRoute
 internal data class FrozenBrowseItem(val image: androidx.compose.ui.graphics.ImageBitmap,
     val origin: androidx.compose.ui.unit.IntOffset, val size: androidx.compose.ui.unit.IntSize)
 
-internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int)
+internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0)
 
 @Stable
 internal class BrowsePinchMotion {
@@ -43,6 +43,8 @@ internal class BrowsePinchMotion {
     var bounds: Map<Any, Rect> = emptyMap()
     var focusKey: Any? = null
     var focusTop: Int = 0
+    var focusFraction = 0f
+    var focusEdge = 0
     var target: BrowseStyle? = null
     var targetColumns = 1
     var sourceColumns = 1
@@ -136,7 +138,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
                 if (destination != null) {
                     onCommit(destination)
-                    motion.focusKey?.let { onAnchor(BrowseZoomAnchor(route, destination, it, motion.focusTop)) }
+                    motion.focusKey?.let { onAnchor(BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge)) }
                 }
                 // Keep retained drawings through the source-layout handoff.
                 withFrameNanos { }; withFrameNanos { }
@@ -168,8 +170,19 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 x * x + y * y
             }
             if (nearest != null) {
-                motion.focusKey = nearest.key; motion.focusTop = nearest.offset.y
-                onAnchor(BrowseZoomAnchor(route, next, nearest.key, nearest.offset.y))
+                val layout = gridState.layoutInfo
+                val first = layout.visibleItemsInfo.firstOrNull { it.index == 0 }
+                val last = layout.visibleItemsInfo.firstOrNull { it.index == layout.totalItemsCount - 1 }
+                val tolerance = with(density) { androidx.compose.ui.unit.Dp(1f).toPx() }
+                motion.focusEdge = when {
+                    !gridState.canScrollBackward || first != null && first.offset.y >= -tolerance -> -1
+                    !gridState.canScrollForward || last != null && last.offset.y + last.size.height + layout.afterContentPadding <= layout.viewportEndOffset + tolerance -> 1
+                    else -> 0
+                }
+                motion.focusFraction = ((midpoint.y - nearest.offset.y) / nearest.size.height.coerceAtLeast(1)).coerceIn(0f, 1f)
+                motion.focusKey = nearest.key
+                motion.focusTop = (nearest.offset.y + nearest.size.height * motion.focusFraction).toInt()
+                onAnchor(BrowseZoomAnchor(route, next, nearest.key, motion.focusTop, motion.focusFraction, motion.focusEdge))
             }
             motion.capturing = true
             motion.capture = scope.launch {

@@ -103,8 +103,8 @@ class BrowsePinchTest {
             val viewport = list.fetchSemanticsNode().boundsInRoot
             list.performTouchInput { pinch(true, original.center.y - viewport.top) }
             waitForView("List, Normal")
-            assertEquals("Keep the item near the pinch at its prior vertical position", original.top,
-                item.fetchSemanticsNode().boundsInRoot.top, 4f)
+            assertEquals("Keep the content at the pinch midpoint fixed", original.center.y,
+                item.fetchSemanticsNode().boundsInRoot.center.y, 4f)
             list.performTouchInput { pinch(true) }; waitForView("List, Large")
             list.performTouchInput { pinch(true) }; waitForView("Gallery, 5 columns")
             for (columns in 4 downTo 1) {
@@ -289,6 +289,39 @@ class BrowsePinchTest {
                 assertEquals(columns, prefs.read(route).itemsPerRow)
             }
         } finally { compose.mainClock.autoAdvance = true; prefs.write(route, original, false) }
+    }
+
+    @Test fun repeatedPinchesKeepTopAndBottomEdgesAnchored() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val route = BrowseRoute(MainTab.Songs)
+        val prefs = BrowsePreferences(context)
+        val old = prefs.read(route)
+        prefs.write(route, BrowseStyle(listSize = ListSize.Normal), false)
+        val tracks = (0..79).map { Track("edge:$it", "Song ${it.toString().padStart(3, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
+        try {
+            compose.setContent { LocalicaTheme {
+                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                    queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+            } }
+            waitForView("List, Normal")
+            val list = compose.onNodeWithTag("browser-list")
+            val top = compose.onNodeWithTag("media-edge:0").fetchSemanticsNode().boundsInRoot.top
+            repeat(2) {
+                list.performTouchInput { pinch(true) }; waitForView("List, Large")
+                assertEquals(top, compose.onNodeWithTag("media-edge:0").fetchSemanticsNode().boundsInRoot.top, 3f)
+                list.performTouchInput { pinch(false) }; waitForView("List, Normal")
+                assertEquals(top, compose.onNodeWithTag("media-edge:0").fetchSemanticsNode().boundsInRoot.top, 3f)
+            }
+            list.performScrollToIndex(80)
+            val bottom = compose.onNodeWithTag("media-edge:79").fetchSemanticsNode().boundsInRoot.bottom
+            repeat(2) {
+                list.performTouchInput { pinch(true) }; waitForView("List, Large")
+                assertEquals(bottom, compose.onNodeWithTag("media-edge:79").fetchSemanticsNode().boundsInRoot.bottom, 3f)
+                list.performTouchInput { pinch(false) }; waitForView("List, Normal")
+                assertEquals(bottom, compose.onNodeWithTag("media-edge:79").fetchSemanticsNode().boundsInRoot.bottom, 3f)
+            }
+        } finally { prefs.write(route, old, false) }
     }
 
     private fun waitForView(label: String) {

@@ -54,6 +54,14 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     val result = rememberLyrics(track)
     val preferences = remember { context.getSharedPreferences("lyric-sources", 0) }
     var chosen by rememberSaveable(track?.id) { mutableStateOf(preferences.getString(track?.id ?: "", null)) }
+    LaunchedEffect(result, chosen) {
+        val legacy = chosen?.takeIf { it.endsWith(":plain") } ?: return@LaunchedEffect
+        val original = legacy.removeSuffix(":plain")
+        if (result?.sources?.any { it.id == original && it.document.synced } == true) {
+            chosen = original
+            preferences.edit().putString(track?.id ?: "", original).apply()
+        }
+    }
     val source = result?.sources?.firstOrNull { it.id == chosen } ?: result?.sources?.firstOrNull()
     var sourcesOpen by remember { mutableStateOf(false) }
     LaunchedEffect(sourcesRequest) { if (sourcesRequest > 0) sourcesOpen = true }
@@ -73,9 +81,10 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         androidx.compose.animation.Crossfade(source, Modifier.weight(1f),
             animationSpec = tween(if (reducedMotion) 0 else 300), label = "Song lyrics") { shown ->
             when {
-                // Let the outgoing document finish fading while the next source loads.
-                // The player closes unavailable lyrics; do not flash an empty-state panel.
-                shown == null -> Spacer(Modifier.fillMaxSize())
+                shown == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (result != null) Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_lyrics),
+                        "No local lyrics", Modifier.size(56.dp).testTag("empty-lyrics"), tint = LocalContentColor.current.copy(alpha = .22f))
+                }
                 else -> key(shown.id, shown.document) {
                     var shownPosition by remember { mutableLongStateOf(lyricClock) }
                     SideEffect { if (shown == source) shownPosition = lyricClock }

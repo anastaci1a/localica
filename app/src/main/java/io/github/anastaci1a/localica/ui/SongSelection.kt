@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -28,11 +29,9 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     val editTags = LocalTagEdit.current
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val chosen = rows.filter { it.id in selected }
-    Column(Modifier.fillMaxWidth().padding(8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("${chosen.size} selected", Modifier.weight(1f))
-            TextButton(onClick = { onAll?.invoke() ?: onSelection(rows.map { it.id }.toSet()) }) { Text("All") }
-            if (onRange != null) TextButton(onClick = onRange) { Text("Range") }
+            Text("${chosen.size} selected", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             LiquidGlassSurface(pressFeedback = false) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (onCollapse != null) {
@@ -43,17 +42,28 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
                 }
             }
         }
-        FlowRow(Modifier.fillMaxWidth()) {
-            if (editTags != null) TextButton(enabled = chosen.isNotEmpty(), onClick = {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_queue, "All") {
+                onAll?.invoke() ?: onSelection(rows.map { it.id }.toSet())
+            }
+            if (onRange != null) GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_queue, "Range", onClick = onRange)
+            if (editTags != null) GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_edit, "Edit tags", enabled = chosen.isNotEmpty()) {
                 editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }
-            }) { Text("Edit tags") }
-            SongTap.entries.forEach { action -> TextButton(enabled = chosen.isNotEmpty() && queues != null, onClick = {
-                queues?.act(chosen.map { it.track }, action, chosen.map { it.sourcePlaylistId }) { if (it) onSelection(emptySet()) }
-            }) { Text(when (action) { SongTap.NewQueue -> "New queue"; SongTap.PlayNow -> "Play now"; SongTap.PlayNext -> "Play next"; SongTap.Append -> "Append" }) } }
-            TextButton(enabled = chosen.isNotEmpty(), onClick = { adding = chosen.map { it.track } }) { Text("Add to playlist") }
-            if (onRemove != null) TextButton(enabled = chosen.isNotEmpty(), onClick = {
+            }
+        }
+        HorizontalDivider(color = LocalContentColor.current.copy(alpha = .12f))
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SongTap.entries.forEach { action ->
+                val label = when (action) { SongTap.NewQueue -> "New queue"; SongTap.PlayNow -> "Play now"; SongTap.PlayNext -> "Play next"; SongTap.Append -> "Append" }
+                GlassActionButton(if (action == SongTap.PlayNow) io.github.anastaci1a.localica.R.drawable.ic_play else io.github.anastaci1a.localica.R.drawable.ic_queue,
+                    label, enabled = chosen.isNotEmpty() && queues != null) {
+                    queues?.act(chosen.map { it.track }, action, chosen.map { it.sourcePlaylistId }) { if (it) onSelection(emptySet()) }
+                }
+            }
+            GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_playlist_add, "Add to playlist", enabled = chosen.isNotEmpty()) { adding = chosen.map { it.track } }
+            if (onRemove != null) GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_close, removeLabel, enabled = chosen.isNotEmpty()) {
                 onRemove { if (it) onSelection(emptySet()) }
-            }) { Text(removeLabel) }
+            }
         }
     }
     adding?.let { tracks -> AddToPlaylistDialog(tracks, playlistState, playlists,
@@ -97,20 +107,19 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
                 items(sortedPlaylists.size, key = { sortedPlaylists[it].id }) { index ->
                     val playlist = sortedPlaylists[index]
                     val selected = playlist.id in chosen
-                    Row(Modifier.fillMaxWidth().selectionLens(selected, false)
+                    Row(Modifier.fillMaxWidth().semantics { this.selected = selected }.selectionLens(selected, false)
                         .then(Modifier.combinedClickable(enabled = !saving, onClick = {
                             chosen = if (selected) chosen - playlist.id else chosen + playlist.id
                         })).padding(vertical = 8.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         MediaArtwork(listOfNotNull(playlist.coverUri) + playlist.entries.map { it.track.uri }, Modifier.size(44.dp))
-                        Text(playlist.name, Modifier.weight(1f), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        InterfaceCheckbox(selected, null, enabled = !saving)
+                        Text(playlist.name, Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
             }
             }
             state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-    }, confirmButton = { TextButton(enabled = valid, onClick = ::add) { Text("Add") } },
-        dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
+    }, confirmButton = { ActionTextButton(enabled = valid, onClick = ::add) { Text("Add") } },
+        dismissButton = { ActionTextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
 }

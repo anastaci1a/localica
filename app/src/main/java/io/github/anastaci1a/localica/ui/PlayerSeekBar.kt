@@ -29,13 +29,19 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 @Composable
 internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRange: ClosedFloatingPointRange<Float>,
     onValueChangeFinished: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier,
-    cancelBounds: Rect? = null, onCancel: () -> Unit = {}, onDrag: (Boolean, Boolean) -> Unit = { _, _ -> }) {
+    cancelBounds: Rect? = null, onCancel: () -> Unit = {}, onDrag: (Boolean, Boolean) -> Unit = { _, _ -> },
+    liveValue: Float = value) {
     val interaction = remember { MutableInteractionSource() }
     val dragging by interaction.collectIsDraggedAsState()
     val thickness by animateDpAsState(if (dragging) 9.dp else 5.dp, tween(if (LocalReducedMotion.current) 0 else 160), label = "Seek thickness")
     var origin by remember { mutableStateOf(Offset.Zero) }
     var cancelRelease by remember { mutableStateOf(false) }
     var wasOver by remember { mutableStateOf(false) }
+    var previewReturning by remember { mutableStateOf(false) }
+    val reduced = LocalReducedMotion.current
+    LaunchedEffect(previewReturning) { if (previewReturning) { kotlinx.coroutines.delay(180); previewReturning = false } }
+    val preview by androidx.compose.animation.core.animateFloatAsState(if (wasOver) liveValue else value,
+        if (!reduced && (wasOver || previewReturning)) tween(180) else androidx.compose.animation.core.snap(), label = "Seek cancel preview")
     val view = androidx.compose.ui.platform.LocalView.current
     val target by rememberUpdatedState(cancelBounds)
     val report by rememberUpdatedState(onDrag)
@@ -56,6 +62,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                         if (over != wasOver) {
                             view.performHapticFeedback(if (over) android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK)
                             wasOver = over
+                            previewReturning = !over
                         }
                         cancelRelease = over
                         report(change.pressed, over)
@@ -73,9 +80,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
             }
         }
     }
-    Slider(value, { next ->
-        if (!cancelRelease) onValueChange(next)
-    }, modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(touch)
+    Slider(value, onValueChange, modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(touch)
         .onPreviewKeyEvent { cancelRelease = false; false }
         .semantics {
             if (enabled) setProgress { requested ->
@@ -97,7 +102,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
         track = {
             Canvas(Modifier.fillMaxWidth().height(40.dp)) {
                 val h = thickness.toPx()
-                val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
+                val fraction = ((preview - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
                 val top = (size.height - h) / 2
                 drawRoundRect(Color.White.copy(alpha = .2f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
                 if (fraction > 0f) drawRoundRect(Color.White.copy(alpha = .7f), Offset(0f, top), Size(size.width * fraction, h), CornerRadius(h / 2))

@@ -29,7 +29,7 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
     val travel = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var animation by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    Box(modifier.semantics { contentDescription = label }
+    Box(modifier.ownButtonDrag(enabled).semantics { contentDescription = label }
         .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null) {
             onClick()
             if (glyph != TransportGlyph.PlayPause && !reducedMotion) { animation?.cancel(); animation = scope.launch {
