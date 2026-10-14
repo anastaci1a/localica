@@ -26,6 +26,31 @@ import org.junit.Test
 class GlassAppearanceTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun frostedPanelsStillScatterTheParentScene() {
+        var top by mutableStateOf(300.dp)
+        lateinit var source: FrostedBackdrop
+        compose.setContent { LocalicaTheme {
+            source = rememberFrostedBackdrop(Unit, dark = false)
+            Box(Modifier.size(240.dp).testTag("frost-fixture")) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    val cell = 4.dp.toPx()
+                    for (x in 0..(size.width / cell).toInt()) drawRect(if (x % 2 == 0) Color.Black else Color.White,
+                        Offset(x * cell, 0f), Size(cell, size.height))
+                }
+                FrostedSurface(Modifier.offset(y = top).fillMaxSize(), source = source, shadow = false) {}
+            }
+        } }
+        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
+        compose.runOnIdle { top = 0.dp }
+        val pixels = compose.onNodeWithTag("frost-fixture").captureToImage().toPixelMap()
+        var low = 1f; var high = 0f
+        for (x in pixels.width / 4 until pixels.width * 3 / 4) {
+            val color = pixels[x, pixels.height / 2].red
+            low = minOf(low, color); high = maxOf(high, color)
+        }
+        assertTrue("Frost must scatter stripes, not show an unfiltered parent: $low..$high", high - low < .12f)
+    }
+
     @Test fun contrastMigrationKeepsExplicitOffAndInitializesTheNewCurve() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val prefs = InterfacePreferences(context)
@@ -48,11 +73,15 @@ class GlassAppearanceTest {
         val prefs = InterfacePreferences(context)
         val original = prefs.read()
         try {
-            val glass = GlassAppearance(.73f, .18f, .04f, .91f, .35f, TabLensStyle.Overlay, .81f, .23f, 3f, 1.7f, 1.4f, .22f)
+            val glass = GlassAppearance(.73f, .18f, .04f, .91f, .35f, TabLensStyle.Overlay, .81f, .23f, 3f, 1.7f, 1.4f, .22f,
+                controlExpansion = 1.9f, overlayDarkening = .2f, overlayForeground = true)
             prefs.write(original.copy(glass = glass))
             assertEquals(glass, InterfacePreferences(context).read().glass)
             prefs.write(original.copy(glass = GlassAppearance(-1f, 2f, Float.NaN, Float.POSITIVE_INFINITY)))
             assertEquals(GlassAppearance(0f, 1f, .12f, .6f), prefs.read().glass)
+            prefs.write(original.copy(glass = GlassAppearance(controlExpansion = Float.NaN, overlayDarkening = 2f)))
+            assertEquals(1.75f, prefs.read().glass.controlExpansion, 0f)
+            assertEquals(.5f, prefs.read().glass.overlayDarkening, 0f)
             prefs.write(original.copy(glass = GlassAppearance()))
             assertEquals(GlassAppearance(), prefs.read().glass)
         } finally { prefs.write(original) }

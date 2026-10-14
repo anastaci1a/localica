@@ -34,11 +34,11 @@ The general [spring/strain model](specification.md#shape-carries-impact) owns th
 
 ## Sliders: keep the value visible
 
-Apple's WWDC25 demonstration enlarges the thumb into a transparent rounded lens during manipulation, revealing the colored track endpoint beneath it. Its resting thumb is quieter and white. **Localica deliberately keeps settings slider thumbs clear at rest**, following the requested design. This is an adaptation, not a claim that all Apple sliders are always clear. [Demonstration and observations](sources.md#sliders-and-switches--wwdc25).
+Apple's WWDC25 demonstration enlarges the thumb into a transparent rounded lens during manipulation, revealing the colored track endpoint beneath it. Its resting thumb is quieter and white. Localica uses opaque white resting thumbs and a clear, unblurred active lens. The active lens ignores ordinary glass appearance settings; its expansion is configurable from 1–2× (default 1.75×). Release continuously restores the white finish, then stops refraction work. [Demonstration and observations](sources.md#sliders-and-switches--wwdc25).
 
 - Use a wide rounded rectangle, a continuous thin track, and crisp nearby value text. Keep the endpoint clear of blur, white plates and contrast coating. Render track and lens as one scene: identity outside, refraction inside, with one shared center and no independently positioned cutout. Keep tick centers inside rounded end caps.
-- A thumb grab preserves its offset. A tap elsewhere on the track can choose a new value using the platform slider behavior; pressure must start from that new location, not the previous value.
-- Match fill, thumb travel, endpoint labels and boundary compression. Horizontal ranges run from logical leading minimum to trailing maximum, including right-to-left layouts. Vertical ranges run from bottom minimum to top maximum.
+- A thumb grab immediately owns the gesture until release, including initial vertical motion, and preserves its offset. A tap elsewhere on the track can choose a new value using the platform slider behavior; pressure must start from that new location, not the previous value.
+- One coordinate model owns fill, thumb travel, values, endpoint labels and boundary compression. Round discrete values to the nearest stop; continuous values reach both limits at the visible track endpoints. Horizontal ranges run from logical leading minimum to trailing maximum, including right-to-left layouts. Vertical ranges run from bottom minimum to top maximum.
 - Discrete controls expose ticks and matching accessible increments, with strong shared magnetic wells between valid stops. Percentage settings use 5% increments; other continuous ranges retain their precision. Thumb motion may preview travel between stops while the saved value stays valid.
 - Reduced Motion keeps direct tracking and state changes, but removes decorative strain and depth changes. Do not substitute a blur animation for the removed movement.
 
@@ -47,9 +47,9 @@ The playback track remains a separate thumbless-at-rest control. Dragging it pre
 <details>
 <summary>See the controls in Localica</summary>
 
-<img src="assets/settings.png" width="300" alt="Localica glass settings with transparent rounded slider thumbs revealing the colored track endpoints beneath them">
+<img src="assets/settings.png" width="300" alt="Localica glass settings with white resting thumbs and grouped labels">
 
-An actual app capture on Android 16. The still image shows resting optics and layout; use the exercises below to review interaction.
+An actual app capture on Android 16. The still image shows the resting controls and layout; use the exercises below to review interaction.
 
 </details>
 

@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
@@ -23,6 +24,23 @@ import kotlin.math.abs
 
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun pageShadowEscapesTheClippedHeaderRow() {
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides
+                io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
+                GlassShadowScope(Modifier.size(240.dp, 180.dp).background(Color.White).testTag("page-shadow")) {
+                    Box(Modifier.padding(top = 40.dp).fillMaxWidth().height(48.dp).clipToBounds(), contentAlignment = Alignment.Center) {
+                        LiquidGlassSurface(Modifier.size(100.dp, 48.dp)) {}
+                    }
+                }
+            }
+        } }
+        val pixels = compose.onNodeWithTag("page-shadow").captureToImage().toPixelMap()
+        val d = pixels.width / 240f
+        val below = pixels[(120 * d).toInt(), (96 * d).toInt()]
+        assertTrue("Header clipping must not truncate the shared shadow: $below", below.red < .98f)
+    }
 
     @Test fun overlappingShadowBodiesHaveUnionCoverageWithoutDoubleDarkening() {
         compose.setContent {

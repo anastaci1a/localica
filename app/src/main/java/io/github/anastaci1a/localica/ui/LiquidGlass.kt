@@ -92,7 +92,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     homeSource: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
     content: (@Composable BoxScope.() -> Unit)? = null) {
     if (Build.VERSION.SDK_INT < 33) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
-    var origin by remember { mutableStateOf(Offset.Zero) }
+    val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
     val appearance = LocalGlassAppearance.current.normalized()
@@ -117,9 +117,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact) else if (anchor != null) Modifier.drawWithContent {
         scale(contact.body.value.scaleX(contact.vertical), contact.body.value.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
     } else Modifier)
-        .then(if (shadow) Modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius) { anchor?.shadowInModal != true } else Modifier)
+        .then(if (shadow) Modifier.surfaceGlassShadow(cornerRadius, anchor) else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
-        .onGloballyPositioned { origin = it.backdropPosition(view); surfaceSize = it.size }, propagateMinConstraints = true) {
+        .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
         if (source != null && Build.VERSION.SDK_INT >= 33) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
@@ -129,7 +129,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             // the cheaper half-resolution recording during the same morph.
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
-            FilteredBackdrop(Modifier.matchParentSize(), source, { origin }, resolution, padding,
+            FilteredBackdrop(Modifier.matchParentSize(), source, location::position, resolution, padding,
                 homeSource, homeWeight) { extent, resolution ->
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
@@ -186,7 +186,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
             with(mesh) {
                 samples.forEachIndexed { index, (backing, image, amount) ->
-                    draw(shape, image, backing.size, origin - backing.origin, depth, refraction,
+                    draw(shape, image, backing.size, location.position() - backing.origin, depth, refraction,
                         amount, lighting = false, additive = index > 0, flattening = flattening)
                 }
                 if (blending) drawContext.canvas.restore()
@@ -210,7 +210,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 /** A restrained ambient reflection on the silhouette, never a plate across the face.
  * Shared by live/mesh controls and connected selections at the final display resolution. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
-    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null, tone: GlassTone = GlassTone()) {
+    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null, tone: GlassTone = GlassTone(), opacity: Float = 1f) {
     val white = tone.color(Color.White)
     val black = tone.color(Color.Black)
     // Diagonally opposed highlights taper into quiet, slightly shaded corners.
@@ -228,7 +228,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
         1f to Color.Transparent, center = bounds.center)
     val silhouette = path ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }
     clipPath(silhouette) {
-        drawPath(silhouette, shine, style = Stroke(2.6.dp.toPx()))
-        drawPath(silhouette, shade, style = Stroke(1.4.dp.toPx()))
+        drawPath(silhouette, shine, alpha = opacity, style = Stroke(2.6.dp.toPx()))
+        drawPath(silhouette, shade, alpha = opacity, style = Stroke(1.4.dp.toPx()))
     }
 }

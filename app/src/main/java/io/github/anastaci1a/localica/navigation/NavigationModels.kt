@@ -97,6 +97,9 @@ data class GlassAppearance(
     val depth: Float = 1.35f,
     val contrastWeight: Float = 2f,
     val classicOpacity: Float = .1f,
+    val controlExpansion: Float = 1.75f,
+    val overlayDarkening: Float = 0f,
+    val overlayForeground: Boolean = false,
 ) {
     fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
         shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,
@@ -104,7 +107,9 @@ data class GlassAppearance(
         if (shapeDamping.isFinite()) shapeDamping.coerceIn(2f, 40f) else 8f,
         if (depth.isFinite()) depth.coerceIn(.6f, 2f) else 1.35f,
         if (contrastWeight.isFinite()) contrastWeight.coerceIn(1f, 2f) else 2f,
-        classicOpacity.unit(.1f))
+        classicOpacity.unit(.1f),
+        if (controlExpansion.isFinite()) controlExpansion.coerceIn(1f, 2f) else 1.75f,
+        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground)
     private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
 }
 

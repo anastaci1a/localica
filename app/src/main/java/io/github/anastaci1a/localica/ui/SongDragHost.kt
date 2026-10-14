@@ -16,6 +16,7 @@ import kotlin.math.roundToInt
 internal class SongDragHost {
     var state by mutableStateOf<SongDragState?>(null)
     var reducedMotion by mutableStateOf(false)
+    var source by mutableStateOf<FrostedBackdrop?>(null)
 }
 internal val LocalSongDragHost = staticCompositionLocalOf<SongDragHost?> { null }
 
@@ -30,7 +31,9 @@ internal fun ForegroundSongDragOverlay(host: SongDragHost) {
             val offset = state.viewportOrigin - origin
             Box(Modifier.offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
                 .size(with(density) { state.viewportWidth.toDp() }, with(density) { state.viewportHeight.toDp() })) {
-                SongDragOverlay(state, host.reducedMotion)
+                CompositionLocalProvider(LocalFrostedBackdrop provides host.source) {
+                    SongDragOverlay(state, host.reducedMotion)
+                }
             }
         }
     }

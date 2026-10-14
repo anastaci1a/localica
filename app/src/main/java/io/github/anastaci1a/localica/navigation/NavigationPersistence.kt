@@ -25,7 +25,9 @@ class InterfacePreferences(context: Context) {
                 preferences.enumValue<TabLensStyle>("tab-lens-style") ?: TabLensStyle.Adjustable,
                 preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f),
                 preferences.getFloat("glass-shape-damping", 8f), preferences.getFloat("glass-depth", 1.35f),
-                preferences.getFloat("glass-contrast-weight", 2f), preferences.getFloat("tab-classic-opacity", .1f)).normalized(),
+                preferences.getFloat("glass-contrast-weight", 2f), preferences.getFloat("tab-classic-opacity", .1f),
+                preferences.getFloat("glass-control-expansion", 1.75f), preferences.getFloat("tab-overlay-darkening", 0f),
+                preferences.getBoolean("tab-overlay-foreground", false)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone(),
             lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000))
     }
@@ -43,6 +45,8 @@ class InterfacePreferences(context: Context) {
             .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)
             .putFloat("glass-contrast-trim", glass.contrast).remove("glass-contrast")
             .putFloat("glass-contrast-weight", glass.contrastWeight).putFloat("tab-classic-opacity", glass.classicOpacity)
+            .putFloat("glass-control-expansion", glass.controlExpansion)
+            .putFloat("tab-overlay-darkening", glass.overlayDarkening).putBoolean("tab-overlay-foreground", glass.overlayForeground)
             .putString("tab-lens-style", glass.tabStyle.name)
             .putFloat("tab-lens-blur", glass.tabBlur).putFloat("tab-lens-tint", glass.tabWhiteTint)
             .putFloat("glass-shape-damping", glass.shapeDamping).putFloat("glass-depth", glass.depth)

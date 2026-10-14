@@ -22,8 +22,7 @@ internal fun ListViewFields(route: BrowseRoute, value: BrowseStyle, onChange: (B
         }
         if (value.presentation != Presentation.List) {
             val columns = value.itemsPerRow ?: galleryColumns(value.presentation, width).coerceIn(1, 5)
-            Text("Items per row: $columns", style = MaterialTheme.typography.titleSmall)
-            InterfaceSlider(columns.toFloat(), { onChange(value.copy(itemsPerRow = it.roundToInt().coerceIn(1, 5))) },
+            SliderPreference("Items per row: $columns", columns.toFloat(), { onChange(value.copy(itemsPerRow = it.roundToInt().coerceIn(1, 5))) },
                 valueRange = 1f..5f, steps = 3, modifier = Modifier.semantics {
                     contentDescription = "Items per row"; stateDescription = columns.toString()
                 })

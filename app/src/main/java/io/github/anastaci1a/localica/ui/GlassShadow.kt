@@ -31,6 +31,30 @@ internal class GlassShadowEntry {
     var revision by mutableIntStateOf(0)
 }
 internal val LocalBottomShadows = staticCompositionLocalOf<GlassShadowGroup?> { null }
+internal val LocalSurfaceShadows = staticCompositionLocalOf<GlassShadowGroup?> { null }
+
+/** Shadow extents belong to the page/window, not a clipped row or filter strip. */
+@Composable internal fun GlassShadowScope(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
+    val group = remember { GlassShadowGroup() }
+    CompositionLocalProvider(LocalSurfaceShadows provides group) {
+        androidx.compose.foundation.layout.Box(modifier.bottomGlassShadowHost(group), content = content)
+    }
+}
+
+@Composable internal fun GlassShadowColumn(modifier: Modifier = Modifier,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val group = remember { GlassShadowGroup() }
+    CompositionLocalProvider(LocalSurfaceShadows provides group) {
+        androidx.compose.foundation.layout.Column(modifier.bottomGlassShadowHost(group), content = content)
+    }
+}
+
+@Composable internal fun Modifier.surfaceGlassShadow(radius: Dp?, anchor: GlassAnchor?): Modifier {
+    val group = LocalSurfaceShadows.current
+    val appearance = LocalGlassAppearance.current
+    return if (group == null) clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, radius) { anchor?.shadowInModal != true }
+        else bottomGlassShadow(radius, group = group, anchorOverride = anchor)
+}
 
 internal class GlassShadowGeometry {
     private var previous = emptyList<RoundRect>()
@@ -146,12 +170,12 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     }
 }
 
-@Composable internal fun Modifier.bottomGlassShadow(radius: Dp? = null, opacity: () -> Float = { 1f }): Modifier {
-    val group = LocalBottomShadows.current
+@Composable internal fun Modifier.bottomGlassShadow(radius: Dp? = null, opacity: () -> Float = { 1f }, group: GlassShadowGroup? = LocalBottomShadows.current,
+    anchorOverride: GlassAnchor? = null): Modifier {
     val appearance = LocalGlassAppearance.current
     if (group == null) return clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, radius)
     val entry = remember { GlassShadowEntry() }
-    val anchor = glassSurfaceAnchor()
+    val anchor = anchorOverride ?: glassSurfaceAnchor()
     val latest by rememberUpdatedState(opacity)
     SideEffect { entry.radius = radius; entry.anchor = anchor; entry.opacity = { latest() }; group.entries[entry] = entry }
     DisposableEffect(group) { onDispose { group.entries.remove(entry) } }

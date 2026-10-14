@@ -33,7 +33,7 @@ internal fun collectionIsLight(visual: PlayerVisual): Boolean = visual.palette.m
 internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: Modifier = Modifier) {
     val light = collectionIsLight(visual)
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val pictureTop = artTop * if (LocalReducedMotion.current) 1f else .65f
+    val pictureTop = WindowInsets.statusBars.getTop(density) + artTop * if (LocalReducedMotion.current) 1f else .65f
     BoxWithConstraints(modifier.then(Modifier.clipToBounds())) {
         val imageHeight = maxWidth
         PlayerBackdrop(visual.palette, Modifier.fillMaxSize(), fullArtBlend = 1f,
@@ -43,7 +43,8 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
             Image(image, null, Modifier.offset(y = with(density) { pictureTop.toDp() }).fillMaxWidth().height(imageHeight)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
                     drawContent()
-                    drawRect(Brush.verticalGradient(0f to Color.Black, .58f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                    drawRect(Brush.verticalGradient(0f to Color.Transparent, .035f to Color.Black,
+                        .58f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
                 }, contentScale = ContentScale.Crop)
         }
     }

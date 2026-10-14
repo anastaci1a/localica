@@ -21,6 +21,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -34,9 +37,13 @@ import kotlinx.coroutines.withContext
  * into its own source: the player and its lyric background use separate sources. */
 @Stable
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
+    var parent: FrostedBackdrop? = null
     var consumers by mutableIntStateOf(0)
     var dark by mutableStateOf(dark)
-    var origin by mutableStateOf(Offset.Zero)
+    val location = BackdropLocation()
+    var origin: Offset
+        get() = location.position()
+        set(value) { location.fallback = value }
     var size by mutableStateOf(IntSize.Zero)
     var fallback by mutableStateOf<ImageBitmap?>(null)
     var snapshot by mutableStateOf<ImageBitmap?>(null)
@@ -49,6 +56,33 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
 }
 internal val LocalFrostedBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
 internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
+
+/** Resolve both sides of sampling in the same draw frame, including scroll placement. */
+@Stable internal class BackdropLocation {
+    var coordinates: LayoutCoordinates? = null
+    var windowOffset by mutableStateOf(Offset.Zero)
+    var placement by mutableIntStateOf(0)
+    var fallback by mutableStateOf(Offset.Zero)
+    fun position(): Offset {
+        placement
+        val previous = fallback
+        return coordinates?.takeIf { it.isAttached }?.let { it.positionInRoot() + windowOffset } ?: previous
+    }
+}
+
+@Composable internal fun Modifier.backdropLocation(location: BackdropLocation): Modifier {
+    val view = LocalView.current
+    return onPlaced {
+        location.coordinates = it
+        androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { location.placement++ }
+    }
+        .onGloballyPositioned {
+            val screen = IntArray(2)
+            view.getLocationOnScreen(screen)
+            location.windowOffset = Offset(screen[0].toFloat(), screen[1].toFloat())
+            location.fallback = it.positionInRoot() + location.windowOffset
+        }
+}
 
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true,
@@ -134,8 +168,8 @@ internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view:
 internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null,
     enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null): Modifier {
     BackdropLease(backing.takeIf { enabled })
-    val view = LocalView.current
-    return onGloballyPositioned { source.origin = it.backdropPosition(view); source.size = it.size }
+    return backdropLocation(source.location)
+        .onSizeChanged { source.size = it }
         .graphicsLayer()
         .drawWithContent {
             if (!enabled) {
@@ -169,27 +203,27 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, darkening: Float = .5f, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     if (Build.VERSION.SDK_INT < 31) BackdropLease(source)
-    var origin by remember { mutableStateOf(Offset.Zero) }
-    val view = LocalView.current
+    val location = remember { BackdropLocation() }
     val dark = source?.dark == true
     val base = if (dark) Color.Black else MaterialTheme.colorScheme.surface
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
     val material = rememberFrostedBackdrop(source?.fallback, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
+    SideEffect { material.parent = source }
     Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)
-        .onGloballyPositioned { origin = it.backdropPosition(view) }
+        .backdropLocation(location)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) .38f else .8f),
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
         if (source != null) {
             if (Build.VERSION.SDK_INT >= 31) {
                 val blur = with(LocalDensity.current) { 22.dp.toPx() }
-                FilteredBackdrop(Modifier.matchParentSize(), source, { origin }, .5f, blur * 1.5f) { _, resolution ->
+                FilteredBackdrop(Modifier.matchParentSize(), source, location::position, .5f, blur * 1.5f) { _, resolution ->
                     BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp)
                 }
             } else Canvas(Modifier.matchParentSize()) {
-                val offset = source.origin - origin
+                val offset = source.origin - location.position()
                 translate(offset.x, offset.y) { source.fallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) } }
             }
         }

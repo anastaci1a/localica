@@ -260,7 +260,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
     val dragHost = LocalSongDragHost.current
     SideEffect {
-        if (reorder.drag != null) { dragHost?.state = reorder; dragHost?.reducedMotion = reducedMotion }
+        if (reorder.drag != null) {
+            dragHost?.source = if (needsListBackdrop) listBackdrop else if (artDetail) collectionSource else surroundingBackdrop
+            dragHost?.state = reorder; dragHost?.reducedMotion = reducedMotion
+        }
         else if (dragHost?.state === reorder) dragHost.state = null
     }
     DisposableEffect(reorder, dragHost) { onDispose { if (dragHost?.state === reorder) dragHost.state = null } }
@@ -453,7 +456,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 }
             }
             }
-            CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
+            CompositionLocalProvider(LocalFrostedBackdrop provides
+                if (needsListBackdrop) listBackdrop else if (artDetail) collectionSource else surroundingBackdrop) {
             if (showFilters) Box(Modifier.align(Alignment.TopStart)) {
                 LibraryFilterBubbles(filters, route.filter, reducedMotion,
                     { onRoute(route.copy(filter = it)) }, onFilterSettings)

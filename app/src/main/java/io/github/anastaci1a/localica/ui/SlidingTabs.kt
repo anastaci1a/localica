@@ -26,6 +26,8 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -85,6 +87,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         if (!dragging && requested != null && abs(page - requested!!) < .001f) requested = null
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
+    val refractForeground = appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
+    val decorated = rememberFrostedBackdrop(appearance, enabled = refractForeground, dark = false)
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val minimumWidth = maxOf(68.dp, with(density) {
@@ -174,7 +178,9 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
                     contrast = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.contrast)) {
                     SelectionLens(modifier, lens,
-                        if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, depthScale = BottomPillDepthScale,
+                        if (appearance.tabStyle == TabLensStyle.Overlay) { if (refractForeground) decorated else composite } else source,
+                        preserveAppearance = true, depthScale = BottomPillDepthScale,
+                        tint = if (appearance.tabStyle == TabLensStyle.Overlay) Color.Black.copy(alpha = appearance.overlayDarkening) else Color.Transparent,
                         pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f }, wall = {
                             when {
                                 lens.value <= scroll.value / pixels + .001f -> -1f
@@ -185,9 +191,19 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 }
             }
             Box(Modifier.width(width * tabs.size).fillMaxHeight()) {
-                Lens()
-                Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
-                Labels(NavigationAccent, false)
+                if (!refractForeground) Lens()
+                Box(Modifier.fillMaxSize().then(if (refractForeground) Modifier.recordFrostedBackdrop(decorated)
+                    .drawWithContent {
+                        if (composite.recorded && !composite.layer.isReleased) {
+                            val delta = composite.origin - decorated.origin
+                            translate(delta.x, delta.y) { drawLayer(composite.layer) }
+                        }
+                        drawContent()
+                    } else Modifier)) {
+                    Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
+                    Labels(NavigationAccent, false)
+                }
+                if (refractForeground) Lens()
             }
         }
         }

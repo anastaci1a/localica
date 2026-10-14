@@ -46,18 +46,15 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
     SettingsHeading("Adaptive contrast")
     Text("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
     GlassSlider("Brightness trim", value.contrast, "Off", "50%", maximum = .5f) { onChange(value.copy(contrast = it)) }
-    Text("Brightness weighting", style = MaterialTheme.typography.titleMedium)
-    InterfaceSlider(value.contrastWeight, { onChange(value.copy(contrastWeight = it)) },
-        Modifier.semantics { contentDescription = "Brightness weighting" }, valueRange = 1f..2f, steps = 19)
-    SliderEndpoints("Even", "Highlights / shadows")
+    SliderPreference("Brightness weighting", value.contrastWeight, { onChange(value.copy(contrastWeight = it)) },
+        Modifier.semantics { contentDescription = "Brightness weighting" }, valueRange = 1f..2f, steps = 19,
+        low = "Even", high = "Highlights / shadows")
     SettingsHeading("Shape and motion")
     Text("Hold the preview to flatten it; release to let it rebound.", style = MaterialTheme.typography.bodySmall)
-    Text("Shape damping · ${value.shapeDamping.roundToInt()}", style = MaterialTheme.typography.titleMedium)
-    InterfaceSlider(value.shapeDamping, { onChange(value.copy(shapeDamping = it)) },
-        Modifier.semantics { contentDescription = "Shape damping" }, valueRange = 2f..40f)
-    Text("Lower is squishier; higher settles sooner.", style = MaterialTheme.typography.bodySmall)
-    Text("Resting depth · ${"%.2f".format(java.util.Locale.ROOT, value.depth)}", style = MaterialTheme.typography.titleMedium)
-    InterfaceSlider(value.depth, { onChange(value.copy(depth = it)) },
+    SliderPreference("Shape damping · ${value.shapeDamping.roundToInt()}", value.shapeDamping, { onChange(value.copy(shapeDamping = it)) },
+        Modifier.semantics { contentDescription = "Shape damping" }, valueRange = 2f..40f,
+        description = "Lower is squishier; higher settles sooner.")
+    SliderPreference("Resting depth · ${"%.2f".format(java.util.Locale.ROOT, value.depth)}", value.depth, { onChange(value.copy(depth = it)) },
         Modifier.semantics { contentDescription = "Resting depth" }, valueRange = .6f..2f)
     SettingsHeading("Navigation selector")
     ChoicePreference("Selector style", value.tabStyle, io.github.anastaci1a.localica.navigation.TabLensStyle.entries, { it.label }) {
@@ -68,9 +65,17 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
         GlassSlider("Selector white tint", value.tabWhiteTint, "None", "White") { onChange(value.copy(tabWhiteTint = it)) }
     } else if (value.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Classic) {
         GlassSlider("Gray pill opacity", value.classicOpacity, "Clear", "Dark") { onChange(value.copy(classicOpacity = it)) }
-    } else Text(if (value.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Overlay)
-        "The clear lens bends the bar beneath sharp labels. Selector blur and tint are saved but inactive."
-        else "A simple gray pill, without glass deformation.", style = MaterialTheme.typography.bodySmall)
+    } else {
+        GlassSlider("Overlay darkening", value.overlayDarkening, "None", "50%", maximum = .5f) {
+            onChange(value.copy(overlayDarkening = it))
+        }
+        BooleanPreference("Refract icons and labels", value.overlayForeground) { onChange(value.copy(overlayForeground = it)) }
+    }
+    SettingsHeading("Sliders and switches")
+    Text("White at rest; clear glass while held.", style = MaterialTheme.typography.bodySmall)
+    SliderPreference("Control expansion · ${"%.2f".format(java.util.Locale.ROOT, value.controlExpansion)}×", value.controlExpansion,
+        { onChange(value.copy(controlExpansion = it)) }, Modifier.semantics { contentDescription = "Control expansion" },
+        valueRange = 1f..2f, steps = 19, low = "1×", high = "2×")
     TextButton(onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") }
 }
 
@@ -119,10 +124,7 @@ private fun GlassPreview(source: FrostedBackdrop) {
 
 @Composable
 private fun GlassSlider(label: String, value: Float, low: String, high: String, maximum: Float = 1f, onChange: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth()) {
-        Text("$label · ${(value * 100).roundToInt()}%", style = MaterialTheme.typography.titleMedium)
-        InterfaceSlider(value, onChange, Modifier.semantics { contentDescription = label }, valueRange = 0f..maximum,
-            steps = (maximum / .05f).roundToInt() - 1)
-        SliderEndpoints(low, high)
-    }
+    SliderPreference("$label · ${(value * 100).roundToInt()}%", value, onChange,
+        Modifier.semantics { contentDescription = label }, valueRange = 0f..maximum,
+        steps = (maximum / .05f).roundToInt() - 1, low = low, high = high)
 }
