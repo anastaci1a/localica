@@ -1,44 +1,34 @@
-<!-- Release: v0.22.0 -->
+<!-- Release: v0.23.0 -->
 
 Development APK for Android 8 or newer. Signed with the project development key; uses a separate `.debug` application ID. Production distribution signing is not configured.
 
 ## Changes
 
-- Replace glass optics with a shared curved lens model; preserve contact compression and return rebound, strengthen magnetic controls, and add a draggable/morphing settings preview.
-- Reuse scene and shadow textures, fix lost taps during menu closing, remove automatic-scroll discontinuities, and fix the crash when adding navigation tabs.
-- Unify playlist destinations and collection menus, add playlist images, prevent duplicate playlist names, and reuse search catalogs for faster results.
-- Standardize staged settings pickers and text clearing; seed album colors/metadata from cached content, improve bright-artwork contrast, and add saved lyric timing correction.
-- Refresh Localica’s rendered icon and Android music-player discovery. Physical Bluetooth timing and phone frame rates still require device review.
+- Keep selection groups independent and preserve gallery items throughout reversible pinch gestures; consolidate browse presentation and shared controls.
+- Make player dismissal as responsive as the Queue drawer, preserve gesture interruption, and pin the playing song when randomizing its active queue.
+- Unify song/collection menus, artwork actions and browse preferences; refresh playback configuration, rounded icons and shadow spacing.
+- Add fine reflective glass rims, remove doubled slider tracks, and place discrete stops inside the track’s rounded caps.
+- Reduce selection sampling area, batch pinch capture, retain useful backdrop samples and avoid unnecessary screen recomposition during resizing.
 
-Known follow-ups: intermittent manual-scroll jitter ([#150](https://github.com/anastaci1a/localica/issues/150)) and the newly reported heading clipping after queue deletion ([#157](https://github.com/anastaci1a/localica/issues/157)).
+Performance measurements use a software-rendered emulator, not the target phone. Physical-device frame pacing and intermittent manual-scroll jitter remain under review ([#167](https://github.com/anastaci1a/localica/issues/167), [#150](https://github.com/anastaci1a/localica/issues/150)).
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/120 - Bright-artwork player contrast.
-- https://github.com/anastaci1a/localica/issues/123 - Lyric clock interpolation and manual output correction.
-- https://github.com/anastaci1a/localica/issues/136 - Curved droplet optics, held contact and release motion.
-- https://github.com/anastaci1a/localica/issues/137 - Magnetic selectors and constrained edge pressure.
-- https://github.com/anastaci1a/localica/issues/138 - Queue actions and clipped glass dismissal.
-- https://github.com/anastaci1a/localica/issues/139 - Inline playlist destinations and unique names.
-- https://github.com/anastaci1a/localica/issues/140 - Shared collection actions and playlist artwork.
-- https://github.com/anastaci1a/localica/issues/141 - Cached search and shared clear/refocus fields.
-- https://github.com/anastaci1a/localica/issues/142 - Fixed Sort/View panels, staged choices and settings alignment.
-- https://github.com/anastaci1a/localica/issues/143 - Capitalized app identity, rendered icon and music discovery.
-- https://github.com/anastaci1a/localica/issues/144 - Scroll-to-top only on current-tab reselection.
-- https://github.com/anastaci1a/localica/issues/145 - Ordered dark tones without a scene-wide contrast wash.
-- https://github.com/anastaci1a/localica/issues/146 - Immediate cached album colors/metadata and sequential track reveal.
-- https://github.com/anastaci1a/localica/issues/147 - Solid paused Play triangle at both player sizes.
-- https://github.com/anastaci1a/localica/issues/148 - Profiled shared scene/shadow reuse and bounded panel allocation.
-- https://github.com/anastaci1a/localica/issues/149 - Continuous bounded automatic scrolling.
-- https://github.com/anastaci1a/localica/issues/151 - Shared lens rendering and continuous modal handoff.
-- https://github.com/anastaci1a/localica/issues/152 - Safe addition, removal and reordering of navigation tabs.
-- https://github.com/anastaci1a/localica/issues/153 - Continuous popup optics and a single sharp navbar foreground.
-- https://github.com/anastaci1a/localica/issues/154 - Scoped search lenses update when their backdrop becomes available.
-- https://github.com/anastaci1a/localica/issues/155 - Visible local text contrast, navbar support and a multicolor preview.
-- https://github.com/anastaci1a/localica/issues/156 - Library and Search filters refract the finished list fade.
+- https://github.com/anastaci1a/localica/issues/157 - Stable queue heading after deletion.
+- https://github.com/anastaci1a/localica/issues/158 - Independent, seamless selection groups.
+- https://github.com/anastaci1a/localica/issues/159 - Reversible gallery/list pinch previews without disappearing items.
+- https://github.com/anastaci1a/localica/issues/160 - Shared glass drag controls, modern playback settings and reliable scrub cancellation.
+- https://github.com/anastaci1a/localica/issues/161 - Interruptible player dismissal and queue scroll handoffs.
+- https://github.com/anastaci1a/localica/issues/162 - Queue controls and playback-aware randomization.
+- https://github.com/anastaci1a/localica/issues/163 - Consistent collection menus, anchors and live sorting preferences.
+- https://github.com/anastaci1a/localica/issues/164 - Artwork navigation, transparent status bars and four-tab layout.
+- https://github.com/anastaci1a/localica/issues/165 - Unclipped panel and queue shadows.
+- https://github.com/anastaci1a/localica/issues/166 - Consolidated presentation, gesture and documentation ownership.
+- https://github.com/anastaci1a/localica/issues/168 - Single refracted slider track and contained stop dots.
+- https://github.com/anastaci1a/localica/issues/169 - Subtle reflective rims on shared glass surfaces.
 
 ## Install
 
-1. Download `localica-v0.22.0-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.23.0-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. It updates the existing development app.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
