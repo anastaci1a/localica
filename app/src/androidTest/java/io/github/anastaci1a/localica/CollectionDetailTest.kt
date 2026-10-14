@@ -90,7 +90,10 @@ class CollectionDetailTest {
         compose.onNodeWithText("Search ${album.title}").assertDoesNotExist()
         compose.onNodeWithContentDescription("Play album").performClick()
         assertEquals(listOf(1, 2, 3), played.map { it.trackNumber })
-        compose.onNodeWithContentDescription("Collection actions").performClick()
-        compose.onNodeWithText("View options").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Collection actions").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Album actions").performClick()
+        compose.onNodeWithText("Select all songs").assertIsDisplayed()
+        compose.onNodeWithText("View options").assertDoesNotExist()
+        compose.onNodeWithText("Set playlist image").assertDoesNotExist()
     }
 }

@@ -48,7 +48,7 @@ class ListControlsTest {
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Z song 070"))
         compose.onNodeWithContentDescription("Current song").assertIsDisplayed()
         compose.onNodeWithText("Z song 070").performTouchInput { longClick() }
-        compose.onNodeWithText("Select song").performClick()
+        compose.onNodeWithText("Select song").assertDoesNotExist()
         compose.onNodeWithContentDescription("Current song").assertDoesNotExist()
         compose.onNodeWithText("1 selected").assertIsDisplayed()
         compose.onNodeWithContentDescription("Close selection").performClick()

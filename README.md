@@ -23,4 +23,4 @@ Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus
   <p><img src="docs/images/navigation.gif" width="360" alt="Navigating an album, player, and Queue drawer in Localica"></p>
 </details>
 
-Previews captured in v0.23.0 using silent demo files. Album artwork and track names: Radiohead’s [In Rainbows](https://radiohead.bandcamp.com/album/in-rainbows) and [Kid A](https://radiohead.bandcamp.com/album/kid-a). Artwork belongs to its respective rights holders and is not included in the app.
+Previews captured in v0.24.0 using silent demo files. Album artwork and track names: Radiohead’s [In Rainbows](https://radiohead.bandcamp.com/album/in-rainbows) and [Kid A](https://radiohead.bandcamp.com/album/kid-a). Artwork belongs to its respective rights holders and is not included in the app.

@@ -46,12 +46,12 @@ internal class GlassMomentum(var damping: Float = 8f) {
 
     fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f }
 
-    fun advance(velocity: Float, seconds: Float, pressure: Float = 0f, contact: Float = 0f) {
+    fun advance(velocity: Float, seconds: Float, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f) {
         if (!seconds.isFinite() || seconds <= 0f) return
         val speed = if (velocity.isFinite()) velocity.coerceIn(-30f, 30f) else 0f
-        motion.velocity += ((speed - travelVelocity) * .11f).coerceIn(-.7f, .7f)
+        motion.velocity += ((speed - travelVelocity) * .11f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.7f, .7f)
         // Acceleration flattens the cap; braking lets it rise. Contact sustains flattening.
-        depth.velocity -= ((abs(speed) - abs(travelVelocity)) * .035f).coerceIn(-.35f, .35f)
+        depth.velocity -= ((abs(speed) - abs(travelVelocity)) * .035f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.35f, .35f)
         travelVelocity = speed
         this.pressure.target = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f

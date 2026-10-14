@@ -34,7 +34,7 @@ rest → tracking → settling → rest
 - Track from the grabbed point. A thumb or panel must not teleport to put its center under the finger.
 - Re-grabbing starts from the displayed geometry. Retargeting keeps velocity unless an actual constraint or direct manipulation changes it.
 - Recognition may begin with competing candidates. Once artwork, queue, slider, reorder or pinch owns the gesture, retain that owner through reversals until release/cancellation. Redirecting within an owned interaction is different from accidentally transferring it to another screen.
-- Do not wait for a decorative rebound before starting a useful transition. A closing modal must remain represented until its restored trigger can draw; avoid both a blank frame and two visible silhouettes.
+- Do not wait for a decorative rebound before starting a useful transition. A closing modal must remain represented until its restored trigger can draw; avoid both a blank frame and two visible silhouettes. Quiet triggers fade their entire temporary material away; glass triggers retain their material and deformation. Give small controls bounded additional impulse response so return rebounds remain visible.
 
 ### Destination and settling
 

@@ -113,7 +113,6 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                 }
             }
             if (p > 0f) {
-                Spacer(Modifier.height(8.dp))
                 content()
             }
         }

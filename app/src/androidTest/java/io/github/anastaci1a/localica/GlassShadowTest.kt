@@ -46,8 +46,10 @@ class GlassShadowTest {
         }
         assertTrue(darkPixels() > 100)
         compose.runOnIdle { anchor.modalPresent = true }
+        assertTrue("The trigger keeps its shadow until the popup is ready", darkPixels() > 100)
+        compose.runOnIdle { anchor.shadowInModal = true }
         org.junit.Assert.assertEquals("The popup owns its shadow while away from the bottom group", 0, darkPixels())
-        compose.runOnIdle { anchor.modalPresent = false }
+        compose.runOnIdle { anchor.modalPresent = false; anchor.shadowInModal = false }
         assertTrue("The returning trigger rejoins the union", darkPixels() > 100)
     }
 

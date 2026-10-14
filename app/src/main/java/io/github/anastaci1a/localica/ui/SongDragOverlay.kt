@@ -25,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlin.math.exp
 
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boolean) {
     val drag = state.drag ?: return
@@ -93,25 +94,28 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         // frames should rebuild artwork/text or measure the card tree.
         fun heldPosition() = (if (index == 0 || reducedMotion) homePosition() else followers[(index - 1).coerceAtMost(1)]) +
             Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2)) + liftOffset.value
-        val landingStart = remember(drag.dropping, destination, drag.returnFrom) {
+        val landingStart = remember(drag.dropping, drag.returnFrom) {
             drag.returnFrom?.get(item.key)?.topLeft ?: heldPosition()
         }
         fun displayed() = if (!drag.dropping) heldPosition() else destination?.let {
             landingStart + (it.topLeft - landingStart) * drag.landing.value
         } ?: landingStart
         fun cardWidth() = stackWidth + ((destination?.width ?: stackWidth) - stackWidth) * drag.landing.value
+        fun cardHeight() = drag.cardSize.height + ((destination?.height ?: drag.cardSize.height) - drag.cardSize.height) * drag.landing.value
         val alpha by animateFloatAsState(if (drag.destinations != null && destination == null) 0f else 1f,
             tween(if (reducedMotion) 0 else 300), label = "Song landing")
         GlassDragBubble(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
             .graphicsLayer { translationX = displayed().x; translationY = displayed().y }
-            .width(with(density) { cardWidth().toDp() }).height(height).graphicsLayer { this.alpha = alpha }
+            .width(with(density) { cardWidth().toDp() }).height(with(density) { cardHeight().toDp() }).graphicsLayer { this.alpha = alpha }
             .testTag(if (index == 0) "drag-stack" else "drag-card-${item.key}"),
             landing = { drag.handoff.value }, shadow = false) {
-            if (index == 0 || !lifted || drag.dropping) Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                MediaArtwork(item.coverUris, Modifier.size(48.dp), shape = artworkShape(item.ref.kind))
-                Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                    item.subtitle?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
+            if (index == 0 || !lifted || drag.dropping) androidx.compose.ui.layout.LookaheadScope {
+                Box(Modifier.fillMaxWidth().padding(horizontal = if (drag.dense) 4.dp else 12.dp, vertical = 8.dp)) {
+                    MaterialTheme(colorScheme = drag.colors ?: MaterialTheme.colorScheme) {
+                        CompositionLocalProvider(LocalContentColor provides drag.ink.takeUnless { it == Color.Unspecified }.let { it ?: LocalContentColor.current }) {
+                            BrowseItemLayout(item, drag.style, drag.dense, this@LookaheadScope, true, menu = { })
+                        }
+                    }
                 }
             }
         }

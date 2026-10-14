@@ -30,7 +30,7 @@ class DragReorderTest {
     @get:Rule val compose = createComposeRule()
     private val selection = SessionSelection()
     private lateinit var backDispatcher: androidx.activity.OnBackPressedDispatcher
-    private fun fixture(failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
+    private fun fixture(gallery: Boolean = false, failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         val db = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
@@ -44,6 +44,10 @@ class DragReorderTest {
                 assertTrue(withTimeout(5000) { saved.await() })
             }
             val playlist = controller.state.value.playlists.single()
+            if (gallery) io.github.anastaci1a.localica.browse.BrowsePreferences(context).write(
+                BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
+                io.github.anastaci1a.localica.browse.BrowseStyle(sort = TrackSort.Manual,
+                    presentation = io.github.anastaci1a.localica.browse.Presentation.Standard, itemsPerRow = 3), true)
             if (failWrites) db.openHelper.writableDatabase.execSQL(
                 "CREATE TRIGGER reject_move BEFORE INSERT ON playlist_entries BEGIN SELECT RAISE(ABORT, 'Injected failure'); END")
             compose.setContent { LocalicaTheme {
@@ -69,7 +73,7 @@ class DragReorderTest {
     @Test fun backClearsMutableListSelectionWithoutLeavingTheList() = fixture { _, playlist ->
         val id = playlist.entries[1].id
         compose.onNodeWithTag("media-$id").performTouchInput { longClick() }
-        compose.onNodeWithText("Select song").performClick()
+        compose.onNodeWithText("Select song").assertDoesNotExist()
         compose.runOnIdle { assertTrue(selection.active); backDispatcher.onBackPressed() }
         compose.onNodeWithTag("media-$id").assertIsDisplayed().assertIsNotSelected()
         compose.runOnIdle { assertFalse(selection.active); assertTrue(selection.entries.isEmpty()) }
@@ -77,7 +81,6 @@ class DragReorderTest {
     @Test fun disjointSelectionLiftsIntoStackAndMovesInSourceOrder() = fixture { controller, playlist ->
         val ids = playlist.entries.map { it.id }
         compose.onNodeWithTag("media-${ids[2]}").performTouchInput { longClick() }
-        compose.onNodeWithText("Select song").performClick()
         compose.onNodeWithTag("media-${ids[0]}").performClick()
         compose.onAllNodes(isToggleable()).assertCountEquals(0)
         compose.onNodeWithTag("media-${ids[0]}").assertIsSelected()
@@ -98,6 +101,31 @@ class DragReorderTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { assertTrue(selection.entries.isEmpty()); assertFalse(selection.active) }
     }
+    @Test fun gallerySelectionStaysGalleryWhileLiftedAndLandsAtItsActualBounds() = fixture(gallery = true) { _, playlist ->
+        val id = playlist.entries[1].id
+        compose.onNodeWithTag("media-$id").performTouchInput { longClick() }
+        compose.onNodeWithTag("media-$id").assertIsSelected()
+        compose.onNodeWithText("Select song").assertDoesNotExist()
+        compose.onNodeWithTag("media-$id").performTouchInput {
+            down(center); advanceEventTime(650); moveBy(Offset(0f, 70f)); advanceEventTime(32)
+        }
+        val stack = compose.onNodeWithTag("drag-stack").fetchSemanticsNode().boundsInRoot
+        val art = compose.onNodeWithTag("browse-art-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val text = compose.onNodeWithTag("browse-text-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("A lifted tile retains its large artwork", art.width > stack.width * .65f)
+        assertTrue("Gallery text stays below the artwork", text.top >= art.bottom - 1f)
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithTag("browser-list").performTouchInput { up() }
+            compose.mainClock.advanceTimeBy(440)
+            val returned = compose.onNodeWithTag("media-$id").fetchSemanticsNode().boundsInRoot
+            val landing = compose.onNodeWithTag("drag-stack").fetchSemanticsNode().boundsInRoot
+            assertEquals(returned.left, landing.left, 2f)
+            assertEquals(returned.top, landing.top, 2f)
+            assertEquals(returned.width, landing.width, 2f)
+        } finally { compose.mainClock.autoAdvance = true }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
+    }
     @Test fun heldCardTracksTheFingerWithinOneFrame() = fixture { _, playlist ->
         val id = playlist.entries[1].id
         compose.onNodeWithTag("media-$id").performTouchInput {
@@ -117,7 +145,6 @@ class DragReorderTest {
     @Test fun trailingCardsStayCloseAndStackDrawsOverBottomActions() = fixture(foregroundFooter = true) { _, playlist ->
         val ids = playlist.entries.map { it.id }
         compose.onNodeWithTag("media-${ids[1]}").performTouchInput { longClick() }
-        compose.onNodeWithText("Select song").performClick()
         compose.onNodeWithTag("media-${ids[2]}").performClick()
         compose.onNodeWithTag("media-${ids[3]}").performClick()
         compose.onNodeWithTag("media-${ids[1]}").performTouchInput {

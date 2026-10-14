@@ -49,7 +49,7 @@ class BrowsePreferences(context: Context) {
             store.enumValue<SongGrouping>("$key.group", if (route.collection?.kind == MediaKind.Album)
                 store.getString("catalog.Album.group", null) else null) ?: SongGrouping.None,
             store.getInt("$key.columns", 0).takeIf { it in 1..5 }).let {
-            if (route.collection?.kind == MediaKind.Album && it.songGrouping != SongGrouping.None) it.copy(presentation = Presentation.List) else it
+            if (!route.search && route.collection?.kind == MediaKind.Album) it.copy(sort = TrackSort.Album, ascending = true, presentation = Presentation.List, songGrouping = SongGrouping.None) else it
         }
     }
     fun write(route: BrowseRoute, value: BrowseStyle, override: Boolean) {

@@ -311,9 +311,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
         LookaheadScope {
         if (popupDismiss == null || route.text.isNotBlank()) Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
-            .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, { contextMenu = it.key }, moveSongs)) {
+            .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
             val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
+            val dragColors = MaterialTheme.colorScheme
+            val dragInk = LocalContentColor.current
+            SideEffect { reorder.style = displayedStyle; reorder.dense = denseGallery; reorder.colors = dragColors; reorder.ink = dragInk }
             if (loadedResult == null && !artDetail) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters || showSearchPill) pillSlotHeight else 0.dp).testTag("browse-loading"))
             else SelectionViewport(Modifier.fillMaxSize()
                 // Floating controls sample the finished scrolling scene, including
@@ -326,7 +329,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
-                .browsePinch(enabled && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind != MediaKind.Queue,
+                .browsePinch(enabled && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind !in setOf(MediaKind.Queue, MediaKind.Album),
                     pinchMotion, displayedStyle, route, gridState, reorder.viewportWidth, density, scrollScope, reducedMotion,
                     onPreview = { style = it }, onCommit = { style = it; preferences.write(route, it, preferences.overridden(route)) },
                     onAnchor = { zoomAnchor = it })
@@ -376,12 +379,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val selectedCount = if (item.row != null) { if (session.contains(route.collection, item.row.id)) 1 else 0 }
                         else item.songs.count { it.track.id in selectedTracks }
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
-                    Column(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
+                    Column(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer {
                             val sweep = if (!artDetail) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
                                 .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
                             alpha = sweep * (reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f)
                         }) {
+                        DisposableEffect(item.key, reorder) { onDispose { reorder.itemCoordinates.remove(item.key) } }
                         val menuAnchor = rememberGlassAnchor()
                         SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
@@ -404,14 +408,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                             playlistController?.move(route.collection.id, item.key, 1) { if (it) session.clear() }; contextMenu = null
                                         })
                                     }
-                                    if (route.collection?.kind == MediaKind.Queue) {
-                                        val index = result.rows.indexOfFirst { it.id == item.key }
-                                        val manual = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank()
-                                        ActionMenuItem("Move up", enabled = manual && index > 0,
-                                            onClick = { queues?.moveEntry(item.key, -1, route.collection?.id) { if (it) session.clear() }; contextMenu = null })
-                                        ActionMenuItem("Move down", enabled = manual && index < result.rows.lastIndex,
-                                            onClick = { queues?.moveEntry(item.key, 1, route.collection?.id) { if (it) session.clear() }; contextMenu = null })
-                                    }
+
                                 }
                             }
                         }
@@ -427,17 +424,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     translationX = (old.left - position.x) * (1f - pinchMotion.progress.value)
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
-                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionLens(selectedCount > 0, partiallySelected)
+                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }.currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionLens(selectedCount > 0, partiallySelected)
                             .retainPinchItem(item.key, pinchMotion).testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
                                 else if (session.active) session.toggle(route.collection, item.row)
                                 else { onSearchCommit(); onPlay(result.rows, result.rows.indexOfFirst { it.id == item.row.id }, result.scope) }
-                            }, onLongClickLabel = if (item.row != null) "Song actions" else "Collection actions",
+                            }, onLongClickLabel = if (item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) "Select song" else if (item.row != null) "Song actions" else "Collection actions",
                             onLongClick = {
-                                // Mutable rows distinguish a stationary hold from a reorder in songDrag.
-                                if (item.row == null || !editableOrder) contextMenu = item.key
+                                // Mutable songs reserve holds for selection; dots retain context actions.
+                                if (item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) {
+                                    if (!editableOrder) session.select(route.collection, listOf(item.row))
+                                } else contextMenu = item.key
                             }
                         ).padding(horizontal = if (denseGallery) 4.dp else 12.dp, vertical = 8.dp)) {
                             BrowseItemLayout(item, displayedStyle, denseGallery, this@LookaheadScope, reducedMotion, itemMenu,
@@ -487,13 +486,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 }
             }
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, displayedStyle.sort, Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset))
-            if (route.collection?.kind == MediaKind.Playlist && !route.search) {
-                val playlist = playlists.playlists.firstOrNull { it.id == route.collection.id }
-                if (playlist != null) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)) {
+            if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album) && !route.search) {
+                val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }
+                if (playlist != null || route.collection?.kind == MediaKind.Album) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)) {
                     val anchor = rememberGlassAnchor()
                     var open by remember { mutableStateOf(false) }
-                    ActionIcon(R.drawable.ic_ellipsis, "Playlist actions", anchor = anchor) { open = true }
-                    CollectionActions(open, anchor, BrowserItem(route.collection, playlist.name, null, result.rows, coverUri = playlist.coverUri),
+                    ActionIcon(R.drawable.ic_ellipsis, if (playlist != null) "Playlist actions" else "Album actions", anchor = anchor) { open = true }
+                    CollectionActions(open, anchor, BrowserItem(requireNotNull(route.collection), playlist?.name ?: route.title.orEmpty(), null, result.rows, coverUri = playlist?.coverUri),
                         playlists, playlistController, queues, pins, onPin, { open = false },
                         onDeleted = { onRoute(route.copy(collection = null, title = null)) },
                         onRenamed = { onRoute(route.copy(title = it)) })
@@ -523,7 +522,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             Text(route.title.orEmpty(), Modifier.weight(1f).graphicsLayer { alpha = scrollFade }
                 .then(if (scrollFade < .1f) Modifier.clearAndSetSemantics {} else Modifier), maxLines = 1,
                 overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-            Box {
+            if (artistDetail) Box {
                 ActionIcon(R.drawable.ic_ellipsis, "Collection actions", anchor = collectionMenuAnchor) {
                     collectionSort = false; collectionView = false; collectionMenu = true
                 }

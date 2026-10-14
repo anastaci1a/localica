@@ -46,6 +46,7 @@ internal class GlassAnchor {
     var bounds by mutableStateOf(Rect.Zero)
     var hidden by mutableStateOf(false)
     var modalPresent by mutableStateOf(false)
+    var shadowInModal by mutableStateOf(false)
     var source: FrostedBackdrop? = null
     var face: (@Composable () -> Unit)? = null
     var depthScale = RaisedGlassDepthScale
@@ -155,7 +156,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             present = true; anchor.modalPresent = true; anchor.contact.modal = true
             // Keep the origin visible until the modal has a measured surface.
             withFrameNanos { }; withFrameNanos { }
-            anchor.hidden = true; surfaceReady = true
+            anchor.hidden = true; surfaceReady = true; anchor.shadowInModal = true
         }
         if (reduced) progress.snapTo(if (visible) 1f else 0f)
         else progress.animateTo(if (visible) 1f else 0f,
@@ -169,11 +170,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             // drawing acknowledgement, keeping the modal material visible meanwhile.
             var frames = 0
             while (anchor.triggerMounted && !anchor.restoredDrawn && frames++ < 6) withFrameNanos { }
-            present = false; surfaceReady = false; anchor.modalPresent = false
+            present = false; surfaceReady = false; anchor.modalPresent = false; anchor.shadowInModal = false
             anchor.contact.modal = false
         }
     }
-    DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false; anchor.contact.modal = false } }
+    DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false } }
     if (!present) return
     Dialog(onDismissRequest = dismissNow, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { TextEditingFocusHost {
         val view = LocalView.current
@@ -292,7 +293,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             LocalGlassAppearance.current.shadowSpread, radius)
                         .clip(RoundedCornerShape(radius)).recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
-                        Box(Modifier.recordFrostedBackdrop(material)) {
+                        Box(Modifier.graphicsLayer {
+                            if (anchor.quiet) { val t = (p / .25f).coerceIn(0f, 1f); alpha = t * t * (3f - 2f * t) }
+                        }.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
