@@ -118,7 +118,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         libraryFilters, route, style, reducedMotion, queryDispatcher)
     val presentation = browse.current
     val loadedResult = presentation?.result
-    val listReveal = browse.reveal.value
     val displayedStyle = presentation?.style ?: style
     val queryPending = browse.pending
     val sourceResult = loadedResult ?: BrowseResult()
@@ -142,6 +141,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         albums.filter { it.id in validAlbums }.flatMap { it.tracks }.map { it.id }.toSet()
     }
     val result = if (artistDetail && validAlbums.isNotEmpty()) sourceResult.copy(items = sourceResult.items.filter { it.row?.track?.id in selectedTrackIds }) else sourceResult
+    val itemIndices = remember(result.items) { result.items.withIndex().associate { it.value.key to it.index } }
+    val itemKeys = remember(result.items) { result.items.map { it.key } }
     val heroUri = if (artistDetail) albums.sortedWith(compareByDescending<LibraryGroup> { it.tracks.mapNotNull(Track::year).maxOrNull() ?: 0 }
         .thenByDescending { it.tracks.mapNotNull(Track::addedAt).maxOrNull() ?: 0 }.thenBy { it.id }).firstOrNull()?.tracks?.firstOrNull()?.uri
         else seededCollection?.coverUris?.firstOrNull() ?: sourceResult.rows.firstOrNull()?.track?.uri
@@ -192,11 +193,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val searchSlotHeight = (pillSlotHeight - with(density) { (searchVacancy * vacancyProgress.value.coerceIn(0f, 1f)).toDp() }).coerceAtLeast(0.dp)
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
-    val pinchGraphics = androidx.compose.ui.platform.LocalGraphicsContext.current
-    DisposableEffect(pinchMotion, pinchGraphics) { onDispose {
-        pinchMotion.retained.values.forEach(pinchGraphics::releaseGraphicsLayer)
-        pinchMotion.retained.clear()
-    } }
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
         val anchor = zoomAnchor ?: return@LaunchedEffect
@@ -324,9 +320,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 // its fade and selection/overscroll transforms, never the raw grid.
                 .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, if (artDetail) collectionSource else surroundingBackdrop)
                     .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
-                .graphicsLayer { alpha = if (artDetail) 1f else listReveal }
+                .graphicsLayer { alpha = if (artDetail) 1f else browse.reveal.value }
                 .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier)
-                .pinchRetainedOverlay(pinchMotion, gridState, result.items.map { it.key })) { overscroll ->
+                .pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
@@ -375,7 +371,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         return@items
                     }
                     val item = entry
-                    val itemIndex = result.items.indexOf(item)
+                    val itemIndex = itemIndices[item.key] ?: 0
                     val current = route.collection?.kind == MediaKind.Queue && item.row != null && item.row.id == playingEntryId
                     val selectedCount = if (item.row != null) { if (session.contains(route.collection, item.row.id)) 1 else 0 }
                         else item.songs.count { it.track.id in selectedTracks }
@@ -432,7 +428,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
                             }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionLens(selectedCount > 0, partiallySelected)
-                            .retainPinchItem(item.key, pinchMotion, pinchGraphics).testTag("media-${item.key}").combinedClickable(
+                            .retainPinchItem(item.key, pinchMotion).testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }

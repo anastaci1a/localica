@@ -10,7 +10,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 
-/** Compact input: a complete backdrop followed by only the visible foreground.
+/** Compact input: the reachable backdrop region followed by the visible foreground.
  * Coordinates stay in the output crop, independently of the backdrop's bounds. */
 internal data class LensAtlas(val output: Size, val backdrop: Size,
     val backdropOffset: Offset, val foregroundY: Float)

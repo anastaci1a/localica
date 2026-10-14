@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.*
 
 internal data class SelectionRegion(val bounds: Rect)
-internal class SelectionEntry { var coordinates: LayoutCoordinates? = null; var selected = false }
+internal class SelectionEntry { var coordinates: LayoutCoordinates? = null; var selected by mutableStateOf(false) }
 @Stable internal class SelectionScene {
     val regions = mutableStateMapOf<Any, SelectionEntry>()
     var placement by mutableIntStateOf(0)
@@ -48,6 +48,8 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
     val groups = remember { mutableListOf<SelectionGroupRenderer>() }
     DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
     val backing = LocalFrostedBackdrop.current
+    val hasSelection by remember { derivedStateOf { scene.regions.values.any { it.selected } } }
+    BackdropLease(backing.takeIf { hasSelection })
     val view = LocalView.current
     var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
     val geometry = remember { SelectionPathCache() }
@@ -91,18 +93,27 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                     val at = Offset(floor(crop.left), floor(crop.top))
                     val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
                     val source = backing?.takeUnless { it.layer.isReleased }
-                    val backdropSize = source?.size ?: androidx.compose.ui.unit.IntSize.Zero
+                    val sourceOffset = at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero)
+                    // Only upload pixels this lens can reach. The ray model's bounded
+                    // entry/exit projection is below 2.1 spans, including maximum depth.
+                    val reach = groupPath.getBounds().size.minDimension * 1.05f + 2f
+                    val sampled = if (source == null) Rect.Zero else Rect(sourceOffset, visible).inflate(reach)
+                        .intersect(Rect(Offset.Zero, Size(source.size.width.toFloat(), source.size.height.toFloat())))
+                        .takeUnless { it.isEmpty } ?: Rect.Zero
+                    val sampleOrigin = Offset(floor(sampled.left), floor(sampled.top))
+                    val backdropSize = androidx.compose.ui.unit.IntSize(ceil(sampled.right - sampleOrigin.x).toInt(),
+                        ceil(sampled.bottom - sampleOrigin.y).toInt())
                     val foregroundY = backdropSize.height + 2f
                     val atlas = LensAtlas(visible, Size(backdropSize.width.toFloat(), backdropSize.height.toFloat()),
-                        at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero), foregroundY)
+                        sourceOffset - sampleOrigin, foregroundY)
                     val extent = androidx.compose.ui.unit.IntSize(max(visible.width.toInt(), backdropSize.width + 2),
                         foregroundY.toInt() + visible.height.toInt())
                     val output = renderer.output
                     output.renderEffect = requireNotNull(renderer.optics).effect(groupRegions, groupPath, 16.dp.toPx(), absolute - at, depth, atlas)
                     output.clip = true
-                    output.record(size = extent) {
+                    output.record(size = glassLayerExtent(extent)) {
                         clipRect(left = 1f, top = 1f, right = backdropSize.width + 1f, bottom = backdropSize.height + 1f) {
-                            if (source != null) translate(1f, 1f) { drawLayer(source.layer) }
+                            if (source != null) translate(1f - sampleOrigin.x, 1f - sampleOrigin.y) { drawLayer(source.layer) }
                         }
                         clipRect(top = foregroundY) { translate(-at.x, foregroundY - at.y) { drawLayer(contentLayer) } }
                     }
@@ -132,6 +143,11 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                             field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map) }
                     } }
                 }
+            }
+            components.forEachIndexed { index, component ->
+                val offset = origin + component.first().bounds.topLeft
+                val groupPath = groups[index].path.path(localLensRegions(component, component.first().bounds.topLeft), 16.dp.toPx())
+                translate(offset.x, offset.y) { drawGlassRim(groupPath.getBounds(), 24.dp.toPx(), groupPath) }
             }
 
         }) { content() }

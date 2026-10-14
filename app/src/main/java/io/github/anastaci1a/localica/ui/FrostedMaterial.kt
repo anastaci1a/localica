@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -26,12 +27,14 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
 /** A recorded scene, independent of every surface that samples it. Never record a surface
  * into its own source: the player and its lyric background use separate sources. */
 @Stable
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
+    var consumers by mutableIntStateOf(0)
     var dark by mutableStateOf(dark)
     var origin by mutableStateOf(Offset.Zero)
     var size by mutableStateOf(IntSize.Zero)
@@ -50,24 +53,35 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true,
-    glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true): FrostedBackdrop {
+    glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true,
+    whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
-    // A shared scene is sampled by many lenses. Retain its raster, not just its
-    // display list, so every lens does not replay all of the scene's drawing.
-    SideEffect { layer.compositingStrategy = if (retainRaster) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
-        else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto }
     val contrastLayer = rememberGraphicsLayer()
     val source = remember(layer) { FrostedBackdrop(layer, dark) }
-    SideEffect { source.dark = dark }
+    // An unreferenced scene needs a display list, not another full-window raster.
+    // Sampled scenes retain pixels so sibling lenses never replay all their children.
+    val sampled = source.consumers > 0
+    SideEffect {
+        layer.compositingStrategy = if (retainRaster && sampled) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+            else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
+        source.dark = dark
+    }
     // Android 8–11 have no RenderEffect. Read back only when the scene/size changes,
     // then scatter a small snapshot off the main thread; never blur on each gesture frame.
-    LaunchedEffect(source, key, source.size, source.revision, enabled) {
-        if (enabled && source.size != IntSize.Zero) {
-            suspend fun capture() {
+    // Keep a completed sample across temporary visibility changes. Modal sources
+    // with no open consumer never need a CPU readback at all.
+    var captured by remember(source) { mutableStateOf<List<Any?>?>(null) }
+    LaunchedEffect(source, key, enabled, sampled) {
+        // Size belongs to sampling, not the caller's composition. Reading it above
+        // this effect would recompose the whole player host on every resize frame.
+        if (enabled && sampled) snapshotFlow { source.size to source.revision }.collectLatest { (size, revision) ->
+            val captureKey = listOf(key, size, revision)
+            if (size == IntSize.Zero || captured == captureKey) return@collectLatest
+            suspend fun capture(): Boolean {
                 withFrameNanos { }; withFrameNanos { }
                 // Layout can exist before the first recorded draw, or survive a restored
                 // player layer briefly. ImageReader rejects a zero-sized recording.
-                if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return
+                if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return false
                 if (Build.VERSION.SDK_INT >= 33) {
                     val extent = IntSize(48, (48f * source.size.height / source.size.width).toInt().coerceIn(1, 96))
                     contrastLayer.record(androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr, extent) {
@@ -81,16 +95,16 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                     source.snapshot = snapshot
                     source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
                 }
+                return true
             }
             capture()
             // Artwork/lyrics may still be easing when the new scene key is published.
             // Refresh its settled appearance once, without readback on every animation frame.
             kotlinx.coroutines.delay(500)
-            capture()
+            if (capture()) captured = captureKey
         }
     }
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() } * glassBlur.coerceIn(0f, 1f)
-    val whiteTint = LocalGlassAppearance.current.whiteTint
     LaunchedEffect(source, source.snapshot, source.fallback, blurRadius, whiteTint) {
         if (Build.VERSION.SDK_INT < 33) {
             val snapshot = source.snapshot
@@ -112,6 +126,15 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     return source
 }
 
+/** Lifetime of a sampling edge in the backdrop graph; no per-frame registration. */
+@Composable
+internal fun BackdropLease(source: FrostedBackdrop?) {
+    DisposableEffect(source) {
+        if (source != null) source.consumers++
+        onDispose { if (source != null) source.consumers-- }
+    }
+}
+
 /** Screen coordinates also align sources sampled from another Compose window. */
 internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view: android.view.View): Offset {
     val location = IntArray(2)
@@ -121,7 +144,8 @@ internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view:
 
 @Composable
 internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null,
-    enabled: Boolean = true): Modifier {
+    enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null): Modifier {
+    BackdropLease(backing.takeIf { enabled })
     val view = LocalView.current
     return onGloballyPositioned { source.origin = it.backdropPosition(view); source.size = it.size }
         .graphicsLayer()
@@ -142,7 +166,11 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 }
             }
             source.recorded = true
-            drawLayer(source.layer)
+            // A transparent optical overlay replaces the source beneath its body;
+            // retain the complete source for sampling, omit only its direct display.
+            val cutout = displayCutout?.invoke(this)
+            if (cutout == null) drawLayer(source.layer)
+            else clipPath(cutout, ClipOp.Difference) { drawLayer(source.layer) }
         }
 }
 
@@ -152,6 +180,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
 internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corners.panel,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, darkening: Float = .5f, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
+    if (Build.VERSION.SDK_INT < 31) BackdropLease(source)
     var origin by remember { mutableStateOf(Offset.Zero) }
     val view = LocalView.current
     val dark = source?.dark == true

@@ -23,6 +23,22 @@ import org.junit.Test
 class LiquidGlassTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun resizingAnInactiveBackdropDoesNotRecomposeItsScreen() {
+        lateinit var source: FrostedBackdrop
+        var compositions = 0
+        compose.setContent { LocalicaTheme {
+            source = rememberFrostedBackdrop(Unit, enabled = false)
+            SideEffect { compositions++ }
+        } }
+        compose.waitForIdle()
+        val settled = compositions
+        repeat(10) { frame ->
+            compose.runOnIdle { source.size = androidx.compose.ui.unit.IntSize(300, 60 + frame * 40) }
+            compose.waitForIdle()
+        }
+        assertEquals("A mini-player resize must not rebuild the surrounding screen just to schedule sampling", settled, compositions)
+    }
+
     @Test fun restoredSelectorStartsAtRestAndOnlyDeformsWhenItMoves() {
         var position by mutableFloatStateOf(2f)
         lateinit var shape: State<GlassShape>

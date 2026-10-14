@@ -20,6 +20,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
@@ -125,6 +126,10 @@ fun LocalicaScreen(
     val queueProgress = remember { androidx.compose.animation.core.Animatable(if (queueOpen) 1f else 0f) }
     LaunchedEffect(queueOpen) { queueProgress.animateTo(if (queueOpen) 1f else 0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
     val progress = remember { androidx.compose.animation.core.Animatable(if (expanded) 1f else 0f) }
+    val playerVisible by remember { derivedStateOf { progress.value > 0f } }
+    val playerCoversBrowse by remember { derivedStateOf { progress.value >= .5f } }
+    val playerFullyOpen by remember { derivedStateOf { progress.value >= .99f } }
+    val queueVisible by remember { derivedStateOf { queueProgress.value > 0f } }
     LaunchedEffect(queues.playerRequest) {
         if (queues.playerRequest != consumedRequest) {
             consumedRequest = queues.playerRequest
@@ -203,7 +208,7 @@ fun LocalicaScreen(
     val previousArtwork = journey?.previous?.let { visit -> previousVisual?.let { ArtworkNeighbor(visit.token, it) } }
     // Older Android snapshots must never capture the expanding mini-player's
     // light browsing glass and stretch it into the Queue's dark material.
-    val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded && progress.value >= .99f, glassBlur = settings.glass.blur)
+    val playerBackdrop = rememberFrostedBackdrop(playerVisual to lyricsOpen, expanded && playerFullyOpen, glassBlur = settings.glass.blur)
     var browseInk by remember { mutableStateOf(androidx.compose.ui.graphics.Color.Black) }
     var pageBackground by remember { mutableStateOf(androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
     val miniInk by androidx.compose.animation.animateColorAsState(browseInk,
@@ -220,7 +225,7 @@ fun LocalicaScreen(
     SideEffect { dialogs?.backdrop = modalBackdrop }
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     val playerPalette = animatedPlayerPalette(playerVisual.palette, settings.motionDuration(450))
-    PlayerSystemBars(hasPlayer && progress.value >= .99f || insideCollection && browseInk == androidx.compose.ui.graphics.Color.White)
+    PlayerSystemBars(hasPlayer && playerFullyOpen || insideCollection && browseInk == androidx.compose.ui.graphics.Color.White)
     val bottomShadows = remember { GlassShadowGroup() }
     LocalicaTheme(grayTone = settings.grayTone) {
     CompositionLocalProvider(LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
@@ -233,8 +238,12 @@ fun LocalicaScreen(
     BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
-        Column(Modifier.fillMaxSize().recordFrostedBackdrop(browseBackdrop).background(pageBackground)
-            .then(if (hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier)) {
+        Column(Modifier.fillMaxSize()
+            // The opaque full player covers this entire scene. Keep its composition,
+            // scroll state and cached recording, but do not submit hidden pixels.
+            .drawWithContent { if (!hasPlayer || progress.value < 1f) drawContent() }
+            .recordFrostedBackdrop(browseBackdrop).background(pageBackground)
+            .then(if (hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier)) {
             TabPager(pager, tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
@@ -286,12 +295,12 @@ fun LocalicaScreen(
         }
         Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
             .padding(bottom = inset + 8.dp).height(NavigationPillHeight).fillMaxWidth()
-            .offset(y = (80.dp + inset) * maxOf(progress.value, 1f - chromeVisibility))
+            .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(progress.value, 1f - chromeVisibility)).toInt()) }
             .graphicsLayer { alpha = chromeVisibility }
-            .then(if (insideCollection || hasPlayer && progress.value >= 0.5f) Modifier.clearAndSetSemantics {} else Modifier),
+            .then(if (insideCollection || hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill")) {
-                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], pager.currentPage + pager.currentPageOffsetFraction, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->
                     navigation = navigation.resetTab(tab)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
                 }) { tab ->
@@ -356,7 +365,7 @@ fun LocalicaScreen(
                 onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
-        if (hasPlayer && progress.value > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
+        if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         MaterialTheme(colorScheme = darkColorScheme(primary = androidx.compose.ui.graphics.Color.White,
             onPrimary = androidx.compose.ui.graphics.Color.Black,
             primaryContainer = androidx.compose.ui.graphics.Color(0xFF414249), onPrimaryContainer = androidx.compose.ui.graphics.Color.White,
@@ -364,7 +373,7 @@ fun LocalicaScreen(
             onSecondaryContainer = androidx.compose.ui.graphics.Color.White, surfaceTint = androidx.compose.ui.graphics.Color.White,
             surface = playerPalette.bottom, surfaceContainer = playerPalette.middle, surfaceContainerLow = playerPalette.bottom,
             onSurface = androidx.compose.ui.graphics.Color.White, onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFDBDFE6))) {
-        QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = progress.value) {
+        QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value }) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false }) } }
             SelectionPanelVisibility(session.active && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
@@ -373,13 +382,13 @@ fun LocalicaScreen(
             } }
         }
         } }
-        CompositionLocalProvider(LocalFrostedBackdrop provides if (queueProgress.value > 0f) playerBackdrop else browseBackdrop) {
+        CompositionLocalProvider(LocalFrostedBackdrop provides if (queueVisible) playerBackdrop else browseBackdrop) {
             ForegroundSongDragOverlay(dragHost)
         }
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
-    androidx.activity.compose.BackHandler(queueOpen || queueProgress.value > 0f) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
-    androidx.activity.compose.BackHandler((queueOpen || queueProgress.value > 0f) && session.active) { session.clear() }
+    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
+    androidx.activity.compose.BackHandler((queueOpen || queueVisible) && session.active) { session.clear() }
     if (settingsOpen) FolderSettings(library,
         onDismiss = { settingsOpen = false; if (returnToScanner) { scannerOpen = true; returnToScanner = false } }, onChooseFolder, onRemoveFolder,
         extraContent = {

@@ -7,6 +7,19 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LensGeometryTest {
+    @Test fun maximumOpticalDepthCannotSampleBeyondTheSelectionAtlasMargin() {
+        for (width in listOf(64f, 320f, 800f)) for (height in listOf(64f, 120f, 900f)) {
+            val span = minOf(width, height) / 2f
+            for (corner in listOf(0f, 16f, span)) for (depth in listOf(.05f, 1.35f, 4f)) {
+                val shape = LensGeometry(Rect(0f, 0f, width, height), corner)
+                for (x in 0..40) for (y in 0..40) {
+                    val ray = lensRay(shape.field(Offset(width * x / 40f, height * y / 40f)), span, depth)
+                    assertTrue("Cropping must retain every ray at maximum supported depth", ray.offset.getDistance() <= span * 2.1f)
+                }
+            }
+        }
+    }
+
     @Test fun boxCrownHasNoDirectionalWedgesThroughItsCenter() {
         val shape = LensGeometry(Rect(0f, 0f, 400f, 400f), 28f)
         fun ray(x: Float, y: Float) = lensRay(shape.field(shape.bounds.center + Offset(x, y)), shape.span, 1.35f)

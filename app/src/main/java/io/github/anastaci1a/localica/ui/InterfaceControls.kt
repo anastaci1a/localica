@@ -31,6 +31,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.draw.drawWithCache
 import kotlin.math.exp
 
 /** Captions share the real slider-track inset and remain visually attached to it. */
@@ -60,7 +62,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val pressed by interaction.collectIsPressedAsState()
     val dragged by interaction.collectIsDraggedAsState()
     val deformation = rememberGlassBody({ shownFraction }, { pressure }, { if (pressed || dragged) 1f else 0f })
-    val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f)
+    val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f, whiteTint = 0f)
     val inset = with(LocalDensity.current) { 20.dp.toPx() }
     val touch = if (!enabled) Modifier else Modifier.pointerInput(valueRange, rtl) {
         awaitEachGesture {
@@ -84,9 +86,14 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
         }
     }
     val color = NavigationAccent
+    var thumbCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    var trackCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val legacy = android.os.Build.VERSION.SDK_INT < 33
+    val directionLayout = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val density = LocalDensity.current
     Slider(value, onValueChange, modifier.onSizeChanged { controlWidth = it.width.toFloat() }.then(touch), enabled = enabled, valueRange = valueRange, steps = actualSteps, interactionSource = interaction,
         thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
-            LiquidGlassSurface(Modifier.size(40.dp, 26.dp).testTag("settings-slider-thumb").graphicsLayer {
+            LiquidGlassSurface(Modifier.size(40.dp, 26.dp).testTag("settings-slider-thumb").onPlaced { thumbCoordinates = it }.graphicsLayer {
                 scaleX = deformation.value.scaleX(); scaleY = deformation.value.scaleY()
                 val fraction = (value - valueRange.start) / span
                 translationX = direction * (shownFraction - fraction) * (controlWidth - 2 * inset).coerceAtLeast(0f) +
@@ -94,16 +101,42 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
             }, source = trackSource, cornerRadius = 13.dp, pressFeedback = false, shadow = false, body = { deformation.value })
         } },
         track = {
-            Canvas(Modifier.fillMaxWidth().height(48.dp).recordFrostedBackdrop(trackSource)) {
-                val h = 5.dp.toPx()
-                val fraction = shownFraction.coerceIn(0f, 1f)
-                val top = (size.height - h) / 2
-                drawRoundRect(color.copy(alpha = if (enabled) .16f else .08f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
-                if (fraction > 0f) drawRoundRect(color.copy(alpha = if (enabled) .8f else .3f), Offset(if (rtl) size.width * (1f - fraction) else 0f, top), Size(size.width * fraction, h), CornerRadius(h / 2))
-                if (actualSteps > 0) for (index in 0..actualSteps + 1) drawCircle(color.copy(alpha = .4f), 1.dp.toPx(),
-                    Offset(size.width * index / (actualSteps + 1), size.height / 2))
-            }
+            // Procedural old-Android snapshots use the same drawing as the live
+            // track, without a GPU readback while the user moves the value.
+            val fraction = shownFraction.coerceIn(0f, 1f)
+            Canvas(Modifier.fillMaxWidth().height(48.dp).onPlaced { trackCoordinates = it }
+                .recordFrostedBackdrop(trackSource, displayCutout = {
+                    val host = trackCoordinates; val thumb = thumbCoordinates
+                    val shape = deformation.value
+                    if (host?.isAttached != true || thumb?.isAttached != true || legacy && trackSource.snapshot == null) null
+                    else Path().apply {
+                        val rect = host.localBoundingBoxOf(thumb, clipBounds = false)
+                        addRoundRect(androidx.compose.ui.geometry.RoundRect(rect,
+                            CornerRadius(13.dp.toPx() * shape.scaleX(), 13.dp.toPx() * shape.scaleY())))
+                    }
+                }).drawWithCache {
+                    val image = if (!legacy) null else androidx.compose.ui.graphics.ImageBitmap(size.width.toInt(), size.height.toInt()).also { bitmap ->
+                        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(density, directionLayout,
+                            androidx.compose.ui.graphics.Canvas(bitmap), size) { drawSliderTrack(fraction, actualSteps, enabled, rtl, color) }
+                    }
+                    onDrawBehind { if (image != null) { trackSource.snapshot = image; trackSource.lensSnapshot = image; trackSource.lensFrostSnapshot = image } }
+                }) { drawSliderTrack(fraction, actualSteps, enabled, rtl, color) }
         })
+}
+
+/** Stop markers live inside rounded caps, including the current active endpoint. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSliderTrack(fraction: Float, steps: Int,
+    enabled: Boolean, rtl: Boolean, color: Color) {
+    val h = 5.dp.toPx(); val radius = h / 2; val top = (size.height - h) / 2
+    drawRoundRect(color.copy(alpha = if (enabled) .16f else .08f), Offset(0f, top), Size(size.width, h), CornerRadius(radius))
+    val length = size.width * fraction
+    if (fraction > 0f) drawRoundRect(color.copy(alpha = if (enabled) .8f else .3f),
+        Offset(if (rtl) size.width - length else 0f, top), Size(length, h), CornerRadius(radius))
+    if (steps > 0) for (index in 0..steps + 1) {
+        val point = index.toFloat() / (steps + 1)
+        val at = (size.width * point - radius).coerceIn(radius, (size.width - radius).coerceAtLeast(radius))
+        drawCircle(color.copy(alpha = .4f), 1.dp.toPx(), Offset(if (rtl) size.width - at else at, size.height / 2))
+    }
 }
 
 /** The containing preference row owns the toggle's semantics and full-width tap target. */
@@ -126,7 +159,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val direction = if (rtl) -1f else 1f
-    val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f)
+    val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f, whiteTint = 0f)
     val body = rememberGlassBody({ position.value }, { pressure }, { if (dragging) 1f else 0f })
     val active by animateFloatAsState(if (dragging || position.isRunning) 1f else 0f,
         tween(if (reduced) 0 else 100), label = "Switch lens")

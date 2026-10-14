@@ -31,7 +31,7 @@ class SlidingTabsTest {
                 Box(Modifier.size(300.dp, 64.dp).testTag("tabs")) {
                     Box(Modifier.fillMaxSize().recordFrostedBackdrop(source).background(Color.White))
                     CompositionLocalProvider(LocalFrostedBackdrop provides source) {
-                        SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, 0f) {}
+                        SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, { 0f }) {}
                     }
                 }
             }
@@ -57,7 +57,7 @@ class SlidingTabsTest {
         val selections = mutableListOf<MainTab>()
         val reselections = mutableListOf<MainTab>()
         compose.setContent { LocalicaTheme { Box(Modifier.size(300.dp, 64.dp)) {
-            SlidingTabs(tabs, active, tabs.indexOf(active).toFloat(), onReselect = { reselections += it }) {
+            SlidingTabs(tabs, active, { tabs.indexOf(active).toFloat() }, onReselect = { reselections += it }) {
                 active = it; selections += it
             }
         } } }
@@ -73,7 +73,7 @@ class SlidingTabsTest {
         var active by mutableStateOf(MainTab.Home)
         val calls = mutableListOf<MainTab>()
         compose.setContent { LocalicaTheme { Box(Modifier.size(300.dp, 64.dp).testTag("tabs")) {
-            SlidingTabs(tabs, active, tabs.indexOf(active).toFloat()) { active = it; calls += it }
+            SlidingTabs(tabs, active, { tabs.indexOf(active).toFloat() }) { active = it; calls += it }
         } } }
         val target = compose.onNodeWithTag("tabs")
         val bounds = target.fetchSemanticsNode().boundsInRoot
@@ -94,7 +94,7 @@ class SlidingTabsTest {
         val tabs = MainTab.entries.take(8)
         val calls = mutableListOf<MainTab>()
         compose.setContent { LocalicaTheme { Box(Modifier.size(260.dp, 64.dp)) {
-            SlidingTabs(tabs, tabs.first(), 0f) { calls += it }
+            SlidingTabs(tabs, tabs.first(), { 0f }) { calls += it }
         } } }
         val strip = compose.onNodeWithTag("tab-scroll")
         strip.performTouchInput { swipe(Offset(width * .18f, centerY), Offset(width * .02f, centerY), 400) }
@@ -112,7 +112,7 @@ class SlidingTabsTest {
         val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)
         var active by mutableStateOf(MainTab.Home)
         compose.setContent { LocalicaTheme { Box(Modifier.size(300.dp, 64.dp).testTag("tabs")) {
-            SlidingTabs(tabs, active, tabs.indexOf(active).toFloat()) { active = it }
+            SlidingTabs(tabs, active, { tabs.indexOf(active).toFloat() }) { active = it }
         } } }
         compose.onNodeWithTag("tabs").performTouchInput {
             swipe(Offset(width * .5f, centerY), Offset(width * .88f, centerY), 400)
@@ -123,7 +123,7 @@ class SlidingTabsTest {
     @Test fun longestLabelFitsInsideItsSelectorWithRoundedEndPadding() {
         val tabs = listOf(MainTab.Home, MainTab.AlbumArtists, MainTab.Albums)
         compose.setContent { LocalicaTheme { Box(Modifier.size(300.dp, 64.dp)) {
-            SlidingTabs(tabs, MainTab.AlbumArtists, 1f) {}
+            SlidingTabs(tabs, MainTab.AlbumArtists, { 1f }) {}
         } } }
         val label = compose.onNode(hasText(MainTab.AlbumArtists.label) and hasAnyAncestor(isSelected()), useUnmergedTree = true)
         val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()

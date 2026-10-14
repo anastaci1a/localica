@@ -20,7 +20,10 @@ class BrowseScrollContinuityTest {
 
     @Test fun galleryScrollMovesArtworkAndLabelsWithoutAnIndependentCatchUp() = follow(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 3), 54)
 
-    private fun follow(style: BrowseStyle, target: Int) {
+    @Test fun slowDownwardGalleryPullDoesNotJumpAcrossRecycledRows() =
+        follow(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 3), 54, 1f)
+
+    private fun follow(style: BrowseStyle, target: Int, direction: Float = -1f) {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val route = BrowseRoute(MainTab.Songs)
         val old = prefs.read(route)
@@ -38,7 +41,7 @@ class BrowseScrollContinuityTest {
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(51)
             compose.mainClock.autoAdvance = false
-            list.performTouchInput { down(center); moveBy(Offset(0f, -40f), delayMillis = 32) }
+            list.performTouchInput { down(center); moveBy(Offset(0f, direction * 40f), delayMillis = 32) }
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val row = compose.onNodeWithTag("media-slow:$target", useUnmergedTree = true)
             val text = compose.onNodeWithTag("browse-text-slow:$target", useUnmergedTree = true)
@@ -48,11 +51,11 @@ class BrowseScrollContinuityTest {
             var previousRow = row.fetchSemanticsNode().boundsInRoot.top
             var previousText = text.fetchSemanticsNode().boundsInRoot.top
             repeat(80) {
-                list.performTouchInput { moveBy(Offset(0f, -3f), delayMillis = 16) }
+                list.performTouchInput { moveBy(Offset(0f, direction * 3f), delayMillis = 16) }
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 val nextRow = row.fetchSemanticsNode().boundsInRoot.top
                 val nextText = text.fetchSemanticsNode().boundsInRoot.top
-                assertEquals("Row follows slow drag at frame $it", -3f, nextRow - previousRow, 1f)
+                assertEquals("Row follows slow drag at frame $it", direction * 3f, nextRow - previousRow, 1f)
                 assertEquals("Text cannot catch up separately at frame $it", nextRow - previousRow, nextText - previousText, 1f)
                 previousRow = nextRow; previousText = nextText
             }

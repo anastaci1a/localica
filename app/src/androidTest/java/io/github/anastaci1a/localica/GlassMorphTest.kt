@@ -260,9 +260,11 @@ class GlassMorphTest {
                 }
             }
         } } }
-        if (android.os.Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
         compose.runOnIdle { open = true }
         compose.waitForIdle()
+        // Unused backdrops intentionally skip readback; opening the popup acquires
+        // its sampling lease. Wait for the older-device pixels after that point.
+        if (android.os.Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
         assertNotSame("Nested controls cannot resample the original scene", source, material)
         // Compose cannot capture Dialog roots before API 28. Read the real screen
         // using the material's global origin, also exercising cross-window alignment.

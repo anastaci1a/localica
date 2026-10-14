@@ -133,17 +133,25 @@ class BrowsePinchTest {
             val list = compose.onNodeWithTag("browser-list")
             compose.waitForIdle()
             compose.mainClock.autoAdvance = false
+            val artwork = compose.onNodeWithTag("browse-art-live:0", true)
+            val resting = artwork.fetchSemanticsNode().boundsInRoot.width
             list.performTouchInput {
                 down(0, Offset(centerX - 50, 200f)); down(1, Offset(centerX + 50, 200f))
                 moveTo(0, Offset(centerX - 65, 200f)); moveTo(1, Offset(centerX + 65, 200f))
             }
+            // The frozen-source readback uses the real render thread, not the
+            // synthetic animation clock. Wait for that handoff with fingers held.
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                kotlin.math.abs(artwork.fetchSemanticsNode().boundsInRoot.width - resting) > 1f
+            }
             compose.mainClock.advanceTimeBy(64)
-            val first = compose.onNodeWithTag("browse-art-live:0", true).fetchSemanticsNode().boundsInRoot.width
+            val first = artwork.fetchSemanticsNode().boundsInRoot.width
             list.performTouchInput {
                 moveTo(0, Offset(centerX - 110, 200f)); moveTo(1, Offset(centerX + 110, 200f))
             }
             compose.mainClock.advanceTimeBy(64)
-            val second = compose.onNodeWithTag("browse-art-live:0", true).fetchSemanticsNode().boundsInRoot.width
+            val second = artwork.fetchSemanticsNode().boundsInRoot.width
             assertTrue("Artwork must respond while both fingers remain down: $first / $second", kotlin.math.abs(second - first) > 1f)
             list.performTouchInput { up(0); up(1) }
             compose.mainClock.autoAdvance = true
