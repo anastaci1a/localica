@@ -42,11 +42,13 @@ internal class GlassShadowGeometry {
         if (bodies == previous && reach == previousReach && shift == previousShift) return
         previous = bodies; previousReach = reach; previousShift = shift
         fun outline(expansion: Float, y: Float = 0f): Path = Path().apply {
+            // Non-zero winding fills overlapping clockwise silhouettes once. A
+            // Boolean path union has the same coverage but rebuilds intersections
+            // for every ring on every frame of a changing player/menu outline.
             bodies.forEach { r ->
-                val other = Path().apply { addRoundRect(RoundRect(r.left - expansion, r.top - expansion + y,
+                addRoundRect(RoundRect(r.left - expansion, r.top - expansion + y,
                     r.right + expansion, r.bottom + expansion + y,
-                    CornerRadius(r.topLeftCornerRadius.x + expansion, r.topLeftCornerRadius.y + expansion))) }
-                op(this, other, PathOperation.Union)
+                    CornerRadius(r.topLeftCornerRadius.x + expansion, r.topLeftCornerRadius.y + expansion)))
             }
         }
         body = outline(0f)

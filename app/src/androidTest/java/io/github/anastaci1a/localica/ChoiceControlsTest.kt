@@ -40,7 +40,11 @@ class ChoiceControlsTest {
         compose.onNodeWithText("Sort by").performClick()
         compose.onNodeWithText("Year").performScrollTo().performClick()
         compose.onNodeWithText("Select", substring = false).performClick()
+        val body = compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Save only for this list").assertIsDisplayed().performClick().assertIsOn()
         compose.onNodeWithText("View", substring = false).performClick().assertIsSelected()
+        assertEquals(body, compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithText("Save only for this list").assertIsOn()
         compose.onNodeWithText("Gallery", substring = false).performClick()
         compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
         compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
