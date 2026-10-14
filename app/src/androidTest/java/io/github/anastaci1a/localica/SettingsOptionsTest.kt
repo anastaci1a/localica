@@ -27,11 +27,11 @@ class SettingsOptionsTest {
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNode(hasSetTextAction()).assertTextContains("scanner")
     }
-    @Test fun albumViewChoicesPersistAndOverrideOnlyTheirCollection() {
+    @Test fun playlistViewChoicesPersistAndOverrideOnlyTheirCollection() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val prefs = BrowsePreferences(context)
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
-        val route = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "album-a"), "Album A")
+        val route = BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, "playlist-a"), "Playlist A")
         var saved: BrowseStyle? = null
         try {
             compose.setContent { LocalicaTheme { BrowseSortDialog(route, prefs.read(route), false, {}, { style, override ->
@@ -47,18 +47,14 @@ class SettingsOptionsTest {
             compose.waitUntil(5000) { compose.onAllNodes(hasText("Album Artist") and
                 SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role,
                     androidx.compose.ui.semantics.Role.RadioButton)).fetchSemanticsNodes().isEmpty() }
-            compose.onNodeWithText("Group album songs").performClick()
-            compose.onNodeWithText("Artist").performClick()
-            compose.onNodeWithText("Select", substring = false).performClick()
-            compose.onNodeWithText("Quick-search box").assertDoesNotExist()
+            compose.onNodeWithText("Quick-search box").performScrollTo().assertExists()
             compose.onNodeWithText("Only for this collection").performScrollTo().performClick()
             compose.onNodeWithText("Save").performClick()
             compose.runOnIdle {
                 assertEquals(saved, BrowsePreferences(context).read(route))
-                assertEquals(SongGrouping.Artist, saved?.songGrouping)
                 assertEquals(ExtraInfo.AlbumArtist, saved?.extraInfo)
                 assertTrue(prefs.overridden(route))
-                assertEquals(SongGrouping.None, prefs.read(route.copy(collection = MediaRef(MediaKind.Album, "album-b"))).songGrouping)
+                assertEquals(ExtraInfo.Automatic, prefs.read(route.copy(collection = MediaRef(MediaKind.Playlist, "playlist-b"))).extraInfo)
                 prefs.reset(route)
                 assertFalse(prefs.overridden(route))
             }

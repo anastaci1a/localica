@@ -11,6 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.positionInRoot
+import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.navigation.MediaRef
 import kotlinx.coroutines.*
@@ -20,7 +23,8 @@ internal const val DropGapKey = "localica-drop-gap"
 
 @Stable
 internal class SongDrag(val original: List<BrowserItem>, val moving: List<BrowserItem>,
-    val initialBounds: Map<String, Rect>, val grab: Offset, point: Offset, val cardSize: androidx.compose.ui.geometry.Size) {
+    val initialBounds: Map<String, Rect>, val grab: Offset, point: Offset, val cardSize: androidx.compose.ui.geometry.Size, val style: BrowseStyle, val dense: Boolean,
+    val colors: androidx.compose.material3.ColorScheme?, val ink: androidx.compose.ui.graphics.Color) {
     val keys = moving.map { it.key }.toSet()
     val remaining = original.filterNot { it.key in keys }
     val remainingPositions = remaining.withIndex().associate { it.value.key to it.index }
@@ -39,6 +43,15 @@ internal class SongDrag(val original: List<BrowserItem>, val moving: List<Browse
 @Stable
 internal class SongDragState(val grid: LazyGridState, private val scope: CoroutineScope) {
     var items: List<BrowserItem> = emptyList()
+    var style = BrowseStyle()
+    var dense = false
+    var colors: androidx.compose.material3.ColorScheme? = null
+    var ink = androidx.compose.ui.graphics.Color.Unspecified
+    val itemCoordinates = mutableMapOf<String, LayoutCoordinates>()
+    fun visualBounds() = bounds() + itemCoordinates.filterValues { it.isAttached }.mapValues { (_, coordinates) ->
+        val at = coordinates.positionInRoot() - viewportOrigin
+        Rect(at, androidx.compose.ui.geometry.Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
+    }
     var drag by mutableStateOf<SongDrag?>(null)
         private set
     var optimistic by mutableStateOf<List<BrowserItem>?>(null)
@@ -66,11 +79,11 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
         point.x >= it.offset.x && point.x < it.offset.x + it.size.width && point.y >= it.offset.y && point.y < it.offset.y + it.size.height
     }?.key?.toString()?.let { key -> items.firstOrNull { it.key == key } }
     fun begin(item: BrowserItem, selected: Set<String>, point: Offset): Boolean {
-        val rects = bounds()
+        val rects = visualBounds()
         val held = rects[item.key] ?: return false
         val moving = items.filter { it.key in selected }
         if (moving.isEmpty()) return false
-        drag = SongDrag(items, moving, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size)
+        drag = SongDrag(items, moving, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size, style, dense, colors, ink)
         return true
     }
     fun move(point: Offset) { drag?.takeUnless { it.dropping }?.let { it.pointer = point
@@ -134,13 +147,14 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
         val d = drag?.takeUnless { it.dropping } ?: return
         d.dropping = true
         val expected = if (cancel) items else d.ordered()
+        grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset)
         d.dropItems = expected
         scope.launch {
             val result = CompletableDeferred<Boolean>()
             if (cancel) result.complete(false)
             else commit(d.keys, d.remaining.getOrNull(d.insertion)?.key) { result.complete(it) }
             withFrameNanos { }; withFrameNanos { }
-            d.destinations = bounds()
+            d.destinations = visualBounds()
             d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
             val saved = if (cancel) false else withTimeoutOrNull(5000) { result.await() } == true
             if (!saved && !cancel) {
@@ -148,7 +162,7 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
                 d.landing.snapTo(0f)
                 d.dropItems = items
                 withFrameNanos { }; withFrameNanos { }
-                d.destinations = bounds()
+                d.destinations = visualBounds()
                 d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
             }
             if (saved && items.map { it.key } != expected.map { it.key }) {
@@ -164,7 +178,7 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
 
 /** Own the held pointer at Initial pass so item clicks/scrolling cannot take over mid-drag. */
 internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: MediaRef?, selection: SessionSelection,
-    reducedMotion: Boolean, trailingActions: Boolean, onContext: (BrowserItem) -> Unit, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier = if (!enabled) this else pointerInput(state, source, reducedMotion, trailingActions) {
+    reducedMotion: Boolean, trailingActions: Boolean, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier = if (!enabled) this else pointerInput(state, source, reducedMotion, trailingActions) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val item = state.hit(down.position) ?: return@awaitEachGesture
@@ -182,6 +196,7 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
             @Suppress("UNREACHABLE_CODE") false
         }
         if (held != null) return@awaitEachGesture
+        selection.select(source, listOf(row))
         var moving = false
         try {
             while (true) {
@@ -195,12 +210,11 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
                     if (moving) {
                         if (!canceled) state.move(change.position)
                         state.finish(canceled || state.drag?.overCancel == true, reducedMotion, selection::clear, commit)
-                    } else if (!canceled) onContext(item)
+                    }
                     break
                 }
                 change.consume()
                 if (!moving && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
-                    selection.select(source, listOf(row))
                     val selected = selection.entries.takeIf { entries -> entries.all { it.source == source && state.items.any { item -> item.key == it.row.id } } }
                         ?.map { it.row.id }?.toSet()
                     if (selected != null) moving = state.begin(item, selected, down.position)

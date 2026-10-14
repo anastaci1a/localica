@@ -36,7 +36,6 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
     enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null) {
-    val shadowInset = glassShadowInset().coerceAtLeast(12.dp)
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
@@ -79,22 +78,14 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
             rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
         }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
             playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId, header = {
-                Column(Modifier.padding(horizontal = shadowInset, vertical = shadowInset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        onMinimize?.let { ActionIcon(R.drawable.ic_down, "Minimize queue", onClick = it) }
                         LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
                             Box(Modifier.fillMaxWidth().height(CompactControlSize)
                                 .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
 
                         }
-                        onMinimize?.let { ActionIcon(R.drawable.ic_down, "Minimize queue", onClick = it) }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ActionIcon(R.drawable.ic_sort, "Sort queue", anchor = sortAnchor) { sorting = true }
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
-                            Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
-                        }
-                        ActionIcon(R.drawable.ic_playlist_add, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true) { saving = true }
                         Box {
                             ActionIcon(R.drawable.ic_more, "Queue actions", anchor = menuAnchor) { menu = true }
                             GlassMenu(menu, menuAnchor, { menu = false }) {
@@ -104,6 +95,15 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                                     onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
                             }
                         }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ActionIcon(R.drawable.ic_sort, "Sort queue", anchor = sortAnchor) { sorting = true }
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
+                            Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
+                        }
+                        ActionIcon(R.drawable.ic_playlist_add, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true) { saving = true }
+
                     }
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (active == null) Text("Tap a song in Library to start a queue.")

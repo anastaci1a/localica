@@ -13,7 +13,5 @@ internal fun GlassDragBubble(modifier: Modifier = Modifier, landing: () -> Float
     LiquidGlassSurface(modifier.graphicsLayer {
         val finish = landing().coerceIn(0f, 1f)
         alpha = 1f - finish
-        scaleX = 1f - .65f * finish * finish
-        scaleY = 1f - .65f * finish * finish
     }, cornerRadius = 16.dp, pressFeedback = false, shadow = shadow, content = content)
 }

@@ -22,6 +22,7 @@ internal fun glassMorphSpring(speed: Float) = androidx.compose.animation.core.sp
 @Stable internal class GlassBodyState {
     val output = mutableStateOf(GlassShape())
     val momentum = GlassMomentum()
+    var impulseScale = 1f
     var previous = 0f
     var initialized = false
 }
@@ -55,7 +56,7 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
                     last = frame
                     val current = input()
                     body.damping = damping
-                    body.advance(((current - state.previous) / dt / speed).coerceIn(-20f, 20f), dt * speed, force(), touch())
+                    body.advance(((current - state.previous) / dt / speed).coerceIn(-20f, 20f), dt * speed, force(), touch(), state.impulseScale)
                     state.previous = current
                     result.value = body.shape
                 } while (!body.settled)

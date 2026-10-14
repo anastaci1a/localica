@@ -6,6 +6,10 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -20,11 +24,12 @@ internal fun Modifier.currentSongHighlight(current: Boolean, color: Color) = sem
     } else emptyList()
     onDrawBehind {
         if (current) {
-            val inset = 3.dp.toPx()
+            val inset = 4.dp.toPx()
             val bounds = Size(size.width - inset * 2, size.height - inset * 2)
             val corner = CornerRadius(14.dp.toPx())
             drawRoundRect(color.copy(alpha = .13f), Offset(inset, inset), bounds, corner)
-            grain.forEach { drawCircle(Color.White.copy(alpha = .065f), .4.dp.toPx(), it) }
+            val outline = Path().apply { addRoundRect(RoundRect(Rect(Offset(inset, inset), bounds), corner)) }
+            clipPath(outline) { grain.forEach { drawCircle(Color.White.copy(alpha = .065f), .4.dp.toPx(), it) } }
             drawRoundRect(Color.White.copy(alpha = .12f), Offset(inset, inset), bounds, corner, style = Stroke(.7.dp.toPx()))
         }
     }
