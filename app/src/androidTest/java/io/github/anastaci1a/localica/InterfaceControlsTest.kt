@@ -35,6 +35,34 @@ class InterfaceControlsTest {
         compose.runOnIdle { assertEquals(.8f, value, .001f) }
     }
 
+    @Test fun clearSliderDoesNotCompositeTheUnrefractedTrackUnderItsLens() {
+        compose.setContent { LocalicaTheme { Box(Modifier.background(Color.White).padding(32.dp)) {
+            InterfaceSlider(2f, {}, Modifier.width(300.dp), valueRange = 1f..3f)
+        } } }
+        val pixels = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true).captureToImage().toPixelMap()
+        for (percent in 20..40 step 5) {
+            val ink = pixels[pixels.width * percent / 100, pixels.height / 2]
+            assertTrue("The active track must still refract through the thumb: $ink", ink.red > ink.green + .12f)
+            assertTrue("One 80% red track, not two overlaid copies: $ink", ink.green > .31f)
+        }
+    }
+
+    @Test fun discreteStopRemainsInsideTheActiveTracksRoundEndCap() {
+        var rtl by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            androidx.compose.foundation.Canvas(Modifier.size(200.dp, 48.dp).background(Color.White).testTag("track-caps")) {
+                drawSliderTrack(.5f, 3, true, rtl, NavigationAccent)
+            }
+        } }
+        for (reverse in listOf(false, true)) {
+            compose.runOnIdle { rtl = reverse }
+            val pixels = compose.onNodeWithTag("track-caps").captureToImage().toPixelMap()
+            val x = pixels.width / 2 + if (reverse) -2 else 1
+            val beyondCap = pixels[x, pixels.height / 2]
+            assertTrue("No stop dot protrudes past the active cap ($reverse): $beyondCap", beyondCap.green > .75f)
+        }
+    }
+
     @Test fun switchTapAndDragChangeTheSameAccessibleState() {
         var checked by mutableStateOf(false)
         compose.setContent { LocalicaTheme { Column(Modifier.width(300.dp)) {

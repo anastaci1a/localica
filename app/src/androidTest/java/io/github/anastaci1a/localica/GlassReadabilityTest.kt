@@ -48,7 +48,7 @@ class GlassReadabilityTest {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(contrast = strength,
                 shadowStrength = 0f, blur = 0f, whiteTint = 0f, tabStyle = TabLensStyle.Classic)) {
                 Box(Modifier.size(300.dp, 64.dp).background(Color.Black).testTag("navbar-contrast")) {
-                    SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, 0f) {}
+                    SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, { 0f }) {}
                 }
             }
         } }

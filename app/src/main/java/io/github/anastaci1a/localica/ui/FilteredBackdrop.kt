@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -26,6 +26,11 @@ internal fun glassLayerExtent(size: IntSize): IntSize {
 internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origin: () -> Offset,
     resolution: Float, padding: Float = 0f, homeSource: FrostedBackdrop? = null,
     homeWeight: () -> Float = { 0f }, effect: (Size, Float) -> RenderEffect?) {
+    BackdropLease(source)
+    BackdropLease(homeSource?.takeUnless { it === source })
+    val currentOrigin by rememberUpdatedState(origin)
+    val sourceDelta by remember(source) { derivedStateOf { source.origin - currentOrigin() } }
+    val homeDelta by remember(homeSource) { derivedStateOf { (homeSource?.origin ?: Offset.Zero) - currentOrigin() } }
     val layer = rememberGraphicsLayer()
     val primary = if (homeSource != null && homeSource !== source) rememberGraphicsLayer() else null
     val home = if (primary != null) rememberGraphicsLayer() else null
@@ -44,7 +49,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
         layer.renderEffect = effect(Size(extent.width.toFloat(), extent.height.toFloat()), r)
         fun androidx.compose.ui.graphics.drawscope.DrawScope.scene(backing: FrostedBackdrop) {
             clipRect { scale(r, r, Offset.Zero) {
-                val delta = backing.origin - origin() + Offset(padding, padding)
+                val delta = (if (backing === source) sourceDelta else homeDelta) + Offset(padding, padding)
                 translate(delta.x, delta.y) { drawLayer(backing.layer) }
             } }
         }
