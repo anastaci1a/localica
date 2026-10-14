@@ -76,7 +76,7 @@ class QueueBrowsingTest {
         } finally { preferences.edit().clear().commit() }
     }
 
-    @Test fun queueSearchReturnsToSavedOrderAndDisplaySortDisablesManualMoves() {
+    @Test fun queueSearchReturnsToSavedOrderAndUnavailableSortLeavesTheQueueUntouched() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = context.getSharedPreferences("browse-style", 0)
         preferences.edit().clear().commit()
@@ -109,7 +109,8 @@ class QueueBrowsingTest {
             compose.onNodeWithText("Sort by").performClick()
             compose.onNodeWithText("Title").performClick()
             compose.onNodeWithText("Select", substring = false).performClick()
-            compose.onNodeWithText("Save").performClick()
+            compose.onNodeWithText("Apply").assertIsNotEnabled()
+            compose.onNodeWithText("Close").performClick()
             compose.onNodeWithContentDescription("Actions for Second").performClick()
             compose.onNodeWithText("Move up").assertDoesNotExist()
             compose.onNodeWithText("Move down").assertDoesNotExist()

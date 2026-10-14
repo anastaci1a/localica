@@ -38,8 +38,18 @@ class PlayerTransitionTest {
         val seek = compose.onNodeWithContentDescription("Seek")
         val bounds = seek.fetchSemanticsNode().boundsInRoot
         seek.performTouchInput { down(center); moveBy(Offset(60f, 0f), delayMillis = 48) }
+        fun previewBrightness(): Float {
+            val image = seek.captureToImage().toPixelMap()
+            return image[(image.width * .4f).toInt(), image.height / 2].red
+        }
+        val pendingBrightness = previewBrightness()
         val cancel = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
         compose.runOnIdle { position = 23000L }
+        seek.performTouchInput { moveTo(cancel.center - bounds.topLeft, delayMillis = 160) }
+        assertTrue("Hovering X previews the live position before release", previewBrightness() < pendingBrightness - .15f)
+        compose.runOnIdle { assertEquals("Previewing cancellation never seeks", 0, seeks) }
+        seek.performTouchInput { moveTo(Offset(width * .8f, center.y), delayMillis = 160) }
+        assertTrue("Leaving X restores the pending finger position", previewBrightness() > pendingBrightness - .08f)
         seek.performTouchInput { moveTo(cancel.center - bounds.topLeft, delayMillis = 160); up() }
         compose.onNodeWithTag("cancel-seek").assertDoesNotExist()
         compose.onNodeWithContentDescription("Pause").assertIsDisplayed()
@@ -63,7 +73,7 @@ class PlayerTransitionTest {
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             PlayerSurface(state, true, { collapsed = !it }, InterfaceSettings(), remember { Animatable(1f) },
                 {}, {}, {}, {}, {}, {}, lyricsOpen = lyrics, onLyrics = { lyrics = it },
-                lyricsAvailable = true, visual = PlayerVisual())
+                visual = PlayerVisual())
         } } }
         fun pill() = compose.onNodeWithTag("player-lyrics-pill").fetchSemanticsNode().boundsInRoot
         val circle = pill()

@@ -17,13 +17,13 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Text(filter.label, style = MaterialTheme.typography.titleMedium)
                 FlowRow {
-                    TextButton(enabled = index > 0, onClick = {
+                    ActionTextButton(enabled = index > 0, onClick = {
                         onChange(value.copy(visible = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.visible, index, -1)))
                     }) { Text("Move up") }
-                    TextButton(enabled = index < value.visible.lastIndex, onClick = {
+                    ActionTextButton(enabled = index < value.visible.lastIndex, onClick = {
                         onChange(value.copy(visible = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.visible, index, 1)))
                     }) { Text("Move down") }
-                    TextButton(onClick = { onChange(value.copy(visible = value.visible - filter)) }) { Text("Remove") }
+                    ActionTextButton(onClick = { onChange(value.copy(visible = value.visible - filter)) }) { Text("Remove") }
                 }
             }
         }
@@ -39,5 +39,5 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
             onChange(value.copy(allCollections = if (included) value.allCollections + kind else value.allCollections - kind))
         }
     }
-    TextButton(onClick = { onChange(LibraryFilters()) }) { Text("Reset library filters") }
+    ActionTextButton(onClick = { onChange(LibraryFilters()) }) { Text("Reset library filters") }
 }

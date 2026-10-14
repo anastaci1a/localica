@@ -80,6 +80,10 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             val components = grouping.get(local, 16.dp.toPx())
             while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer())
             if (Build.VERSION.SDK_INT >= 33) {
+                // This recording is read by the ordinary viewport and by every
+                // selected component's atlas. Rasterize it once: Auto would
+                // replay all visible text/artwork for each of those reads.
+                contentLayer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
                 contentLayer.record { this@drawWithContent.drawContent() }
                 translate(origin.x, origin.y) { clipPath(path, ClipOp.Difference) {
                     translate(-origin.x, -origin.y) { drawLayer(contentLayer) }

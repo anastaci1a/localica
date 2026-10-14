@@ -38,6 +38,7 @@ internal class LensRenderer {
         uniform float2 outputSize;
         uniform float2 backdropSize;
         uniform float2 backdropOffset;
+        $GlassColorShader
         float3 geometry(float2 p) {
             if (fieldMode > 0.5) {
                 float3 f = float3(field.eval((p - fieldOrigin) * fieldScale).rgb);
@@ -104,18 +105,7 @@ internal class LensRenderer {
                 } else sampled = scene.eval(lookup);
                 float alpha = float(sampled.a);
                 float3 color = float3(sampled.rgb) / max(alpha, 0.0001);
-                // User-selected white tint is separate from readability. Its ordered
-                // shoulder lifts shadows more than highlights, retaining saturated light.
-                float luma = clamp(dot(color, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
-                float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
-                float tint = clamp((lifted - luma) / max(1.0 - luma, 0.0001), 0.0, 1.0);
-                color = mix(color, float3(1), tint);
-                color = clamp(color, 0.0, 1.0);
-                if (tone.x > 0.0) {
-                    float3 end = tone.z > 0.5 ? color : 1.0 - color;
-                    float3 weighted = tone.y == 2.0 ? end * end : tone.y == 1.0 ? end : pow(end, float3(tone.y));
-                    color += weighted * (tone.z > 0.5 ? -tone.x : tone.x);
-                }
+                color = glassColor(color, whiteTint, tone);
                 sampled = ink + half4(half3(color * alpha), half(alpha)) * (1.0 - ink.a);
             }
             float alpha = float(sampled.a);

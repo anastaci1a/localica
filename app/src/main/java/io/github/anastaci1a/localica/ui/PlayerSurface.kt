@@ -56,7 +56,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null,
     artworkVisit: String? = null, previousArtwork: ArtworkNeighbor? = null, nextArtwork: ArtworkNeighbor? = null,
     onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black,
-    lyricsAvailable: Boolean = false, actions: @Composable () -> Unit = {}) {
+    actions: @Composable () -> Unit = {}) {
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
     val playerScroll = rememberScrollState()
@@ -94,7 +94,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     var artworkMenu by remember { mutableStateOf(false) }
     var configureTap by remember { mutableStateOf(false) }
     fun artworkAction(value: ArtworkAction) { when (value) {
-        ArtworkAction.Lyrics -> if (lyricsAvailable) onLyrics(!lyricsOpen)
+        ArtworkAction.Lyrics -> onLyrics(!lyricsOpen)
         ArtworkAction.Menu -> artworkMenu = true
         ArtworkAction.View -> viewing = true
         ArtworkAction.Change -> track?.let { editArtwork?.invoke(it) }
@@ -245,20 +245,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,
                         Modifier.fillMaxSize().graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
                         contentScale = ContentScale.Fit)
-                    PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag(if (neighbor) "player-neighbor-artwork" else "player-artwork").graphicsLayer {
-                        compositingStrategy = if (coverBlend > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
-                    }.drawWithContent {
-                        drawContent()
-                        if (coverBlend > 0f) {
-                            val stops = Array(33) { index ->
-                                val y = index / 32f
-                                val edge = if (y < 0.14f) (0.14f - y) / 0.14f else (y - 0.68f) / 0.32f
-                                val t = edge.coerceIn(0f, 1f)
-                                y to Color.Black.copy(alpha = 1f - t * t * (3f - 2f * t) * coverBlend)
-                            }
-                            drawRect(Brush.verticalGradient(*stops), blendMode = BlendMode.DstIn)
-                        }
-                    }.artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather), edgeBand + (.22f - edgeBand) * swipeFeather).clip(artworkShape),
+                    PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag(if (neighbor) "player-neighbor-artwork" else "player-artwork")
+                        .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),
+                            edgeBand + (.22f - edgeBand) * swipeFeather, coverBlend).clip(artworkShape),
                         shape = artworkShape,
                         contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
                     }
@@ -277,9 +266,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).testTag("artwork-gesture")
                 .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
-                    onClickLabel = settings.artworkTap.takeUnless { it == ArtworkAction.Lyrics && !lyricsAvailable }?.label,
+                    onClickLabel = settings.artworkTap.label,
                     onClick = { artworkAction(settings.artworkTap) },
-                    onLongClickLabel = settings.artworkHold.takeUnless { it == ArtworkAction.Lyrics && !lyricsAvailable }?.label,
+                    onLongClickLabel = settings.artworkHold.label,
                     onLongClick = { artworkAction(settings.artworkHold) }) else Modifier)) {
                 GlassMenu(artworkMenu, rememberGlassAnchor(), { artworkMenu = false }) {
                     ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
@@ -298,7 +287,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {
                         ActionIcon(R.drawable.ic_down, "Collapse player") { settle(false) }
                     }
-                    if (lyricsAvailable) Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
+                    Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
                         LiquidGlassSurface(Modifier.width(CompactControlSize * (1f + lyricProgress) + 1.dp * lyricProgress)
                             .height(CompactControlSize).testTag("player-lyrics-pill"), pressFeedback = false, depthScale = RaisedGlassDepthScale) {
                             Box(Modifier.align(Alignment.CenterStart).size(CompactControlSize), contentAlignment = Alignment.Center) {
@@ -349,7 +338,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     valueRange = 0f..duration, onValueChangeFinished = { seeking?.let { onSeek(it.toLong()) }; seeking = null },
                     enabled = state.connected && (state.durationMs ?: 0) > 0,
                     modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = "Seek" },
-                    cancelBounds = scrubCancelBounds, onCancel = { seeking = null },
+                    cancelBounds = scrubCancelBounds, onCancel = { seeking = null }, liveValue = state.positionMs.toFloat(),
                     onDrag = { active, hovered -> scrubDragging = active; scrubOverCancel = hovered })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(formatTime(seeking?.toLong() ?: state.positionMs), style = MaterialTheme.typography.labelSmall)
@@ -385,7 +374,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     }
     if (viewing && state.trackUri != null) ArtworkViewer(state.trackUri) { viewing = false }
     if (configureTap) GlassAlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
-        text = { Column { ArtworkAction.entries.forEach { value -> TextButton(onClick = {
+        text = { Column { ArtworkAction.entries.forEach { value -> ActionTextButton(onClick = {
             onSettings(settings.copy(artworkTap = value)); configureTap = false
-        }) { Text(value.label) } } } }, confirmButton = { TextButton(onClick = { configureTap = false }) { Text("Close") } })
+        }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
 }

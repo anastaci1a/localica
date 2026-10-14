@@ -34,7 +34,7 @@ import io.github.anastaci1a.localica.R
     TextField(value, onValueChange, modifier.focusRequester(focus).clearTextFocusOnBack(),
         label = label, placeholder = placeholder, leadingIcon = leadingIcon,
         trailingIcon = {
-            if (value.isNotEmpty() || visible > 0f) IconButton(enabled = enabled && value.isNotEmpty(),
+            if (value.isNotEmpty() || visible > 0f) ActionIconButton(enabled = enabled && value.isNotEmpty(),
                 onClick = { onValueChange(""); focus.requestFocus(); keyboard?.show() },
                 modifier = Modifier.graphicsLayer { alpha = visible }) {
                 Icon(painterResource(R.drawable.ic_close), "Clear text", Modifier.size(22.dp))

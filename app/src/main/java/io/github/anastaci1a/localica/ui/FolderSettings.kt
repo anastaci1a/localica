@@ -98,7 +98,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         Text(folder.name, style = MaterialTheme.typography.titleMedium)
                         Text("Removing a folder only removes it from Localica. Audio files are kept.")
                         ExcludedFoldersPreference(folder, preferences, !state.scanning && !state.updatingFolders)
-                        TextButton(onClick = { removing = folder }, enabled = !state.scanning && !state.updatingFolders) { Text("Remove folder") }
+                        ActionTextButton(onClick = { removing = folder }, enabled = !state.scanning && !state.updatingFolders) { Text("Remove folder") }
                     }
                     "Scanner configuration" -> ScannerConfiguration(preferences) { path = path + "Folders to scan" }
                 }
@@ -107,8 +107,8 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     }
     removing?.let { folder -> GlassAlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folder.name}?") },
         text = { Text("Audio files are kept. Queues and playlists keep their references to these songs.") },
-        confirmButton = { TextButton(onClick = { onRemove(folder.uri); removing = null; back() }) { Text("Remove") } },
-        dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } }) }
+        confirmButton = { ActionTextButton(onClick = { onRemove(folder.uri); removing = null; back() }) { Text("Remove") } },
+        dismissButton = { ActionTextButton(onClick = { removing = null }) { Text("Cancel") } }) }
 }
 
 @Composable
@@ -131,9 +131,9 @@ private fun ScannerConfiguration(preferences: ScanPreferences, folders: () -> Un
             GlassTextField(input, { input = it }, label = { Text("Minimum seconds (0 = off)") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = seconds == null || seconds !in 0..3600)
-        }, confirmButton = { TextButton(enabled = seconds != null && seconds in 0..3600, onClick = {
+        }, confirmButton = { ActionTextButton(enabled = seconds != null && seconds in 0..3600, onClick = {
             options = options.copy(minimumDurationSeconds = seconds!!); preferences.write(options); durationOpen = false
-        }) { Text("Save") } }, dismissButton = { TextButton(onClick = { durationOpen = false }) { Text("Cancel") } })
+        }) { Text("Save") } }, dismissButton = { ActionTextButton(onClick = { durationOpen = false }) { Text("Cancel") } })
     }
 }
 
@@ -151,7 +151,7 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
                 Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Changes apply on the next scan.")
                 GlassTextField(input, { input = it }, label = { Text("Subfolder paths") }, minLines = 3, maxLines = 6, isError = !valid)
             }
-        }, confirmButton = { TextButton(enabled = valid, onClick = { paths = lines; preferences.excluded(folder.uri, paths); open = false }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } })
+        }, confirmButton = { ActionTextButton(enabled = valid, onClick = { paths = lines; preferences.excluded(folder.uri, paths); open = false }) { Text("Save") } },
+            dismissButton = { ActionTextButton(onClick = { open = false }) { Text("Cancel") } })
     }
 }

@@ -24,13 +24,28 @@ import io.github.anastaci1a.localica.navigation.*
 
 @Composable
 internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden: Boolean,
-    onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: (() -> Unit)? = null) {
+    onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: ((((Boolean) -> Unit)) -> Unit)? = null,
+    mutableOrder: io.github.anastaci1a.localica.library.SavedOrder? = null,
+    manualNeedsRestore: Boolean = false,
+    onApplySort: ((TrackSort, Boolean, (Boolean) -> Unit) -> Unit)? = null) {
     var tab by remember { mutableIntStateOf(if (presentationOnly) 1 else 0) }
     val shadowInset = glassShadowInset().coerceAtLeast(12.dp)
     val sortScroll = rememberScrollState()
     val viewScroll = rememberScrollState()
-    var edited by remember { mutableStateOf(value) }
+    var edited by remember { mutableStateOf(if (mutableOrder != null)
+        value.copy(sort = mutableOrder.sort, ascending = mutableOrder.ascending) else value) }
+    var busy by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf(false) }
+    val applying = mutableOrder != null && tab == 0
+    val applied = mutableOrder != null && edited.sort == mutableOrder.sort &&
+        (edited.sort == TrackSort.Manual || edited.ascending == mutableOrder.ascending) &&
+        !(edited.sort == TrackSort.Manual && manualNeedsRestore)
     var override by remember { mutableStateOf(overridden) }
+    @Composable fun scopeFields() {
+        HorizontalDivider(color = LocalContentColor.current.copy(alpha = .12f))
+        BooleanPreference("Save only for this list", override) { override = it }
+        if (overridden) ActionTextButton(onClick = onReset) { Text("Use list-type defaults") }
+    }
     val songs = route.collection != null || route.tab in setOf(MainTab.Songs, MainTab.MostPlayed) || route.filter == MediaKind.Song
     val fields = if (songs) TrackSort.entries.filter { it != TrackSort.Count && (it != TrackSort.Manual || route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) }
         else TrackSort.entries.filterNot { it in setOf(TrackSort.Manual, TrackSort.Album, TrackSort.Folder) }
@@ -54,16 +69,24 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                 else Modifier)
                 .scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = shadowInset, vertical = shadowInset),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (page == 1) ListViewFields(route, edited) { edited = it }
-                else {
+                if (page == 1) {
+                    ListViewFields(route, edited) { edited = it }
+                    if (mutableOrder != null) scopeFields()
+                } else {
                     if (onRandomize != null) {
-                        GlassActionButton(R.drawable.ic_shuffle, "Randomize queue order", onClick = onRandomize)
-                        Text("Shuffles the saved order. While playing, the current song stays first and playback continues.", style = MaterialTheme.typography.bodySmall)
+                        GlassActionButton(R.drawable.ic_shuffle, "Randomize", enabled = !busy, onClick = {
+                            busy = true; failure = false
+                            onRandomize { ok -> busy = false; failure = !ok
+                                if (ok) edited = edited.copy(sort = TrackSort.Manual, ascending = true)
+                            }
+                        })
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp), color = LocalContentColor.current.copy(alpha = .12f))
                     }
                     ChoicePreference("Sort by", edited.sort, fields, ::sortLabel, popup = true) { field ->
                         edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending)
                     }
-                    SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }
+                    if (edited.sort != TrackSort.Manual) SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }
+                    if (failure) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -77,13 +100,15 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
             }
         }
     }, footer = {
-        Column {
-            HorizontalDivider(color = LocalContentColor.current.copy(alpha = .12f))
-            BooleanPreference("Save only for this list", override) { override = it }
-            if (overridden) TextButton(onClick = onReset) { Text("Use list-type defaults") }
-        }
-    }, confirmButton = { TextButton(onClick = { onSave(edited, override) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+        if (mutableOrder == null && (route.collection != null || route.search)) Column { scopeFields() }
+    }, confirmButton = {
+        ActionTextButton(enabled = !busy && (!applying || !applied && onApplySort != null), onClick = {
+            if (applying) {
+                busy = true; failure = false
+                onApplySort?.invoke(edited.sort, edited.ascending) { ok -> busy = false; failure = !ok }
+            } else onSave(edited, override)
+        }) { Text(if (applying) "Apply" else "Save") }
+    }, dismissButton = { ActionTextButton(enabled = !busy, onClick = onDismiss) { Text(if (applying) "Close" else "Cancel") } })
 }
 
 private fun sortLabel(sort: TrackSort) = when (sort) {

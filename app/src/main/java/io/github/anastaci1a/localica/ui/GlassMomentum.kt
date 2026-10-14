@@ -15,6 +15,15 @@ internal data class GlassShape(val strain: Float = 0f, val depth: Float = 0f) {
 internal fun glassWallTranslation(extent: Float, scale: Float, wall: Float): Float =
     wall.coerceIn(-1f, 1f) * extent * (1f - scale) / 2
 
+/** Approach wall anchoring continuously; switching anchors at the endpoint jumps
+ * whenever contact has already expanded the body. Works in either travel axis. */
+internal fun glassWallAffinity(position: Float, last: Float): Float {
+    if (last <= 0f) return 0f
+    val reach = minOf(.25f, last / 2f)
+    fun ease(t: Float): Float { val p = t.coerceIn(0f, 1f); return p * p * (3f - 2f * p) }
+    return ease((position - last + reach) / reach) - ease((reach - position) / reach)
+}
+
 /** Position is owned by the gesture; acceleration, contact and pressure drive its shape. */
 internal class GlassMomentum(var damping: Float = 8f) {
     private class Spring {

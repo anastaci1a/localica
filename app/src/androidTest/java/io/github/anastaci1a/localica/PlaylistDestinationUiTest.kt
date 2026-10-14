@@ -17,6 +17,19 @@ import org.junit.Test
 class PlaylistDestinationUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun backFromNameEndsEditingBeforeDismissingPicker() {
+        var closed by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            if (!closed) AddToPlaylistDialog(emptyList(), PlaylistState(loading = false), null, { closed = true }, {})
+        } }
+        compose.onNodeWithText("New playlist name").performClick().performTextInput("Draft")
+        androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+        compose.waitForIdle()
+        compose.onNodeWithText("Add to playlists").assertIsDisplayed()
+        compose.onNode(hasSetTextAction()).assertIsNotFocused()
+        compose.runOnIdle { assertFalse(closed) }
+    }
+
     @Test fun duplicateDraftCannotAddAndKeyboardSubmissionCommitsEveryDestination() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()

@@ -62,7 +62,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     val appearance = LocalGlassAppearance.current
     var requested by remember { mutableStateOf<Int?>(null) }
     fun focus(index: Int, notify: Boolean = true) {
-        if (index != chosen) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+        if (index != chosen) view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         chosen = index
         if (notify) selected(tabs[index])
     }
@@ -182,11 +182,9 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         preserveAppearance = true, depthScale = BottomPillDepthScale,
                         tint = if (appearance.tabStyle == TabLensStyle.Overlay) Color.Black.copy(alpha = appearance.overlayDarkening) else Color.Transparent,
                         pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f }, wall = {
-                            when {
-                                lens.value <= scroll.value / pixels + .001f -> -1f
-                                lens.value >= minOf(tabs.lastIndex.toFloat(), (scroll.value + viewport) / pixels - 1f) - .001f -> 1f
-                                else -> 0f
-                            }
+                            val first = scroll.value / pixels
+                            val last = minOf(tabs.lastIndex.toFloat(), (scroll.value + viewport) / pixels - 1f)
+                            glassWallAffinity(lens.value - first, last - first)
                         })
                 }
             }

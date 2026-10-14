@@ -84,8 +84,10 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             }
         }
     }
-    val p = progress.value
-    if (p > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = p * 0.2f }.clickable { settle(false) }) {
+    val shown by remember(progress) { derivedStateOf { progress.value > 0f } }
+    val currentPlayerProgress by rememberUpdatedState(playerProgress)
+    val interactive by remember { derivedStateOf { currentPlayerProgress() >= .99f } }
+    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value * 0.2f }.clickable { settle(false) }) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.scrim) {}
     }
     // Keep the list viewport fixed while the drawer moves. Resizing every frame
@@ -94,16 +96,16 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         kotlin.math.round((top + (status - top) * progress.value + 80.dp * (1f - playerProgress())).toPx()).toInt()) }
         .width(maxWidth).height(maxHeight - status)
         .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
-        .then(if (playerProgress() < .99f) Modifier.clearAndSetSemantics {} else Modifier)
+        .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
         .draggable(rememberDraggableState { dy ->
             delta += dy
             scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo((start - delta / distance).coerceIn(0f, 1f)) }
         }, Orientation.Vertical, onDragStarted = { progress.stop(); start = progress.value; delta = 0f },
             onDragStopped = { velocity -> settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f)) })
-        .nestedScroll(listPull).testTag("queue-surface"), shape = rememberDeviceCorners().shape(), darkening = .22f + .28f * p) {
-        GlassShadowColumn(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
-            Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (p == 0f) "Open queue" else "Close queue") { settle(p < .5f) }
-                .semantics { contentDescription = if (p == 0f) "Open queue" else "Close queue" }) {
+        .nestedScroll(listPull).testTag("queue-surface"), shape = rememberDeviceCorners().shape(), darkening = { .22f + .28f * progress.value }) {
+        Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
+            Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") { settle(progress.value < .5f) }
+                .semantics { contentDescription = if (!shown) "Open queue" else "Close queue" }) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)
                     .background(Color.White.copy(alpha = .38f), RoundedCornerShape(2.dp)))
                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -112,7 +114,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                     Spacer(Modifier.width(CompactControlSize))
                 }
             }
-            if (p > 0f) {
+            if (shown) {
                 content()
             }
         }

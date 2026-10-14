@@ -38,6 +38,8 @@ import kotlinx.coroutines.*
             ActionMenuItem("Information", enabled = onInformation != null, onClick = { onDismiss(); onInformation?.invoke(row.track) })
             if (editTags != null) ActionMenuItem("Edit tags", onClick = { onDismiss(); editTags(listOf(row.track)) {} })
         }
+        if (item.row == null && editTags != null) ActionMenuItem("Edit tags", enabled = item.songs.isNotEmpty(),
+            onClick = { onDismiss(); editTags(item.songs.map { it.track }.distinctBy { it.id }) {} })
         ActionMenuItem(if (item.row == null) "Select all songs" else "Select song", enabled = item.songs.isNotEmpty(),
             onClick = { selection?.select(selectionSource, item.songs); onDismiss() })
         HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
@@ -83,15 +85,15 @@ import kotlinx.coroutines.*
                 if (name.isNotBlank() && !available) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
                 playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
-        }, confirmButton = { TextButton(enabled = available && !busy, onClick = {
+        }, confirmButton = { ActionTextButton(enabled = available && !busy, onClick = {
             busy = true; controller?.rename(item.ref.id, name) { ok -> busy = false; if (ok) { renaming = false; onRenamed(name.trim()) } }
-        }) { Text("Save") } }, dismissButton = { TextButton(enabled = !busy, onClick = { renaming = false }) { Text("Cancel") } })
+        }) { Text("Save") } }, dismissButton = { ActionTextButton(enabled = !busy, onClick = { renaming = false }) { Text("Cancel") } })
     }
     if (deleting) GlassAlertDialog({ if (!busy) deleting = false }, title = { Text("Delete playlist?") },
         text = { Text("Delete “${item.title}”? Your music files stay on the device.") },
-        confirmButton = { TextButton(enabled = !busy, onClick = {
+        confirmButton = { ActionTextButton(enabled = !busy, onClick = {
             busy = true; controller?.delete(item.ref.id) { ok -> busy = false; if (ok) { deleting = false; onDeleted() } }
-        }) { Text("Delete") } }, dismissButton = { TextButton(enabled = !busy, onClick = { deleting = false }) { Text("Cancel") } })
+        }) { Text("Delete") } }, dismissButton = { ActionTextButton(enabled = !busy, onClick = { deleting = false }) { Text("Cancel") } })
     if (image) ImageChooser({ image = false }) { cropped ->
         image = false
         scope.launch {
@@ -111,5 +113,5 @@ import kotlinx.coroutines.*
         }
     }
     failure?.let { message -> GlassAlertDialog({ failure = null }, title = { Text("Collection") }, text = { Text(message) },
-        confirmButton = { TextButton({ failure = null }) { Text("Close") } }) }
+        confirmButton = { ActionTextButton({ failure = null }) { Text("Close") } }) }
 }

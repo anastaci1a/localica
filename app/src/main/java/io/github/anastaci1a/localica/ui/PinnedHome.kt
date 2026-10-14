@@ -40,6 +40,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     val editTags = LocalTagEdit.current
     var menu by remember { mutableStateOf<MediaRef?>(null) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+    val artworkTransit = remember { ArtworkTransit() }
     val carousel = androidx.compose.foundation.lazy.rememberLazyListState()
     val refreshBackdrop = LocalBackdropRefresh.current
     LaunchedEffect(items, scroll.isScrollInProgress, carousel.isScrollInProgress) {
@@ -52,15 +53,18 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     LaunchedEffect(scrollToTopRequest) {
         if (consumedScrollRequest != scrollToTopRequest) {
             consumedScrollRequest = scrollToTopRequest
-            scroll.easeToItem(0, reducedMotion, 500)
+            artworkTransit.during(!reducedMotion && scroll.firstVisibleItemIndex > scroll.layoutInfo.visibleItemsInfo.size * 2) {
+                scroll.easeToItem(0, reducedMotion, 500)
+            }
         }
     }
+    CompositionLocalProvider(LocalArtworkTransit provides artworkTransit) {
     LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
-            TextButton(onClick = onBrowse) { Text("Browse all music") }
-            if (library.snapshot.folders.isEmpty()) TextButton(onClick = onSettings) { Text("Add music folders") }
+            ActionTextButton(onClick = onBrowse) { Text("Browse all music") }
+            if (library.snapshot.folders.isEmpty()) ActionTextButton(onClick = onSettings) { Text("Add music folders") }
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
@@ -81,6 +85,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 })
             } }
         } }
+    }
     }
     info?.let { track -> SongInformation(track, { info = null }, { editTags?.invoke(listOf(track)) {} }) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists

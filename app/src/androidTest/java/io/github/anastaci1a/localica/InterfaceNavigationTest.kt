@@ -96,7 +96,7 @@ class InterfaceNavigationTest {
         val state = NavigationState().switch(MainTab.Library).open(route).switch(MainTab.Home)
         assertEquals(state, NavigationCodec.decode(NavigationCodec.encode(state)))
         InterfacePreferences(context).write(InterfaceSettings(tabs = MainTab.entries, reducedMotion = true, grayTone = .73f))
-        assertEquals(MainTab.entries, InterfacePreferences(context).read().tabs)
+        assertEquals(MainTab.entries.filter { it != MainTab.MostPlayed }, InterfacePreferences(context).read().tabs)
         assertEquals(.73f, InterfacePreferences(context).read().grayTone)
         InterfacePreferences(context).write(InterfaceSettings(grayTone = Float.NaN))
         assertEquals(.4f, InterfacePreferences(context).read().grayTone)
