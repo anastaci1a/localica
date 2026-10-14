@@ -54,6 +54,7 @@ internal class GlassAnchor {
     var quiet = false
     var contextual = false
     var bottomClearance = 0f
+    var bottomLimit = Float.NaN
     var ink by mutableStateOf(Color.Unspecified)
 }
 
@@ -72,6 +73,9 @@ internal fun rememberGlassAnchor(): GlassAnchor {
     SideEffect { anchor.source = source; anchor.quiet = true; anchor.contextual = true; anchor.bottomClearance = clearance; anchor.face = null }
     return onGloballyPositioned {
         anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        anchor.bottomLimit = location[1] + view.height - clearance
         anchor.cornerRadius = if (circular) with(density) { (it.size.width / 2f).toDp() } else 16.dp
     }
 }
@@ -86,7 +90,14 @@ internal fun GlassAnchor.captureInk() {
 internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
     val view = LocalView.current
     DisposableEffect(anchor) { anchor.triggerMounted = true; onDispose { anchor.triggerMounted = false } }
-    return then(GlassDepthMarker(anchor)).onGloballyPositioned { anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat())) }
+    return then(GlassDepthMarker(anchor)).onGloballyPositioned {
+        anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
+        if (anchor.contextual) {
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            anchor.bottomLimit = location[1] + view.height - anchor.bottomClearance
+        }
+    }
         // Read visibility in drawing, not only in a child RenderNode's alpha. Recorded
         // backdrop parents must re-record the restored trigger even while stationary.
         .drawWithContent { if (!anchor.hidden) { drawContent(); anchor.restoredDrawn = true } }
@@ -107,6 +118,7 @@ internal val LocalGlassPanelReady = compositionLocalOf { true }
 // Only separate modal windows may read this scene. Inline lenses must keep using
 // LocalFrostedBackdrop, whose recordings exclude their own foreground controls.
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
+private val LocalChildPanels = staticCompositionLocalOf<MutableIntState?> { null }
 
 private fun android.view.Window.glassInput(enabled: Boolean) {
     val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -139,6 +151,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
     var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var dismissalAttempt by remember { mutableIntStateOf(0) }
+    var searchHeightLimit by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(Int.MAX_VALUE) }
     val dismissNow: () -> Unit = {
         // Release hit testing in the dismissal event itself. Waiting for the next
         // composition can swallow a quick tap on a neighboring trigger.
@@ -176,6 +189,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     }
     DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false } }
     if (!present) return
+    val parentPanels = LocalChildPanels.current
+    val childPanels = remember { mutableIntStateOf(0) }
+    DisposableEffect(parentPanels) {
+        parentPanels?.let { it.intValue++ }
+        onDispose { parentPanels?.let { it.intValue-- } }
+    }
     Dialog(onDismissRequest = dismissNow, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { TextEditingFocusHost {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
@@ -214,7 +233,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val p = progress.value.coerceIn(0f, 1f)
         val geometry = if (anchor.quiet) ((p - .14f) / .86f).coerceIn(0f, 1f) else p
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
+        GlassShadowScope(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
             .pointerInput(visible) { detectTapGestures { if (visible) dismissNow() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
                 val density = LocalDensity.current
@@ -231,6 +250,21 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val margin = with(density) { if (page) 0f else 12.dp.toPx() }
                 val availableWidth = constraints.maxWidth
                 val availableHeight = constraints.maxHeight
+                // Keep the keyboard-open viewport after IME dismissal. A nested
+                // action menu freezes its parent's position until it has returned.
+                val imeHeight = WindowInsets.ime.getBottom(density)
+                SideEffect {
+                    if (placement == GlassPlacement.Search && imeHeight > 0)
+                        searchHeightLimit = minOf(searchHeightLimit, availableHeight)
+                }
+                val searchY = remember { Animatable(margin) }
+                LaunchedEffect(placement, imeHeight, availableHeight, targetHeight, childPanels.intValue, reduced, speed) {
+                    if (placement == GlassPlacement.Search && childPanels.intValue == 0) {
+                        val destination = if (imeHeight > 0) margin else ((availableHeight - targetHeight) / 2f).coerceAtLeast(margin)
+                        if (reduced) searchY.snapTo(destination)
+                        else searchY.animateTo(destination, glassMorphSpring(speed))
+                    }
+                }
                 val widthLimit = minOf(availableWidth - margin * 2, with(density) {
                     when (placement) { GlassPlacement.Menu -> if (fitContent) availableWidth.toFloat() else 400.dp.toPx(); GlassPlacement.Center, GlassPlacement.Sheet -> 400.dp.toPx()
                         GlassPlacement.Search, GlassPlacement.Page -> availableWidth.toFloat() }
@@ -243,7 +277,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     else expandedWidth.animateTo(measuredWidth.toFloat(), glassMorphSpring(speed))
                 }
                 val targetWidth = (expandedWidth.value.takeIf { it > 0f } ?: measuredWidth.takeIf { it > 0 }?.toFloat() ?: widthLimit.toFloat()).roundToInt()
-                val maxHeight = (availableHeight - margin * 2).roundToInt().coerceAtLeast(1)
+                val maxHeight = ((if (placement == GlassPlacement.Search) minOf(availableHeight, searchHeightLimit)
+                    else availableHeight) - margin * 2).roundToInt().coerceAtLeast(1)
                 // Closing follows the restored trigger. Opening keeps the pre-collapse location.
                 val start = (if (visible) origin else anchor.bounds).translate(-windowOrigin)
                 val detached = page || (origin == Rect.Zero && anchor.bounds == Rect.Zero)
@@ -254,10 +289,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 SideEffect { anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
                 val dark = darkOverride ?: (source?.dark == true)
                 val material = rememberFrostedBackdrop(source?.fallback to (p == 1f), dark = dark)
+                SideEffect { material.parent = source }
                 // This recording is sampled only by a later nested modal. Its
                 // material already has a shared raster; don't allocate and redraw
                 // another full-panel texture throughout every opening/closing.
                 val completePanel = rememberFrostedBackdrop(p == 1f, dark = dark, retainRaster = false)
+                SideEffect { completePanel.parent = source }
                 fun mix(a: Float, b: Float) = a + (b - a) * geometry
                 Box(Modifier.fillMaxSize().onGloballyPositioned { windowOrigin = it.backdropPosition(view) }) {
                     Layout(modifier = Modifier.offset {
@@ -266,13 +303,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             (if (anchor.contextual) start.center.x - targetWidth / 2f else if (rightAligned) start.right - targetWidth else start.left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))
                             else (availableWidth - targetWidth) / 2f
                         val y = when (placement) {
-                            GlassPlacement.Search -> margin
+                            GlassPlacement.Search -> searchY.value
                             GlassPlacement.Center -> (availableHeight - targetHeight) / 2f
                             GlassPlacement.Sheet -> (availableHeight - targetHeight - margin).coerceAtLeast(margin)
                             GlassPlacement.Page -> 0f
-                            GlassPlacement.Menu -> (if (anchor.contextual) minOf(start.top, availableHeight - anchor.bottomClearance - targetHeight - margin)
+                            GlassPlacement.Menu -> (if (anchor.contextual) minOf(start.top,
+                                (anchor.bottomLimit.takeIf { it.isFinite() }?.minus(windowOrigin.y) ?: (availableHeight - anchor.bottomClearance)) - targetHeight)
                                 else if (start.center.y > availableHeight / 2f) start.bottom - targetHeight else start.top)
-                                .coerceIn(margin, (availableHeight - targetHeight - margin).coerceAtLeast(margin))
+                                .coerceIn(margin, (availableHeight - targetHeight).toFloat().coerceAtLeast(margin))
                         }
                         if (page) androidx.compose.ui.unit.IntOffset(with(density) { (28.dp.toPx() * (1f - p)).roundToInt() }, 0)
                         else androidx.compose.ui.unit.IntOffset(mix(if (detached) x else start.left, x).roundToInt(),
@@ -315,6 +353,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             } else Modifier)) {
                             CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
                                 LocalModalBackdrop provides completePanel,
+                                LocalChildPanels provides childPanels,
                                 LocalGlassOrigin provides null,
                                 LocalGlassPanelReady provides (visible && p >= .9f)) {
                                 GlassPanelTheme(dark, content)

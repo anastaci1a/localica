@@ -22,6 +22,41 @@ import org.junit.Test
 
 class SlidingTabsTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun optionalForegroundRefractionChangesOnlyTheSelectedInk() {
+        var foreground by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = TabLensStyle.Overlay,
+                overlayForeground = foreground, whiteTint = 0f, blur = 0f, contrast = 0f, shadowStrength = 0f)) {
+                val source = rememberFrostedBackdrop(Unit, dark = false)
+                Box(Modifier.size(300.dp, 64.dp).testTag("foreground-tabs")) {
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(source).background(Color.White))
+                    SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, { 0f }, source = source) {}
+                }
+            }
+        } }
+        val node = compose.onNodeWithTag("foreground-tabs")
+        val before = node.captureToImage().toPixelMap()
+        compose.runOnIdle { foreground = true }
+        // The legacy renderer prepares its shared scene off the UI thread.
+        // Compose idleness alone does not mean that readback has finished.
+        var after = node.captureToImage().toPixelMap()
+        compose.waitUntil(8000) {
+            after = node.captureToImage().toPixelMap()
+            var refracted = 0
+            for (y in 0 until before.height) for (x in 0 until before.width / 2)
+                if (kotlin.math.abs(before[x, y].green - after[x, y].green) > .1f) refracted++
+            refracted > 40
+        }
+        var changed = 0; var outside = 0
+        for (y in 0 until before.height) for (x in 0 until before.width) {
+            val error = kotlin.math.abs(before[x, y].green - after[x, y].green)
+            if (error > .1f) { if (x < before.width / 2) changed++ else outside++ }
+        }
+        assertTrue("Opting in must visibly refract the selected foreground", changed > 40)
+        assertTrue("Other tab labels stay untouched: $outside", outside < 10)
+        compose.onAllNodesWithContentDescription("Home").assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Library").assertCountEquals(1)
+    }
     @Test fun overlayLensDoesNotRefractOrDuplicateItsForegroundLabels() {
         var style by mutableStateOf(TabLensStyle.Classic)
         compose.setContent { LocalicaTheme {

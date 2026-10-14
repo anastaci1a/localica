@@ -29,8 +29,6 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
     BackdropLease(source)
     BackdropLease(homeSource?.takeUnless { it === source })
     val currentOrigin by rememberUpdatedState(origin)
-    val sourceDelta by remember(source) { derivedStateOf { source.origin - currentOrigin() } }
-    val homeDelta by remember(homeSource) { derivedStateOf { (homeSource?.origin ?: Offset.Zero) - currentOrigin() } }
     val layer = rememberGraphicsLayer()
     val primary = if (homeSource != null && homeSource !== source) rememberGraphicsLayer() else null
     val home = if (primary != null) rememberGraphicsLayer() else null
@@ -49,8 +47,24 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
         layer.renderEffect = effect(Size(extent.width.toFloat(), extent.height.toFloat()), r)
         fun androidx.compose.ui.graphics.drawscope.DrawScope.scene(backing: FrostedBackdrop) {
             clipRect { scale(r, r, Offset.Zero) {
-                val delta = (if (backing === source) sourceDelta else homeDelta) + Offset(padding, padding)
-                translate(delta.x, delta.y) { drawLayer(backing.layer) }
+                // Refraction/blur can reach beyond a nested panel's recorded box.
+                // Supply its real parent there, instead of transparent edge bands.
+                val chain = mutableListOf<FrostedBackdrop>()
+                var item: FrostedBackdrop? = backing
+                while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
+                chain.asReversed().forEach { scene ->
+                    if (scene.recorded && !scene.layer.isReleased) {
+                        val delta = scene.origin - currentOrigin() + Offset(padding, padding)
+                        if (scene === backing) translate(delta.x, delta.y) { drawLayer(scene.layer) }
+                        else {
+                            val inside = backing.origin - currentOrigin() + Offset(padding, padding)
+                            clipRect(inside.x, inside.y, inside.x + backing.size.width, inside.y + backing.size.height,
+                                androidx.compose.ui.graphics.ClipOp.Difference) {
+                                translate(delta.x, delta.y) { drawLayer(scene.layer) }
+                            }
+                        }
+                    }
+                }
             } }
         }
         val blend = if (homeSource != null && !homeSource.layer.isReleased && homeSource.layer.size.width > 0)

@@ -14,7 +14,8 @@ import kotlin.math.exp
 @Composable
 internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, AnimationVector1D>,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, preserveAppearance: Boolean = false,
-    vertical: Boolean = false, depthScale: Float = 1f, pressure: () -> Float = { 0f }, wall: () -> Float = { 0f }, contact: () -> Float = { 0f }) {
+    vertical: Boolean = false, depthScale: Float = 1f, pressure: () -> Float = { 0f }, wall: () -> Float = { 0f }, contact: () -> Float = { 0f },
+    cornerRadius: androidx.compose.ui.unit.Dp? = null, tint: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Transparent) {
     val body = rememberGlassBody({ motion.value }, pressure, contact)
     CompositionLocalProvider(LocalGlassAppearance provides if (preserveAppearance) LocalGlassAppearance.current else LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, shadowStrength = .04f, contrast = 0f)) {
         LiquidGlassSurface(modifier.graphicsLayer {
@@ -26,7 +27,7 @@ internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, Animati
             scaleY = body.value.scaleY(vertical).coerceIn(if (!vertical) 2f - allowanceY else .5f, allowanceY)
             translationX = if (vertical) 0f else glassWallTranslation(size.width, scaleX, wall())
             translationY = if (vertical) glassWallTranslation(size.height, scaleY, wall()) else 0f
-        }, source = source, pressFeedback = false, shadow = false,
+        }, source = source, pressFeedback = false, shadow = false, cornerRadius = cornerRadius, tint = tint,
             body = { body.value }, depthScale = depthScale,
             inkOverride = if (preserveAppearance) androidx.compose.ui.graphics.Color.Black else null) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
     }

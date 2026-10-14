@@ -54,7 +54,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
             if (horizontal) 0 else (stride * position.value).roundToInt()) }.width(width).height(height),
             position, vertical = !horizontal, pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f }, wall = {
                 direction * when { position.value <= .001f -> -1f; position.value >= labels.lastIndex - .001f -> 1f; else -> 0f }
-            })
+            }, cornerRadius = 20.dp)
         @Composable fun Item(index: Int, modifier: Modifier) {
             Box(modifier.height(height).selectable(index == selected, role = role,
                 interactionSource = null, indication = null, onClick = { change(index) })
