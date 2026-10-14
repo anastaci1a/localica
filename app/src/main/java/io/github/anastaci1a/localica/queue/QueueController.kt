@@ -346,7 +346,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             repeat = QueueRepeat.entries[(state.value.settings.repeat.ordinal + 1) % QueueRepeat.entries.size]))
     }
     fun randomize(queueId: String, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { queue ->
-        queue.copy(entries = queue.entries.shuffled())
+        QueueEdits.randomize(queue, queue.id == state.value.library.activeId && player?.isPlaying == true)
     }
     private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: (ListeningQueue) -> ListeningQueue) = submit {
         try {
