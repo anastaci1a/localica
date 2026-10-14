@@ -32,6 +32,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
     val rtl = horizontal && androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val direction = if (rtl) -1f else 1f
     var dragging by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
     var raw by remember { mutableFloatStateOf(selected.toFloat()) }
     var pressure by remember { mutableFloatStateOf(0f) }
     var settleRequest by remember { mutableIntStateOf(0) }
@@ -43,7 +44,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
         }
     }
     BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = 4.dp)
-        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .045f), RoundedCornerShape(24.dp))
+        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .10f), RoundedCornerShape(24.dp))
         .padding(4.dp).selectableGroup()) {
         val width = if (horizontal) maxWidth / labels.size else maxWidth
         val height = (52 * (LocalDensity.current.fontScale.coerceAtLeast(1f))).dp
@@ -51,13 +52,13 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
         SelectionLens(Modifier.testTag("choice-lens").offset { androidx.compose.ui.unit.IntOffset(
             if (horizontal) (stride * position.value).roundToInt() else 0,
             if (horizontal) 0 else (stride * position.value).roundToInt()) }.width(width).height(height),
-            position, vertical = !horizontal, pressure = { pressure }, contact = { if (dragging) 1f else 0f }, wall = {
+            position, vertical = !horizontal, pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f }, wall = {
                 direction * when { position.value <= .001f -> -1f; position.value >= labels.lastIndex - .001f -> 1f; else -> 0f }
             })
         @Composable fun Item(index: Int, modifier: Modifier) {
             Box(modifier.height(height).selectable(index == selected, role = role,
                 interactionSource = null, indication = null, onClick = { change(index) })
-                .then(if (index == selected) Modifier.elasticControlDrag(horizontal,
+                .then(if (index == selected) Modifier.observeGlassContact { pressed = it }.elasticControlDrag(horizontal,
                     onStart = { dragging = true; scope.launch(start = CoroutineStart.UNDISPATCHED) { position.stop(); raw = position.value } },
                     onDelta = { delta ->
                         raw += direction * delta / stride

@@ -27,8 +27,12 @@ class GlassDialogsTest {
             }
         } }
         compose.onNode(hasSetTextAction()).performTextInput("Night music")
+        compose.onNode(hasSetTextAction()).assertTextContains("Night music")
+        compose.waitForIdle()
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithText("Create").performClick()
+        // This test owns the frozen exit clock, not the native IME's resizing
+        // window. Invoke the same button callback without racing its moving bounds.
+        compose.onNodeWithText("Create").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.mainClock.advanceTimeBy(96)
         assertEquals("Night music", saved)
         assertEquals(1, saves)

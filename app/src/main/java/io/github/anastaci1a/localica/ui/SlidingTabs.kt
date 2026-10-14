@@ -51,6 +51,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     val density = LocalDensity.current
     val lens = remember { Animatable(page) }
     var dragging by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
     var raw by remember { mutableFloatStateOf(page) }
     var pressure by remember { mutableFloatStateOf(0f) }
     var chosen by remember { mutableIntStateOf(tabs.indexOf(active).coerceAtLeast(0)) }
@@ -109,7 +110,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale)
         Box(Modifier.fillMaxSize().clip(CircleShape)) {
         Box(Modifier.fillMaxHeight().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll, enabled = !fits && !dragging)
-            .testTag("tab-scroll").pointerInput(tabs, pixels, viewport, fits) {
+            .testTag("tab-scroll").observeGlassContact { pressed = it }.pointerInput(tabs, pixels, viewport, fits) {
                 if (!fits) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -149,7 +150,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         val path = Path().apply { addRoundRect(RoundRect(left, 4.dp.toPx(),
                             left + pixels - 8.dp.toPx(), size.height - 4.dp.toPx(), CornerRadius(size.height / 2))) }
                         clipPath(path, if (interactive) ClipOp.Difference else ClipOp.Intersect) { this@drawWithContent.drawContent() }
-                    }.lensInkSupport(color, appearance.contrast)) {
+                    }) {
                     tabs.forEach { tab ->
                         Column(Modifier.width(width).padding(4.dp).fillMaxHeight()
                             .then(if (interactive) Modifier.selectable(active == tab,
@@ -167,14 +168,14 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                     .width(width - 8.dp).height(NavigationPillHeight - 8.dp)
                     .testTag("tab-selector")
                 if (appearance.tabStyle == TabLensStyle.Classic) {
-                    Box(modifier.background(Color.Black.copy(alpha = .10f), androidx.compose.foundation.shape.CircleShape))
+                    Box(modifier.background(Color.Black.copy(alpha = appearance.classicOpacity), androidx.compose.foundation.shape.CircleShape))
                 } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
                     blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
                     contrast = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.contrast)) {
                     SelectionLens(modifier, lens,
                         if (appearance.tabStyle == TabLensStyle.Overlay) composite else source, preserveAppearance = true, depthScale = BottomPillDepthScale,
-                        pressure = { pressure }, contact = { if (dragging) 1f else 0f }, wall = {
+                        pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f }, wall = {
                             when {
                                 lens.value <= scroll.value / pixels + .001f -> -1f
                                 lens.value >= minOf(tabs.lastIndex.toFloat(), (scroll.value + viewport) / pixels - 1f) - .001f -> 1f
