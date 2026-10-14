@@ -53,9 +53,13 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
     val view = LocalView.current
     var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
     val geometry = remember { SelectionPathCache() }
+    val grouping = remember { SelectionComponentCache() }
     val depth = LocalGlassAppearance.current.depth
     CompositionLocalProvider(LocalSelectionScene provides scene) {
         Box(modifier.onPlaced { coordinates = it }.drawWithContent {
+            // Pager placement also moves unselected rows. Do not subscribe their
+            // otherwise reusable display lists to the selection geometry clock.
+            if (!hasSelection) return@drawWithContent drawContent()
             // Placement runs before drawing; query live coordinates instead of copying
             // global bounds through a later callback and lagging one frame behind rows.
             scene.placement
@@ -73,7 +77,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             val origin = regions.first().bounds.topLeft
             val local = localLensRegions(regions, origin)
             val path = geometry.path(local, 16.dp.toPx())
-            val components = selectionComponents(local, 16.dp.toPx())
+            val components = grouping.get(local, 16.dp.toPx())
             while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer())
             if (Build.VERSION.SDK_INT >= 33) {
                 contentLayer.record { this@drawWithContent.drawContent() }
@@ -151,6 +155,20 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             }
 
         }) { content() }
+    }
+}
+
+/** Scrolling translates a group; only a membership/layout change rebuilds connectivity. */
+private class SelectionComponentCache {
+    private var regions: List<SelectionRegion> = emptyList()
+    private var gap = Float.NaN
+    private var result: List<List<SelectionRegion>> = emptyList()
+    fun get(value: List<SelectionRegion>, spacing: Float): List<List<SelectionRegion>> {
+        if (value != regions || spacing != gap) {
+            result = selectionComponents(value, spacing)
+            regions = value; gap = spacing
+        }
+        return result
     }
 }
 
@@ -242,6 +260,6 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean): Modi
         if (partial) stateDescription = "Partially selected"
     }.onPlaced {
         entry.coordinates = it
-        androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 }
+        if (entry.selected) androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 }
     }
 }

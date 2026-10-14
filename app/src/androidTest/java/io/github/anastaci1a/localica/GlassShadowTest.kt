@@ -24,6 +24,41 @@ import kotlin.math.abs
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun overlappingShadowBodiesHaveUnionCoverageWithoutDoubleDarkening() {
+        compose.setContent {
+            Column {
+                listOf(false, true).forEach { unionReference ->
+                    Box(Modifier.size(220.dp, 170.dp).background(Color.White)
+                        .testTag("overlap-$unionReference").drawBehind {
+                            val bodies = listOf(
+                                RoundRect(35.dp.toPx(), 40.dp.toPx(), 135.dp.toPx(), 100.dp.toPx(), CornerRadius(22.dp.toPx())),
+                                RoundRect(85.dp.toPx(), 60.dp.toPx(), 180.dp.toPx(), 120.dp.toPx(), CornerRadius(22.dp.toPx()))
+                            )
+                            val geometry = GlassShadowGeometry()
+                            geometry.update(bodies, 24.dp.toPx(), 2.dp.toPx())
+                            // Compare intersecting silhouettes, including a duplicate,
+                            // against the old Boolean union with translucent ink.
+                            if (unionReference) {
+                                val paths = bodies.map { body -> androidx.compose.ui.graphics.Path().apply { addRoundRect(body) } }
+                                val union = androidx.compose.ui.graphics.Path.combine(
+                                    androidx.compose.ui.graphics.PathOperation.Union, paths[0], paths[1])
+                                drawPath(union, Color.Black.copy(alpha = .25f))
+                            } else {
+                                geometry.update(bodies + bodies.first(), 24.dp.toPx(), 2.dp.toPx())
+                                drawPath(geometry.body, Color.Black.copy(alpha = .25f))
+                            }
+                        })
+                }
+            }
+        }
+        val expected = compose.onNodeWithTag("overlap-true").captureToImage().toPixelMap()
+        val actual = compose.onNodeWithTag("overlap-false").captureToImage().toPixelMap()
+        var error = 0f
+        for (y in 0 until expected.height) for (x in 0 until expected.width)
+            error += abs(expected[x, y].red - actual[x, y].red)
+        assertTrue("Overlapping silhouettes must have the same filled coverage", error / (expected.width * expected.height) < .001f)
+    }
+
     @Test fun bottomUnionDoesNotKeepAGhostOfAModalTrigger() {
         lateinit var anchor: GlassAnchor
         compose.setContent { LocalicaTheme {

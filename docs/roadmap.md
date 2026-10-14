@@ -2,7 +2,9 @@
 
 ## Current checkpoint
 
-Review the [Liquid Glass specification](liquid-glass/specification.md) on the user’s phone: low-damping depth response, rapid interrupted gestures, large collections and material handoffs. Compare device traces with the shared-rendering optimizations; emulator measurements do not establish physical-device frame rates. Reproduce the remaining intermittent manual-scroll jitter ([#150](https://github.com/anastaci1a/localica/issues/150)) and revisit selection entrance motion separately ([#107](https://github.com/anastaci1a/localica/issues/107)). Preserve accessibility, playback continuity and older-Android support.
+- Review the [Liquid Glass specification](liquid-glass/specification.md) on the user’s phone: depth response, interrupted gestures, large collections and material handoffs.
+- Validate [rendering performance](https://github.com/anastaci1a/localica/issues/167), especially queue scrolling and player expansion; emulator measurements do not establish physical-device frame rates. Reproduce [intermittent manual-scroll jitter](https://github.com/anastaci1a/localica/issues/150).
+- Revisit [selection entrance motion](https://github.com/anastaci1a/localica/issues/107) separately. Preserve accessibility, playback continuity and older-Android support throughout.
 
 ## Deferred capabilities
 

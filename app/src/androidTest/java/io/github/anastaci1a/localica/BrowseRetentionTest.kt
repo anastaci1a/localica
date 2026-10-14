@@ -5,6 +5,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
@@ -72,6 +73,14 @@ class BrowseRetentionTest {
         compose.runOnIdle { mounted = true }
         compose.onNodeWithText("First album").assertIsDisplayed()
         assertTrue("Returning content must not wait for a duplicate query", tasks.isEmpty())
+        val preferences = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+        for (style in listOf(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 3),
+            BrowseStyle(listSize = ListSize.Compact), BrowseStyle(listSize = ListSize.Large, extraInfo = ExtraInfo.Year))) {
+            compose.runOnIdle { preferences.write(route, style, false) }
+            compose.waitForIdle()
+            compose.onNodeWithText("First album").assertIsDisplayed()
+            assertTrue("Layout-only changes reuse the ordered rows immediately", tasks.isEmpty())
+        }
         compose.runOnIdle { library = LibrarySnapshot(tracks = listOf(track.copy(album = "Updated album"))) }
         finishQuery()
         compose.onNodeWithText("Updated album").assertIsDisplayed()
