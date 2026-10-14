@@ -10,7 +10,7 @@ A dependable offline Android player for audio on the device: Musicolet-inspired 
 - Albums group by title plus Album Artist, falling back to track Artist. Normalize case and surrounding whitespace; missing metadata forms distinct unknown groups. Artist views use track Artist; folders group by root and relative parent directory. Keep Artist and Album Artist distinct, including compilations.
 - Shared queries provide deterministic search/filter/sort results. Unknown values sort last with stable ties. Collection summaries use earliest known year and summed known duration, marked when partial; date/count rules are [below](#dates-and-listening-statistics).
 - Manual playlists support unique trimmed, case-insensitive names, ordered duplicate song occurrences, and reviewed local M3U/M3U8/PLS imports. Creation, rename and import reject duplicate names without rewriting legacy duplicates. Add to playlists atomically appends to selected existing destinations and an optional new named playlist. Custom covers are required square crops stored privately; replacement/deletion removes only unreferenced app-owned copies. Resolve imports against indexed music; review ambiguous/unresolved entries before skipping them. Never fetch remote audio.
-- Available playlist songs use current library metadata; unavailable songs retain saved metadata/references. Display search/sort never rewrites saved order. Manual reordering requires the complete, unfiltered saved order.
+- Available playlist songs use current library metadata; unavailable songs retain saved metadata/references. Search never rewrites saved order. Queue/playlist sorting is an explicit persisted reorder operation; subsequent dragging remains available in the complete, unfiltered list. Automatic sorts retain a Manual baseline; applying Manual restores it. Actual manual moves and Randomize replace that baseline, while no-op moves leave it intact. Preserve occurrence identities, cursor and traversal history through sorting and migration.
 
 ## Queues and playback
 
@@ -48,7 +48,7 @@ Implementation and supported-write limitations: [Structure](structure.md#file-op
 
 ## Lyrics sources
 
-Read embedded synced/plain lyrics and same-basename `.lrc` sidecars in the song's actual granted folder. Keep sources selectable: prefer usable synced lyrics, then sidecars over embedded sources of equal timing type. Missing, malformed, inaccessible, or untimed lyrics must not interrupt playback or invent timestamps. Viewing is local, with no online lookup.
+Read embedded synced/plain lyrics and same-basename `.lrc` sidecars in the song's actual granted folder. Keep distinct sources selectable without a duplicate plain rendition of a synced source; prefer usable synced lyrics, then sidecars over embedded sources of equal timing type. Missing, malformed, inaccessible, or untimed lyrics must not interrupt playback or invent timestamps. Viewing is local, with no online lookup.
 
 LRC supports offsets/repeated timestamps; ID3 SYLT supports millisecond timing. Frame-count SYLT is unsupported. Use word timing only when a supported source actually supplies it. Presentation and gesture rules: [Artwork and lyrics](interface.md#artwork-and-lyrics).
 
