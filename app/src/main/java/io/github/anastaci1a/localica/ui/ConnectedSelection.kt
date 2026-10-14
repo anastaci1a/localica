@@ -44,14 +44,13 @@ internal fun SelectionViewport(modifier: Modifier = Modifier, content: @Composab
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val scene = remember { SelectionScene() }
     val contentLayer = rememberGraphicsLayer()
-    val output = rememberGraphicsLayer()
+    val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
+    val groups = remember { mutableListOf<SelectionGroupRenderer>() }
+    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
     val backing = LocalFrostedBackdrop.current
     val view = LocalView.current
     var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
     val geometry = remember { SelectionPathCache() }
-    val mesh = remember { LensMeshRenderer() }
-    val meshShape = remember { LensSelectionShape() }
-    val optics = remember { if (Build.VERSION.SDK_INT >= 33) LensSelectionRenderer() else null }
     val depth = LocalGlassAppearance.current.depth
     CompositionLocalProvider(LocalSelectionScene provides scene) {
         Box(modifier.onPlaced { coordinates = it }.drawWithContent {
@@ -72,19 +71,23 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             val origin = regions.first().bounds.topLeft
             val local = localLensRegions(regions, origin)
             val path = geometry.path(local, 16.dp.toPx())
-            if (Build.VERSION.SDK_INT >= 33 && optics != null) {
+            val components = selectionComponents(local, 16.dp.toPx())
+            while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer())
+            if (Build.VERSION.SDK_INT >= 33) {
                 contentLayer.record { this@drawWithContent.drawContent() }
-                val crop = path.getBounds().translate(origin).inflate(2f).intersect(Rect(Offset.Zero, size))
-                // The backing is a lens input, not a replacement for the viewport.
-                // Painting it across unselected space creates rectangular seams over
-                // parallax artwork and translucent parent surfaces.
                 translate(origin.x, origin.y) { clipPath(path, ClipOp.Difference) {
                     translate(-origin.x, -origin.y) { drawLayer(contentLayer) }
                 } }
-                if (!crop.isEmpty) {
-                    // Keep the complete backdrop once, then only the visible ink.
-                    // Padding each half by the lens radius wastes several screenfuls
-                    // of pixels for a long selection without adding source detail.
+            }
+            components.forEachIndexed { index, component ->
+                val renderer = groups[index]
+                val groupOrigin = component.first().bounds.topLeft
+                val groupRegions = localLensRegions(component, groupOrigin)
+                val groupPath = renderer.path.path(groupRegions, 16.dp.toPx())
+                val absolute = origin + groupOrigin
+                val crop = groupPath.getBounds().translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
+                if (crop.isEmpty) return@forEachIndexed
+                if (Build.VERSION.SDK_INT >= 33) {
                     val at = Offset(floor(crop.left), floor(crop.top))
                     val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
                     val source = backing?.takeUnless { it.layer.isReleased }
@@ -94,38 +97,74 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                         at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero), foregroundY)
                     val extent = androidx.compose.ui.unit.IntSize(max(visible.width.toInt(), backdropSize.width + 2),
                         foregroundY.toInt() + visible.height.toInt())
-                    output.renderEffect = optics.effect(local, path, 16.dp.toPx(), origin - at, depth, atlas)
+                    val output = renderer.output
+                    output.renderEffect = requireNotNull(renderer.optics).effect(groupRegions, groupPath, 16.dp.toPx(), absolute - at, depth, atlas)
                     output.clip = true
                     output.record(size = extent) {
                         clipRect(left = 1f, top = 1f, right = backdropSize.width + 1f, bottom = backdropSize.height + 1f) {
                             if (source != null) translate(1f, 1f) { drawLayer(source.layer) }
                         }
-                        clipRect(top = foregroundY) {
-                            translate(-at.x, foregroundY - at.y) { drawLayer(contentLayer) }
-                        }
+                        clipRect(top = foregroundY) { translate(-at.x, foregroundY - at.y) { drawLayer(contentLayer) } }
                     }
-                    translate(origin.x, origin.y) { clipPath(path) {
-                        translate(at.x - origin.x, at.y - origin.y) { drawLayer(output) }
+                    translate(absolute.x, absolute.y) { clipPath(groupPath) {
+                        translate(at.x - absolute.x, at.y - absolute.y) { drawLayer(output) }
+                    } }
+                } else {
+                    renderer.shape.update(groupRegions, groupPath, 16.dp.toPx())
+                    val shape = renderer.shape.geometry ?: return@forEachIndexed
+                    val source = backing
+                    val image = source?.snapshot
+                    if (image != null) translate(absolute.x, absolute.y) { clipPath(groupPath) {
+                        with(renderer.mesh) { draw(shape, image, source.size, absolute + host.backdropPosition(view) - source.origin, depth,
+                            field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map, lighting = false) }
                     } }
                 }
-
-            } else {
-                meshShape.update(local, path, 16.dp.toPx())
-                val shape = meshShape.geometry ?: return@drawWithContent drawContent()
-                val source = backing
-                val image = source?.snapshot
-                if (image != null) translate(origin.x, origin.y) { clipPath(path) {
-                    with(mesh) { draw(shape, image, source.size, origin + host.backdropPosition(view) - source.origin, depth,
-                        field = meshShape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = meshShape.map, lighting = false) }
-                } }
-                drawContent()
-                translate(origin.x, origin.y) { clipPath(path) {
-                    with(mesh) { draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth,
-                        field = meshShape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = meshShape.map) }
-                } }
             }
+            if (Build.VERSION.SDK_INT < 33) {
+                drawContent()
+                components.forEachIndexed { index, component ->
+                    val renderer = groups[index]
+                    val shape = renderer.shape.geometry ?: return@forEachIndexed
+                    val absolute = origin + component.first().bounds.topLeft
+                    val groupPath = renderer.path.path(localLensRegions(component, component.first().bounds.topLeft), 16.dp.toPx())
+                    translate(absolute.x, absolute.y) { clipPath(groupPath) {
+                        with(renderer.mesh) { draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth,
+                            field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map) }
+                    } }
+                }
+            }
+
         }) { content() }
     }
+}
+
+private class SelectionGroupRenderer(val output: androidx.compose.ui.graphics.layer.GraphicsLayer) {
+    val path = SelectionPathCache()
+    val mesh = LensMeshRenderer()
+    val shape = LensSelectionShape()
+    val optics = if (Build.VERSION.SDK_INT >= 33) LensSelectionRenderer() else null
+}
+
+/** Optical depth belongs to each connected body, never the hull of separated selections. */
+internal fun selectionComponents(regions: List<SelectionRegion>, gap: Float): List<List<SelectionRegion>> {
+    val remaining = regions.toMutableList()
+    val result = mutableListOf<List<SelectionRegion>>()
+    while (remaining.isNotEmpty()) {
+        val group = mutableListOf(remaining.removeAt(0))
+        var next = 0
+        while (next < group.size) {
+            val a = group[next++].bounds
+            val iterator = remaining.iterator()
+            while (iterator.hasNext()) {
+                val b = iterator.next()
+                val x = max(a.left - b.bounds.right, b.bounds.left - a.right)
+                val y = max(a.top - b.bounds.bottom, b.bounds.top - a.bottom)
+                if (x <= gap && y <= gap && (x < 0 || y < 0)) { group += b; iterator.remove() }
+            }
+        }
+        result += group
+    }
+    return result
 }
 
 private class SelectionPathCache {

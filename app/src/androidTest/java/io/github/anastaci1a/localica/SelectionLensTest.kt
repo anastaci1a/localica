@@ -22,6 +22,43 @@ import androidx.compose.ui.unit.dp
 class SelectionLensTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun disconnectedSelectionCannotChangeTheFirstGroupsOptics() {
+        var second by mutableStateOf(false)
+        lateinit var source: FrostedBackdrop
+        compose.setContent { LocalicaTheme {
+            source = rememberFrostedBackdrop(Unit)
+            Box(Modifier.size(280.dp, 360.dp).testTag("independent-lenses")) {
+                androidx.compose.foundation.Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    val cell = 8.dp.toPx()
+                    for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt()) {
+                        drawRect(if ((x + y) % 2 == 0) Color.Red else Color.Blue,
+                            androidx.compose.ui.geometry.Offset(x * cell, y * cell), androidx.compose.ui.geometry.Size(cell, cell))
+                    }
+                }
+                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+                    ConnectedSelectionHost(Modifier.fillMaxSize()) {
+                        Column(Modifier.padding(16.dp)) {
+                            Box(Modifier.fillMaxWidth().height(80.dp).selectionLens(true, false))
+                            Spacer(Modifier.height(80.dp))
+                            Box(Modifier.fillMaxWidth().height(80.dp).selectionLens(second, false))
+                        }
+                    }
+                }
+            }
+        } }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
+        val before = compose.onNodeWithTag("independent-lenses").captureToImage().toPixelMap()
+        compose.runOnIdle { second = true }
+        val after = compose.onNodeWithTag("independent-lenses").captureToImage().toPixelMap()
+        val density = before.width / 280f
+        var difference = 0f; var count = 0
+        for (y in (20 * density).toInt() until (92 * density).toInt() step 2)
+            for (x in (20 * density).toInt() until (260 * density).toInt() step 2) {
+                difference += kotlin.math.abs(before[x, y].red - after[x, y].red); count++
+            }
+        assertTrue("A disconnected lens cannot change the existing body: ${difference / count}", difference / count < .01f)
+    }
+
     @Test fun selectionRefractsItsBackingOnBothRenderers() {
         var chosen by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
