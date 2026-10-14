@@ -88,17 +88,6 @@ internal fun SelectionPane(modifier: Modifier = Modifier) {
     }
 }
 
-/** Full-row choice treatment shared by sorting and settings dialogs. */
-@Composable
-internal fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        if (selected) SelectionPane(Modifier.matchParentSize())
-        Text(label, Modifier.fillMaxWidth().selectable(selected, role = Role.RadioButton, interactionSource = null,
-            indication = null, onClick = onClick).heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically)
-            .padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
 @Composable
 internal fun SortDirection(ascending: Boolean, onSelect: (Boolean) -> Unit) {
     GlassChoices(listOf("Ascending", "Descending"), if (ascending) 0 else 1, horizontal = true) { onSelect(it == 0) }

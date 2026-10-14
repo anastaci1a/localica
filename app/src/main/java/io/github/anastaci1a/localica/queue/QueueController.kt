@@ -276,14 +276,6 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         activate(play)
     }
-    /** Resume a queue's saved cursor without treating the action as a song tap. */
-    fun playQueue(id: String) = submit {
-        capture()
-        val queue = state.value.library.queues.firstOrNull { it.id == id } ?: return@submit
-        save(state.value.library.update(queue.copy(lastActivatedAt = nextActivation())).copy(activeId = id))
-        mutable.update { it.copy(browsedId = id) }
-        activate(play = true, seek = true)
-    }
     fun selectEntry(id: String) = submit {
         capture()
         val active = state.value.library.queues.firstOrNull { queue -> queue.entries.any { it.id == id } } ?: return@submit

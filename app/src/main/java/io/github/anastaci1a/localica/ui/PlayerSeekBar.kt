@@ -31,7 +31,6 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     val dragging by interaction.collectIsDraggedAsState()
     val thickness by animateDpAsState(if (dragging) 9.dp else 5.dp, tween(if (LocalReducedMotion.current) 0 else 160), label = "Seek thickness")
     var origin by remember { mutableStateOf(Offset.Zero) }
-    var pointerActive by remember { mutableStateOf(false) }
     var cancelRelease by remember { mutableStateOf(false) }
     var wasOver by remember { mutableStateOf(false) }
     val view = androidx.compose.ui.platform.LocalView.current
@@ -42,7 +41,6 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             cancelRelease = false
-            pointerActive = true
             wasOver = false
             report(true, false)
             var released = false
@@ -67,7 +65,6 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                     }
                 } while (!released && event.changes.any { it.pressed })
             } finally {
-                pointerActive = false
                 report(false, false)
                 if (!released) { cancelRelease = true; cancel() }
             }
