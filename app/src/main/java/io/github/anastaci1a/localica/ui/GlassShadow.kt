@@ -135,9 +135,10 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     return remember(scope) { RetainedGlassShadow(scope) }
 }
 
-@Composable internal fun Modifier.clearGlassShadow(strength: Float, spread: Float, radius: Dp?): Modifier {
+@Composable internal fun Modifier.clearGlassShadow(strength: Float, spread: Float, radius: Dp?, visible: () -> Boolean = { true }): Modifier {
     val cache = rememberGlassShadow()
     return drawBehind {
+    if (!visible()) return@drawBehind
     val corner = (radius?.toPx() ?: size.minDimension / 2).coerceIn(0f, size.minDimension / 2)
     with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread) }
     }
@@ -167,7 +168,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
             val item = entry.coordinates
             val alpha = entry.opacity()
             val anchor = entry.anchor
-            if (item == null || !item.isAttached || alpha <= .001f || anchor?.modalPresent == true) null else {
+            if (item == null || !item.isAttached || alpha <= .001f || anchor?.shadowInModal == true) null else {
                 val rect = host.localBoundingBoxOf(item, clipBounds = false)
                 val corner = (entry.radius?.toPx() ?: minOf(rect.width, rect.height) / 2).coerceIn(0f, minOf(rect.width, rect.height) / 2)
                 // Anchored controls deform in draw space. Their coordinates alone

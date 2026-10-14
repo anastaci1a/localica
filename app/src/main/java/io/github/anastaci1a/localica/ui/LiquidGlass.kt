@@ -131,6 +131,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val contact = rememberGlassContact(anchor?.contact)
     SideEffect { if (anchor != null) {
         anchor.source = source; anchor.cornerRadius = cornerRadius; anchor.depthScale = depthScale
+        anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
     } }
     val lens = remember { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null }
     val mesh = remember { LensMeshRenderer() }
@@ -139,7 +140,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact) else if (anchor != null) Modifier.drawWithContent {
         scale(contact.body.value.scaleX(contact.vertical), contact.body.value.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
     } else Modifier)
-        .then(if (shadow) Modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius) else Modifier)
+        .then(if (shadow) Modifier.clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, cornerRadius) { anchor?.shadowInModal != true } else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
         .onGloballyPositioned { origin = it.backdropPosition(view); surfaceSize = it.size }, propagateMinConstraints = true) {
         if (source != null && Build.VERSION.SDK_INT >= 33) {

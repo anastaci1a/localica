@@ -335,7 +335,6 @@ fun LocalicaScreen(
                             moreOpen = false; scannerOpen = true
                         })
                         ActionMenuItem("Settings", onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
-                        ActionMenuItem("Close Localica", onClick = { moreOpen = false; if (settings.confirmExit) exitPrompt = true else exit() })
                     }
                 }
                 }

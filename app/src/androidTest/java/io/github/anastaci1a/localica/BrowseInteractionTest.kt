@@ -31,7 +31,7 @@ class BrowseInteractionTest {
         compose.onNodeWithTag(last).performClick()
         compose.runOnIdle { assertEquals(1, played); played = null }
         compose.onNodeWithTag(last).performTouchInput { longClick() }
-        compose.onNodeWithText("Select song").performClick()
+        compose.onNodeWithText("Select song").assertDoesNotExist()
         compose.onNodeWithText("1 selected").assertIsDisplayed()
         compose.onNodeWithTag(first).performClick()
         compose.runOnIdle { assertNull(played) }
@@ -47,8 +47,8 @@ class BrowseInteractionTest {
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         try {
             val preferences = BrowsePreferences(context)
-            val album = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "one"))
-            val another = album.copy(collection = MediaRef(MediaKind.Album, "two"))
+            val album = BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, "one"))
+            val another = album.copy(collection = MediaRef(MediaKind.Playlist, "two"))
             val byYear = BrowseStyle(TrackSort.Year, false, Presentation.Standard)
             preferences.write(album, byYear, false)
             assertEquals(byYear, preferences.read(another))
@@ -60,6 +60,13 @@ class BrowseInteractionTest {
             preferences.reset(another)
             assertEquals(byYear, preferences.read(another))
             assertEquals(TrackSort.Title, preferences.read(album.copy(search = true)).sort)
+            val fixedAlbum = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "one"))
+            preferences.write(fixedAlbum, byYear.copy(songGrouping = SongGrouping.Artist), true)
+            val ordered = preferences.read(fixedAlbum)
+            assertEquals(TrackSort.Album, ordered.sort)
+            assertTrue(ordered.ascending)
+            assertEquals(Presentation.List, ordered.presentation)
+            assertEquals(SongGrouping.None, ordered.songGrouping)
         } finally { context.getSharedPreferences("browse-style", 0).edit().clear().commit() }
     }
 }
