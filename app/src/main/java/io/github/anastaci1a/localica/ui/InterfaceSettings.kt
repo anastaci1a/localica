@@ -87,7 +87,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
 
 @Composable
 internal fun ArtworkActionPreference(label: String, value: ArtworkAction, onChange: (ArtworkAction) -> Unit) {
-    ChoicePreference(label, value, ArtworkAction.entries, { it.label }, onChange)
+    ChoicePreference(label, value, ArtworkAction.entries, { it.label }, onSelect = onChange)
 }
 
 @Composable

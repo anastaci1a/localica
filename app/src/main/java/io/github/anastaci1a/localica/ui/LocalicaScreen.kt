@@ -96,6 +96,13 @@ fun LocalicaScreen(
     }
     val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val presentationCache = remember { BrowsePresentationCache() }
+    val warmRoutes = remember(navigation.stacks, settings.tabs, queues.browsedId, queues.library) {
+        val pages = settings.tabs.map { navigation.stacks[it]?.lastOrNull() ?: BrowseRoute(it) }
+            .filterNot { it.collection == null && !it.search && it.tab in setOf(MainTab.Home, MainTab.Queues) }
+        val queue = queues.library.queues.firstOrNull { it.id == queues.browsedId } ?: queues.library.active
+        pages + listOfNotNull(queue?.let { BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, it.id), it.name) })
+    }
+    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, queues.library.queues, libraryFilters, warmRoutes)
     val artworkStore = remember { BrowseArtworkStore() }
     val retainedRoutes = navigation.stacks.values.mapNotNull { it.lastOrNull()?.key }.toMutableSet()
     var backDestination = navigation

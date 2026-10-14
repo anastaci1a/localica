@@ -76,12 +76,13 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
 internal fun GlassAlertDialog(onDismissRequest: () -> Unit, confirmButton: @Composable () -> Unit,
     modifier: Modifier = Modifier, dismissButton: (@Composable () -> Unit)? = null,
     icon: (@Composable () -> Unit)? = null, title: (@Composable () -> Unit)? = null,
-    text: (@Composable () -> Unit)? = null) {
+    text: (@Composable () -> Unit)? = null, footer: (@Composable () -> Unit)? = null) {
     GlassDialog(onDismissRequest) {
         Column(modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             icon?.let { Box(Modifier.align(Alignment.CenterHorizontally)) { it() } }
             title?.let { ProvideTextStyle(MaterialTheme.typography.titleLarge, it) }
             text?.let { Box(Modifier.weight(1f, fill = false)) { ProvideTextStyle(MaterialTheme.typography.bodyMedium, it) } }
+            footer?.invoke()
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 dismissButton?.invoke(); confirmButton()
             }

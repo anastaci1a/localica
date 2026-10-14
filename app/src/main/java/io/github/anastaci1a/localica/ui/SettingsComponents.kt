@@ -78,7 +78,8 @@ internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, labe
     onDismiss: () -> Unit, onSelect: (T) -> Unit) {
     var draft by remember { mutableStateOf(choices.firstOrNull { it == selected } ?: choices.firstOrNull() ?: selected) }
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
+        val scroll = rememberScrollState()
+        Column(Modifier.scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = 8.dp, vertical = 12.dp).selectableGroup()) {
             GlassChoices(choices.map(label), choices.indexOf(draft).coerceAtLeast(0)) { index -> draft = choices[index] }
         }
     }, confirmButton = { TextButton(enabled = choices.isNotEmpty(), onClick = { onSelect(draft); onDismiss() }) { Text("Select") } },
@@ -86,7 +87,8 @@ internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, labe
 }
 
 @Composable
-internal fun <T> ChoicePreference(title: String, selected: T, choices: List<T>, label: (T) -> String, onSelect: (T) -> Unit) {
+internal fun <T> ChoicePreference(title: String, selected: T, choices: List<T>, label: (T) -> String,
+    popup: Boolean = false, onSelect: (T) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val anchor = rememberGlassAnchor()
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
@@ -95,7 +97,7 @@ internal fun <T> ChoicePreference(title: String, selected: T, choices: List<T>, 
     val style = MaterialTheme.typography.bodyLarge
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val required = with(density) { (labels.maxOfOrNull { measurer.measure(androidx.compose.ui.text.AnnotatedString(it), style).size.width } ?: 0).toDp() + 32.dp }
-        if (choices.size in 2..3 && required * choices.size <= maxWidth) Column {
+        if (!popup && choices.size in 2..3 && required * choices.size <= maxWidth) Column {
             Text(title, style = MaterialTheme.typography.titleMedium)
             GlassChoices(labels, choices.indexOf(selected).coerceAtLeast(0), horizontal = true) { onSelect(choices[it]) }
         } else SettingsLink(title, label(selected), anchor = anchor) { open = true }

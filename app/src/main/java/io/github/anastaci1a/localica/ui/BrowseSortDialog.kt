@@ -1,7 +1,12 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -37,10 +42,17 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
             HorizontalDivider(Modifier.padding(top = 8.dp), color = LocalContentColor.current.copy(alpha = .12f))
         }
     }, text = {
-        val panelHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * .53f).coerceAtMost(460.dp)
-        Crossfade(tab, modifier = Modifier.height(panelHeight), animationSpec = androidx.compose.animation.core.tween(if (LocalReducedMotion.current) 0 else 140), label = "Browse options page") { page ->
+        val panelLimit = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * .55f).coerceAtMost(420.dp)
+        val pageProgress by animateFloatAsState(tab.toFloat(), tween(if (LocalReducedMotion.current) 0 else 140), label = "Browse options page")
+        // Measure both drafts under the same height cap. Navigation changes only
+        // the visible page, never the panel's size or the footer's position.
+        Layout(modifier = Modifier.fillMaxWidth().heightIn(max = panelLimit).testTag("browse-options-body"), content = {
+        repeat(2) { page ->
             val scroll = if (page == 0) sortScroll else viewScroll
-            Column(Modifier.fillMaxSize().scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = shadowInset, vertical = shadowInset),
+            Column(Modifier.fillMaxWidth().then(if (page != tab) Modifier.clearAndSetSemantics { }
+                .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } } }
+                else Modifier)
+                .scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = shadowInset, vertical = shadowInset),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (page == 1) ListViewFields(route, edited) { edited = it }
                 else {
@@ -48,18 +60,27 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                         GlassActionButton(R.drawable.ic_shuffle, "Randomize queue order", onClick = onRandomize)
                         Text("Shuffles the saved order. While playing, the current song stays first and playback continues.", style = MaterialTheme.typography.bodySmall)
                     }
-                    ChoicePreference("Sort by", edited.sort, fields, ::sortLabel) { field ->
+                    ChoicePreference("Sort by", edited.sort, fields, ::sortLabel, popup = true) { field ->
                         edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending)
                     }
                     SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }
                 }
-                SettingsHeading("Apply to")
-                if (route.collection != null) {
-                    BooleanPreference("Only for this collection", override) { override = it }
-                    if (overridden) TextButton(onClick = onReset) { Text("Use list-type defaults") }
-                }
-                Text(if (override) "Saved for this collection." else "Saved for this type of list.")
             }
+        }
+        }) { children, constraints ->
+            val pages = children.map { it.measure(constraints.copy(minHeight = 0)) }
+            layout(constraints.maxWidth, pages.maxOf { it.height }) {
+                pages.forEachIndexed { index, page ->
+                    val alpha = if (index == 0) 1f - pageProgress else pageProgress
+                    if (alpha > 0f) page.placeWithLayer(0, 0, zIndex = if (index == tab) 1f else 0f) { this.alpha = alpha }
+                }
+            }
+        }
+    }, footer = {
+        Column {
+            HorizontalDivider(color = LocalContentColor.current.copy(alpha = .12f))
+            BooleanPreference("Save only for this list", override) { override = it }
+            if (overridden) TextButton(onClick = onReset) { Text("Use list-type defaults") }
         }
     }, confirmButton = { TextButton(onClick = { onSave(edited, override) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })

@@ -26,13 +26,19 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun MarqueeTitle(title: String, reducedMotion: Boolean, modifier: Modifier = Modifier,
     style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleSmall) {
+    // Player expansion deliberately freezes marquee motion. Avoid subcomposition
+    // and a second text measurement for every intermediate player width.
+    if (reducedMotion) {
+        Text(title, modifier, maxLines = 1, style = style, overflow = TextOverflow.Ellipsis)
+        return
+    }
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     BoxWithConstraints(modifier) {
         val width = constraints.maxWidth.toFloat()
         val textWidth = measurer.measure(AnnotatedString(title), style, maxLines = 1, softWrap = false).size.width
-        if (reducedMotion || textWidth <= width || !constraints.hasBoundedWidth) {
+        if (textWidth <= width || !constraints.hasBoundedWidth) {
             Text(title, maxLines = 1, style = style, overflow = TextOverflow.Ellipsis)
         } else {
             val offset = remember(title, width, style) { Animatable(0f) }

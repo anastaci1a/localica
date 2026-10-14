@@ -136,16 +136,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (artistDetail) LibraryViews.groups(library.snapshot.copy(tracks = sourceResult.rows.map { it.track }),
             SongListView.Albums, LibraryViews.defaults(SongListView.Albums)) else emptyList()
     }
-    val validAlbums = selectedAlbums.filter { id -> albums.any { it.id == id } }
+    val validAlbums = remember(albums, selectedAlbums) { selectedAlbums.filter { id -> albums.any { it.id == id } } }
     val selectedTrackIds = remember(albums, validAlbums) {
         albums.filter { it.id in validAlbums }.flatMap { it.tracks }.map { it.id }.toSet()
     }
-    val result = if (artistDetail && validAlbums.isNotEmpty()) sourceResult.copy(items = sourceResult.items.filter { it.row?.track?.id in selectedTrackIds }) else sourceResult
+    val result = remember(sourceResult, artistDetail, selectedTrackIds) {
+        if (artistDetail && selectedTrackIds.isNotEmpty()) sourceResult.copy(items = sourceResult.items.filter { it.row?.track?.id in selectedTrackIds }) else sourceResult
+    }
     val itemIndices = remember(result.items) { result.items.withIndex().associate { it.value.key to it.index } }
     val itemKeys = remember(result.items) { result.items.map { it.key } }
-    val heroUri = if (artistDetail) albums.sortedWith(compareByDescending<LibraryGroup> { it.tracks.mapNotNull(Track::year).maxOrNull() ?: 0 }
+    val artistHero = remember(artistDetail, albums) { if (artistDetail) albums.sortedWith(compareByDescending<LibraryGroup> { it.tracks.mapNotNull(Track::year).maxOrNull() ?: 0 }
         .thenByDescending { it.tracks.mapNotNull(Track::addedAt).maxOrNull() ?: 0 }.thenBy { it.id }).firstOrNull()?.tracks?.firstOrNull()?.uri
-        else seededCollection?.coverUris?.firstOrNull() ?: sourceResult.rows.firstOrNull()?.track?.uri
+        else null }
+    val heroUri = if (artistDetail) artistHero else seededCollection?.coverUris?.firstOrNull() ?: sourceResult.rows.firstOrNull()?.track?.uri
     val hero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
     val lightCollection = collectionIsLight(hero)
     val collectionInk = if (lightCollection) androidx.compose.ui.graphics.Color(0xFF202124) else androidx.compose.ui.graphics.Color.White
@@ -220,7 +223,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val needsListBackdrop = (showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
         (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
     val listBackdrop = rememberFrostedBackdrop(presentation to surroundingBackdrop?.fallback,
-        needsListBackdrop, dark = if (artDetail) !lightCollection else surroundingBackdrop?.dark == true)
+        needsListBackdrop, dark = if (artDetail) !lightCollection else surroundingBackdrop?.dark == true,
+        // Floating controls sample narrow regions. Let their clips cull rows
+        // instead of rasterizing the entire scrolling viewport a second time.
+        retainRaster = false)
     val refreshBackdrop = LocalBackdropRefresh.current
     LaunchedEffect(presentation, gridState.isScrollInProgress) {
         if (!gridState.isScrollInProgress) {
@@ -327,7 +333,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier)
                 .pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
-                .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List"
+                .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List, ${displayedStyle.listSize.name}"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
                 .browsePinch(enabled && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind !in setOf(MediaKind.Queue, MediaKind.Album),
                     pinchMotion, displayedStyle, route, gridState, reorder.viewportWidth, density, scrollScope, reducedMotion,
@@ -438,7 +444,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     if (!editableOrder) session.select(route.collection, listOf(item.row))
                                 } else contextMenu = item.key
                             }
-                        ).padding(horizontal = if (denseGallery) 4.dp else 12.dp, vertical = 8.dp)) {
+                        ).padding(horizontal = if (denseGallery) 4.dp else 12.dp)) {
                             BrowseItemLayout(item, displayedStyle, denseGallery, this@LookaheadScope, reducedMotion, itemMenu,
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
                         }

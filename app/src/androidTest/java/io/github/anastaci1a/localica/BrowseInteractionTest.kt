@@ -67,6 +67,27 @@ class BrowseInteractionTest {
             assertTrue(ordered.ascending)
             assertEquals(Presentation.List, ordered.presentation)
             assertEquals(SongGrouping.None, ordered.songGrouping)
+            assertEquals(ListSize.Normal, ordered.listSize)
+            val tab = BrowseRoute(MainTab.Songs)
+            val filter = BrowseRoute(MainTab.Library, filter = MediaKind.Song)
+            val normal = BrowseStyle(listSize = ListSize.Normal)
+            val compact = normal.copy(listSize = ListSize.Compact, extraInfo = ExtraInfo.Year)
+            preferences.write(tab, normal, false)
+            preferences.write(filter, compact, true)
+            assertEquals(normal, preferences.read(tab))
+            assertEquals(compact, preferences.read(filter))
+            assertEquals(compact, BrowsePreferences(context).read(filter))
+            val search = filter.copy(search = true, text = "first")
+            preferences.write(search, compact, true)
+            assertEquals(compact, preferences.read(search.copy(text = "second")))
+            // Clearing the override and changing defaults is one atomic publication.
+            val observed = mutableListOf<BrowseStyle>()
+            val stop = preferences.observe(filter) { observed += it }
+            preferences.write(filter, normal.copy(listSize = ListSize.Large), false)
+            assertFalse(preferences.overridden(filter))
+            assertEquals(ListSize.Large, preferences.read(tab).listSize)
+            assertTrue(observed.all { it.listSize == ListSize.Large })
+            stop()
         } finally { context.getSharedPreferences("browse-style", 0).edit().clear().commit() }
     }
 }

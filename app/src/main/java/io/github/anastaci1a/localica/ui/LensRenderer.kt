@@ -25,8 +25,7 @@ internal class LensRenderer {
         uniform float4 bounds;
         uniform float corner;
         uniform float span;
-        uniform float depth;
-        uniform float flattening;
+        uniform float3 optics;
         uniform float power;
         uniform float whiteTint;
         uniform float illumination;
@@ -85,44 +84,47 @@ internal class LensRenderer {
             half4 ink = foregroundOffset > 0.0 ? scene.eval(p + float2(0, foregroundOffset)) : half4(0);
             float u = clamp(1.0 - max(f.x, 0.0) / max(span, 0.001), 0.0, 1.0);
             float root = sqrt(max(1.0 - u * u, 0.0004));
-            float opticalDepth = depth / sqrt(1.0 + depth * depth / 4.0);
-            float crown = span * 0.62 * opticalDepth;
-            float shoulder = 0.4 + 0.06 * flattening;
+            float crown = optics.x;
+            float shoulder = optics.y;
             float height = crown * root * (1.0 + shoulder * u * u);
             float slope = crown / max(span, 0.001) * u / root * (1.0 - 2.0 * shoulder + 3.0 * shoulder * u * u);
             float3 normal = normalize(float3(-f.yz * slope, 1.0));
-            half4 sampled = half4(0);
+            half4 sampled = ink;
             if (ink.a < 1.0) {
                 float3 ray = refract(float3(0, 0, -1), normal, 1.0 / 1.33);
                 float2 exiting = ray.xy * 1.33;
                 float exitZ = sqrt(max(1.0 - dot(exiting, exiting), 0.01));
                 float2 displacement = (ray.xy * height / max(-ray.z, 0.12)
-                    + exiting * span * 0.32 * opticalDepth / exitZ) * power;
+                    + exiting * optics.z / exitZ) * power;
                 float2 lookup = p + displacement;
                 if (foregroundOffset > 0.0) {
                     lookup += backdropOffset;
                     sampled = lookup.x >= 0.0 && lookup.y >= 0.0 && lookup.x < backdropSize.x && lookup.y < backdropSize.y
                         ? scene.eval(lookup + float2(1)) : half4(0);
                 } else sampled = scene.eval(lookup);
+                float alpha = float(sampled.a);
+                float3 color = float3(sampled.rgb) / max(alpha, 0.0001);
+                // User-selected white tint is separate from readability. Its ordered
+                // shoulder lifts shadows more than highlights, retaining saturated light.
+                float luma = clamp(dot(color, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+                float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
+                float tint = clamp((lifted - luma) / max(1.0 - luma, 0.0001), 0.0, 1.0);
+                color = mix(color, float3(1), tint);
+                color = clamp(color, 0.0, 1.0);
+                if (tone.x > 0.0) {
+                    float3 end = tone.z > 0.5 ? color : 1.0 - color;
+                    float3 weighted = tone.y == 2.0 ? end * end : tone.y == 1.0 ? end : pow(end, float3(tone.y));
+                    color += weighted * (tone.z > 0.5 ? -tone.x : tone.x);
+                }
+                sampled = ink + half4(half3(color * alpha), half(alpha)) * (1.0 - ink.a);
             }
             float alpha = float(sampled.a);
             float3 color = float3(sampled.rgb) / max(alpha, 0.0001);
-            // User-selected white tint is separate from readability. Its ordered
-            // shoulder lifts shadows more than highlights, retaining saturated light.
-            float luma = clamp(dot(color, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
-            float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
-            float tint = clamp((lifted - luma) / max(1.0 - luma, 0.0001), 0.0, 1.0);
-            color = mix(color, float3(1), tint);
-            color = clamp(color, 0.0, 1.0);
-            color = tone.z > 0.5 ? color - tone.x * pow(color, float3(tone.y))
-                : color + tone.x * pow(1.0 - color, float3(tone.y));
-            sampled = ink + half4(half3(color * alpha), half(alpha)) * (1.0 - ink.a);
-            alpha = float(sampled.a);
-            color = float3(sampled.rgb) / max(alpha, 0.0001);
             // A broad environment reflection belongs to the curved normal. No
             // painted plate, contour gradient or uniform adaptive-contrast coating.
             float facing = dot(normal, normalize(float3(-0.45, -0.75, 0.6)));
-            float grazing = pow(1.0 - normal.z, 3.0);
+            float grazing = 1.0 - normal.z;
+            grazing = grazing * grazing * grazing;
             float reflection = (0.018 * (1.0 - normal.z) + 0.26 * grazing) * illumination * power;
             float white = tone.z > 0.5 ? 1.0 - tone.x : 1.0;
             float black = tone.z > 0.5 ? 0.0 : tone.x;
@@ -161,8 +163,11 @@ internal class LensRenderer {
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
         shader.setFloatUniform("corner", geometry.corner.coerceIn(0f, geometry.span))
         shader.setFloatUniform("span", geometry.span)
-        shader.setFloatUniform("depth", state[7])
-        shader.setFloatUniform("flattening", flattening.coerceIn(0f, 1f))
+        // Surface-wide constants belong to the draw, not every shaded pixel.
+        val d = state[7]
+        val opticalDepth = d / kotlin.math.sqrt(1f + d * d / 4f)
+        shader.setFloatUniform("optics", geometry.span * .62f * opticalDepth,
+            .4f + .06f * flattening.coerceIn(0f, 1f), geometry.span * .32f * opticalDepth)
         shader.setFloatUniform("power", power)
         shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)

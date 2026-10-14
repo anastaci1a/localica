@@ -6,8 +6,13 @@ import org.junit.Test
 
 class BrowseZoomTest {
     @Test fun zoomTraversesEveryViewAndStopsAtBothEnds() {
-        var style = BrowseStyle()
+        var style = BrowseStyle(listSize = ListSize.Compact)
         assertEquals(style, style.zoomStep(false, 400f))
+        for (size in listOf(ListSize.Normal, ListSize.Large)) {
+            style = style.zoomStep(true, 400f)
+            assertEquals(Presentation.List, style.presentation)
+            assertEquals(size, style.listSize)
+        }
         for (columns in 5 downTo 1) {
             style = style.zoomStep(true, 400f)
             assertEquals(columns, galleryColumns(style.presentation, 400f, style.itemsPerRow))
@@ -18,16 +23,21 @@ class BrowseZoomTest {
             style = style.zoomStep(false, 400f)
             assertEquals(columns, style.itemsPerRow)
         }
-        assertEquals(Presentation.List, style.zoomStep(false, 400f).presentation)
+        for (size in listOf(ListSize.Large, ListSize.Normal, ListSize.Compact)) {
+            style = style.zoomStep(false, 400f)
+            assertEquals(Presentation.List, style.presentation)
+            assertEquals(size, style.listSize)
+        }
+        assertEquals(style, style.zoomStep(false, 400f))
     }
 
-    @Test fun zoomKeepsSortAndOtherPreferencesWhileLeavingSectionedListMode() {
+    @Test fun zoomKeepsSortAndOtherPreferencesAndAlbumsStayFixed() {
         val old = BrowseStyle(ascending = false, extraInfo = ExtraInfo.Year, quickSearch = false, songGrouping = SongGrouping.Artist)
         assertEquals(SongGrouping.Artist, old.zoomStep(true, 400f).songGrouping)
         val next = old.zoomStep(true, 400f, albumSongs = true)
         assertFalse(next.ascending)
         assertEquals(ExtraInfo.Year, next.extraInfo)
         assertFalse(next.quickSearch)
-        assertEquals(SongGrouping.None, next.songGrouping)
+        assertEquals(old, next)
     }
 }

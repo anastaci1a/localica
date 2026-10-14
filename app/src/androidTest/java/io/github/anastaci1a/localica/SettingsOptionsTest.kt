@@ -48,7 +48,7 @@ class SettingsOptionsTest {
                 SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role,
                     androidx.compose.ui.semantics.Role.RadioButton)).fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("Quick-search box").performScrollTo().assertExists()
-            compose.onNodeWithText("Only for this collection").performScrollTo().performClick()
+            compose.onNodeWithText("Save only for this list").performClick()
             compose.onNodeWithText("Save").performClick()
             compose.runOnIdle {
                 assertEquals(saved, BrowsePreferences(context).read(route))

@@ -110,7 +110,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
             .testTag(if (index == 0) "drag-stack" else "drag-card-${item.key}"),
             landing = { drag.handoff.value }, shadow = false) {
             if (index == 0 || !lifted || drag.dropping) androidx.compose.ui.layout.LookaheadScope {
-                Box(Modifier.fillMaxWidth().padding(horizontal = if (drag.dense) 4.dp else 12.dp, vertical = 8.dp)) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = if (drag.dense) 4.dp else 12.dp)) {
                     MaterialTheme(colorScheme = drag.colors ?: MaterialTheme.colorScheme) {
                         CompositionLocalProvider(LocalContentColor provides drag.ink.takeUnless { it == Color.Unspecified }.let { it ?: LocalContentColor.current }) {
                             BrowseItemLayout(item, drag.style, drag.dense, this@LookaheadScope, true, menu = { })

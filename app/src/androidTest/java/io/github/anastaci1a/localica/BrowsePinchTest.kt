@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
@@ -22,6 +23,39 @@ import org.junit.Test
 
 class BrowsePinchTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun listSizesChangeDensityWithoutLosingSavedDetailOrArtwork() {
+        val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+        val route = BrowseRoute(MainTab.Songs)
+        val original = prefs.read(route)
+        val style = BrowseStyle(extraInfo = ExtraInfo.Artist, listSize = ListSize.Compact)
+        val tracks = (0..29).map { Track("size:$it", "Song ${it.toString().padStart(2, '0')}", artist = "Artist $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
+        try {
+            prefs.write(route, style, false)
+            compose.setContent { LocalicaTheme {
+                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                    queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+            } }
+            waitForView("List, Compact")
+            compose.onNodeWithText("Artist 0").assertDoesNotExist()
+            assertEquals(0f, compose.onNodeWithTag("browse-art-size:0", true).fetchSemanticsNode().boundsInRoot.width)
+            val row = compose.onNodeWithTag("media-size:0")
+            val compact = row.fetchSemanticsNode().boundsInRoot.height
+            compose.runOnIdle { prefs.write(route, style.copy(listSize = ListSize.Normal), false) }
+            waitForView("List, Normal")
+            compose.onNodeWithText("Artist 0").assertIsDisplayed()
+            val normal = row.fetchSemanticsNode().boundsInRoot.height
+            assertTrue(normal > compact)
+            compose.runOnIdle { prefs.write(route, style.copy(listSize = ListSize.Large), false) }
+            waitForView("List, Large")
+            assertTrue(row.fetchSemanticsNode().boundsInRoot.height > normal)
+            compose.runOnIdle { prefs.write(route, style, false) }
+            waitForView("List, Compact")
+            assertEquals(compact, row.fetchSemanticsNode().boundsInRoot.height)
+            assertEquals(ExtraInfo.Artist, prefs.read(route).extraInfo)
+        } finally { prefs.write(route, original, false) }
+    }
 
     @Test fun oneStepUntilEveryFingerLiftsAndDisabledViewsIgnorePinches() {
         val steps = mutableListOf<Boolean>()
@@ -44,7 +78,7 @@ class BrowsePinchTest {
         assertEquals(2, steps.size)
     }
 
-    @Test fun deepListKeepsItsAnchorAndSelectionAcrossAllSixViews() {
+    @Test fun deepListKeepsItsAnchorAndSelectionAcrossAllEightViews() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val route = BrowseRoute(MainTab.Songs)
         val prefs = BrowsePreferences(context)
@@ -53,7 +87,7 @@ class BrowsePinchTest {
         val tracks = (0..119).map { index ->
             Track("pinch:$index", "Song ${index.toString().padStart(3, '0')}", fileName = "$index.mp3", relativePath = "$index.mp3")
         }
-        prefs.write(route, BrowseStyle(), false)
+        prefs.write(route, BrowseStyle(listSize = ListSize.Compact), false)
         try {
             compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalSessionSelection provides session) {
                 BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
@@ -68,9 +102,11 @@ class BrowsePinchTest {
             val original = item.fetchSemanticsNode().boundsInRoot
             val viewport = list.fetchSemanticsNode().boundsInRoot
             list.performTouchInput { pinch(true, original.center.y - viewport.top) }
-            waitForView("Gallery, 5 columns")
+            waitForView("List, Normal")
             assertEquals("Keep the item near the pinch at its prior vertical position", original.top,
                 item.fetchSemanticsNode().boundsInRoot.top, 4f)
+            list.performTouchInput { pinch(true) }; waitForView("List, Large")
+            list.performTouchInput { pinch(true) }; waitForView("Gallery, 5 columns")
             for (columns in 4 downTo 1) {
                 list.performTouchInput { pinch(true) }; waitForView(if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns")
                 assertEquals(columns, prefs.read(route).itemsPerRow)
@@ -78,7 +114,9 @@ class BrowsePinchTest {
             for (columns in 2..5) {
                 list.performTouchInput { pinch(false) }; waitForView("Gallery, $columns columns")
             }
-            list.performTouchInput { pinch(false) }; waitForView("List")
+            for (size in listOf("Large", "Normal", "Compact")) {
+                list.performTouchInput { pinch(false) }; waitForView("List, $size")
+            }
             assertEquals(Presentation.List, prefs.read(route).presentation)
             assertEquals(listOf("pinch:60"), session.entries.map { it.row.track.id })
         } finally { prefs.write(route, old, false) }
@@ -111,7 +149,7 @@ class BrowsePinchTest {
             list.performTouchInput {
                 moveTo(0, Offset(centerX - 100, y)); moveTo(1, Offset(centerX + 100, y)); up(0); up(1)
             }
-            waitForView("Gallery, 5 columns")
+            waitForView("List, Large")
             assertFalse(session.active)
             compose.onNodeWithTag("drop-gap").assertDoesNotExist()
         } finally { prefs.write(route, old, false) }
@@ -122,19 +160,22 @@ class BrowsePinchTest {
         val route = BrowseRoute(MainTab.Songs)
         val prefs = BrowsePreferences(context)
         val old = prefs.read(route)
-        prefs.write(route, BrowseStyle(), false)
+        prefs.write(route, BrowseStyle(listSize = ListSize.Large), false)
         try {
             val tracks = (0..20).map { Track("live:$it", "Song ${it.toString().padStart(2, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
-            compose.setContent { LocalicaTheme {
+            // A bounded viewport makes the endpoint sizes distinct on both emulator densities.
+            compose.setContent { LocalicaTheme { Box(Modifier.width(300.dp)) {
                 BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
                     PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
                     queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
-            } }
+            } } }
             val list = compose.onNodeWithTag("browser-list")
             compose.waitForIdle()
             compose.mainClock.autoAdvance = false
             val artwork = compose.onNodeWithTag("browse-art-live:0", true)
-            val resting = artwork.fetchSemanticsNode().boundsInRoot.width
+            val resting = artwork.fetchSemanticsNode().boundsInRoot
+            fun changed(a: androidx.compose.ui.geometry.Rect, b: androidx.compose.ui.geometry.Rect) =
+                maxOf(kotlin.math.abs(a.width - b.width), kotlin.math.abs(a.left - b.left), kotlin.math.abs(a.top - b.top)) > 1f
             list.performTouchInput {
                 down(0, Offset(centerX - 50, 200f)); down(1, Offset(centerX + 50, 200f))
                 moveTo(0, Offset(centerX - 65, 200f)); moveTo(1, Offset(centerX + 65, 200f))
@@ -143,16 +184,18 @@ class BrowsePinchTest {
             // synthetic animation clock. Wait for that handoff with fingers held.
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
-                kotlin.math.abs(artwork.fetchSemanticsNode().boundsInRoot.width - resting) > 1f
+                // Large-list and five-column artwork can have nearly equal widths;
+                // their movement into different positions must still follow the pinch.
+                changed(artwork.fetchSemanticsNode().boundsInRoot, resting)
             }
             compose.mainClock.advanceTimeBy(64)
-            val first = artwork.fetchSemanticsNode().boundsInRoot.width
+            val first = artwork.fetchSemanticsNode().boundsInRoot
             list.performTouchInput {
                 moveTo(0, Offset(centerX - 110, 200f)); moveTo(1, Offset(centerX + 110, 200f))
             }
             compose.mainClock.advanceTimeBy(64)
-            val second = artwork.fetchSemanticsNode().boundsInRoot.width
-            assertTrue("Artwork must respond while both fingers remain down: $first / $second", kotlin.math.abs(second - first) > 1f)
+            val second = artwork.fetchSemanticsNode().boundsInRoot
+            assertTrue("Artwork must respond while both fingers remain down: $first / $second", changed(second, first))
             list.performTouchInput { up(0); up(1) }
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()

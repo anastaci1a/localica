@@ -31,18 +31,39 @@ internal class BrowsePresentationCache {
     fun get(library: LibrarySnapshot, playlists: List<ManualPlaylist>, queues: List<ListeningQueue>,
         filters: LibraryFilters, route: BrowseRoute, style: BrowseStyle): PresentedBrowse? {
         val index = entries.indexOfFirst { it.library === library && it.playlists === playlists && it.queues === queues &&
-            it.filters == filters && it.presentation.route == route && it.presentation.style == style }
-        return if (index < 0) null else entries.removeAt(index).also { entries.add(it) }.presentation
+            it.filters == filters && it.presentation.route == route && it.presentation.style.sameQuery(style) }
+        return if (index < 0) null else entries.removeAt(index).also { entries.add(it) }.presentation.copy(style = style)
     }
     fun put(library: LibrarySnapshot, playlists: List<ManualPlaylist>, queues: List<ListeningQueue>,
         filters: LibraryFilters, presentation: PresentedBrowse) {
-        entries.removeAll { it.library !== library || (it.presentation.route == presentation.route && it.presentation.style == presentation.style) }
+        entries.removeAll { it.library !== library || (it.presentation.route == presentation.route && it.presentation.style.sameQuery(presentation.style)) }
         entries.add(Entry(library, playlists, queues, filters, presentation))
         while (entries.size > 12) entries.removeAt(0)
     }
 }
 
+private fun BrowseStyle.sameQuery(other: BrowseStyle) = sort == other.sort && ascending == other.ascending && songGrouping == other.songGrouping
+
 internal val LocalBrowsePresentationCache = compositionLocalOf<BrowsePresentationCache?> { null }
+
+/** Warm bounded tab/queue results off Main before a gesture needs their first frame.
+ * Artwork readers remain demand-driven so prefetch cannot block a visible cover. */
+@Composable
+internal fun WarmBrowsePresentations(cache: BrowsePresentationCache, library: LibrarySnapshot,
+    playlists: List<ManualPlaylist>, queues: List<ListeningQueue>, filters: LibraryFilters, routes: List<BrowseRoute>) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val preferences = remember(context) { BrowsePreferences(context) }
+    LaunchedEffect(library, playlists, queues, filters, routes) {
+        for (route in routes.distinct()) {
+            val style = preferences.read(route)
+            if (cache.get(library, playlists, queues, filters, route, style) != null) continue
+            val result = withContext(kotlinx.coroutines.Dispatchers.Default) {
+                BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections)
+            }
+            cache.put(library, playlists, queues, filters, PresentedBrowse(route, style, result))
+        }
+    }
+}
 
 internal data class BrowsePresentationState(val current: PresentedBrowse?, val cached: Boolean,
     val reveal: Animatable<Float, AnimationVector1D>, val pending: Boolean)
@@ -54,9 +75,9 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     reducedMotion: Boolean, queryDispatcher: kotlinx.coroutines.CoroutineDispatcher): BrowsePresentationState {
     // Query work and filter motion are independent. Departing rows begin fading
     // immediately; only a result for the latest request may replace them.
-    val presentationCache = LocalBrowsePresentationCache.current
+    val presentationCache = LocalBrowsePresentationCache.current ?: remember { BrowsePresentationCache() }
     val cachedPresentation = remember(library, playlists, route, style, queues, libraryFilters) {
-        presentationCache?.get(library, playlists, queues, libraryFilters, route, style)
+        presentationCache.get(library, playlists, queues, libraryFilters, route, style)
     }
     val queriedPresentation by produceState(cachedPresentation, library, playlists, route, style, queues, libraryFilters) {
         if (cachedPresentation != null) { value = cachedPresentation; return@produceState }
@@ -66,7 +87,7 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
             }
         }
         value = PresentedBrowse(route, style, queried).also {
-            presentationCache?.put(library, playlists, queues, libraryFilters, it)
+            presentationCache.put(library, playlists, queues, libraryFilters, it)
         }
     }
     val candidate = cachedPresentation ?: queriedPresentation

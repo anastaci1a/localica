@@ -15,14 +15,10 @@ import io.github.anastaci1a.localica.navigation.*
 
 @Composable
 internal fun ListViewFields(route: BrowseRoute, value: BrowseStyle, onChange: (BrowseStyle) -> Unit) {
-    val albumSongs = route.collection?.kind == MediaKind.Album
-    val albumCatalog = route.collection == null && (route.tab == MainTab.Albums || route.filter == MediaKind.Album)
     val width = LocalConfiguration.current.screenWidthDp.toFloat()
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsHeading(route.title ?: route.filter?.label ?: route.tab.label)
         ChoicePreference("View mode", value.presentation != Presentation.List, listOf(false, true), { if (it) "Gallery" else "List" }) {
-            onChange(value.copy(presentation = if (it) Presentation.Standard else Presentation.List,
-                songGrouping = if (it && albumSongs) SongGrouping.None else value.songGrouping))
+            onChange(value.copy(presentation = if (it) Presentation.Standard else Presentation.List))
         }
         if (value.presentation != Presentation.List) {
             val columns = value.itemsPerRow ?: galleryColumns(value.presentation, width).coerceIn(1, 5)
@@ -31,14 +27,8 @@ internal fun ListViewFields(route: BrowseRoute, value: BrowseStyle, onChange: (B
                 valueRange = 1f..5f, steps = 3, modifier = Modifier.semantics {
                     contentDescription = "Items per row"; stateDescription = columns.toString()
                 })
-        }
-        ChoicePreference("Extra information", value.extraInfo, ExtraInfo.entries, ::extraInfoLabel) { onChange(value.copy(extraInfo = it)) }
-        if (albumSongs || albumCatalog) {
-            ChoicePreference("Group album songs", value.songGrouping, SongGrouping.entries, { it.label }) {
-                onChange(value.copy(songGrouping = it, presentation = if (albumSongs && it != SongGrouping.None) Presentation.List else value.presentation))
-            }
-            Text("Group the album’s songs into sections in list view.", style = MaterialTheme.typography.bodySmall)
-        }
+        } else ChoicePreference("Size", value.listSize, ListSize.entries, { it.name }) { onChange(value.copy(listSize = it)) }
+        ChoicePreference("Extra information", value.extraInfo, ExtraInfo.entries, ::extraInfoLabel, popup = true) { onChange(value.copy(extraInfo = it)) }
         if (!route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library))
             BooleanPreference("Quick-search box", value.quickSearch) { onChange(value.copy(quickSearch = it)) }
     }
