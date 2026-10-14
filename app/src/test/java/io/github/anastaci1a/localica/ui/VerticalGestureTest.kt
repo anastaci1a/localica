@@ -16,9 +16,10 @@ class VerticalGestureTest {
         assertTrue(settleOpen(-100f, 420f, .7f, false))
         assertFalse(settleOpen(100f, -420f, .3f, true))
     }
-    @Test fun playerDismissalRequiresTheHigherVelocityOrDistance() {
-        assertTrue(settleOpen(-20f, -340f, .96f, false, 400f))
-        assertFalse(settleOpen(-20f, -440f, .96f, false, 400f))
-        assertFalse(settleOpen(-80f, 0f, .84f, false, 400f))
+    @Test fun playerAndQueueShareTheSameClosingBoundary() {
+        assertTrue(settleOpen(-20f, -(VerticalReleaseVelocity - 1f), .96f, false))
+        assertFalse(settleOpen(-20f, -VerticalReleaseVelocity, .96f, false))
+        assertTrue(settleOpen(-(VerticalReleaseDistance - 1f), 0f, .84f, false))
+        assertFalse(settleOpen(-VerticalReleaseDistance, 0f, .84f, false))
     }
 }

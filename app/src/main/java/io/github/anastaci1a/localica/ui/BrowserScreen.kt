@@ -36,7 +36,6 @@ import io.github.anastaci1a.localica.home.PinEdits
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -115,46 +114,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             onRoute(route.copy(filter = null))
         }
     }
-    // Query work and filter motion are independent. Departing rows begin fading
-    // immediately; only a result for the latest request may replace them.
-    val presentationCache = LocalBrowsePresentationCache.current
-    val cachedPresentation = remember(library.snapshot, playlists.playlists, route, style, queueState.library, libraryFilters) {
-        presentationCache?.get(library.snapshot, playlists.playlists, queueState.library.queues, libraryFilters, route, style)
-    }
-    val queriedPresentation by produceState(cachedPresentation, library.snapshot, playlists.playlists, route, style, queueState.library, libraryFilters) {
-        if (cachedPresentation != null) { value = cachedPresentation; return@produceState }
-        val queried = withContext(queryDispatcher) {
-            BrowseQueries.evaluate(library.snapshot, playlists.playlists, route, style.query(), queueState.library.queues, libraryFilters.allCollections).let {
-                if (route.collection?.kind == MediaKind.Album) it.groupAlbumSongs(style.songGrouping) else it
-            }
-        }
-        value = PresentedBrowse(route, style, queried).also {
-            presentationCache?.put(library.snapshot, playlists.playlists, queueState.library.queues, libraryFilters, it)
-        }
-    }
-    val candidate = cachedPresentation ?: queriedPresentation
-    var presentation by remember(route.key) { mutableStateOf(cachedPresentation) }
-    var displayedFilter by remember(route.key) { mutableStateOf(route.filter) }
-    val reveal = remember(route.key) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
-    LaunchedEffect(route, style, candidate, reducedMotion) {
-        if (displayedFilter != route.filter) {
-            if (reducedMotion) reveal.snapTo(0f) else reveal.animateTo(0f, androidx.compose.animation.core.tween(110))
-        }
-        if (candidate?.route == route && candidate.style == style) {
-            presentation = candidate
-            displayedFilter = route.filter
-            if (reducedMotion) reveal.snapTo(1f) else if (reveal.value < 1f)
-                reveal.animateTo(1f, androidx.compose.animation.core.tween(180))
-        }
-    }
+    val browse = rememberBrowsePresentation(library.snapshot, playlists.playlists, queueState.library.queues,
+        libraryFilters, route, style, reducedMotion, queryDispatcher)
+    val presentation = browse.current
     val loadedResult = presentation?.result
-    val listReveal = reveal.value
+    val listReveal = browse.reveal.value
     val displayedStyle = presentation?.style ?: style
-    val queryPending = presentation?.route != route || presentation?.style != style
+    val queryPending = browse.pending
     val sourceResult = loadedResult ?: BrowseResult()
     val artDetail = !route.search && route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist)
     val seededCollection = LocalBrowseArtwork.current?.collection?.takeIf { it.ref == route.collection }
-    val entrySweep = remember(route.key) { androidx.compose.animation.core.Animatable(if (cachedPresentation != null) 1f else 0f) }
+    val entrySweep = remember(route.key) { androidx.compose.animation.core.Animatable(if (browse.cached) 1f else 0f) }
     LaunchedEffect(loadedResult != null, reducedMotion) {
         if (loadedResult != null && entrySweep.value < 1f) {
             if (reducedMotion) entrySweep.snapTo(1f)
@@ -360,83 +330,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
-                .pinchToChangeView(enabled && (pinchMotion.source == null || pinchMotion.held) && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind != MediaKind.Queue,
-                    onProgress = { value ->
-                        pinchMotion.fingerProgress = value
-                        if (pinchMotion.held && !pinchMotion.capturing && !reducedMotion) {
-                            pinchMotion.tracking?.cancel()
-                            pinchMotion.tracking = scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                                pinchMotion.progress.animateTo(value, androidx.compose.animation.core.spring(1f, 1600f))
-                            }
-                        }
-                    },
-                    onRelease = {
-                        pinchMotion.held = false
-                        pinchMotion.tracking?.cancel()
-                        scrollScope.launch {
-                            pinchMotion.capture?.join()
-                            val commit = pinchMotion.fingerProgress >= .35f
-                            val destination = if (commit) pinchMotion.target else pinchMotion.source
-                            if (reducedMotion) pinchMotion.progress.snapTo(if (commit) 1f else 0f)
-                            else pinchMotion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
-                            if (destination != null) {
-                                style = destination
-                                preferences.write(route, destination, preferences.overridden(route))
-                                pinchMotion.focusKey?.let { zoomAnchor = BrowseZoomAnchor(route, destination, it, pinchMotion.focusTop) }
-                            }
-                            // Keep retained drawings through the source-layout handoff.
-                            withFrameNanos { }; withFrameNanos { }
-                            pinchMotion.source = null
-                            pinchMotion.frozen.clear()
-                        }
-                    }) { zoomIn, midpoint ->
-                    val next = displayedStyle.zoomStep(zoomIn, with(density) { reorder.viewportWidth.toDp().value },
-                        albumSongs = route.collection?.kind == MediaKind.Album)
-                    if (next != displayedStyle) {
-                        val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
-                        pinchMotion.source = displayedStyle
-                        pinchMotion.target = next
-                        pinchMotion.targetColumns = galleryColumns(next.presentation, with(density) { reorder.viewportWidth.toDp().value }, next.itemsPerRow)
-                        pinchMotion.held = true
-                        pinchMotion.fingerProgress = 0f
-                        pinchMotion.viewportWidth = reorder.viewportWidth.toFloat()
-                        pinchMotion.sourceColumns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
-                        pinchMotion.bounds = visible.associate { it.key to androidx.compose.ui.geometry.Rect(it.offset.x.toFloat(), it.offset.y.toFloat(),
-                            (it.offset.x + it.size.width).toFloat(), (it.offset.y + it.size.height).toFloat()) }
-                        visible.firstOrNull()?.let { first ->
-                            pinchMotion.anchorIndex = first.index - 1; pinchMotion.anchorTop = first.offset.y.toFloat()
-                            pinchMotion.rowHeight = first.size.height.toFloat()
-                        }
-                        scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { pinchMotion.progress.snapTo(if (reducedMotion) 1f else 0f) }
-                        val nearest = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }.minByOrNull {
-                            val x = it.offset.x + it.size.width / 2f - midpoint.x
-                            val y = it.offset.y + it.size.height / 2f - midpoint.y
-                            x * x + y * y
-                        }
-                        if (nearest != null) {
-                            pinchMotion.focusKey = nearest.key; pinchMotion.focusTop = nearest.offset.y
-                            zoomAnchor = BrowseZoomAnchor(route, next, nearest.key, nearest.offset.y)
-                        }
-                        pinchMotion.capturing = true
-                        pinchMotion.capture = scrollScope.launch {
-                            try {
-                                pinchMotion.frozen.clear()
-                                // Flatten before the destination can mutate/release nested
-                                // artwork layers. A retained display list alone is not a snapshot.
-                                for (entry in visible) {
-                                    val layer = pinchMotion.retained[entry.key]?.takeUnless { it.isReleased } ?: continue
-                                    pinchMotion.frozen[entry.key] = layer.toImageBitmap()
-                                }
-                                style = next
-                            } finally { pinchMotion.capturing = false }
-                            if (pinchMotion.held && !reducedMotion) {
-                                pinchMotion.tracking = scrollScope.launch {
-                                    pinchMotion.progress.animateTo(pinchMotion.fingerProgress, androidx.compose.animation.core.spring(1f, 1600f))
-                                }
-                            }
-                        }
-                    }
-                }
+                .browsePinch(enabled && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind != MediaKind.Queue,
+                    pinchMotion, displayedStyle, route, gridState, reorder.viewportWidth, density, scrollScope, reducedMotion,
+                    onPreview = { style = it }, onCommit = { style = it; preferences.write(route, it, preferences.overridden(route)) },
+                    onAnchor = { zoomAnchor = it })
                 .testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     Column {
