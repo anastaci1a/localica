@@ -34,11 +34,11 @@ internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit,
                 RepeatChoices(QueueEnd.entries, policy.queueEnd, { it.label }) { policy = policy.copy(queueEnd = it) }
                 if (policy.songEnd == SongEnd.Repeat) Text("Queue-end options apply after you turn off repeating the current song.", style = MaterialTheme.typography.bodySmall)
             }
-            TextButton(onClick = { simple = QueueRepeat.Off; policy = AdvancedRepeat() }) { Text("Reset") }
+            ActionTextButton(onClick = { simple = QueueRepeat.Off; policy = AdvancedRepeat() }) { Text("Reset") }
         }
-    }, confirmButton = { TextButton(onClick = {
+    }, confirmButton = { ActionTextButton(onClick = {
         onApply(settings.copy(advancedRepeat = if (advanced) policy else null, repeat = if (advanced) policy.repeat else simple)); onDismiss()
-    }) { Text("Apply") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    }) { Text("Apply") } }, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable

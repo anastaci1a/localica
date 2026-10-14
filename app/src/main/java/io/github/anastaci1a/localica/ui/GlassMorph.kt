@@ -48,7 +48,7 @@ internal class GlassAnchor {
     var modalPresent by mutableStateOf(false)
     var shadowInModal by mutableStateOf(false)
     var source: FrostedBackdrop? = null
-    var face: (@Composable () -> Unit)? = null
+    var face by mutableStateOf<(@Composable () -> Unit)?>(null)
     var depthScale = RaisedGlassDepthScale
     var cornerRadius: androidx.compose.ui.unit.Dp? = null
     var quiet = false
@@ -233,7 +233,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val p = progress.value.coerceIn(0f, 1f)
         val geometry = if (anchor.quiet) ((p - .14f) / .86f).coerceIn(0f, 1f) else p
-        GlassShadowScope(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
             .pointerInput(visible) { detectTapGestures { if (visible) dismissNow() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
                 val density = LocalDensity.current
@@ -260,8 +260,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val searchY = remember { Animatable(margin) }
                 LaunchedEffect(placement, imeHeight, availableHeight, targetHeight, childPanels.intValue, reduced, speed) {
                     if (placement == GlassPlacement.Search && childPanels.intValue == 0) {
-                        val destination = if (imeHeight > 0) margin else ((availableHeight - targetHeight) / 2f).coerceAtLeast(margin)
-                        if (reduced) searchY.snapTo(destination)
+                        val destination = if (imeHeight > 0) (availableHeight - targetHeight - margin).coerceAtLeast(margin)
+                            else ((availableHeight - targetHeight) / 2f).coerceAtLeast(margin)
+                        if (reduced || imeHeight > 0) searchY.snapTo(destination)
                         else searchY.animateTo(destination, glassMorphSpring(speed))
                     }
                 }
@@ -277,7 +278,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     else expandedWidth.animateTo(measuredWidth.toFloat(), glassMorphSpring(speed))
                 }
                 val targetWidth = (expandedWidth.value.takeIf { it > 0f } ?: measuredWidth.takeIf { it > 0 }?.toFloat() ?: widthLimit.toFloat()).roundToInt()
-                val maxHeight = ((if (placement == GlassPlacement.Search) minOf(availableHeight, searchHeightLimit)
+                val maxHeight = ((if (placement == GlassPlacement.Search) minOf(availableHeight, if (imeHeight > 0 || childPanels.intValue > 0) searchHeightLimit
+                        else (searchHeightLimit.toLong() * 120 / 100).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                     else availableHeight) - margin * 2).roundToInt().coerceAtLeast(1)
                 // Closing follows the restored trigger. Opening keeps the pre-collapse location.
                 val start = (if (visible) origin else anchor.bounds).translate(-windowOrigin)
@@ -289,7 +291,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 SideEffect { anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
                 val dark = darkOverride ?: (source?.dark == true)
                 val material = rememberFrostedBackdrop(source?.fallback to (p == 1f), dark = dark)
-                SideEffect { material.parent = source }
+                SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { radius.toPx() } }
                 // This recording is sampled only by a later nested modal. Its
                 // material already has a shared raster; don't allocate and redraw
                 // another full-panel texture throughout every opening/closing.
@@ -303,7 +305,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             (if (anchor.contextual) start.center.x - targetWidth / 2f else if (rightAligned) start.right - targetWidth else start.left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))
                             else (availableWidth - targetWidth) / 2f
                         val y = when (placement) {
-                            GlassPlacement.Search -> searchY.value
+                            GlassPlacement.Search -> if (imeHeight > 0 && childPanels.intValue == 0)
+                                (availableHeight - (expandedHeight.value.takeIf { it >= 0f } ?: targetHeight.toFloat()) - margin).coerceAtLeast(margin)
+                                else searchY.value
                             GlassPlacement.Center -> (availableHeight - targetHeight) / 2f
                             GlassPlacement.Sheet -> (availableHeight - targetHeight - margin).coerceAtLeast(margin)
                             GlassPlacement.Page -> 0f
@@ -338,6 +342,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
                                     homeSource = anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
+                                    homeBounds = { if (visible) origin else anchor.bounds },
                                     cornerRadius = radius, frostProgress = p, panelProgress = p, panelDark = dark,
                                     inkOverride = anchor.ink.takeIf { it != Color.Unspecified }
                                         ?: if (dark) Color.White else Color(0xFF202124),
@@ -354,12 +359,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
                                 LocalModalBackdrop provides completePanel,
                                 LocalChildPanels provides childPanels,
+                                LocalSurfaceShadows provides null, LocalBottomShadows provides null,
                                 LocalGlassOrigin provides null,
-                                LocalGlassPanelReady provides (visible && p >= .9f)) {
+                                LocalGlassPanelReady provides (visible && (placement == GlassPlacement.Search || p >= .9f))) {
                                 GlassPanelTheme(dark, content)
                             }
                         }
-                        Box(Modifier.graphicsLayer { alpha = (1f - p / .32f).coerceIn(0f, 1f) }
+                        Box(Modifier.graphicsLayer { alpha = (1f - p / .55f).coerceIn(0f, 1f) }
                             .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                             CompositionLocalProvider(LocalContentColor provides (anchor.ink.takeIf { it != Color.Unspecified }
                                 ?: if (dark) Color.White else Color(0xFF202124))) { anchor.face?.invoke() }
@@ -380,10 +386,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         val face = children[2].measure(Constraints.fixed(startWidth.roundToInt().coerceAtLeast(1), startHeight.roundToInt().coerceAtLeast(1)))
                         layout(width, height) {
                             backing.place(0, 0)
-                            foreground.placeWithLayer((width - foreground.width) / 2, (height - foreground.height) / 2) {
+                            foreground.placeWithLayer((width - foreground.width) / 2, if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2) {
                                 // Reveal the whole fixed-layout menu, not a moving crop of its
                                 // middle rows. A uniform scale keeps glyph proportions intact.
-                                val fit = if (page) 1f else minOf(width.toFloat() / foreground.width.coerceAtLeast(1),
+                                val fit = if (page || placement == GlassPlacement.Search) 1f else minOf(width.toFloat() / foreground.width.coerceAtLeast(1),
                                     height.toFloat() / foreground.height.coerceAtLeast(1)).coerceAtMost(1f)
                                 scaleX = fit; scaleY = fit
                             }

@@ -63,7 +63,7 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = n
             leadingContent = icon?.let { { Icon(painterResource(it), null, Modifier.size(24.dp)) } },
             trailingContent = { Icon(painterResource(R.drawable.ic_back), null, Modifier.size(20.dp).rotate(180f)) },
             colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-            modifier = Modifier.clickable(enabled, role = Role.Button, onClick = onClick).heightIn(min = 64.dp))
+            modifier = Modifier.ownButtonDrag(enabled).clickable(enabled, role = Role.Button, onClick = onClick).heightIn(min = 64.dp))
     }
 }
 
@@ -82,8 +82,8 @@ internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, labe
         Column(Modifier.scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = 8.dp, vertical = 12.dp).selectableGroup()) {
             GlassChoices(choices.map(label), choices.indexOf(draft).coerceAtLeast(0)) { index -> draft = choices[index] }
         }
-    }, confirmButton = { TextButton(enabled = choices.isNotEmpty(), onClick = { onSelect(draft); onDismiss() }) { Text("Select") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    }, confirmButton = { ActionTextButton(enabled = choices.isNotEmpty(), onClick = { onSelect(draft); onDismiss() }) { Text("Select") } },
+        dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable

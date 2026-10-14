@@ -27,4 +27,17 @@ class PlayerActionSlotsTest {
         assertEquals(14, all.visibleSlots.size)
         assertTrue(all.copy(centered = false).columns.size >= 9)
     }
+    @Test fun playbackEndsAtLastVisibleAssignmentButEditorKeepsDestinations() {
+        val settings = PlayerActionSettings(slots = mapOf(ActionSlot(0, 2) to PlayerAction.Info,
+            ActionSlot(1, 7) to PlayerAction.Repeat), centered = false)
+        assertEquals(listOf(0, 1, 2), settings.playbackColumns)
+        assertTrue(settings.columns.size >= 9)
+        assertEquals((0..7).toList(), settings.copy(twoRows = true).playbackColumns)
+    }
+    @Test fun selectedOptionsPreserveCanonicalOrderInBothGroups() {
+        val options = listOf("Centered", "2 rows", "Compact")
+        assertEquals(listOf("2 rows", "Compact", "Centered"), orderedBubbleGroups(options, setOf("Compact", "2 rows")))
+        assertEquals(options, orderedBubbleGroups(options, options.toSet()))
+        assertEquals(options, orderedBubbleGroups(options, emptySet()))
+    }
 }

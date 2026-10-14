@@ -53,7 +53,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
             if (horizontal) (stride * position.value).roundToInt() else 0,
             if (horizontal) 0 else (stride * position.value).roundToInt()) }.width(width).height(height),
             position, vertical = !horizontal, pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f }, wall = {
-                direction * when { position.value <= .001f -> -1f; position.value >= labels.lastIndex - .001f -> 1f; else -> 0f }
+                direction * glassWallAffinity(position.value, labels.lastIndex.toFloat())
             }, cornerRadius = 20.dp)
         @Composable fun Item(index: Int, modifier: Modifier) {
             Box(modifier.height(height).selectable(index == selected, role = role,
@@ -69,7 +69,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                         val next = position.value.roundToInt().coerceIn(labels.indices)
                         pressure = 0f; dragging = false; settleRequest++
                         if (!cancelled) change(next)
-                    }) else Modifier), contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
+                    }) else Modifier.ownButtonDrag()), contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
                 Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     icons?.getOrNull(index)?.let { Icon(painterResource(it), null, Modifier.size(24.dp)) }
                     Text(labels[index], style = if (role == Role.Tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,

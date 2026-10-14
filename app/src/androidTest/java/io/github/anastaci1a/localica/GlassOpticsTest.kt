@@ -24,6 +24,43 @@ import org.junit.Test
 class GlassOpticsTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun materialOnlySamplingUsesTheLocalMeanButContentBackdropsKeepDetail() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)
+        var material by mutableStateOf(true)
+        lateinit var source: FrostedBackdrop
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalGlassAppearance provides
+            GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
+            source = rememberFrostedBackdrop(Unit)
+            val isMaterial = material
+            SideEffect { source.materialOnly = isMaterial; source.materialCorner = 0f }
+            Box(Modifier.size(256.dp, 160.dp)) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    for (y in 0..7) for (x in 0..7) drawRect(
+                        if ((x + y) % 2 == 0) Color.Red else Color.Blue,
+                        Offset(x * size.width / 8, y * size.height / 8), Size(size.width / 8, size.height / 8))
+                }
+                LiquidGlassSurface(Modifier.fillMaxSize().testTag("sampled-material"), source,
+                    cornerRadius = 24.dp, pressFeedback = false)
+            }
+        } } }
+        val averaged = compose.onNodeWithTag("sampled-material").captureToImage().toPixelMap()
+        for (y in 3..5) for (x in 3..5) {
+            val pixel = averaged[averaged.width * x / 8, averaged.height * y / 8]
+            assertEquals("Local red/blue mean", .5f, pixel.red, .04f)
+            assertEquals("Local red/blue mean", .5f, pixel.blue, .04f)
+        }
+        compose.runOnIdle {
+            assertFalse("A footprint outside the material is never flattened", source.canAverage(source.origin - Offset(1f, 0f), Size(20f, 20f)))
+            material = false
+        }
+        val detailed = compose.onNodeWithTag("sampled-material").captureToImage().toPixelMap()
+        var changed = 0
+        for (y in detailed.height / 4 until detailed.height * 3 / 4 step 4)
+            for (x in detailed.width / 4 until detailed.width * 3 / 4 step 4)
+                if (kotlin.math.abs(detailed[x, y].red - .5f) > .2f) changed++
+        assertTrue("Foreground-containing scenes preserve their spatial detail", changed > 100)
+    }
+
     @Test fun changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched() {
         var depth by mutableFloatStateOf(.6f)
         lateinit var source: FrostedBackdrop

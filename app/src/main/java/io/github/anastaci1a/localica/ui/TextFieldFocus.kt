@@ -17,6 +17,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
+/** Scoped empty search may dismiss itself when editing ends through Back. */
+internal val LocalEmptySearchBack = compositionLocalOf<(() -> Unit)?> { null }
+
 private val LocalRestingTextFocus = staticCompositionLocalOf<FocusRequester> { error("Text fields require a window focus host") }
 
 /** A non-editing focus destination per window, outside field autofocus modifiers. */
@@ -48,7 +51,8 @@ private val LocalRestingTextFocus = staticCompositionLocalOf<FocusRequester> { e
     // the window owner can immediately focus its first editor again in key mode.
     val restingFocus = LocalRestingTextFocus.current
     val keyboard = LocalSoftwareKeyboardController.current
-    fun endEditing() { restingFocus.requestFocus(); keyboard?.hide() }
+    val emptySearchBack by rememberUpdatedState(LocalEmptySearchBack.current)
+    fun endEditing() { restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke() }
     BackHandler(focused) { endEditing() }
     LaunchedEffect(focused, keyboardVisible, keyboardSettled, windowFocused) {
         if (!focused || !windowFocused) sawKeyboard = false

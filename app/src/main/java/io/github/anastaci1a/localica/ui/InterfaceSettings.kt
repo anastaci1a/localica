@@ -26,7 +26,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                 Text("Secondary text", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Selected", color = NavigationAccent)
             }
-            TextButton(onClick = { onChange(value.copy(grayTone = InterfaceSettings().grayTone)) }) { Text("Reset gray tone") }
+            ActionTextButton(onClick = { onChange(value.copy(grayTone = InterfaceSettings().grayTone)) }) { Text("Reset gray tone") }
         }
         "Glass" -> GlassSettingsControls(value.glass) { onChange(value.copy(glass = it)) }
         "Motion" -> {
@@ -43,7 +43,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                 { onChange(value.copy(lyricDelayMs = kotlin.math.round(it / 50).toInt() * 50)) },
                 valueRange = -2000f..2000f, steps = 79, low = "Earlier", high = "Later",
                 description = "If lyrics lead the sound, move them later. This adjusts lyrics only; use 0 ms for normal output timing.")
-            TextButton(onClick = { onChange(value.copy(lyricDelayMs = 0)) }) { Text("Reset lyrics timing") }
+            ActionTextButton(onClick = { onChange(value.copy(lyricDelayMs = 0)) }) { Text("Reset lyrics timing") }
             SettingsHeading("Artwork")
             ChoicePreference("Player artwork", value.artworkLayout, ArtworkLayout.entries, { it.label }) { onChange(value.copy(artworkLayout = it)) }
             ChoicePreference("Song-change transition", value.artworkTransition, ArtworkTransition.entries, { it.label }) { onChange(value.copy(artworkTransition = it)) }
@@ -62,22 +62,22 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Text(tab.label, style = MaterialTheme.typography.titleMedium)
                         Row {
-                            TextButton(enabled = index > 0, onClick = {
+                            ActionTextButton(enabled = index > 0, onClick = {
                                 val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, -1); onChange(value.copy(tabs = tabs))
                             }) { Text("Move up") }
-                            TextButton(enabled = index < value.tabs.lastIndex, onClick = {
+                            ActionTextButton(enabled = index < value.tabs.lastIndex, onClick = {
                                 val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, 1); onChange(value.copy(tabs = tabs))
                             }) { Text("Move down") }
-                            TextButton(enabled = value.tabs.size > 1, onClick = { onChange(value.copy(tabs = value.tabs - tab)) }) { Text("Remove") }
+                            ActionTextButton(enabled = value.tabs.size > 1, onClick = { onChange(value.copy(tabs = value.tabs - tab)) }) { Text("Remove") }
                         }
                     }
                 }
             }
             var adding by remember { mutableStateOf(false) }
-            SettingsLink("Add main tab", enabled = value.tabs.size < MainTab.entries.size) { adding = true }
-            if (adding) ChoiceDialog("Add main tab", MainTab.entries.filterNot { it in value.tabs }, MainTab.Home, { it.label },
+            SettingsLink("Add main tab", enabled = value.tabs.size < MainTab.available.size) { adding = true }
+            if (adding) ChoiceDialog("Add main tab", MainTab.available.filterNot { it in value.tabs }, MainTab.Home, { it.label },
                 { adding = false }) { onChange(value.copy(tabs = value.tabs + it)) }
-            TextButton(onClick = { onChange(value.copy(tabs = InterfaceSettings().tabs)) }) { Text("Reset main tabs") }
+            ActionTextButton(onClick = { onChange(value.copy(tabs = InterfaceSettings().tabs)) }) { Text("Reset main tabs") }
         }
     }
 }
@@ -89,7 +89,8 @@ internal fun ArtworkActionPreference(label: String, value: ArtworkAction, onChan
 
 @Composable
 internal fun BooleanPreference(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).toggleable(value, role = Role.Switch, onValueChange = onChange)
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).ownButtonDrag(pass = androidx.compose.ui.input.pointer.PointerEventPass.Main)
+        .toggleable(value, role = Role.Switch, onValueChange = onChange)
         .padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f).padding(end = 12.dp))
         InterfaceSwitch(value, onChange)

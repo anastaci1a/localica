@@ -17,6 +17,9 @@ internal data class PlayerActionSettings(
         if (small) listOf(0, 1, 2, 4, 6, 7, 8) else listOf(0, 1, 4, 7, 8)
     } else (0..maxOf(8, (slots.keys.maxOfOrNull { it.column } ?: 0) + 1).coerceAtMost(31)).toList()
     val visibleSlots get() = (0 until rows).flatMap { row -> columns.map { ActionSlot(row, it) } }
+    /** The editor retains empty destinations; playback ends at its last visible assignment. */
+    val playbackColumns get() = if (centered) columns else
+        (0..(slots.keys.filter { it.row < rows }.maxOfOrNull { it.column } ?: 0)).toList()
     val hiddenCount get() = slots.keys.count { it !in visibleSlots }
 
     /** Moving an assigned action swaps occupants; a new palette action replaces the target. */

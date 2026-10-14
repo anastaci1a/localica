@@ -87,8 +87,8 @@ internal fun ArtworkCrop(uri: String, onDismiss: () -> Unit, onCropped: (String)
             InterfaceSlider(zoom, { zoom = it; bitmap?.let(::constrain) },
                 Modifier.semantics { contentDescription = "Crop zoom" }, valueRange = 1f..8f, enabled = !saving)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") }
-                TextButton(onClick = { zoom = 1f; centerX = .5f; centerY = .5f }, enabled = !saving) { Text("Reset crop") }
+                ActionTextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") }
+                ActionTextButton(onClick = { zoom = 1f; centerX = .5f; centerY = .5f }, enabled = !saving) { Text("Reset crop") }
                 Button(enabled = bitmap != null && !saving, onClick = {
                     val image = bitmap ?: return@Button
                     saving = true; failure = null

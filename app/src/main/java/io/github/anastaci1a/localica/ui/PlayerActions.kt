@@ -32,13 +32,14 @@ internal enum class PlayerAction(val label: String, val icon: Int) {
 }
 
 @Composable
-internal fun PlayerActionGlyph(action: PlayerAction, description: String?, small: Boolean = false,
+internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
     repeat: QueueRepeat = QueueRepeat.Off, count: String = "1 / 12", advancedRepeat: AdvancedRepeat? = null) {
     Box(contentAlignment = Alignment.Center) {
-        if (action == PlayerAction.Count) Text(count, style = MaterialTheme.typography.labelSmall,
+        if (action == PlayerAction.Count) Text(count.replace(" / ", "/"), style = MaterialTheme.typography.labelSmall,
+            maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.semantics { if (description != null) contentDescription = description })
         else {
-            Icon(painterResource(action.icon), description, Modifier.size(if (small) 20.dp else 24.dp))
+            Icon(painterResource(action.icon), description, Modifier.size(24.dp))
             if (action == PlayerAction.BackTen || action == PlayerAction.ForwardTen) Text("10", fontSize = 8.sp,
                 modifier = Modifier.clearAndSetSemantics {}, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
             if (action == PlayerAction.Repeat) {
@@ -61,18 +62,14 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?, small
 internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction) -> String,
     onAction: (PlayerAction) -> Unit, onCustomize: () -> Unit, shuffle: Boolean = false, repeat: QueueRepeat = QueueRepeat.Off,
     lyricsOpen: Boolean = false, pinned: Boolean = false, count: String = "0 / 0", onRepeatOptions: (() -> Unit)? = null,
-    advancedRepeat: AdvancedRepeat? = null, lyricsAvailable: Boolean = true) {
+    advancedRepeat: AdvancedRepeat? = null) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columnWidth = if (value.centered) (maxWidth / value.columns.size).coerceAtLeast(48.dp) else if (value.small) 48.dp else 64.dp
         Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).testTag("player-action-slots")) {
-            value.columns.forEach { column -> Column(Modifier.width(columnWidth)) {
+            value.playbackColumns.forEach { column -> Column(Modifier.width(columnWidth)) {
                 kotlin.repeat(value.rows) { row ->
                     val slot = ActionSlot(row, column)
                     val action = value.slots[slot]
-                    if (action == PlayerAction.Lyrics && !lyricsAvailable) {
-                        Spacer(Modifier.fillMaxWidth().height(48.dp))
-                        return@repeat
-                    }
                     val active = when (action) {
                         PlayerAction.Shuffle -> shuffle
                         PlayerAction.Repeat -> repeat != QueueRepeat.Off || advancedRepeat != null
@@ -87,12 +84,12 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                             if (action == null) contentDescription = "Empty player action slot, ${slot.label}"
                             if (mode) { selected = active; stateDescription = label(action!!) }
                         }
-                        .combinedClickable(interactionSource = null, indication = null, onClick = { if (action != null) onAction(action) },
-                            onLongClickLabel = if (action == null) "Customize player actions" else if (action == PlayerAction.Repeat && onRepeatOptions != null) "Repeat options" else null,
-                            onLongClick = if (action == null) onCustomize else if (action == PlayerAction.Repeat) onRepeatOptions else null),
+                        .ownButtonDrag().combinedClickable(interactionSource = null, indication = null, onClick = { if (action != null) onAction(action) },
+                            onLongClickLabel = if (action == PlayerAction.Repeat && onRepeatOptions != null) "Repeat options" else "Customize player actions",
+                            onLongClick = if (action == PlayerAction.Repeat && onRepeatOptions != null) onRepeatOptions else onCustomize),
                         contentAlignment = Alignment.Center) {
                         if (action != null) CompositionLocalProvider(LocalContentColor provides LocalContentColor.current.copy(alpha = if (mode && !active) .5f else 1f)) {
-                            PlayerActionGlyph(action, label(action), value.small, repeat, count, advancedRepeat)
+                            PlayerActionGlyph(action, label(action), repeat, count, advancedRepeat)
                         }
                     }
                 }

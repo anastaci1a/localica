@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
@@ -71,7 +72,7 @@ fun LocalicaScreen(
     var pins by remember { mutableStateOf(pinPreferences.read()) }
     fun pin(ref: MediaRef) { pins = PinEdits.toggle(pins, ref); pinPreferences.write(pins) }
     var navigation by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
-        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
+        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it).reconcile(settings.tabs) })) {
         mutableStateOf(NavigationState.fresh(settings.tabs))
     }
     // Count and item keys both read the same live snapshot. A captured List in the
@@ -159,13 +160,8 @@ fun LocalicaScreen(
     }
     val indexedTrack = currentTrack?.let { saved -> library.snapshot.tracks.firstOrNull { it.id == saved.id }
         ?: saved.copy(playCount = library.snapshot.trackPlays[saved.id] ?: 0) }
-    val lyricResult = rememberLyrics(indexedTrack)
-    val lyricsAvailable = lyricResult?.sources?.isNotEmpty() == true
-    // Keep an existing lyrics view stable while a new song's local sources load,
-    // but close it when that lookup establishes there is no source to display.
-    LaunchedEffect(indexedTrack?.id, lyricResult) {
-        if (lyricResult != null && !lyricsAvailable) lyricsOpen = false
-    }
+    // The lyrics page is available even without local sources and stays open
+    // across song changes; source discovery belongs to the page itself.
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
         val route = BrowseRoute(navigation.active, item.ref, item.title)
         artworkStore.seed(route.key, artworkStore.scope(navigation.route.key)?.peek(item.coverUris)
@@ -180,7 +176,7 @@ fun LocalicaScreen(
             PlayerAction.Info, PlayerAction.Count -> songInfo = true
             PlayerAction.Edit -> editTags?.invoke(listOf(track)) {}
             PlayerAction.Artwork -> viewArt = true
-            PlayerAction.Lyrics -> if (lyricsAvailable) lyricsOpen = !lyricsOpen
+            PlayerAction.Lyrics -> lyricsOpen = !lyricsOpen
             PlayerAction.Playlist -> addPlaying = true
             PlayerAction.Pin -> pin(MediaRef(MediaKind.Song, track.id))
             PlayerAction.Shuffle -> queueController?.shuffle()
@@ -245,7 +241,7 @@ fun LocalicaScreen(
     BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
-        GlassShadowColumn(Modifier.fillMaxSize()
+        Column(Modifier.fillMaxSize()
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
             .drawWithContent { if (!hasPlayer || progress.value < 1f) drawContent() }
@@ -259,7 +255,7 @@ fun LocalicaScreen(
             Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
                 .then(if (route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search)
                     Modifier else Modifier.statusBarsPadding())) {
-                if (route.search || route.collection?.kind !in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist)) Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+                if (route.search || route.collection?.kind !in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist)) Row(Modifier.zIndex(2f).fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
                     androidx.compose.animation.Crossfade(if (route.search) "Search" else route.title ?: route.tab.label,
@@ -308,7 +304,7 @@ fun LocalicaScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill")) {
                 SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->
-                    navigation = navigation.resetTab(tab)
+                    navigation = navigation.resetTab(tab, clearLibraryFilter = false)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
                 }) { tab ->
                     keyboard?.hide(); focusManager.clearFocus()
@@ -350,15 +346,15 @@ fun LocalicaScreen(
         SelectionPanelVisibility(session.active && !expanded && dragHost.state?.drag == null, Modifier.align(Alignment.BottomCenter)
             .padding(horizontal = 8.dp).padding(bottom = inset + if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome)
             .fillMaxWidth().heightIn(max = maxHeight / 2).onSizeChanged { selectionHeight = with(density) { it.height.toDp() } }, settings.reducedMotion) {
-            Surface(shape = Corners.panel, tonalElevation = 6.dp) {
+            FrostedSurface(shape = Corners.panel) {
             Column(Modifier.verticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }
         } }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
-            lyricsOpen, { if (!it || lyricsAvailable) lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
+            lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
-            bottomChrome = bottomChrome, miniForeground = miniInk, lyricsAvailable = lyricsAvailable, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
+            bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
@@ -367,7 +363,7 @@ fun LocalicaScreen(
                 PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
             } }, ::playerAction, { customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
-                lyricsOpen = lyricsOpen, lyricsAvailable = lyricsAvailable, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
+                lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
                 onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
@@ -417,8 +413,8 @@ fun LocalicaScreen(
         scannerOpen = false; returnToScanner = true; settingsCategory = destination; settingsOpen = true
     }
     if (exitPrompt) GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
-        text = { Text("Playback will continue.") }, confirmButton = { TextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
-        dismissButton = { TextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
+        text = { Text("Playback will continue.") }, confirmButton = { ActionTextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
+        dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
     if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
     if (customizeActions) PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false }, settings.reducedMotion)
     if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { songInfo = false }, { playerAction(PlayerAction.Edit) }, ::playerAction)
@@ -426,8 +422,8 @@ fun LocalicaScreen(
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            PlayerAction.entries.filterNot { it == PlayerAction.More || it == PlayerAction.Lyrics && !lyricsAvailable }
-                .forEach { action -> TextButton(onClick = { playerMore = false; playerAction(action) }) { Text(action.label) } }
+            PlayerAction.entries.filterNot { it == PlayerAction.More }
+                .forEach { action -> ActionTextButton(onClick = { playerMore = false; playerAction(action) }) { Text(action.label) } }
         }
     }
     QueueDialogs(queues, queueController)

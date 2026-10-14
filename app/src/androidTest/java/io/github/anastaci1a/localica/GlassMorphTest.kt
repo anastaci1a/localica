@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -12,6 +13,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -23,6 +25,46 @@ import org.junit.Test
 
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun popupChildShadowTravelsAndFadesWithItsOwner() {
+        var moved by mutableStateOf(false)
+        var visible by mutableStateOf(true)
+        val outsideShadows = GlassShadowGroup()
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides
+                io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f),
+                LocalSurfaceShadows provides outsideShadows, LocalBottomShadows provides outsideShadows) {
+                GlassMorphPopup(true, rememberGlassAnchor(), {}, fitContent = false) {
+                    Box(Modifier.fillMaxWidth().height(180.dp).background(Color.White).testTag("moving-shadow-scene")) {
+                        Box(Modifier.fillMaxSize().graphicsLayer {
+                            translationX = if (moved) 140.dp.toPx() else 0f; alpha = if (visible) 1f else 0f
+                        }) {
+                            LiquidGlassSurface(Modifier.offset(30.dp, 40.dp).size(80.dp, 40.dp)) {}
+                        }
+                    }
+                }
+            }
+        } }
+        fun darkness(left: Int): Float {
+            val pixels = compose.onNodeWithTag("moving-shadow-scene").captureToImage().toPixelMap()
+            val density = compose.density.density
+            assertTrue("Sample region must stay inside the popup", (left + 50) * density < pixels.width)
+            var dark = 0f; var count = 0
+            for (y in (82 * density).toInt()..(90 * density).toInt())
+                for (x in (left * density).toInt()..((left + 50) * density).toInt()) {
+                    dark += 1f - pixels[x, y].red; count++
+                }
+            return dark / count
+        }
+        val original = darkness(45)
+        assertTrue("Modal descendants cannot join a shadow group in another window", outsideShadows.entries.isEmpty())
+        assertTrue("Control casts a visible shadow", original > .01f)
+        compose.runOnIdle { moved = true }
+        assertTrue("No shadow remains at the old location", darkness(45) < .002f)
+        assertTrue("Shadow follows the translated control", darkness(185) > .01f)
+        compose.runOnIdle { visible = false }
+        assertTrue("Parent alpha also removes the child's shadow", darkness(185) < .002f)
+    }
 
     @Test fun dismissalReleasesInputPromptlyAndRespectsRefusedRequests() {
         var open by mutableStateOf(false)

@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -20,12 +21,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.foundation.focusable
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -80,8 +86,9 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val touch = if (!enabled) Modifier else Modifier.pointerInput(valueRange, actualSteps, rtl) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            val extent = size.width.toFloat().coerceAtLeast(1f)
-            fun fraction(x: Float) = if (rtl) 1f - x / extent else x / extent
+            val inset = 14.dp.toPx()
+            val extent = (size.width - inset * 2f).coerceAtLeast(1f)
+            fun fraction(x: Float): Float { val at = (x - inset) / extent; return if (rtl) 1f - at else at }
             val initial = ((current - valueRange.start) / span).coerceIn(0f, 1f)
             val grabbed = kotlin.math.abs(fraction(down.position.x) - initial) * extent <= 24.dp.toPx()
             val offset = if (grabbed) initial - fraction(down.position.x) else 0f
@@ -134,28 +141,39 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
                 direction != 0
             }
         }.focusable(enabled)) {
-    GlassControlScene(Modifier.matchParentSize().testTag("settings-slider-scene"), horizontalPadding = 32.dp,
-        geometry = {
-            val scale = 1f + (expansion - 1f) * active
-            val width = 24.dp.toPx() * scale * body.value.scaleX()
-            val height = 16.dp.toPx() * scale * body.value.scaleY()
-            val x = size.width * if (rtl) 1f - shown else shown
-            LensGeometry(androidx.compose.ui.geometry.Rect(x - width / 2, center.y - height / 2,
-                x + width / 2, center.y + height / 2), height / 2)
-        }, body = { body.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {
-        drawSliderTrack(shown, actualSteps, enabled, rtl, NavigationAccent)
+    fun Density.thumbBounds(controlWidth: Float): Rect {
+        val scale = 1f + (expansion - 1f) * active
+        val baseWidth = 28.dp.toPx() * scale
+        val width = baseWidth * body.value.scaleX()
+        val height = 28.dp.toPx() * (1f + (scale - 1f) * 2f / 9f) * body.value.scaleY()
+        val fraction = if (rtl) 1f - shown else shown
+        val x = 14.dp.toPx() + (controlWidth - 28.dp.toPx()) * fraction +
+            glassWallTranslation(baseWidth, body.value.scaleX(), glassWallAffinity(fraction, 1f))
+        return Rect(x - width / 2, (48.dp.toPx() - height) / 2,
+            x + width / 2, (48.dp.toPx() + height) / 2)
     }
-    val scale = 1f + (expansion - 1f) * active
-    val width = 24.dp * scale * body.value.scaleX()
-    val height = 16.dp * scale * body.value.scaleY()
-    Box(Modifier.offset(x = maxWidth * (if (rtl) 1f - shown else shown) - width / 2, y = (48.dp - height) / 2)
-        .size(width, height).testTag("settings-slider-thumb"))
+    GlassControlScene(Modifier.matchParentSize().testTag("settings-slider-scene"), horizontalPadding = 32.dp,
+        geometry = { thumbBounds(size.width).let { LensGeometry(it, it.height / 2) } },
+        body = { body.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {
+        inset(14.dp.toPx(), 0f) {
+            drawSliderTrack(shown, actualSteps, enabled, rtl, NavigationAccent, active)
+        }
+    }
+    // Keep test/accessibility geometry aligned without composing the entire control
+    // on every contact, position and rebound frame.
+    Box(Modifier.offset {
+        thumbBounds(maxWidth.toPx()).let { IntOffset(it.left.roundToInt(), it.top.roundToInt()) }
+    }.layout { measurable, _ ->
+        val rect = thumbBounds(maxWidth.toPx())
+        val item = measurable.measure(Constraints.fixed(rect.width.roundToInt(), rect.height.roundToInt()))
+        layout(item.width, item.height) { item.place(0, 0) }
+    }.testTag("settings-slider-thumb"))
     }
 }
 
 /** Stop markers live inside rounded caps, including the current active endpoint. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSliderTrack(fraction: Float, steps: Int,
-    enabled: Boolean, rtl: Boolean, color: Color) {
+    enabled: Boolean, rtl: Boolean, color: Color, dots: Float = 1f) {
     val h = 5.dp.toPx(); val radius = h / 2; val top = (size.height - h) / 2
     drawRoundRect(color.copy(alpha = if (enabled) .16f else .08f), Offset(0f, top), Size(size.width, h), CornerRadius(radius))
     val length = size.width * fraction
@@ -164,7 +182,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSliderTrack(fr
     if (steps > 0) for (index in 0..steps + 1) {
         val point = index.toFloat() / (steps + 1)
         val at = (size.width * point - radius).coerceIn(radius, (size.width - radius).coerceAtLeast(radius))
-        drawCircle(color.copy(alpha = .4f), 1.dp.toPx(), Offset(if (rtl) size.width - at else at, size.height / 2))
+        drawCircle(color.copy(alpha = .4f * dots), 1.dp.toPx(), Offset(if (rtl) size.width - at else at, size.height / 2))
     }
 }
 
@@ -207,7 +225,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
                     if (point.isConsumed) break
                     val dx = point.position.x - down.position.x
                     moved = moved || kotlin.math.abs(dx) > viewConfiguration.touchSlop
-                    raw = initial + direction * dx / 24.dp.toPx()
+                    raw = initial + direction * dx / 28.dp.toPx()
                     pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
                     scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(raw.coerceIn(0f, 1f))) }
                     point.consume()
@@ -225,8 +243,8 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
             val scale = 1f + (expansion - 1f) * active
             val width = 28.dp.toPx() * scale * shape.scaleX()
             val height = 28.dp.toPx() * scale * shape.scaleY()
-            val wall = direction * when { fraction <= .001f -> -1f; fraction >= .999f -> 1f; else -> 0f }
-            val x = (18.dp + 24.dp * (if (rtl) 1f - fraction else fraction)).toPx() + glassWallTranslation(32.dp.toPx(), shape.scaleX(), wall)
+            val wall = direction * glassWallAffinity(fraction, 1f)
+            val x = (16.dp + 28.dp * (if (rtl) 1f - fraction else fraction)).toPx() + glassWallTranslation(28.dp.toPx() * scale, shape.scaleX(), wall)
             LensGeometry(androidx.compose.ui.geometry.Rect(x - width / 2f, center.y - height / 2f,
                 x + width / 2f, center.y + height / 2f), height / 2f)
         }, body = { body.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {

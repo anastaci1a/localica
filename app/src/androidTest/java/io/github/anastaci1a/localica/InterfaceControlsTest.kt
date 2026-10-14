@@ -21,6 +21,43 @@ import org.junit.Test
 class InterfaceControlsTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun idleControlsDoNotRenderLensesAndContactCannotEraseNeighboringContent() {
+        var value by mutableFloatStateOf(.5f)
+        var checked by mutableStateOf(false)
+        var lensDraws = 0
+        compose.setContent { LocalicaTheme {
+            val source = rememberFrostedBackdrop(Unit)
+            Box(Modifier.size(320.dp, 220.dp).background(Color.White)) {
+                Box(Modifier.matchParentSize().recordFrostedBackdrop(source).background(Color.White))
+                CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalControlLensDraw provides { lensDraws++ }) {
+                    Column(Modifier.padding(20.dp)) {
+                        Box(Modifier.fillMaxWidth().height(12.dp).background(Color.Black).testTag("neighbor-label"))
+                        InterfaceSlider(value, { value = it }, Modifier.testTag("lens-work-slider"))
+                        BooleanPreference("Toggle", checked) { checked = it }
+                    }
+                }
+            }
+        } }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals("Settled controls do not render refraction", 0, lensDraws) }
+        val thumb = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals("Idle slider is circular", thumb.width, thumb.height, .5f)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("lens-work-slider").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(240)
+        val pixels = compose.onNodeWithTag("neighbor-label").captureToImage().toPixelMap()
+        for (y in 0 until pixels.height) for (x in 0 until pixels.width)
+            assertTrue("A lens cannot replay its background over the preceding label", pixels[x, y].red < .02f)
+        assertTrue("Contact renders an optical lens", lensDraws > 0)
+        compose.onNodeWithTag("lens-work-slider").performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        var settledDraws = 0
+        compose.runOnIdle { settledDraws = lensDraws }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.runOnIdle { assertEquals("Release ends optical work", settledDraws, lensDraws) }
+    }
+
     @Test fun restingThumbIsWhiteAndVerticalContactKeepsSliderOwnership() {
         var value by mutableFloatStateOf(.5f)
         compose.setContent { LocalicaTheme { Box(Modifier.background(Color.White).padding(32.dp)) {

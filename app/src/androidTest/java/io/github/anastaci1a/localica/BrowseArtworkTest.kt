@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -20,6 +21,34 @@ import org.junit.Test
 class BrowseArtworkTest {
     @get:Rule val compose = createComposeRule()
     private fun bitmap(color: Int) = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+
+    @Test fun automaticTransitDefersUncachedDecodeAndCancellationResumesIt() {
+        val transit = ArtworkTransit()
+        val journey = CompletableDeferred<Unit>()
+        val started = CompletableDeferred<Unit>()
+        var decoded = 0
+        var job: kotlinx.coroutines.Job? = null
+        var show by mutableStateOf(false)
+        val provider = CoverProvider { _, _, _ -> decoded++; bitmap(android.graphics.Color.RED) }
+        compose.setContent { LocalicaTheme {
+            val scope = rememberCoroutineScope()
+            LaunchedEffect(Unit) {
+                job = scope.launch { transit.during(true) { started.complete(Unit); journey.await() } }
+            }
+            CompositionLocalProvider(LocalArtworkTransit provides transit) {
+                if (show) MediaArtwork(listOf("deferred"), Modifier.size(100.dp).testTag("deferred-cover"), provider)
+            }
+        } }
+        compose.waitUntil(5000) { started.isCompleted }
+        compose.runOnIdle { show = true }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(0, decoded); job!!.cancel() }
+        compose.waitUntil(5000) { decoded == 1 }
+        compose.waitForIdle()
+        val image = compose.onNodeWithTag("deferred-cover").captureToImage().toPixelMap()
+        assertTrue("Interrupted journeys resume the final viewport's artwork", image[image.width / 2, image.height / 2].red > .9f)
+        compose.runOnIdle { assertFalse(transit.active) }
+    }
 
     @Test fun visibleCoversSurviveTwoBackDestinationsButReleaseScrolledAndInvalidatedImages() {
         val store = BrowseArtworkStore()

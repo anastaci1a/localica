@@ -31,13 +31,13 @@ class BrowseZoomTest {
         assertEquals(style, style.zoomStep(false, 400f))
     }
 
-    @Test fun zoomKeepsSortAndOtherPreferencesAndAlbumsStayFixed() {
+    @Test fun zoomKeepsSortAndOtherPreferencesIncludingAlbums() {
         val old = BrowseStyle(ascending = false, extraInfo = ExtraInfo.Year, quickSearch = false, songGrouping = SongGrouping.Artist)
         assertEquals(SongGrouping.Artist, old.zoomStep(true, 400f).songGrouping)
         val next = old.zoomStep(true, 400f, albumSongs = true)
         assertFalse(next.ascending)
         assertEquals(ExtraInfo.Year, next.extraInfo)
         assertFalse(next.quickSearch)
-        assertEquals(old, next)
+        assertEquals(old.copy(listSize = ListSize.Large), next)
     }
 }
