@@ -18,13 +18,8 @@ internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit,
         songEnd = if (settings.repeat == QueueRepeat.One) SongEnd.Repeat else SongEnd.Next,
         queueEnd = if (settings.repeat == QueueRepeat.All) QueueEnd.Repeat else QueueEnd.Stop)) }
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Repeat modes") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf("Simple", "Advanced").forEachIndexed { index, label ->
-                    SegmentedButton(advanced == (index == 1), { advanced = index == 1 },
-                        SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
-                }
-            }
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GlassChoices(listOf("Simple", "Advanced"), if (advanced) 1 else 0, horizontal = true) { advanced = it == 1 }
             Spacer(Modifier.height(12.dp))
             if (!advanced) RepeatChoices(QueueRepeat.entries, simple, { when (it) {
                 QueueRepeat.Off -> "Play next song"; QueueRepeat.All -> "Repeat queue"; QueueRepeat.One -> "Repeat song"
@@ -48,7 +43,5 @@ internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit,
 
 @Composable
 private fun <T> RepeatChoices(values: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
-    Column(Modifier.selectableGroup()) { values.forEach { value ->
-        OptionRow(label(value), value == selected) { onSelect(value) }
-    } }
+    GlassChoices(values.map(label), values.indexOf(selected), horizontal = false) { onSelect(values[it]) }
 }

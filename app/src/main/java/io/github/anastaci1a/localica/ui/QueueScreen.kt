@@ -36,6 +36,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
     enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null) {
+    val shadowInset = glassShadowInset().coerceAtLeast(12.dp)
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
@@ -58,7 +59,6 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         }
     }
     SideEffect { selectorAnchor.face = { SelectorFace() } }
-    val playingThisQueue = active?.id == state.library.activeId && isPlaying
     val position = active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
     val duration = active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
     var browsing by rememberSaveable(active?.id, stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
@@ -71,12 +71,15 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     }
     val route = browsing.route
     BackHandler(browsing.stacks.getValue(MainTab.Queues).size > 1) { browsing.back(false)?.let { browsing = it } }
-    rememberSaveableStateHolder().SaveableStateProvider(route.key) {
+    val browseHolder = rememberSaveableStateHolder()
+    // Saved scroll state may survive, but drawing nodes must belong to this route.
+    // Reusing the old queue's recorded children can leave stale clip/ink layers.
+    key(route.key) { browseHolder.SaveableStateProvider(route.key) {
         BrowserScreen(library, playlists, route, { browsing = browsing.update(it) }, onOpen, {}, { rows, index, _ ->
             rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
         }, controller, playlistController, enabled, false, pins, onPin, sorting, { sorting = false }, state,
             playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId, header = {
-                Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(horizontal = shadowInset, vertical = shadowInset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
                             Box(Modifier.fillMaxWidth().height(CompactControlSize)
@@ -86,22 +89,18 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                         onMinimize?.let { ActionIcon(R.drawable.ic_down, "Minimize queue", onClick = it) }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ActionIcon(if (playingThisQueue) R.drawable.ic_pause else R.drawable.ic_play,
-                            if (playingThisQueue) "Pause queue" else "Play queue", enabled = enabled && active?.entries?.isNotEmpty() == true) {
-                            if (playingThisQueue) controller?.togglePlayback() else active?.id?.let { controller?.playQueue(it) }
-                        }
                         ActionIcon(R.drawable.ic_sort, "Sort queue", anchor = sortAnchor) { sorting = true }
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
                             Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
                         }
-                        ActionIcon(R.drawable.ic_save, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true) { saving = true }
+                        ActionIcon(R.drawable.ic_playlist_add, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true) { saving = true }
                         Box {
                             ActionIcon(R.drawable.ic_more, "Queue actions", anchor = menuAnchor) { menu = true }
                             GlassMenu(menu, menuAnchor, { menu = false }) {
                                 ActionMenuItem("Rename", enabled = active != null, onClick = { menu = false; renameId = active?.id })
                                 ActionMenuItem("Delete", enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
-                                ActionMenuItem("Remove others", enabled = state.library.queues.size > 1,
+                                if (state.library.queues.size > 1) ActionMenuItem("Remove others",
                                     onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
                             }
                         }
@@ -109,7 +108,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (active == null) Text("Tap a song in Library to start a queue.")
                 }
-            }, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor)
+            }, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor, initialPlayingPosition = onMinimize != null)
+    }
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center) {
@@ -148,7 +148,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 }
                 }
                 SideEffect { removeOthersAnchor.face = { Text("Remove all other queues", maxLines = 1, overflow = TextOverflow.Ellipsis) } }
-                GlassActionButton(R.drawable.ic_trash, "Remove all other queues",
+                if (state.library.queues.size > 1) GlassActionButton(R.drawable.ic_trash, "Remove all other queues",
                     Modifier.padding(horizontal = 12.dp, vertical = 8.dp).glassAnchor(removeOthersAnchor),
                     enabled = state.library.queues.size > 1, onClick = {
                     deletionOrigin = removeOthersAnchor

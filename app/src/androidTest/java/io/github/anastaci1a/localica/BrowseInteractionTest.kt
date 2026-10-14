@@ -31,6 +31,7 @@ class BrowseInteractionTest {
         compose.onNodeWithTag(last).performClick()
         compose.runOnIdle { assertEquals(1, played); played = null }
         compose.onNodeWithTag(last).performTouchInput { longClick() }
+        compose.onNodeWithText("Select song").performClick()
         compose.onNodeWithText("1 selected").assertIsDisplayed()
         compose.onNodeWithTag(first).performClick()
         compose.runOnIdle { assertNull(played) }

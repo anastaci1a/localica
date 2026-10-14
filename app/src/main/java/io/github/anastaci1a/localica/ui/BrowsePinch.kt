@@ -25,6 +25,9 @@ internal class BrowsePinchMotion {
     var held by mutableStateOf(false)
     var fingerProgress = 0f
     var tracking: kotlinx.coroutines.Job? = null
+    var capture: kotlinx.coroutines.Job? = null
+    var capturing = false
+    val frozen = mutableMapOf<Any, androidx.compose.ui.graphics.ImageBitmap>()
     var source by mutableStateOf<BrowseStyle?>(null)
     var bounds: Map<Any, Rect> = emptyMap()
     var focusKey: Any? = null

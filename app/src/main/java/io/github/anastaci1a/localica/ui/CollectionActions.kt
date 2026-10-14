@@ -18,8 +18,11 @@ import kotlinx.coroutines.*
 @Composable internal fun CollectionActions(visible: Boolean, anchor: GlassAnchor, item: BrowserItem,
     playlists: PlaylistState, controller: PlaylistController?, queues: QueueController?, pins: List<MediaRef>,
     onPin: (MediaRef) -> Unit, onDismiss: () -> Unit, onDeleted: () -> Unit = {}, onRenamed: (String) -> Unit = {},
+    onInformation: ((io.github.anastaci1a.localica.library.Track) -> Unit)? = null,
+    selectionSource: MediaRef? = item.ref, onRemove: (() -> Unit)? = null,
+    selection: SessionSelection? = LocalSessionSelection.current,
     extra: @Composable () -> Unit = {}) {
-    val selection = LocalSessionSelection.current
+    val editTags = LocalTagEdit.current
     var adding by remember { mutableStateOf(false) }
     var queuePicker by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
@@ -31,8 +34,17 @@ import kotlinx.coroutines.*
     val context = LocalContext.current
     fun act(action: SongTap) { onDismiss(); queues?.act(item.songs.map { it.track }, action, item.songs.map { it.sourcePlaylistId }) }
     GlassMenu(visible, anchor, onDismiss) {
-        ActionMenuItem("Select all songs", enabled = item.songs.isNotEmpty(), onClick = { selection?.select(item.ref, item.songs); onDismiss() })
+        item.row?.let { row ->
+            ActionMenuItem("Information", enabled = onInformation != null, onClick = { onDismiss(); onInformation?.invoke(row.track) })
+            if (editTags != null) ActionMenuItem("Edit tags", onClick = { onDismiss(); editTags(listOf(row.track)) {} })
+        }
+        ActionMenuItem(if (item.row == null) "Select all songs" else "Select song", enabled = item.songs.isNotEmpty(),
+            onClick = { selection?.select(selectionSource, item.songs); onDismiss() })
         HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        if (item.row != null) {
+            ActionMenuItem("New queue", enabled = queues != null, onClick = { act(SongTap.NewQueue) })
+            ActionMenuItem("Play now", enabled = queues != null, onClick = { act(SongTap.PlayNow) })
+        }
         ActionMenuItem("Play next", enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.PlayNext) })
         ActionMenuItem("Add to current queue", enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.Append) })
         ActionMenuItem("Add to a queue", enabled = item.songs.isNotEmpty() && queues != null, onClick = { onDismiss(); queuePicker = true })
@@ -48,6 +60,11 @@ import kotlinx.coroutines.*
             ActionMenuItem("Delete playlist", enabled = controller != null, onClick = { onDismiss(); deleting = true })
         }
         extra()
+        if (onRemove != null) {
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            ActionMenuItem(if (selectionSource?.kind == MediaKind.Queue) "Remove from queue" else "Remove from playlist",
+                onClick = { onDismiss(); onRemove() })
+        }
     }
     if (adding) AddToPlaylistDialog(item.songs.map { it.track }, playlists, controller, { adding = false }, { adding = false })
     if (queuePicker && queues != null) {
