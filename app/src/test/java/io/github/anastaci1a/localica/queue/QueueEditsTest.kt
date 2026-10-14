@@ -47,6 +47,24 @@ class QueueEditsTest {
         assertEquals(queue.currentEntryId, moved.currentEntryId)
         assertEquals(500L, moved.positionMs)
     }
+    @Test fun `randomize pins only the playing occurrence and preserves duplicate songs and cursor`() {
+        val queue = QueueEdits.create(listOf(song("a"), song("b"), song("a"), song("c")), 2, "Queue").copy(positionMs = 1234)
+        val edited = QueueEdits.randomize(queue, true, kotlin.random.Random(12))
+        assertEquals(queue.currentEntryId, edited.entries.first().id)
+        assertEquals(queue.entries.map { it.id }.toSet(), edited.entries.map { it.id }.toSet())
+        assertEquals(2, edited.entries.count { it.track.id == "a" })
+        assertEquals(queue.currentEntryId, edited.currentEntryId)
+        assertEquals(1234L, edited.positionMs)
+    }
+    @Test fun `paused and inactive randomization has no pinned occurrence and handles empty and singleton`() {
+        val queue = QueueEdits.create((0..8).map { song("$it") }, 4, "Queue")
+        val expected = queue.entries.shuffled(kotlin.random.Random(3))
+        assertEquals(expected, QueueEdits.randomize(queue, false, kotlin.random.Random(3)).entries)
+        val only = QueueEdits.create(listOf(song("a")), 0, "Only")
+        assertEquals(only, QueueEdits.randomize(only, true))
+        val empty = only.copy(entries = emptyList(), currentEntryId = null)
+        assertEquals(empty, QueueEdits.randomize(empty, true))
+    }
     @Test fun `cap requires enough inactive removals and never permits current removal`() {
         val first = QueueEdits.create(listOf(song("a")), "a", "First").copy(createdAt = 1)
         val second = QueueEdits.create(listOf(song("b")), "b", "Second").copy(createdAt = 2)
