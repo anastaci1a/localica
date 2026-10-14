@@ -26,7 +26,7 @@ internal fun Modifier.playerVerticalDrag(onDelta: (Float) -> Unit, onStart: susp
             var total = Offset.Zero
             var owned = false
             val velocity = VelocityTracker()
-            velocity.addPosition(down.uptimeMillis, down.position)
+            velocity.addPosition(down.uptimeMillis, Offset.Zero)
             do {
                 val event = awaitPointerEvent(PointerEventPass.Main)
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -34,14 +34,15 @@ internal fun Modifier.playerVerticalDrag(onDelta: (Float) -> Unit, onStart: susp
                 if (!owned && (change.isConsumed || event.changes.count { it.pressed } > 1)) break
                 val movement = change.positionChange()
                 total += movement
-                velocity.addPosition(change.uptimeMillis, change.position)
-                if (!owned && abs(total.y) > viewConfiguration.touchSlop && abs(total.y) > abs(total.x) * 1.8f) {
+                // The surface moves under the pointer; integrate deltas in a stable frame.
+                velocity.addPosition(change.uptimeMillis, total)
+                if (!owned && abs(total.y) > viewConfiguration.touchSlop && abs(total.y) > abs(total.x) * 1.3f) {
                     owned = true
                     scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { start() }
                     delta(total.y)
                 } else if (owned) delta(movement.y)
                 if (owned) change.consume()
-                else if (abs(total.x) > viewConfiguration.touchSlop) break
+                else if (abs(total.x) > viewConfiguration.touchSlop && abs(total.x) > abs(total.y) * 1.3f) break
             } while (event.changes.any { it.pressed })
             if (owned) scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { stop(velocity.calculateVelocity().y) }
         }

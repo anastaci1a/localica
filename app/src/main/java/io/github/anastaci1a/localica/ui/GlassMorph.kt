@@ -51,6 +51,8 @@ internal class GlassAnchor {
     var depthScale = RaisedGlassDepthScale
     var cornerRadius: androidx.compose.ui.unit.Dp? = null
     var quiet = false
+    var contextual = false
+    var bottomClearance = 0f
     var ink by mutableStateOf(Color.Unspecified)
 }
 
@@ -60,15 +62,16 @@ internal fun rememberGlassAnchor(): GlassAnchor {
     return remember { GlassAnchor().also { it.ink = ink } }
 }
 
-/** Gallery long-press uses a compact contextual origin, without hiding its whole tile. */
-@Composable internal fun Modifier.contextMenuAnchor(anchor: GlassAnchor): Modifier {
+/** Context menus return to the actual artwork shape, never an invented menu button. */
+@Composable internal fun Modifier.contextMenuAnchor(anchor: GlassAnchor, circular: Boolean = false): Modifier {
     val view = LocalView.current
     val source = LocalFrostedBackdrop.current
-    val edge = with(LocalDensity.current) { 40.dp.toPx() }
-    SideEffect { anchor.source = source; anchor.quiet = true }
+    val density = LocalDensity.current
+    val clearance = with(density) { LocalBrowseObscuredInset.current.toPx() }
+    SideEffect { anchor.source = source; anchor.quiet = true; anchor.contextual = true; anchor.bottomClearance = clearance; anchor.face = null }
     return onGloballyPositioned {
-        val origin = it.backdropPosition(view)
-        anchor.bounds = Rect(origin + Offset(it.size.width - edge, 0f), Size(edge, edge))
+        anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
+        anchor.cornerRadius = if (circular) with(density) { (it.size.width / 2f).toDp() } else 16.dp
     }
 }
 
@@ -259,14 +262,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     Layout(modifier = Modifier.offset {
                         val rightAligned = start.center.x > availableWidth / 2f
                         val x = if (placement == GlassPlacement.Menu)
-                            (if (rightAligned) start.right - targetWidth else start.left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))
+                            (if (anchor.contextual) start.center.x - targetWidth / 2f else if (rightAligned) start.right - targetWidth else start.left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))
                             else (availableWidth - targetWidth) / 2f
                         val y = when (placement) {
                             GlassPlacement.Search -> margin
                             GlassPlacement.Center -> (availableHeight - targetHeight) / 2f
                             GlassPlacement.Sheet -> (availableHeight - targetHeight - margin).coerceAtLeast(margin)
                             GlassPlacement.Page -> 0f
-                            GlassPlacement.Menu -> (if (start.center.y > availableHeight / 2f) start.bottom - targetHeight else start.top)
+                            GlassPlacement.Menu -> (if (anchor.contextual) minOf(start.top, availableHeight - anchor.bottomClearance - targetHeight - margin)
+                                else if (start.center.y > availableHeight / 2f) start.bottom - targetHeight else start.top)
                                 .coerceIn(margin, (availableHeight - targetHeight - margin).coerceAtLeast(margin))
                         }
                         if (page) androidx.compose.ui.unit.IntOffset(with(density) { (28.dp.toPx() * (1f - p)).roundToInt() }, 0)

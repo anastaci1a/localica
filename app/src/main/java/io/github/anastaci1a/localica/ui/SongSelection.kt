@@ -67,6 +67,18 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
     var name by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     var chosen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(emptyList<String>()) }
     var saving by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val browsePreferences = remember(context) { io.github.anastaci1a.localica.browse.BrowsePreferences(context) }
+    val playlistRoute = remember { io.github.anastaci1a.localica.navigation.BrowseRoute(io.github.anastaci1a.localica.navigation.MainTab.Playlists) }
+    var playlistStyle by remember { mutableStateOf(browsePreferences.read(playlistRoute)) }
+    DisposableEffect(browsePreferences) { val stop = browsePreferences.observe(playlistRoute) { playlistStyle = it }; onDispose(stop) }
+    val sortedPlaylists by produceState(state.playlists, state.playlists, playlistStyle) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val byId = state.playlists.associateBy { it.id }
+            io.github.anastaci1a.localica.browse.BrowseQueries.evaluate(io.github.anastaci1a.localica.library.LibrarySnapshot(),
+                state.playlists, playlistRoute, playlistStyle.query()).items.mapNotNull { byId[it.ref.id] }
+        }
+    }
     val duplicate = name.isNotBlank() && !PlaylistEdits.nameAvailable(state.playlists, name)
     val valid = controller != null && !saving && !state.loading && !duplicate && (name.isNotBlank() || chosen.isNotEmpty())
     fun add() {
@@ -82,8 +94,8 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
             if (duplicate) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
             SelectionViewport(Modifier.fillMaxWidth().heightIn(max = 320.dp)) { overscroll ->
             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth(), overscrollEffect = overscroll) {
-                items(state.playlists.size, key = { state.playlists[it].id }) { index ->
-                    val playlist = state.playlists[index]
+                items(sortedPlaylists.size, key = { sortedPlaylists[it].id }) { index ->
+                    val playlist = sortedPlaylists[index]
                     val selected = playlist.id in chosen
                     Row(Modifier.fillMaxWidth().selectionLens(selected, false)
                         .then(Modifier.combinedClickable(enabled = !saving, onClick = {

@@ -36,6 +36,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         cache?.putHome(library.snapshot, playlists.playlists, pins, result)
         value = result
     }
+    var info by remember { mutableStateOf<io.github.anastaci1a.localica.library.Track?>(null) }
+    val editTags = LocalTagEdit.current
     var menu by remember { mutableStateOf<MediaRef?>(null) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val carousel = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -65,13 +67,13 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         item { LazyRow(state = carousel, modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
                 val anchor = rememberGlassAnchor()
-                Column(Modifier.width(160.dp).contextMenuAnchor(anchor).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
+                Column(Modifier.width(160.dp).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {
-                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f), shape = artworkShape(item.ref.kind))
+                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f).contextMenuAnchor(anchor, item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)), shape = artworkShape(item.ref.kind))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
-                CollectionActions(menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null }, extra = {
+                CollectionActions(menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null }, onInformation = { info = it }, extra = {
                     ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
                     ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,
@@ -80,4 +82,11 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             } }
         } }
     }
+    info?.let { track -> SongInformation(track, { info = null }, { editTags?.invoke(listOf(track)) {} }) { action ->
+        val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
+            PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
+        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab)).items
+            .firstOrNull { item -> item.songs.any { it.track.id == track.id } }?.let { info = null; onOpen(it, it.songs) }
+    } }
+
 }

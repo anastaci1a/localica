@@ -50,7 +50,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
     libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {},
     popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0, sortOrigin: GlassAnchor? = null,
-    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, onBack: () -> Unit = {},
+    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, initialPlayingPosition: Boolean = false, onBack: () -> Unit = {},
     onAppearance: (androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color) -> Unit = { _, _ -> }) {
     var localSearchOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val searchAnchor = rememberGlassAnchor()
@@ -69,6 +69,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val editTags = LocalTagEdit.current
     val preferences = remember(context) { BrowsePreferences(context) }
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
+    DisposableEffect(preferences, route.key, route.filter) {
+        val unsubscribe = preferences.observe(route) { updated ->
+            style = updated.copy(sort = route.querySort ?: updated.sort, ascending = route.queryAscending ?: updated.ascending)
+        }
+        onDispose(unsubscribe)
+    }
     val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
     val showFilters = route.collection == null && (route.tab == MainTab.Library || route.globalSearch) && filters.isNotEmpty()
     val pillSlotHeight = listPillSlotHeight()
@@ -194,6 +200,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }) else null) }
 
     val gridState = rememberLazyGridState()
+    var positionedPlaying by remember(route.key) { mutableStateOf(false) }
+    SideEffect {
+        if (initialPlayingPosition && !positionedPlaying && !queryPending && loadedResult != null) {
+            val index = result.items.indexOfFirst { it.row?.id == playingEntryId }
+            if (index >= 0) gridState.requestScrollToItem(index + 1, -with(density) { (if (showSearchPill) pillSlotHeight else 0.dp).roundToPx() })
+            positionedPlaying = true
+        }
+    }
     val vacancyProgress = remember { androidx.compose.animation.core.Animatable(if (localSearchOpen) 1f else 0f) }
     val motionSpeed = LocalMotionSpeed.current
     LaunchedEffect(localSearchOpen, reducedMotion, motionSpeed) {
@@ -331,8 +345,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
         LookaheadScope {
         if (popupDismiss == null || route.text.isNotBlank()) Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
-            .pinchRetainedOverlay(pinchMotion, gridState, result.items.map { it.key })
-            .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
+            .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, { contextMenu = it.key }, moveSongs)) {
             val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
             if (loadedResult == null && !artDetail) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters || showSearchPill) pillSlotHeight else 0.dp).testTag("browse-loading"))
@@ -342,14 +355,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, if (artDetail) collectionSource else surroundingBackdrop)
                     .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
                 .graphicsLayer { alpha = if (artDetail) 1f else listReveal }
-                .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier)) { overscroll ->
+                .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier)
+                .pinchRetainedOverlay(pinchMotion, gridState, result.items.map { it.key })) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
                 .pinchToChangeView(enabled && (pinchMotion.source == null || pinchMotion.held) && !playerOpen && !queryPending && reorder.drag == null && route.collection?.kind != MediaKind.Queue,
                     onProgress = { value ->
                         pinchMotion.fingerProgress = value
-                        if (pinchMotion.held && !reducedMotion) {
+                        if (pinchMotion.held && !pinchMotion.capturing && !reducedMotion) {
                             pinchMotion.tracking?.cancel()
                             pinchMotion.tracking = scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                                 pinchMotion.progress.animateTo(value, androidx.compose.animation.core.spring(1f, 1600f))
@@ -360,6 +374,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         pinchMotion.held = false
                         pinchMotion.tracking?.cancel()
                         scrollScope.launch {
+                            pinchMotion.capture?.join()
                             val commit = pinchMotion.fingerProgress >= .35f
                             val destination = if (commit) pinchMotion.target else pinchMotion.source
                             if (reducedMotion) pinchMotion.progress.snapTo(if (commit) 1f else 0f)
@@ -372,6 +387,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             // Keep retained drawings through the source-layout handoff.
                             withFrameNanos { }; withFrameNanos { }
                             pinchMotion.source = null
+                            pinchMotion.frozen.clear()
                         }
                     }) { zoomIn, midpoint ->
                     val next = displayedStyle.zoomStep(zoomIn, with(density) { reorder.viewportWidth.toDp().value },
@@ -401,7 +417,24 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             pinchMotion.focusKey = nearest.key; pinchMotion.focusTop = nearest.offset.y
                             zoomAnchor = BrowseZoomAnchor(route, next, nearest.key, nearest.offset.y)
                         }
-                        style = next
+                        pinchMotion.capturing = true
+                        pinchMotion.capture = scrollScope.launch {
+                            try {
+                                pinchMotion.frozen.clear()
+                                // Flatten before the destination can mutate/release nested
+                                // artwork layers. A retained display list alone is not a snapshot.
+                                for (entry in visible) {
+                                    val layer = pinchMotion.retained[entry.key]?.takeUnless { it.isReleased } ?: continue
+                                    pinchMotion.frozen[entry.key] = layer.toImageBitmap()
+                                }
+                                style = next
+                            } finally { pinchMotion.capturing = false }
+                            if (pinchMotion.held && !reducedMotion) {
+                                pinchMotion.tracking = scrollScope.launch {
+                                    pinchMotion.progress.animateTo(pinchMotion.fingerProgress, androidx.compose.animation.core.spring(1f, 1600f))
+                                }
+                            }
+                        }
                     }
                 }
                 .testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
@@ -456,23 +489,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
                             alpha = sweep * (reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f)
                         }) {
+                        val menuAnchor = rememberGlassAnchor()
+                        SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
-                            val menuAnchor = rememberGlassAnchor()
                             Box {
-                                if (!showButton) Box(Modifier.contextMenuAnchor(menuAnchor))
                                 if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor, quiet = true) { contextMenu = item.key }
-                                if (item.row == null) CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null })
-                                else GlassMenu(contextMenu == item.key, menuAnchor, { contextMenu = null }) {
-                                    if (item.row != null) {
-                                        ActionMenuItem("Information", onClick = { contextMenu = null; info = item.row.track })
-                                        if (editTags != null) ActionMenuItem("Edit tags", onClick = { contextMenu = null; editTags(listOf(item.row.track)) {} })
-                                        ActionMenuItem("Add to playlist", onClick = { contextMenu = null; addingSong = item.row.track })
-                                        SongTap.entries.forEach { action -> ActionMenuItem(action.label(), onClick = {
-                                            contextMenu = null; queues?.act(listOf(item.row.track), action, listOf(item.row.sourcePlaylistId))
-                                        }) }
-                                    }
-                                    if (item.ref.kind in PinEdits.supported) DropdownMenuItem(text = { Text(if (item.ref in pins) "Unpin" else "Pin to Home") },
-                                        onClick = { onPin(item.ref); contextMenu = null })
+                                CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
+                                    onInformation = { info = it }, selectionSource = route.collection, selection = session,
+                                    onRemove = if (item.row == null) null else when (route.collection?.kind) {
+                                        MediaKind.Queue -> ({ queues?.removeEntries(setOf(item.key), route.collection.id); Unit })
+                                        MediaKind.Playlist -> ({ playlistController?.removeEntries(route.collection.id, setOf(item.key)) { }; Unit })
+                                        else -> null
+                                    }) {
                                     if (route.collection?.kind == MediaKind.Playlist) {
                                         val index = result.rows.indexOfFirst { it.id == item.key }
                                         val manual = style.sort == TrackSort.Manual && style.ascending && route.text.isBlank()
@@ -513,14 +541,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
                                 else if (session.active) session.toggle(route.collection, item.row)
                                 else { onSearchCommit(); onPlay(result.rows, result.rows.indexOfFirst { it.id == item.row.id }, result.scope) }
-                            }, onLongClickLabel = if (item.row != null) "Select song and show actions" else "Collection actions",
+                            }, onLongClickLabel = if (item.row != null) "Song actions" else "Collection actions",
                             onLongClick = {
-                                if (item.row != null) session.select(route.collection, listOf(item.row))
-                                else contextMenu = item.key
+                                // Mutable rows distinguish a stationary hold from a reorder in songDrag.
+                                if (item.row == null || !editableOrder) contextMenu = item.key
                             }
                         ).padding(horizontal = if (denseGallery) 4.dp else 12.dp, vertical = 8.dp)) {
                             BrowseItemLayout(item, displayedStyle, denseGallery, this@LookaheadScope, reducedMotion, itemMenu,
-                                trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion)
+                                trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
                         }
 
                     }
@@ -596,7 +624,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(100.dp)
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(
                 MaterialTheme.colorScheme.surface.copy(alpha = .7f * scrollFade), androidx.compose.ui.graphics.Color.Transparent))))
-        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ActionIcon(R.drawable.ic_back, "Back", onClick = onBack)
             Text(route.title.orEmpty(), Modifier.weight(1f).graphicsLayer { alpha = scrollFade }

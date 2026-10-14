@@ -13,7 +13,7 @@ import kotlin.math.max
 
 /** Keep a bounded set of source drawings alive even when the destination virtualizes them out. */
 internal fun Modifier.retainPinchItem(key: Any, motion: BrowsePinchMotion, graphics: GraphicsContext): Modifier = drawWithContent {
-    if (motion.source == null) {
+    if (motion.source == null && !motion.capturing) {
         val layer = motion.retained.getOrPut(key) {
             if (motion.retained.size >= 96) motion.retained.keys.firstOrNull()?.let { oldest ->
                 motion.retained.remove(oldest)?.let(graphics::releaseGraphicsLayer)
@@ -37,7 +37,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     clipRect {
         motion.bounds.forEach { (key, old) ->
             if (key in liveKeys) return@forEach
-            val layer = motion.retained[key]?.takeUnless { it.isReleased } ?: return@forEach
+            val image = motion.frozen[key] ?: return@forEach
             val index = keys.indexOf(key)
             if (index < 0) return@forEach
             val width = motion.viewportWidth / motion.targetColumns
@@ -45,7 +45,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * targetHeight
             translate(old.left + (x - old.left) * p, old.top + (y - old.top) * p) {
                 scale(1f + (width / old.width - 1f) * p, 1f + (targetHeight / old.height - 1f) * p, Offset.Zero) {
-                    drawLayer(layer)
+                    drawImage(image)
                 }
             }
         }

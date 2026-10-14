@@ -17,6 +17,9 @@ import kotlin.math.floor
 import kotlin.math.pow
 import kotlinx.coroutines.*
 
+/** Reserve the same extent that the shadow renderer actually draws. */
+@Composable internal fun glassShadowInset(): Dp = (6f + 28f * LocalGlassAppearance.current.shadowSpread).dp
+
 internal class GlassShadowEntry {
     var coordinates: LayoutCoordinates? = null
     var radius: Dp? = null
