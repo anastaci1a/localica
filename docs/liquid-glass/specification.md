@@ -93,18 +93,15 @@ outline + elevation → one shadow field behind the surface group
 
 - Derive normals from a rounded height field, refract through entry/exit interfaces using Snell’s law, and offset sampling by the ray’s travel. Concentrate power in the curved shoulder with gentle central curvature; depth must change normals and displacement, not just zoom. Localica’s water-like index near 1.33 follows [PBRT’s optics derivation](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission) as an artistic starting point, not an Apple parameter.
 - Keep rectangular crowns smooth, without directional wedges, medial-axis ridges, flat masks or inset highlights. Inspect changing curvature as well as normal continuity. Circles retain a radial profile; illumination follows the crown.
-- Define the actual silhouette with a very thin, low-opacity light/dark rim that follows deformation and joins. Never outline an inset flat face. This is Localica’s interpretation of Apple’s [geometry-responsive highlights](https://developer.apple.com/videos/play/wwdc2025/219/?time=630), not a reproduction of its shader.
+- Define the silhouette with an inset rim: broader white highlights toward top-left/bottom-right, tapering into faint dark shading on the opposite corners. Follow deformation and joins without outlining a flat face. This interprets Apple’s [geometry-responsive highlights](https://developer.apple.com/videos/play/wwdc2025/219/?time=630); it does not reproduce its shader.
 
 Neighboring glass shares a coherent source without recursively sampling its own output. Sample required padding but clip recording and filtered output to their bounds. Merged selections preserve unselected holes; diagonal gallery bridges remain disabled. Selections appear immediately until #107 is reviewed.
 
-Contrast adaptation needs to assess what lies beneath the **glyph area**, not merely the album's average color. Test a white icon over alternating white/black text, a checkerboard and bright moving artwork. Safeguards to verify:
+Contrast is a page-level decision, inherited by its controls and menus. Keep foreground pixels sharp and unfiltered; test them over moving black/white text, checkerboards and bright artwork.
 
-1. Choose foreground polarity and supporting tint together.
-2. Add hysteresis and a short response filter so a scrolling edge does not flicker between black and white.
-3. Preserve tonal ordering: black must never become lighter than gray under identical settings. User white tint uses a monotonic highlight roll-off. Readability support follows the actual foreground silhouette instead of coating the entire scene; ink polarity has hysteresis. Avoid whole-panel polarity flips on large menus.
-4. Offer a robust high-contrast fallback. User customization must not remove accessible semantics or hide selection state.
-
-These are acceptance targets; the existing shader's local brightness adjustment is not proof that they all pass. The [evidence atlas](sources.md#hig--materials-and-color) explains why a universal zero-blur treatment is insufficient.
+- For white icons, map normalized background channels through `f(x) = x − t·x^p`; for dark icons use `1 − f(1 − x)`. Trim `t ∈ [0, 0.5]` bounds the problematic end; weighting `p ∈ [1, 2]` preserves the safe end more strongly. These bounds guarantee monotonic ordering, including at maximum settings.
+- Map glass after white tint and keep optical illumination within the mapped brightness endpoints; never add a uniform white/black overlay or filter the icons. Page polarity stays stable while content scrolls beneath individual buttons. Media selection lenses remain clear.
+- This is Localica’s user-directed adaptation model, not Apple’s private algorithm. Customization does not replace accessible semantics or guarantee legibility for every possible setting; [Apple’s material guidance](sources.md#hig--materials-and-color) still informs the defaults and review.
 
 ## Rendering and measurement
 

@@ -63,13 +63,13 @@ Bound/orient imported images; the zoom viewer decodes separately. Resolve lyric 
 
 ### Optics and performance
 
-Controls, panels and selections use one [lens model](liquid-glass/specification.md#geometry-and-readability), executed by platform-specific adapters without retaining an older visual style. Share outline geometry across clipping, refraction, illumination and shadow. White tint uses the same monotonic tone curve on both adapters; readability records sharp foreground silhouettes separately. Older devices independently blend prepared blur/tint endpoints without filtering fresh bitmaps each frame.
+Controls, panels and selections use one [lens model](liquid-glass/specification.md#geometry-and-readability), executed by platform-specific adapters. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback; both adapters use the same ordered brightness mapping. Older devices share bounded, asynchronously prepared blur/tint/tone endpoints. Sliders and switches render one procedural scene, unchanged outside the lens and refracted inside; track and lens share draw-time geometry.
 
 Floating list controls sample the finished viewport after its fade and scrolling transforms, with the parent backing beneath transparent pixels. Keep those controls outside their own source recording.
 
 | Platform / layer | Treatment |
 | --- | --- |
-| Android 13+ optics | Padded AGSL rounded-surface refraction; small shared scene samples guide foreground polarity, never per-lens readback. |
+| Android 13+ optics | Padded AGSL rounded-surface refraction and tone mapping; the page supplies foreground polarity without readback. |
 | Older optics | Bounded meshes over prepared snapshots with the same curvature/tint model and sharp foreground content. Android 8–9 rasterize and retain the mesh because [hardware vertex drawing starts at API 29](https://developer.android.com/topic/performance/hardware-accel). |
 | Live scattering | Bounded downsampled layers: frosted panels on Android 12+, refracting glass on Android 13+. |
 | Prepared scattering | Shared cancellable snapshots on older adapters after scene changes/settled scrolling, never each gesture frame. |

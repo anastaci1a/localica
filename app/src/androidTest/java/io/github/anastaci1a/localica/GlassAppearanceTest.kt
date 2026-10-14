@@ -26,12 +26,29 @@ import org.junit.Test
 class GlassAppearanceTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun contrastMigrationKeepsExplicitOffAndInitializesTheNewCurve() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = InterfacePreferences(context)
+        val original = prefs.read()
+        val store = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
+        try {
+            store.edit().remove("glass-contrast-trim").putFloat("glass-contrast", 0f).commit()
+            assertEquals(0f, prefs.read().glass.contrast, 0f)
+            store.edit().putFloat("glass-contrast", .8f).commit()
+            assertEquals(.25f, prefs.read().glass.contrast, 0f)
+            prefs.write(original.copy(glass = GlassAppearance(contrast = .4f, contrastWeight = 1.2f, classicOpacity = .3f)))
+            assertEquals(.4f, InterfacePreferences(context).read().glass.contrast, 0f)
+            assertEquals(1.2f, InterfacePreferences(context).read().glass.contrastWeight, 0f)
+            assertEquals(.3f, InterfacePreferences(context).read().glass.classicOpacity, 0f)
+        } finally { prefs.write(original) }
+    }
+
     @Test fun preferencesPersistIndependentlyAndClampInvalidValues() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val prefs = InterfacePreferences(context)
         val original = prefs.read()
         try {
-            val glass = GlassAppearance(.73f, .18f, .04f, .91f, .67f, TabLensStyle.Overlay, .81f, .23f, 3f, 1.7f)
+            val glass = GlassAppearance(.73f, .18f, .04f, .91f, .35f, TabLensStyle.Overlay, .81f, .23f, 3f, 1.7f, 1.4f, .22f)
             prefs.write(original.copy(glass = glass))
             assertEquals(glass, InterfacePreferences(context).read().glass)
             prefs.write(original.copy(glass = GlassAppearance(-1f, 2f, Float.NaN, Float.POSITIVE_INFINITY)))
@@ -87,7 +104,7 @@ class GlassAppearanceTest {
             blurred.green + (1f - blurred.green) * mix, tinted.green, .025f)
         val adaptive = compose.onNodeWithTag("adaptive-ink").captureToImage().toPixelMap()
         val contrasting = adaptive[adaptive.width / 2, adaptive.height / 4]
-        assertTrue("Heavy white tint needs dark foreground contrast: $contrasting", contrasting.red < .2f)
+        assertTrue("User tint cannot independently flip this page’s white foreground: $contrasting", contrasting.red > .98f)
         val ink = compose.onNodeWithTag("ink").captureToImage().toPixelMap()
         val black = ink[ink.width / 2, ink.height * 3 / 4]
         assertTrue("Foreground is never blurred or tinted: $black", black.red + black.green + black.blue < .03f)

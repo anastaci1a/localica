@@ -30,6 +30,7 @@ internal class LensRenderer {
         uniform float power;
         uniform float whiteTint;
         uniform float illumination;
+        uniform float3 tone;
         uniform float fieldMode;
         uniform float2 fieldOrigin;
         uniform float fieldScale;
@@ -78,6 +79,10 @@ internal class LensRenderer {
             if (foregroundOffset > 0.0 && (p.x >= outputSize.x || p.y >= outputSize.y)) return half4(0);
             float3 f = geometry(p);
             if (f.x < -1.0) return scene.eval(p);
+            // Selection content stays spatially sharp. Brightness compression
+            // affects only the backing, while the shared optical reflection still
+            // describes the curved surface over opaque rows and artwork.
+            half4 ink = foregroundOffset > 0.0 ? scene.eval(p + float2(0, foregroundOffset)) : half4(0);
             float u = clamp(1.0 - max(f.x, 0.0) / max(span, 0.001), 0.0, 1.0);
             float root = sqrt(max(1.0 - u * u, 0.0004));
             float opticalDepth = depth / sqrt(1.0 + depth * depth / 4.0);
@@ -86,10 +91,7 @@ internal class LensRenderer {
             float height = crown * root * (1.0 + shoulder * u * u);
             float slope = crown / max(span, 0.001) * u / root * (1.0 - 2.0 * shoulder + 3.0 * shoulder * u * u);
             float3 normal = normalize(float3(-f.yz * slope, 1.0));
-            // A selected row is foreground on the lens, like a button's label.
-            // Its atlas entry stays sharp while the separate backing refracts.
-            half4 ink = foregroundOffset > 0.0 ? scene.eval(p + float2(0, foregroundOffset)) : half4(0);
-            half4 sampled = ink;
+            half4 sampled = half4(0);
             if (ink.a < 1.0) {
                 float3 ray = refract(float3(0, 0, -1), normal, 1.0 / 1.33);
                 float2 exiting = ray.xy * 1.33;
@@ -102,7 +104,6 @@ internal class LensRenderer {
                     sampled = lookup.x >= 0.0 && lookup.y >= 0.0 && lookup.x < backdropSize.x && lookup.y < backdropSize.y
                         ? scene.eval(lookup + float2(1)) : half4(0);
                 } else sampled = scene.eval(lookup);
-                sampled = ink + sampled * (1.0 - ink.a);
             }
             float alpha = float(sampled.a);
             float3 color = float3(sampled.rgb) / max(alpha, 0.0001);
@@ -112,17 +113,26 @@ internal class LensRenderer {
             float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
             float tint = clamp((lifted - luma) / max(1.0 - luma, 0.0001), 0.0, 1.0);
             color = mix(color, float3(1), tint);
+            color = clamp(color, 0.0, 1.0);
+            color = tone.z > 0.5 ? color - tone.x * pow(color, float3(tone.y))
+                : color + tone.x * pow(1.0 - color, float3(tone.y));
+            sampled = ink + half4(half3(color * alpha), half(alpha)) * (1.0 - ink.a);
+            alpha = float(sampled.a);
+            color = float3(sampled.rgb) / max(alpha, 0.0001);
             // A broad environment reflection belongs to the curved normal. No
             // painted plate, contour gradient or uniform adaptive-contrast coating.
             float facing = dot(normal, normalize(float3(-0.45, -0.75, 0.6)));
             float grazing = pow(1.0 - normal.z, 3.0);
             float reflection = (0.018 * (1.0 - normal.z) + 0.26 * grazing) * illumination * power;
-            color = mix(color, float3(1), reflection * max(facing, 0.0));
-            color *= 1.0 - reflection * max(-facing, 0.0) * 0.3;
+            float white = tone.z > 0.5 ? 1.0 - tone.x : 1.0;
+            float black = tone.z > 0.5 ? 0.0 : tone.x;
+            color = mix(color, float3(white), reflection * max(facing, 0.0));
+            color = mix(color, float3(black), reflection * max(-facing, 0.0) * 0.3);
             // Environmental light still reflects when this recording is translucent
             // (for example an unpainted row over its parent's background).
             float reflected = reflection * max(facing, 0.0) * (1.0 - alpha);
-            return half4(half3(color * alpha + reflected), half(alpha + reflected));
+            float reflectedTone = tone.z > 0.5 ? 1.0 - tone.x : 1.0;
+            return half4(half3(color * alpha + reflected * reflectedTone), half(alpha + reflected));
         }
     """.trimIndent())
     private var last: List<Float> = emptyList()
@@ -136,14 +146,16 @@ internal class LensRenderer {
 
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, power: Float = 1f,
         whiteTint: Float = 0f, illumination: Float = 1f, map: LensDistanceMap? = null,
-        origin: Offset = Offset.Zero, atlas: LensAtlas? = null, flattening: Float = 0f): RenderEffect {
+        origin: Offset = Offset.Zero, atlas: LensAtlas? = null, flattening: Float = 0f,
+        tone: GlassTone = GlassTone()): RenderEffect {
         val r = geometry.bounds
         val state = listOf(r.left, r.top, r.right, r.bottom, geometry.corner, geometry.span, blur,
             depth.coerceIn(.05f, 4f), power, whiteTint, illumination, origin.x, origin.y,
             map?.scale ?: 1f, map?.range ?: 1f, atlas?.foregroundY ?: 0f,
             atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f,
             atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f,
-            atlas?.backdropOffset?.x ?: 0f, atlas?.backdropOffset?.y ?: 0f, flattening)
+            atlas?.backdropOffset?.x ?: 0f, atlas?.backdropOffset?.y ?: 0f, flattening,
+            tone.trim, tone.weight, if (tone.lightInk) 1f else 0f)
         if (state == last && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
@@ -154,6 +166,7 @@ internal class LensRenderer {
         shader.setFloatUniform("power", power)
         shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)
+        shader.setFloatUniform("tone", tone.trim, tone.weight, if (tone.lightInk) 1f else 0f)
         shader.setFloatUniform("foregroundOffset", atlas?.foregroundY ?: 0f)
         shader.setFloatUniform("outputSize", atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f)
         shader.setFloatUniform("backdropSize", atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f)

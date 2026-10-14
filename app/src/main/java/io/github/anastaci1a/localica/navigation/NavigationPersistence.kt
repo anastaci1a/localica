@@ -21,10 +21,11 @@ class InterfacePreferences(context: Context) {
             artworkSwipe = preferences.getBoolean("artwork-swipe", true),
             glass = GlassAppearance(preferences.getFloat("glass-blur", .2f), preferences.getFloat("glass-white-tint", .06f),
                 preferences.getFloat("glass-shadow-strength", .12f), preferences.getFloat("glass-shadow-spread", .6f),
-                preferences.getFloat("glass-contrast", .4f),
+                preferences.getFloat("glass-contrast-trim", if (preferences.getFloat("glass-contrast", .4f) == 0f) 0f else .25f),
                 preferences.enumValue<TabLensStyle>("tab-lens-style") ?: TabLensStyle.Adjustable,
                 preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f),
-                preferences.getFloat("glass-shape-damping", 8f), preferences.getFloat("glass-depth", 1.35f)).normalized(),
+                preferences.getFloat("glass-shape-damping", 8f), preferences.getFloat("glass-depth", 1.35f),
+                preferences.getFloat("glass-contrast-weight", 2f), preferences.getFloat("tab-classic-opacity", .1f)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone(),
             lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000))
     }
@@ -40,7 +41,9 @@ class InterfacePreferences(context: Context) {
             .putInt("lyric-delay-ms", value.lyricDelayMs.coerceIn(-2000, 2000))
             .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
             .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)
-            .putFloat("glass-contrast", glass.contrast).putString("tab-lens-style", glass.tabStyle.name)
+            .putFloat("glass-contrast-trim", glass.contrast).remove("glass-contrast")
+            .putFloat("glass-contrast-weight", glass.contrastWeight).putFloat("tab-classic-opacity", glass.classicOpacity)
+            .putString("tab-lens-style", glass.tabStyle.name)
             .putFloat("tab-lens-blur", glass.tabBlur).putFloat("tab-lens-tint", glass.tabWhiteTint)
             .putFloat("glass-shape-damping", glass.shapeDamping).putFloat("glass-depth", glass.depth)
             .putString("artwork-tap", value.artworkTap.name).putString("artwork-hold", value.artworkHold.name).apply()

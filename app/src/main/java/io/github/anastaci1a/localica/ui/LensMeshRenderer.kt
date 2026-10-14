@@ -21,6 +21,7 @@ internal class LensMeshRenderer {
     private var opticalDepth = Float.NaN
     private var opticalPower = Float.NaN
     private var opticalFlattening = Float.NaN
+    private var opticalTone = GlassTone()
     private var fields = emptyList<LensField>()
     private var generation = 0
     private var vertices = FloatArray(0)
@@ -47,7 +48,7 @@ internal class LensMeshRenderer {
     fun DrawScope.draw(shape: LensGeometry, snapshot: ImageBitmap?, sourceSize: IntSize,
         sourceOffset: Offset, depth: Float, power: Float = 1f, alpha: Float = 1f,
         field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false,
-        flattening: Float = 0f) {
+        flattening: Float = 0f, tone: GlassTone = GlassTone()) {
         val next = listOf(shape, density, fieldKey ?: Unit)
         val geometryChanged = geometryKey != next
         if (geometryChanged) {
@@ -58,8 +59,9 @@ internal class LensMeshRenderer {
             // Android 8 JNI validates colors against coordinate count (2/vertex).
             highlights = IntArray(vertices.size)
         }
-        if (geometryChanged || depth != opticalDepth || power != opticalPower || flattening != opticalFlattening) {
+        if (geometryChanged || depth != opticalDepth || power != opticalPower || flattening != opticalFlattening || tone != opticalTone) {
             opticalDepth = depth; opticalPower = power; opticalFlattening = flattening; generation++
+            opticalTone = tone
             for (i in fields.indices) {
                 val f = fields[i]
                 // Boundary triangles include vertices just outside a rounded clip.
@@ -71,8 +73,8 @@ internal class LensMeshRenderer {
                 val grazing = 1f - ray.normalZ
                 val reflection = (.018f * grazing + .26f * grazing * grazing * grazing) * power
                 val opacity = reflection * if (facing >= 0f) facing else -facing * .3f
-                val tone = if (facing >= 0f) 255 else 0
-                highlights[i] = android.graphics.Color.argb((opacity * 255).toInt().coerceIn(0, 255), tone, tone, tone)
+                val light = (tone.channel(if (facing >= 0f) 1f else 0f) * 255).toInt()
+                highlights[i] = android.graphics.Color.argb((opacity * 255).toInt().coerceIn(0, 255), light, light, light)
             }
         }
         scenePaint.shader = snapshot?.let { shaders.getOrPut(it) {

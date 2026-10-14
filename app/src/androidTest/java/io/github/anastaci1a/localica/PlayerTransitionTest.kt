@@ -185,7 +185,8 @@ class PlayerTransitionTest {
         lateinit var scope: CoroutineScope
         lateinit var backdrop: FrostedBackdrop
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(whiteTint = 1f, shadowStrength = 0f)) {
+            // Isolate outline coverage from the independently tested brightness trim.
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(whiteTint = 1f, shadowStrength = 0f, contrast = 0f)) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.Magenta)) {
                     scope = rememberCoroutineScope()
                     backdrop = rememberFrostedBackdrop(Unit)

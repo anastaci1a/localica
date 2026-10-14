@@ -40,7 +40,6 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
     var size by mutableStateOf(IntSize.Zero)
     var fallback by mutableStateOf<ImageBitmap?>(null)
     var snapshot by mutableStateOf<ImageBitmap?>(null)
-    var contrastPixels by mutableStateOf<PixelMap?>(null)
     var glassFallback by mutableStateOf<ImageBitmap?>(null)
     var lensSnapshot by mutableStateOf<ImageBitmap?>(null)
     var lensFrostSnapshot by mutableStateOf<ImageBitmap?>(null)
@@ -56,7 +55,6 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true,
     whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
-    val contrastLayer = rememberGraphicsLayer()
     val source = remember(layer) { FrostedBackdrop(layer, dark) }
     // An unreferenced scene needs a display list, not another full-window raster.
     // Sampled scenes retain pixels so sibling lenses never replay all their children.
@@ -74,7 +72,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     LaunchedEffect(source, key, enabled, sampled) {
         // Size belongs to sampling, not the caller's composition. Reading it above
         // this effect would recompose the whole player host on every resize frame.
-        if (enabled && sampled) snapshotFlow { source.size to source.revision }.collectLatest { (size, revision) ->
+        if (Build.VERSION.SDK_INT < 33 && enabled && sampled) snapshotFlow { source.size to source.revision }.collectLatest { (size, revision) ->
             val captureKey = listOf(key, size, revision)
             if (size == IntSize.Zero || captured == captureKey) return@collectLatest
             suspend fun capture(): Boolean {
@@ -82,19 +80,9 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 // Layout can exist before the first recorded draw, or survive a restored
                 // player layer briefly. ImageReader rejects a zero-sized recording.
                 if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return false
-                if (Build.VERSION.SDK_INT >= 33) {
-                    val extent = IntSize(48, (48f * source.size.height / source.size.width).toInt().coerceIn(1, 96))
-                    contrastLayer.record(androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr, extent) {
-                        scale(extent.width.toFloat() / source.size.width,
-                            extent.height.toFloat() / source.size.height, Offset.Zero) { drawLayer(source.layer) }
-                    }
-                    source.contrastPixels = contrastLayer.toImageBitmap().toPixelMap()
-                } else {
-                    val snapshot = source.layer.toImageBitmap()
-                    source.contrastPixels = withContext(Dispatchers.Default) { snapshot.toPixelMap() }
-                    source.snapshot = snapshot
-                    source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
-                }
+                val snapshot = source.layer.toImageBitmap()
+                source.snapshot = snapshot
+                source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
                 return true
             }
             capture()

@@ -321,8 +321,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             }
                         }
                         Box(Modifier.graphicsLayer { alpha = (1f - p / .32f).coerceIn(0f, 1f) }
-                            .lensInkSupport(anchor.ink.takeIf { it != Color.Unspecified } ?: if (dark) Color.White else Color(0xFF202124),
-                                LocalGlassAppearance.current.contrast)
                             .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                             CompositionLocalProvider(LocalContentColor provides (anchor.ink.takeIf { it != Color.Unspecified }
                                 ?: if (dark) Color.White else Color(0xFF202124))) { anchor.face?.invoke() }

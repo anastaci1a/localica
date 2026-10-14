@@ -35,7 +35,29 @@ class GlassPressureTest {
         assertTrue("A held overdrag compresses the vertical lens: $initial -> $held", held.height < initial.height * .97f)
         assertEquals("Compression pins the contacting top edge", initial.top, held.top, 1f)
         compose.onNodeWithText("Title").performTouchInput { up() }
+        repeat(12) {
+            compose.mainClock.advanceTimeBy(32)
+            val recovering = lens.fetchSemanticsNode().boundsInRoot
+            assertTrue("Vertical release must not turn into a wide horizontal squeeze: $recovering",
+                kotlin.math.abs(recovering.width - initial.width) < initial.width * .04f)
+        }
         compose.mainClock.advanceTimeBy(1200)
+        assertEquals(initial.height, lens.fetchSemanticsNode().boundsInRoot.height, 1f)
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun selectedChoiceRespondsToContactBeforeAnyDrag() {
+        compose.setContent { LocalicaTheme { Box(Modifier.width(260.dp).padding(top = 100.dp)) {
+            GlassChoices(listOf("First", "Second"), 0) { }
+        } } }
+        val lens = compose.onNodeWithTag("elastic-lens-face", useUnmergedTree = true)
+        val initial = lens.fetchSemanticsNode().boundsInRoot
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("First").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(300)
+        assertTrue("Contact flattens and widens the resting droplet before touch slop", lens.fetchSemanticsNode().boundsInRoot.height > initial.height + 1f)
+        compose.onNodeWithText("First").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1600)
         assertEquals(initial.height, lens.fetchSemanticsNode().boundsInRoot.height, 1f)
         compose.mainClock.autoAdvance = true
     }

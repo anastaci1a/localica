@@ -20,6 +20,29 @@ import org.junit.Test
 
 class InterfaceControlsTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun trackRemainsContinuousDuringMovementBetweenDiscreteStops() {
+        var value by mutableFloatStateOf(.5f)
+        compose.setContent { LocalicaTheme { Box(Modifier.background(Color.White).padding(32.dp)) {
+            InterfaceSlider(value, { value = it }, Modifier.width(300.dp).testTag("continuous-slider"), steps = 3)
+        } } }
+        val slider = compose.onNodeWithTag("continuous-slider")
+        compose.mainClock.autoAdvance = false
+        slider.performTouchInput { down(center) }
+        for (fraction in listOf(.58f, .63f, .69f, .61f, .53f)) {
+            slider.performTouchInput { moveTo(Offset(width * fraction, centerY), delayMillis = 32) }
+            compose.mainClock.advanceTimeBy(32)
+            val pixels = slider.captureToImage().toPixelMap()
+            // The left part of the active track must remain one centered red line,
+            // even when its lens is between the committed quarter-step values.
+            for (x in pixels.width / 8..pixels.width * 48 / 100) {
+                val c = pixels[x, pixels.height / 2]
+                assertTrue("No moving cutout gap at fraction $fraction, x=$x: $c", c.red > c.green + .1f)
+            }
+        }
+        slider.performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+    }
     @Test fun clearWideThumbRevealsTrackAndKeepsAdjustableSemantics() {
         var value by mutableFloatStateOf(.5f)
         compose.setContent { LocalicaTheme { Box(Modifier.background(Color.White).padding(32.dp)) {
