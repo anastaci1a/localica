@@ -22,8 +22,8 @@ internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, Animati
             // inside the host's 4 dp inset, including very wide vertical options.
             val allowanceX = 1f + 6.dp.toPx() / size.width.coerceAtLeast(1f)
             val allowanceY = 1f + 6.dp.toPx() / size.height.coerceAtLeast(1f)
-            scaleX = body.value.scaleX(vertical).coerceAtMost(allowanceX)
-            scaleY = body.value.scaleY(vertical).coerceAtMost(allowanceY)
+            scaleX = body.value.scaleX(vertical).coerceIn(if (vertical) 2f - allowanceX else .5f, allowanceX)
+            scaleY = body.value.scaleY(vertical).coerceIn(if (!vertical) 2f - allowanceY else .5f, allowanceY)
             translationX = if (vertical) 0f else glassWallTranslation(size.width, scaleX, wall())
             translationY = if (vertical) glassWallTranslation(size.height, scaleY, wall()) else 0f
         }, source = source, pressFeedback = false, shadow = false,

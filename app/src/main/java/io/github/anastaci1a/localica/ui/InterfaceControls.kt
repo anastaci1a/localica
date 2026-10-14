@@ -56,17 +56,15 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val current by rememberUpdatedState(value)
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
     var fingerFraction by remember { mutableStateOf<Float?>(null) }
-    var controlWidth by remember { mutableFloatStateOf(0f) }
+    var contact by remember { mutableStateOf(false) }
     val shownFraction by animateFloatAsState(fingerFraction ?: ((value - valueRange.start) / span),
         if (fingerFraction != null || LocalReducedMotion.current) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Magnetic slider")
-    val pressed by interaction.collectIsPressedAsState()
-    val dragged by interaction.collectIsDraggedAsState()
-    val deformation = rememberGlassBody({ shownFraction }, { pressure }, { if (pressed || dragged) 1f else 0f })
-    val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f, whiteTint = 0f)
+    val deformation = rememberGlassBody({ shownFraction }, { pressure }, { if (contact) 1f else 0f })
     val inset = with(LocalDensity.current) { 20.dp.toPx() }
     val touch = if (!enabled) Modifier else Modifier.pointerInput(valueRange, rtl) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            contact = true
             val extent = (size.width - 2 * inset).coerceAtLeast(1f)
             val fraction = (current - valueRange.start) / span
             val pointer = if (rtl) size.width - down.position.x else down.position.x
@@ -82,45 +80,28 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
                             else raw.coerceIn(0f, 1f)
                     }
                 } while (event.changes.any { it.pressed })
-            } finally { pressure = 0f; fingerFraction = null }
+            } finally { pressure = 0f; fingerFraction = null; contact = false }
         }
     }
     val color = NavigationAccent
-    var thumbCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
-    var trackCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
-    val legacy = android.os.Build.VERSION.SDK_INT < 33
-    val directionLayout = androidx.compose.ui.platform.LocalLayoutDirection.current
-    val density = LocalDensity.current
-    Slider(value, onValueChange, modifier.onSizeChanged { controlWidth = it.width.toFloat() }.then(touch), enabled = enabled, valueRange = valueRange, steps = actualSteps, interactionSource = interaction,
-        thumb = { CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
-            LiquidGlassSurface(Modifier.size(40.dp, 26.dp).testTag("settings-slider-thumb").onPlaced { thumbCoordinates = it }.graphicsLayer {
-                scaleX = deformation.value.scaleX(); scaleY = deformation.value.scaleY()
-                val fraction = (value - valueRange.start) / span
-                translationX = direction * (shownFraction - fraction) * (controlWidth - 2 * inset).coerceAtLeast(0f) +
-                    glassWallTranslation(size.width, scaleX, direction * when { shownFraction <= .001f -> -1f; shownFraction >= .999f -> 1f; else -> 0f })
-            }, source = trackSource, cornerRadius = 13.dp, pressFeedback = false, shadow = false, body = { deformation.value })
-        } },
+    Slider(value, onValueChange, modifier.then(touch), enabled = enabled, valueRange = valueRange, steps = actualSteps, interactionSource = interaction,
+        // Material owns semantics and input only. The complete visual lives in one
+        // scene below, so the real and refracted tracks cannot be drawn twice.
+        thumb = { Box(Modifier.size(40.dp, 26.dp).testTag("settings-slider-thumb")) },
         track = {
-            // Procedural old-Android snapshots use the same drawing as the live
-            // track, without a GPU readback while the user moves the value.
-            val fraction = shownFraction.coerceIn(0f, 1f)
-            Canvas(Modifier.fillMaxWidth().height(48.dp).onPlaced { trackCoordinates = it }
-                .recordFrostedBackdrop(trackSource, displayCutout = {
-                    val host = trackCoordinates; val thumb = thumbCoordinates
+            GlassControlScene(Modifier.fillMaxWidth().height(48.dp).testTag("settings-slider-scene"),
+                geometry = {
+                    val fraction = shownFraction.coerceIn(0f, 1f)
                     val shape = deformation.value
-                    if (host?.isAttached != true || thumb?.isAttached != true || legacy && trackSource.snapshot == null) null
-                    else Path().apply {
-                        val rect = host.localBoundingBoxOf(thumb, clipBounds = false)
-                        addRoundRect(androidx.compose.ui.geometry.RoundRect(rect,
-                            CornerRadius(13.dp.toPx() * shape.scaleX(), 13.dp.toPx() * shape.scaleY())))
-                    }
-                }).drawWithCache {
-                    val image = if (!legacy) null else androidx.compose.ui.graphics.ImageBitmap(size.width.toInt(), size.height.toInt()).also { bitmap ->
-                        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(density, directionLayout,
-                            androidx.compose.ui.graphics.Canvas(bitmap), size) { drawSliderTrack(fraction, actualSteps, enabled, rtl, color) }
-                    }
-                    onDrawBehind { if (image != null) { trackSource.snapshot = image; trackSource.lensSnapshot = image; trackSource.lensFrostSnapshot = image } }
-                }) { drawSliderTrack(fraction, actualSteps, enabled, rtl, color) }
+                    val width = 40.dp.toPx() * shape.scaleX()
+                    val height = 26.dp.toPx() * shape.scaleY()
+                    val wall = direction * when { fraction <= .001f -> -1f; fraction >= .999f -> 1f; else -> 0f }
+                    val x = size.width * (if (rtl) 1f - fraction else fraction) + glassWallTranslation(40.dp.toPx(), shape.scaleX(), wall)
+                    LensGeometry(androidx.compose.ui.geometry.Rect(x - width / 2f, center.y - height / 2f,
+                        x + width / 2f, center.y + height / 2f), height / 2f)
+                }, body = { deformation.value }) {
+                    drawSliderTrack(shownFraction.coerceIn(0f, 1f), actualSteps, enabled, rtl, color)
+                }
         })
 }
 
@@ -146,6 +127,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val reduced = LocalReducedMotion.current
     val position = remember { androidx.compose.animation.core.Animatable(if (checked) 1f else 0f) }
     var dragging by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
     var settleRequest by remember { mutableIntStateOf(0) }
     LaunchedEffect(checked, reduced, speed, dragging, settleRequest) {
         if (dragging) return@LaunchedEffect
@@ -159,11 +141,10 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val direction = if (rtl) -1f else 1f
-    val trackSource = rememberFrostedBackdrop(Unit, enabled = false, dark = false, glassBlur = 0f, whiteTint = 0f)
-    val body = rememberGlassBody({ position.value }, { pressure }, { if (dragging) 1f else 0f })
-    val active by animateFloatAsState(if (dragging || position.isRunning) 1f else 0f,
+    val body = rememberGlassBody({ position.value }, { pressure }, { if (pressed || dragging) 1f else 0f })
+    val active by animateFloatAsState(if (pressed || dragging || position.isRunning) 1f else 0f,
         tween(if (reduced) 0 else 100), label = "Switch lens")
-    Box(Modifier.size(60.dp, 32.dp).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.elasticControlDrag(
+    Box(Modifier.size(60.dp, 32.dp).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.observeGlassContact { pressed = it }.elasticControlDrag(
         horizontal = true,
         onStart = { dragging = true; scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.stop(); raw = position.value } },
         onDelta = { dx ->
@@ -174,17 +155,18 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
             pressure = 0f; dragging = false; settleRequest++
             if (!cancelled) onChange(position.value >= .5f)
         }))) {
-        Canvas(Modifier.matchParentSize().recordFrostedBackdrop(trackSource)) {
+        GlassControlScene(Modifier.matchParentSize(), horizontalPadding = 0.dp, geometry = {
+            val fraction = position.value.coerceIn(0f, 1f)
+            val shape = body.value
+            val width = 32.dp.toPx() * shape.scaleX()
+            val height = (28.dp.toPx() * shape.scaleY()).coerceAtMost(30.dp.toPx())
+            val wall = direction * when { fraction <= .001f -> -1f; fraction >= .999f -> 1f; else -> 0f }
+            val x = (18.dp + 24.dp * (if (rtl) 1f - fraction else fraction)).toPx() + glassWallTranslation(32.dp.toPx(), shape.scaleX(), wall)
+            LensGeometry(androidx.compose.ui.geometry.Rect(x - width / 2f, center.y - height / 2f,
+                x + width / 2f, center.y + height / 2f), height / 2f)
+        }, body = { body.value }, face = { Color.White.copy(alpha = 1f - active) }) {
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 cornerRadius = CornerRadius(size.height / 2))
-        }
-        CompositionLocalProvider(LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {
-            LiquidGlassSurface(Modifier.offset { androidx.compose.ui.unit.IntOffset((2.dp + 24.dp * position.value).roundToPx(), 2.dp.roundToPx()) }.size(32.dp, 28.dp).graphicsLayer {
-                scaleX = body.value.scaleX(); scaleY = body.value.scaleY()
-                translationX = glassWallTranslation(size.width, scaleX, direction * when { position.value <= .001f -> -1f; position.value >= .999f -> 1f; else -> 0f })
-            }, source = trackSource, cornerRadius = 14.dp, pressFeedback = false, shadow = false, body = { body.value }) {
-                Canvas(Modifier.matchParentSize()) { drawRoundRect(Color.White.copy(alpha = 1f - active), cornerRadius = CornerRadius(size.height / 2)) }
-            }
         }
     }
 }

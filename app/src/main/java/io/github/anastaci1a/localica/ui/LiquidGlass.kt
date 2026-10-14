@@ -96,35 +96,12 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
     val appearance = LocalGlassAppearance.current.normalized()
-    // A moving page carries its controls and backing together. Observe sampled
-    // luminance, not absolute coordinates, so that translation cannot recompose
-    // every control when its relative optical view is unchanged.
-    val sample by remember(source) { derivedStateOf {
-        val pixels = source?.contrastPixels
-        if (pixels == null) null else {
-            val relative = origin - source.origin
-            var total = 0f
-            for (dy in 1..3) for (dx in 1..3) {
-                val x = ((relative.x + surfaceSize.width * dx / 4f) / source.size.width.coerceAtLeast(1) * pixels.width).toInt().coerceIn(0, pixels.width - 1)
-                val y = ((relative.y + surfaceSize.height * dy / 4f) / source.size.height.coerceAtLeast(1) * pixels.height).toInt().coerceIn(0, pixels.height - 1)
-                total += pixels[x, y].luminance()
-            }
-            total / 9
-        }
-    } }
-    var sampledDark by remember(source) { mutableStateOf(source?.dark == true) }
-    val filteredLight by animateFloatAsState(sample ?: if (sampledDark) 0f else 1f,
-        tween(if (LocalReducedMotion.current) 0 else 120), label = "Glass contrast sampling")
-    SideEffect {
-        if (sample != null) {
-            if (filteredLight < .25f) sampledDark = true
-            else if (filteredLight > .55f) sampledDark = false
-        }
-    }
-    val dark = inkOverride?.let { it.luminance() > .5f } ?: if (appearance.whiteTint >= .45f) false
-        else if (appearance.contrast > 0f && panelProgress == 0f) sampledDark else source?.dark == true
+    // The page owns ink polarity. A control never flips independently as content
+    // scrolls beneath it, and no GPU readback is needed to choose its foreground.
+    val dark = inkOverride?.let { it.luminance() > .5f } ?: (source?.dark == true)
     val frost = frostProgress.coerceIn(0f, 1f)
     val panel = panelProgress.coerceIn(0f, 1f)
+    val tone = GlassTone(appearance.contrast * (1f - panel), appearance.contrastWeight, dark)
     val coatingDark = panelDark ?: dark
     val panelBase = if (coatingDark) Color.Black else androidx.compose.material3.MaterialTheme.colorScheme.surface
     val anchor = modifier.glassSurfaceAnchor()
@@ -163,12 +140,26 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                     blur * resolution,
                     appearance.depth * depthScale * thickness,
                     power = refraction, whiteTint = appearance.whiteTint * (1f - panel),
-                    flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f))
+                    flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f), tone = tone)
                 else if (blur > 0f) BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp) else null
             }
         }
 
-        if (Build.VERSION.SDK_INT < 33) Canvas(Modifier.matchParentSize()) {
+        if (Build.VERSION.SDK_INT < 33) {
+        val endpointTone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
+        @Composable fun prepared(backing: FrostedBackdrop?): List<ImageBitmap?> {
+            val clear = backing?.glassFallback ?: backing?.snapshot
+            val frosted = backing?.fallback ?: clear
+            // Morphs blend fixed prepared endpoints; progress must never schedule
+            // a new pixel filter on every animation frame.
+            return listOf(clear,
+                rememberToneSnapshot((backing?.lensSnapshot ?: clear).takeIf { frost < 1f && panel < 1f }, endpointTone),
+                frosted,
+                rememberToneSnapshot((backing?.lensFrostSnapshot ?: frosted).takeIf { frost > 0f && panel < 1f }, endpointTone))
+        }
+        val sourceImages = prepared(source)
+        val homeImages = prepared(homeSource)
+        Canvas(Modifier.matchParentSize()) {
             val shape = LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, size),
                 (cornerRadius?.toPx() ?: size.minDimension / 2f).coerceIn(0f, size.minDimension / 2f))
             val thickness = body().thickness * (if (pressFeedback || anchor != null) contact.body.value.thickness else 1f)
@@ -178,23 +169,19 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             // Blur and tint are independent endpoints. Premultiplied addition
             // preserves opacity while either varies, including a source handoff.
             val samples = mutableListOf<Triple<FrostedBackdrop, ImageBitmap, Float>>()
-            fun samples(backing: FrostedBackdrop?, weight: Float) {
+            fun samples(backing: FrostedBackdrop?, imagesByRole: List<ImageBitmap?>, weight: Float) {
                 if (backing == null || weight <= 0f) return
-                val clear = backing.glassFallback ?: backing.snapshot ?: return
-                val tinted = backing.lensSnapshot ?: clear
-                val frosted = backing.fallback ?: clear
-                val tintedFrost = backing.lensFrostSnapshot ?: frosted
                 val images = linkedMapOf<ImageBitmap, Float>()
-                fun add(image: ImageBitmap, amount: Float) {
-                    if (amount > 0f) images[image] = (images[image] ?: 0f) + amount * weight
+                fun add(image: ImageBitmap?, amount: Float) {
+                    if (image != null && amount > 0f) images[image] = (images[image] ?: 0f) + amount * weight
                 }
-                add(tinted, (1f - frost) * (1f - panel))
-                add(clear, (1f - frost) * panel)
-                add(tintedFrost, frost * (1f - panel))
-                add(frosted, frost * panel)
+                add(imagesByRole[1], (1f - frost) * (1f - panel))
+                add(imagesByRole[0], (1f - frost) * panel)
+                add(imagesByRole[3], frost * (1f - panel))
+                add(imagesByRole[2], frost * panel)
                 images.forEach { (image, amount) -> samples += Triple(backing, image, amount) }
             }
-            samples(source, 1f - home); samples(homeSource, home)
+            samples(source, sourceImages, 1f - home); samples(homeSource, homeImages, home)
             val blending = samples.size > 1
             if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
             with(mesh) {
@@ -203,18 +190,19 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         amount, lighting = false, additive = index > 0, flattening = flattening)
                 }
                 if (blending) drawContext.canvas.restore()
-                draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth, refraction, flattening = flattening)
+                draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth, refraction, flattening = flattening, tone = tone)
             }
         }
+        }
         Canvas(Modifier.matchParentSize()) {
-            drawRect(tint)
+            drawRect(tone.color(tint))
             if (panel > 0f) drawFrostCoating(coatingDark, panelBase, Color.Transparent, .5f, panel)
-            drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f)
+            drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f, tone = tone)
 
         }
         val ink = inkOverride ?: if (dark) Color.White else Color(0xFF202124)
         if (content != null) CompositionLocalProvider(LocalContentColor provides ink) {
-            Box(Modifier.lensInkSupport(ink, appearance.contrast * (1f - panel)), content = content)
+            Box(content = content)
         }
     }
 }
@@ -222,14 +210,25 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 /** A restrained ambient reflection on the silhouette, never a plate across the face.
  * Shared by live/mesh controls and connected selections at the final display resolution. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
-    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null) {
-    val shine = Brush.linearGradient(
-        0f to Color.White.copy(alpha = .22f), .32f to Color.White.copy(alpha = .025f),
-        .52f to Color.Black.copy(alpha = .065f), .72f to Color.White.copy(alpha = .02f),
-        1f to Color.White.copy(alpha = .16f), start = bounds.topLeft, end = bounds.bottomRight)
-    // Half of the centered stroke is clipped by the surface's true silhouette.
-    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(1.2.dp.toPx())
-    if (path != null) clipPath(path) { drawPath(path, shine, style = stroke) }
-    else drawRoundRect(shine, bounds.topLeft, bounds.size,
-        androidx.compose.ui.geometry.CornerRadius(radius), style = stroke)
+    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null, tone: GlassTone = GlassTone()) {
+    val white = tone.color(Color.White)
+    val black = tone.color(Color.Black)
+    // Diagonally opposed highlights taper into quiet, slightly shaded corners.
+    // The silhouette clips both strokes inward; neither changes the hit geometry.
+    val shine = Brush.sweepGradient(
+        0f to white.copy(alpha = .025f), .125f to white.copy(alpha = .32f),
+        .25f to white.copy(alpha = .025f), .375f to Color.Transparent,
+        .5f to white.copy(alpha = .025f), .625f to white.copy(alpha = .32f),
+        .75f to white.copy(alpha = .025f), .875f to Color.Transparent,
+        1f to white.copy(alpha = .025f), center = bounds.center)
+    val shade = Brush.sweepGradient(
+        0f to Color.Transparent, .125f to Color.Transparent, .25f to Color.Transparent,
+        .375f to black.copy(alpha = .11f), .5f to Color.Transparent,
+        .625f to Color.Transparent, .75f to Color.Transparent, .875f to black.copy(alpha = .11f),
+        1f to Color.Transparent, center = bounds.center)
+    val silhouette = path ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }
+    clipPath(silhouette) {
+        drawPath(silhouette, shine, style = Stroke(2.6.dp.toPx()))
+        drawPath(silhouette, shade, style = Stroke(1.4.dp.toPx()))
+    }
 }

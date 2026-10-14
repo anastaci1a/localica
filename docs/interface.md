@@ -31,8 +31,8 @@ Settings categories are Interface, Playback and queues, Library and tags, About/
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |
-| Adaptive contrast | Stable ink polarity and soft glyph-local white/black support preserve foreground readability; media selections remain untinted. |
-| Navigation selector | Adjustable glass has independent blur/tint; Clear overlay refracts the finished bar/labels and disables but retains those values; Classic gray pill has no glass deformation. |
+| Adaptive contrast | Page-wide ink polarity; background brightness trim 0–50% (default 25%) and weighting from even to highlight/shadow-focused. White icons darken highlights; dark icons lift shadows. Foreground and media selections remain unfiltered. |
+| Navigation selector | Adjustable glass has independent blur/tint; Clear overlay refracts the bar without labels. Classic gray pill has adjustable opacity (default 10%) and no glass deformation. |
 
 These controls affect floating glass. Queue frost remains independent.
 
@@ -92,9 +92,8 @@ A 72 dp translucent handle appears late in expansion below the safe top inset. D
 | Queue element | Behavior |
 | --- | --- |
 | Drawer | Bottom-attached, visually separate from player artwork, with one neutral frosted surface throughout expansion: blurred backdrop colors, fine texture and neutral darkening for white text, without an added blue tint. The collapsed shelf keeps the same blur with lighter shading, darkening continuously as it opens. The queue header’s down arrow minimizes it; deletion lives in Queue actions. Whole label and upward player swipes open it; body/handle/list pulls settle by release velocity and distance. Once a gesture starts opening Queue, reversing only closes Queue and cannot dismiss the player. A downward pull from its top-scrolled list closes it; scrolling/flings/reordering retain ownership. |
-| Header | Boxed numbered selector + minimize arrow in the player overlay; sort left, occurrence index/count above total duration center, playlist-add/More right. Save to new/existing playlists; omit the redundant play button. |
 | Selector | Rounded popup opens already positioned at the playback queue. Numbered rows show browsing selection, a separate playback marker, plain rename/delete icons and reorder. When more than one queue exists, Remove all other queues morphs from a glass button into confirmation; each confirmation name uses a single-line ellipsis. Selected long title marquees with an unfaded leading edge during its pause; other rows, closed selector and search prompts use single-line ellipsis. |
-| Header | Handle and Queue title; down/selector/More row; sort/position-and-runtime/add-to-playlist row; search, then songs. Share outer margins and compact spacing while leaving shadows unclipped. |
+| Header | Handle and Queue title; down/numbered-selector/More row; sort/occurrence-index-and-count-above-runtime/add-to-playlist row; search, then songs. Save to new/existing playlists and omit a redundant play button. Share outer margins and compact spacing while leaving shadows unclipped. |
 | Songs/actions | A subtly denser, textured frosted slab marks only the current queue occurrence, with a faint material edge; other browsing lists have no playback highlight. Occurrence menus omit Move up/down; drag ordering remains available; information links close player/queue overlays and open the collection without changing playback. Queue More omits List view options; global Repeat/Shuffle stay in the player. Browsing/deletion behavior: [Product](product.md#queues-and-playback). |
 | Return control | When the current occurrence is offscreen or covered by floating controls, fade in a Liquid Glass bubble pointing toward it. Ease it below the search pill or to the closest possible position. Keep its last direction throughout exit. During selection/drag, slide/fade this down so selection actions occupy the bottom. |
 

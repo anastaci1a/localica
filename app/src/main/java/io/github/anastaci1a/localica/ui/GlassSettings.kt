@@ -22,9 +22,10 @@ internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 @Composable
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
+    var previewLightInk by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalGlassAppearance provides value) {
         Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
-            val source = rememberFrostedBackdrop(Unit, dark = false)
+            val source = rememberFrostedBackdrop(Unit, dark = previewLightInk)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                 val light = listOf(Color(0xFFF1D8BC), Color(0xFFBCD9CE), Color(0xFFCDC8E5), Color(0xFFE9B9AC))
                 val dark = listOf(Color(0xFF294D60), Color(0xFF68566F), Color(0xFF3C6962), Color(0xFF8B514D))
@@ -37,11 +38,18 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
             GlassPreview(source)
         }
     }
+    GlassChoices(listOf("Dark icons", "White icons"), if (previewLightInk) 1 else 0, horizontal = true) { previewLightInk = it == 1 }
     GlassSlider("Blur", value.blur, "Clear", "Frosted") { onChange(value.copy(blur = it)) }
     GlassSlider("White tint", value.whiteTint, "None", "White") { onChange(value.copy(whiteTint = it)) }
     GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong") { onChange(value.copy(shadowStrength = it)) }
     GlassSlider("Shadow spread", value.shadowSpread, "Tight", "Broad") { onChange(value.copy(shadowSpread = it)) }
-    GlassSlider("Adaptive contrast", value.contrast, "Off", "Strong") { onChange(value.copy(contrast = it)) }
+    SettingsHeading("Adaptive contrast")
+    Text("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
+    GlassSlider("Brightness trim", value.contrast, "Off", "50%", maximum = .5f) { onChange(value.copy(contrast = it)) }
+    Text("Brightness weighting", style = MaterialTheme.typography.titleMedium)
+    InterfaceSlider(value.contrastWeight, { onChange(value.copy(contrastWeight = it)) },
+        Modifier.semantics { contentDescription = "Brightness weighting" }, valueRange = 1f..2f, steps = 19)
+    SliderEndpoints("Even", "Highlights / shadows")
     SettingsHeading("Shape and motion")
     Text("Hold the preview to flatten it; release to let it rebound.", style = MaterialTheme.typography.bodySmall)
     Text("Shape damping · ${value.shapeDamping.roundToInt()}", style = MaterialTheme.typography.titleMedium)
@@ -58,6 +66,8 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
     if (value.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Adjustable) {
         GlassSlider("Selector blur", value.tabBlur, "Clear", "Frosted") { onChange(value.copy(tabBlur = it)) }
         GlassSlider("Selector white tint", value.tabWhiteTint, "None", "White") { onChange(value.copy(tabWhiteTint = it)) }
+    } else if (value.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Classic) {
+        GlassSlider("Gray pill opacity", value.classicOpacity, "Clear", "Dark") { onChange(value.copy(classicOpacity = it)) }
     } else Text(if (value.tabStyle == io.github.anastaci1a.localica.navigation.TabLensStyle.Overlay)
         "The clear lens bends the bar beneath sharp labels. Selector blur and tint are saved but inactive."
         else "A simple gray pill, without glass deformation.", style = MaterialTheme.typography.bodySmall)
@@ -108,10 +118,11 @@ private fun GlassPreview(source: FrostedBackdrop) {
 }
 
 @Composable
-private fun GlassSlider(label: String, value: Float, low: String, high: String, onChange: (Float) -> Unit) {
+private fun GlassSlider(label: String, value: Float, low: String, high: String, maximum: Float = 1f, onChange: (Float) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Text("$label · ${(value * 100).roundToInt()}%", style = MaterialTheme.typography.titleMedium)
-        InterfaceSlider(value, onChange, Modifier.semantics { contentDescription = label })
+        InterfaceSlider(value, onChange, Modifier.semantics { contentDescription = label }, valueRange = 0f..maximum,
+            steps = (maximum / .05f).roundToInt() - 1)
         SliderEndpoints(low, high)
     }
 }
