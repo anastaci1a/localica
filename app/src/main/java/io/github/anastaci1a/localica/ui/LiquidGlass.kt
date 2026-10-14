@@ -91,17 +91,22 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     body: () -> GlassShape = { GlassShape() }, panelProgress: Float = 0f, panelDark: Boolean? = null, depthScale: Float = modifier.glassDepthScale(),
     homeSource: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
     content: (@Composable BoxScope.() -> Unit)? = null) {
+    if (Build.VERSION.SDK_INT < 33) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
     var origin by remember { mutableStateOf(Offset.Zero) }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
     val appearance = LocalGlassAppearance.current.normalized()
-    val samplePixels = source?.contrastPixels
-    val sample = samplePixels?.let { pixels -> remember(pixels, origin, surfaceSize, source?.size) {
-        source?.let { source ->
+    // A moving page carries its controls and backing together. Observe sampled
+    // luminance, not absolute coordinates, so that translation cannot recompose
+    // every control when its relative optical view is unchanged.
+    val sample by remember(source) { derivedStateOf {
+        val pixels = source?.contrastPixels
+        if (pixels == null) null else {
+            val relative = origin - source.origin
             var total = 0f
             for (dy in 1..3) for (dx in 1..3) {
-                val x = ((origin.x + surfaceSize.width * dx / 4f - source.origin.x) / source.size.width.coerceAtLeast(1) * pixels.width).toInt().coerceIn(0, pixels.width - 1)
-                val y = ((origin.y + surfaceSize.height * dy / 4f - source.origin.y) / source.size.height.coerceAtLeast(1) * pixels.height).toInt().coerceIn(0, pixels.height - 1)
+                val x = ((relative.x + surfaceSize.width * dx / 4f) / source.size.width.coerceAtLeast(1) * pixels.width).toInt().coerceIn(0, pixels.width - 1)
+                val y = ((relative.y + surfaceSize.height * dy / 4f) / source.size.height.coerceAtLeast(1) * pixels.height).toInt().coerceIn(0, pixels.height - 1)
                 total += pixels[x, y].luminance()
             }
             total / 9
@@ -203,6 +208,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         Canvas(Modifier.matchParentSize()) {
             drawRect(tint)
             if (panel > 0f) drawFrostCoating(coatingDark, panelBase, Color.Transparent, .5f, panel)
+            drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f)
 
         }
         val ink = inkOverride ?: if (dark) Color.White else Color(0xFF202124)
@@ -210,4 +216,19 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             Box(Modifier.lensInkSupport(ink, appearance.contrast * (1f - panel)), content = content)
         }
     }
+}
+
+/** A restrained ambient reflection on the silhouette, never a plate across the face.
+ * Shared by live/mesh controls and connected selections at the final display resolution. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
+    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null) {
+    val shine = Brush.linearGradient(
+        0f to Color.White.copy(alpha = .22f), .32f to Color.White.copy(alpha = .025f),
+        .52f to Color.Black.copy(alpha = .065f), .72f to Color.White.copy(alpha = .02f),
+        1f to Color.White.copy(alpha = .16f), start = bounds.topLeft, end = bounds.bottomRight)
+    // Half of the centered stroke is clipped by the surface's true silhouette.
+    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(1.2.dp.toPx())
+    if (path != null) clipPath(path) { drawPath(path, shine, style = stroke) }
+    else drawRoundRect(shine, bounds.topLeft, bounds.size,
+        androidx.compose.ui.geometry.CornerRadius(radius), style = stroke)
 }

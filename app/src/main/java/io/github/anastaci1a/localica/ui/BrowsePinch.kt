@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -26,6 +25,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 
+internal data class FrozenBrowseItem(val image: androidx.compose.ui.graphics.ImageBitmap,
+    val origin: androidx.compose.ui.unit.IntOffset, val size: androidx.compose.ui.unit.IntSize)
+
 internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int)
 
 @Stable
@@ -36,7 +38,7 @@ internal class BrowsePinchMotion {
     var tracking: kotlinx.coroutines.Job? = null
     var capture: kotlinx.coroutines.Job? = null
     var capturing = false
-    val frozen = mutableMapOf<Any, androidx.compose.ui.graphics.ImageBitmap>()
+    val frozen = mutableMapOf<Any, FrozenBrowseItem>()
     var source by mutableStateOf<BrowseStyle?>(null)
     var bounds: Map<Any, Rect> = emptyMap()
     var focusKey: Any? = null
@@ -111,6 +113,8 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     route: BrowseRoute, gridState: LazyGridState, width: Int, density: Density,
     scope: CoroutineScope, reducedMotion: Boolean, onPreview: (BrowseStyle) -> Unit,
     onCommit: (BrowseStyle) -> Unit, onAnchor: (BrowseZoomAnchor) -> Unit): Modifier {
+    val captureLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     return pinchToChangeView(enabled && (motion.source == null || motion.held),
         onProgress = { value ->
             motion.fingerProgress = value
@@ -171,11 +175,29 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             motion.capture = scope.launch {
                 try {
                     motion.frozen.clear()
-                    // Flatten before the destination can mutate/release nested
-                    // artwork layers. A retained display list alone is not a snapshot.
-                    for (entry in visible) {
-                        val layer = motion.retained[entry.key]?.takeUnless { it.isReleased } ?: continue
-                        motion.frozen[entry.key] = layer.toImageBitmap()
+                    // Freeze all visible drawings in one readback before destination
+                    // reflow mutates nested layers. Pack with gutters so filtering a
+                    // retained item never samples its neighbor in the atlas.
+                    val drawings = visible.mapNotNull { entry ->
+                        motion.retained[entry.key]?.takeUnless { it.isReleased || it.size.width == 0 || it.size.height == 0 }
+                            ?.let { entry.key to it }
+                    }
+                    if (drawings.isNotEmpty()) {
+                        val atlasWidth = max(width, drawings.maxOf { it.second.size.width }) + 2
+                        var x = 1; var y = 1; var rowHeight = 0
+                        val origins = drawings.map { (_, layer) ->
+                            if (x + layer.size.width + 1 > atlasWidth) { x = 1; y += rowHeight + 2; rowHeight = 0 }
+                            androidx.compose.ui.unit.IntOffset(x, y).also {
+                                x += layer.size.width + 2; rowHeight = max(rowHeight, layer.size.height)
+                            }
+                        }
+                        captureLayer.record(density, layoutDirection, androidx.compose.ui.unit.IntSize(atlasWidth, y + rowHeight + 1)) {
+                            drawings.forEachIndexed { i, (_, layer) ->
+                                translate(origins[i].x.toFloat(), origins[i].y.toFloat()) { drawLayer(layer) }
+                            }
+                        }
+                        val image = captureLayer.toImageBitmap()
+                        drawings.forEachIndexed { i, (key, layer) -> motion.frozen[key] = FrozenBrowseItem(image, origins[i], layer.size) }
                     }
                     onPreview(next)
                 } finally { motion.capturing = false }
@@ -190,17 +212,19 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
 }
 
 /** Keep a bounded set of source drawings alive even when the destination virtualizes them out. */
-internal fun Modifier.retainPinchItem(key: Any, motion: BrowsePinchMotion, graphics: GraphicsContext): Modifier = drawWithContent {
-    if (motion.source == null && !motion.capturing) {
-        val layer = motion.retained.getOrPut(key) {
-            if (motion.retained.size >= 96) motion.retained.keys.firstOrNull()?.let { oldest ->
-                motion.retained.remove(oldest)?.let(graphics::releaseGraphicsLayer)
-            }
-            graphics.createGraphicsLayer()
-        }
-        layer.record { this@drawWithContent.drawContent() }
-        drawLayer(layer)
-    } else drawContent()
+@Composable
+internal fun Modifier.retainPinchItem(key: Any, motion: BrowsePinchMotion): Modifier {
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    DisposableEffect(motion, key, layer) {
+        motion.retained[key] = layer
+        onDispose { if (motion.retained[key] === layer) motion.retained.remove(key) }
+    }
+    return drawWithContent {
+        if (motion.source == null && !motion.capturing) {
+            layer.record { this@drawWithContent.drawContent() }
+            drawLayer(layer)
+        } else drawContent()
+    }
 }
 
 internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: LazyGridState, keys: List<String>): Modifier = drawWithContent {
@@ -223,7 +247,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * targetHeight
             translate(old.left + (x - old.left) * p, old.top + (y - old.top) * p) {
                 scale(1f + (width / old.width - 1f) * p, 1f + (targetHeight / old.height - 1f) * p, Offset.Zero) {
-                    drawImage(image)
+                    drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size)
                 }
             }
         }

@@ -44,7 +44,8 @@ import kotlin.math.roundToInt
 internal fun magneticTabPosition(raw: Float): Float = magneticChoicePosition(raw)
 
 @Composable
-internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, page: Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, onSelect: (MainTab) -> Unit) {
+internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, onSelect: (MainTab) -> Unit) {
+    val page = pagePosition()
     val reduced = LocalReducedMotion.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current

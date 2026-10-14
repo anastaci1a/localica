@@ -17,7 +17,7 @@ class SongInformationTest {
         compose.onNode(SemanticsMatcher("View artwork action") {
             it.config.getOrNull(SemanticsActions.OnClick)?.label == "View artwork"
         }).performClick()
-        compose.onNodeWithText("Close artwork").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Close artwork").assertIsDisplayed().performClick()
         compose.onNodeWithText("Information song").assertIsDisplayed()
     }
 }

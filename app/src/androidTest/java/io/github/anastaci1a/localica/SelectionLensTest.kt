@@ -79,9 +79,9 @@ class SelectionLensTest {
                 }
             }
         } }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val before = compose.onNodeWithTag("selection-optics").captureToImage().toPixelMap()
         compose.runOnIdle { chosen = true }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val after = compose.onNodeWithTag("selection-optics").captureToImage().toPixelMap()
         val density = before.width / 300f
         var changed = 0; var samples = 0

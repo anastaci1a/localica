@@ -37,7 +37,7 @@ internal val CollapsedQueueHeight = 64.dp
 
 @Composable
 internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>, settings: InterfaceSettings,
-    onSettled: (Boolean) -> Unit, playerProgress: Float = 1f, content: @Composable ColumnScope.() -> Unit) {
+    onSettled: (Boolean) -> Unit, playerProgress: () -> Float = { 1f }, content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -70,6 +70,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                 // The list consumes its own scrolling first. Only a finger pulling beyond its
                 // top starts dismissal; a fling reaching the top must never close the queue.
                 if (source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+                if (!pulling) pulled = (1f - progress.value) * distance
                 pulling = true
                 return move(available.y)
             }
@@ -87,10 +88,13 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
     if (p > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = p * 0.2f }.clickable { settle(false) }) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.scrim) {}
     }
-    FrostedSurface(Modifier.offset(y = top + (status - top) * p + 80.dp * (1f - playerProgress))
-        .width(maxWidth).height(CollapsedQueueHeight + inset + (maxHeight - status - inset - CollapsedQueueHeight) * p)
-        .graphicsLayer { alpha = ((playerProgress - .4f) / .6f).coerceIn(0f, 1f) }
-        .then(if (playerProgress < .99f) Modifier.clearAndSetSemantics {} else Modifier)
+    // Keep the list viewport fixed while the drawer moves. Resizing every frame
+    // repeatedly measures/virtualizes rows and their glass; the window clips the reveal.
+    FrostedSurface(Modifier.offset { androidx.compose.ui.unit.IntOffset(0,
+        kotlin.math.round((top + (status - top) * progress.value + 80.dp * (1f - playerProgress())).toPx()).toInt()) }
+        .width(maxWidth).height(maxHeight - status)
+        .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
+        .then(if (playerProgress() < .99f) Modifier.clearAndSetSemantics {} else Modifier)
         .draggable(rememberDraggableState { dy ->
             delta += dy
             scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo((start - delta / distance).coerceIn(0f, 1f)) }

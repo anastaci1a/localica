@@ -40,9 +40,9 @@ class LyricsInteractionTest {
             compose.onNodeWithText("View artwork").performClick()
             assertEquals(ArtworkAction.View, InterfacePreferences(context).read().artworkTap)
             compose.onNodeWithTag("player-artwork").performClick()
-            compose.onNodeWithText("Close artwork").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Close artwork").assertIsDisplayed()
             pressSystemBack()
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Close artwork").fetchSemanticsNodes().isEmpty() }
+            compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Close artwork").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
         } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
     }

@@ -20,6 +20,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 
 /** Keep Slider's touch, keyboard and accessibility behavior; draw a quiet, continuous track. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,7 +75,19 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     }
     Slider(value, { next ->
         if (!cancelRelease) onValueChange(next)
-    }, modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(touch), enabled,
+    }, modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(touch)
+        .onPreviewKeyEvent { cancelRelease = false; false }
+        .semantics {
+            if (enabled) setProgress { requested ->
+                val next = requested.coerceIn(valueRange.start, valueRange.endInclusive)
+                if (next == value) false else {
+                    // A cancelled touch may not finish Slider's drag recognizer.
+                    // Accessibility starts an independent edit, never that old touch.
+                    cancelRelease = false
+                    onValueChange(next); onValueChangeFinished(); true
+                }
+            }
+        }, enabled,
         valueRange = valueRange, onValueChangeFinished = {
             if (cancelRelease) onCancel() else onValueChangeFinished()
             cancelRelease = false
