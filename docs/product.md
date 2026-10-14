@@ -32,7 +32,7 @@ Repeat and Shuffle are global persisted modes, initially off:
 - Each queue retains visited membership, history cursor and concrete future, shared by transport, preloading and artwork. Back/forward retrace visits across repeat cycles and restarts.
 - Explicit selection replaces forward history without re-enabling visited occurrences; selection after exhaustion starts a new cycle.
 - Mode changes preserve history and reconcile future traversal. Reordering preserves shuffled plans, additions join them, and removals drop invalid visits.
-- **Randomize queue order** instead persists a new order, displays Manual ascending, and preserves current occurrence/cursor/playing state.
+- **Randomize queue order** persists a new order and displays Manual ascending. In the actively playing queue, put the playing occurrence first and shuffle the rest; paused/inactive queues shuffle fully. Preserve occurrence IDs, duplicates, cursor and playback state.
 
 Advanced Repeat supports song-end Stop / Load next paused / Next / Repeat and queue-end Stop / Next queue / Repeat, with reset-to-first and reshuffle options. The player's [action controls](interface.md#player-actions) expose these settings.
 
