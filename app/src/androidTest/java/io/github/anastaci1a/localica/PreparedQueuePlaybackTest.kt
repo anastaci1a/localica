@@ -79,8 +79,10 @@ class PreparedQueuePlaybackTest {
             move("previous", active.journey.current!!) { queues.previous(alwaysSong = true) }
             move("forward-history", firstNext) { queues.next() }
             for (shuffle in listOf(false, true)) {
+                val settingsAt = SystemClock.elapsedRealtime()
                 queues.settings(QueueSettings(shuffle = shuffle, repeat = QueueRepeat.All))
                 barrier()
+                Log.i("QueueScale", "entries=13000 action=repeat-settings-shuffle-$shuffle barrierMs=${SystemClock.elapsedRealtime() - settingsAt}")
                 val next = queues.state.value.library.active!!.journey!!.next!!
                 move("repeat-next-shuffle-$shuffle", next) { queues.next() }
                 val previous = queues.state.value.library.active!!.journey!!.previous!!
