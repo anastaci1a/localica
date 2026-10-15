@@ -68,6 +68,8 @@ scaleDepth      = exp(depthStrain)
 
 The three scales multiply to one: **approximate volume is preserved** while the footprint and thickness change together. Held contact approaches a shallower, wider cap monotonically, with critical damping: central refraction weakens and the remaining curvature concentrates at the rim. Only release permits the user's low-damping rebound; depth, footprint and refraction oscillate together. This is not a fluid simulation or a reconstruction of Apple’s private renderer. Shape damping is independent of constrained travel; [Glass settings](../interface.md#appearance-and-settings) own its defaults/range and resting optical depth. Motion clocks sleep after settling.
 
+This isolated rebound comparison uses twice the depth stiffness with resistance scaled by √2 to preserve damping ratio, plus a smooth cross-axis allowance capped at4% of travel extent and6dp. It changes transient rhythm and contact width; medium-damping cross-axis dominance remains under investigation, so it is not an accepted default replacement.
+
 Map strain to the motion axis. A horizontal stop compresses width and expands height; a vertical one does the reverse. Keep the contacting edge pinned (not the center) while deforming inward so the apparent contact does not slide through the wall. Additional pull produces diminishing compression. Release removes pressure and lets the same body settle. Reversal during settling changes its response immediately.
 
 Acceptance: a slow drag, fast flick, abrupt reversal and long boundary hold must yield distinguishable shapes. Replaying the same wiggle on all four fails the model. Reduced Motion removes decorative strain while preserving immediate tracking and state feedback.

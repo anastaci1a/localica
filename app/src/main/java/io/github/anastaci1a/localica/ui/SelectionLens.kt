@@ -40,12 +40,21 @@ internal fun Modifier.selectorDeformation(body: () -> GlassShape, vertical: Bool
     scale(deformation.x, deformation.y) { this@drawWithContent.drawContent() }
 }
 
+/** Experimental smooth cross-axis bound, sized by the available travel extent. */
+internal fun glassCrossScale(scale: Float, extent: Float, travelExtent: Float, allowance: Float): Float {
+    val size = extent.coerceAtLeast(1f)
+    val cap = minOf(allowance, travelExtent.coerceAtLeast(0f) * .04f)
+    if (cap <= 0f) return 1f
+    val displacement = (scale - 1f) * size
+    return 1f + cap * displacement / (cap + kotlin.math.abs(displacement)) / size
+}
+
 private fun GlassShape.selectorScale(vertical: Boolean, size: Size, allowance: Float): Offset {
-    // Only the travel axis has space to compress. Keep cross-axis strain
-    // inside the host's 4 dp inset, including very wide vertical options.
     val allowanceX = 1f + allowance / size.width.coerceAtLeast(1f)
     val allowanceY = 1f + allowance / size.height.coerceAtLeast(1f)
-    return Offset(
-        scaleX(vertical).coerceIn(if (vertical) 2f - allowanceX else .5f, allowanceX),
-        scaleY(vertical).coerceIn(if (!vertical) 2f - allowanceY else .5f, allowanceY))
+    return if (vertical) Offset(
+        glassCrossScale(scaleX(true), size.width, size.height, allowance),
+        scaleY(true).coerceIn(.5f, allowanceY))
+    else Offset(scaleX().coerceIn(.5f, allowanceX),
+        glassCrossScale(scaleY(), size.height, size.width, allowance))
 }
