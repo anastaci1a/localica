@@ -177,6 +177,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             mutablePlaylist != null && playlistController != null -> ({ done -> playlistController.randomize(mutablePlaylist.id, done) })
             else -> null
         }, mutableOrder = savedOrder, manualNeedsRestore = savedOrder != null && savedOrder.manual != physicalOrder,
+        mutableOrderIds = physicalOrder, onRevertOrder = when {
+            mutableQueue != null && queues != null -> ({ checkpoint, done -> queues.revertOrder(mutableQueue.id, checkpoint, done) })
+            mutablePlaylist != null && playlistController != null -> ({ checkpoint, done -> playlistController.revertOrder(mutablePlaylist.id, checkpoint, done) })
+            else -> null
+        },
         onApplySort = when {
             mutableQueue != null && queues != null -> ({ method, ascending, done -> queues.applySort(mutableQueue.id, method, ascending, done) })
             mutablePlaylist != null && playlistController != null -> ({ method, ascending, done -> playlistController.applySort(mutablePlaylist.id, method, ascending, done) })

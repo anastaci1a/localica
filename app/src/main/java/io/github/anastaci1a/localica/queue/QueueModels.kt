@@ -110,6 +110,11 @@ object QueueEdits {
         val ids = queue.order.apply(queue.entries.map { SongRow(it.id, it.track) }, method, ascending)
         return queue.copy(entries = ids.map { byId.getValue(it) }, order = queue.order.copy(sort = method, ascending = ascending))
     }
+    fun revertOrder(queue: ListeningQueue, checkpoint: OrderCheckpoint): ListeningQueue {
+        val current = queue.entries.associateBy { it.id }
+        val restored = checkpoint.reconcile(queue.entries.map { it.id })
+        return queue.copy(entries = restored.physical.map(current::getValue), order = restored.saved)
+    }
     fun oldestInactive(library: QueueLibrary): String? = library.queues.filterNot { it.id == library.activeId }
         .minWithOrNull(compareBy<ListeningQueue> { it.createdAt }.thenBy { it.id })?.id
     fun canCreate(library: QueueLibrary, maximum: Int?, removals: Set<String>): Boolean =
