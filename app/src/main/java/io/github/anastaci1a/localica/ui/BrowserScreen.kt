@@ -68,6 +68,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val editTags = LocalTagEdit.current
+    val sorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { BrowsePreferences(context) }
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
     DisposableEffect(preferences, route.key, route.filter) {
@@ -117,7 +118,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     val browse = rememberBrowsePresentation(library.snapshot, playlists.playlists, queueState.library.queues,
-        libraryFilters, route, style, reducedMotion, queryDispatcher)
+        libraryFilters, route, style, reducedMotion, queryDispatcher, sorts)
     val presentation = browse.current
     val loadedResult = presentation?.result
     val displayedStyle = presentation?.style ?: style
@@ -136,9 +137,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val artistDetail = artDetail && route.collection?.kind != MediaKind.Album
     var selectedAlbums by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
-    val albums = remember(sourceResult.rows, artistDetail) {
+    val albums = remember(sourceResult.rows, artistDetail, sorts) {
         if (artistDetail) LibraryViews.groups(library.snapshot.copy(tracks = sourceResult.rows.map { it.track }),
-            SongListView.Albums, LibraryViews.defaults(SongListView.Albums)) else emptyList()
+            SongListView.Albums, LibraryViews.defaults(SongListView.Albums)).map { album ->
+                album.copy(tracks = sorts.rows(MediaRef(MediaKind.Album, album.id), album.tracks.map { SongRow(it.id, it) }).map { it.track })
+            } else emptyList()
     }
     val validAlbums = remember(albums, selectedAlbums) { selectedAlbums.filter { id -> albums.any { it.id == id } } }
     val selectedTrackIds = remember(albums, validAlbums) {
@@ -149,10 +152,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val itemIndices = remember(result.items) { result.items.withIndex().associate { it.value.key to it.index } }
     val itemKeys = remember(result.items) { result.items.map { it.key } }
-    val artistHero = remember(artistDetail, albums) { if (artistDetail) albums.sortedWith(compareByDescending<LibraryGroup> { it.tracks.mapNotNull(Track::year).maxOrNull() ?: 0 }
-        .thenByDescending { it.tracks.mapNotNull(Track::addedAt).maxOrNull() ?: 0 }.thenBy { it.id }).firstOrNull()?.tracks?.firstOrNull()?.uri
-        else null }
-    val heroUri = if (artistDetail) artistHero else seededCollection?.coverUris?.firstOrNull() ?: sourceResult.rows.firstOrNull()?.track?.uri
+    // The artist page displays songs beneath album-filter chips; its hero follows that displayed list.
+    // Entry artwork is only a loading seed, never a permanent override of a newly sorted result.
+    val heroUri = collectionHeroUri(loadedResult?.let { result }, seededCollection)
     val hero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
     val lightCollection = collectionIsLight(hero)
     val collectionInk = if (lightCollection) androidx.compose.ui.graphics.Color(0xFF202124) else androidx.compose.ui.graphics.Color.White
@@ -336,13 +338,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), fieldModifier = Modifier.focusRequester(focus))
 
         LookaheadScope {
-        if (popupDismiss == null || route.text.isNotBlank()) Box(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
+        if (popupDismiss == null || route.text.isNotBlank()) BoxWithConstraints(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
             .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
-            val columns = galleryColumns(displayedStyle.presentation, with(density) { reorder.viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
-            val denseGallery = displayedStyle.presentation != Presentation.List && columns >= 3
+            val viewportWidth = constraints.maxWidth
+            val columns = galleryColumns(displayedStyle.presentation, with(density) { viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
+            val cellGeometry = BrowseCellGeometry(columns)
             val dragColors = MaterialTheme.colorScheme
             val dragInk = LocalContentColor.current
-            SideEffect { reorder.style = displayedStyle; reorder.dense = denseGallery; reorder.colors = dragColors; reorder.ink = dragInk }
+            SideEffect { reorder.style = displayedStyle; reorder.cellGeometry = cellGeometry; reorder.colors = dragColors; reorder.ink = dragInk }
             if (loadedResult == null && !artDetail) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters || showSearchPill) pillSlotHeight else 0.dp).testTag("browse-loading"))
             else SelectionViewport(Modifier.fillMaxSize()
                 // Floating controls sample the finished scrolling scene, including
@@ -356,12 +359,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List, ${displayedStyle.listSize.name}"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
                 .browsePinch(enabled && !playerOpen && !queryPending && reorder.drag == null,
-                    pinchMotion, displayedStyle, route, gridState, reorder.viewportWidth, density, scrollScope, reducedMotion,
+                    pinchMotion, displayedStyle, route, gridState, viewportWidth, density, scrollScope, reducedMotion,
                     onPreview = { style = it }, onCommit = { style = it; preferences.write(route, it, preferences.overridden(route)) },
                     onAnchor = { zoomAnchor = it })
-                .testTag("browser-list"), contentPadding = PaddingValues(bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
+                .testTag("browser-list"), contentPadding = PaddingValues(start = cellGeometry.gridInset.dp, end = cellGeometry.gridInset.dp,
+                    bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
-                    Column {
+                    // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
+                    Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")) {
                         if (artDetail) {
                             CompositionLocalProvider(LocalFrostedBackdrop provides collectionSource) {
                                 CollectionHeader(route.title ?: seededCollection?.title.orEmpty(), if (artistDetail) null else (sourceResult.rows.firstOrNull()?.track ?: seededCollection?.songs?.firstOrNull()?.track)?.let { it.albumArtist ?: it.artist },
@@ -418,7 +423,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             Box {
                                 if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor, quiet = true) { contextMenu = item.key }
                                 CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
-                                    onInformation = { info = it }, selectionSource = route.collection, selection = session,
+                                    onInformation = { info = it }, containingSource = route.collection, selection = session,
                                     onRemove = if (item.row == null) null else when (route.collection?.kind) {
                                         MediaKind.Queue -> ({ queues?.removeEntries(setOf(item.key), route.collection.id); Unit })
                                         MediaKind.Playlist -> ({ playlistController?.removeEntries(route.collection.id, setOf(item.key)) { }; Unit })
@@ -429,9 +434,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
                         Column(Modifier.then(if (pinchMotion.source == null) Modifier.animateBounds(this@LookaheadScope,
-                            modifier = Modifier.fillMaxWidth().padding(4.dp),
+                            modifier = Modifier.fillMaxWidth().padding(cellGeometry.cardInset.dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder) 0 else 350) })
-                            else Modifier.fillMaxWidth().padding(4.dp).graphicsLayer {
+                            else Modifier.fillMaxWidth().padding(cellGeometry.cardInset.dp).graphicsLayer {
                                 val position = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.key }?.offset
                                 if (position != null) {
                                     val old = pinchMotion.sourceBounds(item.key, itemIndex)
@@ -452,8 +457,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     if (!editableOrder) session.select(route.collection, listOf(item.row))
                                 } else contextMenu = item.key
                             }
-                        ).padding(horizontal = 12.dp)) {
-                            BrowseItemLayout(item, displayedStyle, denseGallery, this@LookaheadScope, reducedMotion, itemMenu,
+                        )) {
+                            BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
                                 showInformation = popupDismiss == null,
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
                         }
@@ -559,7 +564,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     info?.let { song -> SongInformation(song, { info = null }, { editTags?.invoke(listOf(song)) {} }) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
-        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab)).items
+        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
             .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
     } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel() }
