@@ -49,18 +49,7 @@ class GlassMorphTest {
         } }
         fun darkness(left: Int): Float {
             val node = compose.onNodeWithTag("moving-shadow-scene")
-            val image = if (android.os.Build.VERSION.SDK_INT >= 28) node.captureToImage() else {
-                // Compose cannot capture Dialog windows on Android 8; capture the
-                // actual display and crop the same node instead of skipping coverage.
-                compose.waitForIdle()
-                val bounds = node.fetchSemanticsNode().boundsInRoot
-                val origin = IntArray(2)
-                compose.runOnIdle { popupView.getLocationOnScreen(origin) }
-                val screen = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-                android.graphics.Bitmap.createBitmap(screen, origin[0] + bounds.left.toInt(),
-                    origin[1] + bounds.top.toInt(), bounds.width.toInt(), bounds.height.toInt()).asImageBitmap()
-            }
-            val pixels = image.toPixelMap()
+            val pixels = capturePopupPixels(compose, node) { popupView }
             val density = compose.density.density
             assertTrue("Sample region must stay inside the popup", (left + 50) * density < pixels.width)
             var dark = 0f; var count = 0
