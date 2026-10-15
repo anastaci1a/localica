@@ -42,9 +42,28 @@ class CollectionSelectionTest {
             compose.waitUntil(5000) {
                 compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty()
             }
-            compose.awaitExpectedWindowFocus(compose.onNodeWithTag("media-Playlist:${playlist.id}"))
-            compose.onNodeWithTag("media-Playlist:${playlist.id}")
-                .assertIsDisplayed().assertIsEnabled().performClick()
+            compose.awaitExpectedWindowFocus(compose.onNodeWithContentDescription("Collapse selection"))
+            compose.onNodeWithContentDescription("Collapse selection").performClick()
+            compose.onNodeWithText("Selection: 2").assertIsDisplayed()
+            fun clickAboveSelection(node: SemanticsNodeInteraction, count: Int) {
+                fun panelBounds() = generateSequence(compose.onNodeWithText("Selection: $count").fetchSemanticsNode()) { it.parent }
+                    .first { it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange) }.boundsInRoot
+                val panel = panelBounds()
+                val bounds = node.fetchSemanticsNode().boundsInRoot
+                val overlap = bounds.bottom - panel.top + 16f
+                if (overlap > 0f) {
+                    compose.onNodeWithTag("browser-list").performSemanticsAction(
+                        androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, overlap) }
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.waitForIdle()
+                }
+                val visible = node.assertIsDisplayed().assertIsEnabled().fetchSemanticsNode().boundsInRoot
+                val currentPanel = panelBounds()
+                org.junit.Assert.assertTrue("Selection panel must not cover the target: $visible / $currentPanel", visible.bottom < currentPanel.top)
+                compose.awaitExpectedWindowFocus(node)
+                node.performClick()
+            }
+            clickAboveSelection(compose.onNodeWithTag("media-Playlist:${playlist.id}"), 2)
             compose.waitUntil(5000) {
                 compose.onAllNodesWithTag("media-${playlist.entries.first().id}").fetchSemanticsNodes().isNotEmpty()
             }
@@ -52,9 +71,10 @@ class CollectionSelectionTest {
             val second = compose.onNodeWithTag("media-${playlist.entries.last().id}")
             first.assertIsSelected()
             second.assertIsSelected()
-            first.performClick()
+            clickAboveSelection(first, 2)
             first.assertIsNotSelected()
             second.assertIsSelected()
+            compose.onNodeWithText("Selection: 1").assertIsDisplayed().performClick()
             compose.onNodeWithText("1 selected").assertIsDisplayed()
             compose.onNodeWithText("Remove from playlist").assertExists()
         } catch (failure: Throwable) {
