@@ -1,6 +1,6 @@
 # Working instructions
 
-Read the relevant page in the [documentation map](../docs/README.md) before editing. Product contracts belong in `docs/`; this file owns working practices.
+Read the relevant page in the [documentation map](../docs/README.md) before editing. Product contracts belong in `docs/`; this file owns working practices. Follow the [dot and Codex collaboration contract](collaboration.md) for responsibilities, ownership, handoffs and approvals.
 
 ## Passive documentation maintenance
 
@@ -34,6 +34,7 @@ Use one type and usually one or two areas. Add workflow labels only while applic
 | --- | --- |
 | Type | `bug` (broken behavior), `enhancement` (capability/improvement), `documentation`, `maintenance` (internal/tooling). |
 | Area | `area: library` (index/metadata/queries), `area: playback` (audio/queues/statistics), `area: interface`, `area: storage` (access/persistence/recovery), `area: build` (CI/releases). |
+| Ownership | Exactly one of `owner:dot` or `owner:codex` per issue; see [collaboration](collaboration.md#ownership-and-handoff). |
 | Workflow | `in progress`, `blocked` (state/link dependency), `question` (state missing decision). |
 | Accessibility | `accessibility`, plus type/area. |
 | Contributions | `help wanted`; `good first issue` for bounded, approachable work. |
