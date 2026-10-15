@@ -142,6 +142,32 @@ class PressIlluminationTest {
         assertTrue("Static illumination invariants: ${failures.joinToString()}", failures.isEmpty())
     }
 
+    @Test fun fullyTransparentBackingPreservesBackgroundAndOpaqueForeground() {
+        val shape = LensGeometry(Rect(0f, 0f, 161f, 121f), 32f)
+        val scenes = listOf(false, true).map { white ->
+            Scene(shape, PressIllumination(1f, shape.bounds.center, 80f), alpha = 0, whiteBackground = white)
+        }
+        var index by mutableIntStateOf(0)
+        compose.setContent { DrawScene(scenes[index], index + 1) }
+        val failures = mutableListOf<String>()
+        for (i in scenes.indices) {
+            compose.runOnIdle { index = i }
+            val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("press-scene"), i + 1) { view }
+            val background = if (scenes[i].whiteBackground) 1f else 0f
+            var maximum = 0f
+            for (y in 0 until 121) for (x in 0 until 161) {
+                val foreground = glyph.contains(Offset(x + .5f, y + .5f))
+                val expected = if (foreground) Color.Magenta else Color(background, background, background)
+                val actual = pixels[x, top + y]
+                maximum = maxOf(maximum, abs(actual.red - expected.red),
+                    abs(actual.green - expected.green), abs(actual.blue - expected.blue))
+            }
+            android.util.Log.i("PressIllumination", "api=${Build.VERSION.SDK_INT} transparentStage=$i maxRgbError=$maximum")
+            if (maximum != 0f) failures += "$i:$maximum"
+        }
+        assertTrue("Fully transparent backing must remain transparent: ${failures.joinToString()}", failures.isEmpty())
+    }
+
     @Test fun illuminationKeepsTheInverseCoordinateMap() {
         val shapes = listOf(LensGeometry(Rect(0f, 0f, 161f, 161f), 80.5f),
             LensGeometry(Rect(0f, 0f, 241f, 121f), 60.5f), LensGeometry(Rect(0f, 0f, 241f, 181f), 28f), LensGeometry(Rect(17f, 11f, 258f, 192f), 28f))
