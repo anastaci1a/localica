@@ -13,14 +13,17 @@ data class LibraryQuery(
 
 /** Shared, deterministic query semantics. Call off the main thread for large libraries. */
 object LibraryQueries {
-    fun tracks(snapshot: LibrarySnapshot, query: LibraryQuery): List<Track> =
-        rows(snapshot.tracks.map { SongRow(it.id, it) }, query).map { it.track }
+    fun tracks(snapshot: LibrarySnapshot, query: LibraryQuery, checkActive: () -> Unit = {}): List<Track> =
+        rows(snapshot.tracks.map { SongRow(it.id, it) }, query, checkActive).map { it.track }
 
-    fun rows(rows: List<SongRow>, query: LibraryQuery): List<SongRow> {
+    fun rows(rows: List<SongRow>, query: LibraryQuery, checkActive: () -> Unit = {}): List<SongRow> {
+        var steps = 0
+        fun checkpoint() { if (steps++ % 128 == 0) checkActive() }
         val terms = query.text.trim().lowercase(Locale.ROOT).split(Regex("\\s+")).filter { it.isNotEmpty() }
         fun <T : Comparable<T>> compare(a: T?, b: T?) = compareKnown(a, b, query.ascending)
         fun key(value: String?) = value?.lowercase(Locale.ROOT)
         val order = Comparator<Track> { a, b ->
+            checkpoint()
             val primary = when (query.sort) {
                 TrackSort.Manual -> 0
                 TrackSort.Title -> compare(key(a.title), key(b.title))
@@ -44,6 +47,7 @@ object LibraryQueries {
                 ?: a.id.compareTo(b.id)
         }
         val result = rows.asSequence().mapNotNull { row ->
+            checkpoint()
             val track = row.track
             if (query.folderUri == null) row else {
                 track.locations.firstOrNull { it.folderUri == query.folderUri }?.let {
@@ -59,6 +63,7 @@ object LibraryQueries {
                 terms.all { it in searchable }
             }
         }.sortedWith { a, b -> order.compare(a.track, b.track) }.toList()
+        checkActive()
         return if (query.sort == TrackSort.Manual && !query.ascending) result.reversed() else result
     }
 }
