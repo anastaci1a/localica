@@ -53,11 +53,20 @@ internal class BrowsePinchMotion {
     var anchorTop = 0f
     var rowHeight = 64f
     var viewportWidth = 1f
+    var pixelDensity = 1f
+    fun sourceContentWidth(key: Any): Int {
+        val geometry = BrowseCellGeometry(sourceColumns)
+        val cellWidth = bounds[key]?.width?.toInt() ?: geometry.cellWidth(viewportWidth.toInt(), pixelDensity)
+        return geometry.contentWidth(cellWidth, pixelDensity)
+    }
     fun sourceBounds(key: Any, index: Int): Rect = bounds[key] ?: run {
-        val width = viewportWidth / sourceColumns
-        Rect((index % sourceColumns) * width,
+        val geometry = BrowseCellGeometry(sourceColumns)
+        val column = index % sourceColumns
+        val left = geometry.cellLeft(viewportWidth.toInt(), pixelDensity, column).toFloat()
+        val width = geometry.cellWidth(viewportWidth.toInt(), pixelDensity, column)
+        Rect(left,
             anchorTop + ((index / sourceColumns) - (anchorIndex / sourceColumns)) * rowHeight,
-            (index % sourceColumns + 1) * width,
+            left + width,
             anchorTop + ((index / sourceColumns) - (anchorIndex / sourceColumns) + 1) * rowHeight)
     }
 }
@@ -156,6 +165,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             motion.held = true
             motion.fingerProgress = 0f
             motion.viewportWidth = width.toFloat()
+            motion.pixelDensity = density.density
             motion.sourceColumns = galleryColumns(style.presentation, with(density) { width.toDp().value }, style.itemsPerRow)
             motion.bounds = visible.associate { it.key to androidx.compose.ui.geometry.Rect(it.offset.x.toFloat(), it.offset.y.toFloat(),
                 (it.offset.x + it.size.width).toFloat(), (it.offset.y + it.size.height).toFloat()) }
@@ -255,8 +265,10 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val image = motion.frozen[key] ?: return@forEach
             val index = keys.indexOf(key)
             if (index < 0) return@forEach
-            val width = motion.viewportWidth / motion.targetColumns
-            val x = index % motion.targetColumns * width
+            val geometry = BrowseCellGeometry(motion.targetColumns)
+            val column = index % motion.targetColumns
+            val width = geometry.cellWidth(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
+            val x = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * targetHeight
             translate(old.left + (x - old.left) * p, old.top + (y - old.top) * p) {
                 scale(1f + (width / old.width - 1f) * p, 1f + (targetHeight / old.height - 1f) * p, Offset.Zero) {
