@@ -158,10 +158,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val latestMetadataY = virtualHeight - navigationInset - 368.dp - extraActions
     val ordinarySeekY = (oldMetadataY + (lyricSeekY - oldMetadataY) * .5f)
         .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
-    val metadataY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
+    val lyricMetadataY = maxOf(ordinarySeekY, lyricSeekY)
+    val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricProgress
     val seekY = metadataY + 64.dp
     val normalTransport = ordinarySeekY + 184.dp + extraActions
-    val lyricBarCenter = maxOf(ordinarySeekY, lyricSeekY) + 64.dp + 20.dp
+    val lyricBarCenter = lyricMetadataY + 64.dp + 20.dp
     val shelfTop = virtualHeight - navigationInset - CollapsedQueueHeight
     val lyricTransport = (lyricBarCenter + shelfTop) / 2 - 32.dp
     val transportMotion = p * p * (3f - 2f * p)
@@ -216,7 +217,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
         Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
-        Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
+        Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
             ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough) { frame ->
@@ -312,8 +313,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
-                    .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
-                    .graphicsLayer { alpha = lyricProgress * p }, sourcesRequest = sourcesRequest, sourcesAnchor = sourcesAnchor,
+                    .height((lyricMetadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
+                    .graphicsLayer { alpha = lyricProgress * p },
+                contentHeight = (metadataY - statusInset - 64.dp).coerceAtLeast(96.dp), sourcesRequest = sourcesRequest, sourcesAnchor = sourcesAnchor,
                 sampledAtMs = state.sampledAtMs, playing = state.isPlaying, speed = state.playbackSpeed,
                 delayMs = settings.lyricDelayMs, durationMs = state.durationMs) }
             val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value
