@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import androidx.compose.ui.test.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -39,6 +40,42 @@ class BrowsePositionTest {
             }
         }
         compose.waitUntil(5000) { compose.runOnUiThread { applied } }
+    }
+
+    /** Bounded counterpart to performScrollTo for this horizontal filter fixture. */
+    private fun scrollFilterIntoView(target: SemanticsNodeInteraction) {
+        compose.waitUntil(5000) {
+            BrowseSchedulerWatchdog.phase("filter: fetch target and viewport")
+            val node = target.fetchSemanticsNode()
+            val parent = generateSequence(node.parent) { it.parent }.first {
+                it.config.contains(SemanticsActions.ScrollBy) &&
+                    it.config.contains(SemanticsProperties.HorizontalScrollAxisRange)
+            }
+            val viewport = parent.boundsInRoot
+            val left = node.positionInRoot.x
+            val right = left + node.size.width
+            val dx = when {
+                left < viewport.left -> left - viewport.left
+                right > viewport.right -> right - viewport.right
+                else -> 0f
+            }
+            if (kotlin.math.abs(dx) <= 1f) true else {
+                val axis = parent.config[SemanticsProperties.HorizontalScrollAxisRange]
+                val before = compose.runOnUiThread { axis.value() }
+                var scroll = if (axis.reverseScrolling) -dx else dx
+                if (parent.layoutInfo.layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl) scroll = -scroll
+                BrowseSchedulerWatchdog.phase("filter: dispatch ScrollBy $scroll")
+                compose.runOnUiThread { check(parent.config[SemanticsActions.ScrollBy].action!!.invoke(scroll, 0f)) }
+                BrowseSchedulerWatchdog.phase("filter: advance frame")
+                compose.mainClock.advanceTimeByFrame()
+                BrowseSchedulerWatchdog.phase("filter: await idle")
+                compose.waitForIdle()
+                BrowseSchedulerWatchdog.phase("filter: verify progress")
+                check(compose.runOnUiThread { axis.value() } != before) { "No horizontal filter scroll progress" }
+                false
+            }
+        }
+        target.assertIsDisplayed()
     }
 
     @Test fun libraryReselectionScrollsBeforeSeparatelyClearingItsFilter() {
@@ -84,7 +121,7 @@ class BrowsePositionTest {
             for ((filter, prefix) in types) {
                 BrowseSchedulerWatchdog.phase("$filter: scroll filter into view")
                 val filterNode = compose.onNodeWithText(filter, useUnmergedTree = true)
-                filterNode.performScrollTo()
+                scrollFilterIntoView(filterNode)
                 BrowseSchedulerWatchdog.phase("$filter: click filter")
                 filterNode.performClick()
                 BrowseSchedulerWatchdog.phase("$filter: filter click returned")
@@ -97,6 +134,14 @@ class BrowsePositionTest {
                     val before = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
                     BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: click collection")
                     compose.onNodeWithText(title).performClick()
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: await detail row key")
+                    val rowKey = if (filter == "Playlists") playlists[60].entries.single().id else "track:060"
+                    // Lazy item keys become available when the async detail result is
+                    // published, even when the row itself is below the viewport.
+                    compose.waitUntil(5000) {
+                        compose.onNodeWithTag("browser-list").fetchSemanticsNode()
+                            .config[SemanticsProperties.IndexForKey](rowKey) == 1
+                    }
                     BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: detail index scroll")
                     compose.onNodeWithTag("browser-list").performScrollToIndex(1)
                     BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: await detail result")
