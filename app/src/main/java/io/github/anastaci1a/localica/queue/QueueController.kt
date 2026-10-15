@@ -373,6 +373,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     fun applySort(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
         editQueue(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.sort(queue, method, ascending) } }
+    fun revertOrder(queueId: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (Boolean) -> Unit = {}) =
+        editQueue(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.revertOrder(queue, checkpoint) } }
     private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: suspend (ListeningQueue) -> ListeningQueue) = submit {
         try {
         capture()

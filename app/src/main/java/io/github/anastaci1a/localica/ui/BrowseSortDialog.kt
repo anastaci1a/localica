@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.TrackSort
+import io.github.anastaci1a.localica.library.OrderCheckpoint
 import io.github.anastaci1a.localica.navigation.*
 
 @Composable
@@ -27,6 +28,8 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: ((((Boolean) -> Unit)) -> Unit)? = null,
     mutableOrder: io.github.anastaci1a.localica.library.SavedOrder? = null,
     manualNeedsRestore: Boolean = false,
+    mutableOrderIds: List<String>? = null,
+    onRevertOrder: ((OrderCheckpoint, (Boolean) -> Unit) -> Unit)? = null,
     onApplySort: ((TrackSort, Boolean, (Boolean) -> Unit) -> Unit)? = null) {
     var tab by remember { mutableIntStateOf(if (presentationOnly) 1 else 0) }
     val shadowInset = glassShadowInset().coerceAtLeast(12.dp)
@@ -34,6 +37,12 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     val viewScroll = rememberScrollState()
     var edited by remember { mutableStateOf(if (mutableOrder != null)
         value.copy(sort = mutableOrder.sort, ascending = mutableOrder.ascending) else value) }
+    // This call leaves composition on dismissal even while its host retains the
+    // closing drawing. A new opening always gets a new checkpoint and draft.
+    val checkpoint = remember {
+        if (mutableOrder != null && mutableOrderIds != null) OrderCheckpoint.capture(mutableOrderIds, mutableOrder) else null
+    }
+    var canRevert by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf(false) }
     val applying = mutableOrder != null && tab == 0
@@ -74,12 +83,28 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                     if (mutableOrder != null) scopeFields()
                 } else {
                     if (onRandomize != null) {
-                        GlassActionButton(R.drawable.ic_shuffle, "Randomize", enabled = !busy, onClick = {
-                            busy = true; failure = false
-                            onRandomize { ok -> busy = false; failure = !ok
-                                if (ok) edited = edited.copy(sort = TrackSort.Manual, ascending = true)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            GlassActionButton(R.drawable.ic_shuffle, "Randomize", modifier = Modifier.weight(1f), enabled = !busy, onClick = {
+                                busy = true; failure = false
+                                onRandomize { ok -> busy = false; failure = !ok
+                                    if (ok) {
+                                        edited = edited.copy(sort = TrackSort.Manual, ascending = true)
+                                        canRevert = true
+                                    }
+                                }
+                            })
+                            if (checkpoint != null && onRevertOrder != null) GlassPresence(canRevert, Modifier.weight(1f)) {
+                                GlassActionButton(R.drawable.ic_seek_back, "Revert", modifier = Modifier.fillMaxWidth(), enabled = !busy, onClick = {
+                                    busy = true; failure = false
+                                    onRevertOrder(checkpoint) { ok -> busy = false; failure = !ok
+                                        if (ok) {
+                                            edited = edited.copy(sort = checkpoint.saved.sort, ascending = checkpoint.saved.ascending)
+                                            canRevert = false
+                                        }
+                                    }
+                                })
                             }
-                        })
+                        }
                         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = LocalContentColor.current.copy(alpha = .12f))
                     }
                     ChoicePreference("Sort by", edited.sort, fields, ::sortLabel, popup = true) { field ->
