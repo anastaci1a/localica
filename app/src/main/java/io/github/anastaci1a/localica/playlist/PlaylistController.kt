@@ -81,6 +81,8 @@ class PlaylistController(private val dao: PlaylistDao,
     fun applySort(id: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
         edit(id, complete) { PlaylistEdits.sort(it, method, ascending) }
     fun randomize(id: String, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.randomize(it) }
+    fun revertOrder(id: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (Boolean) -> Unit = {}) =
+        edit(id, complete) { PlaylistEdits.revertOrder(it, checkpoint) }
     fun delete(id: String, complete: (Boolean) -> Unit = {}) { submit(complete) { playlists -> playlists.filterNot { it.id == id } } }
     fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = refreshTracks(listOf(track), complete)
     fun refreshTracks(tracks: List<Track>, complete: (Boolean) -> Unit) = submit(complete) { playlists ->
