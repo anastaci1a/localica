@@ -103,6 +103,8 @@ class DragReorderTest {
     }
     @Test fun gallerySelectionStaysGalleryWhileLiftedAndLandsAtItsActualBounds() = fixture(gallery = true) { _, playlist ->
         val id = playlist.entries[1].id
+        val restingCard = compose.onNodeWithTag("media-$id").fetchSemanticsNode().boundsInRoot
+        val restingArt = compose.onNodeWithTag("browse-art-$id", true).fetchSemanticsNode().boundsInRoot
         compose.onNodeWithTag("media-$id").performTouchInput { longClick() }
         compose.onNodeWithTag("media-$id").assertIsSelected()
         compose.onNodeWithText("Select song").assertDoesNotExist()
@@ -113,6 +115,8 @@ class DragReorderTest {
         val art = compose.onNodeWithTag("browse-art-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val text = compose.onNodeWithTag("browse-text-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue("A lifted tile retains its large artwork", art.width > stack.width * .65f)
+        assertEquals("Lifting must preserve the artwork width", restingArt.width, art.width, 2f)
+        assertEquals("Lifting must preserve the content inset", restingArt.left - restingCard.left, art.left - stack.left, 2f)
         assertTrue("Gallery text stays below the artwork", text.top >= art.bottom - 1f)
         compose.mainClock.autoAdvance = false
         try {
