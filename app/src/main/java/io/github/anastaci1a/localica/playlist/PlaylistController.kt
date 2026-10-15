@@ -73,7 +73,7 @@ class PlaylistController(private val dao: PlaylistDao,
     fun addToDestinations(ids: Set<String>, name: String, tracks: List<Track>, complete: (Boolean) -> Unit = {}) =
         submit(complete) { PlaylistEdits.addToDestinations(it, ids, name, tracks) }
     fun append(id: String, tracks: List<Track>, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.append(it, tracks) }
-    fun cover(id: String, uri: String, complete: (Boolean) -> Unit = {}) = edit(id, complete) { it.copy(coverUri = uri) }
+    fun cover(id: String, uri: String?, complete: (Boolean) -> Unit = {}) = edit(id, complete) { it.copy(coverUri = uri) }
     fun removeEntries(id: String, entries: Set<String>, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.remove(it, entries) }
     fun move(id: String, entry: String, offset: Int, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.move(it, entry, offset) }
     fun moveBefore(id: String, entries: Set<String>, beforeId: String?, complete: (Boolean) -> Unit = {}) =
