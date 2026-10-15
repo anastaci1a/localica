@@ -16,8 +16,30 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class BrowsePositionTest {
-    @get:Rule val compose = createComposeRule()
+    // Keep real Default-dispatch browse queries. Their completion must enqueue
+    // test UI work rather than resume the unconfined frame clock on a worker.
+    @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
+    @Test fun backgroundCompletionAppliesCompositionOnMain() {
+        var applied = false
+        compose.setContent {
+            val worker by produceState<Thread?>(null) {
+                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Thread.currentThread() }
+            }
+            val completedWorker = worker
+            SideEffect {
+                completedWorker?.let {
+                    org.junit.Assert.assertNotSame("Query work must remain off Main", android.os.Looper.getMainLooper().thread, it)
+                    org.junit.Assert.assertSame("Background completion must apply UI work on Main",
+                        android.os.Looper.getMainLooper().thread, Thread.currentThread())
+                    applied = true
+                }
+            }
+        }
+        compose.waitUntil(5000) { compose.runOnUiThread { applied } }
+    }
+
     @Test fun libraryReselectionScrollsBeforeSeparatelyClearingItsFilter() {
         val tracks = (0..99).map { Track("reselect:$it", "Song ${it.toString().padStart(3, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
         var route by mutableStateOf(BrowseRoute(MainTab.Library, filter = MediaKind.Song))
@@ -50,6 +72,10 @@ class BrowsePositionTest {
         val playlists = tracks.map { PlaylistEdits.append(ManualPlaylist(name = "Playlist " + it.fileName.substringBefore('.')), listOf(it)) }
         try {
             compose.setContent { LocalicaTheme {
+                SideEffect {
+                    org.junit.Assert.assertSame("UI composition effects must run on Main",
+                        android.os.Looper.getMainLooper().thread, Thread.currentThread())
+                }
                 LocalicaScreen(LibraryUiState(LibrarySnapshot(folders, tracks), loading = false), PlaybackState(connected = true),
                     {}, {}, {}, {}, {}, {}, playlist = PlaylistState(playlists, false))
             } }
