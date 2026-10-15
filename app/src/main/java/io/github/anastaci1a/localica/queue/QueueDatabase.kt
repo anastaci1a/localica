@@ -25,6 +25,16 @@ data class StoredQueue(@Embedded val queue: QueueRecord,
 
 @Dao
 abstract class QueueDao {
+    private val database: RoomDatabase?
+    constructor(database: RoomDatabase) { this.database = database }
+    // Pure test DAOs override the SQL boundary; Room selects the non-null owning database constructor.
+    protected constructor() { database = null }
+    private fun journeyWriter(): QueueJourneyWriter {
+        val owner = checkNotNull(database) { "A database is required for concrete journey writes" }
+        check(owner.inTransaction()) { "Journey writes require the owning save transaction" }
+        return QueueJourneyWriter(owner::compileStatement)
+    }
+
     @Transaction @Query("SELECT * FROM queues ORDER BY ordinal, createdAt, id") abstract suspend fun readQueues(): List<StoredQueue>
     @Query("SELECT * FROM queue_state WHERE id = 1") abstract suspend fun readActive(): ActiveQueueRecord?
     @Upsert protected abstract suspend fun upsertQueue(queue: QueueRecord)
@@ -33,7 +43,9 @@ abstract class QueueDao {
     @Upsert protected abstract suspend fun upsertJourney(journey: JourneyRecord)
     @Query("DELETE FROM queue_journeys WHERE queueId = :id") protected abstract suspend fun clearJourney(id: String)
     @Upsert protected abstract suspend fun upsertVisits(visits: List<VisitRecord>)
+    protected open suspend fun updateVisits(visits: List<VisitRecord>): Int = journeyWriter().updateVisits(visits)
     @Upsert protected abstract suspend fun upsertCycleMembers(members: List<CycleMemberRecord>)
+    protected open suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = journeyWriter().updateMembers(members)
     @Query("DELETE FROM queue_visits WHERE queueId = :queueId AND token IN (:tokens)")
     protected abstract suspend fun deleteVisits(queueId: String, tokens: List<String>)
     @Query("DELETE FROM queue_cycle_members WHERE queueId = :queueId AND cycle = :cycle AND entryId IN (:entries)")
@@ -85,7 +97,9 @@ abstract class QueueDao {
             val oldVisits = before?.visitRecords(id).orEmpty().associateBy { it.token }
             val newVisits = after?.visitRecords(id).orEmpty().associateBy { it.token }
             (oldVisits.keys - newVisits.keys).chunked(500).forEach { deleteVisits(id, it) }
-            upsertVisits(newVisits.values.filter { oldVisits[it.token] != it })
+            val (retained, added) = newVisits.values.filter { oldVisits[it.token] != it }.partition { it.token in oldVisits }
+            updateOrRepair(retained, ::updateVisits, ::upsertVisits)
+            if (added.isNotEmpty()) upsertVisits(added)
         }
         if (before?.plans != after?.plans || before?.visited != after?.visited || before?.cycle != after?.cycle) {
             val oldMembers = before?.cycleRecords(id).orEmpty().associateBy { it.cycle to it.entryId }
@@ -93,8 +107,19 @@ abstract class QueueDao {
             (oldMembers.keys - newMembers.keys).groupBy({ it.first }, { it.second }).forEach { (cycle, entries) ->
                 entries.chunked(500).forEach { deleteCycleMembers(id, cycle, it) }
             }
-            upsertCycleMembers(newMembers.values.filter { oldMembers[it.cycle to it.entryId] != it })
+            val (retained, added) = newMembers.values.filter { oldMembers[it.cycle to it.entryId] != it }
+                .partition { it.cycle to it.entryId in oldMembers }
+            updateOrRepair(retained, ::updateCycleMembers, ::upsertCycleMembers)
+            if (added.isNotEmpty()) upsertCycleMembers(added)
         }
+    }
+
+    /** Avoid an INSERT/constraint exception for every retained row; preserve upsert repair if a row is missing. */
+    private suspend fun <T> updateOrRepair(rows: List<T>, update: suspend (List<T>) -> Int, upsert: suspend (List<T>) -> Unit) {
+        if (rows.isEmpty()) return
+        val changed = update(rows)
+        check(changed in 0..rows.size) { "Unexpected saved journey row count" }
+        if (changed != rows.size) upsert(rows)
     }
 }
 
