@@ -24,8 +24,10 @@ internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, Animati
     val frame = placement?.invoke(body.value)
     val density = androidx.compose.ui.platform.LocalDensity.current
     CompositionLocalProvider(LocalGlassAppearance provides if (preserveAppearance) LocalGlassAppearance.current else LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, shadowStrength = .04f, contrast = 0f)) {
+        // Caller semantics and observers belong to the placed surface, not to the
+        // outer offset/wrap coordinator (whose bounds remain at the host origin).
         LiquidGlassSurface(if (frame == null) modifier.selectorDeformation({ body.value }, vertical, wall)
-            else modifier.selectorTrackPlacement(frame.bounds), source = source, pressFeedback = false, shadow = false,
+            else Modifier.selectorTrackPlacement(frame.bounds).then(modifier), source = source, pressFeedback = false, shadow = false,
             cornerRadius = frame?.let { with(density) { it.corner.toDp() } } ?: cornerRadius, tint = tint,
             body = { body.value }, depthScale = depthScale,
             inkOverride = if (preserveAppearance) androidx.compose.ui.graphics.Color.Black else null) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }

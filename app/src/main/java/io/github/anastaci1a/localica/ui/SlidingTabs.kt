@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -96,7 +97,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         tabs.maxOf { textMeasurer.measure(androidx.compose.ui.text.AnnotatedString(it.label), labelStyle,
             maxLines = 1, softWrap = false).size.width }.toDp() + 32.dp
     })
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
         // Four destinations fit the normal phone shelf. Preserve larger font targets
         // by allowing the strip to overflow rather than shrinking accessible text.
         val fits = maxWidth >= minimumWidth * tabs.size ||
@@ -122,7 +123,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         // Fixed padded recording dimensions avoid size-driven legacy recapture on
         // each deformation frame. Dynamic legacy foreground freshness is gated separately.
         val recording = androidx.compose.ui.geometry.Rect(-viewport * .04f, 0f, viewport * 1.04f, baseHeight)
-        Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite)) {
+        Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {
             LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
                 .testTag("tab-track-shell").bottomGlassShadow(opacity = shadowOpacity), source,
                 pressFeedback = false, shadow = false, cornerRadius = with(density) { radius.toDp() },
@@ -131,7 +132,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         Box(Modifier.fillMaxSize().testTag("tab-track-host").drawWithContent {
             val path = Path().apply { addRoundRect(RoundRect(track, CornerRadius(radius))) }
             clipPath(path) { this@drawWithContent.drawContent() }
-        }) {
+        }, contentAlignment = AbsoluteAlignment.TopLeft) {
         // horizontalScroll installs a clipping viewport even when disabled. A fitting
         // track must be free to draw its stretched end outside the fixed gesture host.
         Box(Modifier.fillMaxHeight().then(if (!fits) Modifier.nestedScroll(HorizontalGestureOwner)
@@ -169,14 +170,14 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         }
                     }
                 }
-            }) {
+            }, contentAlignment = AbsoluteAlignment.TopLeft) {
             @Composable fun Labels(color: Color, interactive: Boolean) {
                 Box(Modifier.width(width * tabs.size).fillMaxHeight()
                     .then(if (interactive) Modifier else Modifier.clearAndSetSemantics {})
                     .drawWithContent {
                         val path = Path().apply { addRoundRect(RoundRect(selectorFrame.bounds, CornerRadius(selectorFrame.corner))) }
                         clipPath(path, if (interactive) ClipOp.Difference else ClipOp.Intersect) { this@drawWithContent.drawContent() }
-                    }) {
+                    }, contentAlignment = AbsoluteAlignment.TopLeft) {
                     tabs.forEachIndexed { index, tab ->
                         val cell = geometry.slot(index, tabs.size, insets, false, rtl).cell
                         Box(Modifier.selectorTrackPlacement(cell)
@@ -197,7 +198,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             @Composable fun Lens() {
                 val modifier = Modifier.testTag("tab-selector")
                 if (appearance.tabStyle == TabLensStyle.Classic) {
-                    Box(modifier.selectorTrackPlacement(selectorFrame.bounds).background(Color.Black.copy(alpha = appearance.classicOpacity),
+                    Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),
                         androidx.compose.foundation.shape.RoundedCornerShape(with(density) { selectorFrame.corner.toDp() })))
                 } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
                     blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
@@ -212,7 +213,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
 
                 }
             }
-            Box(Modifier.width(width * tabs.size).fillMaxHeight()) {
+            Box(Modifier.width(width * tabs.size).fillMaxHeight(), contentAlignment = AbsoluteAlignment.TopLeft) {
                 if (!refractForeground) Lens()
                 val foregroundRecording = androidx.compose.ui.geometry.Rect(
                     -geometry.travel * .04f, 0f, geometry.travel * 1.04f, baseHeight)
@@ -225,11 +226,11 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                             translate(delta.x, delta.y) { drawLayer(composite.layer) }
                         }
                         drawContent()
-                    } else Modifier.fillMaxSize()) {
+                    } else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
                     // Record padded visual overflow without changing the gesture or
                     // scrolling host. Both sample origin and label coordinates move once.
                     Box(if (refractForeground) Modifier.selectorTrackPlacement(foregroundContent)
-                        else Modifier.fillMaxSize()) {
+                        else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
                         Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
                         Labels(NavigationAccent, false)
                     }
