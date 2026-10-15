@@ -45,26 +45,27 @@ internal fun capturePopupPixels(rule: ComposeContentTestRule, node: SemanticsNod
 
 /** An unrelated opaque marker proves which compositor frame a screenshot contains. */
 @androidx.compose.runtime.Composable
-internal fun PresentationMarker(stage: () -> Int) {
-    androidx.compose.foundation.Canvas(Modifier.size(8.dp)) {
+internal fun PresentationMarker(modifier: Modifier = Modifier, stage: () -> Int) {
+    androidx.compose.foundation.Canvas(modifier.size(8.dp)) {
         drawRect(androidx.compose.ui.graphics.Color(stage() * 8 / 255f, 1f, 0f))
     }
 }
 
 internal fun capturePresentedPopupPixels(rule: ComposeContentTestRule, node: SemanticsNodeInteraction,
-    stage: Int, popupView: () -> View): PixelMap {
+    stage: Int, sample: androidx.compose.ui.unit.IntOffset = androidx.compose.ui.unit.IntOffset(2, 2),
+    popupView: () -> View): PixelMap {
     lateinit var pixels: PixelMap
     var observed = androidx.compose.ui.graphics.Color.Transparent
     try {
         // Wait for frame identity, never for the optical result being tested.
         rule.waitUntil(5000) {
             pixels = capturePopupPixels(rule, node, popupView)
-            observed = pixels[2, 2]
+            observed = pixels[sample.x, sample.y]
             observed.green > .9f && observed.blue < .1f &&
                 kotlin.math.abs(observed.red - stage * 8 / 255f) < .01f
         }
     } catch (failure: Throwable) {
-        android.util.Log.e("PopupCapture", "Presentation timeout: requestedStage=$stage observed=$observed")
+        android.util.Log.e("PopupCapture", "Presentation timeout: requestedStage=$stage sample=$sample observed=$observed")
         throw failure
     }
     return pixels
