@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.SemanticsActions
@@ -99,7 +98,7 @@ class CollectionPopupAppearanceTest {
                     reducedMotion = true, queryDispatcher = Dispatchers.Unconfined)
             }
         } }
-        assertMountedAppearance(host, false)
+        assertMountedAppearance(host, false, collectionBackdrop = false)
         assertForeground(compose.onNodeWithText("Sort by"), false)
     }
 
@@ -192,17 +191,22 @@ class CollectionPopupAppearanceTest {
         compose.runOnIdle { assertEquals(!bright, anchor.ink.luminance() > .5f) }
     }
 
-    private fun assertMountedAppearance(host: GlassDialogs, dark: Boolean) {
+    private fun assertMountedAppearance(host: GlassDialogs, dark: Boolean, collectionBackdrop: Boolean = true) {
         compose.waitForIdle()
         compose.runOnIdle {
             val entry = host.entries.single { it.mounted }
             assertEquals("Dialog material must inherit its collection caller", dark, entry.dark)
-            assertEquals("Detached sheets need the collection backdrop too", dark, entry.anchor.source?.dark)
+            if (collectionBackdrop) {
+                assertNotNull("Collection dialogs retain their source", entry.anchor.source)
+                assertEquals("Detached sheets need the collection backdrop too", dark, entry.anchor.source?.dark)
+            } else assertNull("Standalone plain browsing needs no recorded backdrop", entry.anchor.source)
         }
     }
 
+    private var presentationStage = 0
+
     private fun assertForeground(node: SemanticsNodeInteraction, white: Boolean) {
-        val pixels = node.captureToImage().toPixelMap()
+        val pixels = capturePresentedPopupNodePixels(compose, node, ++presentationStage)
         var ink = 0
         var background = 0
         for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
