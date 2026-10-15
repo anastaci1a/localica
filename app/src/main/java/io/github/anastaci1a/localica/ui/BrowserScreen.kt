@@ -339,13 +339,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     var contextMenu by remember { mutableStateOf<String?>(null) }
-    var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<Track?>(null) }
+    // Keep every collection-owned popup inside the same appearance and backdrop scope.
+    // Hosted dialogs retain these caller locals through nested windows and their exit.
     val pageColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = if (artDetail) pageColors.copy(onSurface = collectionInk, onSurfaceVariant = collectionInk.copy(alpha = .65f),
         primary = collectionInk, surface = if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom) else pageColors) {
-    CompositionLocalProvider(LocalArtworkTransit provides artworkTransit, LocalContentColor provides MaterialTheme.colorScheme.onSurface,
-        LocalFrostedBackdrop provides if (artDetail) collectionSource else surroundingBackdrop,
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+        LocalFrostedBackdrop provides if (artDetail) collectionSource else surroundingBackdrop) {
+    CompositionLocalProvider(LocalArtworkTransit provides artworkTransit,
         LocalEmptySearchBack provides popupDismiss?.takeIf { route.text.isBlank() }) {
     Box(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())) {
     if (artDetail) CollectionBackground(hero, gridState, collectionSource, reducedMotion,
@@ -578,7 +580,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         onBack, { view -> collectionView = view; collectionMenu = true }) {
         if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel() }
     }
-    } } }
+    } }
 
     if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
         fun closeSearch() { localSearchOpen = false }
@@ -605,7 +607,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
     }
-    addingSong?.let { song -> AddToPlaylistDialog(listOf(song), playlists, playlistController, { addingSong = null }, { addingSong = null }) }
     info?.let { song -> SongInformation(song, { info = null }, { editTags?.invoke(listOf(song)) {} }) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
@@ -613,4 +614,5 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
     } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel() }
+    } }
 }
