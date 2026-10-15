@@ -88,7 +88,7 @@ class PlayerGestureTest {
             swipe(Offset(8f, centerY), Offset(8f, centerY - 240f), durationMillis = 1200)
         }
         compose.onNodeWithContentDescription("Queue actions").assertIsDisplayed()
-        // One held gesture must return from drawer dismissal to ordinary list scrolling.
+        // List scrolling retains its contact through the top and direction reversals.
         compose.onNodeWithTag("browser-list").performTouchInput {
             down(Offset(centerX, height * .45f))
             moveBy(Offset(0f, -120f), delayMillis = 250)
@@ -99,14 +99,14 @@ class PlayerGestureTest {
         compose.onNodeWithContentDescription("Close queue").assertIsDisplayed()
         val listRange = compose.onNodeWithTag("browser-list").fetchSemanticsNode().config[
             androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange]
-        assertTrue("Reopening the drawer must hand unused upward motion back to its list", listRange.value() > 0f)
+        assertTrue("Reversing a list-owned gesture must resume list scrolling", listRange.value() > 0f)
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Queue song 30"))
         compose.onNodeWithTag("browser-list").performTouchInput {
             swipe(Offset(centerX, height * .35f), Offset(centerX, height * .55f), durationMillis = 700)
         }
         compose.onNodeWithContentDescription("Close queue").assertIsDisplayed()
         compose.onNodeWithTag("browser-list").performScrollToIndex(0)
-        // A slow pull from the content (not the handle) hands off at the list's top.
+        // A fresh slow pull from content already at the top may still close the drawer.
         compose.onNodeWithTag("browser-list").performTouchInput {
             swipe(Offset(centerX, height * .35f), Offset(centerX, height * .75f), durationMillis = 1000)
         }
