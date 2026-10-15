@@ -78,7 +78,7 @@ The [control specification](controls.md) owns button, switch, slider and choice 
 
 ## Geometry and readability
 
-Maintain one authoritative outline per displayed surface. Clip, refract, illuminate and shadow that outline in the same frame. Use its actual transformed coordinates for overlays; do not lag list movement through a later bounds callback. Hit regions may be larger for accessibility, but must remain attached to the visible control.
+Maintain one authoritative outline per displayed surface. Draw-space deformation must preserve backdrop registration; physical translation moves the sampling origin with the body. Clip, refract, illuminate and shadow that outline in the same frame. Use its actual transformed coordinates for overlays; do not lag list movement through a later bounds callback. Hit regions may be larger for accessibility, but must remain attached to the visible control.
 
 Nested curves should share a deliberate inset relationship. Begin with `innerRadius = max(0, outerRadius - inset)` where the geometry permits it; then inspect optical balance. Capsules, square artwork and full-player corners need distinct policies. In particular, inset mini-player artwork away from the curved rim, and retain one outline throughout player expansion.
 
