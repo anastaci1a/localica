@@ -96,6 +96,7 @@ private class SettingsGateDao(private val delegate: QueueDao, private val restor
     override suspend fun readQueues() = delegate.readQueues()
     override suspend fun readActive() = delegate.readActive()
     override suspend fun upsertQueue(queue: QueueRecord): Unit = error("Use save")
+    override suspend fun updateQueueMetadata(queue: QueueMetadataRecord): Int = error("Use save")
     override suspend fun upsertActive(active: ActiveQueueRecord): Unit = error("Use save")
     override suspend fun upsertJourney(journey: JourneyRecord): Unit = error("Use save")
     override suspend fun clearJourney(id: String): Unit = error("Use save")
