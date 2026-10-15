@@ -23,14 +23,7 @@ class ListSearchTest {
         }
     }
 
-    private fun dismissSearch() {
-        if (compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isNotEmpty()) {
-            pressSystemBack()
-            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
-        }
-        pressSystemBack()
-        compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
-    }
+    private fun dismissSearch() = compose.dismissSearchWithSystemBack()
 
     @Test fun visibleSearchVacancyRestoresWithoutCumulativeListMovement() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
