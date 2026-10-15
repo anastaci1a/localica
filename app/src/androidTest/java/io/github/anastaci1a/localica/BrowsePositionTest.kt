@@ -57,6 +57,7 @@ class BrowsePositionTest {
             for ((filter, prefix) in types) {
                 compose.onNodeWithText(filter, useUnmergedTree = true).performScrollTo().performClick()
                 for (hardware in listOf(false, true)) {
+                    android.util.Log.i("BrowsePositionTest", "Restoring $filter; hardware=$hardware")
                     val title = "$prefix 060"
                     compose.scrollToUncoveredItem(hasText(title))
                     val before = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
@@ -70,8 +71,12 @@ class BrowsePositionTest {
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
                     if (hardware) pressSystemBack()
                     else compose.onNodeWithContentDescription("Back").performClick()
-                    compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty() &&
-                        compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
+                    try {
+                        compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty() &&
+                            compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
+                    } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
+                        throw AssertionError("$filter / hardware=$hardware: ${compose.onRoot().printToString()}", failure)
+                    }
                     compose.onNodeWithText(title).assertIsDisplayed()
                     assertEquals("$filter / hardware=$hardware", before, compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot)
                 }
