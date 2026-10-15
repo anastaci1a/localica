@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.Modifier
@@ -26,11 +28,19 @@ internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventP
 @androidx.compose.runtime.Composable
 internal fun ActionTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     content: @androidx.compose.runtime.Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
-    androidx.compose.material3.TextButton(onClick, modifier.ownButtonDrag(enabled), enabled = enabled, content = content)
+    val defaults = ButtonDefaults.textButtonColors()
+    val foreground = controlStateColor(enabled, defaults.contentColor, defaults.disabledContentColor,
+        "Action text availability")
+    androidx.compose.material3.TextButton(onClick, modifier.ownButtonDrag(enabled), enabled = enabled,
+        colors = defaults.copy(contentColor = foreground, disabledContentColor = foreground), content = content)
 }
 
 @androidx.compose.runtime.Composable
 internal fun ActionIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     content: @androidx.compose.runtime.Composable () -> Unit) {
-    androidx.compose.material3.IconButton(onClick, modifier.ownButtonDrag(enabled), enabled = enabled, content = content)
+    val defaults = IconButtonDefaults.iconButtonColors()
+    val foreground = controlStateColor(enabled, defaults.contentColor, defaults.disabledContentColor,
+        "Action icon availability")
+    androidx.compose.material3.IconButton(onClick, modifier.ownButtonDrag(enabled), enabled = enabled,
+        colors = defaults.copy(contentColor = foreground, disabledContentColor = foreground), content = content)
 }
