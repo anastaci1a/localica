@@ -23,7 +23,8 @@ class LyricsInteractionTest {
     @Test fun missingLyricsCanBeOpenedAndOtherArtworkActionsStillPersist() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
-        val track = Track("file:///missing.mp3", "Song", fileName = "missing.mp3", relativePath = "missing.mp3")
+        val emptyFixture = NoLyricsFixture("Song")
+        val track = emptyFixture.track
         val queue = QueueEdits.create(listOf(track), 0, "Queue")
         try {
             compose.setContent { LocalicaTheme { LocalicaScreen(LibraryUiState(loading = false),
@@ -46,7 +47,7 @@ class LyricsInteractionTest {
             pressSystemBack()
             compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Close artwork").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
-        } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
+        } finally { emptyFixture.close(); context.getSharedPreferences("interface", 0).edit().clear().commit() }
     }
     @Test fun lyricsRemainOpenAcrossSongsWithAndWithoutSources() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -56,7 +57,8 @@ class LyricsInteractionTest {
         instrumentation.context.assets.open("lyrics.opus").use { input -> file.outputStream().use(input::copyTo) }
         val withLyrics = Track(android.net.Uri.fromFile(file).toString(), "With lyrics", fileName = file.name, relativePath = file.name)
         val second = withLyrics.copy(id = "second-lyric-song", title = "Second with lyrics")
-        val without = Track("file:///missing-lyrics.mp3", "Without lyrics", fileName = "missing-lyrics.mp3", relativePath = "missing-lyrics.mp3")
+        val emptyFixture = NoLyricsFixture("Without lyrics")
+        val without = emptyFixture.track
         var track by mutableStateOf(withLyrics)
         try {
             compose.setContent { LocalicaTheme {
@@ -82,7 +84,7 @@ class LyricsInteractionTest {
             compose.onNodeWithContentDescription("Hide lyrics").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("lyrics-panel").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithContentDescription("Show lyrics").assertIsDisplayed()
-        } finally { file.delete(); context.getSharedPreferences("interface", 0).edit().clear().commit() }
+        } finally { emptyFixture.close(); file.delete(); context.getSharedPreferences("interface", 0).edit().clear().commit() }
     }
     @Test fun timedLinesFollowPlaybackAndCanSeekAfterManualScroll() {
         val document = LrcParser.parse((0..25).joinToString("\n") { "[00:${it.toString().padStart(2, '0')}]Line $it" })
