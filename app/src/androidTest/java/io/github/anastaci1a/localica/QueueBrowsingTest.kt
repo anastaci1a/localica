@@ -100,10 +100,8 @@ class QueueBrowsingTest {
             compose.onNode(hasSetTextAction()).performTextInput("First")
             compose.onNodeWithTag("media-${queue.entries[1].id}").assertIsDisplayed()
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertDoesNotExist()
-            pressSystemBack()
-            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
-            pressSystemBack()
-            compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+            compose.onNode(hasSetTextAction()).assertIsFocused()
+            compose.dismissSearchWithSystemBack()
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertIsDisplayed()
             compose.onNodeWithContentDescription("Sort queue").performClick()
             compose.onNodeWithText("Sort by").performClick()
