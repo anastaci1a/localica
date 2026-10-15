@@ -8,6 +8,10 @@ import io.github.anastaci1a.localica.library.SavedOrderCodec
 data class QueueRecord(@PrimaryKey val id: String, val name: String, val createdAt: Long,
     val currentEntryId: String?, val positionMs: Long, val shuffle: Boolean, val repeat: String, @ColumnInfo(defaultValue = "0") val ordinal: Int = 0, @ColumnInfo(defaultValue = "0") val lastActivatedAt: Long = 0,
     @ColumnInfo(defaultValue = "''") val orderState: String = "")
+/** Partial update keeps the unchanged, potentially large order payload out of cursor checkpoints. */
+data class QueueMetadataRecord(val id: String, val name: String, val createdAt: Long,
+    val currentEntryId: String?, val positionMs: Long, val shuffle: Boolean, val repeat: String,
+    val ordinal: Int, val lastActivatedAt: Long)
 @Entity(tableName = "queue_entries", foreignKeys = [ForeignKey(entity = QueueRecord::class,
     parentColumns = ["id"], childColumns = ["queueId"], onDelete = ForeignKey.CASCADE)], indices = [Index("queueId")])
 data class EntryRecord(@PrimaryKey val id: String, val queueId: String, val ordinal: Int, val track: String, val sourcePlaylistId: String? = null)
@@ -24,6 +28,7 @@ abstract class QueueDao {
     @Transaction @Query("SELECT * FROM queues ORDER BY ordinal, createdAt, id") abstract suspend fun readQueues(): List<StoredQueue>
     @Query("SELECT * FROM queue_state WHERE id = 1") abstract suspend fun readActive(): ActiveQueueRecord?
     @Upsert protected abstract suspend fun upsertQueue(queue: QueueRecord)
+    @Update(entity = QueueRecord::class) protected abstract suspend fun updateQueueMetadata(queue: QueueMetadataRecord): Int
     @Upsert protected abstract suspend fun upsertActive(active: ActiveQueueRecord)
     @Upsert protected abstract suspend fun upsertJourney(journey: JourneyRecord)
     @Query("DELETE FROM queue_journeys WHERE queueId = :id") protected abstract suspend fun clearJourney(id: String)
@@ -54,8 +59,15 @@ abstract class QueueDao {
         for ((ordinal, queue) in after.queues.withIndex()) {
             val previous = before.queues.firstOrNull { it.id == queue.id }
             if (previous == queue && before.queues.indexOf(previous) == ordinal) continue
-            upsertQueue(QueueRecord(queue.id, queue.name, queue.createdAt, queue.currentEntryId,
-                queue.positionMs, queue.shuffle, queue.repeat.name, ordinal, queue.lastActivatedAt, SavedOrderCodec.encode(queue.order)))
+            if (previous != null && previous.order == queue.order) {
+                check(updateQueueMetadata(QueueMetadataRecord(queue.id, queue.name, queue.createdAt, queue.currentEntryId,
+                    queue.positionMs, queue.shuffle, queue.repeat.name, ordinal, queue.lastActivatedAt)) == 1) {
+                    "The saved queue is missing"
+                }
+            } else {
+                upsertQueue(QueueRecord(queue.id, queue.name, queue.createdAt, queue.currentEntryId,
+                    queue.positionMs, queue.shuffle, queue.repeat.name, ordinal, queue.lastActivatedAt, SavedOrderCodec.encode(queue.order)))
+            }
             if (previous?.journey != queue.journey) saveJourney(queue.id, previous?.journey, queue.journey)
             if (previous?.entries != queue.entries) {
                 clearEntries(queue.id)
