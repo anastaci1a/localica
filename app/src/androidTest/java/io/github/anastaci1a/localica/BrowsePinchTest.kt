@@ -60,7 +60,7 @@ class BrowsePinchTest {
     @Test fun oneStepUntilEveryFingerLiftsAndDisabledViewsIgnorePinches() {
         val steps = mutableListOf<Boolean>()
         var enabled by mutableStateOf(true)
-        compose.setContent { Box(Modifier.fillMaxSize().pinchToChangeView(enabled) { zoomIn, _ -> steps += zoomIn }.testTag("pinch")) }
+        compose.setContent { Box(Modifier.fillMaxSize().pinchToChangeView(enabled) { zoomIn, _ -> steps += zoomIn; true }.testTag("pinch")) }
         val target = compose.onNodeWithTag("pinch")
         target.performTouchInput {
             down(0, Offset(centerX - 50, centerY)); down(1, Offset(centerX + 50, centerY))
