@@ -100,8 +100,11 @@ class QueueBrowsingTest {
             compose.onNode(hasSetTextAction()).performTextInput("First")
             compose.onNodeWithTag("media-${queue.entries[1].id}").assertIsDisplayed()
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertDoesNotExist()
+            val searchPopup = compose.onNodeWithTag("list-search-popup")
+            compose.awaitExpectedWindowFocus(searchPopup)
             pressSystemBack()
             compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
+            compose.awaitExpectedWindowFocus(searchPopup)
             pressSystemBack()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertIsDisplayed()
