@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.LocalicaApplication
 import io.github.anastaci1a.localica.library.ArtworkCache
 import io.github.anastaci1a.localica.library.Track
@@ -42,7 +43,8 @@ internal fun rememberLyrics(track: Track?): LyricsResult? {
 @Composable
 internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null,
-    sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null) {
+    sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null,
+    contentHeight: Dp? = null) {
     val lyricClock by produceState(positionMs, positionMs, sampledAtMs, playing, speed, delayMs, durationMs) {
         do {
             value = lyricPosition(positionMs, sampledAtMs, android.os.SystemClock.elapsedRealtime(), playing, speed, delayMs, durationMs)
@@ -65,6 +67,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     val source = result?.sources?.firstOrNull { it.id == chosen } ?: result?.sources?.firstOrNull()
     var sourcesOpen by remember { mutableStateOf(false) }
     LaunchedEffect(sourcesRequest) { if (sourcesRequest > 0) sourcesOpen = true }
+    // The empty decoration uses the stable background viewport. Only actual lyrics resize with metadata.
     Column(modifier.testTag("lyrics-panel")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
@@ -88,7 +91,8 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                 else -> key(shown.id, shown.document) {
                     var shownPosition by remember { mutableLongStateOf(lyricClock) }
                     SideEffect { if (shown == source) shownPosition = lyricClock }
-                    LyricsLines(shown.document, shownPosition, reducedMotion, onSeek, Modifier.fillMaxSize())
+                    LyricsLines(shown.document, shownPosition, reducedMotion, onSeek,
+                        Modifier.fillMaxWidth().then(contentHeight?.let { Modifier.height(it) } ?: Modifier.fillMaxHeight()))
                 }
             }
         }
