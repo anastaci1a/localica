@@ -46,6 +46,11 @@ object PlaylistEdits {
         return playlist.copy(entries = playlist.order.apply(playlist.entries, method, ascending).map { byId.getValue(it) },
             order = playlist.order.copy(sort = method, ascending = ascending))
     }
+    fun revertOrder(playlist: ManualPlaylist, checkpoint: OrderCheckpoint): ManualPlaylist {
+        val current = playlist.entries.associateBy { it.id }
+        val restored = checkpoint.reconcile(playlist.entries.map { it.id })
+        return playlist.copy(entries = restored.physical.map(current::getValue), order = restored.saved)
+    }
     /** A rescan updates available metadata without losing unavailable references or occurrence IDs. */
     fun rows(playlist: ManualPlaylist, snapshot: LibrarySnapshot, query: LibraryQuery): List<SongRow> {
         val tracks = snapshot.tracks.associateBy { it.id }
