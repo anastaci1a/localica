@@ -56,12 +56,11 @@ class BrowsePinchTransactionTest {
                 compose.runOnIdle { prefs.write(route, source, false) }
                 waitForView(label)
                 val list = compose.onNodeWithTag("browser-list")
-                list.performTouchInput {
-                    begin(outward)
-                    spread(if (outward) 110f else 50f)
-                    spread(if (outward) 50f else 110f)
-                    up(0); up(1)
-                }
+                list.performTouchInput { begin(outward); spread(if (outward) 110f else 50f) }
+                // Observe the actual preview before reversing; the initial source
+                // label alone cannot prove asynchronous capture has finished.
+                waitForView(if (outward) "List, Normal" else "Gallery, 2 columns")
+                list.performTouchInput { spread(if (outward) 50f else 110f); up(0); up(1) }
                 waitForView(label)
                 assertEquals(source, prefs.read(route))
                 list.performTouchInput { begin(!outward); spread(if (outward) 50f else 110f); up(0); up(1) }
@@ -75,6 +74,38 @@ class BrowsePinchTransactionTest {
             waitForView("List, Large")
             assertEquals(ListSize.Large, prefs.read(route).listSize)
         } finally { prefs.write(route, original, overridden) }
+    }
+
+    @Test fun bothEndpointTransactionsFinishHandoffBeforeBoundaryGesture() {
+        var style by mutableStateOf(BrowseStyle(listSize = ListSize.Compact))
+        val motion = BrowsePinchMotion()
+        val commits = mutableListOf<BrowseStyle>()
+        compose.setContent {
+            Box(Modifier.fillMaxSize().testTag("pinch").browsePinch(true, motion, style,
+                BrowseRoute(MainTab.Songs), rememberLazyGridState(), 800, LocalDensity.current,
+                rememberCoroutineScope(), false, onPreview = { style = it },
+                onCommit = { commits += it; style = it }, onAnchor = {}))
+        }
+        val node = compose.onNodeWithTag("pinch")
+        for ((source, outward) in listOf(BrowseStyle(listSize = ListSize.Compact) to true,
+            BrowseStyle(presentation = Presentation.Large, itemsPerRow = 1) to false)) {
+            compose.runOnIdle { style = source }
+            node.performTouchInput { begin(outward); spread(if (outward) 110f else 50f) }
+            compose.waitUntil(5000) { motion.held && !motion.capturing && style != source }
+            node.performTouchInput { spread(if (outward) 50f else 110f); up(0); up(1) }
+            compose.waitUntil(5000) { motion.source == null && style == source }
+            var savedCount = 0
+            compose.runOnIdle {
+                assertNull(motion.target); assertNull(motion.settling)
+                assertEquals(source, commits.last()); savedCount = commits.size
+            }
+            node.performTouchInput { begin(!outward); spread(if (outward) 50f else 110f); up(0); up(1) }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertEquals(source, style); assertEquals(savedCount, commits.size)
+                assertNull(motion.source); assertNull(motion.target)
+            }
+        }
     }
 
     @Test fun pointerCancellationRestoresPreviewWithoutSavingAndClearsTransaction() {

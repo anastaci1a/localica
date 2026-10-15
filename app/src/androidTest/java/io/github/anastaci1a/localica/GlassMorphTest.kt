@@ -49,18 +49,7 @@ class GlassMorphTest {
         } }
         fun darkness(left: Int): Float {
             val node = compose.onNodeWithTag("moving-shadow-scene")
-            val image = if (android.os.Build.VERSION.SDK_INT >= 28) node.captureToImage() else {
-                // Compose cannot capture Dialog windows on Android 8; capture the
-                // actual display and crop the same node instead of skipping coverage.
-                compose.waitForIdle()
-                val bounds = node.fetchSemanticsNode().boundsInRoot
-                val origin = IntArray(2)
-                compose.runOnIdle { popupView.getLocationOnScreen(origin) }
-                val screen = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-                android.graphics.Bitmap.createBitmap(screen, origin[0] + bounds.left.toInt(),
-                    origin[1] + bounds.top.toInt(), bounds.width.toInt(), bounds.height.toInt()).asImageBitmap()
-            }
-            val pixels = image.toPixelMap()
+            val pixels = capturePopupPixels(compose, node) { popupView }
             val density = compose.density.density
             assertTrue("Sample region must stay inside the popup", (left + 50) * density < pixels.width)
             var dark = 0f; var count = 0
@@ -191,6 +180,42 @@ class GlassMorphTest {
                 GlassMorphPopup(open, anchor, { open = false }) { Box(Modifier.fillMaxWidth().height(240.dp)) { Text("Options") } }
             }
         } }
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val automation = instrumentation.uiAutomation
+        fun awaitRedTrigger(stage: String) {
+            var last: android.graphics.Bitmap? = null
+            var evidence = "No screenshot sampled"
+            try {
+                compose.waitUntil(5000) {
+                    last?.recycle()
+                    val screenshot = requireNotNull(automation.takeScreenshot()).also { last = it }
+                    val bounds = anchor.bounds
+                    val x = bounds.center.x.toInt(); val y = bounds.center.y.toInt()
+                    val pixel = screenshot.getPixel(x, y)
+                    evidence = "stage=$stage bounds=$bounds sample=($x,$y) pixel=${Integer.toHexString(pixel)} " +
+                        "screen=${screenshot.width}x${screenshot.height} hidden=${anchor.hidden} " +
+                        "restoredDrawn=${anchor.restoredDrawn} modalPresent=${anchor.modalPresent}"
+                    android.graphics.Color.red(pixel) > 240 && android.graphics.Color.green(pixel) < 20
+                }
+            } catch (failure: Throwable) {
+                android.util.Log.e("GlassMorphProbe", evidence)
+                last?.let { screenshot ->
+                    // Keep evidence in both the device output and captured logcat;
+                    // no CI workflow change is needed to retrieve this synthetic scene.
+                    val bytes = java.io.ByteArrayOutputStream().also {
+                        screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }.toByteArray()
+                    val file = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "trigger-$stage.png")
+                    runCatching { file.writeBytes(bytes) }
+                    if (bytes.size <= 256 * 1024) {
+                        val chunks = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).chunked(3000)
+                        chunks.forEachIndexed { index, chunk -> android.util.Log.e("GlassMorphProbe", "PNG $stage ${index + 1}/${chunks.size} $chunk") }
+                    }
+                }
+                throw failure
+            } finally { last?.recycle() }
+        }
+        awaitRedTrigger("before-open")
         val windowInset = anchor.bounds.top - compose.onNodeWithTag("stationary-trigger").fetchSemanticsNode().boundsInRoot.top
         compose.runOnIdle { open = true }
         compose.waitForIdle()
@@ -199,7 +224,6 @@ class GlassMorphTest {
         compose.mainClock.advanceTimeBy(48)
         compose.waitForIdle()
         compose.onNodeWithTag("glass-morph-surface").assertExists()
-        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
         val target = compose.onNodeWithTag("next-action").fetchSemanticsNode().boundsInRoot.center
         val device = androidx.test.uiautomator.UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
         device.click(target.x.toInt(), (target.y + windowInset).toInt())
@@ -211,13 +235,7 @@ class GlassMorphTest {
         compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
         // Screen capture does not invalidate the Compose tree. A semantics-only assertion
         // would miss a trigger that exists but stays absent from its recorded parent.
-        compose.waitUntil(5000) {
-            val screenshot = automation.takeScreenshot()
-            try {
-                val pixel = screenshot.getPixel(anchor.bounds.center.x.toInt(), anchor.bounds.center.y.toInt())
-                android.graphics.Color.red(pixel) > 240 && android.graphics.Color.green(pixel) < 20
-            } finally { screenshot.recycle() }
-        }
+        awaitRedTrigger("after-return")
         compose.mainClock.autoAdvance = true
     }
 
