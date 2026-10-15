@@ -45,7 +45,7 @@ class GlassMorphTest {
                         }
                         // Outside the transformed/alpha-controlled child: proves
                         // the requested state reached the same captured frame.
-                        PresentationMarker { if (!visible) 2 else if (moved) 1 else 0 }
+                        PresentationMarker(Modifier.offset(16.dp, 16.dp)) { if (!visible) 2 else if (moved) 1 else 0 }
                     }
                 }
             }
@@ -53,7 +53,10 @@ class GlassMorphTest {
         fun darkness(left: Int): Float {
             val node = compose.onNodeWithTag("moving-shadow-scene")
             val stage = if (!visible) 2 else if (moved) 1 else 0
-            val pixels = capturePresentedPopupPixels(compose, node, stage) { popupView }
+            // Stay inside the rounded popup clip, away from the shadow sample regions.
+            val marker = (16 * compose.density.density).toInt() + 2
+            val pixels = capturePresentedPopupPixels(compose, node, stage,
+                androidx.compose.ui.unit.IntOffset(marker, marker)) { popupView }
             val density = compose.density.density
             assertTrue("Sample region must stay inside the popup", (left + 50) * density < pixels.width)
             var dark = 0f; var count = 0
