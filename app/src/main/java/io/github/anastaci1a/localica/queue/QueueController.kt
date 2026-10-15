@@ -328,15 +328,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun moveEntry(id: String, offset: Int, queueId: String? = null, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { QueueEdits.move(it, id, offset) }
     fun moveBefore(queueId: String, entries: Set<String>, beforeId: String?, complete: (Boolean) -> Unit = {}) =
         editQueue(queueId, complete) { QueueEdits.moveBefore(it, entries, beforeId) }
-    fun shuffle() = submit {
-        capture()
-        changeSettings(state.value.settings.copy(shuffle = !state.value.settings.shuffle))
-    }
-    fun repeat() = submit {
-        capture()
-        changeSettings(state.value.settings.copy(advancedRepeat = null,
-            repeat = QueueRepeat.entries[(state.value.settings.repeat.ordinal + 1) % QueueRepeat.entries.size]))
-    }
+    fun shuffle() = settings { it.copy(shuffle = !it.shuffle) }
+    fun repeat() = settings { it.copy(advancedRepeat = null,
+        repeat = QueueRepeat.entries[(it.repeat.ordinal + 1) % QueueRepeat.entries.size]) }
     fun randomize(queueId: String, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { queue ->
         QueueEdits.randomize(queue, queue.id == state.value.library.activeId && player?.isPlaying == true)
     }
@@ -351,10 +345,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         complete(true)
         } catch (failure: Exception) { complete(false); throw failure }
     }
-    fun settings(value: QueueSettings) = submit {
+    /** Explicit full replacement, including resets/restoration. */
+    fun settings(value: QueueSettings) = settings { value }
+    /** Read-modify-write runs in the actor; callers capture only their intended field values. */
+    fun settings(change: (QueueSettings) -> QueueSettings) = submit {
+        capture()
+        val value = change(state.value.settings)
         require(value.maximum == null || value.maximum > 0)
         require(value.previousThresholdSeconds in 1..60)
-        capture()
         changeSettings(value.copy(repeat = value.advancedRepeat?.repeat ?: value.repeat))
     }
     private suspend fun changeSettings(value: QueueSettings) {

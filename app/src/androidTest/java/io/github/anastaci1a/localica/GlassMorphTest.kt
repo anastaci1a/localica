@@ -43,13 +43,20 @@ class GlassMorphTest {
                         }) {
                             LiquidGlassSurface(Modifier.offset(30.dp, 40.dp).size(80.dp, 40.dp)) {}
                         }
+                        // Outside the transformed/alpha-controlled child: proves
+                        // the requested state reached the same captured frame.
+                        PresentationMarker(Modifier.offset(16.dp, 16.dp)) { if (!visible) 2 else if (moved) 1 else 0 }
                     }
                 }
             }
         } }
         fun darkness(left: Int): Float {
             val node = compose.onNodeWithTag("moving-shadow-scene")
-            val pixels = capturePopupPixels(compose, node) { popupView }
+            val stage = if (!visible) 2 else if (moved) 1 else 0
+            // Stay inside the rounded popup clip, away from the shadow sample regions.
+            val marker = (16 * compose.density.density).toInt() + 2
+            val pixels = capturePresentedPopupPixels(compose, node, stage,
+                androidx.compose.ui.unit.IntOffset(marker, marker)) { popupView }
             val density = compose.density.density
             assertTrue("Sample region must stay inside the popup", (left + 50) * density < pixels.width)
             var dark = 0f; var count = 0
@@ -57,7 +64,9 @@ class GlassMorphTest {
                 for (x in (left * density).toInt()..((left + 50) * density).toInt()) {
                     dark += 1f - pixels[x, y].red; count++
                 }
-            return dark / count
+            return (dark / count).also {
+                android.util.Log.i("GlassMorphProbe", "shadow stage=$stage moved=$moved visible=$visible left=$left darkness=$it")
+            }
         }
         val original = darkness(45)
         assertTrue("Modal descendants cannot join a shadow group in another window", outsideShadows.entries.isEmpty())
@@ -172,7 +181,11 @@ class GlassMorphTest {
             Box(Modifier.fillMaxSize().recordFrostedBackdrop(recorded)) {
                 anchor = rememberGlassAnchor()
                 Canvas(Modifier.fillMaxSize()) { drawRect(Color.White) }
-                Canvas(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(104.dp, 64.dp)
+                // The assertion samples actual screen pixels; system navigation
+                // scrims must not cover this synthetic trigger on edge-to-edge hosts.
+                Canvas(Modifier.align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.End))
+                    .padding(24.dp).size(104.dp, 64.dp)
                     .glassAnchor(anchor).testTag("stationary-trigger")) { drawRect(Color.Red) }
                 Box(Modifier.align(Alignment.TopStart).padding(24.dp).size(80.dp).testTag("next-action").clickable { presses++ }) {
                     Text("Next action")
