@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import kotlin.math.max
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -68,6 +69,12 @@ internal class BrowsePinchMotion {
         clearTransaction()
     }
     var pixelDensity = 1f
+    fun highlightHeight(key: Any, index: Int, targetHeight: Float): Float {
+        if (source == null) return targetHeight
+        val inset = (BrowseCellGeometry(sourceColumns).cardInset * pixelDensity).roundToInt()
+        val sourceHeight = (sourceBounds(key, index).height - 2 * inset).coerceAtLeast(0f)
+        return sourceHeight + (targetHeight - sourceHeight) * progress.value.coerceIn(0f, 1f)
+    }
     fun sourceContentWidth(key: Any): Int {
         val geometry = BrowseCellGeometry(sourceColumns)
         val cellWidth = bounds[key]?.width?.toInt() ?: geometry.cellWidth(viewportWidth.toInt(), pixelDensity)
