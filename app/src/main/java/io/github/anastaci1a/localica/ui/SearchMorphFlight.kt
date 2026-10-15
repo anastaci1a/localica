@@ -16,3 +16,15 @@ internal data class SearchMorphFlight(
         return lerp(from, destination, fraction)
     }
 }
+
+/** Optional geometry observation; production consumers leave it unset. */
+internal data class SearchMorphSample(
+    val progress: Float,
+    val bounds: Rect,
+    val viewportOrigin: androidx.compose.ui.geometry.Offset,
+    val ime: Int,
+    val imeSource: Int,
+    val imeTarget: Int,
+    val windowFocused: Boolean,
+)
+internal val LocalSearchMorphObserver = androidx.compose.runtime.staticCompositionLocalOf<((SearchMorphSample) -> Unit)?> { null }

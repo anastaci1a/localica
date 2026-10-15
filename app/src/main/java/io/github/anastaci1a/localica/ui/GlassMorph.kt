@@ -144,6 +144,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     fitContent: Boolean = placement == GlassPlacement.Menu, content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
+    val searchObserver = LocalSearchMorphObserver.current
     val progress = anchor.contact.expansion
     val body = rememberGlassBody({ anchor.contact.travel + progress.value },
         contact = { if (anchor.contact.pressed) 1f else 0f }, state = anchor.contact.state,
@@ -390,6 +391,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (placement == GlassPlacement.Search) {
                             val at = it.backdropPosition(view)
                             searchRendered = Rect(at, Size(it.size.width.toFloat(), it.size.height.toFloat()))
+                            searchObserver?.invoke(SearchMorphSample(p, searchRendered, windowOrigin,
+                                imeHeight, imeSource, imeTarget, windowFocused))
                         }
                     }.graphicsLayer {
                         alpha = if (detached) p else if (surfaceReady) 1f else 0f
