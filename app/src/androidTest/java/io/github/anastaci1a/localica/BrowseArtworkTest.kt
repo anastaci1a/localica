@@ -107,6 +107,28 @@ class BrowseArtworkTest {
         compose.mainClock.autoAdvance = true
     }
 
+    @Test fun changedCollectionFirstMemberNeverReusesAnotherMembersSeed() {
+        val first = Track("first", "First", fileName = "first", relativePath = "first")
+        val item = io.github.anastaci1a.localica.browse.BrowserItem(
+            io.github.anastaci1a.localica.navigation.MediaRef(io.github.anastaci1a.localica.navigation.MediaKind.Album, "album"),
+            "Album", null, listOf(SongRow("first", first)))
+        val cached = ArtworkCache.CachedArtwork(bitmap(android.graphics.Color.RED), 128)
+        val scope = BrowseArtworkScope().apply { seed(cached, item) }
+        assertSame(cached, scope.preview("first"))
+        assertNull(scope.preview("second"))
+        val ready = CompletableDeferred<Bitmap?>()
+        val provider = CoverProvider { _, _, _ -> ready.await() }
+        var visual: PlayerVisual? = null
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalBrowseArtwork provides scope) {
+            val current = rememberCollectionVisual("second", provider)
+            SideEffect { visual = current }
+        } } }
+        compose.runOnIdle { assertNull("A new first member cannot inherit the old member's thumbnail", visual?.artwork) }
+        ready.complete(null)
+        compose.waitForIdle()
+        compose.runOnIdle { assertNull("Missing artwork remains missing rather than borrowing the seed", visual?.artwork) }
+    }
+
     @Test fun decodedResolutionUpgradeFadesInsteadOfSwitchingInOneFrame() {
         var image by mutableStateOf(bitmap(android.graphics.Color.RED).asImageBitmap())
         compose.setContent { LocalicaTheme { ArtworkImage(image, false, Modifier.size(120.dp).testTag("cover")) } }
