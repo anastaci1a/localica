@@ -16,7 +16,7 @@ import kotlin.math.floor
 /** API 26 cannot capture Dialog roots through Compose. Keep the same pixel
  * assertions by cropping the display using that popup's own LocalView origin.
  * PixelMap owns a copied pixel array; temporary screenshots are always released. */
-internal fun capturePopupPixels(rule: ComposeContentTestRule, node: SemanticsNodeInteraction, popupView: View): PixelMap {
+internal fun capturePopupPixels(rule: ComposeContentTestRule, node: SemanticsNodeInteraction, popupView: () -> View): PixelMap {
     if (Build.VERSION.SDK_INT >= 28) {
         val bitmap = node.captureToImage().asAndroidBitmap()
         return try { bitmap.asImageBitmap().toPixelMap() } finally { bitmap.recycle() }
@@ -24,7 +24,7 @@ internal fun capturePopupPixels(rule: ComposeContentTestRule, node: SemanticsNod
     rule.waitForIdle()
     val bounds = node.fetchSemanticsNode().boundsInRoot
     val origin = IntArray(2)
-    rule.runOnIdle { popupView.getLocationOnScreen(origin) }
+    rule.runOnIdle { popupView().getLocationOnScreen(origin) }
     val screen = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
     try {
         val left = origin[0] + floor(bounds.left).toInt()
