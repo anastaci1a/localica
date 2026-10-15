@@ -5,6 +5,56 @@ import org.junit.Test
 import kotlin.math.abs
 
 class GlassMomentumTest {
+    @Test fun heldAccelerationAndBrakingRemainVisibleWithoutRinging() {
+        for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f))
+            for (direction in listOf(-1f, 1f)) for (braking in listOf(false, true)) {
+                val body = GlassMomentum(damping)
+                val initialVelocity = if (braking) direction * 4f else 0f
+                repeat(fps * 3) { body.advance(initialVelocity, 1f / fps, contact = 1f) }
+                val nextVelocity = if (braking) 0f else direction * 4f
+                var peak = 0f
+                repeat(fps) {
+                    body.advance(nextVelocity, 1f / fps, contact = 1f)
+                    val axial = body.strain * if (braking) -1f else 1f
+                    assertTrue("Held impulse cannot ring across rest at $fps fps", axial >= -.000001f)
+                    peak = maxOf(peak, axial)
+                    assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
+                }
+                assertTrue("Held acceleration/braking must survive target projection", peak > .004f)
+                assertTrue("Held impulse remains bounded", peak < .02f)
+                assertEquals("Steady tracking dissipates the impulse", 0f, body.strain, .00001f)
+            }
+    }
+
+    @Test fun alternatingHeldImpulsesRetargetContinuouslyAndSettle() {
+        for (fps in listOf(30, 60, 120)) {
+            val body = GlassMomentum()
+            var minimum = 0f; var maximum = 0f
+            for (velocity in listOf(4f, 0f, 4f, 0f, 4f, 0f)) repeat(fps / 5) {
+                body.advance(velocity, 1f / fps, contact = 1f)
+                minimum = minOf(minimum, body.strain); maximum = maxOf(maximum, body.strain)
+                assertTrue("Opposing impulses remain bounded", abs(body.strain) < .12f)
+                assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
+            }
+            assertTrue("Acceleration stays responsive after braking", maximum > .004f)
+            assertTrue("Braking can oppose a live acceleration response", minimum < -.004f)
+            repeat(fps * 3) { body.advance(0f, 1f / fps, contact = 1f) }
+            assertTrue("Stationary held input sleeps after forced changes", body.settled)
+        }
+    }
+
+    @Test fun heldAccelerationIsSymmetricAndDoesNotChangeStationaryContactDepth() {
+        val forward = GlassMomentum(); val backward = GlassMomentum(); val stationary = GlassMomentum()
+        repeat(180) { for (body in listOf(forward, backward, stationary)) body.advance(0f, 1f / 60, contact = 1f) }
+        repeat(60) {
+            forward.advance(4f, 1f / 60, contact = 1f)
+            backward.advance(-4f, 1f / 60, contact = 1f)
+            stationary.advance(0f, 1f / 60, contact = 1f)
+            assertEquals(forward.shape, backward.shape)
+            assertEquals("Pressure/contact depth constraints stay independent", stationary.shape.depth, forward.shape.depth, .00001f)
+        }
+    }
+
     @Test fun pressingStoresStrainWithoutAnyBounceAndReleaseOscillatesDepth() {
         val body = GlassMomentum(2f)
         var previous = 1f
