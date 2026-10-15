@@ -69,4 +69,23 @@ class ShadowUnionTest {
             assertTrue(bands.all { it.ringIndices.size == count })
         }
     }
+
+    @Test fun absoluteLevelsReplaceIncrementalFieldsWithoutChangingTheirValue() {
+        val weights = listOf(listOf(1f, .5f, .25f), listOf(1f, .75f, .5f, .25f),
+            listOf(1f, .18126415f, .43256444f, .21986524f), listOf(1f, .18f, .43f, .22f),
+            listOf(.5f, .50000006f, .000999f, .001001f))
+        for (values in weights) for (strength in listOf(.1f, .6f, 1f)) {
+            val bands = weightedShadowBands(values, strength)
+            for (first in -1..15) for (second in -1..15) for (third in -1..15) {
+                val rings = listOf(first, second, third, (first + second + third + 3) % 17 - 1).take(values.size)
+                val opacity = bands.lastOrNull { band -> band.ringIndices.indices.any { body ->
+                    band.ringIndices[body] >= 0 && rings[body] >= band.ringIndices[body]
+                } }?.opacity?.toDouble() ?: 0.0
+                assertEquals(values.indices.maxOf { individual(rings[it], strength, values[it]) }, opacity, 1e-7)
+                assertEquals(union(bands, rings), opacity, 1e-7)
+            }
+            assertTrue(bands.zipWithNext().all { (a, b) -> a.opacity <= b.opacity })
+        }
+    }
+
 }

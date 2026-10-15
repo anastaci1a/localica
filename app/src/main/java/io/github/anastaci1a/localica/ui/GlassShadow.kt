@@ -103,7 +103,7 @@ internal class GlassShadowGeometry {
                         addShadowOutline(r, expansion, previousShift)
                     }
                 }
-            } to band.alpha
+            } to band.opacity
         }
         return weighted
     }
@@ -126,7 +126,19 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
                 val alpha = shadowRingAlpha(index, strength, opacity)
                 if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
             }
-        } else weighted.forEach { (ring, alpha) -> drawPath(ring, Color.Black.copy(alpha = alpha)) }
+        } else if (weighted.isNotEmpty()) {
+            // Tiny source-over increments lose precision when each paint alpha is
+            // quantized. Stamp the absolute field into one isolated layer instead.
+            // Native edge controls check Src coverage at nested AA boundaries.
+            // Composite the completed field over the backing only once.
+            val canvas = drawContext.canvas
+            canvas.saveLayer(weighted.first().first.getBounds().inflate(1f), Paint())
+            try {
+                weighted.forEach { (ring, opacity) ->
+                    drawPath(ring, Color.Black.copy(alpha = opacity), blendMode = BlendMode.Src)
+                }
+            } finally { canvas.restore() }
+        }
     }
     if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { rings() } else rings()
 }
