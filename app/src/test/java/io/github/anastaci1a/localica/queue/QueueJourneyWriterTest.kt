@@ -5,6 +5,40 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class QueueJourneyWriterTest {
+    @Test fun newJourneyRowsReuseTwoInsertStatementsAndBindEveryColumn() {
+        val statements = mutableListOf<Statement>()
+        val writer = QueueJourneyWriter { sql -> Statement(sql).also { statements += it } }
+        val visits = List(6500) { VisitRecord("visit-$it", "queue", it, "entry-$it", it.toLong() - 2) }
+        val members = List(13_000) { CycleMemberRecord("queue", it.toLong() - 2, "entry-$it", it, it % 2 == 0) }
+        writer.upsertVisits(visits); writer.upsertMembers(members)
+        assertEquals(2, statements.size)
+        assertEquals("INSERT INTO `queue_visits` (`token`,`queueId`,`ordinal`,`entryId`,`cycle`) VALUES (?,?,?,?,?)", statements[0].sql)
+        assertEquals(visits.map { listOf(it.token, it.queueId, it.ordinal.toLong(), it.entryId, it.cycle) }, statements[0].rows)
+        assertEquals("INSERT INTO `queue_cycle_members` (`queueId`,`cycle`,`entryId`,`ordinal`,`visited`) VALUES (?,?,?,?,?)", statements[1].sql)
+        assertEquals(members.map { listOf(it.queueId, it.cycle, it.entryId, it.ordinal.toLong(), if (it.visited) 1L else 0L) }, statements[1].rows)
+        assertTrue(statements.all { it.closed })
+    }
+
+    @Test fun emptyInsertsPrepareNothingAndNonSqlFailureClosesWithoutRepair() {
+        val statements = mutableListOf<Statement>()
+        val writer = QueueJourneyWriter { sql -> Statement(sql, failAt = 1).also { statements += it } }
+        writer.upsertVisits(emptyList()); writer.upsertMembers(emptyList())
+        assertTrue(statements.isEmpty())
+        try { writer.upsertVisits(visits()); fail("The failure must propagate") } catch (_: IllegalStateException) { }
+        assertEquals(1, statements.size)
+        assertEquals(2, statements.single().rows.size)
+        assertTrue(statements.single().closed)
+    }
+
+    @Test fun uniquenessPredicateMatchesPinnedRoomWithoutAcceptingOtherConstraints() {
+        for (message in listOf("UNIQUE constraint failed", "constraint 2067", "constraint 1555")) {
+            assertTrue(isJourneyUniquenessFailure(message))
+        }
+        for (message in listOf(null, "", "FOREIGN KEY constraint failed (787)", "NOT NULL constraint failed", "CHECK constraint failed")) {
+            assertFalse(isJourneyUniquenessFailure(message))
+        }
+    }
+
     @Test fun largeBatchesReuseOneStatementAndBindEveryTypedColumn() {
         val statements = mutableListOf<Statement>()
         val writer = QueueJourneyWriter { sql -> Statement(sql).also { statements += it } }
@@ -57,12 +91,16 @@ class QueueJourneyWriterTest {
         override fun bindNull(index: Int) { bindings[index] = null }
         override fun clearBindings() { bindings.clear() }
         override fun executeUpdateDelete(): Int {
+            val index = record()
+            return counts.getOrElse(index) { 1 }
+        }
+        private fun record(): Int {
             val index = rows.size
             rows += bindings.values.toList()
             if (index == failAt) error("Injected statement failure")
-            return counts.getOrElse(index) { 1 }
+            return index
         }
-        override fun execute(): Unit = error("Must use scalar row count")
+        override fun execute() { check(sql.startsWith("INSERT")) { "Retained updates must use scalar count" }; record() }
         override fun executeInsert(): Long = error("Must not insert retained rows")
         override fun simpleQueryForLong(): Long = error("Must not query changes")
         override fun simpleQueryForString(): String = error("Must not query changes")
