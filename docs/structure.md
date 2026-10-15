@@ -72,7 +72,7 @@ On Android 13+, controls entirely over explicitly recorded panel material use an
 | Platform / layer | Treatment |
 | --- | --- |
 | Android 13+ optics | Padded AGSL rounded-surface refraction and tone mapping; the page supplies foreground polarity without readback. |
-| Older optics | Bounded meshes over prepared snapshots with the same curvature/tint model and sharp foreground content. Android 8–9 rasterize and retain the mesh because [hardware vertex drawing starts at API 29](https://developer.android.com/topic/performance/hardware-accel). |
+| Older optics | Bounded meshes over prepared snapshots with the same curvature/tint model and sharp foreground content. Android 8–9 rasterize and retain the mesh because [hardware vertex drawing starts at API 29](https://developer.android.com/topic/performance/hardware-accel). Software texture triangles may cyclically reorder their unchanged vertices to improve the legacy affine basis; folds and genuinely singular mappings are not altered. |
 | Live scattering | Bounded downsampled layers: frosted panels on Android 12+, refracting glass on Android 13+. |
 | Prepared scattering | Shared cancellable snapshots on older adapters after scene changes/settled scrolling, never each gesture frame. |
 | Foreground / clear glass | Full resolution; tint below icons/text. |
