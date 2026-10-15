@@ -8,6 +8,9 @@ import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.util.Log
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.C
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -24,16 +27,35 @@ import org.junit.Test
 import java.nio.ByteBuffer
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /** Native synthetic-provider diagnostics; shared fixture bytes do not model real-provider or phone latency. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class LargeQueueTransportTest {
+    @Test fun decodedProbeAcceptsEmptyInputWithoutChangingPcm() {
+        val firstDecoded = AtomicLong()
+        val processor = FirstDecodedProcessor(firstDecoded)
+        processor.configure(AudioFormat(44_100, 1, C.ENCODING_PCM_16BIT)); processor.flush()
+        processor.queueInput(AudioProcessor.EMPTY_BUFFER)
+        assertFalse(processor.output.hasRemaining())
+        assertEquals(0L, firstDecoded.get())
+        val bytes = byteArrayOf(1, 2, 3, 4)
+        val input = ByteBuffer.allocateDirect(bytes.size).put(bytes).apply { flip() }
+        processor.queueInput(input)
+        assertFalse(input.hasRemaining())
+        val actual = ByteArray(bytes.size)
+        processor.output.get(actual)
+        assertArrayEquals(bytes, actual)
+        assertTrue(firstDecoded.get() > 0)
+        processor.queueInput(AudioProcessor.EMPTY_BUFFER)
+        assertFalse(processor.output.hasRemaining())
+        processor.reset()
+    }
     @Test fun distinctDocumentQueueStartsDecodesAndCommitsSeekAndNextCursors() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val preferences = QueuePreferences(context)
         val original = preferences.read()
-        val authority = QueueScaleGrantActivity.AUTHORITY
         assertEquals(QueueScaleGrantActivity.TARGET, context.packageName)
         fun fixtureGrant(granted: Boolean) {
             context.startActivity(Intent(if (granted) QueueScaleGrantActivity.GRANT else QueueScaleGrantActivity.REVOKE)
@@ -54,11 +76,16 @@ class LargeQueueTransportTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val firstDecoded = AtomicLong()
         val firstReady = AtomicLong()
+        val firstPlaybackError = AtomicReference<PlaybackException?>()
         lateinit var player: ExoPlayer
         lateinit var queues: QueueController
         var createdPlayer: ExoPlayer? = null
         var createdQueues: QueueController? = null
+        fun checkPlayback() {
+            firstPlaybackError.get()?.let { throw AssertionError("Native fixture playback failed", it) }
+        }
         fun ready(entryId: String, positionMs: Long? = null): Boolean {
+            checkPlayback()
             var result = false
             instrumentation.runOnMainSync {
                 result = player.currentMediaItem?.mediaId == entryId && player.playbackState == Player.STATE_READY &&
@@ -68,6 +95,7 @@ class LargeQueueTransportTest {
         }
         fun checkpoint(entryId: String, positionMs: Long, after: Long): Long {
             await(timeoutMs = 30_000) {
+                checkPlayback()
                 dao.completed.any { it.at >= after && it.library.active?.let { q ->
                     q.currentEntryId == entryId && q.positionMs == positionMs } == true }
             }
@@ -97,16 +125,9 @@ class LargeQueueTransportTest {
                 try { context.contentResolver.openAssetFileDescriptor(probe, "r")?.use { true } ?: false }
                 catch (_: SecurityException) { false }
             }
-            context.contentResolver.call(authority, "resetStats", null, null)
+            context.contentResolver.call(probe, "resetStats", null, null)
             instrumentation.runOnMainSync {
-                val processor = object : BaseAudioProcessor() {
-                    override fun onConfigure(inputAudioFormat: AudioFormat) = inputAudioFormat
-                    override fun queueInput(inputBuffer: ByteBuffer) {
-                        val size = inputBuffer.remaining()
-                        if (size > 0) firstDecoded.compareAndSet(0, SystemClock.elapsedRealtime())
-                        replaceOutputBuffer(size).put(inputBuffer).flip()
-                    }
-                }
+                val processor = FirstDecodedProcessor(firstDecoded)
                 val renderers = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
                         enableAudioOutputPlaybackParams: Boolean): AudioSink = DefaultAudioSink.Builder(context)
@@ -115,6 +136,7 @@ class LargeQueueTransportTest {
                 player = ExoPlayer.Builder(context, renderers).build().also { createdPlayer = it }.apply {
                     volume = 0f
                     addListener(object : Player.Listener {
+                        override fun onPlayerError(error: PlaybackException) { firstPlaybackError.compareAndSet(null, error) }
                         override fun onPlaybackStateChanged(state: Int) {
                             if (state == Player.STATE_READY) firstReady.compareAndSet(0, SystemClock.elapsedRealtime())
                         }
@@ -127,12 +149,12 @@ class LargeQueueTransportTest {
             await { !queues.state.value.loading }
             val requestedAt = SystemClock.elapsedRealtime()
             queues.tap(tracks, 6500)
-            await(timeoutMs = 30_000) { queues.state.value.library.active?.entries?.size == 13_000 }
+            await(timeoutMs = 30_000) { checkPlayback(); queues.state.value.library.active?.entries?.size == 13_000 }
             val active = queues.state.value.library.active!!
             val selected = active.entries[6500].id
-            await(timeoutMs = 30_000) { firstDecoded.get() > 0 && firstReady.get() > 0 && ready(selected) }
+            await(timeoutMs = 30_000) { checkPlayback(); firstDecoded.get() > 0 && firstReady.get() > 0 && ready(selected) }
             instrumentation.runOnMainSync { player.pause() }
-            await(timeoutMs = 30_000) { dao.completed.any { it.library.active?.entries?.size == 13_000 } }
+            await(timeoutMs = 30_000) { checkPlayback(); dao.completed.any { it.library.active?.entries?.size == 13_000 } }
             val firstCommit = dao.completed.first { it.library.active?.entries?.size == 13_000 }.at
             // PCM here is decoded output into the sink, not the time sound reached a physical speaker.
             Log.i("QueueScale", "documents=13000 sharedBytes=true providerPreflight=true action=start readyMs=${firstReady.get() - requestedAt} firstDecodedMs=${firstDecoded.get() - requestedAt} commitMs=${firstCommit - requestedAt}")
@@ -147,7 +169,7 @@ class LargeQueueTransportTest {
             assertEquals(13_000, stored.entries.size)
             assertEquals(next, stored.journey!!.current)
             assertEquals(9000L, stored.positionMs)
-            val provider = context.contentResolver.call(authority, "stats", null, null)!!
+            val provider = context.contentResolver.call(probe, "stats", null, null)!!
             val opened = provider.getStringArrayList("documents")!!
             assertTrue(opened.containsAll(listOf("scale-6500.mp3", "scale-6501.mp3")))
             Log.i("QueueScale", "documents=13000 sharedBytes=true providerOpens=${provider.getInt("opens")} distinctOpened=${opened.size} readBytes=unmeasured")
@@ -165,6 +187,18 @@ class LargeQueueTransportTest {
                 }
             }
         }
+    }
+}
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class FirstDecodedProcessor(private val firstDecoded: AtomicLong) : BaseAudioProcessor() {
+    override fun onConfigure(inputAudioFormat: AudioFormat) = inputAudioFormat
+    override fun queueInput(inputBuffer: ByteBuffer) {
+        val size = inputBuffer.remaining()
+        // The pipeline may pass the shared EMPTY_BUFFER before decoding; copying it to itself throws.
+        if (size == 0) return
+        firstDecoded.compareAndSet(0, SystemClock.elapsedRealtime())
+        replaceOutputBuffer(size).put(inputBuffer).flip()
     }
 }
 
