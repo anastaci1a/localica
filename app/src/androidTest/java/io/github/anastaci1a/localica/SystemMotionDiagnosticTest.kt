@@ -18,20 +18,36 @@ import org.junit.Test
 class SystemMotionDiagnosticTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun scaleCommandsUseSingleNumericArgumentsWithoutShellQuoting() {
+        assertEquals("settings delete global animator_duration_scale", animatorScaleCommand(null))
+        for (value in listOf("0", "1", "0.0", "1.25", "1e-2"))
+            assertEquals("settings put global animator_duration_scale $value", animatorScaleCommand(value))
+        for (value in listOf("'1'", "1 2", "NaN", "1;echo", ""))
+            assertTrue(runCatching { animatorScaleCommand(value) }.isFailure)
+    }
+
     @Test fun compareSystemDisabledAndAppReducedMotionWithTheSameContact() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val resolver = instrumentation.targetContext.contentResolver
         val key = Settings.Global.ANIMATOR_DURATION_SCALE
         val previous = Settings.Global.getString(resolver, key)
+        // Validate restoration before changing the global setting. UiAutomation
+        // uses Runtime.exec tokenization, not a shell that removes quotes.
+        animatorScaleCommand(previous)
         val previouslyEnabled = ValueAnimator.areAnimatorsEnabled()
         var touching = false
         fun writeScale(value: String?) {
-            val command = if (value == null) "settings delete global $key"
-                else "settings put global $key '${value.replace("'", "'\\''")}'"
-            ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
-                .use { it.readBytes() }
-            compose.waitUntil(5000) { Settings.Global.getString(resolver, key) == value }
+            val command = animatorScaleCommand(value)
+            val output = ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
+                .use { String(it.readBytes(), Charsets.UTF_8) }
+            try {
+                compose.waitUntil(5000) { Settings.Global.getString(resolver, key) == value }
+            } catch (error: Throwable) {
+                throw AssertionError("Animator scale requested=$value observed=${Settings.Global.getString(resolver, key)} enabled=${ValueAnimator.areAnimatorsEnabled()} commandOutput=$output", error)
+            }
+            android.util.Log.i("SystemMotionDiagnostic", "Scale requested=$value observed=${Settings.Global.getString(resolver, key)} enabled=${ValueAnimator.areAnimatorsEnabled()}")
         }
+        var failure: Throwable? = null
         try {
             writeScale("1")
             compose.waitUntil(5000) { ValueAnimator.areAnimatorsEnabled() }
@@ -66,11 +82,27 @@ class SystemMotionDiagnosticTest {
             val appReduced = contact("app-reduced")
             assertEquals("App reduced motion removes width deformation", appReduced.first.width, appReduced.second.width, 1f)
             assertEquals("App reduced motion removes height deformation", appReduced.first.height, appReduced.second.height, 1f)
+        } catch (error: Throwable) {
+            failure = error
+            throw error
         } finally {
             if (touching) runCatching { compose.onNodeWithText("First").performTouchInput { cancel() } }
             compose.mainClock.autoAdvance = true
-            writeScale(previous)
-            compose.waitUntil(5000) { ValueAnimator.areAnimatorsEnabled() == previouslyEnabled }
+            try {
+                writeScale(previous)
+                compose.waitUntil(5000) { ValueAnimator.areAnimatorsEnabled() == previouslyEnabled }
+            } catch (restoreError: Throwable) {
+                val original = failure
+                if (original == null) throw restoreError else original.addSuppressed(restoreError)
+            }
         }
     }
+}
+
+private fun animatorScaleCommand(value: String?): String {
+    val key = Settings.Global.ANIMATOR_DURATION_SCALE
+    if (value == null) return "settings delete global $key"
+    require(value.matches(Regex("[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?")) &&
+        value.toFloatOrNull()?.isFinite() == true) { "Animator scale must be a finite numeric token" }
+    return "settings put global $key $value"
 }
