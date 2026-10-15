@@ -181,7 +181,11 @@ class GlassMorphTest {
             Box(Modifier.fillMaxSize().recordFrostedBackdrop(recorded)) {
                 anchor = rememberGlassAnchor()
                 Canvas(Modifier.fillMaxSize()) { drawRect(Color.White) }
-                Canvas(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(104.dp, 64.dp)
+                // The assertion samples actual screen pixels; system navigation
+                // scrims must not cover this synthetic trigger on edge-to-edge hosts.
+                Canvas(Modifier.align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.End))
+                    .padding(24.dp).size(104.dp, 64.dp)
                     .glassAnchor(anchor).testTag("stationary-trigger")) { drawRect(Color.Red) }
                 Box(Modifier.align(Alignment.TopStart).padding(24.dp).size(80.dp).testTag("next-action").clickable { presses++ }) {
                     Text("Next action")
