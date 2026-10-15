@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -62,21 +63,38 @@ class QueueFileEditTest {
     @Test fun cancellationAfterActorAcquiresBeforeCallerDispatchRestoresPlayback() = fixture {
         val scheduler = TestCoroutineScheduler()
         val caller = CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler))
+        // runCurrent also drains replies enqueued while it runs. Hold capture until that first
+        // pump has returned, so a fast Main actor cannot run the editor action before cancellation.
+        withContext(Dispatchers.Main) { player.position = 3210 }
+        val capture = dao.gateNextSave()
         var edited = false
         try {
             val request = caller.launch { queues.withFileEdit("one") { edited = true } }
+            fun phase(name: String) = Log.i("EditLeasePhase",
+                "phase=$name edited=$edited completed=${request.isCompleted} cancelled=${request.isCancelled} atNs=${System.nanoTime()}")
             scheduler.runCurrent()
+            capture.entered.await()
+            phase("caller-parked-capture-held")
+            assertFalse("Writer must remain behind the capture gate", edited)
+            assertFalse(request.isCompleted)
+            capture.release.complete(Unit)
+            // Do not advance the caller scheduler: Main may acquire, but delivery stays parked.
             awaitMain { player.clears == 1 && player.mediaItemCount == 0 }
-            assertTrue(runCatching { readers.opening("one") }.isFailure)
+            phase("actor-acquired-caller-parked")
+            assertFalse("Writer must not run before cancellation of undelivered acquisition", edited)
+            assertFalse(request.isCompleted)
+            assertTrue(runCatching { readers.opening("one").closed() }.isFailure)
             request.cancel()
             scheduler.runCurrent()
+            phase("cancel-delivered")
             barrier()
             scheduler.runCurrent()
+            phase("cleanup-acknowledged")
             assertTrue(request.isCompleted)
             assertFalse(edited)
             readers.opening("one").closed()
-            assertRestored(expectedClears = 1)
-        } finally { caller.cancel() }
+            assertRestored(expectedClears = 1, position = 3210)
+        } finally { capture.release.complete(Unit); caller.cancel() }
     }
 
     @Test fun cancellationWaitsForWriterCleanupAndDoesNotReleaseANewerOwner() = fixture {
