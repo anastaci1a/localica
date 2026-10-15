@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -39,14 +38,14 @@ class SelectorRegistrationTest {
             Box(Modifier.size(280.dp, 240.dp).testTag("contact-scene")) {
                 Canvas(Modifier.align(Alignment.Center).size(220.dp, 120.dp)
                     .selectorDeformation({ shape }, vertical, { wall })) { drawRect(Color.Red) }
-                PresentationMarker(presentedStage)
+                PresentationMarker { presentedStage }
             }
         }
         for (axis in listOf(false, true)) for (edge in listOf(-1f, 1f)) {
             var restingEdge = 0
             for ((index, next) in listOf(GlassShape(), GlassShape(-.15f, -.2f), GlassShape(.04f, .08f)).withIndex()) {
                 compose.runOnIdle { vertical = axis; wall = edge; shape = next; presentedStage++ }
-                val pixels = presentedPixels("contact-scene", presentedStage) { view }
+                val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("contact-scene"), presentedStage) { view }
                 val extent = if (axis) pixels.height else pixels.width
                 val covered = (0 until extent).filter { position ->
                     val pixel = if (axis) pixels[pixels.width / 2, position] else pixels[position, pixels.height / 2]
@@ -89,7 +88,7 @@ class SelectorRegistrationTest {
                             }
                             LiquidGlassSurface(Modifier.align(Alignment.Center).size(220.dp, 120.dp)
                                 .selectorDeformation({ shape }, vertical).testTag("registration-lens"), pressFeedback = false, shadow = false, body = { shape })
-                            PresentationMarker(presentedStage)
+                            PresentationMarker { presentedStage }
                         }
                     }
                 }
@@ -108,7 +107,7 @@ class SelectorRegistrationTest {
         val failures = mutableListOf<String>()
         for (axis in listOf(false, true)) for ((stage, next) in stages) {
             compose.runOnIdle { vertical = axis; shape = next; presentedStage++ }
-            val pixels = presentedPixels("registration-scene", presentedStage) { sceneView }
+            val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("registration-scene"), presentedStage) { sceneView }
             var red = 0f; var blue = 0f
             for (y in pixels.height / 2 - 1..pixels.height / 2 + 1)
                 for (x in pixels.width / 2 - 1..pixels.width / 2 + 1) {
@@ -122,31 +121,6 @@ class SelectorRegistrationTest {
             if (!(red / 9 > .6f && blue / 9 < .3f)) failures += result
         }
         assertTrue("Symmetric lens center must retain its red landmark at every stage:\n" + failures.joinToString("\n"), failures.isEmpty())
-    }
-
-    @Composable
-    private fun PresentationMarker(stage: Int) {
-        Canvas(Modifier.size(8.dp)) { drawRect(Color(stage * 8 / 255f, 1f, 0f)) }
-    }
-
-    private fun presentedPixels(tag: String, stage: Int, view: () -> View): PixelMap {
-        lateinit var pixels: PixelMap
-        var observed = Color.Transparent
-        try {
-            // UiAutomation may return the previous compositor frame on API26,
-            // especially for a Dialog. Wait for an unrelated opaque marker in
-            // this same frame, never for the lens result under test.
-            compose.waitUntil(5000) {
-                pixels = capturePopupPixels(compose, compose.onNodeWithTag(tag), view)
-                observed = pixels[2, 2]
-                observed.green > .9f && observed.blue < .1f &&
-                    kotlin.math.abs(observed.red - stage * 8 / 255f) < .01f
-            }
-        } catch (failure: Throwable) {
-            android.util.Log.e("SelectorRegistration", "Presentation timeout: tag=$tag requestedStage=$stage observed=$observed")
-            throw failure
-        }
-        return pixels
     }
 
 }
