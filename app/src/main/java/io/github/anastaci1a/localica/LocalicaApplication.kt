@@ -29,7 +29,7 @@ class LocalicaApplication : Application() {
     }
     val nativeReaders = io.github.anastaci1a.localica.playback.NativeReaders()
     val queues by lazy {
-        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6).build().queues(),
+        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6, QueueDatabase.MIGRATION_6_7).build().queues(),
             QueuePreferences(this), library, readers = nativeReaders)
     }
     val library by lazy {

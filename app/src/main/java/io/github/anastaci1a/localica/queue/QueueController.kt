@@ -365,7 +365,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun settings(value: QueueSettings) = settings { value }
     /** Read-modify-write runs in the actor; callers capture only their intended field values. */
     fun settings(change: (QueueSettings) -> QueueSettings) = submit {
-        capture()
+        // Capture and publish the native mode change without an intervening cursor-only disk wait.
+        captureNativeState()
         val value = change(state.value.settings)
         require(value.maximum == null || value.maximum > 0)
         require(value.previousThresholdSeconds in 1..60)
@@ -645,6 +646,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val arrival = arrivals.removeFirst()
             val queue = result.queues.firstOrNull { it.id == arrival.queueId } ?: continue
             val arrived = queue.journey?.arrive(arrival.token, queue.entries.map { it.id }) ?: continue
+            if (arrived.current?.token != arrival.token) continue
             result = result.update(queue.copy(journey = arrived, currentEntryId = arrived.current?.entryId, positionMs = 0))
         }
         val queue = result.active ?: return result
@@ -656,7 +658,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         return result.update(queue.copy(journey = arrived, currentEntryId = arrived.current?.entryId,
             positionMs = source.currentPosition.coerceAtLeast(0)))
     }
-    private suspend fun capture() {
+    private fun captureNativeState() {
         mutable.update { it.copy(library = capturedLibrary(player)) }
         player?.let { attached ->
             val modes = state.value.settings
@@ -667,8 +669,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                     repeat = if (modes.advancedRepeat == null) repeat else modes.repeat))
                 mutable.update { it.copy(library = reconcile(it.library)) }
             }
-            syncTimeline()
         }
+    }
+    private suspend fun capture() {
+        captureNativeState()
+        syncTimeline()
         persist(state.value.library)
     }
     private suspend fun save(next: QueueLibrary) {
