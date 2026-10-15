@@ -11,6 +11,29 @@ import org.junit.Test
 import java.io.File
 
 class CoverImagesTest {
+    @Test fun deviceEnumerationIsOptionalAndCannotHideRememberedImages() = runBlocking {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = base.getSharedPreferences("cover-images", 0)
+        val original = preferences.getString("recent", null)
+        var resolverRequests = 0
+        val context = object : android.content.ContextWrapper(base) {
+            override fun getContentResolver(): android.content.ContentResolver {
+                resolverRequests++
+                throw SecurityException("Photo access revoked")
+            }
+        }
+        try {
+            preferences.edit().remove("recent").commit()
+            val images = CoverImages(context)
+            val remembered = "content://previously-selected/image"
+            images.remember(remembered)
+            assertEquals(listOf(remembered), images.recent(includeDevicePhotos = false))
+            assertEquals(0, resolverRequests)
+            assertEquals(listOf(remembered), images.recent(includeDevicePhotos = true))
+            assertEquals(1, resolverRequests)
+        } finally { preferences.edit().putString("recent", original).commit() }
+    }
+
     @Test fun importedPicturesHonorOrientationAndDecodeBounds() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val file = File(context.cacheDir, "cover-orientation.jpg")
