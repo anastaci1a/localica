@@ -11,7 +11,7 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.queue.*
 
 @Composable
-internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit, onApply: (QueueSettings) -> Unit) {
+internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit, onApply: ((QueueSettings) -> QueueSettings) -> Unit) {
     var advanced by remember { mutableStateOf(settings.advancedRepeat != null) }
     var simple by remember { mutableStateOf(settings.repeat) }
     var policy by remember { mutableStateOf(settings.advancedRepeat ?: AdvancedRepeat(
@@ -37,7 +37,9 @@ internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit,
             ActionTextButton(onClick = { simple = QueueRepeat.Off; policy = AdvancedRepeat() }) { Text("Reset") }
         }
     }, confirmButton = { ActionTextButton(onClick = {
-        onApply(settings.copy(advancedRepeat = if (advanced) policy else null, repeat = if (advanced) policy.repeat else simple)); onDismiss()
+        val appliedPolicy = if (advanced) policy else null
+        val appliedRepeat = if (advanced) policy.repeat else simple
+        onApply { it.copy(advancedRepeat = appliedPolicy, repeat = appliedRepeat) }; onDismiss()
     }) { Text("Apply") } }, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
