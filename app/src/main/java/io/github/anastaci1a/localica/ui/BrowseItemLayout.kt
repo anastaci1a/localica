@@ -23,7 +23,7 @@ import io.github.anastaci1a.localica.browse.*
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: BrowseCellGeometry,
-    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true) {
+    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap()) {
     val dense = geometry.dense
     val gallery = style.presentation != Presentation.List
     val from = pinch?.source
@@ -58,7 +58,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                 maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis)
         }
         Box(Modifier.morph().testTag("browse-info-${item.key}")) {
-            if (showInformation) item.information(style)?.let { Text(it,
+            if (showInformation) item.information(style, inheritedInformation)?.let { Text(it,
                 color = if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified,
                 style = MaterialTheme.typography.bodySmall, maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis) }
         }

@@ -71,6 +71,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val editTags = LocalTagEdit.current
     val sorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { BrowsePreferences(context) }
+    var inheritedInformation by remember(preferences) { mutableStateOf(preferences.informationStyles()) }
+    DisposableEffect(preferences) {
+        val unsubscribe = preferences.observeInformation { inheritedInformation = it }
+        onDispose(unsubscribe)
+    }
     val currentRoute by rememberUpdatedState(route)
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
     DisposableEffect(preferences, route.key, route.filter) {
@@ -480,7 +485,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             }
                         )) {
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
-                                showInformation = popupDismiss == null,
+                                showInformation = popupDismiss == null, inheritedInformation = inheritedInformation,
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
                         }
 
