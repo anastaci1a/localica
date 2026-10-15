@@ -26,6 +26,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private val timeline = QueueTimeline()
     private var syncingTimeline = false
     private data class Arrival(val queueId: String, val token: String)
+    /** Only synchronous normalization may create this value; publication consumes its exact source state. */
+    private class PreparedPlayback(val source: QueueUiState, val library: QueueLibrary)
     private val arrivals = ArrayDeque<Arrival>()
     private var loadedQueueId: String? = null
     private var generation = 0
@@ -448,10 +450,16 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         capture()
     }
     private suspend fun moveTo(visit: QueueVisit) {
-        val queue = state.value.library.active ?: return
-        val arrived = journey(queue).arrive(visit.token, queue.entries.map { it.id })
+        val source = state.value
+        val queue = source.library.active ?: return
+        val ids = queue.entries.map { it.id }
+        val arrived = journey(queue, ids).arrive(visit.token, ids)
         val next = queue.copy(journey = arrived, currentEntryId = arrived.current?.entryId, positionMs = 0)
-        saveStartingPlayback(state.value.library.update(next)) { syncTimeline(seek = true) }
+        // Arrival already normalized this active journey. Inactive/restored queues still need their usual repair.
+        val prepared = PreparedPlayback(source, source.library.copy(queues = source.library.queues.map {
+            if (it.id == queue.id) next else reconcileQueue(it)
+        }))
+        savePreparedPlayback(prepared) { syncTimeline(seek = true) }
     }
 
     fun dismissProblem() { mutable.update { it.copy(problem = null) } }
@@ -502,15 +510,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         activate(false)
     }
 
-    private fun journey(queue: ListeningQueue): QueueJourney {
-        val ids = queue.entries.map { it.id }
+    private fun journey(queue: ListeningQueue, ids: List<String> = queue.entries.map { it.id }): QueueJourney {
         val modes = JourneyModes.from(state.value.settings)
         return queue.journey?.reconcile(ids, queue.currentEntryId, modes)
             ?: QueueJourney.start(ids, queue.currentEntryId, modes)
     }
-    private fun reconcile(value: QueueLibrary) = value.copy(queues = value.queues.map { queue ->
+    private fun reconcileQueue(queue: ListeningQueue) =
         if (queue.journey == null) queue else queue.copy(journey = journey(queue))
-    })
+    private fun reconcile(value: QueueLibrary) = value.copy(queues = value.queues.map(::reconcileQueue))
     private fun capturedLibrary(source: Player?): QueueLibrary {
         var result = state.value.library
         while (arrivals.isNotEmpty()) {
@@ -555,7 +562,13 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     private suspend fun saveStartingPlayback(next: QueueLibrary, start: suspend () -> Unit) {
-        mutable.update { it.copy(library = reconcile(next), problem = null) }
+        savePreparedPlayback(PreparedPlayback(state.value, reconcile(next)), start)
+    }
+    private suspend fun savePreparedPlayback(prepared: PreparedPlayback, start: suspend () -> Unit) {
+        check(state.value.library === prepared.source.library && state.value.settings === prepared.source.settings) {
+            "Playback preparation no longer matches the queue state"
+        }
+        mutable.update { it.copy(library = prepared.library, problem = null) }
         // Audio starts before persistence; failed writes remain retryable from the durable snapshot.
         try { start() } finally { persist(state.value.library) }
     }
