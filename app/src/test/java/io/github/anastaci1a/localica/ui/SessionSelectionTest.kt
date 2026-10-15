@@ -25,6 +25,20 @@ class SessionSelectionTest {
         assertEquals(SongSelectionTarget(source, listOf(row)), item.selectionTarget(source))
         assertEquals(SongSelectionTarget(null, listOf(row)), item.selectionTarget())
     }
+    @Test fun standaloneSongMembershipDoesNotBorrowPlaylistOccurrenceButCollectionsSummarizeTracks() {
+        val source = MediaRef(MediaKind.Playlist, "playlist")
+        val row = SongRow(track.id, track)
+        val song = BrowserItem(MediaRef(MediaKind.Song, track.id), track.title, null, listOf(row), row)
+        val collection = BrowserItem(source, "Playlist", null, listOf(row))
+        val state = SessionSelection()
+        state.select(source, listOf(row))
+        assertEquals(0, state.selectedCount(song))
+        assertEquals(1, state.selectedCount(song, source))
+        assertEquals(1, state.selectedCount(collection))
+        state.toggle(null, row)
+        assertEquals(1, state.selectedCount(song))
+        assertEquals(2, state.entries.size)
+    }
     @Test fun selectingAPlaylistInItsCatalogRetainsItsOccurrencesInsideThePlaylist() {
         val source = MediaRef(MediaKind.Playlist, "playlist")
         val rows = listOf(SongRow("entry1", track, source.id), SongRow("entry2", track, source.id))

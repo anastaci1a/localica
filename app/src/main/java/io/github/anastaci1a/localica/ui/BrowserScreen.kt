@@ -279,8 +279,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     BackHandler(selectionVisible && session.active && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) {
         session.clear()
     }
-    val selectedTracks = session.trackIds
-    SideEffect { if (selectionVisible && !localSearchOpen) { session.visible = result.rows; session.source = route.collection } }
+    BindSelectionScope(session, route.collection, result.rows, selectionVisible && !localSearchOpen)
     val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
     val dragHost = LocalSongDragHost.current
     SideEffect {
@@ -405,8 +404,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val item = entry
                     val itemIndex = itemIndices[item.key] ?: 0
                     val current = route.collection?.kind == MediaKind.Queue && item.row != null && item.row.id == playingEntryId
-                    val selectedCount = if (item.row != null) { if (session.contains(route.collection, item.row.id)) 1 else 0 }
-                        else item.songs.count { it.track.id in selectedTracks }
+                    val selectedCount = session.selectedCount(item, route.collection)
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
                     Column(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer {

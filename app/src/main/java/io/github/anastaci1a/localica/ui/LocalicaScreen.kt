@@ -278,7 +278,7 @@ fun LocalicaScreen(
                         { item, songs ->
                             if (item.row != null) queueController?.tap(songs.map { it.track }, songs.indexOfFirst { it.id == item.row.id }, sourceName = "Pinned songs")
                             else openCollection(item)
-                        }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) }, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, playlistController = playlistController, queues = queueController)
+                        }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) }, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage, playlistController = playlistController, queues = queueController)
                 } else BrowserScreen(library, playlist, route, { navigation = navigation.update(it) },
                     ::openCollection,
                     { settingsCategory = "Folders to scan"; settingsOpen = true }, { rows, index, scope ->
