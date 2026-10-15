@@ -38,10 +38,10 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
             (Build.VERSION.SDK_INT >= 34 && granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED))
         else granted(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
-    val recent by produceState(emptyList<String>(), revision, hasPermission) { value = if (hasPermission) images.recent() else emptyList() }
+    val recent by produceState(emptyList<String>(), revision, hasPermission) { value = images.recent(includeDevicePhotos = hasPermission) }
     fun chosen(uri: Uri?) { if (uri != null) {
         runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        images.remember(uri.toString()); cropUri = uri.toString()
+        images.remember(uri.toString()); revision++; cropUri = uri.toString()
     } }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), ::chosen)
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
@@ -49,7 +49,7 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     if (cropUri == null) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
-            if (hasPermission && recent.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (recent.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
                     val cover by produceState<android.graphics.Bitmap?>(null, uri) {
                         value = runCatching { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
@@ -58,7 +58,7 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
                 }
             }
             if (!hasPermission) {
-            Text("Allow photo access to see recent images here.", style = MaterialTheme.typography.bodySmall)
+            Text("Allow photo access to also see recent device photos.", style = MaterialTheme.typography.bodySmall)
             GlassActionButton(R.drawable.ic_albums, "Allow recent photos", Modifier.fillMaxWidth()) { permission.launch(when {
                 Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
                 Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
