@@ -325,8 +325,15 @@ class BrowsePinchTest {
     }
 
     private fun waitForView(label: String) {
-        compose.waitUntil(5000) { compose.onNodeWithTag("browser-list").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == label }
-        compose.waitForIdle()
+        try {
+            compose.waitUntil(5000) { compose.onNodeWithTag("browser-list").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == label }
+            compose.waitForIdle()
+        } catch (failure: Throwable) {
+            runCatching {
+                android.util.Log.e("BrowsePinchTest", "Expected view: $label; ${compose.onNodeWithTag("browser-list").printToString()}")
+            }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
     }
 
     private fun TouchInjectionScope.pinch(zoomIn: Boolean, y: Float = centerY) {
