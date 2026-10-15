@@ -41,6 +41,7 @@ internal class LensRenderer {
         uniform float2 backdropOffset;
         $GlassColorShader
         $BoundaryOpticsShader
+        $PressIlluminationShader
         float3 geometry(float2 p) {
             if (fieldMode > 0.5) {
                 float3 f = float3(field.eval((p - fieldOrigin) * fieldScale).rgb);
@@ -109,6 +110,8 @@ internal class LensRenderer {
                 float alpha = float(sampled.a);
                 float3 color = float3(sampled.rgb) / max(alpha, 0.0001);
                 color = glassColor(color, whiteTint, tone);
+                if (pressLight.x > 0.0 && f.x >= 0.0)
+                    color = pressColor(color, p, tone.z > 0.5 ? 1.0 - tone.x : 1.0);
                 sampled = ink + half4(half3(color * alpha), half(alpha)) * (1.0 - ink.a);
             }
             float alpha = float(sampled.a);
@@ -142,7 +145,10 @@ internal class LensRenderer {
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, power: Float = 1f,
         whiteTint: Float = 0f, illumination: Float = 1f, map: LensDistanceMap? = null,
         origin: Offset = Offset.Zero, atlas: LensAtlas? = null, flattening: Float = 0f,
-        tone: GlassTone = GlassTone(), boundaryProfile: BoundaryOptics? = null): RenderEffect {
+        tone: GlassTone = GlassTone(), boundaryProfile: BoundaryOptics? = null,
+        pressProfile: PressIllumination? = null): RenderEffect {
+        require(pressProfile == null || map == null) { "Press illumination experiment requires analytic geometry" }
+        val press = pressProfile?.resolve(geometry)
         require(boundaryProfile == null || (map == null && illumination == 0f && power in 0f..1f)) {
             "Experimental boundary optics requires analytic geometry, no illumination, and bounded power"
         }
@@ -157,7 +163,8 @@ internal class LensRenderer {
             boundaryProfile?.strength ?: 0f, boundaryProfile?.falloff ?: 1f,
             boundaryProfile?.coreStart ?: .3f, boundaryProfile?.coreEnd ?: .65f,
             boundaryProfile?.guard ?: .15f, boundaryProfile?.softness ?: .01f,
-            if (boundaryProfile == null) 0f else 1f)
+            if (boundaryProfile == null) 0f else 1f,
+            press?.amount ?: 0f, press?.origin?.x ?: 0f, press?.origin?.y ?: 0f, press?.spread ?: 1f)
         if (state == last && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
@@ -172,6 +179,8 @@ internal class LensRenderer {
         shader.setFloatUniform("boundaryProfile", boundaryProfile?.strength ?: 0f, boundaryProfile?.falloff ?: 1f,
             boundaryProfile?.coreStart ?: .3f, boundaryProfile?.coreEnd ?: .65f)
         shader.setFloatUniform("boundaryGuard", boundaryProfile?.guard ?: .15f, boundaryProfile?.softness ?: .01f)
+        shader.setFloatUniform("pressLight", press?.amount ?: 0f, press?.origin?.x ?: 0f,
+            press?.origin?.y ?: 0f, press?.spread ?: 1f)
         shader.setFloatUniform("power", power)
         shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)
