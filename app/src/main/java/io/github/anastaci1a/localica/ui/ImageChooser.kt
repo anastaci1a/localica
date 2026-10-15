@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import android.Manifest
-import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -39,9 +38,9 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
         else granted(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
     val recent by produceState(emptyList<String>(), revision, hasPermission) { value = images.recent(includeDevicePhotos = hasPermission) }
+    var unavailableRecent by remember(recent, revision) { mutableStateOf(false) }
     fun chosen(uri: Uri?) { if (uri != null) {
-        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        images.remember(uri.toString()); revision++; cropUri = uri.toString()
+        runCatching { images.selected(uri.toString()) }; revision++; cropUri = uri.toString()
     } }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), ::chosen)
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
@@ -49,10 +48,14 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     if (cropUri == null) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
+            if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
             if (recent.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
                     val cover by produceState<android.graphics.Bitmap?>(null, uri) {
-                        value = runCatching { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
+                        value = try { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+                        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                        catch (_: Exception) { null }
+                        if (value == null) unavailableRecent = true
                     }
                     cover?.let { Image(it.asImageBitmap(), "Choose recent image", Modifier.size(104.dp).clip(RoundedCornerShape(16.dp)).clickable { chosen(Uri.parse(uri)) }, contentScale = ContentScale.Crop) }
                 }
@@ -72,5 +75,11 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
             GlassActionButton(R.drawable.ic_folder, "Browse files", Modifier.fillMaxWidth()) { files.launch(arrayOf("image/*")) }
         }
     }, confirmButton = {}, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
-    cropUri?.let { uri -> ArtworkCrop(uri, { cropUri = null }, onChosen) }
+    cropUri?.let { uri ->
+        DisposableEffect(uri) {
+            val lease = images.retain(uri)
+            onDispose { lease.close() }
+        }
+        ArtworkCrop(uri, { cropUri = null }, onChosen)
+    }
 }
