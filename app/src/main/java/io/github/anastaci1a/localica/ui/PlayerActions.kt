@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -50,8 +51,16 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
                     advancedRepeat?.queueEnd == QueueEnd.NextQueue -> "Q"
                     else -> null
                 }
-                if (badge != null) Text(badge, fontSize = 10.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, modifier = Modifier.clearAndSetSemantics {})
+                // The icon owns the single live description. Decorative variants keep
+                // fixed bounds and fade independently, even when reversed mid-transition.
+                Box(Modifier.size(24.dp).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+                    listOf("1", "■", "Ⅱ", "Q").forEach { variant ->
+                        val opacity by animateControlStateFloat(if (badge == variant) 1f else 0f, "Repeat badge $variant")
+                        if (opacity > 0f) Text(variant, fontSize = 10.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            modifier = Modifier.graphicsLayer { alpha = opacity })
+                    }
+                }
             }
         }
     }
@@ -78,6 +87,7 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                         else -> false
                     }
                     val mode = action in setOf(PlayerAction.Shuffle, PlayerAction.Repeat, PlayerAction.Lyrics, PlayerAction.Pin)
+                    val opacity by animateControlStateFloat(if (mode && !active) .5f else 1f, "Player action state")
                     Box(Modifier.fillMaxWidth().height(48.dp).clip(Corners.card)
                         .testTag("player-slot-${slot.key}")
                         .semantics {
@@ -88,7 +98,7 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                             onLongClickLabel = if (action == PlayerAction.Repeat && onRepeatOptions != null) "Repeat options" else "Customize player actions",
                             onLongClick = if (action == PlayerAction.Repeat && onRepeatOptions != null) onRepeatOptions else onCustomize),
                         contentAlignment = Alignment.Center) {
-                        if (action != null) CompositionLocalProvider(LocalContentColor provides LocalContentColor.current.copy(alpha = if (mode && !active) .5f else 1f)) {
+                        if (action != null) CompositionLocalProvider(LocalContentColor provides LocalContentColor.current.copy(alpha = LocalContentColor.current.alpha * opacity)) {
                             PlayerActionGlyph(action, label(action), repeat, count, advancedRepeat)
                         }
                     }
