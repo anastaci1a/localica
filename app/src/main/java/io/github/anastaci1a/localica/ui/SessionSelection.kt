@@ -26,6 +26,9 @@ internal class SessionSelection : ViewModel() {
     var visible: List<SongRow> = emptyList()
     var source: MediaRef? = null
     fun contains(source: MediaRef?, id: String) = source to id in occurrences
+    fun selectedCount(item: BrowserItem, containingSource: MediaRef? = null): Int =
+        item.row?.let { if (contains(containingSource, it.id)) 1 else 0 }
+            ?: item.songs.count { it.track.id in trackIds }
     fun select(source: MediaRef?, rows: List<SongRow>) {
         if (!active) collapsed = false
         active = true
@@ -45,6 +48,12 @@ internal class SessionSelection : ViewModel() {
     fun clear() { entries.clear(); active = false; collapsed = false }
 }
 internal val LocalSessionSelection = staticCompositionLocalOf<SessionSelection?> { null }
+
+/** Only the settled, uncovered list owns All/Range; offscreen pages retain membership. */
+@Composable
+internal fun BindSelectionScope(session: SessionSelection, source: MediaRef?, rows: List<SongRow>, active: Boolean) {
+    SideEffect { if (active) { session.visible = rows; session.source = source } }
+}
 
 @Composable
 internal fun SessionSelectionPanel(session: SessionSelection, queues: io.github.anastaci1a.localica.queue.QueueController?,
