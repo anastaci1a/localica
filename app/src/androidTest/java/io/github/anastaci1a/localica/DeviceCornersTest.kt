@@ -34,14 +34,27 @@ class DeviceCornersTest {
 
     @Test fun reportedCornersPreserveAbsenceAsymmetryAndWindowUpdates() {
         if (Build.VERSION.SDK_INT >= 31) {
-            val empty = WindowInsets.Builder().build()
-            assertEquals(DeviceCorners(), deviceCorners(empty, density))
-            val rounded = WindowInsets.Builder()
-                .setRoundedCorner(RoundedCorner.POSITION_TOP_LEFT, RoundedCorner(RoundedCorner.POSITION_TOP_LEFT, 40, 40, 40))
-                .setRoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT, RoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT, 60, 540, 940))
-                .build()
-            assertEquals(DeviceCorners(20.dp, 0.dp, 30.dp, 0.dp), deviceCorners(rounded, density))
-            assertEquals("A later square window cannot retain the old device's radii", DeviceCorners(), deviceCorners(empty, density))
+            val positions = listOf(RoundedCorner.POSITION_TOP_LEFT, RoundedCorner.POSITION_TOP_RIGHT,
+                RoundedCorner.POSITION_BOTTOM_RIGHT, RoundedCorner.POSITION_BOTTOM_LEFT)
+            val builder = WindowInsets.Builder()
+            val empty = builder.build()
+            val original = positions.map { empty.getRoundedCorner(it) }
+            try {
+                assertEquals(DeviceCorners(), deviceCorners(empty, density))
+                val rounded = builder
+                    .setRoundedCorner(RoundedCorner.POSITION_TOP_LEFT, RoundedCorner(RoundedCorner.POSITION_TOP_LEFT, 40, 40, 40))
+                    .setRoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT, RoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT, 60, 540, 940))
+                    .build()
+                assertEquals(DeviceCorners(20.dp, 0.dp, 30.dp, 0.dp), deviceCorners(rounded, density))
+                // Framework builders can alias the same mutable corner container.
+                // Construct an explicitly cleared update instead of reusing an old
+                // supposedly immutable empty fixture; restore shared state below.
+                positions.forEach { builder.setRoundedCorner(it, null) }
+                assertEquals("A later square window cannot retain the old device's radii",
+                    DeviceCorners(), deviceCorners(builder.build(), density))
+            } finally {
+                positions.forEachIndexed { index, position -> builder.setRoundedCorner(position, original[index]) }
+            }
         }
     }
 
