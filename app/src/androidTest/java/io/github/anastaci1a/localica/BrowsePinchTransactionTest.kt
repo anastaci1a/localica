@@ -98,7 +98,7 @@ class BrowsePinchTransactionTest {
         val route = BrowseRoute(MainTab.Songs)
         val original = prefs.read(route)
         val overridden = prefs.overridden(route)
-        val compact = BrowseStyle(listSize = ListSize.Compact)
+        val compact = BrowseStyle(listSize = ListSize.Smallest)
         val gallery = BrowseStyle(presentation = Presentation.Large, itemsPerRow = 1)
         gestureTag = "browser-list"
         prefs.write(route, compact, false)
@@ -109,7 +109,7 @@ class BrowsePinchTransactionTest {
                     PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
                     queryDispatcher = Dispatchers.Unconfined)
             } }
-            for ((source, outward, label) in listOf(Triple(compact, true, "List, Compact"), Triple(gallery, false, "Gallery, 1 column"))) {
+            for ((source, outward, label) in listOf(Triple(compact, true, "List, Smallest"), Triple(gallery, false, "Gallery, 1 column"))) {
                 compose.runOnIdle { prefs.write(route, source, false) }
                 waitForView(label)
                 val list = compose.onNodeWithTag("browser-list")
@@ -120,7 +120,7 @@ class BrowsePinchTransactionTest {
                 compose.waitUntil(5000) {
                     compose.mainClock.advanceTimeByFrame()
                     list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) ==
-                        if (outward) "List, Normal" else "Gallery, 2 columns"
+                        if (outward) "List, Small" else "Gallery, 2 columns"
                 }
                 list.performTouchInput { spread(if (outward) 50f else 110f); finish() }
                 compose.mainClock.autoAdvance = true
@@ -140,7 +140,7 @@ class BrowsePinchTransactionTest {
     }
 
     @Test fun bothEndpointTransactionsFinishHandoffBeforeBoundaryGesture() {
-        var style by mutableStateOf(BrowseStyle(listSize = ListSize.Compact))
+        var style by mutableStateOf(BrowseStyle(listSize = ListSize.Smallest))
         val motion = BrowsePinchMotion()
         val route = BrowseRoute(MainTab.Songs)
         val commits = mutableListOf<BrowseStyle>()
@@ -151,7 +151,7 @@ class BrowsePinchTransactionTest {
                 onCommit = { commits += it; style = it }, onAnchor = {}))
         }
         val node = compose.onNodeWithTag("pinch")
-        for ((source, outward) in listOf(BrowseStyle(listSize = ListSize.Compact) to true,
+        for ((source, outward) in listOf(BrowseStyle(listSize = ListSize.Smallest) to true,
             BrowseStyle(presentation = Presentation.Large, itemsPerRow = 1) to false)) {
             compose.runOnIdle { style = source }
             node.performTouchInput { begin(outward); spread(if (outward) 110f else 50f) }

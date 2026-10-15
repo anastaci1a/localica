@@ -44,6 +44,22 @@ class WorkflowPersistenceTest {
         } finally { store.edit().clear().commit() }
     }
 
+    @Test fun everyListDensitySurvivesPreferencesReopeningByName() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val route = BrowseRoute(MainTab.Songs)
+        val prefs = BrowsePreferences(context)
+        val original = prefs.read(route)
+        val overridden = prefs.overridden(route)
+        try {
+            for (size in ListSize.densityOrder) {
+                prefs.write(route, original.copy(listSize = size, extraInfo = ExtraInfo.Artist), false)
+                val restored = BrowsePreferences(context).read(route)
+                assertEquals(size, restored.listSize)
+                assertEquals(ExtraInfo.Artist, restored.extraInfo)
+            }
+        } finally { prefs.write(route, original, overridden) }
+    }
+
     @Test fun sortedOccurrencesAndManualBaselineSurviveReopeningBothStores() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val qName = "sorted-queue-test.db"; val pName = "sorted-playlist-test.db"
