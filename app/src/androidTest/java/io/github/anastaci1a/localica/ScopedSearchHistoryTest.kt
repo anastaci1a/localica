@@ -146,7 +146,8 @@ class ScopedSearchHistoryTest {
         pressSystemBack() // Empty scoped search closes even with completed history.
         awaitClosed()
         open()
-        editor.assertTextEquals("")
+        editor.assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
         pressSystemBack()
         awaitClosed()
     }
@@ -162,7 +163,8 @@ class ScopedSearchHistoryTest {
         assertTrue(device.click(2, device.displayHeight / 2))
         awaitClosed()
         open()
-        editor.assertTextEquals("")
+        editor.assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
         pressSystemBack()
         awaitClosed()
     }
