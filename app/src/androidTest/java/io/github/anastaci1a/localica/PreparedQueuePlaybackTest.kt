@@ -70,7 +70,7 @@ class PreparedQueuePlaybackTest {
             val readyAfter = SystemClock.elapsedRealtime() - requestedAt
             val committedAt = checkpoint(after)
             // Diagnostic wall times include polling/dispatch; they are not physical-device audio latency budgets.
-            Log.i("QueueScale", "entries=13000 action=$action readyMs=$readyAfter checkpointMs=${committedAt - requestedAt} checkpointSource=${if (after == null) "restore-read" else "transaction"}")
+            Log.i("QueueScale", "entries=13000 action=$action readyMs=$readyAfter checkpointMs=${committedAt - requestedAt} checkpointSource=${if (after == null) "restored-state" else "transaction"}")
             assertEquals(visit, runBlocking { db.queues().read().active!!.journey!!.current })
             instrumentation.runOnMainSync { assertFalse(player.playWhenReady); assertTrue(player.mediaItemCount <= 129) }
         }
