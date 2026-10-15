@@ -66,10 +66,11 @@ class SearchSourceRevisionTest {
         fun ordering(ascending: Boolean) = BrowseSortSnapshot.fromValues(mapOf(
             "contents.Album.sort" to "Title", "contents.Album.ascending" to ascending))
         var sorts by mutableStateOf(ordering(true))
+        val route = BrowseRoute(MainTab.Albums)
         var shown: BrowsePresentationState? = null
         compose.setContent {
             val state = rememberBrowsePresentation(library, emptyList(), emptyList(), LibraryFilters(),
-                BrowseRoute(MainTab.Albums), BrowseStyle(), true, dispatcher, sorts)
+                route, BrowseStyle(), true, dispatcher, sorts)
             SideEffect { shown = state }
         }
         fun nextQuery() = requireNotNull(tasks.poll(5, TimeUnit.SECONDS)) { "Expected queued query" }
