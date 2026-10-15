@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
+import io.github.anastaci1a.localica.browse.BrowseCellGeometry
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.navigation.MediaRef
@@ -23,7 +24,7 @@ internal const val DropGapKey = "localica-drop-gap"
 
 @Stable
 internal class SongDrag(val original: List<BrowserItem>, val moving: List<BrowserItem>,
-    val initialBounds: Map<String, Rect>, val grab: Offset, point: Offset, val cardSize: androidx.compose.ui.geometry.Size, val style: BrowseStyle, val dense: Boolean,
+    val initialBounds: Map<String, Rect>, val grab: Offset, point: Offset, val cardSize: androidx.compose.ui.geometry.Size, val style: BrowseStyle, val cellGeometry: BrowseCellGeometry,
     val colors: androidx.compose.material3.ColorScheme?, val ink: androidx.compose.ui.graphics.Color) {
     val keys = moving.map { it.key }.toSet()
     val remaining = original.filterNot { it.key in keys }
@@ -44,7 +45,7 @@ internal class SongDrag(val original: List<BrowserItem>, val moving: List<Browse
 internal class SongDragState(val grid: LazyGridState, private val scope: CoroutineScope) {
     var items: List<BrowserItem> = emptyList()
     var style = BrowseStyle()
-    var dense = false
+    var cellGeometry = BrowseCellGeometry(1)
     var colors: androidx.compose.material3.ColorScheme? = null
     var ink = androidx.compose.ui.graphics.Color.Unspecified
     val itemCoordinates = mutableMapOf<String, LayoutCoordinates>()
@@ -83,7 +84,7 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
         val held = rects[item.key] ?: return false
         val moving = items.filter { it.key in selected }
         if (moving.isEmpty()) return false
-        drag = SongDrag(items, moving, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size, style, dense, colors, ink)
+        drag = SongDrag(items, moving, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size, style, cellGeometry, colors, ink)
         return true
     }
     fun move(point: Offset) { drag?.takeUnless { it.dropping }?.let { it.pointer = point

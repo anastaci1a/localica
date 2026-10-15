@@ -57,13 +57,22 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
 internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = null, enabled: Boolean = true, anchor: GlassAnchor? = null,
     onClick: () -> Unit) {
     anchor?.captureInk()
-    LiquidGlassSurface(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f)
-        .then(if (anchor == null) Modifier else Modifier.glassAnchor(anchor)), cornerRadius = 20.dp, pressFeedback = enabled) {
-        ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } },
+    val colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+    val headlineStyle = MaterialTheme.typography.bodyLarge
+    val summaryStyle = MaterialTheme.typography.bodyMedium
+    // The modal owns the same foreground while the live trigger is hidden. Capture
+    // its colors and text styles here so nested panels keep their original ink.
+    @Composable fun Foreground(modifier: Modifier = Modifier) {
+        ListItem(headlineContent = { Text(title, style = headlineStyle) },
+            supportingContent = summary?.let { { Text(it, style = summaryStyle) } },
             leadingContent = icon?.let { { Icon(painterResource(it), null, Modifier.size(24.dp)) } },
             trailingContent = { Icon(painterResource(R.drawable.ic_back), null, Modifier.size(20.dp).rotate(180f)) },
-            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-            modifier = Modifier.ownButtonDrag(enabled).clickable(enabled, role = Role.Button, onClick = onClick).heightIn(min = 64.dp))
+            colors = colors, modifier = modifier.heightIn(min = 64.dp))
+    }
+    SideEffect { if (anchor != null) anchor.face = { Foreground() } }
+    LiquidGlassSurface(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f)
+        .then(if (anchor == null) Modifier else Modifier.glassAnchor(anchor)), cornerRadius = 20.dp, pressFeedback = enabled) {
+        Foreground(Modifier.ownButtonDrag(enabled).clickable(enabled, role = Role.Button, onClick = onClick))
     }
 }
 
