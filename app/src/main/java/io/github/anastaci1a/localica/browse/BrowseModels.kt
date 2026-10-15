@@ -203,7 +203,11 @@ internal fun BrowserItem.metadataText(sort: TrackSort): String? = songs.mapNotNu
     }
 }.distinct().sorted().takeIf { it.isNotEmpty() }?.joinToString(", ")
 
-internal fun BrowserItem.information(style: BrowseStyle): String? {
+internal fun BrowserItem.information(style: BrowseStyle, inherited: Map<MediaKind, BrowseStyle> = emptyMap()): String? {
+    if (style.extraInfo == ExtraInfo.Inherited) {
+        val own = inherited[ref.kind] ?: BrowseStyle()
+        return information(own.copy(extraInfo = own.extraInfo.takeUnless { it == ExtraInfo.Inherited } ?: ExtraInfo.Automatic))
+    }
     val info = if (style.extraInfo != ExtraInfo.Automatic) style.extraInfo else
         ExtraInfo.entries.firstOrNull { it.name == style.sort.name } ?: return subtitle
     return when (info) {
@@ -215,7 +219,7 @@ internal fun BrowserItem.information(style: BrowseStyle): String? {
         ExtraInfo.Added -> addedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Modified -> modifiedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Artist, ExtraInfo.AlbumArtist, ExtraInfo.Composer, ExtraInfo.Genre -> metadataText(TrackSort.valueOf(info.name))
-        ExtraInfo.Automatic -> subtitle
+        ExtraInfo.Automatic, ExtraInfo.Inherited -> subtitle
     }
 }
 
