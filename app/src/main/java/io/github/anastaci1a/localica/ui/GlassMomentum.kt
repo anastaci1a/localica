@@ -24,6 +24,14 @@ internal fun glassWallAffinity(position: Float, last: Float): Float {
     return ease((position - last + reach) / reach) - ease((reach - position) / reach)
 }
 
+/** A sign change contains braking that magnitude-only velocity misses. The
+ * correction vanishes with crossing speed, leaving a slow passage through zero
+ * continuous. Callers supply finite bounded speeds and clamp each channel impulse. */
+internal fun glassMotionSpeedChange(previous: Float, current: Float): Float {
+    val change = abs(current) - abs(previous)
+    return if (previous * current < 0f) change - 2f * minOf(abs(previous), abs(current)) else change
+}
+
 /** Position is owned by the gesture; acceleration, contact and pressure drive its shape. */
 internal class GlassMomentum(var damping: Float = 8f) {
     private class Spring {
@@ -58,11 +66,12 @@ internal class GlassMomentum(var damping: Float = 8f) {
     fun advance(velocity: Float, seconds: Float, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f) {
         if (!seconds.isFinite() || seconds <= 0f) return
         val speed = if (velocity.isFinite()) velocity.coerceIn(-30f, 30f) else 0f
+        val speedChange = glassMotionSpeedChange(travelVelocity, speed)
         // Strain is axial: acceleration stretches and braking compresses along
         // travel, independent of whether that travel is leftward or rightward.
-        motion.velocity += ((abs(speed) - abs(travelVelocity)) * .11f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.7f, .7f)
+        motion.velocity += (speedChange * .11f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.7f, .7f)
         // Acceleration flattens the cap; braking lets it rise. Contact sustains flattening.
-        depth.velocity -= ((abs(speed) - abs(travelVelocity)) * .035f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.35f, .35f)
+        depth.velocity -= (speedChange * .035f * impulseScale.coerceIn(1f, 1.8f)).coerceIn(-.35f, .35f)
         travelVelocity = speed
         this.pressure.target = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f
