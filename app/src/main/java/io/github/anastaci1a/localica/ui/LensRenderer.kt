@@ -27,6 +27,7 @@ internal class LensRenderer {
         uniform float span;
         uniform float3 optics;
         uniform float power;
+        uniform float boundaryEnabled;
         uniform float whiteTint;
         uniform float illumination;
         uniform float3 tone;
@@ -39,6 +40,7 @@ internal class LensRenderer {
         uniform float2 backdropSize;
         uniform float2 backdropOffset;
         $GlassColorShader
+        $BoundaryOpticsShader
         float3 geometry(float2 p) {
             if (fieldMode > 0.5) {
                 float3 f = float3(field.eval((p - fieldOrigin) * fieldScale).rgb);
@@ -97,6 +99,7 @@ internal class LensRenderer {
                 float exitZ = sqrt(max(1.0 - dot(exiting, exiting), 0.01));
                 float2 displacement = (ray.xy * height / max(-ray.z, 0.12)
                     + exiting * optics.z / exitZ) * power;
+                if (boundaryEnabled > 0.5) displacement = boundaryOffset(p) * power;
                 float2 lookup = p + displacement;
                 if (foregroundOffset > 0.0) {
                     lookup += backdropOffset;
@@ -139,7 +142,10 @@ internal class LensRenderer {
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, power: Float = 1f,
         whiteTint: Float = 0f, illumination: Float = 1f, map: LensDistanceMap? = null,
         origin: Offset = Offset.Zero, atlas: LensAtlas? = null, flattening: Float = 0f,
-        tone: GlassTone = GlassTone()): RenderEffect {
+        tone: GlassTone = GlassTone(), boundaryProfile: BoundaryOptics? = null): RenderEffect {
+        require(boundaryProfile == null || (map == null && illumination == 0f && power in 0f..1f)) {
+            "Experimental boundary optics requires analytic geometry, no illumination, and bounded power"
+        }
         val r = geometry.bounds
         val state = listOf(r.left, r.top, r.right, r.bottom, geometry.corner, geometry.span, blur,
             depth.coerceIn(.05f, 4f), power, whiteTint, illumination, origin.x, origin.y,
@@ -147,7 +153,11 @@ internal class LensRenderer {
             atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f,
             atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f,
             atlas?.backdropOffset?.x ?: 0f, atlas?.backdropOffset?.y ?: 0f, flattening,
-            tone.trim, tone.weight, if (tone.lightInk) 1f else 0f)
+            tone.trim, tone.weight, if (tone.lightInk) 1f else 0f,
+            boundaryProfile?.strength ?: 0f, boundaryProfile?.falloff ?: 1f,
+            boundaryProfile?.coreStart ?: .3f, boundaryProfile?.coreEnd ?: .65f,
+            boundaryProfile?.guard ?: .15f, boundaryProfile?.softness ?: .01f,
+            if (boundaryProfile == null) 0f else 1f)
         if (state == last && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
@@ -158,6 +168,10 @@ internal class LensRenderer {
         val opticalDepth = d / kotlin.math.sqrt(1f + d * d / 4f)
         shader.setFloatUniform("optics", geometry.span * .62f * opticalDepth,
             .4f + .06f * flattening.coerceIn(0f, 1f), geometry.span * .32f * opticalDepth)
+        shader.setFloatUniform("boundaryEnabled", if (boundaryProfile == null) 0f else 1f)
+        shader.setFloatUniform("boundaryProfile", boundaryProfile?.strength ?: 0f, boundaryProfile?.falloff ?: 1f,
+            boundaryProfile?.coreStart ?: .3f, boundaryProfile?.coreEnd ?: .65f)
+        shader.setFloatUniform("boundaryGuard", boundaryProfile?.guard ?: .15f, boundaryProfile?.softness ?: .01f)
         shader.setFloatUniform("power", power)
         shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)

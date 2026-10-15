@@ -18,6 +18,8 @@ This is our translation of the [Apple evidence](sources.md) into testable Androi
 
 Apple's preference against layered glass conflicts with some requested Localica treatments. Preserve the requested selection lenses, frosted dialogs and bubble actions; ordinary song overflow and queue-row rename/delete remain plain icons. A future review should compare those with a single-material alternative; do not silently replace them because a guideline differs. Likewise, keep configurable overflow tabs and detail-page tab hiding.
 
+An opt-in boundary-distance experiment is available only to optical tests; it does not change the default membrane model. Its inverse map has bounded normal/tangential Jacobians, a clear core and an explicitly uncalibrated smooth continuation across the outer band. Compare shader and mesh coordinates before judging appearance; it supplies no frosted or illumination model.
+
 Treat blur, refraction, illumination, contrast support and shadow as separate parameters. An element may be clear yet need strong edge curvature; a text-heavy panel may need scattering without a heavy border. The current glass sliders remain user controls, not claims that every combination is equally legible.
 
 ## Input and motion
