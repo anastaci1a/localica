@@ -13,6 +13,8 @@ import io.github.anastaci1a.localica.library.SongListView
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resumeWithException
 
 /** In-process command gateway. Only the service attaches a player; every mutation is serialized here. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -20,6 +22,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                       private val library: LibraryRepository,
                       private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) {
     private val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
+    private val commandJob: Job
     private val mutable = MutableStateFlow(QueueUiState(settings = preferences.read()))
     val state = mutable.asStateFlow()
     private var player: Player? = null
@@ -116,7 +119,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     init {
-        scope.launch {
+        commandJob = scope.launch {
             try {
                 val saved = dao.read()
                 persistedLibrary = saved
@@ -136,6 +139,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 catch (_: Exception) { mutable.update { it.copy(problem = "Couldn’t save this queue change. Try again.") } }
             }
         }
+        commandJob.invokeOnCompletion { commands.close() }
         scope.launch { while (isActive) { delay(5000); if (restored) submit { capture() } } }
     }
 
@@ -455,33 +459,84 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     fun dismissProblem() { mutable.update { it.copy(problem = null) } }
-    data class EditPlayback(val entryId: String, val resume: Boolean, val queueId: String)
-    fun beginFileEdit(trackId: String, complete: (EditPlayback?) -> Unit) = submit {
-        capture()
-        val source = player
-        val queue = state.value.library.active
-        val entry = queue?.entries?.firstOrNull { it.id == queue.currentEntryId }
-        if (source != null && entry != null && queue.entries.any { it.track.id == trackId }) {
-            val token = EditPlayback(entry.id, source.playWhenReady, queue.id)
-            editing = token
-            editPlayRequest = null
-            // stop releases periods; clearing prevents a metadata refresh from reusing stale bytes.
-            source.pause(); source.stop(); source.clearMediaItems(); loadedQueueId = null
-            complete(token)
-        } else complete(null)
+    private class EditPlayback {
+        val abandoned = AtomicBoolean(false)
+        var entryId: String? = null
+        var queueId: String? = null
+        var resume = false
     }
-    fun endFileEdit(token: EditPlayback?, complete: (Boolean) -> Unit) = submit {
+
+    /** Own the request before suspending: cancellation cannot discard an acquired playback lease. */
+    suspend fun <T> withFileEdit(trackId: String, action: suspend () -> T): T {
+        val token = EditPlayback()
+        var failure: Throwable? = null
         try {
-            if (token != null && editing == token) {
-                editing = null
-                val unchanged = state.value.library.activeId == token.queueId &&
-                    state.value.library.active?.currentEntryId == token.entryId
-                val resume = editPlayRequest ?: (unchanged && token.resume)
-                editPlayRequest = null
-                activate(resume, seek = true)
+            withTimeout(15000) {
+                editCommand(onCancellation = { token.abandoned.set(true) }) {
+                    if (token.abandoned.get()) return@editCommand
+                    check(editing == null) { "Another song edit is still releasing playback. Try again." }
+                    capture()
+                    // Persistence in capture can outlive the editor's timeout.
+                    if (token.abandoned.get()) return@editCommand
+                    val source = player
+                    val queue = state.value.library.active
+                    val entry = queue?.entries?.firstOrNull { it.id == queue.currentEntryId }
+                    if (source != null && entry != null && queue.entries.any { it.track.id == trackId }) {
+                        token.entryId = entry.id
+                        token.queueId = queue.id
+                        token.resume = source.playWhenReady
+                        editing = token
+                        editPlayRequest = null
+                        // Release every prepared occurrence, including duplicates and upcoming songs.
+                        source.pause(); source.stop(); source.clearMediaItems(); loadedQueueId = null
+                    }
+                }
             }
-            complete(true)
-        } catch (failure: Exception) { complete(false); throw failure }
+            currentCoroutineContext().ensureActive()
+            return action()
+        } catch (caught: Throwable) {
+            failure = caught
+            throw caught
+        } finally {
+            token.abandoned.set(true)
+            try {
+                withContext(NonCancellable) {
+                    // A timeout bounds the caller's wait, not the queued release's lifetime.
+                    withTimeout(15000) { editCommand(alwaysRun = true) { endFileEdit(token) } }
+                }
+            } catch (cleanup: Throwable) {
+                if (failure == null) throw cleanup else failure.addSuppressed(cleanup)
+            }
+        }
+    }
+
+    private suspend fun endFileEdit(token: EditPlayback) {
+        if (editing !== token) return
+        editing = null
+        val unchanged = state.value.library.activeId == token.queueId &&
+            state.value.library.active?.currentEntryId == token.entryId
+        val resume = editPlayRequest ?: (unchanged && token.resume)
+        editPlayRequest = null
+        activate(resume, seek = true)
+    }
+
+    private suspend fun <T> editCommand(alwaysRun: Boolean = false, onCancellation: () -> Unit = {},
+        action: suspend () -> T): T = suspendCancellableCoroutine { continuation ->
+        val stopped = commandJob.invokeOnCompletion { cause ->
+            continuation.cancel(CancellationException("Playback controller stopped.", cause))
+        }
+        continuation.invokeOnCancellation { onCancellation(); stopped.dispose() }
+        val sent = commands.trySend {
+            try {
+                if (alwaysRun || continuation.isActive) continuation.resumeWith(Result.success(action()))
+            } catch (failure: Exception) {
+                if (continuation.isActive) continuation.resumeWithException(failure)
+            } finally { stopped.dispose() }
+        }
+        if (sent.isFailure) {
+            stopped.dispose()
+            if (continuation.isActive) continuation.resumeWithException(IllegalStateException("Playback controller is unavailable."))
+        }
     }
     fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = refreshTracks(listOf(track), complete)
     fun refreshTracks(tracks: List<Track>, complete: (Boolean) -> Unit) = submit {
