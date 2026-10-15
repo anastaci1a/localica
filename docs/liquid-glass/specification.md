@@ -68,9 +68,9 @@ scaleAcross     = exp(-strain - depthStrain / 2)
 scaleDepth      = exp(depthStrain)
 ```
 
-The three scales multiply to one: **approximate volume is preserved** while the footprint and thickness change together. Held contact approaches a shallower, wider cap monotonically, with critical damping: central refraction weakens and the remaining curvature concentrates at the rim. Only release permits the user's low-damping rebound; depth, footprint and refraction oscillate together. This is not a fluid simulation or a reconstruction of Apple’s private renderer. Shape damping is independent of constrained travel; [Glass settings](../interface.md#appearance-and-settings) own its defaults/range and resting optical depth. Motion clocks sleep after settling.
+The three scales multiply to one: **approximate volume is preserved** while the footprint and thickness change together. Held contact approaches a shallower, wider cap monotonically, with critical damping; externally driven travel impulses remain responsive under that damping rather than being projected to zero: central refraction weakens and the remaining curvature concentrates at the rim. Only release permits the user's low-damping rebound; depth, footprint and refraction oscillate together. This is not a fluid simulation or a reconstruction of Apple’s private renderer. Shape damping is independent of constrained travel; [Glass settings](../interface.md#appearance-and-settings) own its defaults/range and resting optical depth. Motion clocks sleep after settling.
 
-Map strain to the motion axis. A horizontal stop compresses width and expands height; a vertical one does the reverse. Keep the contacting edge pinned (not the center) while deforming inward so the apparent contact does not slide through the wall. Additional pull produces diminishing compression. Release removes pressure and lets the same body settle. Reversal during settling changes its response immediately.
+Map strain to the motion axis. A horizontal stop compresses width and expands height; a vertical one does the reverse. Keep the contacting edge pinned (not the center) while deforming inward so the apparent contact does not slide through the wall. Additional pull produces diminishing compression. Release removes pressure and lets the same body settle. Reversal during settling changes its response immediately. A sampled velocity sign flip adds bounded directional braking to the motion and depth impulse inputs; the correction vanishes as the crossing speed approaches zero, while ordinary magnitude-based acceleration and braking stay unchanged.
 
 Acceptance: a slow drag, fast flick, abrupt reversal and long boundary hold must yield distinguishable shapes. Replaying the same wiggle on all four fails the model. Reduced Motion removes decorative strain while preserving immediate tracking and state feedback.
 
@@ -80,7 +80,7 @@ The [control specification](controls.md) owns button, switch, slider and choice 
 
 ## Geometry and readability
 
-Maintain one authoritative outline per displayed surface. Clip, refract, illuminate and shadow that outline in the same frame. Use its actual transformed coordinates for overlays; do not lag list movement through a later bounds callback. Hit regions may be larger for accessibility, but must remain attached to the visible control.
+Maintain one authoritative outline per displayed surface. Draw-space deformation must preserve backdrop registration; physical translation moves the sampling origin with the body. Clip, refract, illuminate and shadow that outline in the same frame. Use its actual transformed coordinates for overlays; do not lag list movement through a later bounds callback. Hit regions may be larger for accessibility, but must remain attached to the visible control.
 
 Nested curves should share a deliberate inset relationship. Begin with `innerRadius = max(0, outerRadius - inset)` where the geometry permits it; then inspect optical balance. Capsules, square artwork and full-player corners need distinct policies. In particular, inset mini-player artwork away from the curved rim, and retain one outline throughout player expansion.
 
