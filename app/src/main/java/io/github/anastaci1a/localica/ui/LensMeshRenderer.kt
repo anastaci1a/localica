@@ -23,6 +23,11 @@ internal class LensMeshRenderer {
     private var opticalFlattening = Float.NaN
     private var opticalTone = GlassTone()
     private var opticalBoundary: BoundaryOptics? = null
+    private var opticalPress: PressIllumination? = null
+    private var pressTone = GlassTone()
+    private val pressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_ATOP)
+    }
     private var fields = emptyList<LensField>()
     private var generation = 0
     private var vertices = FloatArray(0)
@@ -50,7 +55,12 @@ internal class LensMeshRenderer {
     fun DrawScope.draw(shape: LensGeometry, snapshot: ImageBitmap?, sourceSize: IntSize,
         sourceOffset: Offset, depth: Float, power: Float = 1f, alpha: Float = 1f,
         field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false,
-        flattening: Float = 0f, tone: GlassTone = GlassTone(), boundaryProfile: BoundaryOptics? = null) {
+        flattening: Float = 0f, tone: GlassTone = GlassTone(), boundaryProfile: BoundaryOptics? = null,
+        pressProfile: PressIllumination? = null) {
+        require(pressProfile == null || (field == null && snapshot != null && !additive)) {
+            "Press illumination experiment requires an analytic, non-additive source"
+        }
+        val press = pressProfile?.resolve(shape)?.takeIf { it.amount > 0f }
         require(boundaryProfile == null || (field == null && !lighting && power in 0f..1f)) {
             "Experimental boundary optics requires analytic geometry, no illumination, and bounded power"
         }
@@ -84,6 +94,21 @@ internal class LensMeshRenderer {
                 highlights[i] = android.graphics.Color.argb((opacity * 255).toInt().coerceIn(0, 255), light, light, light)
             }
         }
+        if (press != opticalPress || tone != pressTone) {
+            opticalPress = press; pressTone = tone
+            generation++
+            pressPaint.shader = press?.let { profile ->
+                val endpoint = (tone.channel(1f) * 255).roundToInt().coerceIn(0, 255)
+                val colors = IntArray(PressIllumination.GradientSteps + 1) { step ->
+                    val radius = PressIllumination.GradientExtent * step / PressIllumination.GradientSteps
+                    val weight = if (step == PressIllumination.GradientSteps) 0f
+                        else profile.radialWeight(radius)
+                    android.graphics.Color.argb((weight * 255).roundToInt(), endpoint, endpoint, endpoint)
+                }
+                android.graphics.RadialGradient(profile.origin.x, profile.origin.y,
+                    profile.spread * PressIllumination.GradientExtent, colors, null, Shader.TileMode.CLAMP)
+            }
+        }
         scenePaint.shader = snapshot?.let { shaders.getOrPut(it) {
             BitmapShader(it.asAndroidBitmap(), Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
         } }
@@ -101,6 +126,10 @@ internal class LensMeshRenderer {
                 canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, vertices.size,
                     vertices, 0, texture, 0, null, 0, textureIndices, 0, textureIndices.size, scenePaint)
             }
+            if (press != null) {
+                // SRC_ATOP changes color while preserving the sampled source alpha.
+                canvas.drawRect(shape.bounds.left, shape.bounds.top, shape.bounds.right, shape.bounds.bottom, pressPaint)
+            }
             if (lighting) {
                 lightPaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
                 canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, vertices.size,
@@ -110,7 +139,12 @@ internal class LensMeshRenderer {
         drawIntoCanvas { canvas ->
             if (Build.VERSION.SDK_INT >= 29) {
                 scenePaint.xfermode = if (additive) addition else null
-                render(canvas.nativeCanvas, alpha)
+                if (press == null) render(canvas.nativeCanvas, alpha) else {
+                    // Opt-in only: isolate destination alpha from the surrounding scene.
+                    val save = canvas.nativeCanvas.saveLayer(shape.bounds.left, shape.bounds.top,
+                        shape.bounds.right, shape.bounds.bottom, null)
+                    try { render(canvas.nativeCanvas, alpha) } finally { canvas.nativeCanvas.restoreToCount(save) }
+                }
             }
             else {
                 val key = RasterKey(generation, snapshot, sourceSize, if (snapshot == null) Offset.Zero else sourceOffset, lighting)
