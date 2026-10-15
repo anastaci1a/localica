@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import android.content.Context
 import android.database.SQLException
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import androidx.room.Room
@@ -46,11 +47,12 @@ class QueueBoundedInsertBenchmarkTest {
                     val elapsed = SystemClock.elapsedRealtime() - at
                     assertEquals(expected, snapshot(db))
                     db.runInTransaction { assertForeignKeys(sql) }
+                    val effective = if (journey) journeyMode(mode) else mode
                     val rows = if (journey) stored.visits.size + stored.cycleMembers.size else stored.entries.size
                     val batches = if (journey) chunks(stored.visits.size) + chunks(stored.cycleMembers.size) else chunks(rows)
-                    assertEquals(if (mode == Mode.Reused) rows else batches, work.inserts)
-                    assertEquals(if (mode == Mode.MultiRow128 && journey) batches * 2 else 0, work.savepoints)
-                    Log.i("QueueScale", "microbenchmark=bounded-insert dataset=${if (journey) "journey-upsert" else "entries-strict"} rows=$rows mode=$mode sample=$sample transactionMs=$elapsed compileCalls=${work.prepares} insertCalls=${work.inserts} savepointStatements=${work.savepoints} maxParameters=640 warmedPages=true payloadEncoding=excluded")
+                    assertEquals(if (effective == Mode.Reused) rows else batches, work.inserts)
+                    assertEquals(if (effective == Mode.MultiRow128 && journey) batches * 2 else 0, work.savepoints)
+                    Log.i("QueueScale", "microbenchmark=bounded-insert dataset=${if (journey) "journey-upsert" else "entries-strict"} rows=$rows api=${Build.VERSION.SDK_INT} requested=$mode effective=$effective sample=$sample transactionMs=$elapsed compileCalls=${work.prepares} insertCalls=${work.inserts} savepointStatements=${work.savepoints} maxParameters=640 warmedPages=true payloadEncoding=excluded")
                 }
             }
         } finally { db.close(); context.deleteDatabase(name) }
@@ -114,7 +116,8 @@ class QueueBoundedInsertBenchmarkTest {
             for (mode in Mode.entries) {
                 for (duplicate in listOf(true, false)) {
                     db.runInTransaction { clearJourney(sql); sql.execSQL("DELETE FROM queue_entries") }
-                    val emptyRows = snapshot(db)
+                    // Journey metadata is intentionally retained without its rows; compare raw rollback state.
+                    val emptyRows = rawSnapshot(db)
                     val invalid = stored.entries.mapIndexed { index, row ->
                         if (index != 200) row else if (duplicate) row.copy(id = stored.entries[0].id)
                         else row.copy(queueId = "missing-parent")
@@ -130,7 +133,7 @@ class QueueBoundedInsertBenchmarkTest {
                         if (duplicate) assertTrue(isJourneyUniquenessFailure(error.message))
                         else assertTrue(error.message.orEmpty().contains("FOREIGN KEY", ignoreCase = true))
                     }
-                    assertEquals(emptyRows, snapshot(db))
+                    assertEquals(emptyRows, rawSnapshot(db))
                     db.queues().save(QueueLibrary(), target)
                     assertEquals(expected, snapshot(db))
                 }
@@ -160,14 +163,14 @@ class QueueBoundedInsertBenchmarkTest {
                     clearJourney(sql)
                     sql.execSQL("UPDATE diagnostic_effects SET value=0")
                     assertForeignKeys(sql)
-                    // No existing/duplicate keys precede the trigger: the speculative batch itself reaches FAIL.
+                    // On supported adapters no earlier key conflict prevents the speculative batch reaching FAIL.
                     writeJourney(sql, mode, visits, members, work)
                 }
                 val stored = db.queues().readQueues().single()
                 assertEquals(visits.filterNot { it.token == visits[80].token }.toSet(), stored.visits.toSet())
                 assertEquals(members.toSet(), stored.cycleMembers.toSet())
                 sql.query("SELECT value FROM diagnostic_effects").use { assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0)) }
-                assertEquals(if (mode == Mode.Reused) 0 else (chunks(visits.size) + chunks(members.size)) * 2 + 1, work.savepoints)
+                assertEquals(if (journeyMode(mode) == Mode.Reused) 0 else (chunks(visits.size) + chunks(members.size)) * 2 + 1, work.savepoints)
                 results += snapshot(db)
             }
             assertEquals(results[0], results[1])
@@ -219,14 +222,21 @@ class QueueBoundedInsertBenchmarkTest {
         } finally { db.close() }
     }
 
-    private fun writeJourney(sql: SupportSQLiteDatabase, mode: Mode, visits: List<VisitRecord>, members: List<CycleMemberRecord>, work: Work) {
+    // API16–27 DatabaseUtils treats ROLLBACK TO as a full transaction abort. Keep its proven per-row path.
+    // API28 fixes that classifier; the hosted native matrix currently exercises26 and36, not every intermediate API.
+    private fun journeyMode(requested: Mode) = if (Build.VERSION.SDK_INT < 28) Mode.Reused else requested
+
+    private fun writeJourney(sql: SupportSQLiteDatabase, mode: Mode, visits: List<VisitRecord>, members: List<CycleMemberRecord>, work: Work) = inOuterTransaction(sql) {
         val writer = QueueJourneyWriter { compile(sql, it, work) }
-        if (mode == Mode.Reused) { writer.upsertVisits(visits); writer.upsertMembers(members); return }
-        bulk(sql, visits, "INSERT INTO queue_visits(token,queueId,ordinal,entryId,cycle)", work, ::bindVisit, writer::upsertVisits)
-        bulk(sql, members, "INSERT INTO queue_cycle_members(queueId,cycle,entryId,ordinal,visited)", work, ::bindMember, writer::upsertMembers)
+        if (journeyMode(mode) == Mode.Reused) {
+            writer.upsertVisits(visits); writer.upsertMembers(members)
+        } else {
+            bulk(sql, visits, "INSERT INTO queue_visits(token,queueId,ordinal,entryId,cycle)", work, ::bindVisit, writer::upsertVisits)
+            bulk(sql, members, "INSERT INTO queue_cycle_members(queueId,cycle,entryId,ordinal,visited)", work, ::bindMember, writer::upsertMembers)
+        }
     }
 
-    private fun writeEntries(sql: SupportSQLiteDatabase, mode: Mode, entries: List<EntryRecord>, work: Work) {
+    private fun writeEntries(sql: SupportSQLiteDatabase, mode: Mode, entries: List<EntryRecord>, work: Work) = inOuterTransaction(sql) {
         val prefix = "INSERT OR ABORT INTO queue_entries(id,queueId,ordinal,track,sourcePlaylistId)"
         if (mode == Mode.MultiRow128) bulk(sql, entries, prefix, work, ::bindEntry)
         else compile(sql, "$prefix VALUES(?,?,?,?,?)", work).use { statement ->
@@ -234,9 +244,21 @@ class QueueBoundedInsertBenchmarkTest {
         }
     }
 
+    private inline fun inOuterTransaction(sql: SupportSQLiteDatabase, block: () -> Unit) {
+        check(sql.inTransaction()) { "Writer requires the owning outer transaction" }
+        try { block() } catch (failure: Throwable) {
+            if (!sql.inTransaction()) throw AssertionError("Writer failure ended the owning outer transaction", failure)
+            throw failure
+        }
+        check(sql.inTransaction()) { "Writer ended the owning outer transaction" }
+    }
+
     private fun <T> bulk(sql: SupportSQLiteDatabase, rows: List<T>, prefix: String, work: Work,
         bind: (SupportSQLiteStatement, T, Int) -> Unit, repair: ((List<T>) -> Unit)? = null) {
-        fun control(command: String) { work.savepoints++; sql.execSQL(command) }
+        fun control(command: String) {
+            work.savepoints++; sql.execSQL(command)
+            check(sql.inTransaction()) { "Savepoint control ended the owning outer transaction" }
+        }
         Statements().use { statements ->
             for (batch in rows.chunked(128)) {
                 check(batch.size * 5 <= 640)
@@ -309,7 +331,8 @@ class QueueBoundedInsertBenchmarkTest {
         }, journey=QueueJourney.start(seed.entries.map { it.id }, seed.currentEntryId, JourneyModes()))
         return QueueLibrary(listOf(queue), queue.id)
     }
-    private suspend fun snapshot(db: QueueDatabase) = Triple(db.queues().read(), db.queues().readActive(),
+    private suspend fun snapshot(db: QueueDatabase) = db.queues().read() to rawSnapshot(db)
+    private suspend fun rawSnapshot(db: QueueDatabase) = db.queues().readActive() to
         db.queues().readQueues().map { s -> s.copy(entries=s.entries.sortedBy { it.id }, journeys=s.journeys.sortedBy { it.queueId },
-            visits=s.visits.sortedBy { it.token }, cycleMembers=s.cycleMembers.sortedWith(compareBy<CycleMemberRecord> { it.cycle }.thenBy { it.entryId })) })
+            visits=s.visits.sortedBy { it.token }, cycleMembers=s.cycleMembers.sortedWith(compareBy<CycleMemberRecord> { it.cycle }.thenBy { it.entryId })) }
 }
