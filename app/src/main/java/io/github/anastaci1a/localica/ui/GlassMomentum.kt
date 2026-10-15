@@ -72,7 +72,10 @@ internal class GlassMomentum(var damping: Float = 8f) {
         while (remaining > 0f) {
             val dt = minOf(remaining, 1f / 240f)
             val resistance = if (held) maxOf(40f, drag) else drag
-            motion.advance(dt, resistance, held); this.pressure.advance(dt, resistance, held); depth.advance(dt, resistance, held)
+            // Motion is driven by velocity impulses around a zero target. Projecting
+            // it into [before, target] would erase acceleration at rest; held
+            // critical damping already prevents an unforced ringing response.
+            motion.advance(dt, resistance); this.pressure.advance(dt, resistance, held); depth.advance(dt, resistance, held)
             remaining -= dt
         }
     }
