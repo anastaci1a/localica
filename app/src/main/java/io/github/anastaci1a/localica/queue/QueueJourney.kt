@@ -102,7 +102,9 @@ data class QueueJourney(
                 }
                 else -> ids.shuffled(random)
             }
-            val added = ids.filterNot { it in retained }.let { if (modes.shuffle) it.shuffled(random) else it }
+            // Keep traversal order in the list, but do not scan it for every occurrence.
+            val retainedIds = retained.toHashSet()
+            val added = ids.filterNot { it in retainedIds }.let { if (modes.shuffle) it.shuffled(random) else it }
             prepared[number] = retained + added
         }
         val oldVisits = future.associateBy { it.cycle to it.entryId }

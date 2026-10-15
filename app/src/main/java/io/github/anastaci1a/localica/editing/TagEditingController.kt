@@ -81,18 +81,18 @@ class TagEditingController(private val context: Context, private val library: Li
                 for (track in tracks) {
                     if (stopped || state.value.recovery != null) break
                     val result = library.withExclusiveFiles {
-                        var token: QueueController.EditPlayback? = null
                         try {
                             check(writer.canWrite(track)) { "Grant write access to this song’s folder first." }
-                            token = await { queues.beginFileEdit(track.id, it) }
-                            withContext(Dispatchers.IO) { refreshJournal.include(track) }
-                            val written = writer.edit(track, patch)
-                            withContext(Dispatchers.IO) { refreshJournal.include(written) }
-                            writer.complete()
-                            EditResult(track, true, "Saved and verified")
+                            queues.withFileEdit(track.id) {
+                                withContext(Dispatchers.IO) { refreshJournal.include(track) }
+                                val written = writer.edit(track, patch)
+                                withContext(Dispatchers.IO) { refreshJournal.include(written) }
+                                writer.complete()
+                                EditResult(track, true, "Saved and verified")
+                            }
                         } catch (failure: Exception) {
                             EditResult(track, false, failure.message ?: "Couldn’t save this file.")
-                        } finally { await<Boolean> { queues.endFileEdit(token, it) } }
+                        }
                     }
                     mutable.update { it.copy(results = it.results + result) }
                     recordJob("Editing")
@@ -131,12 +131,11 @@ class TagEditingController(private val context: Context, private val library: Li
         scope.launch {
             try { library.withExclusiveFiles {
                 val pending = withContext(Dispatchers.IO) { writer.pending() } ?: return@withExclusiveFiles
-                val token = await<QueueController.EditPlayback?> { queues.beginFileEdit(pending.track.id, it) }
-                try {
+                queues.withFileEdit(pending.track.id) {
                     val restored = writer.recover()
                     withContext(Dispatchers.IO) { refreshJournal.include(restored) }
                     flushMetadata()
-                } finally { await<Boolean> { queues.endFileEdit(token, it) } }
+                }
             } } catch (failure: Exception) { mutable.update { it.copy(error = failure.message) } }
             finally { mutable.update { it.copy(busy = false) }; checkRecovery() }
         }
