@@ -57,26 +57,69 @@ class SearchImeMotionTest {
             " rootToken=${view?.windowToken} dialogToken=${window?.decorView?.windowToken} $sample")
     }
 
+    private fun keyboardShell(command: String): String {
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        return android.os.ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command))
+            .bufferedReader().use { it.readText().trim() }
+    }
+
+    private fun awaitKeyboardPolicy(expected: Int) {
+        // AOSP SettingsObserver uses UNKNOWN=0, FALSE=1, TRUE=2, not the secure setting's 0/1.
+        // Provider readback alone does not mean the IME main-thread observer has applied it.
+        val deadline = android.os.SystemClock.uptimeMillis() + 5000L
+        var observed: Int?
+        do {
+            val dump = keyboardShell("dumpsys -t 2 input_method")
+            observed = Regex("""mShowImeWithHardKeyboard=(\d+)""")
+                .find(dump)?.groupValues?.get(1)?.toIntOrNull()
+            if (observed == expected) return
+            // UNKNOWN lazily reads the provider; a new service reads it during onCreate.
+            // Accept only the explicit unbound marker, never a missing/failed dump.
+            if (observed == 0 || (observed == null && dump.lineSequence().any {
+                    it.trim() == "No input method service."
+                })) return
+            android.os.SystemClock.sleep(50L)
+        } while (android.os.SystemClock.uptimeMillis() < deadline)
+        assertEquals("Bound IME service must apply fixture keyboard policy", expected, observed)
+    }
+
+    private fun hasDockedKeyboard(view: android.view.View): Boolean = compose.runOnUiThread {
+        val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+        insets != null && insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) &&
+            insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom >
+            insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars()).bottom
+    }
+
+    private fun assertDockedInputView(view: android.view.View) {
+        assertTrue("Docked keyboard must occlude content beyond the navigation bar", hasDockedKeyboard(view))
+        val dump = keyboardShell("dumpsys -t 2 input_method")
+        val policy = Regex("""mShowImeWithHardKeyboard=(\d+)""").find(dump)?.groupValues?.get(1)
+        assertEquals("Requested docked input must have an applied TRUE policy", "2", policy)
+        val shown = Regex("""\bmIsInputViewShown=(true|false)\b""")
+            .find(dump)?.groupValues?.get(1)
+        assertEquals("The IME input view itself must be shown, not only its navigation strip", "true", shown)
+    }
+
     // Only docked-IME fixtures opt in. Restore even when setup or a test assertion fails.
     private fun withDockedKeyboard(block: () -> Unit) {
-        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
-        fun shell(command: String): String = android.os.ParcelFileDescriptor.AutoCloseInputStream(
-            automation.executeShellCommand(command)
-        ).bufferedReader().use { it.readText().trim() }
         val key = "show_ime_with_hard_keyboard"
-        val original = shell("settings get secure $key")
+        val original = keyboardShell("settings get secure $key")
         check(original == "null" || original.matches(Regex("-?[0-9]+"))) {
             "Cannot safely snapshot docked-keyboard fixture setting"
         }
+        val originalPolicy = if (original == "null" || original.toIntOrNull() == 0) 1 else 2
+        awaitKeyboardPolicy(originalPolicy)
         try {
-            shell("settings put secure $key 1")
-            assertEquals("Docked-keyboard fixture setting must be enabled", "1", shell("settings get secure $key"))
-            // Do not wait here: the modal test must still observe the real initial IME flight.
+            keyboardShell("settings put secure $key 1")
+            assertEquals("Docked-keyboard fixture setting must be enabled", "1", keyboardShell("settings get secure $key"))
+            awaitKeyboardPolicy(2)
+            // Policy-only preparation: no focus/show or waiting once the opening request begins.
             block()
         } finally {
-            if (original == "null") shell("settings delete secure $key")
-            else shell("settings put secure $key $original")
-            assertEquals("Restore the original keyboard setting after the fixture", original, shell("settings get secure $key"))
+            if (original == "null") keyboardShell("settings delete secure $key")
+            else keyboardShell("settings put secure $key $original")
+            assertEquals("Restore the original keyboard setting after the fixture", original, keyboardShell("settings get secure $key"))
+            awaitKeyboardPolicy(originalPolicy)
         }
     }
 
@@ -227,12 +270,8 @@ class SearchImeMotionTest {
                 val manager = editor.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
                 manager.showSoftInput(editor, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
             }
-            compose.waitUntil(5000) {
-                compose.runOnUiThread {
-                    androidx.core.view.ViewCompat.getRootWindowInsets(requireNotNull(editor))
-                        ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom?.let { it > 0 } == true
-                }
-            }
+            compose.waitUntil(5000) { hasDockedKeyboard(requireNotNull(editor)) }
+            assertDockedInputView(requireNotNull(editor))
         } finally {
             keyboardDiagnostics("plain-native-control", editor)
             compose.runOnUiThread {
@@ -258,6 +297,7 @@ class SearchImeMotionTest {
             keyboardDiagnostics(if (reduced) "reduced-endpoint" else "normal-endpoint")
             screenshotEvidence()
             assertTrue("Docked-keyboard fixture requires a measured occluding IME; inspect native screenshot/visibility if absent", ime > 0)
+            assertDockedInputView(requireNotNull(popupView))
             val opening = compose.runOnUiThread { samples.filter { it.first == "opening" }.map { it.second }.filter { it.progress > .001f } }
             assertTrue("Recorded actual opening layouts", opening.size > 1)
             opening.forEach { sample -> assertTrue("Initial flight must use settled keyboard geometry: $sample",
@@ -348,6 +388,7 @@ class SearchImeMotionTest {
             keyboardDiagnostics(if (reduced) "reduced-endpoint" else "normal-endpoint")
             screenshotEvidence()
             assertTrue("Docked-keyboard fixture requires a measured occluding IME; inspect native screenshot/visibility if absent", ime > 0)
+            assertDockedInputView(requireNotNull(popupView))
             val shown = compose.runOnUiThread { samples.map { it.second }.filter { it.progress > 0f } }
             assertTrue("Recorded the reduced-motion endpoint", shown.isNotEmpty())
             shown.forEach { sample ->
