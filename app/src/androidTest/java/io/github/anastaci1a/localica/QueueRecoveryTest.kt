@@ -40,12 +40,19 @@ class QueueRecoveryTest {
         assertEquals(openedBeforeRetry, opened.size)
         assertEquals(before.entries, queues.state.value.library.active!!.entries)
         assertNotNull(queues.state.value.problem)
+        val notice = queues.state.value.problem
+        queues.settings { it.copy(previousThresholdSeconds = 6) }
+        barrier()
+        assertEquals(notice, queues.state.value.problem)
         assertEquals(2L, files[0].length())
         assertNotNull(writer.pending())
         queues.selectEntry(before.entries[1].id)
         awaitMain { player.isPlaying && player.currentMediaItem?.mediaId == before.entries[1].id }
         assertTrue(opened.drop(openedBeforeRetry).contains(tracks[1].uri))
         assertFalse(opened.drop(openedBeforeRetry).contains(tracks[0].uri))
+        barrier()
+        assertNull("Unrelated playback must not carry the previous occurrence's notice", queues.state.value.problem)
+        assertTrue(readers.recovery().blocks(tracks[0].id))
     }
 
     @Test fun failedRecoveryRemainsBlockedAndVerifiedLaterRecoveryLoadsPaused() = fixture(pending = 0) {
@@ -61,6 +68,8 @@ class QueueRecoveryTest {
         awaitMain { player.mediaItemCount > 0 && player.playbackState == Player.STATE_READY }
         withContext(Dispatchers.Main) { assertFalse(player.playWhenReady); assertFalse(player.isPlaying) }
         assertNull(writer.pending())
+        barrier()
+        assertNull("Verified recovery clears the owned notice", queues.state.value.problem)
         assertArrayEquals(originalBytes[0], files[0].readBytes())
         assertEquals(original.entries, queues.state.value.library.active!!.entries)
         assertEquals(original.currentEntryId, queues.state.value.library.active!!.currentEntryId)
@@ -113,6 +122,50 @@ class QueueRecoveryTest {
         queues.previous(alwaysSong = true); barrier()
         awaitMain { player.mediaItemCount > 0 }
         assertEquals(before.currentEntryId, queues.state.value.library.active!!.currentEntryId)
+    }
+
+    @Test fun futureBoundaryNoticeSurvivesMetadataAndSettingsUntilDismissed() = fixture(pending = 1) {
+        play()
+        awaitMain { player.playbackState == Player.STATE_READY }
+        withContext(Dispatchers.Main) { player.seekTo(player.duration - 150) }
+        awaitMain { player.playbackState == Player.STATE_ENDED && queues.state.value.problem != null }
+        val notice = queues.state.value.problem
+        assertFalse(readers.recovery().blocks(tracks[0].id))
+        assertTrue(readers.recovery().blocks(tracks[1].id))
+        barrier()
+        assertEquals(notice, queues.state.value.problem)
+        queues.settings { it.copy(previousThresholdSeconds = 6) }
+        barrier()
+        assertEquals(notice, queues.state.value.problem)
+        val edited = CompletableDeferred<Boolean>()
+        queues.moveEntry(original.entries.first().id, 0, complete = { edited.complete(it) })
+        assertTrue(withTimeout(7000) { edited.await() })
+        assertEquals("Passive activation of the same safe occurrence keeps its blocked-future notice",
+            notice, queues.state.value.problem)
+        queues.dismissProblem()
+        barrier()
+        assertNull(queues.state.value.problem)
+        queues.settings { it.copy(previousThresholdSeconds = 7) }
+        barrier()
+        assertNull("Successful commands must not resurrect a dismissed notice", queues.state.value.problem)
+        assertFalse(opened.contains(tracks[1].uri))
+        assertEquals(original.currentEntryId, queues.state.value.library.active!!.currentEntryId)
+        withContext(Dispatchers.Main) { assertFalse(player.isPlaying) }
+    }
+
+    @Test fun ordinaryTransientQueueErrorsStillClearAfterSuccessfulCommands() = fixture {
+        play()
+        assertEquals(RecoveryAdmission.Clear, readers.recovery())
+        queues.settings { it.copy(previousThresholdSeconds = 0) }
+        awaitMain { queues.state.value.problem?.contains("Couldn’t save") == true }
+        barrier()
+        assertNull("A successful rename still clears a transient command error", queues.state.value.problem)
+        queues.settings { it.copy(previousThresholdSeconds = 0) }
+        awaitMain { queues.state.value.problem?.contains("Couldn’t save") == true }
+        queues.settings { it.copy(previousThresholdSeconds = 6) }
+        awaitMain { queues.state.value.settings.previousThresholdSeconds == 6 }
+        assertNull("A successful settings change still clears a transient command error", queues.state.value.problem)
+        withContext(Dispatchers.Main) { assertTrue(player.isPlaying) }
     }
 
     @Test fun advancedEndPoliciesCannotAdvanceAutomaticallyIntoTheBlockedVisit() = fixture(pending = 1) {
@@ -178,6 +231,10 @@ class QueueRecoveryTest {
         withContext(Dispatchers.Main) { assertEquals(0, player.mediaItemCount); assertFalse(player.playWhenReady) }
         assertTrue(opened.isEmpty())
         assertTrue(queues.state.value.problem.orEmpty().contains("could not be read"))
+        queues.settings { it.copy(previousThresholdSeconds = 6) }
+        barrier()
+        assertTrue(queues.state.value.problem.orEmpty().contains("could not be read"))
+        assertTrue(opened.isEmpty())
     }
 
     @Test fun inactiveSourceEditProtectsLaterSelectionAndKeepsNewUnrelatedPlayback() = fixture {
@@ -459,8 +516,8 @@ class QueueRecoveryTest {
         val sources: DataSource.Factory) : CoroutineScope by scope {
         private var checkpoints = 0
         suspend fun barrier() {
-            // An explicit harmless metadata command confirms prior actor work without a new edit,
-            // reader lease, native activation or synthetic recovery publication.
+            // A real metadata publication confirms prior actor work without a new edit/reader lease.
+            // Keeping an applicable recovery notice across this successful rename is also a contract.
             val name = "Checkpoint ${++checkpoints}"
             queues.rename(original.id, name)
             awaitMain { queues.state.value.library.queues.first { it.id == original.id }.name == name }
