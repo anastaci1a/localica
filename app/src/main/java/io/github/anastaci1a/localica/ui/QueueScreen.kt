@@ -35,7 +35,7 @@ import io.github.anastaci1a.localica.library.SongListView
 fun QueueScreen(state: QueueUiState, controller: QueueController?, library: LibraryUiState = LibraryUiState(loading = false),
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
-    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null) {
+    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null, listBackEnabled: Boolean = false) {
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
@@ -108,7 +108,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (active == null) Text("Tap a song in Library to start a queue.")
                 }
-            }, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor, initialPlayingPosition = onMinimize != null)
+            }, listBackEnabled = listBackEnabled, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor, initialPlayingPosition = onMinimize != null)
     }
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
