@@ -10,6 +10,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.playback.NativeReaders
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
@@ -66,12 +67,14 @@ class QueueFileEditTest {
             val request = caller.launch { queues.withFileEdit("one") { edited = true } }
             scheduler.runCurrent()
             awaitMain { player.clears == 1 && player.mediaItemCount == 0 }
+            assertTrue(runCatching { readers.opening("one") }.isFailure)
             request.cancel()
             scheduler.runCurrent()
             barrier()
             scheduler.runCurrent()
             assertTrue(request.isCompleted)
             assertFalse(edited)
+            readers.opening("one").closed()
             assertRestored(expectedClears = 1)
         } finally { caller.cancel() }
     }
@@ -241,6 +244,95 @@ class QueueFileEditTest {
         } finally { caller.cancel() }
     }
 
+    @Test fun readerAdmittedDuringCaptureIsDrainedAndLaterAdmissionIsRejected() = fixture {
+        withContext(Dispatchers.Main) { player.position = 3210 }
+        val gate = dao.gateNextSave()
+        val writing = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+        val request = launch { queues.withFileEdit("one") { writing.complete(Unit); finish.await() } }
+        gate.entered.await()
+        val reader = readers.opening("one")
+        try {
+            gate.release.complete(Unit)
+            awaitMain { player.mediaItemCount == 0 }
+            assertFalse(writing.isCompleted)
+            assertTrue(runCatching { readers.opening("one") }.exceptionOrNull() is IOException)
+            reader.closed()
+            writing.await()
+            finish.complete(Unit)
+            request.join()
+            assertRestored(expectedClears = 1, position = 3210)
+        } finally { reader.closed(); gate.release.complete(Unit); finish.complete(Unit); request.cancel() }
+    }
+
+    @Test fun nativeCloseTimeoutNeverStartsWriterAndReleasesOnlyItsAdmissionBlock() = fixture {
+        val scheduler = TestCoroutineScheduler()
+        val caller = CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler))
+        val reader = readers.opening("one")
+        var edited = false
+        try {
+            val request = caller.async { queues.withFileEdit("one") { edited = true } }
+            scheduler.runCurrent()
+            awaitMain { player.mediaItemCount == 0 }
+            scheduler.runCurrent()
+            scheduler.advanceTimeBy(15000)
+            scheduler.runCurrent()
+            barrier()
+            scheduler.runCurrent()
+            assertTrue(request.isCancelled)
+            assertFalse(edited)
+            readers.opening("one").closed()
+            reader.closed()
+            scheduler.runCurrent()
+            assertFalse(edited)
+            assertRestored(expectedClears = 1)
+        } finally { reader.closed(); caller.cancel() }
+    }
+
+    @Test fun cancellationDuringNativeCloseWaitNeverStartsWriter() = fixture {
+        val reader = readers.opening("one")
+        var edited = false
+        val request = launch { queues.withFileEdit("one") { edited = true } }
+        try {
+            awaitMain { player.mediaItemCount == 0 }
+            request.cancelAndJoin()
+            assertFalse(edited)
+            reader.closed()
+            readers.opening("one").closed()
+            assertRestored(expectedClears = 1)
+        } finally { reader.closed(); request.cancel() }
+    }
+
+    @Test fun failedNativeClosePreventsThisAndSubsequentWriters() = fixture {
+        val reader = readers.opening("one")
+        reader.failedClose(IOException("Provider failed to close"))
+        repeat(2) {
+            val result = runCatching { queues.withFileEdit("one") { fail("Unknown reader lifetime admitted a writer") } }
+            assertTrue(result.exceptionOrNull() is IOException)
+            assertRestored(expectedClears = it + 1)
+        }
+    }
+
+    @Test fun inactiveTargetLaterAttachedIsHeldButNewerUnrelatedPauseIsPreserved() = fixture {
+        val absent = original.entries.first().track.copy(id = "absent")
+        val unrelated = original.entries.first().track.copy(id = "unrelated")
+        queues.withFileEdit("absent") {
+            assertRestored(expectedClears = 0)
+            queues.act(listOf(absent), SongTap.NewQueue)
+            awaitMain { queues.state.value.library.active?.entries?.singleOrNull()?.track?.id == "absent" && player.mediaItemCount == 0 }
+            withContext(Dispatchers.Main) { queues.detach(player); queues.attach(player) }
+            queues.act(listOf(unrelated), SongTap.NewQueue)
+            awaitMain { player.currentMediaItem?.mediaMetadata?.extras?.getString("trackId") == "unrelated" && player.isPlaying }
+            withContext(Dispatchers.Main) { player.pause() }
+        }
+        withContext(Dispatchers.Main) {
+            assertEquals("unrelated", player.currentMediaItem?.mediaMetadata?.extras?.getString("trackId"))
+            assertFalse(player.playWhenReady)
+            assertFalse(player.isPlaying)
+            assertEquals(1, player.clears)
+        }
+    }
+
     private fun fixture(failedRestore: Boolean = false, test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -257,8 +349,9 @@ class QueueFileEditTest {
         val queue = ListeningQueue(id = "active", name = "Original", entries = tracks.map { QueueEntry(track = it) }, positionMs = 2000)
         val dao = GatedDao(QueueLibrary(listOf(queue), queue.id)).apply { failRead = failedRestore }
         val player = withContext(Dispatchers.Main) { ClockedPlayer(ExoPlayer.Builder(context).build().apply { volume = 0f }) }
-        val queues = QueueController(dao, preferences, (context.applicationContext as LocalicaApplication).library, actor)
-        val fixture = Fixture(this, actor, queues, dao, player, queue)
+        val readers = NativeReaders()
+        val queues = QueueController(dao, preferences, (context.applicationContext as LocalicaApplication).library, actor, readers)
+        val fixture = Fixture(this, actor, queues, dao, player, queue, readers)
         try {
             if (failedRestore) fixture.awaitMain { !queues.state.value.loading } else {
                 queues.attach(player)
@@ -282,6 +375,7 @@ class QueueFileEditTest {
         val dao: GatedDao,
         val player: ClockedPlayer,
         val original: ListeningQueue,
+        val readers: NativeReaders,
     ) : CoroutineScope by scope {
         suspend fun barrier() { queues.withFileEdit("absent") {} }
         suspend fun awaitMain(condition: () -> Boolean) = withTimeout(5000) {

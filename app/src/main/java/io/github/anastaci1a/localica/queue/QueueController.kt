@@ -8,6 +8,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.anastaci1a.localica.library.LibraryRepository
+import io.github.anastaci1a.localica.playback.NativeReaders
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.SongListView
 import kotlinx.coroutines.*
@@ -20,7 +21,8 @@ import kotlin.coroutines.resumeWithException
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueController(private val dao: QueueDao, private val preferences: QueuePreferences,
                       private val library: LibraryRepository,
-                      private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) {
+                      private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+                      private val readers: NativeReaders = NativeReaders()) {
     private val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
     private val commandJob: Job
     private val mutable = MutableStateFlow(QueueUiState(settings = preferences.read()))
@@ -288,7 +290,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val next = state.value.library.update(selected).copy(activeId = active.id)
         saveStartingPlayback(next) {
             val attached = player
-            if (attached != null && loadedQueueId == active.id && editing == null && timeline.contains(selected)) {
+            if (attached != null && loadedQueueId == active.id && !holdsForEdit(selected) && timeline.contains(selected)) {
                 syncTimeline(seek = true)
                 attached.play()
             } else activate(play = true, seek = true)
@@ -459,16 +461,49 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     fun dismissProblem() { mutable.update { it.copy(problem = null) } }
-    private class EditPlayback {
+    private class EditPlayback(val trackId: String) {
         val abandoned = AtomicBoolean(false)
         var entryId: String? = null
         var queueId: String? = null
         var resume = false
+        var suspendedPlayback = false
+        @Volatile var readers: NativeReaders.Block? = null
+            private set
+        fun blockReaders(registry: NativeReaders): Boolean = synchronized(this) {
+            if (abandoned.get()) return@synchronized false
+            readers = registry.block(trackId)
+            true
+        }
+        fun abandon() = synchronized(this) {
+            abandoned.set(true)
+            readers?.release()
+        }
+    }
+
+    private fun holdsForEdit(queue: ListeningQueue?) =
+        editing?.let { edit -> queue?.entries?.any { it.track.id == edit.trackId } == true } == true
+
+    /** A later queue switch or service attachment must not prepare the temporarily blocked source. */
+    private fun holdForEdit(attached: Player, queue: ListeningQueue?, play: Boolean? = null): Boolean {
+        val token = editing ?: return false
+        if (!holdsForEdit(queue)) return false
+        if (!token.suspendedPlayback) {
+            token.queueId = queue?.id
+            token.entryId = queue?.currentEntryId
+            token.resume = attached.playWhenReady
+            token.suspendedPlayback = true
+        }
+        if (play != null) editPlayRequest = play
+        if (attached.mediaItemCount != 0) {
+            attached.pause(); attached.stop(); attached.clearMediaItems()
+        }
+        loadedQueueId = null
+        return true
     }
 
     /** Own the request before suspending: cancellation cannot discard an acquired playback lease. */
     suspend fun <T> withFileEdit(trackId: String, action: suspend () -> T): T {
-        val token = EditPlayback()
+        val token = EditPlayback(trackId)
         var failure: Throwable? = null
         try {
             withTimeout(15000) {
@@ -478,19 +513,16 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                     capture()
                     // Persistence in capture can outlive the editor's timeout.
                     if (token.abandoned.get()) return@editCommand
-                    val source = player
-                    val queue = state.value.library.active
-                    val entry = queue?.entries?.firstOrNull { it.id == queue.currentEntryId }
-                    if (source != null && entry != null && queue.entries.any { it.track.id == trackId }) {
-                        token.entryId = entry.id
-                        token.queueId = queue.id
-                        token.resume = source.playWhenReady
-                        editing = token
-                        editPlayRequest = null
-                        // Release every prepared occurrence, including duplicates and upcoming songs.
-                        source.pause(); source.stop(); source.clearMediaItems(); loadedQueueId = null
-                    }
+                    // Registration precedes every native open. Any open that raced during capture
+                    // is included by this atomic block; later opens are rejected without provider IO.
+                    if (!token.blockReaders(readers)) return@editCommand
+                    editing = token
+                    editPlayRequest = null
+                    player?.let { holdForEdit(it, state.value.library.active) }
                 }
+                // Never await the loading thread from the command actor: it must remain able to
+                // process detach/attach and newer transport while native close finishes.
+                token.readers?.awaitClosed()
             }
             currentCoroutineContext().ensureActive()
             return action()
@@ -498,7 +530,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             failure = caught
             throw caught
         } finally {
-            token.abandoned.set(true)
+            // Byte access has finished (including the writer's cancellation cleanup), or never
+            // began. Release admission even if the actor is dead or its cleanup ack times out.
+            token.abandon()
             try {
                 withContext(NonCancellable) {
                     // A timeout bounds the caller's wait, not the queued release's lifetime.
@@ -512,11 +546,15 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
 
     private suspend fun endFileEdit(token: EditPlayback) {
         if (editing !== token) return
+        val affected = holdsForEdit(state.value.library.active)
         editing = null
+        val request = editPlayRequest
+        editPlayRequest = null
+        // A newer unrelated queue/player keeps its own timeline and intent, including Pause.
+        if (!affected || !token.suspendedPlayback) return
         val unchanged = state.value.library.activeId == token.queueId &&
             state.value.library.active?.currentEntryId == token.entryId
-        val resume = editPlayRequest ?: (unchanged && token.resume)
-        editPlayRequest = null
+        val resume = request ?: (unchanged && token.resume)
         activate(resume, seek = true)
     }
 
@@ -617,7 +655,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private fun syncTimeline(seek: Boolean = false) {
         val attached = player ?: return
         val queue = state.value.library.active ?: return
-        if (editing != null || queue.entries.isEmpty() || !timeline.contains(queue)) return
+        if (holdForEdit(attached, queue) || queue.entries.isEmpty() || !timeline.contains(queue)) return
         syncingTimeline = true
         try {
             val changed = timeline.sync(attached, queue, seek, loadedQueueId != queue.id || attached.mediaItemCount == 0)
@@ -626,12 +664,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         } finally { syncingTimeline = false }
     }
     private suspend fun activate(play: Boolean?, seek: Boolean = false, refreshLocations: Boolean = true) {
-        if (editing != null) {
-            if (play != null) editPlayRequest = play
-            return
-        }
         val attached = player ?: return
         val queue = state.value.library.active
+        if (holdForEdit(attached, queue, play)) return
         if (queue == null || queue.entries.isEmpty()) {
             loadedQueueId = queue?.id
             attached.stop(); attached.clearMediaItems(); applyPlaybackModes(timelineChanged = true)
