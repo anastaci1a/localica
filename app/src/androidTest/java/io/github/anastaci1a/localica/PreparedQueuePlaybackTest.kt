@@ -12,6 +12,7 @@ import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.atomic.AtomicLong
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PreparedQueuePlaybackTest {
@@ -31,16 +32,33 @@ class PreparedQueuePlaybackTest {
             journey = QueueJourney(history = listOf(QueueVisit("removed", 0)), cursor = 0))
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         runBlocking { db.queues().save(QueueLibrary(), QueueLibrary(listOf(active, inactive), active.id)) }
+        val observed = PreparedQueueDao(db.queues())
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         lateinit var player: ExoPlayer
         lateinit var queues: QueueController
-        fun barrier() {
-            val done = CompletableDeferred<Boolean>()
-            queues.endFileEdit(null) { done.complete(it) }
-            assertTrue(runBlocking { withTimeout(30_000) { done.await() } })
-            assertNull(queues.state.value.problem)
+        fun remaining(deadline: Long): Long = (deadline - SystemClock.elapsedRealtime()).also {
+            assertTrue("The command exceeded its original 30-second completion budget", it > 0)
         }
-        fun at(visit: QueueVisit, action: String, requestedAt: Long) {
+        fun awaitUntil(deadline: Long, condition: () -> Boolean) {
+            await(timeoutMs = remaining(deadline), condition = condition)
+            assertTrue("The command observation exceeded its original 30-second completion budget",
+                SystemClock.elapsedRealtime() <= deadline)
+        }
+        fun checkpoint(after: Long? = null, deadline: Long = SystemClock.elapsedRealtime() + 30_000): Long {
+            lateinit var expected: QueueLibrary
+            instrumentation.runOnMainSync { expected = queues.state.value.library }
+            // Observe the exact durable state without adding a capture/edit command to the timing.
+            // Startup can already be durable; later moves must match the latest completed save,
+            // not an older matching snapshot in a history of previous writes.
+            var matched: PreparedQueueDao.Completed? = null
+            awaitUntil(deadline) {
+                observed.committed?.takeIf { it.library == expected && (after == null || it.sequence > after) }
+                    ?.also { matched = it } != null
+            }
+            assertNull(queues.state.value.problem)
+            return matched!!.at
+        }
+        fun at(visit: QueueVisit, action: String, requestedAt: Long, after: Long? = null) {
             await {
                 var result = false
                 instrumentation.runOnMainSync {
@@ -50,22 +68,23 @@ class PreparedQueuePlaybackTest {
                 result
             }
             val readyAfter = SystemClock.elapsedRealtime() - requestedAt
-            barrier()
+            val committedAt = checkpoint(after)
             // Diagnostic wall times include polling/dispatch; they are not physical-device audio latency budgets.
-            Log.i("QueueScale", "entries=13000 action=$action readyMs=$readyAfter barrierMs=${SystemClock.elapsedRealtime() - requestedAt}")
+            Log.i("QueueScale", "entries=13000 action=$action readyMs=$readyAfter checkpointMs=${committedAt - requestedAt} checkpointSource=${if (after == null) "restore-read" else "transaction"}")
             assertEquals(visit, runBlocking { db.queues().read().active!!.journey!!.current })
             instrumentation.runOnMainSync { assertFalse(player.playWhenReady); assertTrue(player.mediaItemCount <= 129) }
         }
         fun move(action: String, visit: QueueVisit, command: () -> Unit) {
+            val before = observed.committed!!.sequence
             val requestedAt = SystemClock.elapsedRealtime()
             command()
-            at(visit, action, requestedAt)
+            at(visit, action, requestedAt, before)
         }
         try {
             val restoreAt = SystemClock.elapsedRealtime()
             instrumentation.runOnMainSync {
                 player = ExoPlayer.Builder(context).build().apply { volume = 0f }
-                queues = QueueController(db.queues(), preferences, (context.applicationContext as LocalicaApplication).library, scope)
+                queues = QueueController(observed, preferences, (context.applicationContext as LocalicaApplication).library, scope)
                 queues.attach(player)
             }
             at(active.journey!!.current!!, "restore", restoreAt)
@@ -79,10 +98,18 @@ class PreparedQueuePlaybackTest {
             move("previous", active.journey.current!!) { queues.previous(alwaysSong = true) }
             move("forward-history", firstNext) { queues.next() }
             for (shuffle in listOf(false, true)) {
+                val before = observed.committed!!.sequence
                 val settingsAt = SystemClock.elapsedRealtime()
-                queues.settings(QueueSettings(shuffle = shuffle, repeat = QueueRepeat.All))
-                barrier()
-                Log.i("QueueScale", "entries=13000 action=repeat-settings-shuffle-$shuffle barrierMs=${SystemClock.elapsedRealtime() - settingsAt}")
+                val deadline = settingsAt + 30_000
+                val settings = QueueSettings(shuffle = shuffle, repeat = QueueRepeat.All)
+                queues.settings(settings)
+                awaitUntil(deadline) {
+                    var applied = false
+                    instrumentation.runOnMainSync { applied = queues.state.value.settings == settings }
+                    applied
+                }
+                val committedAt = checkpoint(before, deadline)
+                Log.i("QueueScale", "entries=13000 action=repeat-settings-shuffle-$shuffle checkpointMs=${committedAt - settingsAt}")
                 val next = queues.state.value.library.active!!.journey!!.next!!
                 move("repeat-next-shuffle-$shuffle", next) { queues.next() }
                 val previous = queues.state.value.library.active!!.journey!!.previous!!
@@ -94,4 +121,34 @@ class PreparedQueuePlaybackTest {
             db.close(); file.delete(); preferences.write(original)
         }
     }
+}
+
+private class PreparedQueueDao(private val delegate: QueueDao) : QueueDao() {
+    data class Completed(val library: QueueLibrary, val at: Long, val sequence: Long)
+    private val sequence = AtomicLong()
+    @Volatile var committed: Completed? = null
+        private set
+    override suspend fun read() = delegate.read().also {
+        committed = Completed(it, SystemClock.elapsedRealtime(), sequence.incrementAndGet())
+    }
+    override suspend fun save(before: QueueLibrary, after: QueueLibrary) {
+        delegate.save(before, after)
+        committed = Completed(after, SystemClock.elapsedRealtime(), sequence.incrementAndGet())
+    }
+    override suspend fun readQueues(): List<StoredQueue> = error("Use read")
+    override suspend fun readActive(): ActiveQueueRecord? = error("Use read")
+    override suspend fun upsertQueue(queue: QueueRecord): Unit = error("Use save")
+    override suspend fun updateQueueMetadata(queue: QueueMetadataRecord): Int = error("Use save")
+    override suspend fun upsertActive(active: ActiveQueueRecord): Unit = error("Use save")
+    override suspend fun upsertJourney(journey: JourneyRecord): Unit = error("Use save")
+    override suspend fun clearJourney(id: String): Unit = error("Use save")
+    override suspend fun upsertVisits(visits: List<VisitRecord>): Unit = error("Use save")
+    override suspend fun updateVisits(visits: List<VisitRecord>): Int = error("Use save")
+    override suspend fun upsertCycleMembers(members: List<CycleMemberRecord>): Unit = error("Use save")
+    override suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = error("Use save")
+    override suspend fun deleteVisits(queueId: String, tokens: List<String>): Unit = error("Use save")
+    override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("Use save")
+    override suspend fun insertEntries(entries: List<EntryRecord>): Unit = error("Use save")
+    override suspend fun clearEntries(id: String): Unit = error("Use save")
+    override suspend fun deleteQueue(id: String): Unit = error("Use save")
 }
