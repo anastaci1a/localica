@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import android.content.Context
 import android.database.SQLException
+import android.util.Log
 import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
@@ -54,6 +55,7 @@ class QueueJourneyInsertPersistenceTest {
             val invalidMembers = members.mapIndexed { index, row -> if (index == 10) row.copy(queueId = "missing-parent") else row }
             try {
                 db.runInTransaction {
+                    assertForeignKeys(sql)
                     val writer = QueueJourneyWriter(sql::compileStatement)
                     writer.upsertVisits(visits)
                     writer.upsertMembers(invalidMembers)
@@ -65,7 +67,7 @@ class QueueJourneyInsertPersistenceTest {
             assertEquals(damaged, snapshot(db))
             db.queues().save(QueueLibrary(), target)
             assertEquals(expected, snapshot(db))
-            assertForeignKeys(sql)
+            observeWriteForeignKeys(db)
         } finally { db.close(); context.deleteDatabase(name) }
     }
 
@@ -87,6 +89,7 @@ class QueueJourneyInsertPersistenceTest {
             sql.execSQL("CREATE TRIGGER ignore_member_repair BEFORE UPDATE ON queue_cycle_members " +
                 "WHEN OLD.entryId = '${member.entryId}' BEGIN SELECT RAISE(IGNORE); END")
             db.runInTransaction {
+                assertForeignKeys(sql)
                 val writer = QueueJourneyWriter(sql::compileStatement)
                 writer.upsertVisits(listOf(visit.copy(cycle = 99), newVisit, newVisit.copy(cycle = 3)))
                 writer.upsertMembers(listOf(member.copy(ordinal = 99), newMember, newMember.copy(visited = true)))
@@ -99,7 +102,7 @@ class QueueJourneyInsertPersistenceTest {
                 after.cycleMembers.associateBy { it.cycle to it.entryId })
             assertEquals(before.copy(visits = emptyList(), cycleMembers = emptyList()),
                 after.copy(visits = emptyList(), cycleMembers = emptyList()))
-            assertForeignKeys(sql)
+            observeWriteForeignKeys(db)
         } finally { db.close() }
     }
 
@@ -115,7 +118,22 @@ class QueueJourneyInsertPersistenceTest {
             journeys = stored.journeys.sortedBy { it.queueId }, visits = stored.visits.sortedBy { it.token },
             cycleMembers = stored.cycleMembers.sortedWith(compareBy<CycleMemberRecord> { it.cycle }.thenBy { it.entryId })) })
 
-    private fun assertForeignKeys(sql: SupportSQLiteDatabase) {
-        sql.query("PRAGMA foreign_keys").use { assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0)) }
+    private fun observeWriteForeignKeys(db: QueueDatabase) {
+        val sql = db.openHelper.writableDatabase
+        val unbound = foreignKeys(sql)
+        // An unbound WAL cursor can use a pooled read connection; writes own a transaction connection.
+        db.runInTransaction {
+            val write = foreignKeys(sql)
+            Log.i("QueueScale", "foreignKeysProbe unbound=$unbound owningWrite=$write inTransaction=${sql.inTransaction()}")
+            assertForeignKeys(sql)
+        }
     }
+
+    private fun assertForeignKeys(sql: SupportSQLiteDatabase) {
+        assertTrue("Observe foreign keys on the owning write transaction", sql.inTransaction())
+        assertEquals(1, foreignKeys(sql))
+    }
+
+    private fun foreignKeys(sql: SupportSQLiteDatabase): Int =
+        sql.query("PRAGMA foreign_keys").use { assertTrue(it.moveToFirst()); it.getInt(0) }
 }
