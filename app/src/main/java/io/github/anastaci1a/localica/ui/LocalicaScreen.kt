@@ -237,7 +237,7 @@ fun LocalicaScreen(
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
-            (if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome) + if (session.active) selectionHeight else 0.dp)) {
+            (if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome) + if (session.panelVisible) selectionHeight else 0.dp)) {
     BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
@@ -343,7 +343,7 @@ fun LocalicaScreen(
                 }
             }
         }
-        SelectionPanelVisibility(session.active && !expanded && dragHost.state?.drag == null, Modifier.align(Alignment.BottomCenter)
+        SelectionPanelVisibility(session.panelVisible && !expanded && dragHost.state?.drag == null, Modifier.align(Alignment.BottomCenter)
             .padding(horizontal = 8.dp).padding(bottom = inset + if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome)
             .fillMaxWidth().heightIn(max = maxHeight / 2).onSizeChanged { selectionHeight = with(density) { it.height.toDp() } }, settings.reducedMotion) {
             FrostedSurface(shape = Corners.panel) {
@@ -378,7 +378,7 @@ fun LocalicaScreen(
         QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value }) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false }) } }
-            SelectionPanelVisibility(session.active && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
+            SelectionPanelVisibility(session.panelVisible && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).verticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)
             } }
