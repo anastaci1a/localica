@@ -1,13 +1,7 @@
 package io.github.anastaci1a.localica
 
-import android.view.View
-import android.view.ViewGroup
-import androidx.core.view.WindowInsetsAnimationCompat
-import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.library.*
@@ -18,8 +12,13 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ScopedSearchHistoryTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
+    // Production dispatch queues effects; do not run scroll restoration inline
+    // while the pager is subcomposing during a measure pass.
+    @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
+    private lateinit var albumKeys: Map<String, String>
     private val editor get() = compose.onNode(hasSetTextAction())
 
     private fun fixture(test: () -> Unit) {
@@ -30,9 +29,13 @@ class ScopedSearchHistoryTest {
         InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Albums), reducedMotion = true))
         val tracks = (0..79).map { n -> Track("history:$n", "Song $n", album = "Album " + n.toString().padStart(3, '0'),
             fileName = "$n.mp3", relativePath = "$n.mp3") }
+        val snapshot = LibrarySnapshot(tracks = tracks)
+        albumKeys = io.github.anastaci1a.localica.browse.BrowseQueries.evaluate(snapshot, emptyList(), BrowseRoute(MainTab.Albums))
+            .items.associate { it.title to it.key }
         try {
+            BrowseSchedulerWatchdog.phase("install scoped history fixture")
             compose.setContent { LocalicaTheme { LocalicaScreen(
-                LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaybackState(connected = true),
+                LibraryUiState(snapshot, loading = false), PlaybackState(connected = true),
                 {}, {}, {}, {}, {}, {}) } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 000").fetchSemanticsNodes().isNotEmpty() }
             open()
@@ -41,84 +44,58 @@ class ScopedSearchHistoryTest {
     }
 
     private fun open() {
+        BrowseSchedulerWatchdog.phase("open scoped search and await editor")
         compose.onNodeWithTag("list-search-pill").performClick()
         compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 }
     }
 
-    private fun endEditing(action: () -> Unit) {
-        val view = (editor.fetchSemanticsNode().root as ViewRootForTest).view
-        val decor = view.rootView as ViewGroup
-        lateinit var observer: View
-        val animations = mutableSetOf<WindowInsetsAnimationCompat>()
-        var observed: WindowInsetsCompat? = null
-        compose.runOnUiThread {
-            // Independent first child observes legacy dispatch before content consumes it.
-            // It never replaces Compose callbacks and returns insets unchanged.
-            observer = View(view.context)
-            ViewCompat.setOnApplyWindowInsetsListener(observer) { _, insets -> observed = insets; insets }
-            ViewCompat.setWindowInsetsAnimationCallback(observer, object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
-                override fun onPrepare(animation: WindowInsetsAnimationCompat) {
-                    if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) animations += animation
-                }
-                override fun onProgress(insets: WindowInsetsCompat, runningAnimations: MutableList<WindowInsetsAnimationCompat>): WindowInsetsCompat {
-                    observed = insets
-                    animations.clear()
-                    animations.addAll(runningAnimations.filter { it.typeMask and WindowInsetsCompat.Type.ime() != 0 })
-                    return insets
-                }
-                override fun onEnd(animation: WindowInsetsAnimationCompat) { animations -= animation }
-            })
-            decor.addView(observer, 0, ViewGroup.LayoutParams(0, 0))
-            ViewCompat.requestApplyInsets(observer)
-        }
-        try {
-            compose.waitUntil(5000) { compose.runOnUiThread { observed != null && view.hasWindowFocus() } }
-            action()
-            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
-            compose.waitUntil(5000) { compose.runOnUiThread {
-                val native = ViewCompat.getRootWindowInsets(view)
-                fun WindowInsetsCompat.hidden() = !isVisible(WindowInsetsCompat.Type.ime()) && getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
-                view.hasWindowFocus() && observed?.hidden() == true && native?.hidden() == true && animations.isEmpty()
-            } }
-        } catch (failure: Throwable) {
-            runCatching {
-                compose.runOnUiThread { android.util.Log.e("ScopedSearchHistory", "focus=${view.hasWindowFocus()} ime=${observed?.isVisible(WindowInsetsCompat.Type.ime())} animations=${animations.size}") }
-                android.util.Log.e("ScopedSearchHistory", compose.onAllNodes(isRoot()).printToString())
-            }.exceptionOrNull()?.let(failure::addSuppressed)
-            throw failure
-        } finally {
-            compose.runOnUiThread {
-                ViewCompat.setWindowInsetsAnimationCallback(observer, null)
-                ViewCompat.setOnApplyWindowInsetsListener(observer, null)
-                decor.removeView(observer)
-            }
-        }
-    }
 
     private fun submit(text: String) {
+        BrowseSchedulerWatchdog.phase("submit $text")
         editor.performClick().performTextReplacement(text)
         compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 }
-        endEditing { editor.performImeAction() }
+        compose.awaitSearchImeHandoff { editor.performImeAction() }
     }
 
     private fun backTo(text: String) {
+        BrowseSchedulerWatchdog.phase("native Back to $text")
         compose.awaitExpectedWindowFocus(editor)
-        endEditing { pressSystemBack() } // Exactly one native Back per historical transition.
+        compose.awaitSearchImeHandoff { pressSystemBack() } // Exactly one native Back per historical transition.
         compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and hasText(text)).fetchSemanticsNodes().size == 1 }
         editor.assertTextContains(text).assertIsNotFocused()
         compose.onNodeWithTag("list-search-popup").assertIsDisplayed()
     }
 
-    private fun awaitClosed() = compose.waitUntil(5000) {
-        compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty()
+    private fun awaitClosed() {
+        BrowseSchedulerWatchdog.phase("await scoped popup removed")
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+    }
+
+    private fun scrollToAlbum(title: String) {
+        val key = albumKeys.getValue(title)
+        var index = -1
+        BrowseSchedulerWatchdog.phase("await indexed result $title")
+        compose.waitUntil(5000) {
+            compose.mainClock.advanceTimeByFrame()
+            index = runCatching { compose.onNodeWithTag("browser-list").fetchSemanticsNode()
+                .config[androidx.compose.ui.semantics.SemanticsProperties.IndexForKey](key) }.getOrDefault(-1)
+            index >= 0
+        }
+        BrowseSchedulerWatchdog.phase("scroll $title to index $index")
+        compose.onNodeWithTag("browser-list").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex) { it(index) }
+        BrowseSchedulerWatchdog.phase("pump indexed scroll $title")
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        BrowseSchedulerWatchdog.phase("verify indexed scroll $title")
+        compose.onNodeWithText(title).assertIsDisplayed()
     }
 
     @Test fun completedQueriesRestoreTheirPositionsAndRootBackClosesWithoutKeyboard() = fixture {
         submit("Album")
-        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Album 060"))
+        scrollToAlbum("Album 060")
         val firstPosition = compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot
         submit("Album 0")
-        compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Album 040"))
+        scrollToAlbum("Album 040")
         val secondPosition = compose.onNodeWithText("Album 040").fetchSemanticsNode().boundsInRoot
         submit("Album 01")
         backTo("Album 0")
@@ -136,7 +113,7 @@ class ScopedSearchHistoryTest {
         editor.performClick().performTextReplacement("Album 02")
         compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 }
         compose.awaitExpectedWindowFocus(editor)
-        endEditing { pressSystemBack() }
+        compose.awaitSearchImeHandoff { pressSystemBack() }
         editor.assertTextContains("Album 02")
         compose.onNodeWithTag("list-search-popup").assertIsDisplayed()
         backTo("Album 01")
