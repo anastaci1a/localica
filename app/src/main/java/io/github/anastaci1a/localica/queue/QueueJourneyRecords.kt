@@ -5,7 +5,9 @@ import androidx.room.*
 @Entity(tableName = "queue_journeys", foreignKeys = [ForeignKey(entity = QueueRecord::class,
     parentColumns = ["id"], childColumns = ["queueId"], onDelete = ForeignKey.CASCADE)])
 data class JourneyRecord(@PrimaryKey val queueId: String, val historySize: Int, val cursor: Int,
-    val cycle: Long, val shuffle: Boolean, val loop: Boolean, val reshuffle: Boolean)
+    val cycle: Long, val shuffle: Boolean, val loop: Boolean, val reshuffle: Boolean,
+    @ColumnInfo(defaultValue = "NULL") val orderedTraversalId: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val orderedAnchorToken: String? = null)
 
 @Entity(tableName = "queue_visits", foreignKeys = [ForeignKey(entity = QueueRecord::class,
     parentColumns = ["id"], childColumns = ["queueId"], onDelete = ForeignKey.CASCADE)], indices = [Index("queueId")])
@@ -15,6 +17,8 @@ data class VisitRecord(@PrimaryKey val token: String, val queueId: String, val o
     parentColumns = ["id"], childColumns = ["queueId"], onDelete = ForeignKey.CASCADE)])
 data class CycleMemberRecord(val queueId: String, val cycle: Long, val entryId: String, val ordinal: Int, val visited: Boolean)
 
+// Compatibility build: legacy traversal cannot retain projection identities after a journey mutation.
+// QueueDao always writes this header for any changed journey; metadata-only checkpoints leave it untouched.
 internal fun QueueJourney.record(queueId: String) = JourneyRecord(queueId, history.size, cursor, cycle, modes.shuffle, modes.loop, modes.reshuffle)
 internal fun QueueJourney.visitRecords(queueId: String) = (history + future).mapIndexed { index, visit ->
     VisitRecord(visit.token, queueId, index, visit.entryId, visit.cycle)

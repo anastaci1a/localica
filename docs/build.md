@@ -15,6 +15,12 @@ Verify affected contracts: migrations/recovery and failed operations; occurrence
 
 Local and CI verification use the same tests and Gradle launcher. Use focused tests during iteration, then run the complete build/check commands and `connectedDebugAndroidTest` on both API 26 and 36 against the final candidate before pushing. Match the emulator configuration below; code, test or build-configuration changes after that gate require another full run. CI repeats verification in a fresh environment on the pushed commit before release.
 
+## Development-only schema compatibility build
+
+This branch retains delivered traversal behavior while opening the newer queue schema. Reading or changing only queue metadata preserves ordered-projection columns; any legacy journey mutation clears them transactionally so a newer controller regenerates its traversal identity. It does not restore history deliberately reset by the newer behavior. The original schema-6 APK cannot open schema 7, and there is no destructive fallback.
+
+This is not a distribution-ready rollback package. A same-package, same-signature candidate → compatibility build → candidate installation roundtrip with increasing test version codes must verify queue rows, order, cursor, statistics and closed/reopened controllers before relying on it. That hosted installation test remains pending; ordinary database tests alone cannot prove APK update compatibility.
+
 ## Compatibility and dependencies
 
 - Android 8+; MP3 and AAC/M4A are primary formats, with WAV/FLAC/Ogg/Opus using available device decoders. No decoder extensions. Boundary tests check decoded samples, MP3 waveform alignment and transition buffering; sample counts alone are insufficient.
