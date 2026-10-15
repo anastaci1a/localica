@@ -34,9 +34,9 @@ internal fun TagEditorHost(controller: TagEditingController, content: @Composabl
     var recoveryDismissed by remember(state.recovery) { mutableStateOf(false) }
     if (state.recovery != null && !recoveryDismissed && state.tracks.isEmpty()) GlassAlertDialog(
         onDismissRequest = { recoveryDismissed = true }, title = { Text("Interrupted tag edit") },
-        text = { Column { Text("An original copy of ${state.recovery} is retained. Restore it to undo the interrupted edit. You can also recover from Settings.")
+        text = { Column { Text(state.recoveryProblem ?: "An original copy of ${state.recovery} is retained. Restore it to undo the interrupted edit. You can also recover from Settings.")
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) } } },
-        confirmButton = { ActionTextButton(enabled = !state.busy, onClick = controller::recover) { Text("Restore original") } },
+        confirmButton = { ActionTextButton(enabled = !state.busy, onClick = controller::recover) { Text(if (state.recoveryProblem == null) "Restore original" else "Retry recovery") } },
         dismissButton = { ActionTextButton(onClick = { recoveryDismissed = true }) { Text("Later") } })
 }
 
@@ -47,9 +47,9 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
     SettingsLink("Tag editing jobs", if (state.busy) "${state.results.size} of ${state.tracks.size} files checked" else "Recent outcomes and interrupted work",
         icon = io.github.anastaci1a.localica.R.drawable.ic_edit, onClick = controller::showJobs)
     if (state.recovery != null) ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
-    if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Restore original file?") },
-        text = { Text("This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
-        confirmButton = { ActionTextButton(onClick = { confirming = false; controller.recover() }) { Text("Restore original") } },
+    if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
+        text = { Text(state.recoveryProblem ?: "This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
+        confirmButton = { ActionTextButton(onClick = { confirming = false; controller.recover() }) { Text(if (state.recoveryProblem == null) "Restore original" else "Retry recovery") } },
         dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }
 
@@ -179,7 +179,7 @@ private fun TagJobsDialog(state: TagEditorState, controller: TagEditingControlle
                 Text("${job.total} songs · ${job.status}", style = MaterialTheme.typography.titleSmall)
                 job.outcomes.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
-            if (state.recovery != null) Text("An original file is retained. Use Tag jobs and recovery in Settings before retrying.")
+            if (state.recovery != null) Text(state.recoveryProblem ?: "An original file is retained. Use Tag jobs and recovery in Settings before retrying.")
             ActionTextButton(onClick = controller::hideJobs, modifier = Modifier.align(Alignment.End)) { Text("Close") }
         }
     }
