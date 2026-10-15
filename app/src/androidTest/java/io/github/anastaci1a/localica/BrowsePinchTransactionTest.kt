@@ -19,11 +19,26 @@ import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.*
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 
 class BrowsePinchTransactionTest {
     @get:Rule val compose = createComposeRule()
+    private var gestureHeld = false
+    private var gestureTag = "pinch"
+
+    @After fun releaseHeldInput() {
+        // A failed held-preview assertion must not leave native pointers down for
+        // the next test. Disable idle-driven frames before finding that owner.
+        compose.mainClock.autoAdvance = false
+        try {
+            if (gestureHeld) compose.onNodeWithTag(gestureTag).performTouchInput { cancel() }
+        } finally {
+            gestureHeld = false
+            compose.mainClock.autoAdvance = true
+        }
+    }
 
     @Test fun rejectedStepOwnsGestureButNeverReceivesProgressOrRelease() {
         var attempts = 0
@@ -33,8 +48,27 @@ class BrowsePinchTransactionTest {
             Box(Modifier.fillMaxSize().testTag("pinch").pinchToChangeView(true,
                 onProgress = { progress++ }, onRelease = { releases++ }) { _, _ -> attempts++; false })
         }
-        compose.onNodeWithTag("pinch").performTouchInput { begin(true); spread(110f); spread(50f); spread(120f); up(0); up(1) }
+        compose.onNodeWithTag("pinch").performTouchInput { begin(true); spread(110f); spread(50f); spread(120f); finish() }
         compose.runOnIdle { assertEquals(1, attempts); assertEquals(0, progress); assertEquals(0, releases) }
+    }
+
+    @Test fun heldTwoPointerGestureClassifiesFinalUpAsReleaseAndCancelAsCancellation() {
+        val releases = mutableListOf<Boolean>()
+        var progress = 0f
+        compose.setContent {
+            Box(Modifier.fillMaxSize().testTag("pinch").pinchToChangeView(true,
+                onProgress = { progress = it }, onRelease = { releases += it }) { _, _ -> true })
+        }
+        val node = compose.onNodeWithTag("pinch")
+        node.performTouchInput { begin(true) }
+        compose.mainClock.advanceTimeBy(800)
+        node.performTouchInput { spread(110f); finish() }
+        compose.runOnIdle {
+            assertTrue("A genuine held release retains its commit progress", progress >= .35f)
+            assertEquals(listOf(false), releases)
+        }
+        node.performTouchInput { begin(true); spread(110f); cancel(); gestureHeld = false }
+        compose.runOnIdle { assertEquals(listOf(false, true), releases) }
     }
 
     @Test fun canceledEndpointsCannotLeakTargetsIntoBoundaryPinchesOrLaterSettings() {
@@ -44,6 +78,7 @@ class BrowsePinchTransactionTest {
         val overridden = prefs.overridden(route)
         val compact = BrowseStyle(listSize = ListSize.Compact)
         val gallery = BrowseStyle(presentation = Presentation.Large, itemsPerRow = 1)
+        gestureTag = "browser-list"
         prefs.write(route, compact, false)
         try {
             val tracks = (0..29).map { Track("transaction:$it", "Song $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
@@ -56,21 +91,27 @@ class BrowsePinchTransactionTest {
                 compose.runOnIdle { prefs.write(route, source, false) }
                 waitForView(label)
                 val list = compose.onNodeWithTag("browser-list")
+                compose.mainClock.autoAdvance = false
                 list.performTouchInput { begin(outward); spread(if (outward) 110f else 50f) }
                 // Observe the actual preview before reversing; the initial source
                 // label alone cannot prove asynchronous capture has finished.
-                waitForView(if (outward) "List, Normal" else "Gallery, 2 columns")
-                list.performTouchInput { spread(if (outward) 50f else 110f); up(0); up(1) }
+                compose.waitUntil(5000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) ==
+                        if (outward) "List, Normal" else "Gallery, 2 columns"
+                }
+                list.performTouchInput { spread(if (outward) 50f else 110f); finish() }
+                compose.mainClock.autoAdvance = true
                 waitForView(label)
                 assertEquals(source, prefs.read(route))
-                list.performTouchInput { begin(!outward); spread(if (outward) 50f else 110f); up(0); up(1) }
+                list.performTouchInput { begin(!outward); spread(if (outward) 50f else 110f); finish() }
                 compose.waitForIdle()
                 waitForView(label)
                 assertEquals(source, prefs.read(route))
             }
             compose.runOnIdle { prefs.write(route, BrowseStyle(listSize = ListSize.Normal), false) }
             waitForView("List, Normal")
-            compose.onNodeWithTag("browser-list").performTouchInput { begin(true); spread(110f); up(0); up(1) }
+            compose.onNodeWithTag("browser-list").performTouchInput { begin(true); spread(110f); finish() }
             waitForView("List, Large")
             assertEquals(ListSize.Large, prefs.read(route).listSize)
         } finally { prefs.write(route, original, overridden) }
@@ -79,10 +120,11 @@ class BrowsePinchTransactionTest {
     @Test fun bothEndpointTransactionsFinishHandoffBeforeBoundaryGesture() {
         var style by mutableStateOf(BrowseStyle(listSize = ListSize.Compact))
         val motion = BrowsePinchMotion()
+        val route = BrowseRoute(MainTab.Songs)
         val commits = mutableListOf<BrowseStyle>()
         compose.setContent {
             Box(Modifier.fillMaxSize().testTag("pinch").browsePinch(true, motion, style,
-                BrowseRoute(MainTab.Songs), rememberLazyGridState(), 800, LocalDensity.current,
+                route, rememberLazyGridState(), 800, LocalDensity.current,
                 rememberCoroutineScope(), false, onPreview = { style = it },
                 onCommit = { commits += it; style = it }, onAnchor = {}))
         }
@@ -92,14 +134,14 @@ class BrowsePinchTransactionTest {
             compose.runOnIdle { style = source }
             node.performTouchInput { begin(outward); spread(if (outward) 110f else 50f) }
             compose.waitUntil(5000) { motion.held && !motion.capturing && style != source }
-            node.performTouchInput { spread(if (outward) 50f else 110f); up(0); up(1) }
+            node.performTouchInput { spread(if (outward) 50f else 110f); finish() }
             compose.waitUntil(5000) { motion.source == null && style == source }
             var savedCount = 0
             compose.runOnIdle {
                 assertNull(motion.target); assertNull(motion.settling)
                 assertEquals(source, commits.last()); savedCount = commits.size
             }
-            node.performTouchInput { begin(!outward); spread(if (outward) 50f else 110f); up(0); up(1) }
+            node.performTouchInput { begin(!outward); spread(if (outward) 50f else 110f); finish() }
             compose.waitForIdle()
             compose.runOnIdle {
                 assertEquals(source, style); assertEquals(savedCount, commits.size)
@@ -112,11 +154,12 @@ class BrowsePinchTransactionTest {
         var style by mutableStateOf(BrowseStyle(listSize = ListSize.Compact))
         val source = style
         val motion = BrowsePinchMotion()
+        val route = BrowseRoute(MainTab.Songs)
         var commits = 0
         compose.setContent {
             val density = LocalDensity.current
             Box(Modifier.fillMaxSize().testTag("pinch").browsePinch(true, motion, style,
-                BrowseRoute(MainTab.Songs), rememberLazyGridState(), 800, density, rememberCoroutineScope(), false,
+                route, rememberLazyGridState(), 800, density, rememberCoroutineScope(), false,
                 onPreview = { style = it }, onCommit = { commits++; style = it }, onAnchor = {}))
         }
         val node = compose.onNodeWithTag("pinch")
@@ -124,7 +167,7 @@ class BrowsePinchTransactionTest {
         compose.waitUntil(5000) { motion.source != null && style != source }
         // A second transaction cannot start while cancellation is handing the
         // source layout back, even before recomposition updates enabled state.
-        node.performTouchInput { cancel(); begin(true); spread(110f); up(0); up(1) }
+        node.performTouchInput { cancel(); begin(true); spread(110f); finish() }
         compose.waitUntil(5000) { motion.source == null }
         compose.runOnIdle {
             assertEquals(source, style); assertEquals(0, commits)
@@ -132,7 +175,7 @@ class BrowsePinchTransactionTest {
             assertTrue(motion.frozen.isEmpty()); assertTrue(motion.bounds.isEmpty())
             assertFalse(motion.held); assertFalse(motion.capturing)
         }
-        node.performTouchInput { begin(true); spread(110f); up(0); up(1) }
+        node.performTouchInput { begin(true); spread(110f); finish() }
         compose.waitUntil(5000) { motion.source == null && commits == 1 }
         compose.runOnIdle { assertEquals(ListSize.Normal, style.listSize) }
     }
@@ -155,14 +198,14 @@ class BrowsePinchTransactionTest {
         node.performTouchInput { begin(true); spread(110f) }
         compose.waitUntil(5000) { owners[oldKey]?.held == true }
         compose.runOnIdle { route = BrowseRoute(MainTab.Albums); style = BrowseStyle(listSize = ListSize.Compact) }
-        node.performTouchInput { up(0); up(1) }
+        node.performTouchInput { finish() }
         compose.waitForIdle()
         compose.runOnIdle {
             assertTrue(commits.isEmpty()); assertTrue(owners.getValue(oldKey).disposed)
             assertNull(owners.getValue(oldKey).source); assertNull(owners.getValue(oldKey).target)
             assertEquals(ListSize.Compact, style.listSize)
         }
-        node.performTouchInput { begin(true); spread(110f); up(0); up(1) }
+        node.performTouchInput { begin(true); spread(110f); finish() }
         compose.waitUntil(5000) { commits.isNotEmpty() }
         compose.runOnIdle { assertEquals(listOf(route.key), commits); assertEquals(ListSize.Normal, style.listSize) }
     }
@@ -171,7 +214,12 @@ class BrowsePinchTransactionTest {
         compose.waitUntil(5000) { compose.onNodeWithTag("browser-list").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == label }
         compose.waitForIdle()
     }
+    private fun TouchInjectionScope.finish() {
+        up(0); up(1)
+        gestureHeld = false
+    }
     private fun TouchInjectionScope.begin(outward: Boolean) {
+        gestureHeld = true
         val span = if (outward) 50f else 110f
         down(0, Offset(centerX - span, centerY)); down(1, Offset(centerX + span, centerY))
     }
