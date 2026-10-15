@@ -57,6 +57,46 @@ class SearchImeMotionTest {
             " rootToken=${view?.windowToken} dialogToken=${window?.decorView?.windowToken} $sample")
     }
 
+    // Fixed read-only commands; emit only allowlisted state values, never editor text or raw dumps.
+    private fun keyboardDiagnostics(label: String, view: android.view.View? = popupView) {
+        val nativeState = compose.runOnUiThread {
+            val configuration = compose.activity.resources.configuration
+            val nativeInsets = view?.let(androidx.core.view.ViewCompat::getRootWindowInsets)
+            "keyboard-state $label keyboard=${configuration.keyboard}" +
+                " keyboardHidden=${configuration.keyboardHidden} hardKeyboardHidden=${configuration.hardKeyboardHidden}" +
+                " attached=${view?.isAttachedToWindow} focused=${view?.hasWindowFocus()}" +
+                " nativeIme=${nativeInsets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom}" +
+                " visible=${nativeInsets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())}"
+        }
+        android.util.Log.i("SearchImeMotion", nativeState)
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        val state = Regex("""\b(mInputShown|mShowRequested|mShowExplicitlyRequested|mShowForced|mShowInputRequested|mInputViewShown|mIsInputViewShown|mWindowVisible|mWindowWasVisible|mImeWindowVis|mShowImeWithHardKeyboard|mHardwareKeyboardAvailable|mHasSurface|mViewVisibility|mPolicyVisibility|mPolicyVisibilityAfterAnim|isOnScreen|isVisible|isReadyForDisplay|mSurfaceShown|mAnimatingExit|mGivenInsetsPending)=(true|false|0x[0-9a-fA-F]+|[0-9]+)\b""")
+        for (command in listOf("settings get secure show_ime_with_hard_keyboard", "dumpsys input_method", "dumpsys window windows")) {
+            runCatching {
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command))
+                    .bufferedReader().use { reader ->
+                        var relevantWindow = false
+                        val fields = mutableListOf<String>()
+                        reader.lineSequence().take(6000).forEach { line ->
+                            if (command.startsWith("settings")) {
+                                val value = line.trim().takeIf { it == "null" || it.matches(Regex("[0-9]+")) } ?: "unavailable"
+                                if (fields.isEmpty()) fields += "show_ime_with_hard_keyboard=$value"
+                            } else {
+                                if (command == "dumpsys window windows" && line.trimStart().startsWith("Window #")) {
+                                    relevantWindow = line.contains("InputMethod") || line.contains("io.github.anastaci1a.localica")
+                                    if (relevantWindow && fields.size < 80) fields += if (line.contains("InputMethod")) "IME-window" else "fixture-window"
+                                }
+                                if (command == "dumpsys input_method" || relevantWindow) {
+                                    state.findAll(line).forEach { if (fields.size < 80) fields += it.value }
+                                }
+                            }
+                        }
+                        android.util.Log.i("SearchImeMotion", "keyboard-state $label $command ${fields.joinToString(" ").ifEmpty { "no-allowlisted-fields" }}")
+                    }
+            }.onFailure { android.util.Log.w("SearchImeMotion", "keyboard-state $label $command unavailable (${it.javaClass.simpleName})") }
+        }
+    }
+
     private fun screenshotEvidence() = runCatching {
         val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
         val screenshot = instrumentation.uiAutomation.takeScreenshot() ?: return@runCatching
@@ -143,6 +183,45 @@ class SearchImeMotionTest {
         return node.boundsInRoot.translate(Offset(location[0].toFloat(), location[1].toFloat()))
     }
 
+    @Test fun plainNativeEditorProvidesDockedImeControl() {
+        var editor: android.widget.EditText? = null
+        compose.setContent {
+            androidx.compose.ui.viewinterop.AndroidView(factory = { context ->
+                android.widget.EditText(context).also {
+                    editor = it
+                    it.isSingleLine = true
+                    it.hint = "Synthetic IME control"
+                }
+            }, modifier = Modifier.fillMaxWidth())
+        }
+        try {
+            compose.waitUntil(5000) {
+                compose.runOnUiThread { editor?.let { it.isAttachedToWindow && it.hasWindowFocus() } == true }
+            }
+            compose.runOnUiThread {
+                val editor = requireNotNull(editor)
+                editor.requestFocus()
+                val manager = editor.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                manager.showSoftInput(editor, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            }
+            compose.waitUntil(5000) {
+                compose.runOnUiThread {
+                    androidx.core.view.ViewCompat.getRootWindowInsets(requireNotNull(editor))
+                        ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom?.let { it > 0 } == true
+                }
+            }
+        } finally {
+            keyboardDiagnostics("plain-native-control", editor)
+            compose.runOnUiThread {
+                editor?.let { editor ->
+                    val manager = editor.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                    manager.hideSoftInputFromWindow(editor.windowToken, 0)
+                    editor.clearFocus()
+                }
+            }
+        }
+    }
+
     @Test fun openingWaitsForImeAndEmptyBackReturnsDirectlyWhileImeHides() {
         fixture(true)
         compose.mainClock.autoAdvance = false
@@ -153,6 +232,7 @@ class SearchImeMotionTest {
                 compose.runOnUiThread { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning &&
                     samples.lastOrNull()?.second?.progress == 1f }
             }
+            keyboardDiagnostics(if (reduced) "reduced-endpoint" else "normal-endpoint")
             screenshotEvidence()
             assertTrue("Docked-keyboard fixture requires a measured occluding IME; inspect native screenshot/visibility if absent", ime > 0)
             val opening = compose.runOnUiThread { samples.filter { it.first == "opening" }.map { it.second }.filter { it.progress > .001f } }
@@ -242,6 +322,7 @@ class SearchImeMotionTest {
                 compose.mainClock.advanceTimeBy(64)
                 compose.runOnUiThread { samples.any { it.second.progress == 1f } }
             }
+            keyboardDiagnostics(if (reduced) "reduced-endpoint" else "normal-endpoint")
             screenshotEvidence()
             assertTrue("Docked-keyboard fixture requires a measured occluding IME; inspect native screenshot/visibility if absent", ime > 0)
             val shown = compose.runOnUiThread { samples.map { it.second }.filter { it.progress > 0f } }
