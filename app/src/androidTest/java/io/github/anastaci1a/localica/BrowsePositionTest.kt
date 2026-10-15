@@ -95,7 +95,7 @@ class BrowsePositionTest {
                         runCatching { compose.onNodeWithText("Song 060").assertIsDisplayed() }.isSuccess
                     }
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
-                    if (hardware) pressSystemBack()
+                    if (hardware) compose.pressBackFromExpectedWindow(compose.onNodeWithContentDescription("Back"))
                     else compose.onNodeWithContentDescription("Back").performClick()
                     try {
                         compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty() &&

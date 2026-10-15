@@ -48,7 +48,20 @@ class ChoiceControlsTest {
         compose.onNodeWithText("Gallery", substring = false).performClick()
         compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
         compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
-        compose.onNodeWithText("Year").assertIsDisplayed()
+        try {
+            compose.onNodeWithText("Year").assertIsDisplayed()
+        } catch (failure: Throwable) {
+            runCatching {
+                val year = compose.onNodeWithText("Year").fetchSemanticsNode()
+                val view = (year.root as androidx.compose.ui.platform.ViewRootForTest).view
+                val native = compose.runOnUiThread { "attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()}" }
+                android.util.Log.e("ChoiceControlsTest", "Year bounds=${year.boundsInRoot}; native=$native; saved=$saved")
+                compose.onAllNodes(isRoot(), useUnmergedTree = true).fetchSemanticsNodes().indices.forEach { index ->
+                    compose.onAllNodes(isRoot(), useUnmergedTree = true)[index].printToLog("ChoiceControlsTest")
+                }
+            }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle {
             assertEquals(TrackSort.Year, saved!!.sort)
