@@ -43,11 +43,11 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
             else position.animateTo(selected.toFloat(), spring(1f, 650f * speed * speed))
         }
     }
-    BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = 4.dp)
+    BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = ChoiceOuterVerticalInset)
         .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .10f), RoundedCornerShape(24.dp))
-        .padding(4.dp).selectableGroup()) {
+        .padding(ChoiceInnerInset).selectableGroup()) {
         val width = if (horizontal) maxWidth / labels.size else maxWidth
-        val height = (52 * (LocalDensity.current.fontScale.coerceAtLeast(1f))).dp
+        val height = glassChoiceCellHeight()
         val stride = with(LocalDensity.current) { (if (horizontal) width else height).toPx() }
         SelectionLens(Modifier.testTag("choice-lens").offset { androidx.compose.ui.unit.IntOffset(
             if (horizontal) (stride * position.value).roundToInt() else 0,
@@ -70,11 +70,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                         pressure = 0f; dragging = false; settleRequest++
                         if (!cancelled) change(next)
                     }) else Modifier.ownButtonDrag()), contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
-                Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    icons?.getOrNull(index)?.let { Icon(painterResource(it), null, Modifier.size(24.dp)) }
-                    Text(labels[index], style = if (role == Role.Tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
-                        maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                }
+                GlassChoiceFace(labels[index], icons?.getOrNull(index), role == Role.Tab)
             }
         }
         if (horizontal) Row { labels.indices.forEach { Item(it, Modifier.width(width)) } }

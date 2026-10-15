@@ -50,11 +50,8 @@ import kotlin.math.roundToInt
 @Composable internal fun SliderPreference(label: String, value: Float, onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier, valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0,
     low: String? = null, high: String? = null, description: String? = null) {
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
+    SliderPreferenceFrame(label, low, high, description) {
         InterfaceSlider(value, onValueChange, modifier, valueRange, steps)
-        if (low != null && high != null) SliderEndpoints(low, high)
-        if (description != null) Text(description, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -127,7 +124,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
             enabled
         }
     }
-    BoxWithConstraints(modifier.fillMaxWidth().height(48.dp).then(semantics).then(touch)
+    BoxWithConstraints(modifier.fillMaxWidth().height(InterfaceSliderHeight).then(semantics).then(touch)
         .onKeyEvent { event ->
             if (!enabled || event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) false
             else {
@@ -213,7 +210,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
         tween(if (reduced) 0 else 180), label = "Switch lens")
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
-    Box(Modifier.size(60.dp, 48.dp).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.pointerInput(rtl) {
+    Box(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.pointerInput(rtl) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             down.consume(); pressed = true; dragging = true

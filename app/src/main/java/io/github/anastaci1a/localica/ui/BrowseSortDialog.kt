@@ -58,7 +58,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     val songs = route.collection != null || route.tab in setOf(MainTab.Songs, MainTab.MostPlayed) || route.filter == MediaKind.Song
     val fields = if (songs) TrackSort.entries.filter { it != TrackSort.Count && (it != TrackSort.Manual || route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) }
         else TrackSort.entries.filterNot { it in setOf(TrackSort.Manual, TrackSort.Album, TrackSort.Folder) }
-    GlassAlertDialog(onDismissRequest = onDismiss, title = {
+    GlassAlertDialog(onDismissRequest = onDismiss, modifier = Modifier.testTag("browse-options-dialog"), title = {
         Column {
             GlassChoices(listOf("Sort", "View"), tab, horizontal = true,
                 icons = listOf(R.drawable.ic_sort, R.drawable.ic_eye), role = Role.Tab,
@@ -66,11 +66,11 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
             HorizontalDivider(Modifier.padding(top = 8.dp), color = LocalContentColor.current.copy(alpha = .12f))
         }
     }, text = {
-        val panelLimit = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * .55f).coerceAtMost(420.dp)
         val pageProgress by animateFloatAsState(tab.toFloat(), tween(if (LocalReducedMotion.current) 0 else 140), label = "Browse options page")
-        // Measure both drafts under the same height cap. Navigation changes only
-        // the visible page, never the panel's size or the footer's position.
-        Layout(modifier = Modifier.fillMaxWidth().heightIn(max = panelLimit).testTag("browse-options-body"), content = {
+        StablePopupBody(Modifier.testTag("browse-options-body"), measurement = {
+            BrowseOptionsMeasurement(route, fields, mutableOrder != null, onRandomize != null, overridden, shadowInset)
+        }) {
+        Layout(modifier = Modifier.fillMaxWidth(), content = {
         repeat(2) { page ->
             val scroll = if (page == 0) sortScroll else viewScroll
             Column(Modifier.fillMaxWidth().then(if (page != tab) Modifier.clearAndSetSemantics { }
@@ -124,6 +124,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                 }
             }
         }
+        }
     }, footer = {
         if (mutableOrder == null && (route.collection != null || route.search)) Column { scopeFields() }
     }, confirmButton = {
@@ -133,10 +134,11 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                 onApplySort?.invoke(edited.sort, edited.ascending) { ok -> busy = false; failure = !ok }
             } else onSave(edited, override)
         }) { Text(if (applying) "Apply" else "Save") }
-    }, dismissButton = { ActionTextButton(enabled = !busy, onClick = onDismiss) { Text(if (applying) "Close" else "Cancel") } })
+    }, dismissButton = { ActionTextButton(enabled = !busy, onClick = onDismiss) { Text(if (applying) "Close" else "Cancel") } },
+        actionsMeasurement = if (mutableOrder != null) ({ BrowseOptionsActionsMeasurement() }) else null)
 }
 
-private fun sortLabel(sort: TrackSort) = when (sort) {
+internal fun sortLabel(sort: TrackSort) = when (sort) {
     TrackSort.Album -> "Album / disc / track"
     TrackSort.AlbumArtist -> "Album Artist"
     TrackSort.Added -> "Date added"
