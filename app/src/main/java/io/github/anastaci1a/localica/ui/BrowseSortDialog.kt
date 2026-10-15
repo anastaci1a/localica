@@ -160,7 +160,7 @@ internal fun BrowseOptionsPill(anchor: GlassAnchor, onChoose: (Boolean) -> Unit)
             }
         }
     }
-    LiquidGlassSurface(Modifier.height(CompactControlSize).glassAnchor(anchor).testTag("browse-options-trigger"), pressFeedback = false) {
+    LiquidGlassSurface(Modifier.height(CompactControlSize).glassAnchor(anchor).testTag("browse-options-trigger")) {
         anchor.captureInk()
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
             ActionIcon(R.drawable.ic_sort, "Sort", glass = false) { onChoose(false) }
