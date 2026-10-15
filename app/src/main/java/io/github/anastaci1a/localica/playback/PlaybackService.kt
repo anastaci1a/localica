@@ -40,16 +40,16 @@ class PlaybackService : MediaSessionService() {
             override fun seekToPreviousMediaItem() { (application as LocalicaApplication).queues.previous() }
             override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {
                 val queues = (application as LocalicaApplication).queues
-                queues.settings(queues.state.value.settings.copy(shuffle = shuffleModeEnabled))
+                queues.settings { it.copy(shuffle = shuffleModeEnabled) }
             }
             override fun setRepeatMode(repeatMode: Int) {
                 val queues = (application as LocalicaApplication).queues
-                queues.settings(queues.state.value.settings.copy(advancedRepeat = null,
+                queues.settings { it.copy(advancedRepeat = null,
                     repeat = when (repeatMode) {
                         Player.REPEAT_MODE_ALL -> io.github.anastaci1a.localica.queue.QueueRepeat.All
                         Player.REPEAT_MODE_ONE -> io.github.anastaci1a.localica.queue.QueueRepeat.One
                         else -> io.github.anastaci1a.localica.queue.QueueRepeat.Off
-                    }))
+                    }) }
             }
         }
         session = MediaSession.Builder(this, controls)
