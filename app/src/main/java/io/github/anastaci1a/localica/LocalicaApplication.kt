@@ -27,9 +27,10 @@ class LocalicaApplication : Application() {
         PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").addMigrations(PlaylistDatabase.MIGRATION_1_2, PlaylistDatabase.MIGRATION_2_3, PlaylistDatabase.MIGRATION_3_4).build().playlists(),
             coverDirectory = java.io.File(filesDir, "playlist-covers"))
     }
+    val nativeReaders = io.github.anastaci1a.localica.playback.NativeReaders()
     val queues by lazy {
-        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6).build().queues(),
-            QueuePreferences(this), library)
+        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6, QueueDatabase.MIGRATION_6_7).build().queues(),
+            QueuePreferences(this), library, readers = nativeReaders)
     }
     val library by lazy {
         val database = Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4, LibraryDatabase.MIGRATION_4_5, LibraryDatabase.MIGRATION_5_6).build()
