@@ -2,12 +2,17 @@ package io.github.anastaci1a.localica
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.ResultReceiver
 import android.provider.DocumentsContract
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -87,13 +92,16 @@ class IncompleteScanTest {
         assertFalse(permissions.hasReadAccess(newRoot))
         for (mode in listOf("loading-empty", "error", "null")) {
             mode(mode)
-            expectFailure { repository.scan(newRoot) }
+            // Each picker retry supplies a fresh persistable grant after failed-scan cleanup.
+            grant(IncompleteScanGrantActivity.GRANT)
+            expectFailure("New root mode: $mode") { repository.scan(newRoot) }
             assertEquals(before, store.current())
             assertEquals(grants, persisted())
             assertFalse(permissions.hasReadAccess(newRoot))
             assertCursorsClosed()
         }
         mode("complete")
+        grant(IncompleteScanGrantActivity.GRANT)
         repository.scan(newRoot)
         assertTrue(permissions.hasReadAccess(newRoot))
         assertEquals(2, store.current().folders.size)
@@ -128,10 +136,17 @@ class IncompleteScanTest {
         }
         val repository = LibraryRepository(store, TreeScanner(source), permissions)
         private fun tree(id: String) = DocumentsContract.buildTreeDocumentUri(IncompleteScanGrantActivity.AUTHORITY, id).toString()
-        private fun grant(action: String) {
+        suspend fun grant(action: String) {
+            val completed = CompletableDeferred<Unit>()
+            val completion = object : ResultReceiver(Handler(Looper.getMainLooper())) {
+                override fun onReceiveResult(resultCode: Int, resultData: Bundle?) { completed.complete(Unit) }
+            }
             context.startActivity(Intent(action)
                 .setClassName(instrumentation.context.packageName, IncompleteScanGrantActivity::class.java.name)
+                .putExtra("completion", completion)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            // Read access alone cannot prove that a fresh persistable grant has arrived.
+            withTimeout(10_000) { completed.await() }
         }
         suspend fun prepare() {
             assertEquals(IncompleteScanGrantActivity.TARGET, context.packageName)
@@ -146,8 +161,10 @@ class IncompleteScanTest {
         }
         fun mode(value: String) { resolver.call(Uri.parse(root), "scanFixtureMode", value, null) }
         fun persisted() = resolver.persistedUriPermissions.map { Triple(it.uri.toString(), it.isReadPermission, it.isWritePermission) }.toSet()
-        suspend fun expectFailure(block: suspend () -> Unit) {
-            try { block(); fail("Incomplete listing must fail") } catch (_: IOException) { }
+        suspend fun expectFailure(label: String = "Incomplete listing", block: suspend () -> Unit) {
+            try { block(); fail("$label must fail") }
+            catch (_: IOException) { }
+            catch (failure: SecurityException) { throw AssertionError("$label failed before listing validation", failure) }
         }
         fun assertCursorsClosed() {
             val stats = requireNotNull(resolver.call(Uri.parse(root), "scanFixtureStats", null, null))
