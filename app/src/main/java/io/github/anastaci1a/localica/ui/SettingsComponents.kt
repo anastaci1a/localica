@@ -57,17 +57,12 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
 internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = null, enabled: Boolean = true, anchor: GlassAnchor? = null,
     onClick: () -> Unit) {
     anchor?.captureInk()
+    // Retained modal foreground keeps the source composition’s ink and typography.
     val colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
     val headlineStyle = MaterialTheme.typography.bodyLarge
     val summaryStyle = MaterialTheme.typography.bodyMedium
-    // The modal owns the same foreground while the live trigger is hidden. Capture
-    // its colors and text styles here so nested panels keep their original ink.
     @Composable fun Foreground(modifier: Modifier = Modifier) {
-        ListItem(headlineContent = { Text(title, style = headlineStyle) },
-            supportingContent = summary?.let { { Text(it, style = summaryStyle) } },
-            leadingContent = icon?.let { { Icon(painterResource(it), null, Modifier.size(24.dp)) } },
-            trailingContent = { Icon(painterResource(R.drawable.ic_back), null, Modifier.size(20.dp).rotate(180f)) },
-            colors = colors, modifier = modifier.heightIn(min = 64.dp))
+        SettingsLinkFace(title, summary, icon, modifier, headlineStyle, summaryStyle, colors)
     }
     SideEffect { if (anchor != null) anchor.face = { Foreground() } }
     val opacity by animateControlStateFloat(if (enabled) 1f else .45f, "Settings link availability")
@@ -101,17 +96,10 @@ internal fun <T> ChoicePreference(title: String, selected: T, choices: List<T>, 
     popup: Boolean = false, onSelect: (T) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val anchor = rememberGlassAnchor()
-    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-    val density = androidx.compose.ui.platform.LocalDensity.current
     val labels = choices.map(label)
-    val style = MaterialTheme.typography.bodyLarge
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val required = with(density) { (labels.maxOfOrNull { measurer.measure(androidx.compose.ui.text.AnnotatedString(it), style).size.width } ?: 0).toDp() + 32.dp }
-        if (!popup && choices.size in 2..3 && required * choices.size <= maxWidth) Column {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            GlassChoices(labels, choices.indexOf(selected).coerceAtLeast(0), horizontal = true) { onSelect(choices[it]) }
-        } else SettingsLink(title, label(selected), anchor = anchor) { open = true }
-    }
+    ChoicePreferenceFrame(title, labels, popup, choices = {
+        GlassChoices(labels, choices.indexOf(selected).coerceAtLeast(0), horizontal = true) { onSelect(choices[it]) }
+    }, link = { SettingsLink(title, label(selected), anchor = anchor) { open = true } })
     if (open) CompositionLocalProvider(LocalGlassOrigin provides anchor) {
         ChoiceDialog(title, choices, selected, label, { open = false }, onSelect)
     }

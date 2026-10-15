@@ -72,6 +72,7 @@ class ChoiceControlsTest {
         assertEquals(body, compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot)
         compose.onNodeWithText("Save only for this list").assertDoesNotExist()
         compose.onNodeWithText("Gallery", substring = false).performClick()
+        assertEquals(body, compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot)
         compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
         compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
         choicePhase("return to Sort retains Year") {

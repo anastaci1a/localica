@@ -76,16 +76,25 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
 internal fun GlassAlertDialog(onDismissRequest: () -> Unit, confirmButton: @Composable () -> Unit,
     modifier: Modifier = Modifier, dismissButton: (@Composable () -> Unit)? = null,
     icon: (@Composable () -> Unit)? = null, title: (@Composable () -> Unit)? = null,
-    text: (@Composable () -> Unit)? = null, footer: (@Composable () -> Unit)? = null) {
+    text: (@Composable () -> Unit)? = null, actionsMeasurement: (@Composable () -> Unit)? = null,
+    footer: (@Composable () -> Unit)? = null) {
     GlassDialog(onDismissRequest) {
-        Column(modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            icon?.let { Box(Modifier.align(Alignment.CenterHorizontally)) { it() } }
-            title?.let { ProvideTextStyle(MaterialTheme.typography.titleLarge, it) }
-            text?.let { Box(Modifier.weight(1f, fill = false)) { ProvideTextStyle(MaterialTheme.typography.bodyMedium, it) } }
-            footer?.invoke()
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                dismissButton?.invoke(); confirmButton()
+        DialogViewport(modifier, header = if (icon == null && title == null) null else ({
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                icon?.let { Box(Modifier.align(Alignment.CenterHorizontally)) { it() } }
+                title?.let { ProvideTextStyle(MaterialTheme.typography.titleLarge, it) }
             }
-        }
+        }), body = text?.let { body -> ({ ProvideTextStyle(MaterialTheme.typography.bodyMedium, body) }) }, footer = {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                footer?.invoke()
+                @Composable fun Actions() {
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        dismissButton?.invoke(); confirmButton()
+                    }
+                }
+                if (actionsMeasurement == null) Actions()
+                else StablePopupBody(measurement = actionsMeasurement) { Actions() }
+            }
+        })
     }
 }

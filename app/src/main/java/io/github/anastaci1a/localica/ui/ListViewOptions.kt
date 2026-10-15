@@ -33,7 +33,7 @@ internal fun ListViewFields(route: BrowseRoute, value: BrowseStyle, onChange: (B
     }
 }
 
-private fun extraInfoLabel(info: ExtraInfo) = when (info) {
+internal fun extraInfoLabel(info: ExtraInfo) = when (info) {
     ExtraInfo.Inherited -> "Automatic"
     ExtraInfo.Automatic -> "Follow sort order"
     ExtraInfo.Count -> "Number of songs"
