@@ -36,7 +36,14 @@ class CollectionSelectionTest {
             compose.onNodeWithText("Select all songs").performClick()
             compose.onNodeWithText("2 selected").assertIsDisplayed()
             compose.onNodeWithText("Remove from playlist").assertExists()
-            compose.onNodeWithTag("media-Playlist:${playlist.id}").performClick()
+            // Selection appears in the underlying activity before the closing menu's
+            // native window is necessarily removed. Wait for that explicit handoff
+            // before injecting the next physical touch into the activity.
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty()
+            }
+            compose.onNodeWithTag("media-Playlist:${playlist.id}")
+                .assertIsDisplayed().assertIsEnabled().performClick()
             compose.waitUntil(5000) {
                 compose.onAllNodesWithTag("media-${playlist.entries.first().id}").fetchSemanticsNodes().isNotEmpty()
             }
@@ -49,6 +56,13 @@ class CollectionSelectionTest {
             second.assertIsSelected()
             compose.onNodeWithText("1 selected").assertIsDisplayed()
             compose.onNodeWithText("Remove from playlist").assertExists()
+        } catch (failure: Throwable) {
+            runCatching {
+                compose.onAllNodes(isRoot(), useUnmergedTree = true).fetchSemanticsNodes().indices.forEach { index ->
+                    compose.onAllNodes(isRoot(), useUnmergedTree = true)[index].printToLog("CollectionSelection")
+                }
+            }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
         } finally {
             interfaceStore.edit().clear().commit()
             browseStore.edit().clear().commit()
