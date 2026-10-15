@@ -11,13 +11,14 @@ import kotlin.coroutines.resume
 
 data class TagEditorState(val tracks: List<Track> = emptyList(), val busy: Boolean = false,
     val results: List<EditResult> = emptyList(), val recovery: String? = null, val error: String? = null,
-    val background: Boolean = false, val artworkOnly: Boolean = false, val jobsVisible: Boolean = false, val jobs: List<TagJob> = emptyList())
+    val background: Boolean = false, val artworkOnly: Boolean = false, val jobsVisible: Boolean = false, val jobs: List<TagJob> = emptyList(),
+    val recoveryProblem: String? = null)
 
 class TagEditingController(private val context: Context, private val library: LibraryRepository,
-    private val queues: QueueController, private val playlists: PlaylistController) {
+    private val queues: QueueController, private val playlists: PlaylistController,
+    private val writer: RecoverableTagWriter) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val documents = AndroidDocuments(context)
-    private val writer = RecoverableTagWriter(File(context.filesDir, "tag-recovery"), AndroidEditableDocuments(context))
     private val history = TagJobHistory(context)
     private val refreshJournal = MetadataRefreshJournal(File(context.filesDir, "pending-metadata-refresh.json"))
     private val mutable = MutableStateFlow(TagEditorState(jobs = history.read()))
@@ -127,17 +128,21 @@ class TagEditingController(private val context: Context, private val library: Li
     }
     fun recover() {
         if (state.value.busy) return
+        val request = queues.recoveryRequested()
         mutable.update { it.copy(busy = true, error = null) }
         scope.launch {
             try { library.withExclusiveFiles {
                 val pending = withContext(Dispatchers.IO) { writer.pending() } ?: return@withExclusiveFiles
-                queues.withFileEdit(pending.track.id) {
+                queues.withFileRecovery(pending.track.id, request) {
                     val restored = writer.recover()
                     withContext(Dispatchers.IO) { refreshJournal.include(restored) }
                     flushMetadata()
                 }
             } } catch (failure: Exception) { mutable.update { it.copy(error = failure.message) } }
-            finally { mutable.update { it.copy(busy = false) }; checkRecovery() }
+            finally {
+                queues.finishRecovery(request)
+                mutable.update { it.copy(busy = false) }; checkRecovery()
+            }
         }
     }
     private suspend fun flushMetadata() = withContext(Dispatchers.IO) {
@@ -152,8 +157,17 @@ class TagEditingController(private val context: Context, private val library: Li
         refreshJournal.write(pending.filter { it.id == recovering })
     }
     private suspend fun checkRecovery() {
-        val name = withContext(Dispatchers.IO) { runCatching { writer.pending()?.track?.fileName }.getOrElse { "Unreadable recovery record" } }
-        mutable.update { it.copy(recovery = name) }
+        val (name, problem) = withContext(Dispatchers.IO) {
+            try {
+                val pending = writer.pending()
+                pending?.track?.fileName to if (pending != null && !pending.original.isFile)
+                    "The recovery copy is missing. Keep the recovery record and restore this song from another backup." else null
+            } catch (failure: Exception) {
+                "Unreadable recovery record" to
+                    "Recovery could not be read. Retry when storage is available; keep the retained files. ${failure.message.orEmpty()}"
+            }
+        }
+        mutable.update { it.copy(recovery = name, recoveryProblem = problem) }
     }
     private suspend fun <T> await(action: ((T) -> Unit) -> Unit): T = withTimeout(15000) {
         suspendCancellableCoroutine { continuation -> action { if (continuation.isActive) continuation.resume(it) } }
