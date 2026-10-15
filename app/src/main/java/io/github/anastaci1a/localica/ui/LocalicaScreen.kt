@@ -64,6 +64,7 @@ fun LocalicaScreen(
     var selectionHeight by remember { mutableStateOf(0.dp) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val editTags = LocalTagEdit.current
+    val browseSorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
     var settings by remember { mutableStateOf(preferences.read()) }
     val libraryFilterPreferences = remember(context) { io.github.anastaci1a.localica.browse.LibraryFilterPreferences(context) }
@@ -103,7 +104,7 @@ fun LocalicaScreen(
         val queue = queues.library.queues.firstOrNull { it.id == queues.browsedId } ?: queues.library.active
         pages + listOfNotNull(queue?.let { BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, it.id), it.name) })
     }
-    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, queues.library.queues, libraryFilters, warmRoutes)
+    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, queues.library.queues, libraryFilters, warmRoutes, browseSorts)
     val artworkStore = remember { BrowseArtworkStore() }
     val retainedRoutes = navigation.stacks.values.mapNotNull { it.lastOrNull()?.key }.toMutableSet()
     var backDestination = navigation
@@ -189,7 +190,7 @@ fun LocalicaScreen(
                     PlayerAction.AlbumArtist -> MediaKind.AlbumArtist; else -> MediaKind.Folder }
                 val tab = when (kind) { MediaKind.Album -> MainTab.Albums; MediaKind.Artist -> MainTab.Artists
                     MediaKind.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
-                val item = io.github.anastaci1a.localica.browse.BrowseQueries.evaluate(library.snapshot, playlist.playlists, BrowseRoute(tab))
+                val item = io.github.anastaci1a.localica.browse.BrowseQueries.evaluate(library.snapshot, playlist.playlists, BrowseRoute(tab), sorts = browseSorts)
                     .items.firstOrNull { item -> item.songs.any { it.track.id == track.id } }
                 if (item != null) openCollection(item)
             }
@@ -232,7 +233,7 @@ fun LocalicaScreen(
     val bottomShadows = remember { GlassShadowGroup() }
     LocalicaTheme(grayTone = settings.grayTone) {
     CompositionLocalProvider(LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
-        LocalBrowsePresentationCache provides presentationCache,
+        LocalBrowsePresentationCache provides presentationCache, LocalBrowseSortSnapshot provides browseSorts,
         LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,

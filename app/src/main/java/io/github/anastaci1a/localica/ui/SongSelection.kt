@@ -112,7 +112,7 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
                             chosen = if (selected) chosen - playlist.id else chosen + playlist.id
                         })).padding(vertical = 8.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MediaArtwork(listOfNotNull(playlist.coverUri) + playlist.entries.map { it.track.uri }, Modifier.size(44.dp))
+                        MediaArtwork(io.github.anastaci1a.localica.browse.collectionCoverUris(playlist.coverUri, playlist.entries.firstOrNull()?.track?.uri), Modifier.size(44.dp))
                         Text(playlist.name, Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
