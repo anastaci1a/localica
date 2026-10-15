@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.offset
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.pow
 import kotlinx.coroutines.*
 
 /** Reserve the same extent that the shadow renderer actually draws. */
@@ -60,42 +59,85 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<GlassShadowGroup?> {
         else bottomGlassShadow(radius, group = group, anchorOverride = anchor)
 }
 
+private fun Path.addShadowOutline(r: RoundRect, expansion: Float, y: Float = 0f) {
+    addRoundRect(RoundRect(r.left - expansion, r.top - expansion + y,
+        r.right + expansion, r.bottom + expansion + y,
+        CornerRadius(r.topLeftCornerRadius.x + expansion, r.topLeftCornerRadius.y + expansion)))
+}
+
 internal class GlassShadowGeometry {
     private var previous = emptyList<RoundRect>()
     private var previousReach = -1f
     private var previousShift = Float.NaN
+    private var previousWeights = emptyList<Float>()
+    private var previousStrength = Float.NaN
+    private var weighted = emptyList<Pair<Path, Float>>()
     var body = Path(); private set
-    var rings = emptyList<Path>(); private set
+    private var uniformRings: List<Path>? = null
+    val rings: List<Path> get() = uniformRings ?: (16 downTo 1).map {
+        outline(previousReach * it / 16f, previousShift)
+    }.also { uniformRings = it }
+
+    private fun outline(expansion: Float, y: Float = 0f): Path = Path().apply {
+        // Non-zero winding fills overlapping clockwise silhouettes once.
+        previous.forEach { addShadowOutline(it, expansion, y) }
+    }
     fun update(bodies: List<RoundRect>, reach: Float, shift: Float) {
         if (bodies == previous && reach == previousReach && shift == previousShift) return
         previous = bodies; previousReach = reach; previousShift = shift
-        fun outline(expansion: Float, y: Float = 0f): Path = Path().apply {
-            // Non-zero winding fills overlapping clockwise silhouettes once. A
-            // Boolean path union has the same coverage but rebuilds intersections
-            // for every ring on every frame of a changing player/menu outline.
-            bodies.forEach { r ->
-                addRoundRect(RoundRect(r.left - expansion, r.top - expansion + y,
-                    r.right + expansion, r.bottom + expansion + y,
-                    CornerRadius(r.topLeftCornerRadius.x + expansion, r.topLeftCornerRadius.y + expansion)))
-            }
-        }
+        previousWeights = emptyList()
         body = outline(0f)
-        rings = (16 downTo 1).map { outline(reach * it / 16f, shift) }
+        // Mixed groups build their own level sets; don't also build unused uniform rings.
+        uniformRings = null
+    }
+
+    fun weightedRings(opacities: List<Float>, strength: Float): List<Pair<Path, Float>> {
+        if (opacities == previousWeights && strength == previousStrength) return weighted
+        previousWeights = opacities; previousStrength = strength
+        weighted = weightedShadowBands(opacities, strength).map { band ->
+            Path().apply {
+                band.ringIndices.forEachIndexed { bodyIndex, ring ->
+                    if (ring >= 0) {
+                        val r = previous[bodyIndex]
+                        val expansion = previousReach * (16 - ring) / 16f
+                        addShadowOutline(r, expansion, previousShift)
+                    }
+                }
+            } to band.opacity
+        }
+        return weighted
     }
 }
 
-/** Draw the union once: neighboring shadows never accumulate opacity. */
+/** Draw the maximum shadow field once, preserving independent sibling fades. */
 internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float, cache: GlassShadowGeometry,
     excludeInterior: Boolean = true) {
     if (strength <= 0f || bodies.isEmpty()) return
-    val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
+    val opacities = bodies.map { it.second.coerceIn(0f, 1f) }
+    val opacity = opacities.max()
     val reach = (4f + spread * 28f).dp.toPx()
     cache.update(bodies.map { it.first }, reach, 2.dp.toPx())
+    val uniform = opacities.all { it == opacity }
+    val weighted = if (uniform) emptyList() else cache.weightedRings(opacities, strength)
     fun DrawScope.rings() {
-        cache.rings.forEachIndexed { index, ring ->
-            val t = (16 - index) / 16f
-            val alpha = strength * opacity * .07f * (1f - t).pow(2)
-            if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
+        if (uniform) {
+            // Keep the existing paths, fill order and alpha arithmetic exactly.
+            cache.rings.forEachIndexed { index, ring ->
+                val alpha = shadowRingAlpha(index, strength, opacity)
+                if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
+            }
+        } else if (weighted.isNotEmpty()) {
+            // Tiny source-over increments lose precision when each paint alpha is
+            // quantized. Stamp the absolute field into one isolated layer instead.
+            // Native edge controls check Src coverage at nested AA boundaries.
+            // Composite the completed field over the backing only once.
+            val canvas = drawContext.canvas
+            canvas.saveLayer(weighted.first().first.getBounds().inflate(1f), Paint())
+            try {
+                weighted.forEach { (ring, opacity) ->
+                    drawPath(ring, Color.Black.copy(alpha = opacity), blendMode = BlendMode.Src)
+                }
+            } finally { canvas.restore() }
         }
     }
     if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { rings() } else rings()
