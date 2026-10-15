@@ -95,7 +95,12 @@ class DragReorderTest {
             compose.onNodeWithTag("drag-stack").assertExists()
             compose.runOnIdle { interactionEnabled = false }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
-            compose.runOnIdle { assertFalse(selection.active); assertEquals(original, controller.state.value.playlists.single().entries.map { it.id }) }
+            compose.runOnIdle {
+                // Interruption rolls back the drag while retaining its selection.
+                assertTrue(selection.active)
+                assertEquals(listOf(original[1]), selection.entries.map { it.row.id })
+                assertEquals(original, controller.state.value.playlists.single().entries.map { it.id })
+            }
             list.performTouchInput { up(); held = false }
         } finally {
             if (held) {
