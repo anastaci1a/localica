@@ -13,6 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.playback.QueueTransportPlayer
 import io.github.anastaci1a.localica.playback.NativeReaders
+import io.github.anastaci1a.localica.playback.RecoveryAdmission
 import io.github.anastaci1a.localica.playback.track
 import io.github.anastaci1a.localica.queue.*
 import kotlinx.coroutines.*
@@ -306,6 +307,261 @@ class PlaybackIntentTest {
         assertFalse(player.preparedWhilePlaying)
     }
 
+    @Test fun blockedPlayDoesNotAutoplayAfterLaterManualRecovery() = fixture {
+        readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+        awaitMain { player.engine.mediaItemCount == 0 && queues.state.value.problem != null }
+        controls.play(); barrier()
+        val before = player.trueRequests
+        queues.withFileRecovery(track.id) { readers.publishRecovery(RecoveryAdmission.Clear) }
+        assertPlayback(false)
+        assertEquals(before, player.trueRequests)
+    }
+
+    @Test fun onlyNewRecoverySessionIntentMayResumeAndNewerPauseWins() {
+        for (play in listOf(false, true)) fixture {
+            readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+            awaitMain { player.engine.mediaItemCount == 0 && queues.state.value.problem != null }
+            controls.play(); barrier() // An old failed Play is retired for this source.
+            val before = player.trueRequests
+            val entered = CompletableDeferred<Unit>()
+            val finish = CompletableDeferred<Unit>()
+            val recovery = async { queues.withFileRecovery(track.id) {
+                readers.publishRecovery(RecoveryAdmission.Clear)
+                entered.complete(Unit); finish.await()
+            } }
+            try {
+                entered.await()
+                controls.play()
+                if (!play) controls.pause()
+                barrier()
+                assertEquals(before, player.trueRequests)
+                finish.complete(Unit); recovery.await()
+                assertPlayback(play)
+                assertEquals(before + if (play) 1 else 0, player.trueRequests)
+            } finally { withContext(NonCancellable) { finish.complete(Unit); recovery.cancelAndJoin() } }
+        }
+    }
+
+    @Test fun recoveryAcceptedBeforeExclusiveFileWaitPreservesNewerPlayAndPause() {
+        for (pause in listOf(false, true)) fixture {
+            readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+            awaitMain { player.engine.mediaItemCount == 0 && queues.state.value.problem != null }
+            controls.play(); barrier()
+            val before = player.trueRequests
+            val locked = CompletableDeferred<Unit>()
+            val unlock = CompletableDeferred<Unit>()
+            val holder = async { library.withExclusiveFiles { locked.complete(Unit); unlock.await() } }
+            locked.await()
+            // The production Recover entry point creates this marker before its same library wait.
+            val accepted = queues.recoveryRequested()
+            val waiting = CompletableDeferred<Unit>()
+            val recovery = async {
+                waiting.complete(Unit)
+                try { library.withExclusiveFiles {
+                    queues.withFileRecovery(track.id, accepted) { readers.publishRecovery(RecoveryAdmission.Clear) }
+                } } finally { queues.finishRecovery(accepted) }
+            }
+            try {
+                waiting.await()
+                controls.play()
+                if (pause) controls.pause()
+                barrier()
+                assertEquals(before, player.trueRequests)
+                assertFalse(recovery.isCompleted)
+                unlock.complete(Unit); holder.await(); recovery.await()
+                assertPlayback(!pause)
+                assertEquals(before + if (pause) 0 else 1, player.trueRequests)
+            } finally { withContext(NonCancellable) {
+                unlock.complete(Unit)
+                withTimeout(10000) { holder.cancelAndJoin(); recovery.cancelAndJoin() }
+            } }
+        }
+    }
+
+    @Test fun failedOrCancelledPreAcquisitionRecoveryCannotCarryPlayIntoALaterAttempt() {
+        for (cancel in listOf(false, true)) fixture {
+            readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+            awaitMain { player.engine.mediaItemCount == 0 && queues.state.value.problem != null }
+            val before = player.trueRequests
+            val locked = CompletableDeferred<Unit>()
+            val unlock = CompletableDeferred<Unit>()
+            val holder = async { library.withExclusiveFiles { locked.complete(Unit); unlock.await() } }
+            locked.await()
+            val accepted = queues.recoveryRequested()
+            val waiting = CompletableDeferred<Unit>()
+            val recovery = async { runCatching {
+                waiting.complete(Unit)
+                try { library.withExclusiveFiles { throw IOException("Controlled pending-journal inspection failure") } }
+                finally { queues.finishRecovery(accepted) }
+            } }
+            try {
+                waiting.await()
+                controls.play(); barrier()
+                assertEquals(before, player.trueRequests)
+                if (cancel) recovery.cancelAndJoin()
+                unlock.complete(Unit); holder.await(); recovery.join()
+                assertTrue(recovery.isCompleted)
+                queues.withFileRecovery(track.id) { readers.publishRecovery(RecoveryAdmission.Clear) }
+                assertPlayback(false)
+                assertEquals(before, player.trueRequests)
+            } finally { withContext(NonCancellable) {
+                unlock.complete(Unit)
+                withTimeout(10000) { holder.cancelAndJoin(); recovery.cancelAndJoin() }
+            } }
+        }
+    }
+
+    @Test fun duplicateRecoveryMarkerCannotFinishTheOriginalWaitingSession() = fixture {
+        readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+        awaitMain { player.engine.mediaItemCount == 0 && queues.state.value.problem != null }
+        val accepted = queues.recoveryRequested()
+        controls.play(); barrier() // Newer Play is already bound, but persistent quarantine holds it.
+        val before = player.trueRequests
+        val gate = dao.gateNextSave()
+        queues.rename(first.id, "Waiting recovery acquisition")
+        gate.entered.await()
+        val firstRecovery = async(start = CoroutineStart.UNDISPATCHED) {
+            queues.withFileRecovery(track.id, accepted) { readers.publishRecovery(RecoveryAdmission.Clear) }
+        }
+        try {
+            var duplicateEntered = false
+            val duplicate = runCatching { queues.withFileRecovery(track.id, accepted) { duplicateEntered = true } }
+            assertTrue(duplicate.isFailure)
+            assertFalse(duplicateEntered)
+            assertFalse(firstRecovery.isCompleted)
+            gate.release.complete(Unit); firstRecovery.await()
+            assertPlayback(true)
+            assertEquals(before + 1, player.trueRequests)
+        } finally { withContext(NonCancellable) {
+            gate.release.complete(Unit)
+            withTimeout(10000) { firstRecovery.cancelAndJoin() }
+            queues.finishRecovery(accepted)
+        } }
+    }
+
+    @Test fun pausedSwitchThenNewerPlayBindsToNewSourceAndInactiveRecoveryCannotConsumeIt() = fixture {
+        queues.settings(QueueSettings(switching = QueueSwitch.Paused)); barrier()
+        val gate = dao.gateNextSave()
+        queues.rename(first.id, "Suspended")
+        gate.entered.await()
+        val before = player.trueRequestSources.size
+        queues.switchTo(second.id)
+        withContext(Dispatchers.Main) { readers.publishRecovery(RecoveryAdmission.Pending(track.id)); yield() }
+        controls.play()
+        gate.release.complete(Unit)
+        barrier(); assertPlayback(true)
+        val secondSource = second.entries.single().track.id
+        assertEquals(second.id, queues.state.value.library.activeId)
+        assertTrue(player.trueRequestSources.drop(before).all { it == secondSource })
+        val requests = player.trueRequests
+        queues.withFileRecovery(track.id) { readers.publishRecovery(RecoveryAdmission.Clear) }
+        barrier(); assertPlayback(true)
+        assertEquals(second.id, queues.state.value.library.activeId)
+        assertEquals(requests, player.trueRequests)
+    }
+
+    @Test fun queuedSwitchToBlockedSourceRetiresItsPlayWithoutTransientResumeOrLaterAutoplay() = fixture {
+        queues.selectEntry(second.entries.single().id); barrier(); assertPlayback(true)
+        queues.settings(QueueSettings(switching = QueueSwitch.Paused)); barrier()
+        val gate = dao.gateNextSave()
+        queues.rename(second.id, "Suspended")
+        gate.entered.await()
+        val before = player.trueRequests
+        queues.switchTo(first.id)
+        withContext(Dispatchers.Main) { readers.publishRecovery(RecoveryAdmission.Pending(track.id)); yield() }
+        controls.play()
+        gate.release.complete(Unit)
+        barrier()
+        awaitMain { queues.state.value.library.activeId == first.id && player.engine.mediaItemCount == 0 }
+        assertEquals(before, player.trueRequests)
+        queues.withFileRecovery(track.id) { readers.publishRecovery(RecoveryAdmission.Clear) }
+        assertPlayback(false)
+        assertEquals(before, player.trueRequests)
+    }
+
+    @Test fun coalescedSafeOutcomeRestoresWindowRepeatAndLatestIntentWithoutPendingNotification() {
+        for (pause in listOf(false, true)) fixture {
+            queues.settings(QueueSettings(repeat = QueueRepeat.All)); barrier()
+            controls.play(); barrier(); assertPlayback(true)
+            val before = queues.state.value.library.active!!
+            val nativeCount = withContext(Dispatchers.Main) { player.engine.mediaItemCount }
+            val scheduler = TestCoroutineScheduler()
+            val dispatcher = StandardTestDispatcher(scheduler)
+            val acquired = CompletableDeferred<Unit>()
+            val finish = CompletableDeferred<Unit>()
+            val request = async(dispatcher) { queues.withFileEdit(track.id) {
+                acquired.complete(Unit); finish.await()
+                // Both publications happen while the actor is suspended. Its notification commands
+                // can only observe Clear, so the scoped completion must restore playback itself.
+                readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+                readers.publishRecovery(RecoveryAdmission.Clear)
+            } }
+            var gate: Gate? = null
+            try {
+                pumpUntil(scheduler) { acquired.isCompleted }
+                gate = dao.gateNextSave()
+                queues.rename(first.id, "Coalesced outcome")
+                gate.entered.await()
+                val requests = player.trueRequests
+                finish.complete(Unit); scheduler.runCurrent()
+                assertFalse(request.isCompleted)
+                if (pause) controls.pause()
+                gate.release.complete(Unit)
+                pumpUntil(scheduler) { request.isCompleted }; request.await()
+                barrier(); assertPlayback(!pause)
+                withContext(Dispatchers.Main) {
+                    assertEquals(nativeCount, player.engine.mediaItemCount)
+                    assertEquals(Player.REPEAT_MODE_ALL, player.engine.repeatMode)
+                }
+                assertEquals(before.journey!!.current, queues.state.value.library.active!!.journey!!.current)
+                assertEquals(QueueRepeat.All, queues.state.value.settings.repeat)
+                if (pause) assertEquals(requests, player.trueRequests)
+            } finally { withContext(NonCancellable) {
+                gate?.release?.complete(Unit); finish.complete(Unit); request.cancel()
+                pumpUntil(scheduler) { request.isCompleted }
+            } }
+        }
+    }
+
+    @Test fun quarantineRejectsLateNativeOpenWhileScopedCleanupIsQueuedBehindSuspendedActor() = fixture {
+        val scheduler = TestCoroutineScheduler()
+        val dispatcher = StandardTestDispatcher(scheduler)
+        val acquired = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+        val request = async(dispatcher) { runCatching {
+            queues.withFileEdit(track.id) {
+                acquired.complete(Unit); finish.await()
+                readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+                throw IOException("Controlled unresolved writer outcome")
+            }
+        } }
+        var gate: Gate? = null
+        try {
+            pumpUntil(scheduler) { acquired.isCompleted }
+            gate = dao.gateNextSave()
+            queues.rename(first.id, "Holding cleanup")
+            gate.entered.await()
+            finish.complete(Unit)
+            // Run the caller through action failure and temporary block release to its queued ack.
+            scheduler.runCurrent()
+            assertFalse(request.isCompleted)
+            val native = readers.track(DefaultDataSource.Factory(InstrumentationRegistry.getInstrumentation().targetContext)).createDataSource()
+            try { assertTrue(runCatching { withContext(Dispatchers.IO) {
+                native.open(androidx.media3.datasource.DataSpec(Uri.parse(track.uri)))
+            } }.exceptionOrNull() is IOException) }
+            finally { withContext(Dispatchers.IO) { native.close() } }
+            gate.release.complete(Unit)
+            pumpUntil(scheduler) { request.isCompleted }
+            assertTrue(request.await().exceptionOrNull() is IOException)
+            assertEquals(RecoveryAdmission.Pending(track.id), readers.recovery())
+            awaitMain { player.engine.mediaItemCount == 0 && !player.engine.playWhenReady }
+        } finally { withContext(NonCancellable) {
+            gate?.release?.complete(Unit); finish.complete(Unit)
+            request.cancel()
+            pumpUntil(scheduler) { request.isCompleted }
+        } }
+    }
+
     private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false, test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -335,23 +591,45 @@ class PlaybackIntentTest {
         }
         val native = player()
         val attached = if (rawPlayer) native.engine else native
-        val fixture = Fixture(this, queues, dao, store, native, QueueTransportPlayer(attached, queues), first, second, track, file, ::player)
+        val fixture = Fixture(this, queues, dao, store, native, QueueTransportPlayer(attached, queues), first, second, track, file, readers, library, ::player)
+        var primaryFailure: Throwable? = null
         try {
             if (!blockRestore) fixture.awaitMain { !queues.state.value.loading }
             if (attach) { queues.attach(attached); fixture.barrier() }
             withTimeout(20000) { fixture.test() }
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
         } finally { withContext(NonCancellable) {
             dao.release(); store.release()
-            actor.cancel()
-            withContext(Dispatchers.Main) { players.forEach { it.engine.release() } }
-            context.deleteSharedPreferences("intent-$id")
-            directory.deleteRecursively()
+            val closing = listOf(readers.block(track.id), readers.block(secondUri))
+            var closed = false
+            try {
+                var failure: Throwable? = null
+                suspend fun attempt(action: suspend () -> Unit) {
+                    try { action() }
+                    catch (caught: Throwable) { if (failure == null) failure = caught else failure!!.addSuppressed(caught) }
+                }
+                attempt { withTimeout(10000) { actor.coroutineContext[Job]!!.cancelAndJoin() } }
+                // Try every engine even after a release error. A synchronous Main release cannot
+                // be interrupted by coroutine timeout; the instrumentation job is the outer bound.
+                players.forEach { native -> attempt { withContext(Dispatchers.Main) { native.engine.release() } } }
+                attempt { withTimeout(10000) { closing.forEach { it.awaitClosed() } } }
+                failure?.let { throw it }
+                closed = true
+            } catch (cleanup: Throwable) {
+                if (primaryFailure == null) throw cleanup else primaryFailure.addSuppressed(cleanup)
+            } finally {
+                closing.forEach { it.release() }
+                context.deleteSharedPreferences("intent-$id")
+                if (closed) directory.deleteRecursively()
+            }
         } }
     }
 
     private class Fixture(scope: CoroutineScope, val queues: QueueController, val dao: IntentDao, val store: IntentStore,
         val player: RecordingPlayer, val controls: QueueTransportPlayer, val first: ListeningQueue, val second: ListeningQueue,
-        val track: Track, val file: File, val newPlayer: suspend () -> RecordingPlayer) : CoroutineScope by scope {
+        val track: Track, val file: File, val readers: NativeReaders, val library: LibraryRepository, val newPlayer: suspend () -> RecordingPlayer) : CoroutineScope by scope {
         suspend fun withHeldEdit(trackId: String, action: suspend () -> Unit) {
             val entered = CompletableDeferred<Unit>()
             val finish = CompletableDeferred<Unit>()
@@ -382,13 +660,18 @@ class PlaybackIntentTest {
         var error: PlaybackException? = null
         private val requested = CopyOnWriteArrayList<Boolean>()
         val trueRequests get() = requested.count { it }
+        val trueRequestSources = CopyOnWriteArrayList<String?>()
         var preparedWhilePlaying = false
         override fun getPlaybackState() = stateOverride ?: super.getPlaybackState()
         override fun getPlaybackSuppressionReason() = suppression ?: super.getPlaybackSuppressionReason()
         override fun getPlayerError() = error ?: super.getPlayerError()
         override fun isPlaying() = playWhenReady && playbackState == Player.STATE_READY && playerError == null &&
             playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE && engine.isPlaying
-        override fun setPlayWhenReady(playWhenReady: Boolean) { requested.add(playWhenReady); super.setPlayWhenReady(playWhenReady) }
+        override fun setPlayWhenReady(playWhenReady: Boolean) {
+            requested.add(playWhenReady)
+            if (playWhenReady) trueRequestSources.add(engine.currentMediaItem?.mediaMetadata?.extras?.getString("trackId"))
+            super.setPlayWhenReady(playWhenReady)
+        }
         override fun prepare() { preparedWhilePlaying = preparedWhilePlaying || playWhenReady; super.prepare() }
     }
 
