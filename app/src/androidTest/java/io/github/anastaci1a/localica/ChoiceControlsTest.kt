@@ -73,7 +73,6 @@ class ChoiceControlsTest {
                 tapTrace("target phase=$phase node=${node.id} bounds=${node.boundsInRoot} native=$native")
             }
             android.util.Log.i("ChoiceControlsTest", "Year tap bounds=${year.fetchSemanticsNode().boundsInRoot}")
-            logTarget("before single tap")
             try {
                 year.performClick().assertIsSelected()
             } finally {
