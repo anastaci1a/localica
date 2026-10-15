@@ -317,30 +317,14 @@ fun LocalicaScreen(
 
             }
             val utilityAnchor = rememberGlassAnchor()
-            SideEffect { utilityAnchor.source = browseBackdrop; utilityAnchor.face = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null, Modifier.size(28.dp)) }
-                    GlassPillDivider()
-                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_more), null, Modifier.size(28.dp)) }
-                }
-            } }
-            LiquidGlassSurface(Modifier.width(104.dp).fillMaxHeight().glassAnchor(utilityAnchor).testTag("utility-pill").bottomGlassShadow(opacity = { chromeVisibility * (1f - progress.value) }), source = browseBackdrop, shadow = false, pressFeedback = false, depthScale = RaisedGlassDepthScale) {
-                utilityAnchor.captureInk()
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                ActionIcon(R.drawable.ic_search, "Search library", glass = false, iconSize = 28.dp) {
-                    navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true))
-                }
-                GlassPillDivider()
-                Box {
-                    ActionIcon(R.drawable.ic_more, "More", glass = false, iconSize = 28.dp) { moreOpen = true }
-                    GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
-                        ActionMenuItem("Scan music", onClick = {
-                            moreOpen = false; scannerOpen = true
-                        })
-                        ActionMenuItem("Settings", onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
-                    }
-                }
-                }
+            NavigationUtilityPill(utilityAnchor, browseBackdrop,
+                Modifier.width(104.dp).fillMaxHeight(),
+                shadowOpacity = { chromeVisibility * (1f - progress.value) },
+                onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
+                onMore = { moreOpen = true })
+            GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
+                ActionMenuItem("Scan music", onClick = { moreOpen = false; scannerOpen = true })
+                ActionMenuItem("Settings", onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             }
         }
         SelectionPanelVisibility(session.panelVisible && !expanded && dragHost.state?.drag == null, Modifier.align(Alignment.BottomCenter)
