@@ -62,7 +62,9 @@ class SearchSortResetTest {
                     }
                 }
             }
-            compose.onNodeWithText("Use list-type defaults").performScrollTo().performClick()
+            val reset = compose.onNodeWithText("Use list-type defaults").assertIsDisplayed().assertIsEnabled()
+            compose.awaitExpectedWindowFocus(reset)
+            reset.performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }
             compose.runOnIdle {
                 assertFalse(preferences.overridden(search))
