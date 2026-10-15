@@ -60,7 +60,7 @@ class BrowsePinchTest {
     @Test fun oneStepUntilEveryFingerLiftsAndDisabledViewsIgnorePinches() {
         val steps = mutableListOf<Boolean>()
         var enabled by mutableStateOf(true)
-        compose.setContent { Box(Modifier.fillMaxSize().pinchToChangeView(enabled) { zoomIn, _ -> steps += zoomIn }.testTag("pinch")) }
+        compose.setContent { Box(Modifier.fillMaxSize().pinchToChangeView(enabled) { zoomIn, _ -> steps += zoomIn; true }.testTag("pinch")) }
         val target = compose.onNodeWithTag("pinch")
         target.performTouchInput {
             down(0, Offset(centerX - 50, centerY)); down(1, Offset(centerX + 50, centerY))
@@ -325,8 +325,15 @@ class BrowsePinchTest {
     }
 
     private fun waitForView(label: String) {
-        compose.waitUntil(5000) { compose.onNodeWithTag("browser-list").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == label }
-        compose.waitForIdle()
+        try {
+            compose.waitUntil(5000) { compose.onNodeWithTag("browser-list").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == label }
+            compose.waitForIdle()
+        } catch (failure: Throwable) {
+            runCatching {
+                android.util.Log.e("BrowsePinchTest", "Expected view: $label; ${compose.onNodeWithTag("browser-list").printToString()}")
+            }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
     }
 
     private fun TouchInjectionScope.pinch(zoomIn: Boolean, y: Float = centerY) {
