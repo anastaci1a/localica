@@ -32,14 +32,59 @@ class ChoiceControlsTest {
         assertFalse(saved!!.ascending)
     }
 
+    private fun choicePhase(name: String, action: () -> Unit) {
+        android.util.Log.i("ChoiceControlsTest", "phase=$name")
+        try { action() } catch (failure: Throwable) {
+            runCatching {
+                val roots = compose.onAllNodes(isRoot(), useUnmergedTree = true)
+                roots.fetchSemanticsNodes().forEachIndexed { index, node ->
+                    val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+                    val native = compose.runOnUiThread { "attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()}" }
+                    android.util.Log.e("ChoiceControlsTest", "failed phase=$name root=$index bounds=${node.boundsInRoot} native=$native")
+                    roots[index].printToLog("ChoiceControlsTest")
+                }
+                android.util.Log.e("ChoiceControlsTest", "windows=" + androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                    .uiAutomation.windows.joinToString { "id=${it.id} focused=${it.isFocused} active=${it.isActive} type=${it.type} package=${it.root?.packageName}" })
+            }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
+    }
+
     @Test fun sortAndViewTabsKeepOneDraftAndSaveBothTogether() {
         var saved: BrowseStyle? = null
+        val tapTrace: (String) -> Unit = { android.util.Log.i("ChoiceTapTrace", it) }
         compose.setContent { LocalicaTheme {
-            BrowseSortDialog(BrowseRoute(MainTab.Albums), BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
+            CompositionLocalProvider(LocalChoiceTapTrace provides tapTrace) {
+                val route = BrowseRoute(MainTab.Albums)
+                SideEffect { tapTrace("fixture-composed routeKey=${route.key}") }
+                BrowseSortDialog(route, BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
+            }
         } }
-        compose.onNodeWithText("Sort by").performClick()
-        compose.onNodeWithText("Year").performScrollTo().performClick()
-        compose.onNodeWithText("Select", substring = false).performClick()
+        choicePhase("open sort choices") { compose.onNodeWithText("Sort by").performClick() }
+        choicePhase("single Year tap selects draft") {
+            val year = compose.onNodeWithText("Year").performScrollTo()
+            fun logTarget(phase: String) {
+                val node = year.fetchSemanticsNode()
+                val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+                val native = compose.runOnUiThread {
+                    val screen = IntArray(2).also(view::getLocationOnScreen)
+                    "view=${System.identityHashCode(view)} attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()} screen=${screen.contentToString()} size=${view.width}x${view.height}"
+                }
+                tapTrace("target phase=$phase node=${node.id} bounds=${node.boundsInRoot} native=$native")
+            }
+            android.util.Log.i("ChoiceControlsTest", "Year tap bounds=${year.fetchSemanticsNode().boundsInRoot}")
+            try {
+                year.performClick().assertIsSelected()
+            } finally {
+                // Keep the original assertion failure even if diagnostic inspection fails.
+                runCatching { logTarget("after single tap") }.onFailure { tapTrace("target inspection failed: $it") }
+            }
+        }
+        choicePhase("Select commits Year to parent") {
+            compose.onNodeWithText("Select", substring = false).performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Select", substring = false).fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithText("Year").assertIsDisplayed()
+        }
         val body = compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot
         compose.onNodeWithText("Save only for this list").assertDoesNotExist()
         compose.onNodeWithText("View", substring = false).performClick().assertIsSelected()
@@ -48,7 +93,13 @@ class ChoiceControlsTest {
         compose.onNodeWithText("Gallery", substring = false).performClick()
         compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
         compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
-        compose.onNodeWithText("Year").assertIsDisplayed()
+        choicePhase("return to Sort retains Year") {
+            // Selected tab semantics update before the incoming page is placed.
+            compose.waitUntil(5000) {
+                runCatching { compose.onNodeWithText("Year").assertIsDisplayed() }.isSuccess
+            }
+            compose.onNodeWithText("Year").assertIsDisplayed()
+        }
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle {
             assertEquals(TrackSort.Year, saved!!.sort)

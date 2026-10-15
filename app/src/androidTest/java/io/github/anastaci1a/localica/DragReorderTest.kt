@@ -29,8 +29,9 @@ import org.junit.Test
 class DragReorderTest {
     @get:Rule val compose = createComposeRule()
     private val selection = SessionSelection()
+    private var interactionEnabled by mutableStateOf(true)
     private lateinit var backDispatcher: androidx.activity.OnBackPressedDispatcher
-    private fun fixture(gallery: Boolean = false, failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
+    private fun fixture(gallery: Boolean = false, failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, filtered: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         val db = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
@@ -50,25 +51,71 @@ class DragReorderTest {
                     presentation = io.github.anastaci1a.localica.browse.Presentation.Standard, itemsPerRow = 3), true)
             if (failWrites) db.openHelper.writableDatabase.execSQL(
                 "CREATE TRIGGER reject_move BEFORE INSERT ON playlist_entries BEGIN SELECT RAISE(ABORT, 'Injected failure'); END")
+            // Incidental selection/overlay recomposition must retain the source revision,
+            // as the real screen's collected LibraryUiState does until library data changes.
+            val library = LibraryUiState(loading = false)
             compose.setContent { LocalicaTheme {
                 backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
                 val state by controller.state.collectAsState()
                 val host = remember { SongDragHost() }
-                val route = remember(playlist.id) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)) }
+                val route = remember(playlist.id) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), text = if (filtered) "Song" else "") }
                 Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter) 80.dp else 0.dp).clipToBounds()) {
                 CompositionLocalProvider(LocalSessionSelection provides selection, LocalSongDragHost provides host) {
-                    BrowserScreen(LibraryUiState(loading = false), state,
+                    BrowserScreen(library, state,
                         route, {}, {}, {},
-                        { _, _, _ -> fail("A held song must not play") }, null, controller, true, false)
+                        { _, _, _ -> fail("A held song must not play") }, null, controller, interactionEnabled, false)
                 } }
                 if (foregroundFooter) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(80.dp).background(Color.Magenta).testTag("fixture-footer"))
+                SelectionPanelVisibility(selection.panelVisible && host.state?.drag == null,
+                    Modifier.align(Alignment.BottomCenter)) {
+                    Box(Modifier.size(1.dp).testTag("fixture-selection-panel"))
+                }
                 ForegroundSongDragOverlay(host)
                 }
             } }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty() }
             test(controller, playlist)
         } finally { scope.cancel(); db.close() }
+    }
+    private fun assertReleasePresentation(filtered: Boolean) = fixture(filtered = filtered) { _, playlist ->
+        val id = playlist.entries[1].id
+        val row = compose.onNodeWithTag("media-$id")
+        val originalBounds = row.fetchSemanticsNode().boundsInRoot
+        var held = false
+        try {
+            row.performTouchInput { down(center); held = true; advanceEventTime(650); moveTo(center) }
+            compose.runOnIdle {
+                assertEquals(listOf(id), selection.entries.map { it.row.id })
+                assertTrue(selection.active)
+                assertFalse("A newly recognized hold must not expose the panel", selection.panelVisible)
+            }
+            assertEquals("Recognizing selection must not move its held row", originalBounds, row.fetchSemanticsNode().boundsInRoot)
+            compose.onNodeWithTag("fixture-selection-panel").assertDoesNotExist()
+            row.performTouchInput { up(); held = false }
+            compose.runOnIdle { assertTrue(selection.panelVisible) }
+            compose.onNodeWithTag("fixture-selection-panel").assertExists()
+            // A pre-existing (including collapsed) panel retains its presentation during another hold.
+            compose.runOnIdle { selection.collapsed = true }
+            row.performTouchInput { down(center); held = true; advanceEventTime(650); moveTo(center) }
+            compose.runOnIdle { assertTrue(selection.panelVisible); assertTrue(selection.collapsed) }
+            row.performTouchInput { up(); held = false }
+        } finally {
+            if (held) {
+                compose.mainClock.autoAdvance = false
+                try { row.performTouchInput { cancel() } } finally { compose.mainClock.autoAdvance = true }
+            }
+        }
+    }
+    @Test fun mutableSongPanelWaitsForPointerRelease() = assertReleasePresentation(false)
+    @Test fun filteredSongPanelWaitsForPointerReleaseWithoutReordering() = assertReleasePresentation(true)
+    @Test fun accessibilitySelectionWithoutPointerShowsPanelImmediately() = fixture { _, playlist ->
+        val id = playlist.entries[1].id
+        compose.onNodeWithTag("media-$id").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnLongClick) { assertTrue(it()) }
+        compose.runOnIdle {
+            assertEquals(listOf(id), selection.entries.map { it.row.id })
+            assertTrue(selection.panelVisible)
+        }
     }
     @Test fun backClearsMutableListSelectionWithoutLeavingTheList() = fixture { _, playlist ->
         val id = playlist.entries[1].id
@@ -78,6 +125,37 @@ class DragReorderTest {
         compose.onNodeWithTag("media-$id").assertIsDisplayed().assertIsNotSelected()
         compose.runOnIdle { assertFalse(selection.active); assertTrue(selection.entries.isEmpty()) }
     }
+    @Test fun disablingDragCancelsHeldTransactionAndRejectsNewDowns() = fixture { controller, playlist ->
+        val original = playlist.entries.map { it.id }
+        val list = compose.onNodeWithTag("browser-list")
+        val bounds = list.fetchSemanticsNode().boundsInRoot
+        val from = compose.onNodeWithTag("media-${original[1]}").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+        compose.runOnIdle { interactionEnabled = false }
+        list.performTouchInput { down(from); advanceEventTime(650); moveTo(from + Offset(0f, 40f)); up() }
+        compose.runOnIdle { assertFalse(selection.active) }
+        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        compose.runOnIdle { interactionEnabled = true }
+        var held = false
+        try {
+            list.performTouchInput { down(from); held = true; advanceEventTime(650); moveTo(from + Offset(0f, 40f)) }
+            compose.onNodeWithTag("drag-stack").assertExists()
+            compose.runOnIdle { interactionEnabled = false }
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
+            compose.runOnIdle {
+                // Interruption rolls back the drag while retaining its selection.
+                assertTrue(selection.active)
+                assertEquals(listOf(original[1]), selection.entries.map { it.row.id })
+                assertEquals(original, controller.state.value.playlists.single().entries.map { it.id })
+            }
+            list.performTouchInput { up(); held = false }
+        } finally {
+            if (held) {
+                compose.mainClock.autoAdvance = false
+                try { list.performTouchInput { cancel() } } finally { compose.mainClock.autoAdvance = true }
+            }
+        }
+    }
+
     @Test fun disjointSelectionLiftsIntoStackAndMovesInSourceOrder() = fixture { controller, playlist ->
         val ids = playlist.entries.map { it.id }
         compose.onNodeWithTag("media-${ids[2]}").performTouchInput { longClick() }
@@ -103,6 +181,8 @@ class DragReorderTest {
     }
     @Test fun gallerySelectionStaysGalleryWhileLiftedAndLandsAtItsActualBounds() = fixture(gallery = true) { _, playlist ->
         val id = playlist.entries[1].id
+        val restingCard = compose.onNodeWithTag("media-$id").fetchSemanticsNode().boundsInRoot
+        val restingArt = compose.onNodeWithTag("browse-art-$id", true).fetchSemanticsNode().boundsInRoot
         compose.onNodeWithTag("media-$id").performTouchInput { longClick() }
         compose.onNodeWithTag("media-$id").assertIsSelected()
         compose.onNodeWithText("Select song").assertDoesNotExist()
@@ -113,6 +193,8 @@ class DragReorderTest {
         val art = compose.onNodeWithTag("browse-art-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val text = compose.onNodeWithTag("browse-text-$id", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue("A lifted tile retains its large artwork", art.width > stack.width * .65f)
+        assertEquals("Lifting must preserve the artwork width", restingArt.width, art.width, 2f)
+        assertEquals("Lifting must preserve the content inset", restingArt.left - restingCard.left, art.left - stack.left, 2f)
         assertTrue("Gallery text stays below the artwork", text.top >= art.bottom - 1f)
         compose.mainClock.autoAdvance = false
         try {
@@ -202,7 +284,7 @@ class DragReorderTest {
         compose.onNodeWithTag("browser-list").performTouchInput { moveTo(target); advanceEventTime(32); up() }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
         assertEquals(playlist, controller.state.value.playlists.single())
-        compose.runOnIdle { assertEquals(listOf(id), selection.entries.map { it.row.id }) }
+        compose.runOnIdle { assertEquals(listOf(id), selection.entries.map { it.row.id }); assertTrue(selection.panelVisible) }
     }
     @Test fun releasingAtOriginalPositionFinishesSelection() = fixture { controller, playlist ->
         val id = playlist.entries[1].id
@@ -219,20 +301,34 @@ class DragReorderTest {
             down(center); advanceEventTime(650); moveBy(Offset(0f, 90f)); advanceEventTime(32)
         }
         compose.onNodeWithTag("drag-stack").assertExists()
+        compose.runOnIdle { assertFalse(selection.panelVisible) }
         compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
         assertEquals(playlist, controller.state.value.playlists.single())
-        compose.runOnIdle { assertEquals(listOf(id), selection.entries.map { it.row.id }) }
+        compose.runOnIdle { assertEquals(listOf(id), selection.entries.map { it.row.id }); assertTrue(selection.panelVisible) }
     }
     @Test fun failedSaveRestoresOrderWithoutClearingSelection() = fixture(failWrites = true) { controller, playlist ->
         val id = playlist.entries[1].id
-        compose.onNodeWithTag("media-$id").performTouchInput {
-            down(center); advanceEventTime(650); moveBy(Offset(0f, 240f)); advanceEventTime(50); up()
+        val list = compose.onNodeWithTag("browser-list")
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        val source = compose.onNodeWithTag("media-$id").fetchSemanticsNode().boundsInRoot
+        val destination = compose.onNodeWithTag("media-${playlist.entries[3].id}")
+            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot.center
+        val from = source.center - viewport.topLeft
+        val to = destination - viewport.topLeft
+        // A fixed pixel delta can remain in the original insertion slot when
+        // list artwork grows. Exercise an actual reorder before rejecting its save.
+        list.performTouchInput {
+            down(from); advanceEventTime(650); moveTo(to); advanceEventTime(50)
         }
+        compose.onNodeWithTag("drag-stack").assertExists()
+        val gap = compose.onNodeWithTag("drop-gap").fetchSemanticsNode().boundsInRoot
+        assertTrue("The drop must move beyond the original row: source=$source, gap=$gap", gap.top > source.bottom)
+        list.performTouchInput { up() }
         compose.waitUntil(5000) { controller.state.value.problem != null }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
         assertEquals(playlist, controller.state.value.playlists.single())
-        compose.runOnIdle { assertEquals(listOf(id), selection.entries.map { it.row.id }) }
+        compose.runOnIdle { assertEquals(listOf(id), selection.entries.map { it.row.id }); assertTrue(selection.panelVisible) }
     }
     @Test fun heldStackScrollsAtEdgeAndStillCancels() = fixture(count = 40) { controller, playlist ->
         val id = playlist.entries[1].id

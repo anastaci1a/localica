@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
@@ -22,7 +23,7 @@ import kotlinx.coroutines.withContext
 internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins: List<MediaRef>,
     onSettings: () -> Unit, onBrowse: () -> Unit, onOpen: (BrowserItem, List<SongRow>) -> Unit,
     onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
-    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default,
+    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, selectionVisible: Boolean = true,
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null, queues: io.github.anastaci1a.localica.queue.QueueController? = null) {
     val cache = LocalBrowsePresentationCache.current
     val cached = remember(library.snapshot, playlists.playlists, pins, cache) { cache?.home(library.snapshot, playlists.playlists, pins) }
@@ -36,6 +37,9 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         cache?.putHome(library.snapshot, playlists.playlists, pins, result)
         value = result
     }
+    val session = LocalSessionSelection.current ?: remember { SessionSelection() }
+    val songs = items.mapNotNull { it.row }
+    BindSelectionScope(session, null, songs, selectionVisible)
     var info by remember { mutableStateOf<io.github.anastaci1a.localica.library.Track?>(null) }
     val editTags = LocalTagEdit.current
     var menu by remember { mutableStateOf<MediaRef?>(null) }
@@ -68,10 +72,17 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
-        item { LazyRow(state = carousel, modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { SelectionViewport { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
+            modifier = Modifier.nestedScroll(HorizontalGestureOwner).testTag("home-pins"), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
                 val anchor = rememberGlassAnchor()
-                Column(Modifier.width(160.dp).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
+                val selectedCount = session.selectedCount(item)
+                Column(Modifier.width(160.dp).clip(Corners.card).testTag("pin-${item.key}")
+                    .selectionLens(selectedCount > 0, item.row == null && selectedCount > 0 && selectedCount < item.songs.size)
+                    .combinedClickable(onClick = {
+                        if (item.row != null && session.active) session.toggle(null, item.row)
+                        else onOpen(item, songs)
+                    },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {
                     MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f).contextMenuAnchor(anchor, item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)), shape = artworkShape(item.ref.kind))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
@@ -84,7 +95,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                         onClick = { onMove(item.ref, 1); menu = null })
                 })
             } }
-        } }
+        } } }
     }
     }
     info?.let { track -> SongInformation(track, { info = null }, { editTags?.invoke(listOf(track)) {} }) { action ->

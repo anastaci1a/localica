@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.LocalicaApplication
 import io.github.anastaci1a.localica.library.ArtworkCache
 import io.github.anastaci1a.localica.library.Track
@@ -32,17 +33,30 @@ internal fun rememberLyrics(track: Track?): LyricsResult? {
     val context = LocalContext.current
     val repository = remember(context) { (context.applicationContext as? LocalicaApplication)?.lyrics ?: LyricsRepository(context) }
     val revision by ArtworkCache.revision.collectAsState()
+    return rememberLyrics(track, revision, repository::load)
+}
+
+@Composable
+internal fun rememberLyrics(track: Track?, revision: Long, load: suspend (Track, Long) -> LyricsResult): LyricsResult? {
     // A new key starts empty: never expose the preceding song's availability.
     return key(track?.id, track?.uri, track?.locations, revision) {
-        val result by produceState<LyricsResult?>(null) { value = track?.let { repository.load(it, revision) } ?: LyricsResult() }
+        val result by produceState<LyricsResult?>(null) { value = track?.let { load(it, revision) } ?: LyricsResult() }
         result
     }
+}
+
+private sealed interface LyricsPresentation {
+    data object Loading : LyricsPresentation
+    data object Unavailable : LyricsPresentation
+    data object Missing : LyricsPresentation
+    data class Available(val source: LyricSource) : LyricsPresentation
 }
 
 @Composable
 internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null,
-    sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null) {
+    sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null,
+    contentHeight: Dp? = null, result: LyricsResult? = rememberLyrics(track)) {
     val lyricClock by produceState(positionMs, positionMs, sampledAtMs, playing, speed, delayMs, durationMs) {
         do {
             value = lyricPosition(positionMs, sampledAtMs, android.os.SystemClock.elapsedRealtime(), playing, speed, delayMs, durationMs)
@@ -51,7 +65,6 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         } while (true)
     }
     val context = LocalContext.current
-    val result = rememberLyrics(track)
     val preferences = remember { context.getSharedPreferences("lyric-sources", 0) }
     var chosen by rememberSaveable(track?.id) { mutableStateOf(preferences.getString(track?.id ?: "", null)) }
     LaunchedEffect(result, chosen) {
@@ -63,8 +76,17 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         }
     }
     val source = result?.sources?.firstOrNull { it.id == chosen } ?: result?.sources?.firstOrNull()
+    // Crossfade retains outgoing content. Capture availability in its target so a completed
+    // read cannot turn an outgoing loading layer into a false missing-lyrics indicator.
+    val presentation = when {
+        source != null -> LyricsPresentation.Available(source)
+        result == null -> LyricsPresentation.Loading
+        result.problem != null -> LyricsPresentation.Unavailable
+        else -> LyricsPresentation.Missing
+    }
     var sourcesOpen by remember { mutableStateOf(false) }
     LaunchedEffect(sourcesRequest) { if (sourcesRequest > 0) sourcesOpen = true }
+    // The empty decoration uses the stable background viewport. Only actual lyrics resize with metadata.
     Column(modifier.testTag("lyrics-panel")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
@@ -78,17 +100,20 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                 }
             }
         }
-        androidx.compose.animation.Crossfade(source, Modifier.weight(1f),
+        androidx.compose.animation.Crossfade(presentation, Modifier.weight(1f),
             animationSpec = tween(if (reducedMotion) 0 else 300), label = "Song lyrics") { shown ->
-            when {
-                shown == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    if (result != null) Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_lyrics),
+            when (shown) {
+                LyricsPresentation.Loading, LyricsPresentation.Unavailable -> Box(Modifier.fillMaxSize())
+                LyricsPresentation.Missing -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    // A prior song's empty state is no longer authoritative once another read starts.
+                    if (presentation == LyricsPresentation.Missing) Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_lyrics),
                         "No local lyrics", Modifier.size(56.dp).testTag("empty-lyrics"), tint = LocalContentColor.current.copy(alpha = .22f))
                 }
-                else -> key(shown.id, shown.document) {
+                is LyricsPresentation.Available -> key(shown.source.id, shown.source.document) {
                     var shownPosition by remember { mutableLongStateOf(lyricClock) }
-                    SideEffect { if (shown == source) shownPosition = lyricClock }
-                    LyricsLines(shown.document, shownPosition, reducedMotion, onSeek, Modifier.fillMaxSize())
+                    SideEffect { if (shown == presentation) shownPosition = lyricClock }
+                    LyricsLines(shown.source.document, shownPosition, reducedMotion, onSeek,
+                        Modifier.fillMaxWidth().then(contentHeight?.let { Modifier.height(it) } ?: Modifier.fillMaxHeight()))
                 }
             }
         }

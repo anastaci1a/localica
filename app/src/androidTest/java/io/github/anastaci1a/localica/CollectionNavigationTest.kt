@@ -24,7 +24,7 @@ class CollectionNavigationTest {
         compose.setContent {
             LocalicaTheme {
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {},
-                    playbackContent = { QueueSettingsControls(QueueSettings()) { saved = it } }, initialCategory = "Playback and queues")
+                    playbackContent = { QueueSettingsControls(QueueSettings()) { saved = it(QueueSettings()) } }, initialCategory = "Playback and queues")
             }
         }
         compose.onNodeWithText("Playback and queues").assertIsDisplayed()

@@ -2,9 +2,16 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModel
+import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.library.SongRow
 import io.github.anastaci1a.localica.navigation.MediaRef
 import java.util.UUID
+
+/** Collections own their occurrences; a song row inherits the list containing it. */
+internal data class SongSelectionTarget(val source: MediaRef?, val rows: List<SongRow>)
+
+internal fun BrowserItem.selectionTarget(containingSource: MediaRef? = null) =
+    if (row == null) SongSelectionTarget(ref, songs) else SongSelectionTarget(containingSource, listOf(row))
 
 internal data class SelectedSong(val id: String = UUID.randomUUID().toString(), val source: MediaRef?, val row: SongRow)
 
@@ -13,12 +20,26 @@ internal class SessionSelection : ViewModel() {
     var active by mutableStateOf(false)
         private set
     var collapsed by mutableStateOf(false)
+    private var presentationHold by mutableStateOf<Any?>(null)
+    val panelVisible: Boolean get() = active && presentationHold == null
+
+    /** Membership starts at recognition; a new panel waits for its initiating pointer. */
+    fun beginPresentationHold(): Any? {
+        if (active || presentationHold != null) return null
+        return Any().also { presentationHold = it }
+    }
+    fun endPresentationHold(token: Any?) {
+        if (token != null && presentationHold === token) presentationHold = null
+    }
     val entries = mutableStateListOf<SelectedSong>()
     private val occurrences by derivedStateOf { entries.mapTo(hashSetOf()) { it.source to it.row.id } }
     val trackIds by derivedStateOf { entries.mapTo(hashSetOf()) { it.row.track.id } }
     var visible: List<SongRow> = emptyList()
     var source: MediaRef? = null
     fun contains(source: MediaRef?, id: String) = source to id in occurrences
+    fun selectedCount(item: BrowserItem, containingSource: MediaRef? = null): Int =
+        item.row?.let { if (contains(containingSource, it.id)) 1 else 0 }
+            ?: item.songs.count { it.track.id in trackIds }
     fun select(source: MediaRef?, rows: List<SongRow>) {
         if (!active) collapsed = false
         active = true
@@ -38,6 +59,12 @@ internal class SessionSelection : ViewModel() {
     fun clear() { entries.clear(); active = false; collapsed = false }
 }
 internal val LocalSessionSelection = staticCompositionLocalOf<SessionSelection?> { null }
+
+/** Only the settled, uncovered list owns All/Range; offscreen pages retain membership. */
+@Composable
+internal fun BindSelectionScope(session: SessionSelection, source: MediaRef?, rows: List<SongRow>, active: Boolean) {
+    SideEffect { if (active) { session.visible = rows; session.source = source } }
+}
 
 @Composable
 internal fun SessionSelectionPanel(session: SessionSelection, queues: io.github.anastaci1a.localica.queue.QueueController?,
