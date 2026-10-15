@@ -28,6 +28,13 @@ import io.github.anastaci1a.localica.navigation.BrowseRoute
 internal data class FrozenBrowseItem(val image: androidx.compose.ui.graphics.ImageBitmap,
     val origin: androidx.compose.ui.unit.IntOffset, val size: androidx.compose.ui.unit.IntSize)
 
+// Temporary diagnostic opt-in, enabled only by the isolated native fixture.
+@Volatile internal var pinchTraceEnabled = false
+
+private fun tracePinch(message: () -> String) {
+    if (pinchTraceEnabled) android.util.Log.d("BrowsePinchTrace", message())
+}
+
 internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0)
 
 @Stable
@@ -63,6 +70,7 @@ internal class BrowsePinchMotion {
         capture = null; tracking = null; settling = null
     }
     fun dispose() {
+        tracePinch { "dispose source=$source target=$target held=$held progress=$fingerProgress" }
         disposed = true
         capture?.cancel(); tracking?.cancel(); settling?.cancel()
         clearTransaction()
@@ -124,6 +132,7 @@ internal fun Modifier.pinchToChangeView(enabled: Boolean, gestureKey: Any? = Uni
                                 gestureProgress = progress
                                 gestureRelease = release
                                 accepted = step(outward, event.calculateCentroid())
+                                tracePinch { "recognized key=$gestureKey available=$available accepted=$accepted scale=$scale outward=$outward" }
                             }
                             if (accepted) {
                                 // Consume recognition slop, not a visible fraction of the
@@ -133,11 +142,20 @@ internal fun Modifier.pinchToChangeView(enabled: Boolean, gestureKey: Any? = Uni
                                 gestureProgress?.invoke(pinchProgress(adjusted, outward))
                             }
                         }
-                        if (fingers == 0) released = event.changes.none { it.isConsumed }
+                        if (fingers == 0) {
+                            tracePinch { "final event key=$gestureKey type=${event.type} consumed=${event.changes.map { it.isConsumed }} previousPressed=${event.changes.map { it.previousPressed }}" }
+                            released = event.changes.none { it.isConsumed }
+                        }
                         event.changes.forEach { it.consume() }
                     }
                 } while (event.changes.any { it.pressed })
-            } finally { if (accepted) gestureRelease?.invoke(!released) }
+            } catch (failure: kotlinx.coroutines.CancellationException) {
+                tracePinch { "pointer coroutine canceled key=$gestureKey accepted=$accepted released=$released type=${failure.javaClass.simpleName}" }
+                throw failure
+            } finally {
+                tracePinch { "gesture finished key=$gestureKey owned=$owned accepted=$accepted released=$released scale=$scale" }
+                if (accepted) gestureRelease?.invoke(!released)
+            }
         }
     }
 }
@@ -165,6 +183,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             }
         },
         onRelease = { cancelled ->
+            tracePinch { "release key=${route.key} cancelled=$cancelled disposed=${motion.disposed} source=${motion.source} target=${motion.target} progress=${motion.fingerProgress}" }
             if (!motion.disposed && motion.source != null && motion.target != null) {
                 motion.held = false
                 motion.tracking?.cancel()
@@ -188,6 +207,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
         }) { zoomIn, midpoint ->
         val next = style.zoomStep(zoomIn, with(density) { width.toDp().value },
             albumSongs = route.collection?.kind == MediaKind.Album)
+        tracePinch { "step key=${route.key} style=$style next=$next disposed=${motion.disposed} existing=${motion.source}" }
         if (next != style && !motion.disposed && motion.source == null) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
             motion.source = style
@@ -253,6 +273,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         val image = captureLayer.toImageBitmap()
                         drawings.forEachIndexed { i, (key, layer) -> motion.frozen[key] = FrozenBrowseItem(image, origins[i], layer.size) }
                     }
+                    tracePinch { "capture complete key=${route.key} held=${motion.held} next=$next" }
                     onPreview(next)
                 } finally { motion.capturing = false }
                 if (motion.held && !reducedMotion) {
