@@ -58,7 +58,19 @@ import kotlinx.coroutines.*
         }
         if (item.ref.kind == MediaKind.Playlist) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            ActionMenuItem("Set playlist image", enabled = controller != null, onClick = { onDismiss(); image = true })
+            val customCover = playlists.playlists.firstOrNull { it.id == item.ref.id }?.coverUri
+            ActionMenuItem(if (customCover != null) "Remove playlist image" else "Set playlist image",
+                enabled = controller != null && !busy, onClick = {
+                    onDismiss()
+                    if (customCover == null) image = true
+                    else {
+                        busy = true
+                        controller?.cover(item.ref.id, null) { ok ->
+                            busy = false
+                            if (!ok) failure = "Couldn’t remove the playlist image."
+                        }
+                    }
+                })
             ActionMenuItem("Rename playlist", enabled = controller != null, onClick = { onDismiss(); renaming = true })
             ActionMenuItem("Delete playlist", enabled = controller != null, onClick = { onDismiss(); deleting = true })
         }
