@@ -28,7 +28,7 @@ class SearchSourceRevisionTest {
         var shown: BrowsePresentationState? = null
         compose.setContent {
             val state = rememberBrowsePresentation(library, emptyList(), emptyList(), LibraryFilters(), route,
-                BrowseStyle(), true, dispatcher)
+                BrowseStyle(), true, dispatcher, BrowseSortSnapshot.Default)
             SideEffect { shown = state }
         }
         fun nextQuery() = requireNotNull(tasks.poll(5, TimeUnit.SECONDS)) { "Expected queued search" }
@@ -52,6 +52,38 @@ class SearchSourceRevisionTest {
         compose.runOnIdle {
             assertFalse(shown!!.pending)
             assertEquals("Final", shown!!.current!!.result.rows.single().track.title)
+        }
+    }
+
+    @Test fun sameQueryCannotPublishAnOldCollectionSortAfterPreferencesChange() {
+        val tasks = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { tasks.add(block) }
+        }
+        val library = LibrarySnapshot(tracks = listOf(
+            Track("alpha", "Alpha", album = "Album", fileName = "alpha.mp3", relativePath = "alpha.mp3"),
+            Track("zulu", "Zulu", album = "Album", fileName = "zulu.mp3", relativePath = "zulu.mp3")))
+        fun ordering(ascending: Boolean) = BrowseSortSnapshot.fromValues(mapOf(
+            "contents.Album.sort" to "Title", "contents.Album.ascending" to ascending))
+        var sorts by mutableStateOf(ordering(true))
+        var shown: BrowsePresentationState? = null
+        compose.setContent {
+            val state = rememberBrowsePresentation(library, emptyList(), emptyList(), LibraryFilters(),
+                BrowseRoute(MainTab.Albums), BrowseStyle(), true, dispatcher, sorts)
+            SideEffect { shown = state }
+        }
+        fun nextQuery() = requireNotNull(tasks.poll(5, TimeUnit.SECONDS)) { "Expected queued query" }
+        val superseded = nextQuery()
+        compose.runOnIdle { sorts = ordering(false) }
+        compose.waitForIdle()
+        nextQuery().run()
+        compose.waitForIdle()
+        superseded.run()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertFalse(shown!!.pending)
+            assertEquals(listOf("zulu"), shown!!.current!!.result.items.single().coverUris)
+            assertEquals(sorts, shown!!.current!!.sorts)
         }
     }
 }
