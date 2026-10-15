@@ -57,6 +57,29 @@ class SearchImeMotionTest {
             " rootToken=${view?.windowToken} dialogToken=${window?.decorView?.windowToken} $sample")
     }
 
+    // Only docked-IME fixtures opt in. Restore even when setup or a test assertion fails.
+    private fun withDockedKeyboard(block: () -> Unit) {
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun shell(command: String): String = android.os.ParcelFileDescriptor.AutoCloseInputStream(
+            automation.executeShellCommand(command)
+        ).bufferedReader().use { it.readText().trim() }
+        val key = "show_ime_with_hard_keyboard"
+        val original = shell("settings get secure $key")
+        check(original == "null" || original.matches(Regex("-?[0-9]+"))) {
+            "Cannot safely snapshot docked-keyboard fixture setting"
+        }
+        try {
+            shell("settings put secure $key 1")
+            assertEquals("Docked-keyboard fixture setting must be enabled", "1", shell("settings get secure $key"))
+            // Do not wait here: the modal test must still observe the real initial IME flight.
+            block()
+        } finally {
+            if (original == "null") shell("settings delete secure $key")
+            else shell("settings put secure $key $original")
+            assertEquals("Restore the original keyboard setting after the fixture", original, shell("settings get secure $key"))
+        }
+    }
+
     // Fixed read-only commands; emit only allowlisted state values, never editor text or raw dumps.
     private fun keyboardDiagnostics(label: String, view: android.view.View? = popupView) {
         val nativeState = compose.runOnUiThread {
@@ -183,7 +206,7 @@ class SearchImeMotionTest {
         return node.boundsInRoot.translate(Offset(location[0].toFloat(), location[1].toFloat()))
     }
 
-    @Test fun plainNativeEditorProvidesDockedImeControl() {
+    @Test fun plainNativeEditorProvidesDockedImeControl() = withDockedKeyboard {
         var editor: android.widget.EditText? = null
         compose.setContent {
             androidx.compose.ui.viewinterop.AndroidView(factory = { context ->
@@ -222,7 +245,7 @@ class SearchImeMotionTest {
         }
     }
 
-    @Test fun openingWaitsForImeAndEmptyBackReturnsDirectlyWhileImeHides() {
+    @Test fun openingWaitsForImeAndEmptyBackReturnsDirectlyWhileImeHides() = withDockedKeyboard {
         fixture(true)
         compose.mainClock.autoAdvance = false
         try {
@@ -312,7 +335,7 @@ class SearchImeMotionTest {
         }
     }
 
-    @Test fun reducedMotionStillResolvesKeyboardTargetBeforeShowingThePopup() {
+    @Test fun reducedMotionStillResolvesKeyboardTargetBeforeShowingThePopup() = withDockedKeyboard {
         reduced = true
         fixture(true)
         compose.mainClock.autoAdvance = false
