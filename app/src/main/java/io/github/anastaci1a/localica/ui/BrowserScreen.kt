@@ -341,6 +341,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
         LookaheadScope {
         if (popupDismiss == null || route.text.isNotBlank()) BoxWithConstraints(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
+            .selectionPanelRelease(session, route.key,
+                enabled && !queryPending && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) { position ->
+                val item = reorder.hit(position)
+                val bounds = item?.let { reorder.bounds()[it.key] }
+                item?.row != null && bounds != null &&
+                    (displayedStyle.presentation != Presentation.List || position.x <= bounds.right - with(density) { 48.dp.toPx() })
+            }
             .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
             val viewportWidth = constraints.maxWidth
             val columns = galleryColumns(displayedStyle.presentation, with(density) { viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
@@ -455,7 +462,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             onLongClick = {
                                 // Mutable songs reserve holds for selection; dots retain context actions.
                                 if (item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) {
-                                    if (!editableOrder) session.select(route.collection, listOf(item.row))
+                                    session.select(route.collection, listOf(item.row))
                                 } else contextMenu = item.key
                             }
                         )) {
@@ -529,7 +536,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
         }
-        if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.active && reorder.drag == null, reducedMotion = reducedMotion) {
+        if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.panelVisible && reorder.drag == null, reducedMotion = reducedMotion) {
             SessionSelectionPanel(session, queues, playlistController, playlists)
         }
     }
