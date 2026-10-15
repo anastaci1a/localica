@@ -51,6 +51,9 @@ class DragReorderTest {
                     presentation = io.github.anastaci1a.localica.browse.Presentation.Standard, itemsPerRow = 3), true)
             if (failWrites) db.openHelper.writableDatabase.execSQL(
                 "CREATE TRIGGER reject_move BEFORE INSERT ON playlist_entries BEGIN SELECT RAISE(ABORT, 'Injected failure'); END")
+            // Incidental selection/overlay recomposition must retain the source revision,
+            // as the real screen's collected LibraryUiState does until library data changes.
+            val library = LibraryUiState(loading = false)
             compose.setContent { LocalicaTheme {
                 backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
                 val state by controller.state.collectAsState()
@@ -59,7 +62,7 @@ class DragReorderTest {
                 Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter) 80.dp else 0.dp).clipToBounds()) {
                 CompositionLocalProvider(LocalSessionSelection provides selection, LocalSongDragHost provides host) {
-                    BrowserScreen(LibraryUiState(loading = false), state,
+                    BrowserScreen(library, state,
                         route, {}, {}, {},
                         { _, _, _ -> fail("A held song must not play") }, null, controller, interactionEnabled, false)
                 } }
