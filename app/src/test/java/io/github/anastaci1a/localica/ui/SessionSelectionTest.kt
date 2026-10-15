@@ -8,6 +8,39 @@ import org.junit.Test
 
 class SessionSelectionTest {
     private val track = Track("song", "Song", fileName = "song.mp3", relativePath = "song.mp3")
+    @Test fun heldPointerDefersOnlyNewPanelAndReleasePreservesMembership() {
+        val state = SessionSelection()
+        val token = state.beginPresentationHold()
+        state.select(null, listOf(SongRow("entry", track)))
+        assertTrue(state.active)
+        assertFalse(state.panelVisible)
+        state.endPresentationHold(Any())
+        state.endPresentationHold(null)
+        assertFalse(state.panelVisible)
+        state.endPresentationHold(token)
+        assertTrue(state.panelVisible)
+        assertEquals(listOf("entry"), state.entries.map { it.row.id })
+        state.collapsed = true
+        assertNull(state.beginPresentationHold())
+        assertTrue(state.panelVisible)
+        assertTrue(state.collapsed)
+    }
+    @Test fun clearingMembershipDoesNotReleaseAnOutstandingPointerOrALaterOwner() {
+        val state = SessionSelection()
+        val first = state.beginPresentationHold()
+        state.select(null, listOf(SongRow("entry", track)))
+        state.clear()
+        state.select(null, listOf(SongRow("second", track)))
+        assertFalse(state.panelVisible)
+        state.endPresentationHold(first)
+        state.clear()
+        val second = state.beginPresentationHold()
+        state.select(null, listOf(SongRow("third", track)))
+        state.endPresentationHold(first)
+        assertFalse(state.panelVisible)
+        state.endPresentationHold(second)
+        assertTrue(state.panelVisible)
+    }
     @Test fun collectionSelectionUsesItsOwnSourceInCatalogsSearchAndOtherCollections() {
         val rows = listOf(SongRow("entry1", track), SongRow("entry2", track))
         for (kind in MediaKind.entries.filterNot { it == MediaKind.Song }) {

@@ -20,6 +20,17 @@ internal class SessionSelection : ViewModel() {
     var active by mutableStateOf(false)
         private set
     var collapsed by mutableStateOf(false)
+    private var presentationHold by mutableStateOf<Any?>(null)
+    val panelVisible: Boolean get() = active && presentationHold == null
+
+    /** Membership starts at recognition; a new panel waits for its initiating pointer. */
+    fun beginPresentationHold(): Any? {
+        if (active || presentationHold != null) return null
+        return Any().also { presentationHold = it }
+    }
+    fun endPresentationHold(token: Any?) {
+        if (token != null && presentationHold === token) presentationHold = null
+    }
     val entries = mutableStateListOf<SelectedSong>()
     private val occurrences by derivedStateOf { entries.mapTo(hashSetOf()) { it.source to it.row.id } }
     val trackIds by derivedStateOf { entries.mapTo(hashSetOf()) { it.row.track.id } }
