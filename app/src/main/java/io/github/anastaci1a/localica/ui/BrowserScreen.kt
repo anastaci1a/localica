@@ -69,10 +69,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val context = androidx.compose.ui.platform.LocalContext.current
     val editTags = LocalTagEdit.current
     val preferences = remember(context) { BrowsePreferences(context) }
+    val currentRoute by rememberUpdatedState(route)
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
     DisposableEffect(preferences, route.key, route.filter) {
         val unsubscribe = preferences.observe(route) { updated ->
-            style = updated.copy(sort = route.querySort ?: updated.sort, ascending = route.queryAscending ?: updated.ascending)
+            style = updated.copy(sort = currentRoute.querySort ?: updated.sort, ascending = currentRoute.queryAscending ?: updated.ascending)
         }
         onDispose(unsubscribe)
     }
@@ -167,11 +168,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val mutablePlaylist = playlists.playlists.firstOrNull { route.collection?.kind == MediaKind.Playlist && it.id == route.collection.id }
     val savedOrder = mutableQueue?.order ?: mutablePlaylist?.order
     val physicalOrder = mutableQueue?.entries?.map { it.id } ?: mutablePlaylist?.entries?.map { it.id }
-    @Composable fun sortingPanel() { BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
-        preferences.write(route, value, override); style = value
+    fun commitStyle(value: BrowseStyle) {
+        style = value
         if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
         dismissSorting()
-    }, { preferences.reset(route); style = preferences.read(route); dismissSorting() }, presentationOnly || collectionView,
+    }
+    @Composable fun sortingPanel() { BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
+        preferences.write(route, value, override)
+        commitStyle(value)
+    }, { preferences.reset(route); commitStyle(preferences.read(route)) }, presentationOnly || collectionView,
         onRandomize = when {
             mutableQueue != null && queues != null -> ({ done -> queues.randomize(mutableQueue.id, done) })
             mutablePlaylist != null && playlistController != null -> ({ done -> playlistController.randomize(mutablePlaylist.id, done) })
