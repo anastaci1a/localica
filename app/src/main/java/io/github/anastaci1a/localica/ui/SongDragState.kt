@@ -179,9 +179,13 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
 
 /** Own the held pointer at Initial pass so item clicks/scrolling cannot take over mid-drag. */
 internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: MediaRef?, selection: SessionSelection,
-    reducedMotion: Boolean, trailingActions: Boolean, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier = if (!enabled) this else pointerInput(state, source, reducedMotion, trailingActions) {
+    reducedMotion: Boolean, trailingActions: Boolean, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier = pointerInput(state, source, reducedMotion, trailingActions, enabled) {
+    // Keep this ancestor node installed: removing it cancels every descendant's
+    // hit path, including a pinch that temporarily makes the browse query pending.
+    // Keying enabled cancels only our own active drag when availability changes.
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        if (!enabled) return@awaitEachGesture
         val item = state.hit(down.position) ?: return@awaitEachGesture
         val row = item.row ?: return@awaitEachGesture
         // The trailing action button keeps its own press/hold interaction.
