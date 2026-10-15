@@ -49,15 +49,20 @@ class ChoiceControlsTest {
         compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
         compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
         try {
+            // Selected tab semantics update before the incoming page is placed.
+            compose.waitUntil(5000) {
+                runCatching { compose.onNodeWithText("Year").assertIsDisplayed() }.isSuccess
+            }
             compose.onNodeWithText("Year").assertIsDisplayed()
         } catch (failure: Throwable) {
             runCatching {
-                val year = compose.onNodeWithText("Year").fetchSemanticsNode()
-                val view = (year.root as androidx.compose.ui.platform.ViewRootForTest).view
-                val native = compose.runOnUiThread { "attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()}" }
-                android.util.Log.e("ChoiceControlsTest", "Year bounds=${year.boundsInRoot}; native=$native; saved=$saved")
                 compose.onAllNodes(isRoot(), useUnmergedTree = true).fetchSemanticsNodes().indices.forEach { index ->
                     compose.onAllNodes(isRoot(), useUnmergedTree = true)[index].printToLog("ChoiceControlsTest")
+                }
+                compose.onAllNodesWithText("Year").fetchSemanticsNodes().forEach { year ->
+                    val view = (year.root as androidx.compose.ui.platform.ViewRootForTest).view
+                    val native = compose.runOnUiThread { "attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()}" }
+                    android.util.Log.e("ChoiceControlsTest", "Year bounds=${year.boundsInRoot}; native=$native; saved=$saved")
                 }
             }.exceptionOrNull()?.let(failure::addSuppressed)
             throw failure
