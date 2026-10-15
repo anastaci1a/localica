@@ -6,6 +6,8 @@ import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -167,7 +169,11 @@ interface LibraryStore {
 }
 
 class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
-    override val snapshots = dao.observe().map { it.toSnapshot() }.flowOn(Dispatchers.Default)
+    private val searchIndex = LibrarySearchIndexBuilder()
+    override val snapshots = dao.observe().map {
+        val context = currentCoroutineContext()
+        searchIndex.prepare(it.toSnapshot()) { context.ensureActive() }
+    }.flowOn(Dispatchers.Default)
     override suspend fun current() = dao.read().toSnapshot()
     override suspend fun replaceRoot(result: ScanResult) {
         dao.replaceRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
