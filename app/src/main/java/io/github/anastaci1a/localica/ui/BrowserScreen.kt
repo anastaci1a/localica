@@ -418,7 +418,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             Box {
                                 if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor, quiet = true) { contextMenu = item.key }
                                 CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
-                                    onInformation = { info = it }, selectionSource = route.collection, selection = session,
+                                    onInformation = { info = it }, containingSource = route.collection, selection = session,
                                     onRemove = if (item.row == null) null else when (route.collection?.kind) {
                                         MediaKind.Queue -> ({ queues?.removeEntries(setOf(item.key), route.collection.id); Unit })
                                         MediaKind.Playlist -> ({ playlistController?.removeEntries(route.collection.id, setOf(item.key)) { }; Unit })
