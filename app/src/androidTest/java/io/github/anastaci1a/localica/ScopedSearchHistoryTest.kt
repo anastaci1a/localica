@@ -54,14 +54,38 @@ class ScopedSearchHistoryTest {
         BrowseSchedulerWatchdog.phase("submit $text")
         editor.performClick().performTextReplacement(text)
         compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 }
-        compose.awaitSearchImeHandoff { editor.performImeAction() }
+        editor.assertTextEquals(text)
+        compose.awaitSearchImeHandoff {
+            editor.assertTextEquals(text)
+            editor.performImeAction()
+        }
+        editor.assertTextEquals(text)
     }
 
     private fun backTo(text: String) {
         BrowseSchedulerWatchdog.phase("native Back to $text")
         compose.awaitExpectedWindowFocus(editor)
+        val view = (editor.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
         compose.awaitSearchImeHandoff { pressSystemBack() } // Exactly one native Back per historical transition.
-        compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and hasText(text)).fetchSemanticsNodes().size == 1 }
+        try {
+            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and hasText(text)).fetchSemanticsNodes().size == 1 }
+        } catch (failure: Throwable) {
+            // The handoff may succeed while the history transition does not. Keep the
+            // original assertion failure and inspect the same native window, even if removed.
+            fun capture(block: () -> Unit) { runCatching(block).exceptionOrNull()?.let(failure::addSuppressed) }
+            capture { compose.runOnUiThread {
+                val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+                android.util.Log.e("ScopedSearchHistory", "${android.os.SystemClock.uptimeMillis()} phase=await history text expected=$text " +
+                    "attached=${view.isAttachedToWindow} windowFocus=${view.hasWindowFocus()} " +
+                    "ime=${insets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())} " +
+                    "bottom=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom}")
+            } }
+            capture { android.util.Log.e("ScopedSearchHistory", InstrumentationRegistry.getInstrumentation().uiAutomation.windows.joinToString { window ->
+                "id=${window.id} type=${window.type} focused=${window.isFocused} active=${window.isActive} package=${window.root?.packageName}"
+            }) }
+            capture { android.util.Log.e("ScopedSearchHistory", compose.onAllNodes(isRoot()).printToString()) }
+            throw failure
+        }
         editor.assertTextContains(text).assertIsNotFocused()
         compose.onNodeWithTag("list-search-popup").assertIsDisplayed()
     }

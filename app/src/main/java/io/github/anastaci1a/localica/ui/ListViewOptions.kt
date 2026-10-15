@@ -27,13 +27,14 @@ internal fun ListViewFields(route: BrowseRoute, value: BrowseStyle, onChange: (B
                     contentDescription = "Items per row"; stateDescription = columns.toString()
                 })
         } else ChoicePreference("Size", value.listSize, ListSize.densityOrder, { it.name }, popup = true) { onChange(value.copy(listSize = it)) }
-        ChoicePreference("Extra information", value.extraInfo, ExtraInfo.entries, ::extraInfoLabel, popup = true) { onChange(value.copy(extraInfo = it)) }
+        ChoicePreference("Extra information", value.extraInfo, route.informationChoices(), ::extraInfoLabel, popup = true) { onChange(value.copy(extraInfo = it)) }
         if (!route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library))
             BooleanPreference("Quick-search box", value.quickSearch) { onChange(value.copy(quickSearch = it)) }
     }
 }
 
 private fun extraInfoLabel(info: ExtraInfo) = when (info) {
+    ExtraInfo.Inherited -> "Automatic"
     ExtraInfo.Automatic -> "Follow sort order"
     ExtraInfo.Count -> "Number of songs"
     ExtraInfo.Added -> "Date added"
