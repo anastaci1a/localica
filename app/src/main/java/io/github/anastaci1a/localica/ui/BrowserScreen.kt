@@ -233,7 +233,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 scrollBy(it.offset.y + it.size.height * anchor.fraction - anchor.top)
                             }
                         }
-                    } while (pinchMotion.held || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
+                    // The same anchor owns preview AND release settlement. Ending it at
+                    // finger-up lets onRelease recreate it and expose the initial coarse
+                    // scrollToItem placement before fractional correction on the next frame.
+                    } while (pinchMotion.source != null || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
                 }
             }
         } finally { if (zoomAnchor == anchor) zoomAnchor = null }
