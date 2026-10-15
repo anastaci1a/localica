@@ -230,9 +230,22 @@ class DragReorderTest {
     }
     @Test fun failedSaveRestoresOrderWithoutClearingSelection() = fixture(failWrites = true) { controller, playlist ->
         val id = playlist.entries[1].id
-        compose.onNodeWithTag("media-$id").performTouchInput {
-            down(center); advanceEventTime(650); moveBy(Offset(0f, 240f)); advanceEventTime(50); up()
+        val list = compose.onNodeWithTag("browser-list")
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        val source = compose.onNodeWithTag("media-$id").fetchSemanticsNode().boundsInRoot
+        val destination = compose.onNodeWithTag("media-${playlist.entries[3].id}")
+            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot.center
+        val from = source.center - viewport.topLeft
+        val to = destination - viewport.topLeft
+        // A fixed pixel delta can remain in the original insertion slot when
+        // list artwork grows. Exercise an actual reorder before rejecting its save.
+        list.performTouchInput {
+            down(from); advanceEventTime(650); moveTo(to); advanceEventTime(50)
         }
+        compose.onNodeWithTag("drag-stack").assertExists()
+        val gap = compose.onNodeWithTag("drop-gap").fetchSemanticsNode().boundsInRoot
+        assertTrue("The drop must move beyond the original row: source=$source, gap=$gap", gap.top > source.bottom)
+        list.performTouchInput { up() }
         compose.waitUntil(5000) { controller.state.value.problem != null }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
         assertEquals(playlist, controller.state.value.playlists.single())
