@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.ResultReceiver;
 import android.provider.DocumentsContract;
 
 /** Only grants/revokes fixed synthetic trees to the debug app. */
@@ -11,6 +12,7 @@ public class IncompleteScanGrantActivity extends Activity {
     public static final String TARGET = "io.github.anastaci1a.localica.debug";
     public static final String GRANT = "io.github.anastaci1a.localica.test.GRANT_INCOMPLETE_SCAN";
     public static final String REVOKE = "io.github.anastaci1a.localica.test.REVOKE_INCOMPLETE_SCAN";
+    @SuppressWarnings("deprecation")
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         try {
@@ -23,6 +25,8 @@ public class IncompleteScanGrantActivity extends Activity {
                     revokeUriPermission(TARGET, tree, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 }
             }
+            ResultReceiver completion = getIntent().getParcelableExtra("completion");
+            if (completion != null) completion.send(0, Bundle.EMPTY);
         } finally { finish(); }
     }
 }
