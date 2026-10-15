@@ -38,8 +38,8 @@ class BrowsePinchTest {
                     queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
             } }
             waitForView("List, Compact")
-            compose.onNodeWithText("Artist 0").assertDoesNotExist()
-            assertEquals(0f, compose.onNodeWithTag("browse-art-size:0", true).fetchSemanticsNode().boundsInRoot.width)
+            compose.onNodeWithText("Artist 0").assertIsDisplayed()
+            assertTrue(compose.onNodeWithTag("browse-art-size:0", true).fetchSemanticsNode().boundsInRoot.width > 0f)
             val row = compose.onNodeWithTag("media-size:0")
             val compact = row.fetchSemanticsNode().boundsInRoot.height
             compose.runOnIdle { prefs.write(route, style.copy(listSize = ListSize.Normal), false) }
@@ -78,7 +78,7 @@ class BrowsePinchTest {
         assertEquals(2, steps.size)
     }
 
-    @Test fun deepListKeepsItsAnchorAndSelectionAcrossAllEightViews() {
+    @Test fun deepListKeepsItsAnchorAndSelectionAcrossAllTenViews() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val route = BrowseRoute(MainTab.Songs)
         val prefs = BrowsePreferences(context)
@@ -114,7 +114,7 @@ class BrowsePinchTest {
             for (columns in 2..5) {
                 list.performTouchInput { pinch(false) }; waitForView("Gallery, $columns columns")
             }
-            for (size in listOf("Large", "Normal", "Compact")) {
+            for (size in listOf("Large", "Normal", "Compact", "Small", "Smallest")) {
                 list.performTouchInput { pinch(false) }; waitForView("List, $size")
             }
             assertEquals(Presentation.List, prefs.read(route).presentation)

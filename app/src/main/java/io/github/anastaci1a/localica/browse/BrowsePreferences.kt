@@ -7,7 +7,11 @@ import io.github.anastaci1a.localica.navigation.*
 enum class Presentation(val label: String) { List("List"), Compact("Compact gallery"), Standard("Standard gallery"), Large("Large gallery") }
 enum class ExtraInfo { Automatic, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
 enum class SongGrouping(val label: String) { None("None"), Artist("Artist"), AlbumArtist("Album Artist"), Composer("Composer") }
-enum class ListSize { Compact, Normal, Large }
+// Names are persisted; density order is explicit so existing values stay compatible.
+enum class ListSize { Compact, Normal, Large, Small, Smallest;
+    val trailingInformation get() = this == Compact || this == Small || this == Smallest
+    companion object { val densityOrder = listOf(Smallest, Small, Compact, Normal, Large) }
+}
 data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boolean = true,
     val presentation: Presentation = Presentation.List, val extraInfo: ExtraInfo = ExtraInfo.Automatic,
     val quickSearch: Boolean = true, val songGrouping: SongGrouping = SongGrouping.None,
