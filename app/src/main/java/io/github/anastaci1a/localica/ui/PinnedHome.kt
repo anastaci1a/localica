@@ -24,6 +24,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     onSettings: () -> Unit, onBrowse: () -> Unit, onOpen: (BrowserItem, List<SongRow>) -> Unit,
     onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, selectionVisible: Boolean = true,
+    listBackEnabled: Boolean = false,
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null, queues: io.github.anastaci1a.localica.queue.QueueController? = null) {
     val cache = LocalBrowsePresentationCache.current
     val cached = remember(library.snapshot, playlists.playlists, pins, cache) { cache?.home(library.snapshot, playlists.playlists, pins) }
@@ -53,15 +54,14 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             refreshBackdrop()
         }
     }
-    var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(scrollToTopRequest) {
-        if (consumedScrollRequest != scrollToTopRequest) {
-            consumedScrollRequest = scrollToTopRequest
-            artworkTransit.during(!reducedMotion && scroll.firstVisibleItemIndex > scroll.layoutInfo.visibleItemsInfo.size * 2) {
+    val returnOwner = remember(library.snapshot, playlists.playlists, pins) { Any() }
+    ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible, listBackEnabled && !session.active,
+        listReturnAction(scroll.canScrollBackward, scroll.isScrollInProgress, false), ready = {}, execute = { action ->
+            if (action == ListReturnAction.ScrollTop) artworkTransit.during(!reducedMotion &&
+                scroll.firstVisibleItemIndex > scroll.layoutInfo.visibleItemsInfo.size * 2) {
                 scroll.easeToItem(0, reducedMotion, 500)
             }
-        }
-    }
+        })
     CompositionLocalProvider(LocalArtworkTransit provides artworkTransit) {
     LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {

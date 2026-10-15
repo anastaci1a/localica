@@ -47,6 +47,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     playingTrackId: String? = null, playingEntryId: String? = null,
     header: @Composable () -> Unit = {}, presentationOnly: Boolean = false, selectionVisible: Boolean = true,
     onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
+    listBackEnabled: Boolean = false,
     libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {},
     popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0, sortOrigin: GlassAnchor? = null,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, initialPlayingPosition: Boolean = false, onBack: () -> Unit = {},
@@ -263,23 +264,28 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val scrollScope = rememberCoroutineScope()
     val artworkTransit = remember { ArtworkTransit() }
     val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
-    var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(scrollToTopRequest) {
-        if (consumedScrollRequest != scrollToTopRequest) {
-            localSearchOpen = false
-            // Keep one job through query publication and the first layout. A readiness key can
-            // restart this effect after it consumed the request but before scrolling could begin.
-            snapshotFlow { readyToScroll && gridState.layoutInfo.totalItemsCount > 0 }.first { it }
-            // Let the newly published rows replace the restored route's empty/old layout.
+    val returnOwner = remember(route, style, library.snapshot, playlists.playlists, queueState.library.queues,
+        libraryFilters, selectedAlbums) { Any() }
+    val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
+        (artistDetail && validAlbums.isNotEmpty())
+    ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible,
+        backEnabled = listBackEnabled && !route.search && !localSearchOpen && !playerOpen,
+        action = listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter),
+        ready = {
+            snapshotFlow { readyToScroll }.first { it }
             withFrameNanos { }; withFrameNanos { }
-            consumedScrollRequest = scrollToTopRequest
-            if (route.tab == MainTab.Library && route.collection == null && !route.search &&
-                route.filter != null && !gridState.canScrollBackward) onRoute(route.copy(filter = null))
-            else artworkTransit.during(!reducedMotion && gridState.firstVisibleItemIndex > gridState.layoutInfo.visibleItemsInfo.size * 2) {
-                gridState.easeToTop(reducedMotion)
+        }, execute = { action ->
+            localSearchOpen = false
+            when (action) {
+                ListReturnAction.ClearFilter -> if (artistDetail) selectedAlbums = emptyList()
+                    else onRoute(route.copy(filter = null))
+                ListReturnAction.ScrollTop -> artworkTransit.during(!reducedMotion &&
+                    gridState.firstVisibleItemIndex > gridState.layoutInfo.visibleItemsInfo.size * 2) {
+                    gridState.easeToTop(reducedMotion)
+                }
+                ListReturnAction.None -> Unit
             }
-        }
-    }
+        })
     val session = LocalSessionSelection.current ?: remember { SessionSelection() }
     BackHandler(selectionVisible && session.active && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) {
         session.clear()
