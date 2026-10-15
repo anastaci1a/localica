@@ -44,7 +44,7 @@ class PopupEnvelopeTest {
                     Sample("live-choice") { ChoicePreference("Size", "Normal", labels, { it }) {} }
                     Sample("face-choice") {
                         ChoicePreferenceFrame("Size", labels, false, choices = {
-                            Spacer(Modifier.fillMaxWidth().height(glassChoiceCellHeight() + ChoiceOuterVerticalInset * 2 + ChoiceInnerInset * 2))
+                            GlassChoicesMeasurement(labels)
                         }, link = { SettingsLinkFace("Size", "Normal", null) })
                     }
                     Sample("live-button") { ActionTextButton({}) { androidx.compose.material3.Text("Use list-type defaults") } }
@@ -70,6 +70,33 @@ class PopupEnvelopeTest {
                     maxOf(sizes.getValue("live-apply-actions").height, sizes.getValue("live-save-actions").height),
                     sizes.getValue("face-actions").height)
             }
+        }
+    }
+
+    @Test fun choiceMeasurementPreservesSeparatePixelRoundingAtFractionalDensity() {
+        val sizes = mutableMapOf<String, IntSize>()
+        compose.setContent { LocalicaTheme {
+            // Pixel 2 / API 26: 52dp rounds to 137px and each 4dp inset to 11px.
+            // Summing first incorrectly rounds 68dp to 179px instead of 181px.
+            CompositionLocalProvider(LocalDensity provides Density(2.625f, 1f)) {
+                Column(Modifier.width(240.dp)) {
+                    @Composable fun Sample(key: String, body: @Composable () -> Unit) {
+                        Box(Modifier.fillMaxWidth().onSizeChanged { sizes[key] = it }) { body() }
+                    }
+                    val labels = listOf("Ascending", "Descending")
+                    Sample("live") { GlassChoices(labels, 0, horizontal = true) {} }
+                    Sample("measurement") { GlassChoicesMeasurement(labels) }
+                    Sample("summed-spacer") {
+                        Spacer(Modifier.fillMaxWidth().height(glassChoiceCellHeight() +
+                            ChoiceOuterVerticalInset * 2 + ChoiceInnerInset * 2))
+                    }
+                }
+            }
+        } }
+        compose.runOnIdle {
+            assertEquals(181, sizes.getValue("live").height)
+            assertEquals(sizes.getValue("live"), sizes.getValue("measurement"))
+            assertEquals(179, sizes.getValue("summed-spacer").height)
         }
     }
 
