@@ -71,6 +71,28 @@ class BrowsePinchTransactionTest {
         compose.runOnIdle { assertEquals(listOf(false, true), releases) }
     }
 
+    @Test fun disablingAncestorDragDoesNotCancelAcceptedChildPinch() {
+        var dragEnabled by mutableStateOf(true)
+        var accepted = 0
+        val releases = mutableListOf<Boolean>()
+        val selection = SessionSelection()
+        compose.setContent {
+            val grid = rememberLazyGridState()
+            val scope = rememberCoroutineScope()
+            val drag = remember { SongDragState(grid, scope) }
+            Box(Modifier.fillMaxSize().songDrag(drag, dragEnabled, null, selection, false, true) { _, _, _ -> fail("No drag commit") }) {
+                Box(Modifier.fillMaxSize().testTag("pinch").pinchToChangeView(true,
+                    onProgress = {}, onRelease = { releases += it }) { _, _ -> accepted++; true })
+            }
+        }
+        val node = compose.onNodeWithTag("pinch")
+        node.performTouchInput { begin(true); spread(110f) }
+        compose.runOnIdle { assertEquals(1, accepted); dragEnabled = false }
+        compose.runOnIdle { assertTrue("Disabling the parent must preserve the child's held stream", releases.isEmpty()) }
+        node.performTouchInput { finish() }
+        compose.runOnIdle { assertEquals(listOf(false), releases); assertFalse(selection.active) }
+    }
+
     @Test fun canceledEndpointsCannotLeakTargetsIntoBoundaryPinchesOrLaterSettings() {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val route = BrowseRoute(MainTab.Songs)
