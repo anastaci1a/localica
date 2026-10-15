@@ -68,7 +68,7 @@ class GalleryGeometryTest {
                     assertEquals(8 * density, second.left - first.right, 2f)
                 }
             }
-            for ((size, columns) in listOf(ListSize.Normal to 5, ListSize.Large to 4)) {
+            for ((size, columns) in listOf(ListSize.Normal to 5, ListSize.Large to 3)) {
                 compose.runOnIdle { prefs.write(route, BrowseStyle(listSize = size), false) }
                 compose.waitUntil(5000) {
                     compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "List, ${size.name}")).fetchSemanticsNodes().isNotEmpty()

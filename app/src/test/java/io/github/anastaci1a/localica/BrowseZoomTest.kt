@@ -6,9 +6,9 @@ import org.junit.Test
 
 class BrowseZoomTest {
     @Test fun zoomTraversesEveryViewAndStopsAtBothEnds() {
-        var style = BrowseStyle(listSize = ListSize.Compact)
+        var style = BrowseStyle(listSize = ListSize.Smallest)
         assertEquals(style, style.zoomStep(false, 400f))
-        for (size in listOf(ListSize.Normal, ListSize.Large)) {
+        for (size in listOf(ListSize.Small, ListSize.Compact, ListSize.Normal, ListSize.Large)) {
             style = style.zoomStep(true, 400f)
             assertEquals(Presentation.List, style.presentation)
             assertEquals(size, style.listSize)
@@ -23,7 +23,7 @@ class BrowseZoomTest {
             style = style.zoomStep(false, 400f)
             assertEquals(columns, style.itemsPerRow)
         }
-        for (size in listOf(ListSize.Large, ListSize.Normal, ListSize.Compact)) {
+        for (size in listOf(ListSize.Large, ListSize.Normal, ListSize.Compact, ListSize.Small, ListSize.Smallest)) {
             style = style.zoomStep(false, 400f)
             assertEquals(Presentation.List, style.presentation)
             assertEquals(size, style.listSize)
