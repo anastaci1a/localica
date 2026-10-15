@@ -5,7 +5,7 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 
 enum class Presentation(val label: String) { List("List"), Compact("Compact gallery"), Standard("Standard gallery"), Large("Large gallery") }
-enum class ExtraInfo { Automatic, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
+enum class ExtraInfo { Automatic, Inherited, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
 enum class SongGrouping(val label: String) { None("None"), Artist("Artist"), AlbumArtist("Album Artist"), Composer("Composer") }
 enum class ListSize { Compact, Normal, Large }
 data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boolean = true,
@@ -85,12 +85,34 @@ class BrowsePreferences(context: Context) {
         return BrowseStyle(store.enumValue<TrackSort>("$key.sort") ?: default.sort,
             store.getBoolean("$key.ascending", default.ascending),
             store.enumValue<Presentation>("$key.presentation") ?: Presentation.List,
-            store.enumValue<ExtraInfo>("$key.info") ?: ExtraInfo.Automatic,
+            (store.enumValue<ExtraInfo>("$key.info") ?: if (route.allowsInheritedInformation()) ExtraInfo.Inherited else ExtraInfo.Automatic)
+                .let { if (it == ExtraInfo.Inherited && !route.allowsInheritedInformation()) ExtraInfo.Automatic else it },
             store.getBoolean("$key.quick-search", true),
             store.enumValue<SongGrouping>("$key.group", if (route.collection?.kind == MediaKind.Album)
                 store.getString("catalog.Album.group", null) else null) ?: SongGrouping.None,
             store.getInt("$key.columns", 0).takeIf { it in 1..5 },
             store.enumValue<ListSize>("$key.list-size") ?: ListSize.Normal)
+    }
+    /** Read one preference revision, rather than reading preferences for every displayed row. */
+    fun informationStyles(): Map<MediaKind, BrowseStyle> {
+        val values = store.all
+        return MediaKind.entries.associateWith { kind ->
+            val key = if (kind == MediaKind.Queue) "catalog.Queues" else "catalog.$kind"
+            val info = ExtraInfo.entries.firstOrNull { it.name == values["$key.info"] }
+                ?.takeUnless { it == ExtraInfo.Inherited } ?: ExtraInfo.Automatic
+            val fallback = if (kind == MediaKind.Song) legacy.read().sort else TrackSort.Title
+            val sort = TrackSort.entries.firstOrNull { it.name == values["$key.sort"] } ?: fallback
+            BrowseStyle(sort = sort, extraInfo = info)
+        }
+    }
+    fun observeInformation(onChange: (Map<MediaKind, BrowseStyle>) -> Unit): () -> Unit {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || key.startsWith("catalog.")) onChange(informationStyles())
+        }
+        store.registerOnSharedPreferenceChangeListener(listener)
+        // Close the gap between an initial read and listener registration.
+        onChange(informationStyles())
+        return { store.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     fun write(route: BrowseRoute, value: BrowseStyle, override: Boolean) {
         val key = if (override && allowsOverride(route)) listKey(route) else type(route)
@@ -118,3 +140,13 @@ class BrowsePreferences(context: Context) {
             .forEach { edit.remove("$key.$it") }
     }
 }
+
+/** Inheritance belongs only to the mixed roots, never a single-type or scoped list. */
+internal fun BrowseRoute.allowsInheritedInformation(): Boolean = collection == null && filter == null &&
+    (if (search) globalSearch else tab == MainTab.Library)
+
+internal fun BrowseRoute.informationChoices(): List<ExtraInfo> =
+    listOf(ExtraInfo.None) + (if (allowsInheritedInformation()) listOf(ExtraInfo.Inherited) else emptyList()) +
+        listOf(ExtraInfo.Automatic) + ExtraInfo.entries.filterNot {
+            it in setOf(ExtraInfo.None, ExtraInfo.Inherited, ExtraInfo.Automatic)
+        }
