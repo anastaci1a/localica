@@ -539,12 +539,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
     if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
         fun closeSearch() { localSearchOpen = false }
+        fun backSearch() {
+            val previous = if (localSearch.route.text.isNotBlank()) localSearch.back(false) else null
+            if (previous != null) localSearch = previous else closeSearch()
+        }
         LaunchedEffect(localSearchOpen, searchAnchor.modalPresent) {
             if (!localSearchOpen && !searchAnchor.modalPresent) {
                 localSearch = freshSearch()
             }
         }
-        ListSearchWindow(localSearchOpen && !playerOpen, searchAnchor, localSearch.route.text.isNotBlank(), ::closeSearch) {
+        ListSearchWindow(localSearchOpen && !playerOpen, searchAnchor, localSearch.route.text.isNotBlank(), ::closeSearch, onBack = ::backSearch) {
             CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
                 val searchRoute = localSearch.route
                 key(searchRoute.key) { searchHolder.SaveableStateProvider(searchRoute.key) {
