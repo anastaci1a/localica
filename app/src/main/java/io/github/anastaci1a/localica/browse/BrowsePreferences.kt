@@ -5,7 +5,7 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 
 enum class Presentation(val label: String) { List("List"), Compact("Compact gallery"), Standard("Standard gallery"), Large("Large gallery") }
-enum class ExtraInfo { Automatic, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
+enum class ExtraInfo { Automatic, Inherited, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
 enum class SongGrouping(val label: String) { None("None"), Artist("Artist"), AlbumArtist("Album Artist"), Composer("Composer") }
 // Names are persisted; density order is explicit so existing values stay compatible.
 enum class ListSize { Compact, Normal, Large, Small, Smallest;
@@ -66,10 +66,17 @@ class BrowsePreferences(context: Context) {
     private fun listKey(route: BrowseRoute) = BrowsePreferenceKeys.list(route)
     fun overridden(route: BrowseRoute) = sortSnapshot().overridden(route)
     fun sortSnapshot() = BrowseSortSnapshot.fromValues(store.all, legacyStore.all)
-    fun observeSorts(onChange: (BrowseSortSnapshot) -> Unit): () -> Unit {
+    fun observeSorts(onChange: (BrowseSortSnapshot) -> Unit): () -> Unit =
+        observeChanges({ it.isOrderingPreference() }) { onChange(sortSnapshot()) }
+
+    private fun String.isOrderingPreference() = this == "sort" || this == "ascending" ||
+        endsWith(".sort") || endsWith(".ascending") || endsWith(".group")
+
+    /** Both consumers observe current and legacy stores, but information-only changes never
+     * invalidate sorted artwork or a source+sort query result. */
+    private fun observeChanges(relevant: (String) -> Boolean, onChange: () -> Unit): () -> Unit {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key == "sort" || key == "ascending" || key.endsWith(".sort") || key.endsWith(".ascending") || key.endsWith(".group"))
-                onChange(sortSnapshot())
+            if (key == null || relevant(key)) onChange()
         }
         store.registerOnSharedPreferenceChangeListener(listener)
         legacyStore.registerOnSharedPreferenceChangeListener(listener)
@@ -84,11 +91,34 @@ class BrowsePreferences(context: Context) {
         val order = sorts.query(route)
         return BrowseStyle(order.sort, order.ascending,
             store.enumValue<Presentation>("$key.presentation") ?: Presentation.List,
-            store.enumValue<ExtraInfo>("$key.info") ?: ExtraInfo.Automatic,
+            (store.enumValue<ExtraInfo>("$key.info") ?: if (route.allowsInheritedInformation()) ExtraInfo.Inherited else ExtraInfo.Automatic)
+                .let { if (it == ExtraInfo.Inherited && !route.allowsInheritedInformation()) ExtraInfo.Automatic else it },
             store.getBoolean("$key.quick-search", true),
             sorts.grouping(route),
             store.getInt("$key.columns", 0).takeIf { it in 1..5 },
             store.enumValue<ListSize>("$key.list-size") ?: ListSize.Normal)
+    }
+    /** Reuse the artwork resolver and one immutable read for every row type. */
+    fun informationStyles(): Map<MediaKind, BrowseStyle> {
+        val values = store.all
+        val sorts = BrowseSortSnapshot.fromValues(values, legacyStore.all)
+        return MediaKind.entries.associateWith { kind ->
+            val route = if (kind == MediaKind.Queue) BrowseRoute(MainTab.Queues)
+                else BrowseRoute(MainTab.Library, filter = kind)
+            val key = BrowsePreferenceKeys.type(route)
+            val info = ExtraInfo.entries.firstOrNull { it.name == values["$key.info"] }
+                ?.takeUnless { it == ExtraInfo.Inherited } ?: ExtraInfo.Automatic
+            val order = sorts.query(route)
+            BrowseStyle(sort = order.sort, ascending = order.ascending, extraInfo = info)
+        }
+    }
+    fun observeInformation(onChange: (Map<MediaKind, BrowseStyle>) -> Unit): () -> Unit {
+        val stop = observeChanges({ it.isOrderingPreference() || (it.startsWith("catalog.") && it.endsWith(".info")) }) {
+            onChange(informationStyles())
+        }
+        // Close the gap between an initial read and listener registration.
+        onChange(informationStyles())
+        return stop
     }
     fun write(route: BrowseRoute, value: BrowseStyle, override: Boolean) {
         val key = if (override && allowsOverride(route)) listKey(route) else type(route)
@@ -116,3 +146,13 @@ class BrowsePreferences(context: Context) {
             .forEach { edit.remove("$key.$it") }
     }
 }
+
+/** Inheritance belongs only to the mixed roots, never a single-type or scoped list. */
+internal fun BrowseRoute.allowsInheritedInformation(): Boolean = collection == null && filter == null &&
+    (if (search) globalSearch else tab == MainTab.Library)
+
+internal fun BrowseRoute.informationChoices(): List<ExtraInfo> =
+    listOf(ExtraInfo.None) + (if (allowsInheritedInformation()) listOf(ExtraInfo.Inherited) else emptyList()) +
+        listOf(ExtraInfo.Automatic) + ExtraInfo.entries.filterNot {
+            it in setOf(ExtraInfo.None, ExtraInfo.Inherited, ExtraInfo.Automatic)
+        }

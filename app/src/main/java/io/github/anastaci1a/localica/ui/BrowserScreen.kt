@@ -71,6 +71,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val editTags = LocalTagEdit.current
     val sorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { BrowsePreferences(context) }
+    var inheritedInformation by remember(preferences) { mutableStateOf(preferences.informationStyles()) }
+    DisposableEffect(preferences) {
+        val unsubscribe = preferences.observeInformation { inheritedInformation = it }
+        onDispose(unsubscribe)
+    }
     val currentRoute by rememberUpdatedState(route)
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
     DisposableEffect(preferences, route.key, route.filter) {
@@ -233,20 +238,33 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     else -> gridState.scrollToItem(index + 1, -anchor.top)
                 }
                 gridState.scroll {
-                    val start = withFrameNanos { it }
-                    do {
-                        val now = withFrameNanos { it }
+                    fun correctAnchor() {
                         val layout = gridState.layoutInfo
                         when (anchor.edge) {
                             -1 -> scrollBy(-gridState.firstVisibleItemScrollOffset.toFloat())
                             1 -> layout.visibleItemsInfo.lastOrNull()?.let {
                                 scrollBy((it.offset.y + it.size.height + layout.afterContentPadding - layout.viewportEndOffset).toFloat())
                             }
-                            else -> layout.visibleItemsInfo.firstOrNull { it.key == anchor.key }?.let {
+                            else -> layout.visibleItemsInfo.firstOrNull {
+                                it.key == anchor.key && it.index == index + 1 && it.size.height > 0
+                            }?.let {
                                 scrollBy(it.offset.y + it.size.height * anchor.fraction - anchor.top)
                             }
                         }
-                    } while (pinchMotion.held || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
+                    }
+                    // displayedStyle gates the destination; scrollToItem forces its
+                    // remeasurement. Read that measured item, never the source bounds,
+                    // and correct before yielding a frame of coarse top alignment.
+                    // Both this correction and the continuing loop own the same scroll.
+                    correctAnchor()
+                    val start = withFrameNanos { it }
+                    do {
+                        val now = withFrameNanos { it }
+                        correctAnchor()
+                    // The same anchor owns preview AND release settlement. Ending it at
+                    // finger-up lets onRelease recreate it and expose the initial coarse
+                    // scrollToItem placement before fractional correction on the next frame.
+                    } while (pinchMotion.source != null || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
                 }
             }
         } finally { if (zoomAnchor == anchor) zoomAnchor = null }
@@ -464,7 +482,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     translationX = (old.left - position.x) * (1f - pinchMotion.progress.value)
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
-                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }.currentSongHighlight(current, MaterialTheme.colorScheme.primary).selectionLens(selectedCount > 0, partiallySelected)
+                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }.currentSongHighlight(current, MaterialTheme.colorScheme.primary) { height ->
+                                pinchMotion.highlightHeight(item.key, itemIndex, height)
+                            }.selectionLens(selectedCount > 0, partiallySelected)
                             .retainPinchItem(item.key, pinchMotion).testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
@@ -480,7 +500,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             }
                         )) {
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
-                                showInformation = popupDismiss == null,
+                                showInformation = popupDismiss == null, inheritedInformation = inheritedInformation,
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
                         }
 
