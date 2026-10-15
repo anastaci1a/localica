@@ -32,6 +32,11 @@ class ControlStateMotionTest {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
                 val a by animateControlStateFloat(if (selected) 1f else 0f, "Forward")
                 val b by animateControlStateFloat(if (selected) 0f else 1f, "Reverse")
+                // Exercise rendered clients rather than an empty composition.
+                Row {
+                    Box(Modifier.size(32.dp).background(Color.White.copy(alpha = a)))
+                    Box(Modifier.size(32.dp).background(Color.White.copy(alpha = b)))
+                }
                 SideEffect { forward = a; reverse = b }
             }
         }
@@ -44,9 +49,13 @@ class ControlStateMotionTest {
                 assertEquals("Both directions have identical elapsed progress", 1f, forward + reverse, .001f)
                 assertTrue(forward >= previous)
                 previous = forward
+                android.util.Log.i("ControlStateMotionTest", "t=${compose.mainClock.currentTime} forward=$forward reverse=$reverse")
             }
         }
-        compose.runOnIdle { assertTrue("Normal fade remains visible beyond 250 ms", forward < 1f) }
+        compose.runOnIdle {
+            assertTrue("Rendered fade must make intermediate progress", forward > 0f)
+            assertTrue("Normal fade remains visible beyond 250 ms", forward < 1f)
+        }
         compose.mainClock.advanceTimeBy(96)
         compose.runOnIdle { assertEquals(1f, forward, 0f); selected = false }
         compose.mainClock.advanceTimeBy(128)
