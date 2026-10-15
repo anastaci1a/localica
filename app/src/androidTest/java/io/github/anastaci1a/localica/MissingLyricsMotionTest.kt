@@ -75,7 +75,8 @@ class MissingLyricsMotionTest {
         val file = java.io.File(instrumentation.targetContext.cacheDir, "missing-lyrics-motion.opus")
         instrumentation.context.assets.open("lyrics.opus").use { input -> file.outputStream().use(input::copyTo) }
         val withLyrics = Track(android.net.Uri.fromFile(file).toString(), "Lyrics", fileName = file.name, relativePath = file.name)
-        val missing = Track("file:///missing-motion.mp3", "Missing", fileName = "missing-motion.mp3", relativePath = "missing-motion.mp3")
+        val emptyFixture = NoLyricsFixture("Missing")
+        val missing = emptyFixture.track
         var track by mutableStateOf(withLyrics)
         var open by mutableStateOf(true)
         var settings by mutableStateOf(InterfaceSettings())
@@ -107,6 +108,6 @@ class MissingLyricsMotionTest {
             compose.runOnIdle { open = true; track = withLyrics }
             compose.waitUntil(10000) { compose.onAllNodesWithTag("lyric-lines").fetchSemanticsNodes().size == 1 }
             compose.onNodeWithTag("empty-lyrics", true).assertDoesNotExist()
-        } finally { compose.mainClock.autoAdvance = true; file.delete() }
+        } finally { compose.mainClock.autoAdvance = true; emptyFixture.close(); file.delete() }
     }
 }
