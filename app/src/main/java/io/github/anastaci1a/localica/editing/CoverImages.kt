@@ -23,13 +23,13 @@ class CoverImages(private val context: Context) {
     private fun remembered(): List<String> = runCatching {
         val array = JSONArray(preferences.getString("recent", "[]")); (0 until array.length()).map(array::getString)
     }.getOrDefault(emptyList())
-    suspend fun recent(): List<String> = withContext(Dispatchers.IO) {
-        val device = runCatching {
+    suspend fun recent(includeDevicePhotos: Boolean): List<String> = withContext(Dispatchers.IO) {
+        val device = if (includeDevicePhotos) runCatching {
             context.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(MediaStore.Images.Media._ID), null, null, "${MediaStore.Images.Media.DATE_ADDED} DESC")?.use { cursor ->
                 buildList { while (size < 12 && cursor.moveToNext()) add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cursor.getLong(0)).toString()) }
             }.orEmpty()
-        }.getOrDefault(emptyList())
+        }.getOrDefault(emptyList()) else emptyList()
         (device + remembered()).distinct().take(20)
     }
     suspend fun read(uri: String, edge: Int = 2048): CoverImage = withContext(Dispatchers.IO) {
