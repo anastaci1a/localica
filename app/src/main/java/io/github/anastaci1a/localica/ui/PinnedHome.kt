@@ -25,18 +25,21 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, selectionVisible: Boolean = true,
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null, queues: io.github.anastaci1a.localica.queue.QueueController? = null) {
+    val sorts = rememberBrowseSortSnapshot()
     val cache = LocalBrowsePresentationCache.current
-    val cached = remember(library.snapshot, playlists.playlists, pins, cache) { cache?.home(library.snapshot, playlists.playlists, pins) }
-    val items by produceState(cached.orEmpty(), library.snapshot, playlists.playlists, pins) {
-        if (cached != null) { value = cached; return@produceState }
+    val cached = remember(library.snapshot, playlists.playlists, pins, cache, sorts) { cache?.home(library.snapshot, playlists.playlists, pins, sorts) }
+    val presented by produceState(sorts to cached.orEmpty(), library.snapshot, playlists.playlists, pins, sorts) {
+        if (cached != null) { value = sorts to cached; return@produceState }
         val result = withContext(queryDispatcher) {
             val catalog = BrowseQueries.evaluate(library.snapshot, playlists.playlists,
-                BrowseRoute(MainTab.Home, globalSearch = true)).items.associateBy { it.ref }
+                BrowseRoute(MainTab.Home, globalSearch = true), sorts = sorts).items.associateBy { it.ref }
             pins.mapNotNull { catalog[it] }
         }
-        cache?.putHome(library.snapshot, playlists.playlists, pins, result)
-        value = result
+        cache?.putHome(library.snapshot, playlists.playlists, pins, result, sorts)
+        value = sorts to result
     }
+    val items = presented.second
+    val currentOrder = presented.first.sameCollections(sorts)
     val session = LocalSessionSelection.current ?: remember { SessionSelection() }
     val songs = items.mapNotNull { it.row }
     BindSelectionScope(session, null, songs, selectionVisible)
@@ -79,7 +82,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 val selectedCount = session.selectedCount(item)
                 Column(Modifier.width(160.dp).clip(Corners.card).testTag("pin-${item.key}")
                     .selectionLens(selectedCount > 0, item.row == null && selectedCount > 0 && selectedCount < item.songs.size)
-                    .combinedClickable(onClick = {
+                    .combinedClickable(enabled = currentOrder, onClick = {
                         if (item.row != null && session.active) session.toggle(null, item.row)
                         else onOpen(item, songs)
                     },
@@ -88,7 +91,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
-                CollectionActions(menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null }, onInformation = { info = it }, extra = {
+                CollectionActions(currentOrder && menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null }, onInformation = { info = it }, extra = {
                     ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
                     ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,
@@ -101,7 +104,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     info?.let { track -> SongInformation(track, { info = null }, { editTags?.invoke(listOf(track)) {} }) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
-        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab)).items
+        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
             .firstOrNull { item -> item.songs.any { it.track.id == track.id } }?.let { info = null; onOpen(it, it.songs) }
     } }
 

@@ -98,7 +98,7 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
                 Column(Modifier.width(136.dp).selectionLens(selected, false).toggleable(selected, role = Role.Checkbox, onValueChange = {
                     onSelection(if (selected) selectedIds - album.id else selectedIds + album.id)
                 }).semantics { this.selected = selected }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    MediaArtwork(album.tracks.map { it.uri }, Modifier.size(112.dp))
+                    MediaArtwork(listOfNotNull(album.tracks.firstOrNull()?.uri), Modifier.size(112.dp))
                     Text(album.title, Modifier.padding(top = 8.dp), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
                 }

@@ -68,6 +68,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val editTags = LocalTagEdit.current
+    val sorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { BrowsePreferences(context) }
     val currentRoute by rememberUpdatedState(route)
     var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
@@ -118,7 +119,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     val browse = rememberBrowsePresentation(library.snapshot, playlists.playlists, queueState.library.queues,
-        libraryFilters, route, style, reducedMotion, queryDispatcher)
+        libraryFilters, route, style, reducedMotion, queryDispatcher, sorts)
     val presentation = browse.current
     val loadedResult = presentation?.result
     val displayedStyle = presentation?.style ?: style
@@ -137,9 +138,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val artistDetail = artDetail && route.collection?.kind != MediaKind.Album
     var selectedAlbums by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
-    val albums = remember(sourceResult.rows, artistDetail) {
+    val albums = remember(sourceResult.rows, artistDetail, sorts) {
         if (artistDetail) LibraryViews.groups(library.snapshot.copy(tracks = sourceResult.rows.map { it.track }),
-            SongListView.Albums, LibraryViews.defaults(SongListView.Albums)) else emptyList()
+            SongListView.Albums, LibraryViews.defaults(SongListView.Albums)).map { album ->
+                album.copy(tracks = sorts.rows(MediaRef(MediaKind.Album, album.id), album.tracks.map { SongRow(it.id, it) }).map { it.track })
+            } else emptyList()
     }
     val validAlbums = remember(albums, selectedAlbums) { selectedAlbums.filter { id -> albums.any { it.id == id } } }
     val selectedTrackIds = remember(albums, validAlbums) {
@@ -150,10 +153,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val itemIndices = remember(result.items) { result.items.withIndex().associate { it.value.key to it.index } }
     val itemKeys = remember(result.items) { result.items.map { it.key } }
-    val artistHero = remember(artistDetail, albums) { if (artistDetail) albums.sortedWith(compareByDescending<LibraryGroup> { it.tracks.mapNotNull(Track::year).maxOrNull() ?: 0 }
-        .thenByDescending { it.tracks.mapNotNull(Track::addedAt).maxOrNull() ?: 0 }.thenBy { it.id }).firstOrNull()?.tracks?.firstOrNull()?.uri
-        else null }
-    val heroUri = if (artistDetail) artistHero else seededCollection?.coverUris?.firstOrNull() ?: sourceResult.rows.firstOrNull()?.track?.uri
+    // The artist page displays songs beneath album-filter chips; its hero follows that displayed list.
+    // Entry artwork is only a loading seed, never a permanent override of a newly sorted result.
+    val heroUri = collectionHeroUri(loadedResult?.let { result }, seededCollection)
     val hero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
     val lightCollection = collectionIsLight(hero)
     val collectionInk = if (lightCollection) androidx.compose.ui.graphics.Color(0xFF202124) else androidx.compose.ui.graphics.Color.White
@@ -581,7 +583,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     info?.let { song -> SongInformation(song, { info = null }, { editTags?.invoke(listOf(song)) {} }) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
-        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab)).items
+        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
             .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
     } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel() }
