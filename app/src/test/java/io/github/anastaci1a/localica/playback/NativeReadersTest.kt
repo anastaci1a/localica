@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.collect
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -117,5 +118,55 @@ class NativeReadersTest {
             withTimeout(5000) { drain.await() }
             block.release()
         }
+    }
+    @Test fun unresolvedStartupBlocksBeforeRegistrationAndKnownRecoveryIsSelective() {
+        val readers = NativeReaders(RecoveryAdmission.Checking)
+        assertTrue(runCatching { readers.opening("song") }.isFailure)
+        assertTrue(runCatching { readers.opening("other") }.isFailure)
+        readers.publishRecovery(RecoveryAdmission.Pending("song"))
+        assertTrue(runCatching { readers.opening("song") }.isFailure)
+        readers.opening("other").closed()
+        readers.publishRecovery(RecoveryAdmission.Unknown("Unreadable journal"))
+        assertTrue(runCatching { readers.opening("other") }.isFailure)
+    }
+
+    @Test fun unsafePublicationSurvivesTemporaryReleaseAndClearStillRespectsOtherLeases() = runTest {
+        val readers = NativeReaders()
+        val opening = readers.opening("song")
+        val first = readers.block("song")
+        readers.publishRecovery(RecoveryAdmission.Pending("song"))
+        val drain = async { first.awaitClosed() }
+        testScheduler.runCurrent()
+        assertFalse(drain.isCompleted)
+        opening.closed(); drain.await()
+        first.release(); first.release()
+        assertTrue(runCatching { readers.opening("song") }.isFailure)
+        val recovery = readers.block("song")
+        recovery.awaitClosed()
+        readers.publishRecovery(RecoveryAdmission.Clear)
+        assertTrue(runCatching { readers.opening("song") }.isFailure)
+        recovery.release()
+        readers.opening("song").closed()
+    }
+
+    @Test fun recoveryNotificationRunsOutsideMonitorAndAlwaysReadsLatestSnapshot() = runBlocking {
+        val readers = NativeReaders()
+        var checked = 0
+        val collector = launch(Dispatchers.Unconfined) {
+            readers.recoveryChanges.collect {
+                if (readers.recovery() is RecoveryAdmission.Pending) {
+                    val opened = CountDownLatch(1)
+                    val other = thread { readers.opening("other").closed(); opened.countDown() }
+                    assertTrue(opened.await(5, TimeUnit.SECONDS))
+                    other.join(); checked++
+                }
+            }
+        }
+        try {
+            readers.publishRecovery(RecoveryAdmission.Pending("song"))
+            assertEquals(1, checked)
+            readers.publishRecovery(RecoveryAdmission.Clear)
+            assertEquals(RecoveryAdmission.Clear, readers.recovery())
+        } finally { collector.cancelAndJoin() }
     }
 }

@@ -9,6 +9,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.anastaci1a.localica.library.LibraryRepository
 import io.github.anastaci1a.localica.playback.NativeReaders
+import io.github.anastaci1a.localica.playback.RecoveryAdmission
+import io.github.anastaci1a.localica.library.documentIdentity
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.SongListView
 import kotlinx.coroutines.*
@@ -45,6 +47,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var editPlayRequest: Boolean? = null
     private var lastPlayWhenReady = false
     private var pausedAtEnd = false
+    private var recoveryRepeatSuppressed = false
+    private data class RecoveryProblem(val message: String, val queueId: String,
+        val entryId: String?, val blockedSource: String)
+    private var recoveryProblem: RecoveryProblem? = null
+    private var recoveryHeld: Pair<String, String?>? = null
+    private var observedRecovery = readers.recovery()
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             if (!holdsForEdit(state.value.library.active)) intents.observe(nativePlayIntent(player))
@@ -82,10 +90,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             // A song tap/seek or service replacement queued ahead of this callback wins.
             if (player !== attached || generation != expected || attached.currentMediaItem?.queueVisit != visit ||
                 attached.currentPosition < position - 250 || state.value.settings.advancedRepeat != policy) return@submit
-            if (policy == null) { capture(); return@submit }
             capture()
-            val journey = state.value.library.active?.journey ?: return@submit
+            val queue = state.value.library.active ?: return@submit
+            val journey = queue.journey ?: return@submit
             val next = journey.next
+            if (blocksVisit(queue, next)) { reportRecovery(); return@submit }
+            if (policy == null) return@submit
             val sameCycle = next != null && next.cycle == journey.current?.cycle
             if (policy.songEnd == SongEnd.Stop && sameCycle) return@submit
             if (policy.songEnd == SongEnd.NextPaused && sameCycle) {
@@ -99,17 +109,23 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val attached = player ?: return
         capture()
         val queue = state.value.library.active ?: return
-        suspend fun reset() {
+        suspend fun reset(): Boolean {
             val first = queue.journey?.plans?.get(queue.journey.cycle)?.firstOrNull()
-                ?: queue.entries.firstOrNull()?.id ?: return
+                ?: queue.entries.firstOrNull()?.id ?: return false
+            if (queue.entries.firstOrNull { it.id == first }?.track?.id?.let(::blocksSource) == true) {
+                reportRecovery(); return false
+            }
             val next = queue.copy(currentEntryId = first, positionMs = 0,
                 journey = journey(queue).restart(queue.entries.map { it.id }, first))
             saveStartingPlayback(state.value.library.update(next)) { syncTimeline(seek = true) }
+            return true
         }
         when (policy.queueEnd) {
             QueueEnd.Stop -> { if (policy.resetToFirst) reset() }
             QueueEnd.Repeat -> {
-                queue.journey?.next?.let { moveTo(it) } ?: reset()
+                val next = queue.journey?.next
+                if (blocksVisit(queue, next)) { reportRecovery(); return }
+                if (next != null) moveTo(next) else if (!reset()) return
                 applyNativeIntent(attached, commandRevision, play)
                 capture()
             }
@@ -117,7 +133,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 val queues = state.value.library.queues
                 val index = queues.indexOfFirst { it.id == queue.id }
                 val next = (1 until queues.size).map { queues[(index + it) % queues.size] }.firstOrNull { it.entries.isNotEmpty() }
-                if (policy.resetToFirst) reset()
+                if (next != null && blocksCurrent(next)) { reportRecovery(); return }
+                if (policy.resetToFirst && !reset()) return
                 if (next == null) return
                 saveStartingPlayback(state.value.library.update(next.copy(lastActivatedAt = nextActivation())).copy(activeId = next.id)) {
                     activate(play, seek = true, recordIntent = false)
@@ -142,13 +159,17 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                     // Finish the complete event batch before changing the native timeline again.
                     yield()
                     if (restored) command()
-                    else mutable.update { it.copy(problem = "Queues are unavailable. Reopen the app to retry restoring them.") }
+                    else reportProblem("Queues are unavailable. Reopen the app to retry restoring them.")
                 }
                 catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { mutable.update { it.copy(problem = "Couldn’t save this queue change. Try again.") } }
+                catch (_: Exception) { reportProblem("Couldn’t save this queue change. Try again.") }
             }
         }
         commandJob.invokeOnCompletion { commands.close() }
+        scope.launch { readers.recoveryChanges.collect {
+            // Notifications may coalesce or arrive after another publication. Read the authority.
+            submit { refreshRecoveryPlayback() }
+        } }
         scope.launch { while (isActive) { delay(5000); if (restored) submit { capture() } } }
     }
 
@@ -249,14 +270,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val pending = state.value.pending ?: return@submit
         capture()
         if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, removals)) {
-            mutable.update { it.copy(problem = "Select enough inactive queues to make room. The current queue is protected.") }
+            reportProblem("Select enough inactive queues to make room. The current queue is protected.")
             return@submit
         }
         create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)
         pendingComplete?.invoke(true); pendingComplete = null
     }
     fun cancelCreation() = submit {
-        mutable.update { it.copy(pending = null, problem = null) }
+        mutable.update { it.copy(pending = null, problem = problemAfterSuccess(it)) }
         pendingComplete?.invoke(false); pendingComplete = null
     }
     private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String, playlistOrigins: List<String?>) {
@@ -299,8 +320,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val next = state.value.library.update(selected).copy(activeId = active.id)
         saveStartingPlayback(next) {
             val attached = player
-            if (attached != null && loadedQueueId == active.id && !holdsForEdit(selected) && timeline.contains(selected)) {
-                intents.propose(commandRevision, true)
+            if (attached != null && loadedQueueId == active.id && !holdsForEdit(selected) && !blocksCurrent(selected) && timeline.contains(selected)) {
+                intents.propose(commandRevision, true, currentSource(selected))
                 syncTimeline(seek = true)
                 applyNativeIntent(attached, commandRevision, true)
             } else activate(play = true, seek = true)
@@ -381,7 +402,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     private fun updateSettings(value: QueueSettings) {
         preferences.write(value)
-        mutable.update { it.copy(settings = value, problem = null) }
+        mutable.update { it.copy(settings = value, problem = problemAfterSuccess(it)) }
     }
     private fun applyPlaybackModes(timelineChanged: Boolean = false) {
         val attached = player ?: return
@@ -393,7 +414,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         val policy = modes.advancedRepeat
         (attached as? ExoPlayer)?.setPauseAtEndOfMediaItems(policy?.pausesEachSong == true)
-        attached.repeatMode = when (if (policy?.pausesEachSong == true) QueueRepeat.Off else modes.repeat) {
+        val recovery = readers.recovery()
+        recoveryRepeatSuppressed = modes.repeat == QueueRepeat.All && recovery != RecoveryAdmission.Clear &&
+            state.value.library.active?.entries?.any { recovery.blocks(documentIdentity(it.track.id)) } == true
+        attached.repeatMode = when (if (policy?.pausesEachSong == true || recoveryRepeatSuppressed) QueueRepeat.Off else modes.repeat) {
             QueueRepeat.Off -> Player.REPEAT_MODE_OFF
             QueueRepeat.All -> Player.REPEAT_MODE_ALL
             QueueRepeat.One -> Player.REPEAT_MODE_ONE
@@ -423,9 +447,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun retryPlayback() = playbackRequested(true)
 
     private suspend fun applyPlaybackRequest(revision: Long) {
+        intents.bindSource(revision, currentSource(state.value.library.active))
         val choice = intents.choose(revision, desiredPlayIntent())
         if (holdsForEdit(state.value.library.active)) { editPlayRequest = choice.play; return }
         val attached = player ?: return
+        if (holdForRecovery(attached, state.value.library.active)) return
         if (attached.currentMediaItem == null) {
             activate(choice.play, recordIntent = false)
             return
@@ -443,6 +469,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     private fun applyNativeIntent(attached: Player, revision: Long? = null, fallback: Boolean) {
+        if (holdForRecovery(attached, state.value.library.active)) return
         intents.apply(revision, fallback) { attached.playWhenReady = it }
     }
     fun seek(positionMs: Long) = submit {
@@ -478,13 +505,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 if ((!alwaysSong && state.value.settings.restartOnPrevious(attached.currentPosition)) || previous == null) {
                     if (!alwaysSong) attached.seekTo(0)
                 } else moveTo(previous)
-            }
+            } else state.value.library.active?.journey?.previous?.let { moveTo(it) }
         }
         capture()
     }
     private suspend fun moveTo(visit: QueueVisit) {
         val source = state.value
         val queue = source.library.active ?: return
+        val play = desiredPlayIntent()
         val ids = queue.entries.map { it.id }
         val arrived = journey(queue, ids).arrive(visit.token, ids)
         val next = queue.copy(journey = arrived, currentEntryId = arrived.current?.entryId, positionMs = 0)
@@ -492,11 +520,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val prepared = PreparedPlayback(source, source.library.copy(queues = source.library.queues.map {
             if (it.id == queue.id) next else reconcileQueue(it)
         }))
-        savePreparedPlayback(prepared) { syncTimeline(seek = true) }
+        savePreparedPlayback(prepared) {
+            if (timeline.contains(next)) syncTimeline(seek = true)
+            else activate(play, seek = true, recordIntent = false)
+        }
     }
 
     fun dismissProblem() { mutable.update { it.copy(problem = null) } }
-    private class EditPlayback(val trackId: String) {
+    private class EditPlayback(val trackId: String, val recoveryRevision: Long? = null) {
         val abandoned = AtomicBoolean(false)
         var entryId: String? = null
         var queueId: String? = null
@@ -516,7 +547,82 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     private fun holdsForEdit(queue: ListeningQueue?) =
-        editing?.let { edit -> queue?.entries?.any { it.track.id == edit.trackId } == true } == true
+        editing?.let { edit -> queue?.entries?.any { documentIdentity(it.track.id) == edit.trackId } == true } == true
+
+    private fun currentSource(queue: ListeningQueue?): String? = queue?.entries
+        ?.firstOrNull { it.id == queue.currentEntryId }?.track?.id?.let(::documentIdentity)
+    private fun blocksSource(identity: String): Boolean {
+        val recovery = readers.recovery()
+        return recovery != RecoveryAdmission.Clear && recovery.blocks(documentIdentity(identity))
+    }
+    private fun blocksCurrent(queue: ListeningQueue) = readers.recovery() != RecoveryAdmission.Clear &&
+        currentSource(queue)?.let(::blocksSource) == true
+    private fun blocksVisit(queue: ListeningQueue, visit: QueueVisit?) = queue.entries
+        .firstOrNull { it.id == visit?.entryId }?.track?.id?.let(::blocksSource) == true
+
+    private fun reportProblem(message: String) {
+        // A transient error never inherits recovery ownership, even if its text is identical.
+        recoveryProblem = null
+        mutable.update { it.copy(problem = message) }
+    }
+    private fun problemAfterSuccess(current: QueueUiState, next: QueueLibrary = current.library): String? {
+        val notice = recoveryProblem ?: return null
+        val active = next.active ?: return null
+        // Preserve only the displayed notice: dismissal must not resurrect it on metadata saves.
+        return notice.message.takeIf { current.problem == it && active.id == notice.queueId &&
+            active.currentEntryId == notice.entryId && readers.recovery().blocks(notice.blockedSource) }
+    }
+    private fun clearInapplicableRecoveryProblem() {
+        val notice = recoveryProblem ?: return
+        if (problemAfterSuccess(state.value) != null) return
+        mutable.update { if (it.problem == notice.message) it.copy(problem = null) else it }
+        recoveryProblem = null
+    }
+    private fun reportRecovery() {
+        val recovery = readers.recovery()
+        val message = recovery.explanation()
+        if (message.isEmpty()) return
+        val queue = state.value.library.active ?: return
+        // At a clipped future boundary the current song is safe; retain the actual blocked source.
+        val source = (recovery as? RecoveryAdmission.Pending)?.identity ?: currentSource(queue) ?: return
+        recoveryProblem = RecoveryProblem(message, queue.id, queue.currentEntryId, source)
+        mutable.update { it.copy(problem = message) }
+    }
+    private fun holdForRecovery(attached: Player, queue: ListeningQueue?): Boolean {
+        val recovery = readers.recovery()
+        if (recovery == RecoveryAdmission.Clear) return false
+        val source = currentSource(queue) ?: return false
+        if (!recovery.blocks(source)) return false
+        if (recovery != RecoveryAdmission.Checking) {
+            // A passive old activation must not bind a newer request intended for a queued switch.
+            intents.discardForRecovery(source, intents.currentRevision(), bindUnassigned = false)
+        }
+        recoveryHeld = requireNotNull(queue).id to queue.currentEntryId
+        syncingTimeline = true
+        try {
+            if (attached.mediaItemCount > 0 || attached.playbackState != Player.STATE_IDLE || attached.playWhenReady) {
+                attached.pause(); attached.stop(); attached.clearMediaItems()
+            }
+            loadedQueueId = null
+        } finally { syncingTimeline = false }
+        reportRecovery()
+        return true
+    }
+    private suspend fun refreshRecoveryPlayback() {
+        val recovery = readers.recovery()
+        if (recovery == observedRecovery) return
+        observedRecovery = recovery
+        val attached = player ?: return
+        val queue = state.value.library.active ?: return
+        if (holdsForEdit(queue)) return
+        if (holdForRecovery(attached, queue)) return
+        clearInapplicableRecoveryProblem()
+        val held = recoveryHeld
+        if (held == (queue.id to queue.currentEntryId)) {
+            recoveryHeld = null
+            activate(false, seek = true, recordIntent = false)
+        } else syncTimeline()
+    }
 
     /** A later queue switch or service attachment must not prepare the temporarily blocked source. */
     private fun holdForEdit(attached: Player, queue: ListeningQueue?, play: Boolean? = null): Boolean {
@@ -526,7 +632,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             token.queueId = queue?.id
             token.entryId = queue?.currentEntryId
             // Until this first hold, native/pending intent is authoritative, not the empty token.
-            token.resume = desiredPlayIntent()
+            token.resume = if (token.recoveryRevision != null && currentSource(queue) == token.trackId)
+                intents.choose(token.recoveryRevision, fallback = false).play else desiredPlayIntent()
             token.suspendedPlayback = true
         }
         if (play != null) editPlayRequest = play
@@ -538,8 +645,34 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     /** Own the request before suspending: cancellation cannot discard an acquired playback lease. */
-    suspend fun <T> withFileEdit(trackId: String, action: suspend () -> T): T {
-        val token = EditPlayback(trackId)
+    suspend fun <T> withFileEdit(trackId: String, action: suspend () -> T): T =
+        withFileScope(trackId, recoveryRevision = null, action = action)
+
+    /** Capture the user's Recover acceptance before the library/journal or actor can suspend. */
+    internal fun recoveryRequested(): PlaybackIntents.RecoveryRequest =
+        intents.recoveryRequested((readers.recovery() as? RecoveryAdmission.Pending)?.identity)
+
+    internal fun finishRecovery(request: PlaybackIntents.RecoveryRequest) {
+        val recovery = readers.recovery()
+        intents.finishRecovery(request, recovery::blocks)
+    }
+
+    suspend fun <T> withFileRecovery(trackId: String, action: suspend () -> T): T {
+        val request = recoveryRequested()
+        try { return withFileRecovery(trackId, request, action) }
+        finally { finishRecovery(request) }
+    }
+
+    internal suspend fun <T> withFileRecovery(trackId: String, request: PlaybackIntents.RecoveryRequest,
+        action: suspend () -> T): T {
+        // Failed duplicate/foreign claims do not own this operation's registration or cleanup.
+        val revision = intents.claimRecovery(request, documentIdentity(trackId))
+        try { return withFileScope(trackId, recoveryRevision = revision, action = action) }
+        finally { finishRecovery(request) }
+    }
+
+    private suspend fun <T> withFileScope(trackId: String, recoveryRevision: Long?, action: suspend () -> T): T {
+        val token = EditPlayback(documentIdentity(trackId), recoveryRevision)
         var failure: Throwable? = null
         try {
             withTimeout(15000) {
@@ -553,6 +686,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                     // is included by this atomic block; later opens are rejected without provider IO.
                     if (!token.blockReaders(readers)) return@editCommand
                     editing = token
+                    token.recoveryRevision?.let { cutoff ->
+                        intents.discardForRecovery(token.trackId, cutoff,
+                            bindUnassigned = currentSource(state.value.library.active) == token.trackId)
+                    }
                     editPlayRequest = null
                     player?.let { holdForEdit(it, state.value.library.active) }
                 }
@@ -583,6 +720,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private suspend fun endFileEdit(token: EditPlayback) {
         if (editing !== token) return
         val affected = holdsForEdit(state.value.library.active)
+        token.recoveryRevision?.let { cutoff ->
+            intents.discardForRecovery(token.trackId, cutoff,
+                bindUnassigned = currentSource(state.value.library.active) == token.trackId)
+        }
         editing = null
         val request = editPlayRequest
         editPlayRequest = null
@@ -644,6 +785,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         while (arrivals.isNotEmpty()) {
             val arrival = arrivals.removeFirst()
             val queue = result.queues.firstOrNull { it.id == arrival.queueId } ?: continue
+            if (readers.recovery() != RecoveryAdmission.Clear &&
+                blocksVisit(queue, queue.journey?.window()?.firstOrNull { it.token == arrival.token })) continue
             val arrived = queue.journey?.arrive(arrival.token, queue.entries.map { it.id }) ?: continue
             result = result.update(queue.copy(journey = arrived, currentEntryId = arrived.current?.entryId, positionMs = 0))
         }
@@ -662,9 +805,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val modes = state.value.settings
             val repeat = when (attached.repeatMode) { Player.REPEAT_MODE_ALL -> QueueRepeat.All
                 Player.REPEAT_MODE_ONE -> QueueRepeat.One; else -> QueueRepeat.Off }
-            if (modes.shuffle != attached.shuffleModeEnabled || (modes.advancedRepeat == null && modes.repeat != repeat)) {
+            if (state.value.library.active?.let(::blocksCurrent) != true &&
+                (modes.shuffle != attached.shuffleModeEnabled || (modes.advancedRepeat == null && !recoveryRepeatSuppressed && modes.repeat != repeat))) {
                 updateSettings(modes.copy(shuffle = attached.shuffleModeEnabled,
-                    repeat = if (modes.advancedRepeat == null) repeat else modes.repeat))
+                    repeat = if (modes.advancedRepeat == null && !recoveryRepeatSuppressed) repeat else modes.repeat))
                 mutable.update { it.copy(library = reconcile(it.library)) }
             }
             syncTimeline()
@@ -674,7 +818,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private suspend fun save(next: QueueLibrary) {
         val reconciled = reconcile(next)
         persist(reconciled)
-        mutable.update { it.copy(library = reconciled, problem = null) }
+        mutable.update { it.copy(library = reconciled, problem = problemAfterSuccess(it, reconciled)) }
     }
     private suspend fun persist(next: QueueLibrary) {
         if (persistedLibrary != next) {
@@ -689,20 +833,25 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         check(state.value.library === prepared.source.library && state.value.settings === prepared.source.settings) {
             "Playback preparation no longer matches the queue state"
         }
-        mutable.update { it.copy(library = prepared.library, problem = null) }
+        mutable.update { it.copy(library = prepared.library, problem = problemAfterSuccess(it, prepared.library)) }
         // Audio starts before persistence; failed writes remain retryable from the durable snapshot.
         try { start() } finally { persist(state.value.library) }
     }
     private fun syncTimeline(seek: Boolean = false) {
         val attached = player ?: return
         val queue = state.value.library.active ?: return
-        if (holdForEdit(attached, queue) || queue.entries.isEmpty() || !timeline.contains(queue)) return
+        if (holdForEdit(attached, queue) || holdForRecovery(attached, queue) || queue.entries.isEmpty() || !timeline.contains(queue)) return
+        val recovery = readers.recovery()
+        // Normal playback retains its existing bounded-window path; do not scan/parse every song.
+        val window = if (recovery == RecoveryAdmission.Clear) requireNotNull(queue.journey).window()
+            else recoveryWindow(queue) { recovery.blocks(documentIdentity(it)) }
+        if (window.isEmpty()) return
         intents.preparing { pauseRequested ->
             // Keep Pause pending through the suspended operation's final play decision.
             if (pauseRequested) attached.pause()
             syncingTimeline = true
             try {
-                val changed = timeline.sync(attached, queue, seek, loadedQueueId != queue.id || attached.mediaItemCount == 0)
+                val changed = timeline.sync(attached, queue, seek, loadedQueueId != queue.id || attached.mediaItemCount == 0, window)
                 loadedQueueId = queue.id
                 applyPlaybackModes(changed)
             } finally { syncingTimeline = false }
@@ -710,13 +859,15 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     private suspend fun activate(play: Boolean?, seek: Boolean = false, refreshLocations: Boolean = true,
         recordIntent: Boolean = true) {
-        if (play != null && recordIntent) intents.propose(commandRevision, play)
+        if (play != null && recordIntent) intents.propose(commandRevision, play, currentSource(state.value.library.active))
         val revision = commandRevision.takeIf { play != null && recordIntent }
         val attached = player ?: return
         val queue = state.value.library.active
         val heldRequest = if (play != null || intents.pending() != null)
             intents.choose(revision, play ?: desiredPlayIntent()).play else null
-        if (holdForEdit(attached, queue, heldRequest)) return
+        if (holdForEdit(attached, queue, heldRequest) || holdForRecovery(attached, queue)) return
+        recoveryHeld = null
+        clearInapplicableRecoveryProblem()
         if (queue == null || queue.entries.isEmpty()) {
             loadedQueueId = queue?.id
             attached.stop(); attached.clearMediaItems(); applyPlaybackModes(timelineChanged = true)
