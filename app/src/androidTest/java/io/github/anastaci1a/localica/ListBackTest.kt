@@ -64,10 +64,12 @@ class ListBackTest {
             }
         } }
         back()
+        compose.waitUntil(5000) { compose.runOnUiThread { executed.size == 1 } }
         compose.runOnIdle { assertEquals(listOf(0), executed); selected = 1 }
         back()
+        compose.waitUntil(5000) { compose.runOnUiThread { executed.size == 2 } }
         compose.runOnIdle { assertEquals(listOf(0, 1), executed); request++ }
-        compose.waitUntil(5000) { executed.size == 3 }
+        compose.waitUntil(5000) { compose.runOnUiThread { executed.size == 3 } }
         compose.runOnIdle { assertEquals(listOf(0, 1, 1), executed) }
     }
 
