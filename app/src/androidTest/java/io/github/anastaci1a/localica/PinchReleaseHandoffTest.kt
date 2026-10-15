@@ -33,6 +33,7 @@ class PinchReleaseHandoffTest {
     @Test fun longHeldInwardPinchDoesNotRecenterForOneReleaseFrame() = release(outward = false)
 
     @Test fun longHeldCancelledPinchRestoresOriginalAnchor() = release(outward = true, cancelled = true)
+    @Test fun longHeldCancelledInwardPinchRestoresOriginalAnchor() = release(outward = false, cancelled = true)
 
     private fun release(outward: Boolean, cancelled: Boolean = false) {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
