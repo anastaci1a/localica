@@ -54,6 +54,7 @@ class ImageChooserTest {
             compose.waitUntil(10000) {
                 compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().size == 1
             }
+            compose.onNodeWithText("Some recent images are unavailable. Choose them again using gallery or files.").assertIsDisplayed()
             compose.onNodeWithText("Allow recent photos").assertIsDisplayed()
             compose.onNodeWithText("Open gallery").assertIsDisplayed()
             compose.onNodeWithText("Browse files").assertIsDisplayed()
