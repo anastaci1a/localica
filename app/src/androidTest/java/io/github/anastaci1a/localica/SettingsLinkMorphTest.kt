@@ -22,7 +22,7 @@ class SettingsLinkMorphTest {
     // Distinctive foreground ink separates text/icon pixels from the neutral
     // material and empty popup. Semantics alone cannot detect a missing fade.
     private fun returningInk(): Float {
-        val pixels = capturePopupPixels(compose, compose.onAllNodesWithTag("glass-morph-surface").onLast(), popupView)
+        val pixels = capturePopupPixels(compose, compose.onAllNodesWithTag("glass-morph-surface").onLast()) { popupView }
         var ink = 0f
         for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
             val color = pixels[x, y]

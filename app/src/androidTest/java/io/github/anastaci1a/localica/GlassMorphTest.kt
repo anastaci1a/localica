@@ -49,7 +49,7 @@ class GlassMorphTest {
         } }
         fun darkness(left: Int): Float {
             val node = compose.onNodeWithTag("moving-shadow-scene")
-            val pixels = capturePopupPixels(compose, node, popupView)
+            val pixels = capturePopupPixels(compose, node) { popupView }
             val density = compose.density.density
             assertTrue("Sample region must stay inside the popup", (left + 50) * density < pixels.width)
             var dark = 0f; var count = 0
