@@ -105,6 +105,7 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
         .padding(vertical = shadowInset).padding(horizontal = horizontalInset).width(total).height(listPillTargetHeight())) {
         GlassShadowScope(Modifier.fillMaxSize()) {
         items.forEach { item -> key(item) {
+            val selection by animateControlStateFloat(if (item in selected) .07f else 0f, "Library filter selection", reducedMotion)
             val anchor = rememberGlassAnchor()
             val source = LocalFrostedBackdrop.current
             SideEffect { anchor.source = source; anchor.face = { Text(label(item), style = style, maxLines = 1) } }
@@ -115,8 +116,7 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
                     onLongClick = onLongClick?.let { callback -> { callback(item) } })
                 .semantics { this.selected = item in selected }, contentAlignment = Alignment.Center) {
                 LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(anchor),
-                    tint = if (item in selected) androidx.compose.ui.graphics.Color.Black.copy(alpha = .07f)
-                        else androidx.compose.ui.graphics.Color.Transparent) {
+                    tint = androidx.compose.ui.graphics.Color.Black.copy(alpha = selection)) {
                     anchor.captureInk()
                     Text(label(item), Modifier.align(Alignment.Center), style = style, maxLines = 1)
                 }

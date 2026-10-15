@@ -68,6 +68,7 @@ internal fun controlValue(fraction: Float, range: ClosedFloatingPointRange<Float
 @Composable
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true) {
+    val enabledProgress by animateControlStateFloat(if (enabled) 1f else 0f, "Slider availability")
     val actualSteps = if (steps == 0 && valueRange.start == 0f && valueRange.endInclusive == 1f) 19 else steps
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val current by rememberUpdatedState(value)
@@ -156,7 +157,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
         geometry = { thumbBounds(size.width).let { LensGeometry(it, it.height / 2) } },
         body = { body.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {
         inset(14.dp.toPx(), 0f) {
-            drawSliderTrack(shown, actualSteps, enabled, rtl, NavigationAccent, active)
+            drawSliderTrack(shown, actualSteps, enabled, rtl, NavigationAccent, active, enabledProgress)
         }
     }
     // Keep test/accessibility geometry aligned without composing the entire control
@@ -173,11 +174,12 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
 
 /** Stop markers live inside rounded caps, including the current active endpoint. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSliderTrack(fraction: Float, steps: Int,
-    enabled: Boolean, rtl: Boolean, color: Color, dots: Float = 1f) {
+    enabled: Boolean, rtl: Boolean, color: Color, dots: Float = 1f,
+    enabledProgress: Float = if (enabled) 1f else 0f) {
     val h = 5.dp.toPx(); val radius = h / 2; val top = (size.height - h) / 2
-    drawRoundRect(color.copy(alpha = if (enabled) .16f else .08f), Offset(0f, top), Size(size.width, h), CornerRadius(radius))
+    drawRoundRect(color.copy(alpha = .08f + .08f * enabledProgress), Offset(0f, top), Size(size.width, h), CornerRadius(radius))
     val length = size.width * fraction
-    if (fraction > 0f) drawRoundRect(color.copy(alpha = if (enabled) .8f else .3f),
+    if (fraction > 0f) drawRoundRect(color.copy(alpha = .3f + .5f * enabledProgress),
         Offset(if (rtl) size.width - length else 0f, top), Size(length, h), CornerRadius(radius))
     if (steps > 0) for (index in 0..steps + 1) {
         val point = index.toFloat() / (steps + 1)
@@ -257,12 +259,12 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
 @Composable
 internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier,
     enabled: Boolean = true) {
-    val progress by animateFloatAsState(if (checked) 1f else 0f,
-        tween(if (LocalReducedMotion.current) 0 else (160 / LocalMotionSpeed.current).toInt()), label = "Checkmark")
+    val progress by animateControlStateFloat(if (checked) 1f else 0f, "Checkmark")
+    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, "Checkbox availability")
     val foreground = LocalContentColor.current
     Box(modifier.size(48.dp).then(if (onCheckedChange != null)
         Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange) else Modifier)
-        .graphicsLayer { alpha = if (enabled) 1f else .38f }, contentAlignment = Alignment.Center) {
+        .graphicsLayer { alpha = opacity }, contentAlignment = Alignment.Center) {
         SelectionPane(Modifier.size(26.dp))
         Canvas(Modifier.fillMaxSize()) {
         val radius = 10.dp.toPx()
@@ -277,10 +279,12 @@ internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> 
 
 @Composable
 internal fun GlassFilterChoice(checked: Boolean, onClick: () -> Unit, label: String, enabled: Boolean) {
+    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, "Filter availability")
+    val selection by animateControlStateFloat(if (checked) .09f else 0f, "Filter selection")
     Box(Modifier.heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically)) {
         LiquidGlassSurface(Modifier.height(40.dp).toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() })
-            .semantics { selected = checked }.graphicsLayer { alpha = if (enabled) 1f else .38f },
-            tint = Color.Black.copy(alpha = if (checked) .09f else 0f), pressFeedback = enabled) {
+            .semantics { selected = checked }.graphicsLayer { alpha = opacity },
+            tint = Color.Black.copy(alpha = selection), pressFeedback = enabled) {
             Text(label, Modifier.align(Alignment.Center).padding(horizontal = 14.dp), style = MaterialTheme.typography.labelLarge)
         }
     }

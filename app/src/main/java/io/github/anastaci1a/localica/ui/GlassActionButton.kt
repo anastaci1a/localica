@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -12,7 +14,8 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun GlassActionButton(icon: Int, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    LiquidGlassSurface(modifier.heightIn(min = CompactControlSize).ownButtonDrag(enabled)
+    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, "Glass action availability")
+    LiquidGlassSurface(modifier.alpha(opacity).heightIn(min = CompactControlSize).ownButtonDrag(enabled)
         .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = onClick), pressFeedback = enabled) {
         Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
