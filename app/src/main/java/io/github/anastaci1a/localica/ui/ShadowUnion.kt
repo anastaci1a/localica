@@ -7,7 +7,7 @@ internal fun shadowRingAlpha(index: Int, strength: Float, opacity: Float): Float
     strength * opacity * .07f * (1f - (16 - index) / 16f).pow(2)
 
 /** A level set of the maximum individual shadow fields. -1 omits that body. */
-internal data class ShadowBand(val alpha: Float, val ringIndices: List<Int>)
+internal data class ShadowBand(val alpha: Float, val ringIndices: List<Int>, val opacity: Float)
 
 internal fun weightedShadowBands(opacities: List<Float>, strength: Float): List<ShadowBand> {
     if (strength <= 0f || opacities.isEmpty()) return emptyList()
@@ -23,7 +23,7 @@ internal fun weightedShadowBands(opacities: List<Float>, strength: Float): List<
     var previous = 0.0
     return levels.map { level ->
         val band = ShadowBand(((level - previous) / (1.0 - previous)).toFloat(),
-            fields.map { field -> field.indexOfFirst { it >= level } })
+            fields.map { field -> field.indexOfFirst { it >= level } }, level.toFloat())
         previous = level
         band
     }
