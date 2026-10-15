@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.Track
@@ -13,6 +14,9 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.random.Random
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(AndroidJUnit4::class)
 class QueueJourneyPersistenceTest {
@@ -56,7 +60,7 @@ class QueueJourneyPersistenceTest {
             val sql = db.openHelper.writableDatabase
             sql.execSQL("DELETE FROM queue_visits WHERE token = ?", arrayOf(missingVisit.token))
             sql.execSQL("DELETE FROM queue_cycle_members WHERE queueId = ? AND cycle = ? AND entryId = ?",
-                arrayOf(before.id, missingMember.cycle, missingMember.entryId))
+                arrayOf<Any?>(before.id, missingMember.cycle, missingMember.entryId))
             val damaged = db.queues().read()
             sql.execSQL("CREATE TRIGGER fail_member_repair BEFORE INSERT ON queue_cycle_members BEGIN SELECT RAISE(ABORT, 'Injected member repair failure'); END")
             try { db.queues().save(library(before), library(after)); fail("Repair failure must roll back earlier updates and inserts") }
@@ -65,6 +69,45 @@ class QueueJourneyPersistenceTest {
             sql.execSQL("DROP TRIGGER fail_member_repair")
             // The prior durable snapshot is deliberately unchanged, just as QueueController retries it.
             db.queues().save(library(before), library(after))
+            assertEquals(library(after), db.queues().read())
+        } finally { db.close() }
+    }
+
+    @Test fun retainedUpdatesUseScalarCountsAndDirectBatchFailureRollsBack() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val measuring = AtomicBoolean()
+        val countQueries = AtomicInteger()
+        val visitUpdates = AtomicInteger()
+        val memberUpdates = AtomicInteger()
+        val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java)
+            .setQueryCallback(RoomDatabase.QueryCallback { sql, _ ->
+                if (measuring.get()) when {
+                    sql == "SELECT changes()" -> countQueries.incrementAndGet()
+                    sql.startsWith("UPDATE OR ABORT `queue_visits`") -> visitUpdates.incrementAndGet()
+                    sql.startsWith("UPDATE OR ABORT `queue_cycle_members`") -> memberUpdates.incrementAndGet()
+                }
+            }, Executor { it.run() }).build()
+        val before = queue(64, loop = true)
+        val after = shuffled(before, loop = true)
+        val oldVisits = before.journey!!.visitRecords(before.id).associateBy { it.token }
+        val oldMembers = before.journey.cycleRecords(before.id).associateBy { it.cycle to it.entryId }
+        val changedVisits = after.journey!!.visitRecords(after.id).count { oldVisits[it.token] != it }
+        val changedMembers = after.journey.cycleRecords(after.id).filter { oldMembers[it.cycle to it.entryId] != it }
+        try {
+            db.queues().save(QueueLibrary(), library(before))
+            val failOrdinal = changedMembers[changedMembers.size / 2].ordinal
+            db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_scalar_update BEFORE UPDATE ON queue_cycle_members WHEN NEW.ordinal = $failOrdinal BEGIN SELECT RAISE(ABORT, 'Injected scalar batch failure'); END")
+            try { db.queues().save(library(before), library(after)); fail("A direct batch failure must roll back every earlier update") }
+            catch (_: android.database.SQLException) { }
+            assertEquals(library(before), db.queues().read())
+            db.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_scalar_update")
+            measuring.set(true)
+            db.queues().save(library(before), library(after))
+            measuring.set(false)
+            assertEquals(changedVisits, visitUpdates.get())
+            assertEquals(changedMembers.size, memberUpdates.get())
+            // Queue metadata and the two unchanged Room upsert paths still read their scalar counts.
+            assertEquals(3, countQueries.get())
             assertEquals(library(after), db.queues().read())
         } finally { db.close() }
     }
