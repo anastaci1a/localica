@@ -7,6 +7,68 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BrowseQueriesTest {
+    @Test fun preparedThirteenThousandSongSearchesMatchOracleAcrossSortsAndReportWarmPercentiles() {
+        val tracks = (0 until 13_000).map { index -> Track("$index", "Song $index", artist = "Artist ${index % 31}",
+            album = "Album ${index % 100}", comment = "rare ${index % 23}", fileName = "$index.mp3", relativePath = "Disc/$index.mp3") }
+        val prepareStart = System.nanoTime()
+        val snapshot = LibrarySearchIndexBuilder().prepare(LibrarySnapshot(tracks = tracks))
+        val prepareMs = (System.nanoTime() - prepareStart) / 1_000_000.0
+        val route = BrowseRoute(MainTab.Songs, search = true)
+        val queries = listOf("s", "10", "Song 10", "Artist 7 rare 3", "Disc/999", "absent")
+        for (sort in listOf(TrackSort.Title, TrackSort.Artist, TrackSort.Manual)) {
+            val ordering = LibraryQuery(sort = sort, ascending = false)
+            for (text in queries) assertEquals(LibraryQueries.rows(tracks.map { SongRow(it.id, it) }, ordering.copy(text = text)).map { it.id },
+                BrowseQueries.evaluate(snapshot, emptyList(), route.copy(text = text), ordering).rows.map { it.id })
+        }
+        val ordering = LibraryQuery()
+        BrowseQueries.evaluate(snapshot, emptyList(), route, ordering)
+        val timings = (0 until 60).map { attempt ->
+            val start = System.nanoTime()
+            BrowseQueries.evaluate(snapshot, emptyList(), route.copy(text = queries[attempt % queries.size]), ordering)
+            (System.nanoTime() - start) / 1_000_000.0
+        }.sorted()
+        println("13,000-song index prepare=${prepareMs}ms; warm query p50=${timings[29]}ms p95=${timings[56]}ms (host JVM; not visible-device latency)")
+    }
+
+    @Test fun computationalCatalogIgnoresNavigationHistoryButKeepsEffectiveOrder() {
+        val snapshot = LibrarySearchIndexBuilder().prepare(library)
+        val route = BrowseRoute(MainTab.Songs, search = true)
+        val first = BrowseQueries.evaluate(snapshot, emptyList(), route)
+        assertSame(first, BrowseQueries.evaluate(snapshot, emptyList(), route.copy(key = "new history", title = "renamed", queryCommitted = true)))
+        val descending = BrowseQueries.evaluate(snapshot, emptyList(), route, LibraryQuery(ascending = false))
+        assertEquals(first.rows.reversed(), descending.rows)
+    }
+
+    @Test fun globalCatalogSharesAcrossOriginsAndCanceledPreparationNeverCachesPartialRows() {
+        val snapshot = LibrarySearchIndexBuilder().prepare(library)
+        val global = BrowseRoute(MainTab.Home, search = true, globalSearch = true)
+        val first = BrowseQueries.evaluate(snapshot, emptyList(), global)
+        assertSame(first, BrowseQueries.evaluate(snapshot, emptyList(), global.copy(tab = MainTab.Songs, key = "other origin")))
+        val separate = snapshot.copy(tracks = (0 until 2000).map { tracks.first().copy(id = "$it", title = "Song $it") })
+        var checks = 0
+        try {
+            BrowseQueries.evaluate(separate, emptyList(), BrowseRoute(MainTab.Songs)) {
+                if (++checks == 3) throw java.util.concurrent.CancellationException("superseded")
+            }
+            fail("Expected a canceled catalog build")
+        } catch (_: java.util.concurrent.CancellationException) { }
+        assertEquals(2000, BrowseQueries.evaluate(separate, emptyList(), BrowseRoute(MainTab.Songs)).rows.size)
+    }
+
+    @Test fun statisticsReuseTextButRefreshMostPlayedOrderAndUnavailableOccurrenceMetadata() {
+        val snapshot = LibrarySearchIndexBuilder().prepare(library)
+        val counted = snapshot.copy(tracks = snapshot.tracks.map { it.copy(playCount = if (it.id == "two") 10 else 1) })
+        assertSame(snapshot.searchIndex, counted.searchIndex)
+        val route = BrowseRoute(MainTab.Songs, search = true)
+        assertEquals(listOf("two", "one"), BrowseQueries.evaluate(counted, emptyList(), route,
+            LibraryQuery(sort = TrackSort.MostPlayed, ascending = false)).rows.map { it.id })
+        val unavailable = tracks.first().copy(title = "Unavailable needle", id = "missing")
+        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Mix"), listOf(unavailable, unavailable, tracks[1]))
+        val detail = BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), search = true, text = "needle")
+        val found = BrowseQueries.evaluate(snapshot, listOf(playlist), detail).rows
+        assertEquals(playlist.entries.take(2).map { it.id }, found.map { it.id })
+    }
+
     @Test fun successiveSearchEditsMatchCompleteQueriesAndInvalidateWithLibraryMetadata() {
         val tracks = (0 until 12000).map { index -> Track("$index", "Song $index", artist = "Artist ${index % 31}",
             album = "Album ${index % 100}", comment = "rare ${index % 23}", fileName = "$index.mp3", relativePath = "Disc/$index.mp3") }
