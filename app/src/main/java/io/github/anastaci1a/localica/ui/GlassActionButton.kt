@@ -17,10 +17,15 @@ internal fun GlassActionButton(icon: Int, label: String, modifier: Modifier = Mo
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, "Glass action availability")
     LiquidGlassSurface(modifier.alpha(opacity).heightIn(min = CompactControlSize).ownButtonDrag(enabled)
         .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = onClick), pressFeedback = enabled) {
-        Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(painterResource(icon), null, Modifier.size(24.dp))
-            Text(label, style = MaterialTheme.typography.labelLarge)
-        }
+        GlassActionButtonFace(icon, label)
+    }
+}
+
+@Composable
+internal fun GlassActionButtonFace(icon: Int, label: String, modifier: Modifier = Modifier) {
+    Row(modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(painterResource(icon), null, Modifier.size(24.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
