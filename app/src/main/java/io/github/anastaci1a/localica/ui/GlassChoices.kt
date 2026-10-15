@@ -25,6 +25,7 @@ import kotlin.math.roundToInt
 @Composable
 internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifier = Modifier, horizontal: Boolean = false, icons: List<Int>? = null, role: Role = Role.RadioButton, onSelect: (Int) -> Unit) {
     if (labels.isEmpty()) return
+    val tapTrace = LocalChoiceTapTrace.current
     val position = remember { Animatable(selected.toFloat()) }
     val scope = rememberCoroutineScope()
     val reduced = LocalReducedMotion.current
@@ -56,8 +57,11 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                 direction * glassWallAffinity(position.value, labels.lastIndex.toFloat())
             }, cornerRadius = 20.dp)
         @Composable fun Item(index: Int, modifier: Modifier) {
-            Box(modifier.height(height).selectable(index == selected, role = role,
-                interactionSource = null, indication = null, onClick = { change(index) })
+            Box(modifier.height(height).choiceTapTrace("choice:${labels[index]}", tapTrace).selectable(index == selected, role = role,
+                interactionSource = null, indication = null, onClick = {
+                    tapTrace?.invoke("choice-click label=${labels[index]} index=$index selected=$selected")
+                    change(index)
+                })
                 .then(if (index == selected) Modifier.observeGlassContact { pressed = it }.elasticControlDrag(horizontal,
                     onStart = { dragging = true; scope.launch(start = CoroutineStart.UNDISPATCHED) { position.stop(); raw = position.value } },
                     onDelta = { delta ->

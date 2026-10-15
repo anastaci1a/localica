@@ -52,14 +52,34 @@ class ChoiceControlsTest {
 
     @Test fun sortAndViewTabsKeepOneDraftAndSaveBothTogether() {
         var saved: BrowseStyle? = null
+        val tapTrace: (String) -> Unit = { android.util.Log.i("ChoiceTapTrace", it) }
         compose.setContent { LocalicaTheme {
-            BrowseSortDialog(BrowseRoute(MainTab.Albums), BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
+            CompositionLocalProvider(LocalChoiceTapTrace provides tapTrace) {
+                val route = BrowseRoute(MainTab.Albums)
+                SideEffect { tapTrace("fixture-composed routeKey=${route.key}") }
+                BrowseSortDialog(route, BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
+            }
         } }
         choicePhase("open sort choices") { compose.onNodeWithText("Sort by").performClick() }
         choicePhase("single Year tap selects draft") {
             val year = compose.onNodeWithText("Year").performScrollTo()
+            fun logTarget(phase: String) {
+                val node = year.fetchSemanticsNode()
+                val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+                val native = compose.runOnUiThread {
+                    val screen = IntArray(2).also(view::getLocationOnScreen)
+                    "view=${System.identityHashCode(view)} attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()} screen=${screen.contentToString()} size=${view.width}x${view.height}"
+                }
+                tapTrace("target phase=$phase node=${node.id} bounds=${node.boundsInRoot} native=$native")
+            }
             android.util.Log.i("ChoiceControlsTest", "Year tap bounds=${year.fetchSemanticsNode().boundsInRoot}")
-            year.performClick().assertIsSelected()
+            logTarget("before single tap")
+            try {
+                year.performClick().assertIsSelected()
+            } finally {
+                // Keep the original assertion failure even if diagnostic inspection fails.
+                runCatching { logTarget("after single tap") }.onFailure { tapTrace("target inspection failed: $it") }
+            }
         }
         choicePhase("Select commits Year to parent") {
             compose.onNodeWithText("Select", substring = false).performClick()

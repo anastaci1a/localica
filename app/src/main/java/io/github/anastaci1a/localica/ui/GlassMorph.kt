@@ -139,6 +139,7 @@ internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> U
 internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit,
     placement: GlassPlacement = GlassPlacement.Menu, darkOverride: Boolean? = null,
     fitContent: Boolean = placement == GlassPlacement.Menu, content: @Composable () -> Unit) {
+    val tapTrace = LocalChoiceTapTrace.current
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
     val progress = anchor.contact.expansion
@@ -232,8 +233,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val p = progress.value.coerceIn(0f, 1f)
+        val traceId = System.identityHashCode(anchor)
+        SideEffect {
+            tapTrace?.invoke("morph id=$traceId visible=$visible present=$present surfaceReady=$surfaceReady progress=$p gate=${!visible || p < .85f} attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()}")
+        }
         val geometry = if (anchor.quiet) ((p - .14f) / .86f).coerceIn(0f, 1f) else p
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
+        Box(Modifier.fillMaxSize().choiceTapTrace("modal:$traceId", tapTrace).background(Color.Black.copy(alpha = .16f * p))
             .pointerInput(visible) { detectTapGestures { if (visible) dismissNow() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
                 val density = LocalDensity.current
@@ -354,7 +359,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
                             .then(if (!visible || p < .85f) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
-                                awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        tapTrace?.invoke("morph-gate-consume id=$traceId " + event.changes.joinToString {
+                                            "time=${it.uptimeMillis} position=${it.position} pressed=${it.pressed} consumedBefore=${it.isConsumed}"
+                                        })
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                }
                             } else Modifier)) {
                             CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
                                 LocalModalBackdrop provides completePanel,
