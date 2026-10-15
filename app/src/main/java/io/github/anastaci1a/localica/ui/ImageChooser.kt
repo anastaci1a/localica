@@ -51,7 +51,7 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
             if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
             if (recent.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
-                    val cover by produceState<android.graphics.Bitmap?>(null, uri) {
+                    val cover by produceState<android.graphics.Bitmap?>(null, uri, recent, revision) {
                         value = try { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
                         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { null }
