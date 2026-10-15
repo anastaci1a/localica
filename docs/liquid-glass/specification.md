@@ -111,7 +111,7 @@ Optimize the expensive stage identified by a trace. Lowering animation duration 
 - Bound filtered surfaces to visible content plus required sampling padding. Downsample blurred backdrops where visually acceptable; retain full-resolution labels, icons and genuinely clear content.
 - Do not rebuild bitmaps, read GPU pixels or remeasure entire lists on every gesture frame. Keep drawing updates separate from semantic/layout updates where possible.
 - Sleep motion clocks after position, velocity and strain settle. Wake them for new input; “continuous behavior” does not require continuous idle work.
-- Avoid repeated shadows and redundant masks. A union shadow must preserve each control's shape and fade to zero before its allocated bounds.
+- Avoid repeated shadows and redundant masks. A union shadow must preserve each control's shape and independent fade without darkening overlaps, and fade to zero before its allocated bounds.
 - Keep API 26 fallback behavior correct. A cheaper approximation should remain spatially stable even when it cannot reproduce modern live optics.
 
 Capture reproducible interaction traces on representative physical devices, separately from emulator functional checks. Record display refresh rate, build, device, selected-item count, effect settings and gesture script. Compare frame deadlines, p50/p95/p99 duration, worst stalls, allocation churn and idle activity. Use identical inputs before/after; report regressions as well as improvements. Android frame tools and Apple hitch metrics are related evidence, not interchangeable numbers.
