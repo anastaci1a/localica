@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -42,11 +43,13 @@ class NavigationShadowFramesTest {
         var stage by mutableIntStateOf(1)
         var markerBounds = Rect.Zero
         var rootBounds = Rect.Zero
+        var density = 1f
         try {
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Library), reducedMotion = false,
                 glass = GlassAppearance(shadowStrength = 1f, shadowSpread = .6f)))
             compose.setContent {
                 view = LocalView.current
+                density = LocalDensity.current.density
                 Box(Modifier.fillMaxSize().testTag("nav-shadow-frame").onGloballyPositioned { rootBounds = it.boundsInRoot() }) {
                     LocalicaTheme {
                         LocalicaScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("shadow-probe:folder", "Probe music")), tracks = listOf(track)), loading = false),
@@ -66,19 +69,28 @@ class NavigationShadowFramesTest {
                 val marker = IntOffset((markerBounds.left - rootBounds.left).toInt() + 2,
                     (markerBounds.top - rootBounds.top).toInt() + 2)
                 val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("nav-shadow-frame"), stage, marker) { view }
-                // Only the fake-media bottom third is needed; retain physical pixels.
+                // Keep the right outline of both actual bottom surfaces at physical resolution.
+                // A narrow lossless strip avoids flooding the instrumentation log transport.
                 val top = pixels.height * 2 / 3
-                val colors = IntArray(pixels.width * (pixels.height - top)) { i ->
-                    pixels[i % pixels.width, top + i / pixels.width].toArgb()
+                val left = (initialUtility.right - rootBounds.left - 48f * density).toInt()
+                    .coerceIn(0, pixels.width - 1)
+                val width = pixels.width - left
+                val colors = IntArray(width * (pixels.height - top)) { i ->
+                    pixels[left + i % width, top + i / width].toArgb()
                 }
-                val bitmap = Bitmap.createBitmap(colors, pixels.width, pixels.height - top, Bitmap.Config.ARGB_8888)
+                val bitmap = Bitmap.createBitmap(colors, width, pixels.height - top, Bitmap.Config.ARGB_8888)
                 val bytes = try { java.io.ByteArrayOutputStream().also {
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
                 }.toByteArray() } finally { bitmap.recycle() }
-                Log.i("NavigationShadowFrames", "frame=$label stage=$stage cropTop=$top root=$rootBounds initialUtility=$initialUtility bytes=${bytes.size}")
+                Log.i("NavigationShadowFrames", "frame=$label stage=$stage cropLeft=$left cropTop=$top cropWidth=$width root=$rootBounds initialUtility=$initialUtility bytes=${bytes.size}")
                 assertTrue("Bounded fake-scene evidence must fit log capture", bytes.size < 512 * 1024)
                 val chunks = Base64.encodeToString(bytes, Base64.NO_WRAP).chunked(3000)
-                chunks.forEachIndexed { i, chunk -> Log.i("NavigationShadowFrames", "PNG $label ${i + 1}/${chunks.size} $chunk") }
+                chunks.forEachIndexed { i, chunk ->
+                    Log.i("NavigationShadowFrames", "PNG $label ${i + 1}/${chunks.size} $chunk")
+                    // This only paces transport of an already captured image. The Compose
+                    // clock remains frozen; no delay is used to select a desired pixel.
+                    Thread.sleep(8)
+                }
             }
             record("rest")
             compose.onNodeWithText("Shadow probe album").performClick()
