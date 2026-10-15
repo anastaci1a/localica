@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import androidx.compose.ui.test.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -18,6 +19,7 @@ import org.junit.Test
 
 @OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class BrowsePositionTest {
+    @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
     // Keep real Default-dispatch browse queries. Their completion must enqueue
     // test UI work rather than resume the unconfined frame clock on a worker.
     @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
@@ -38,6 +40,42 @@ class BrowsePositionTest {
             }
         }
         compose.waitUntil(5000) { compose.runOnUiThread { applied } }
+    }
+
+    /** Bounded counterpart to performScrollTo for this horizontal filter fixture. */
+    private fun scrollFilterIntoView(target: SemanticsNodeInteraction) {
+        compose.waitUntil(5000) {
+            BrowseSchedulerWatchdog.phase("filter: fetch target and viewport")
+            val node = target.fetchSemanticsNode()
+            val parent = generateSequence(node.parent) { it.parent }.first {
+                it.config.contains(SemanticsActions.ScrollBy) &&
+                    it.config.contains(SemanticsProperties.HorizontalScrollAxisRange)
+            }
+            val viewport = parent.boundsInRoot
+            val left = node.positionInRoot.x
+            val right = left + node.size.width
+            val dx = when {
+                left < viewport.left -> left - viewport.left
+                right > viewport.right -> right - viewport.right
+                else -> 0f
+            }
+            if (kotlin.math.abs(dx) <= 1f) true else {
+                val axis = parent.config[SemanticsProperties.HorizontalScrollAxisRange]
+                val before = compose.runOnUiThread { axis.value() }
+                var scroll = if (axis.reverseScrolling) -dx else dx
+                if (parent.layoutInfo.layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl) scroll = -scroll
+                BrowseSchedulerWatchdog.phase("filter: dispatch ScrollBy $scroll")
+                compose.runOnUiThread { check(parent.config[SemanticsActions.ScrollBy].action!!.invoke(scroll, 0f)) }
+                BrowseSchedulerWatchdog.phase("filter: advance frame")
+                compose.mainClock.advanceTimeByFrame()
+                BrowseSchedulerWatchdog.phase("filter: await idle")
+                compose.waitForIdle()
+                BrowseSchedulerWatchdog.phase("filter: verify progress")
+                check(compose.runOnUiThread { axis.value() } != before) { "No horizontal filter scroll progress" }
+                false
+            }
+        }
+        target.assertIsDisplayed()
     }
 
     @Test fun libraryReselectionScrollsBeforeSeparatelyClearingItsFilter() {
@@ -81,30 +119,52 @@ class BrowsePositionTest {
             } }
             val types = listOf("Albums" to "Album", "Artists" to "Artist", "Album Artists" to "Album artist", "Folders" to "Folder", "Playlists" to "Playlist")
             for ((filter, prefix) in types) {
-                compose.onNodeWithText(filter, useUnmergedTree = true).performScrollTo().performClick()
+                BrowseSchedulerWatchdog.phase("$filter: scroll filter into view")
+                val filterNode = compose.onNodeWithText(filter, useUnmergedTree = true)
+                scrollFilterIntoView(filterNode)
+                BrowseSchedulerWatchdog.phase("$filter: click filter")
+                filterNode.performClick()
+                BrowseSchedulerWatchdog.phase("$filter: filter click returned")
                 for (hardware in listOf(false, true)) {
                     android.util.Log.i("BrowsePositionTest", "Restoring $filter; hardware=$hardware")
                     val title = "$prefix 060"
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: scroll to $title")
                     compose.scrollToUncoveredItem(hasText(title))
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: scroll complete")
                     val before = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: click collection")
                     compose.onNodeWithText(title).performClick()
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: await detail row key")
+                    val rowKey = if (filter == "Playlists") playlists[60].entries.single().id else "track:060"
+                    // Lazy item keys become available when the async detail result is
+                    // published, even when the row itself is below the viewport.
+                    compose.waitUntil(5000) {
+                        compose.onNodeWithTag("browser-list").fetchSemanticsNode()
+                            .config[SemanticsProperties.IndexForKey](rowKey) == 1
+                    }
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: detail index scroll")
                     compose.onNodeWithTag("browser-list").performScrollToIndex(1)
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: await detail result")
                     // Browse queries run on Dispatchers.Default, outside Compose's idle clock.
                     // Await their first laid-out result before testing navigation and position.
                     compose.waitUntil(5000) {
                         runCatching { compose.onNodeWithText("Song 060").assertIsDisplayed() }.isSuccess
                     }
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: Back action")
                     if (hardware) pressSystemBack()
                     else compose.onNodeWithContentDescription("Back").performClick()
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: await Back result")
                     try {
                         compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty() &&
                             compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
                     } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
                         throw AssertionError("$filter / hardware=$hardware: ${compose.onRoot().printToString()}", failure)
                     }
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: verify restored position")
                     compose.onNodeWithText(title).assertIsDisplayed()
                     assertEquals("$filter / hardware=$hardware", before, compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot)
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: position verified")
                 }
             }
         } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }

@@ -7,22 +7,32 @@ import androidx.compose.ui.test.junit4.ComposeContentTestRule
 /** Scroll into the interactive viewport, not just the area drawn behind floating controls. */
 internal fun ComposeContentTestRule.scrollToUncoveredItem(target: SemanticsMatcher) {
     // Query work runs outside Compose's idle clock. Wait for its first layout.
+    BrowseSchedulerWatchdog.phase("scroll: await list")
     waitUntil(5000) { onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
     val list = onNodeWithTag("browser-list")
     val scopedTarget = target and hasAnyAncestor(hasTestTag("browser-list"))
     fun scrollBy(amount: Float) {
+        BrowseSchedulerWatchdog.phase("scroll: dispatch ScrollBy $amount")
         list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, amount) }
         // StandardTestDispatcher queues the scroll launch before it has frame
         // awaiters. Start that work explicitly; Compose idle alone cannot see it.
+        BrowseSchedulerWatchdog.phase("scroll: advance frame")
         mainClock.advanceTimeByFrame()
+        BrowseSchedulerWatchdog.phase("scroll: await idle")
         waitForIdle()
+        BrowseSchedulerWatchdog.phase("scroll: idle returned")
     }
     if (onAllNodes(scopedTarget).fetchSemanticsNodes().isEmpty()) {
+        BrowseSchedulerWatchdog.phase("scroll: reset index")
         list.performScrollToIndex(0)
+        BrowseSchedulerWatchdog.phase("scroll: reset advance frame")
         mainClock.advanceTimeByFrame()
+        BrowseSchedulerWatchdog.phase("scroll: reset await idle")
         waitForIdle()
+        BrowseSchedulerWatchdog.phase("scroll: reset idle returned")
     }
     waitUntil(5000) {
+        BrowseSchedulerWatchdog.phase("scroll: find target")
         if (onAllNodes(scopedTarget).fetchSemanticsNodes().isNotEmpty()) true
         else {
             val before = list.fetchSemanticsNode()
