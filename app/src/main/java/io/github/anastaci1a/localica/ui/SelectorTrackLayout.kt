@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
@@ -39,7 +38,10 @@ import kotlin.math.floor
     val end by rememberUpdatedState(onEnd)
     return pointerInput(horizontal) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            // Finish the down event in Main before waiting for slop. Starting in Initial
+            // lets the slop waiter see this same down after selectable consumes it,
+            // cancelling both the drag and contact feedback immediately.
+            val down = awaitFirstDown(requireUnconsumed = false)
             if (!accepts(down.position)) return@awaitEachGesture
             touch(true)
             var started = false
