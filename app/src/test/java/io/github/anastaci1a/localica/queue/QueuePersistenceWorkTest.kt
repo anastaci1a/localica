@@ -103,7 +103,9 @@ class QueuePersistenceWorkTest {
         override suspend fun upsertActive(active: ActiveQueueRecord) { activeWrites++ }
         override suspend fun upsertJourney(journey: JourneyRecord) { journeys++ }
         override suspend fun upsertVisits(visits: List<VisitRecord>) { this.visits += visits.size }
+        override suspend fun updateVisits(visits: List<VisitRecord>): Int { this.visits += visits.size; return visits.size }
         override suspend fun upsertCycleMembers(members: List<CycleMemberRecord>) { this.members += members.size }
+        override suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int { this.members += members.size; return members.size }
         override suspend fun readQueues(): List<StoredQueue> = error("Not needed")
         override suspend fun readActive(): ActiveQueueRecord? = error("Not needed")
         override suspend fun clearJourney(id: String) = error("Unexpected clear")
