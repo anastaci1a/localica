@@ -25,6 +25,16 @@ data class StoredQueue(@Embedded val queue: QueueRecord,
 
 @Dao
 abstract class QueueDao {
+    private val database: RoomDatabase?
+    constructor(database: RoomDatabase) { this.database = database }
+    // Pure test DAOs override the SQL boundary; Room selects the non-null owning database constructor.
+    protected constructor() { database = null }
+    private fun journeyWriter(): QueueJourneyWriter {
+        val owner = checkNotNull(database) { "A database is required for concrete journey writes" }
+        check(owner.inTransaction()) { "Journey writes require the owning save transaction" }
+        return QueueJourneyWriter(owner::compileStatement)
+    }
+
     @Transaction @Query("SELECT * FROM queues ORDER BY ordinal, createdAt, id") abstract suspend fun readQueues(): List<StoredQueue>
     @Query("SELECT * FROM queue_state WHERE id = 1") abstract suspend fun readActive(): ActiveQueueRecord?
     @Upsert protected abstract suspend fun upsertQueue(queue: QueueRecord)
@@ -33,9 +43,9 @@ abstract class QueueDao {
     @Upsert protected abstract suspend fun upsertJourney(journey: JourneyRecord)
     @Query("DELETE FROM queue_journeys WHERE queueId = :id") protected abstract suspend fun clearJourney(id: String)
     @Upsert protected abstract suspend fun upsertVisits(visits: List<VisitRecord>)
-    @Update protected abstract suspend fun updateVisits(visits: List<VisitRecord>): Int
+    protected open suspend fun updateVisits(visits: List<VisitRecord>): Int = journeyWriter().updateVisits(visits)
     @Upsert protected abstract suspend fun upsertCycleMembers(members: List<CycleMemberRecord>)
-    @Update protected abstract suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int
+    protected open suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = journeyWriter().updateMembers(members)
     @Query("DELETE FROM queue_visits WHERE queueId = :queueId AND token IN (:tokens)")
     protected abstract suspend fun deleteVisits(queueId: String, tokens: List<String>)
     @Query("DELETE FROM queue_cycle_members WHERE queueId = :queueId AND cycle = :cycle AND entryId IN (:entries)")
