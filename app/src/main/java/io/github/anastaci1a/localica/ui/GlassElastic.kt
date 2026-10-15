@@ -60,6 +60,11 @@ internal fun rememberGlassBody(position: () -> Float, pressure: () -> Float = { 
                     state.previous = current
                     result.value = body.shape
                 } while (!body.settled)
+                // Epsilon convergence ends the clock, but must not leave a residual
+                // shape across an integer-layout rounding boundary. Cancellation or
+                // ownership handoff exits above without changing the shared body.
+                body.finishSettlement()
+                result.value = body.shape
             }
         }
     }

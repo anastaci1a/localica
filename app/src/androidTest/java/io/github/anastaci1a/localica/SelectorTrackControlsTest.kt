@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.*
@@ -69,6 +70,19 @@ class SelectorTrackControlsTest {
         } }
     }
 
+    // Unlike getUnclippedBoundsInRoot (position + untransformed layout size),
+    // mapped corners include every ancestor graphics layer without clipping.
+    private fun transformedBounds(tag: String): Rect {
+        val coordinates = compose.onNodeWithTag(tag, useUnmergedTree = true)
+            .fetchSemanticsNode().layoutInfo.coordinates
+        val size = coordinates.size
+        val corners = listOf(Offset.Zero, Offset(size.width.toFloat(), 0f),
+            Offset(0f, size.height.toFloat()), Offset(size.width.toFloat(), size.height.toFloat()))
+            .map { coordinates.localToRoot(it) }
+        return Rect(corners.minOf { it.x }, corners.minOf { it.y },
+            corners.maxOf { it.x }, corners.maxOf { it.y })
+    }
+
     private fun checkPull(hostTag: String, shellTag: String, lensTag: String, contentTag: String, vertical: Boolean) {
         fun bounds(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).getUnclippedBoundsInRoot()
         compose.waitForIdle()
@@ -76,7 +90,7 @@ class SelectorTrackControlsTest {
         val restingHost = bounds(hostTag)
         val shell = bounds(shellTag)
         val lens = bounds(lensTag)
-        val content = bounds(contentTag)
+        val content = transformedBounds(contentTag)
         compose.mainClock.autoAdvance = false
         var held = false
         try {
@@ -88,11 +102,11 @@ class SelectorTrackControlsTest {
             compose.mainClock.advanceTimeBy(800)
             val stretched = bounds(shellTag)
             val pressed = bounds(lensTag)
-            val movedContent = bounds(contentTag)
+            val movedContent = transformedBounds(contentTag)
             assertEquals(restingHost, bounds(hostTag))
             val oldGap = if (vertical) lens.top.value - shell.top.value else lens.left.value - shell.left.value
             val newGap = if (vertical) pressed.top.value - stretched.top.value else pressed.left.value - stretched.left.value
-            android.util.Log.i("SelectorTrack", "$hostTag shell=$shell lens=$lens stretched=$stretched pressed=$pressed")
+            android.util.Log.i("SelectorTrack", "$hostTag shell=$shell lens=$lens stretched=$stretched pressed=$pressed content=$content movedContent=$movedContent")
             assertEquals("The measured resting lens includes the actual four-dp inset", 4f, oldGap, .1f)
             assertTrue("The contact gap must progressively close: $oldGap -> $newGap", newGap < oldGap - .1f)
             assertTrue("The outer track stretches along travel", if (vertical) stretched.height > shell.height else stretched.width > shell.width)
