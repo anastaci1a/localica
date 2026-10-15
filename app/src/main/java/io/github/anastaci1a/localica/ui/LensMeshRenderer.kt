@@ -29,6 +29,7 @@ internal class LensMeshRenderer {
     private var texture = FloatArray(0)
     private var highlights = IntArray(0)
     private var indices = ShortArray(0)
+    private var conditionedIndices = ShortArray(0)
     private val scenePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val lightPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -56,6 +57,7 @@ internal class LensMeshRenderer {
             val nextMesh = if (field == null) curvedLensMesh(shape, density) else sampledLensMesh(shape, density, field)
             vertices = nextMesh.vertices; fields = nextMesh.fields; indices = nextMesh.indices
             rays = FloatArray(vertices.size); texture = FloatArray(vertices.size)
+            conditionedIndices = ShortArray(indices.size)
             // Android 8 JNI validates colors against coordinate count (2/vertex).
             highlights = IntArray(vertices.size)
         }
@@ -88,11 +90,11 @@ internal class LensMeshRenderer {
                 texture[i + 1] = (vertices[i + 1] + rays[i + 1] + sourceOffset.y) * sy
             }
         }
-        fun render(canvas: android.graphics.Canvas, opacity: Float) {
+        fun render(canvas: android.graphics.Canvas, opacity: Float, textureIndices: ShortArray = indices) {
             if (snapshot != null) {
                 scenePaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
                 canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, vertices.size,
-                    vertices, 0, texture, 0, null, 0, indices, 0, indices.size, scenePaint)
+                    vertices, 0, texture, 0, null, 0, textureIndices, 0, textureIndices.size, scenePaint)
             }
             if (lighting) {
                 lightPaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
@@ -110,9 +112,10 @@ internal class LensMeshRenderer {
                 val image = rasters.getOrPut(key) {
                     Bitmap.createBitmap(ceil(shape.bounds.width).toInt().coerceAtLeast(1),
                         ceil(shape.bounds.height).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888).also {
+                        if (snapshot != null) conditionLensTextureTriangles(vertices, texture, indices, conditionedIndices)
                         val target = android.graphics.Canvas(it)
                         target.translate(-shape.bounds.left, -shape.bounds.top)
-                        render(target, 1f)
+                        render(target, 1f, conditionedIndices)
                     }
                 }
                 bitmapPaint.alpha = (255 * alpha).toInt().coerceIn(0, 255)
