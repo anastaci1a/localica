@@ -18,6 +18,7 @@ import org.junit.Test
 
 @OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class BrowsePositionTest {
+    @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
     // Keep real Default-dispatch browse queries. Their completion must enqueue
     // test UI work rather than resume the unconfined frame clock on a worker.
     @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
@@ -81,30 +82,44 @@ class BrowsePositionTest {
             } }
             val types = listOf("Albums" to "Album", "Artists" to "Artist", "Album Artists" to "Album artist", "Folders" to "Folder", "Playlists" to "Playlist")
             for ((filter, prefix) in types) {
-                compose.onNodeWithText(filter, useUnmergedTree = true).performScrollTo().performClick()
+                BrowseSchedulerWatchdog.phase("$filter: scroll filter into view")
+                val filterNode = compose.onNodeWithText(filter, useUnmergedTree = true)
+                filterNode.performScrollTo()
+                BrowseSchedulerWatchdog.phase("$filter: click filter")
+                filterNode.performClick()
+                BrowseSchedulerWatchdog.phase("$filter: filter click returned")
                 for (hardware in listOf(false, true)) {
                     android.util.Log.i("BrowsePositionTest", "Restoring $filter; hardware=$hardware")
                     val title = "$prefix 060"
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: scroll to $title")
                     compose.scrollToUncoveredItem(hasText(title))
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: scroll complete")
                     val before = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: click collection")
                     compose.onNodeWithText(title).performClick()
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: detail index scroll")
                     compose.onNodeWithTag("browser-list").performScrollToIndex(1)
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: await detail result")
                     // Browse queries run on Dispatchers.Default, outside Compose's idle clock.
                     // Await their first laid-out result before testing navigation and position.
                     compose.waitUntil(5000) {
                         runCatching { compose.onNodeWithText("Song 060").assertIsDisplayed() }.isSuccess
                     }
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: Back action")
                     if (hardware) pressSystemBack()
                     else compose.onNodeWithContentDescription("Back").performClick()
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: await Back result")
                     try {
                         compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty() &&
                             compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
                     } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
                         throw AssertionError("$filter / hardware=$hardware: ${compose.onRoot().printToString()}", failure)
                     }
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: verify restored position")
                     compose.onNodeWithText(title).assertIsDisplayed()
                     assertEquals("$filter / hardware=$hardware", before, compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot)
+                    BrowseSchedulerWatchdog.phase("$filter hardware=$hardware: position verified")
                 }
             }
         } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
