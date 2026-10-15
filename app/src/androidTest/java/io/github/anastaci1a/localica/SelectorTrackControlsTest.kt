@@ -39,6 +39,28 @@ class SelectorTrackControlsTest {
         checkPull("choice-track-host", "choice-track-shell", "choice-lens", "choice-option-content-0", true)
     }
 
+    @Test fun rtlChoiceTargetsRemainInsideTheTrackInMirroredOrder() {
+        var selected by mutableIntStateOf(0)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    GlassChoices(listOf("First", "Second", "Third"), selected,
+                        Modifier.width(280.dp), horizontal = true) { selected = it }
+                }
+            }
+        } }
+        val host = compose.onNodeWithTag("choice-track-host").getUnclippedBoundsInRoot()
+        val targets = (0..2).map { compose.onNodeWithTag("choice-option-$it").getUnclippedBoundsInRoot() }
+        targets.forEach { target ->
+            assertTrue("Physical placement must not apply RTL alignment a second time", target.left >= host.left && target.right <= host.right)
+        }
+        assertTrue(targets[0].left > targets[1].left && targets[1].left > targets[2].left)
+        compose.onNodeWithText("First").performTouchInput { swipe(center, Offset(-width * 1.5f, centerY), 350) }
+        compose.onNodeWithText("Third").assertIsSelected()
+        compose.onNodeWithText("Third").performTouchInput { swipe(center, Offset(width * 2.5f, centerY), 350) }
+        compose.onNodeWithText("First").assertIsSelected()
+    }
+
     private fun choices(horizontal: Boolean) {
         compose.setContent { LocalicaTheme {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -70,6 +92,8 @@ class SelectorTrackControlsTest {
             assertEquals(restingHost, bounds(hostTag))
             val oldGap = if (vertical) lens.top.value - shell.top.value else lens.left.value - shell.left.value
             val newGap = if (vertical) pressed.top.value - stretched.top.value else pressed.left.value - stretched.left.value
+            android.util.Log.i("SelectorTrack", "$hostTag shell=$shell lens=$lens stretched=$stretched pressed=$pressed")
+            assertEquals("The measured resting lens includes the actual four-dp inset", 4f, oldGap, .1f)
             assertTrue("The contact gap must progressively close: $oldGap -> $newGap", newGap < oldGap - .1f)
             assertTrue("The outer track stretches along travel", if (vertical) stretched.height > shell.height else stretched.width > shell.width)
             assertTrue("Option content follows the moving wall", if (vertical) movedContent.top + movedContent.bottom < content.top + content.bottom else movedContent.left + movedContent.right < content.left + content.right)
