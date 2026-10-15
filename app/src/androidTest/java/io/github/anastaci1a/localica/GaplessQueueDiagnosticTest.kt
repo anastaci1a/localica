@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.PcmAudioUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DataSource
@@ -39,12 +40,12 @@ import java.util.concurrent.atomic.AtomicInteger
 class GaplessQueueDiagnosticTest {
     @Test fun automaticPcmQueuePreservesTheSameNativeSamplesAsBarePlayer() = files { directory ->
         val segments = pcmSegments(directory, List(3) { 44100 to 44100 })
-        compare("pcm-three", segments, expected = segments.flatMap { it.pcm!!.asIterable() }.toByteArray())
+        compare("pcm-three", segments, expected = nativePcm(segments))
     }
 
     @Test fun automaticPcmCrossesTheBoundedQueueWindowWithoutChangingNativeSamples() = files { directory ->
         val segments = pcmSegments(directory, List(70) { 44100 to 6615 })
-        compare("pcm-window-70", segments, expected = segments.flatMap { it.pcm!!.asIterable() }.toByteArray())
+        compare("pcm-window-70", segments, expected = nativePcm(segments))
     }
 
     @Test fun automaticMp3QueueHasTheSameNativeTrimmingAsBarePlayer() = files { directory ->
@@ -57,12 +58,12 @@ class GaplessQueueDiagnosticTest {
 
     @Test fun sampleRateChangesPreservePcmAndExposeNativeOutputRecreation() = files { directory ->
         val segments = pcmSegments(directory, listOf(44100 to 44100, 48000 to 48000, 44100 to 44100))
-        compare("rate-change", segments, expected = segments.flatMap { it.pcm!!.asIterable() }.toByteArray(), sameFormat = false)
+        compare("rate-change", segments, expected = nativePcm(segments), sameFormat = false)
     }
 
     @Test fun disabledPreloadingReportsItsOwnNativeBoundaryEvidence() = files { directory ->
         val segments = pcmSegments(directory, List(3) { 44100 to 44100 })
-        compare("preload-off", segments, expected = segments.flatMap { it.pcm!!.asIterable() }.toByteArray(), preload = false)
+        compare("preload-off", segments, expected = nativePcm(segments), preload = false)
     }
 
     @Test fun manualNextAndPreviousReportAcceptedSamplesAndNativeClockSeparately() = files { directory ->
@@ -70,20 +71,37 @@ class GaplessQueueDiagnosticTest {
         for (controlled in listOf(false, true)) runPlayer("manual-${if (controlled) "queue" else "bare"}", segments, controlled) {
             awaitMain { player.isPlaying && player.currentPosition >= 500 }
             suspend fun move(name: String, target: Int, command: () -> Unit) {
-                val beforeBytes = probe.pcm().size
-                val request = withContext(Dispatchers.Main) { System.nanoTime().also { command() } }
+                lateinit var priorEpochs: Set<NativeAudioOutputProbe.Epoch>
+                val request = withContext(Dispatchers.Main) {
+                    priorEpochs = probe.outputs.flatMap { it.epochs }.toSet()
+                    System.nanoTime().also { command() }
+                }
                 awaitMain { player.currentMediaItem?.mediaId == target.toString() && player.isPlaying && player.currentPosition >= 500 }
-                // Source identity comes from a unique 256-frame PCM prefix, not mutable player state.
-                val expected = requireNotNull(segments[target].pcm)
-                val marker = expected.copyOfRange(0, 256 * segments[target].channels * 2)
-                val accepted = probe.pcm()
-                val targetAt = indexOf(accepted, marker, beforeBytes)
-                assertTrue("$label $name never wrote the target source prefix", targetAt >= beforeBytes)
+                val epochs = probe.outputs.flatMap { it.epochs }
+                val fresh = epochs.filter { it !in priorEpochs && it.bytes().isNotEmpty() }
+                assertEquals("$label $name requires one attributable new written output/flush epoch", 1, fresh.size)
+                val epoch = fresh.single()
+                val segment = segments[target]
+                assertEquals(segment.rate, epoch.rate)
+                assertEquals(segment.channels * 2, epoch.frameBytes)
+                val accepted = epoch.bytes()
+                val expected = rampPcm(requireNotNull(segment.pcm), segment.rate, segment.channels)
+                assertTrue("$label $name target epoch must contain at least 500 ms and no later source",
+                    accepted.size >= segment.rate * epoch.frameBytes / 2 && accepted.size <= expected.size)
+                assertArrayEquals("$label $name must begin at target frame zero with only the pinned startup ramp",
+                    expected.copyOf(accepted.size), accepted)
+                // Fixed 100 ms source marker is beyond the 20 ms ramp. Never scan arbitrary offsets
+                // or remove accepted silence to make a source match or shorten its measured delay.
+                val markerAt = segment.rate * epoch.frameBytes / 10
+                val markerEnd = markerAt + 256 * epoch.frameBytes
+                assertArrayEquals(requireNotNull(segment.pcm).copyOfRange(markerAt, markerEnd),
+                    accepted.copyOfRange(markerAt, markerEnd))
+                val targetAt = epochs.takeWhile { it !== epoch }.sumOf { it.bytes().size }
                 probe.boundary("$label-$name-first-target", targetAt, request)
-                // A later authored marker can be bracketed by stable native timestamps even when
-                // the first frame has no timestamp yet. Do not label this later point first audio.
-                probe.boundary("$label-$name-target-plus-250ms", targetAt + segments[target].rate * segments[target].channels * 2 / 4, request)
-                Log.i("GaplessProbe", "case=$label action=$name target=$target acceptedPrefixByte=$targetAt noAcousticCapture=true")
+                // A later authored marker can have stable native timestamps when frame zero does
+                // not. Report its bounds separately; neither proves acoustic output continuity.
+                probe.boundary("$label-$name-target-plus-250ms", targetAt + segment.rate * epoch.frameBytes / 4, request)
+                Log.i("GaplessProbe", "case=$label action=$name target=$target acceptedPrefixByte=$targetAt sourceMarkerFrame=${segment.rate / 10} startupRampMs=20 newWrittenEpochs=${fresh.size} noAcousticCapture=true")
             }
             move("next", 1) { if (controlled) queues!!.next() else player.seekToNextMediaItem() }
             move("previous", 0) { if (controlled) queues!!.previous(alwaysSong = true) else player.seekToPreviousMediaItem() }
@@ -99,7 +117,7 @@ class GaplessQueueDiagnosticTest {
             val runLabel = this.label
             Log.i("GaplessProbe", "case=$runLabel acceptedBytes=${accepted.size} sha256=${sha256(accepted)} expectedBytes=${expected?.size} transitions=${automatic.get()} rebufferEvents=${rebuffer.get()} decoders=$decoders")
             if (!controlled) bare = accepted else assertArrayEquals("Queue controller changed native accepted PCM for $label", bare, accepted)
-            expected?.let { assertArrayEquals("Native accepted PCM must exactly retain authored samples for $label", it, accepted) }
+            expected?.let { assertArrayEquals("Native accepted PCM must retain every authored frame with only the pinned output startup ramp for $label", it, accepted) }
             assertEquals(segments.size - 1, automatic.get())
             if (sameFormat) {
                 val writtenOutputs = probe.outputs.filter { output -> output.epochs.any { it.bytes().isNotEmpty() } }
@@ -121,6 +139,55 @@ class GaplessQueueDiagnosticTest {
                 Log.i("GaplessProbe", "case=$runLabel encodedSourceSeams=unmapped authoredFrames=${segments.map { it.frames }}")
             }
         }
+    }
+
+    @Test fun nativeStartupRampExpectationMatchesPinnedSignedPcmMath() {
+        val values = shortArrayOf(Short.MIN_VALUE, Short.MAX_VALUE, -1, 1, -1001, 1001, -2000, 2000)
+        val input = ByteBuffer.allocate(values.size * 2).order(ByteOrder.LITTLE_ENDIAN).apply {
+            values.forEach(::putShort)
+        }.array()
+        // 100 Hz gives two ramp frames. Both channels share frame index; negative values retain
+        // Java's signed 32-bit conversion, truncating division, then arithmetic shift semantics.
+        val expected = shortArrayOf(0, 0, -1, 0, -1001, 1001, -2000, 2000)
+        val actual = rampPcm(input, rate = 100, channels = 2)
+        val actualShorts = ByteBuffer.wrap(actual).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        assertArrayEquals(expected, ShortArray(values.size).also { actualShorts.get(it) })
+        for (channels in listOf(1, 2)) for (rate in listOf(100, 44100, 48000)) {
+            val frames = rate / 50 + 3
+            val pcm = ByteBuffer.allocate(frames * channels * 2).order(ByteOrder.LITTLE_ENDIAN).apply {
+                repeat(frames * channels) { putShort(values[it % values.size]) }
+            }.array()
+            val official = PcmAudioUtil.rampUpVolume(ByteBuffer.wrap(pcm), C.ENCODING_PCM_16BIT,
+                channels * 2, 0, rate / 50)
+            assertArrayEquals("Pinned Media3 ramp rate=$rate channels=$channels",
+                ByteArray(official.remaining()).also { official.get(it) }, rampPcm(pcm, rate, channels))
+        }
+    }
+
+    private fun nativePcm(segments: List<Segment>): ByteArray = segments.flatMapIndexed { index, segment ->
+        val pcm = requireNotNull(segment.pcm)
+        val previous = segments.getOrNull(index - 1)
+        // A rate/channel change recreates the sink. Same-format automatic seams must retain the
+        // authored samples exactly: never normalize a per-track fade or unexpected extra reset.
+        (if (previous == null || previous.rate != segment.rate || previous.channels != segment.channels)
+            rampPcm(pcm, segment.rate, segment.channels) else pcm).asIterable()
+    }.toByteArray()
+
+    /** Exact PCM16 envelope applied by DefaultAudioSink 1.10.1 before AudioOutput.write.
+     * https://github.com/androidx/media/blob/1.10.1/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/audio/PcmAudioUtil.java
+     */
+    private fun rampPcm(pcm: ByteArray, rate: Int, channels: Int): ByteArray {
+        val rampFrames = rate / 50 // DefaultAudioSink.AUDIO_OUTPUT_VOLUME_RAMP_TIME_MS = 20.
+        val output = pcm.copyOf()
+        val values = ByteBuffer.wrap(output).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(minOf(rampFrames, pcm.size / (channels * 2))) { frame ->
+            repeat(channels) { channel ->
+                val offset = (frame * channels + channel) * 2
+                val pcm32 = values.getShort(offset).toLong() shl 16
+                values.putShort(offset, ((pcm32 * frame / rampFrames) shr 16).toShort())
+            }
+        }
+        return output
     }
 
     private data class Segment(val file: File, val rate: Int, val frames: Int, val pcm: ByteArray?, val channels: Int)
@@ -268,12 +335,6 @@ class GaplessQueueDiagnosticTest {
             }
             primary?.let { throw it }
         } }
-    }
-    private fun indexOf(bytes: ByteArray, pattern: ByteArray, from: Int): Int {
-        for (index in from..bytes.size - pattern.size) {
-            if (bytes[index] == pattern[0] && pattern.indices.all { bytes[index + it] == pattern[it] }) return index
-        }
-        return -1
     }
     private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 }
