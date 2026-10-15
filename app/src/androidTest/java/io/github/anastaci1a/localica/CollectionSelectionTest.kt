@@ -42,6 +42,7 @@ class CollectionSelectionTest {
             compose.waitUntil(5000) {
                 compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty()
             }
+            compose.awaitExpectedWindowFocus(compose.onNodeWithTag("media-Playlist:${playlist.id}"))
             compose.onNodeWithTag("media-Playlist:${playlist.id}")
                 .assertIsDisplayed().assertIsEnabled().performClick()
             compose.waitUntil(5000) {
