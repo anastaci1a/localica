@@ -46,7 +46,7 @@ class QueueInsertPreparationBenchmarkTest {
                 assertEquals(0, work.repaired)
                 assertEquals(if (mode == Preparation.PerRow) 19_500 else 2, work.insertPrepares)
                 assertEquals(baseline, snapshot(db))
-                assertForeignKeys(sql)
+                db.runInTransaction { assertForeignKeys(sql) }
                 Log.i("QueueScale", "microbenchmark=insert-preparation entries=13000 rows=19500 mode=$mode sample=$sample insertPrepares=${work.insertPrepares} transactionMs=$elapsed warmedPages=true")
             }
         } finally { db.close(); context.deleteDatabase(name) }
@@ -104,7 +104,7 @@ class QueueInsertPreparationBenchmarkTest {
                 assertEquals(damaged, snapshot(db))
                 db.runInTransaction { upsertRows(sql, mode, visits, members, Work()) }
                 assertEquals(baseline, snapshot(db))
-                assertForeignKeys(sql)
+                db.runInTransaction { assertForeignKeys(sql) }
             }
             // Existing keys are not excluded merely because the caller's before-snapshot is empty.
             damagedRows()
@@ -131,6 +131,7 @@ class QueueInsertPreparationBenchmarkTest {
     }
 
     private fun assertForeignKeys(sql: SupportSQLiteDatabase) {
+        assertTrue("Observe foreign keys on the owning write transaction", sql.inTransaction())
         sql.query("PRAGMA foreign_keys").use { assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0)) }
     }
 
