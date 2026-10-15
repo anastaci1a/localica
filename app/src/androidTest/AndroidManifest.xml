@@ -18,5 +18,15 @@
         </provider>
         <activity android:name="io.github.anastaci1a.localica.QueueScaleGrantActivity"
             android:exported="true" android:theme="@android:style/Theme.NoDisplay" />
+        <provider android:name="io.github.anastaci1a.localica.IncompleteScanDocumentsProvider"
+            android:authorities="io.github.anastaci1a.localica.test.incomplete.scan"
+            android:exported="true" android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+        <activity android:name="io.github.anastaci1a.localica.IncompleteScanGrantActivity"
+            android:exported="true" android:theme="@android:style/Theme.NoDisplay" />
     </application>
 </manifest>
