@@ -76,7 +76,19 @@ class NavigationTest {
         compose.runOnIdle { assertEquals(tracks.last(), selected) }
         compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Settings").performClick()
-        compose.onNodeWithText("Library and tags").performClick()
+        val librarySettings = compose.onNodeWithText("Library and tags")
+        compose.awaitExpectedWindowFocus(librarySettings)
+        librarySettings.assertIsDisplayed().performClick()
+        try {
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Folders to scan").fetchSemanticsNodes().isNotEmpty() }
+        } catch (failure: Throwable) {
+            runCatching {
+                compose.onAllNodes(isRoot(), useUnmergedTree = true).fetchSemanticsNodes().indices.forEach { index ->
+                    compose.onAllNodes(isRoot(), useUnmergedTree = true)[index].printToLog("NavigationSettings")
+                }
+            }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
         compose.onNodeWithText("Folders to scan").performClick()
         compose.onNodeWithText("Folders to scan").assertIsDisplayed()
         compose.onNodeWithText("Add folder").performClick()
