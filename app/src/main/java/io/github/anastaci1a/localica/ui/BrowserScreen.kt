@@ -91,6 +91,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         focusedOnce = true; focusedRequest = focusRequest; inputCompletion++
         onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
     }
+    val reportSearchOpeningFocus = LocalSearchOpeningFocus.current
     val panelReady = LocalGlassPanelReady.current
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     val keyboardClosing = WindowInsets.ime.getBottom(density) > 0 && WindowInsets.imeAnimationTarget.getBottom(density) == 0
@@ -101,7 +102,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (!panelReady || !windowFocused || keyboardClosing) return@LaunchedEffect
         if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
             withFrameNanos { } // Wait until the newly keyed field is attached.
-            focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
+            focus.requestFocus(); keyboard?.show(); reportSearchOpeningFocus?.invoke(); focusedOnce = true; focusedRequest = focusRequest
             restoreResultsFocus = false
         } else if (restoreResultsFocus && !playerOpen) {
             // Replacing a focused field can transfer focus to the restored field even without
