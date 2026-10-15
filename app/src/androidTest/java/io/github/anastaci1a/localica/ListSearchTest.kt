@@ -24,12 +24,13 @@ class ListSearchTest {
     }
 
     private fun dismissSearch() {
-        if (compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isNotEmpty()) {
-            pressSystemBack()
-            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
-        }
+        val editing = compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isNotEmpty()
+        compose.awaitSearchImeHandoff { if (editing) pressSystemBack() }
+        compose.awaitExpectedWindowFocus(compose.onNodeWithTag("list-search-popup"))
+        android.util.Log.i("SearchImeHandoff", "${android.os.SystemClock.uptimeMillis()} phase=before popup Back")
         pressSystemBack()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+        android.util.Log.i("SearchImeHandoff", "${android.os.SystemClock.uptimeMillis()} phase=popup removed")
     }
 
     @Test fun visibleSearchVacancyRestoresWithoutCumulativeListMovement() {
