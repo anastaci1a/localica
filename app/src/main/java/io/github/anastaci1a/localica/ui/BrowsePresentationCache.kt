@@ -28,7 +28,7 @@ internal class BrowseSourceRevision(val library: LibrarySnapshot, val playlists:
 internal data class PresentedBrowse(val route: BrowseRoute, val style: BrowseStyle, val result: BrowseResult,
     val source: BrowseSourceRevision)
 
-/** Activity-local, bounded completed queries. Source identities avoid hashing a whole library on Main. */
+/** Activity-local, bounded completed queries. Short cache operations are serialized; query evaluation stays outside this monitor. */
 internal class BrowsePresentationCache {
     private data class Entry(val library: LibrarySnapshot, val playlists: List<ManualPlaylist>,
         val queues: List<ListeningQueue>, val filters: LibraryFilters, val presentation: PresentedBrowse)
@@ -36,17 +36,21 @@ internal class BrowsePresentationCache {
     private data class HomeEntry(val library: LibrarySnapshot, val playlists: List<ManualPlaylist>,
         val pins: List<MediaRef>, val items: List<BrowserItem>)
     private var home: HomeEntry? = null
+    @Synchronized
     fun home(library: LibrarySnapshot, playlists: List<ManualPlaylist>, pins: List<MediaRef>): List<BrowserItem>? =
         home?.takeIf { it.library === library && it.playlists === playlists && it.pins == pins }?.items
+    @Synchronized
     fun putHome(library: LibrarySnapshot, playlists: List<ManualPlaylist>, pins: List<MediaRef>, items: List<BrowserItem>) {
         home = HomeEntry(library, playlists, pins, items)
     }
+    @Synchronized
     fun get(library: LibrarySnapshot, playlists: List<ManualPlaylist>, queues: List<ListeningQueue>,
         filters: LibraryFilters, route: BrowseRoute, style: BrowseStyle): PresentedBrowse? {
         val index = entries.indexOfFirst { it.library === library && it.playlists === playlists && it.queues === queues &&
             it.filters == filters && it.presentation.route == route && it.presentation.style.sameQuery(style) }
         return if (index < 0) null else entries.removeAt(index).also { entries.add(it) }.presentation.copy(style = style)
     }
+    @Synchronized
     fun put(library: LibrarySnapshot, playlists: List<ManualPlaylist>, queues: List<ListeningQueue>,
         filters: LibraryFilters, presentation: PresentedBrowse) {
         entries.removeAll { it.library !== library || (it.presentation.route == presentation.route && it.presentation.style.sameQuery(presentation.style)) }
