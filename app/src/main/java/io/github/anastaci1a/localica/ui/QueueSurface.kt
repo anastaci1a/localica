@@ -51,10 +51,17 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         scope.launch { progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400))) }
     }
     val currentSettle by rememberUpdatedState<(Boolean) -> Unit>(::settle)
+    val scrollOwnership = remember { ScrollGestureOwnership() }
     val listPull = remember(progress, distance, density.density) {
         object : NestedScrollConnection {
             var pulling = false
             var pulled = 0f
+            fun cancelPull() {
+                if (!pulling) return
+                pulling = false
+                pulled = 0f
+                currentSettle(true)
+            }
             fun move(dy: Float): Offset {
                 val before = pulled
                 pulled = (pulled + dy).coerceIn(0f, distance)
@@ -67,9 +74,12 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                 if (pulling && source == NestedScrollSource.UserInput) move(available.y) else Offset.Zero
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                // The list consumes its own scrolling first. Only a finger pulling beyond its
-                // top starts dismissal; a fling reaching the top must never close the queue.
-                if (source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                // Even a partial final list delta owns the rest of this contact. A fresh
+                // downward pull already at the top still starts the documented drawer drag.
+                scrollOwnership.recordScroll(consumed.y)
+                if (scrollOwnership.contentOwned) return Offset(0f, available.y)
+                if (!scrollOwnership.mayHandoff || available.y <= 0f) return Offset.Zero
                 if (!pulling) pulled = (1f - progress.value) * distance
                 pulling = true
                 return move(available.y)
@@ -102,6 +112,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo((start - delta / distance).coerceIn(0f, 1f)) }
         }, Orientation.Vertical, onDragStarted = { progress.stop(); start = progress.value; delta = 0f },
             onDragStopped = { velocity -> settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f)) })
+        .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = rememberDeviceCorners().shape(), darkening = { .22f + .28f * progress.value }) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") { settle(progress.value < .5f) }
