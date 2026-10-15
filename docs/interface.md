@@ -110,7 +110,7 @@ Offer functional information, editing, art, lyrics, playlist, pin, collection li
 
 - Information: frosted sheet with tappable artwork opening the viewer, file/location, known technical details and an Explore group of icon-bearing glass collection links. Popup controls and secondary text share the material’s light/dark palette.
 - Tag editor: compact frosted panel, centered artwork above checked fields, change/remove controls on the preview. Follow [editing and crop rules](product.md#metadata-and-artwork-editing); the cropper offers pan, pinch, zoom and reset.
-- Image picker: rounded recent previews when access is granted; otherwise a short explanation and glass permission button. An evenly spaced divider separates these from icon-bearing glass Gallery/Files actions.
+- Image picker: rounded previews of readable previous choices; optional device-photo access has a short explanation and glass permission button. An evenly spaced divider separates these from icon-bearing glass Gallery/Files actions.
 - Bulk jobs: Continue in background and Stop after current file; **Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows progress/recent per-file outcomes.
 
 Mode icons visibly reflect state without filled hitboxes or ripples: dim when off, full strength when active, visible 1 for Repeat one, distinct Stop/Next paused/Next queue indicators and accessible announcements. Hold Repeat for Simple/Advanced options; tapping returns to the ordinary cycle. Playback semantics live in [Product](product.md#queues-and-playback); keep the destination shelf extensible.
