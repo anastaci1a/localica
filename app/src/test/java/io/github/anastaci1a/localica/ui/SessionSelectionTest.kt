@@ -1,12 +1,43 @@
 package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.navigation.*
 import org.junit.Assert.*
 import org.junit.Test
 
 class SessionSelectionTest {
     private val track = Track("song", "Song", fileName = "song.mp3", relativePath = "song.mp3")
+    @Test fun collectionSelectionUsesItsOwnSourceInCatalogsSearchAndOtherCollections() {
+        val rows = listOf(SongRow("entry1", track), SongRow("entry2", track))
+        for (kind in MediaKind.entries.filterNot { it == MediaKind.Song }) {
+            val ref = MediaRef(kind, "collection")
+            val item = BrowserItem(ref, "Collection", null, rows)
+            for (containingSource in listOf(null, ref, MediaRef(MediaKind.Folder, "parent"))) {
+                assertEquals(SongSelectionTarget(ref, rows), item.selectionTarget(containingSource))
+            }
+        }
+    }
+    @Test fun songSelectionUsesContainingOccurrencesAndStandaloneSongsHaveNoSyntheticSource() {
+        val source = MediaRef(MediaKind.Playlist, "playlist")
+        val row = SongRow("entry1", track, source.id)
+        val item = BrowserItem(MediaRef(MediaKind.Song, track.id), track.title, null, listOf(row), row)
+        assertEquals(SongSelectionTarget(source, listOf(row)), item.selectionTarget(source))
+        assertEquals(SongSelectionTarget(null, listOf(row)), item.selectionTarget())
+    }
+    @Test fun selectingAPlaylistInItsCatalogRetainsItsOccurrencesInsideThePlaylist() {
+        val source = MediaRef(MediaKind.Playlist, "playlist")
+        val rows = listOf(SongRow("entry1", track, source.id), SongRow("entry2", track, source.id))
+        val target = BrowserItem(source, "Playlist", null, rows).selectionTarget()
+        val state = SessionSelection()
+        state.select(target.source, target.rows)
+        assertTrue(rows.all { state.contains(source, it.id) })
+        state.select(source, rows)
+        assertEquals(2, state.entries.size)
+        state.toggle(source, rows.first())
+        assertEquals(listOf("entry2"), state.entries.map { it.row.id })
+        assertEquals(source, state.entries.map { it.source }.distinct().single())
+    }
     @Test fun sourceOccurrencesKeepAppendOrderAndDuplicatesAcrossCollections() {
         val state = SessionSelection()
         val first = MediaRef(MediaKind.Playlist, "one")

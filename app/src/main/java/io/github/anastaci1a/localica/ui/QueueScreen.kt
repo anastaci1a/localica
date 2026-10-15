@@ -209,31 +209,31 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
 }
 
 @Composable
-internal fun QueueSettingsControls(settings: QueueSettings, section: String = "Playback and queues", onChange: (QueueSettings) -> Unit) {
+internal fun QueueSettingsControls(settings: QueueSettings, section: String = "Playback and queues", onChange: ((QueueSettings) -> QueueSettings) -> Unit) {
     var limitOpen by remember { mutableStateOf(false) }
     var thresholdOpen by remember { mutableStateOf(false) }
     if (section == "Song tap behavior") {
         SettingsHeading("Default song action")
-        ChoicePreference("Song tap", settings.songTap, SongTap.entries, { it.label() }) { onChange(settings.copy(songTap = it)) }
+        ChoicePreference("Song tap", settings.songTap, SongTap.entries, { it.label() }) { action -> onChange { it.copy(songTap = action) } }
         SettingsHeading("List overrides")
         SongListView.entries.forEach { view ->
             ChoicePreference(view.label, settings.tapOverrides[view], listOf(null) + SongTap.entries,
                 { it?.label() ?: "Inherit app default" }) { action ->
-                onChange(settings.copy(tapOverrides = if (action == null) settings.tapOverrides - view else settings.tapOverrides + (view to action)))
+                onChange { it.copy(tapOverrides = if (action == null) it.tapOverrides - view else it.tapOverrides + (view to action)) }
             }
         }
-        ActionTextButton(onClick = { onChange(settings.copy(tapOverrides = emptyMap())) }) { Text("Reset all tap overrides") }
+        ActionTextButton(onClick = { onChange { it.copy(tapOverrides = emptyMap()) } }) { Text("Reset all tap overrides") }
     } else {
         SettingsHeading("Playback")
-        BooleanPreference("Preload next track", settings.preloadNext) { onChange(settings.copy(preloadNext = it)) }
-        ChoicePreference("Previous button", settings.previousBehavior, PreviousBehavior.entries, { it.label() }) {
-            onChange(settings.copy(previousBehavior = it))
+        BooleanPreference("Preload next track", settings.preloadNext) { enabled -> onChange { it.copy(preloadNext = enabled) } }
+        ChoicePreference("Previous button", settings.previousBehavior, PreviousBehavior.entries, { it.label() }) { behavior ->
+            onChange { it.copy(previousBehavior = behavior) }
         }
         if (settings.previousBehavior == PreviousBehavior.RestartAfterThreshold) {
             SettingsLink("Restart threshold", "${settings.previousThresholdSeconds} seconds; earlier taps go to the previous song") { thresholdOpen = true }
         }
         SettingsHeading("Queues")
-        ChoicePreference("Switch queue", settings.switching, QueueSwitch.entries, { it.label() }) { onChange(settings.copy(switching = it)) }
+        ChoicePreference("Switch queue", settings.switching, QueueSwitch.entries, { it.label() }) { switching -> onChange { it.copy(switching = switching) } }
         SettingsLink("Maximum queues: " + (settings.maximum ?: "unlimited"), "A limit never deletes existing queues automatically.") { limitOpen = true }
     }
     if (thresholdOpen) {
@@ -244,7 +244,8 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = !valid)
         }, confirmButton = { ActionTextButton(enabled = valid, onClick = {
-            onChange(settings.copy(previousThresholdSeconds = seconds.toInt())); thresholdOpen = false
+            val threshold = seconds.toInt()
+            onChange { it.copy(previousThresholdSeconds = threshold) }; thresholdOpen = false
         }) { Text("Save") } }, dismissButton = { ActionTextButton(onClick = { thresholdOpen = false }) { Text("Cancel") } })
     }
     if (limitOpen) {
@@ -254,7 +255,8 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
         }, confirmButton = { ActionTextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0, onClick = {
-            onChange(settings.copy(maximum = limit.toIntOrNull())); limitOpen = false
+            val maximum = limit.toIntOrNull()
+            onChange { it.copy(maximum = maximum) }; limitOpen = false
         }) { Text("Save queue limit") } }, dismissButton = { ActionTextButton(onClick = { limitOpen = false }) { Text("Cancel") } })
     }
 }
