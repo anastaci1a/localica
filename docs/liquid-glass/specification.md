@@ -105,6 +105,15 @@ Contrast is a page-level decision, inherited by its controls and menus. Keep for
 - Map glass after white tint and keep optical illumination within the mapped brightness endpoints; never add a uniform white/black overlay or filter the icons. Page polarity stays stable while content scrolls beneath individual buttons. Media selection lenses remain clear.
 - This is Localica’s user-directed adaptation model, not Apple’s private algorithm. Customization does not replace accessible semantics or guarantee legibility for every possible setting; [Apple’s material guidance](sources.md#hig--materials-and-color) still informs the defaults and review.
 
+### Press illumination experiment
+
+A proposed opt-in test profile separates interior press light from the radial lookup, scattering, environmental reflection and page contrast. It remains outside released defaults and does not claim Apple's private algorithm. [Reference observations](sources.md#meet-liquid-glass--wwdc25) show photometric changes with nearly matched outlines; they do not identify touch onset, contact position or a universal amplitude.
+
+- Supply light amount in [0, 1], an origin clamped to the displayed outline, and finite spread clamped between one physical pixel and twice the surface’s maximum extent; reuse the current surface outline and frame. Begin with static controlled poses before connecting gesture dynamics. Changing this channel alone must leave sampled coordinates, silhouette, blur and foreground pixels unchanged.
+- Evaluate one shared spatial profile on shader and mesh paths. A smooth localized lift toward the existing contrast-mapped light endpoint is a candidate, not a uniform white coating. Preserve source alpha and keep environmental rim lighting separate; a zero amount must reproduce the current image exactly.
+- Verify amount 0 / .5 / 1, central/off-center origins and narrow/broad spreads over flat dark/mid/light patches and a coordinate grid. Report interior RGB lift separately from coordinate residual and edge spread. Require finite bounded output, monotonic lift without exceeding mapped endpoints, unchanged crisp labels, and no effect outside the silhouette. Fix adapter error tolerances before native measurement, accounting for quantization and mesh interpolation; retain the existing optical probe unchanged.
+- For later interaction wiring, reuse contact state and its cancellation/retargeting; do not add a parallel motion clock. Reduced Motion keeps immediate state feedback without decorative light travel. Validate real gesture frames and settled restoration before enabling any default.
+
 ## Rendering and measurement
 
 Optimize the expensive stage identified by a trace. Lowering animation duration can conceal neither late frames nor a discontinuous handoff.

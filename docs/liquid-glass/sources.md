@@ -38,6 +38,8 @@ Apple describes a designed digital material, not a literal physical simulation. 
 
 Watch: [dynamics, 1:29](https://developer.apple.com/videos/play/wwdc2025/219/?time=89) · [adaptivity, 6:00](https://developer.apple.com/videos/play/wwdc2025/219/?time=360) · [layers, 10:31](https://developer.apple.com/videos/play/wwdc2025/219/?time=631) · [placement and variants, 13:00](https://developer.apple.com/videos/play/wwdc2025/219/?time=780) · [accessibility, 18:00](https://developer.apple.com/videos/play/wwdc2025/219/?time=1080).
 
+A frame comparison of the [press illustration near 12:12](https://developer.apple.com/videos/play/wwdc2025/219/?time=731) separates scene motion from material change: the 731/732 s background registers within 0.09 full-HD pixels, while two label-free interior patches brighten nearly equally across RGB by 25–26/255 and the rim contracts. A closer-outline pair near 731.9/733.4 s differs by at most 4 px at the measured rim positions yet changes interior brightness by about 14/255; exterior residuals are 1.8–2.5/255. These observations support a separate photometric channel, not a calibrated rest/held transfer curve. Unseen depth, tone and scattering changes remain confounded; the demonstration does not reveal touch timing or its private illumination formula.
+
 **Localica implication:** optics, geometry and interaction need a shared model. A translucent outline plus an unrelated scale animation cannot express all of these behaviors. See [surface roles](specification.md#surface-roles).
 
 ### HIG · Materials and color
