@@ -43,13 +43,17 @@ class GlassMorphTest {
                         }) {
                             LiquidGlassSurface(Modifier.offset(30.dp, 40.dp).size(80.dp, 40.dp)) {}
                         }
+                        // Outside the transformed/alpha-controlled child: proves
+                        // the requested state reached the same captured frame.
+                        PresentationMarker { if (!visible) 2 else if (moved) 1 else 0 }
                     }
                 }
             }
         } }
         fun darkness(left: Int): Float {
             val node = compose.onNodeWithTag("moving-shadow-scene")
-            val pixels = capturePopupPixels(compose, node) { popupView }
+            val stage = if (!visible) 2 else if (moved) 1 else 0
+            val pixels = capturePresentedPopupPixels(compose, node, stage) { popupView }
             val density = compose.density.density
             assertTrue("Sample region must stay inside the popup", (left + 50) * density < pixels.width)
             var dark = 0f; var count = 0
@@ -57,7 +61,9 @@ class GlassMorphTest {
                 for (x in (left * density).toInt()..((left + 50) * density).toInt()) {
                     dark += 1f - pixels[x, y].red; count++
                 }
-            return dark / count
+            return (dark / count).also {
+                android.util.Log.i("GlassMorphProbe", "shadow stage=$stage moved=$moved visible=$visible left=$left darkness=$it")
+            }
         }
         val original = darkness(45)
         assertTrue("Modal descendants cannot join a shadow group in another window", outsideShadows.entries.isEmpty())
