@@ -5,15 +5,28 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import io.github.anastaci1a.localica.navigation.MediaKind
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 import io.github.anastaci1a.localica.navigation.MediaRef
+import io.github.anastaci1a.localica.navigation.MainTab
 import io.github.anastaci1a.localica.playlist.ManualPlaylist
 import io.github.anastaci1a.localica.queue.ListeningQueue
 
-internal data class PresentedBrowse(val route: BrowseRoute, val style: BrowseStyle, val result: BrowseResult)
+/** Identity revisions keep large source equality/hash work off Main and separate text from result freshness. */
+internal class BrowseSourceRevision(val library: LibrarySnapshot, val playlists: List<ManualPlaylist>,
+    val queues: List<ListeningQueue>, val filters: LibraryFilters) {
+    override fun equals(other: Any?) = other is BrowseSourceRevision && library === other.library &&
+        playlists === other.playlists && queues === other.queues && filters == other.filters
+    override fun hashCode() = 31 * (31 * (31 * System.identityHashCode(library) + System.identityHashCode(playlists)) +
+        System.identityHashCode(queues)) + filters.hashCode()
+}
+
+internal data class PresentedBrowse(val route: BrowseRoute, val style: BrowseStyle, val result: BrowseResult,
+    val source: BrowseSourceRevision)
 
 /** Activity-local, bounded completed queries. Source identities avoid hashing a whole library on Main. */
 internal class BrowsePresentationCache {
@@ -53,14 +66,26 @@ internal fun WarmBrowsePresentations(cache: BrowsePresentationCache, library: Li
     playlists: List<ManualPlaylist>, queues: List<ListeningQueue>, filters: LibraryFilters, routes: List<BrowseRoute>) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember(context) { BrowsePreferences(context) }
-    LaunchedEffect(library, playlists, queues, filters, routes) {
+    val source = BrowseSourceRevision(library, playlists, queues, filters)
+    LaunchedEffect(source, routes) {
         for (route in routes.distinct()) {
             val style = preferences.read(route)
             if (cache.get(library, playlists, queues, filters, route, style) != null) continue
             val result = withContext(kotlinx.coroutines.Dispatchers.Default) {
-                BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections)
+                val context = currentCoroutineContext()
+                BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections) { context.ensureActive() }
             }
-            cache.put(library, playlists, queues, filters, PresentedBrowse(route, style, result))
+            cache.put(library, playlists, queues, filters, PresentedBrowse(route, style, result, source))
+        }
+        // Warm at most two distinct global orders, sharing the catalog's total row budget.
+        // Synthetic routes must not evict real tab/Back entries from the presentation cache.
+        val globalSearches = (routes.map { it.tab } + MainTab.Home).distinct().map {
+            val route = BrowseRoute(it, search = true, globalSearch = true, key = "warm-search:$it")
+            route to preferences.read(route)
+        }.distinctBy { (_, style) -> style.sort to style.ascending }.take(2)
+        for ((route, style) in globalSearches) withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val context = currentCoroutineContext()
+            BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections) { context.ensureActive() }
         }
     }
 }
@@ -76,17 +101,19 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     // Query work and filter motion are independent. Departing rows begin fading
     // immediately; only a result for the latest request may replace them.
     val presentationCache = LocalBrowsePresentationCache.current ?: remember { BrowsePresentationCache() }
-    val cachedPresentation = remember(library, playlists, route, style, queues, libraryFilters) {
+    val source = BrowseSourceRevision(library, playlists, queues, libraryFilters)
+    val cachedPresentation = remember(source, route, style) {
         presentationCache.get(library, playlists, queues, libraryFilters, route, style)
     }
-    val queriedPresentation by produceState(cachedPresentation, library, playlists, route, style, queues, libraryFilters) {
+    val queriedPresentation by produceState(cachedPresentation, source, route, style) {
         if (cachedPresentation != null) { value = cachedPresentation; return@produceState }
         val queried = withContext(queryDispatcher) {
-            BrowseQueries.evaluate(library, playlists, route, style.query(), queues, libraryFilters.allCollections).let {
+            val context = currentCoroutineContext()
+            BrowseQueries.evaluate(library, playlists, route, style.query(), queues, libraryFilters.allCollections) { context.ensureActive() }.let {
                 if (route.collection?.kind == MediaKind.Album) it.groupAlbumSongs(style.songGrouping) else it
             }
         }
-        value = PresentedBrowse(route, style, queried).also {
+        value = PresentedBrowse(route, style, queried, source).also {
             presentationCache.put(library, playlists, queues, libraryFilters, it)
         }
     }
@@ -94,11 +121,11 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     var presentation by remember(route.key) { mutableStateOf(cachedPresentation) }
     var displayedFilter by remember(route.key) { mutableStateOf(route.filter) }
     val reveal = remember(route.key) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
-    LaunchedEffect(route, style, candidate, reducedMotion) {
+    LaunchedEffect(source, route, style, candidate, reducedMotion) {
         if (displayedFilter != route.filter) {
             if (reducedMotion) reveal.snapTo(0f) else reveal.animateTo(0f, androidx.compose.animation.core.tween(110))
         }
-        if (candidate?.route == route && candidate.style == style) {
+        if (candidate?.source == source && candidate.route == route && candidate.style == style) {
             presentation = candidate
             displayedFilter = route.filter
             if (reducedMotion) reveal.snapTo(1f) else if (reveal.value < 1f)
@@ -106,5 +133,5 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
         }
     }
     return BrowsePresentationState(presentation, cachedPresentation != null, reveal,
-        presentation?.route != route || presentation?.style != style)
+        presentation?.source != source || presentation?.route != route || presentation?.style != style)
 }

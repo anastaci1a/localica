@@ -23,9 +23,9 @@ internal class QueueTimeline {
 
     fun contains(queue: ListeningQueue) = queueId == queue.id && queue.entries.all { it.id in templates }
 
-    fun sync(player: Player, queue: ListeningQueue, seek: Boolean, replace: Boolean): Boolean {
+    fun sync(player: Player, queue: ListeningQueue, seek: Boolean, replace: Boolean,
+        window: List<QueueVisit> = requireNotNull(queue.journey).window()): Boolean {
         val journey = requireNotNull(queue.journey)
-        val window = journey.window()
         val wanted = window.map { it.token }.toSet()
         decorated.keys.retainAll(wanted)
         val items = window.map { visit -> decorated.getOrPut(visit.token) {

@@ -22,8 +22,9 @@ import io.github.anastaci1a.localica.browse.*
 /** Artwork, metadata and menu keep the same composition identities in every view. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, dense: Boolean,
-    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true) {
+internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: BrowseCellGeometry,
+    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap()) {
+    val dense = geometry.dense
     val gallery = style.presentation != Presentation.List
     val from = pinch?.source
     val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
@@ -59,22 +60,25 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, dense: Bool
             Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (trackNumber != null) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
                 maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis)
-            if (showInformation && informationAlpha > 0f) item.information(style)?.let { Text(it, Modifier.graphicsLayer { alpha = informationAlpha },
+            if (showInformation && informationAlpha > 0f) item.information(style, inheritedInformation)?.let { Text(it, Modifier.graphicsLayer { alpha = informationAlpha },
                 style = MaterialTheme.typography.bodySmall, maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis) }
         }
         Box { menu(!gallery) }
     }) { children, constraints ->
-        val width = constraints.maxWidth
+        val targetHorizontalInset = geometry.contentInset.dp.roundToPx()
+        val sourceHorizontalInset = if (from != null) BrowseCellGeometry(requireNotNull(pinch).sourceColumns).contentInset.dp.roundToPx() else targetHorizontalInset
+        val width = (constraints.maxWidth - targetHorizontalInset * 2).coerceAtLeast(0)
         val oldGallery = from?.presentation?.let { it != Presentation.List } ?: gallery
-        val oldWidth = if (from != null) (requireNotNull(pinch).viewportWidth / pinch.sourceColumns - 24.dp.toPx()).toInt().coerceAtLeast(1) else width
+        val oldWidth = if (from != null) requireNotNull(pinch).sourceContentWidth(item.key) else width
         fun mix(a: Int, b: Int) = (a + (b - a) * progress).toInt().coerceAtLeast(0)
         fun coverWidth(value: BrowseStyle, width: Int) = if (value.presentation != Presentation.List) width else
             if (numbered(value)) 28.dp.roundToPx().coerceAtMost(width)
-            else when (value.listSize) {
-                ListSize.Compact -> 0
-                ListSize.Normal -> ((width + 24.dp.toPx()) / 5 - 24.dp.toPx()).toInt().coerceIn(0, width)
-                ListSize.Large -> ((width + 24.dp.toPx()) / 4 - 24.dp.toPx()).toInt().coerceIn(0, width)
+            else if (value.listSize == ListSize.Compact) 0 else {
+                val list = BrowseCellGeometry(1)
+                val viewport = width + 2 * (list.cardInset.dp.roundToPx() + list.contentInset.dp.roundToPx())
+                BrowseCellGeometry(if (value.listSize == ListSize.Normal) 5 else 4).artworkWidth(viewport, density).coerceAtMost(width)
             }
+        val horizontalInset = mix(sourceHorizontalInset, targetHorizontalInset)
         val oldArt = coverWidth(from ?: style, oldWidth)
         val targetArt = coverWidth(style, width)
         val artWidth = mix(oldArt, targetArt)
@@ -96,11 +100,11 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, dense: Bool
         // The grid must lay out its final rows once. Interpolating row height here
         // feeds the animation back into lazy virtualization and shifts every anchor.
         val height = if (from != null) targetHeight else mix(oldHeight, targetHeight)
-        layout(width, height + targetInset * 2) {
-            art.placeRelative(0, inset + mix(if (oldGallery) 0 else (oldHeight - oldArt) / 2, if (gallery) 0 else (targetHeight - targetArt) / 2))
-            text.placeRelative(mix(if (oldGallery) 0 else oldArt + oldGap, if (gallery) 0 else targetArt + targetGap),
+        layout(constraints.maxWidth, height + targetInset * 2) {
+            art.placeRelative(horizontalInset, inset + mix(if (oldGallery) 0 else (oldHeight - oldArt) / 2, if (gallery) 0 else (targetHeight - targetArt) / 2))
+            text.placeRelative(horizontalInset + mix(if (oldGallery) 0 else oldArt + oldGap, if (gallery) 0 else targetArt + targetGap),
                 inset + mix(if (oldGallery) oldArt else (oldHeight - text.height) / 2, if (gallery) targetArt else (targetHeight - text.height) / 2))
-            actions.placeRelative(mix(oldWidth - oldMenu, width - targetMenu), inset + mix(if (oldGallery) oldArt else (oldHeight - actions.height) / 2,
+            actions.placeRelative(horizontalInset + mix(oldWidth - oldMenu, width - targetMenu), inset + mix(if (oldGallery) oldArt else (oldHeight - actions.height) / 2,
                 if (gallery) targetArt else (targetHeight - actions.height) / 2))
         }
     }

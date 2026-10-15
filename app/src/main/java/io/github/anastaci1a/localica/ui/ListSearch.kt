@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -93,8 +94,11 @@ internal fun Modifier.scrollEdgeFade(scroll: androidx.compose.foundation.ScrollS
     }
 
 @Composable
-internal fun ListSearchWindow(visible: Boolean, anchor: GlassAnchor, hasQuery: Boolean, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+internal fun ListSearchWindow(visible: Boolean, anchor: GlassAnchor, hasQuery: Boolean, onDismiss: () -> Unit,
+    onBack: (() -> Unit)? = null, content: @Composable () -> Unit) {
     GlassMorphPopup(visible, anchor, onDismiss, GlassPlacement.Search) {
+        // Register before the editor so ending text input remains the first Back action.
+        BackHandler(visible && onBack != null) { onBack?.invoke() }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             Box(Modifier.fillMaxWidth().then(if (hasQuery) Modifier.height(maxHeight * .85f) else Modifier.wrapContentHeight())
                 .testTag("list-search-popup")) {

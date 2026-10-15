@@ -10,8 +10,11 @@ internal data class LensMeshGeometry(val vertices: FloatArray, val fields: List<
 internal fun curvedLensMesh(shape: LensGeometry, density: Float): LensMeshGeometry {
     val bounds = shape.bounds
     val radius = shape.corner.coerceIn(0f, shape.span)
-    val horizontal = ceil((bounds.width - 2 * radius) / (8 * density)).toInt().coerceIn(1, 64)
-    val vertical = ceil((bounds.height - 2 * radius) / (8 * density)).toInt().coerceIn(1, 64)
+    // A circle/capsule has no straight edge on one or both axes. Keeping a
+    // zero-length edge creates cardinal sliver triangles after trig rounding;
+    // software Canvas can sample those with an effectively singular transform.
+    val horizontal = ceil((bounds.width - 2 * radius) / (8 * density)).toInt().coerceIn(0, 64)
+    val vertical = ceil((bounds.height - 2 * radius) / (8 * density)).toInt().coerceIn(0, 64)
     val arc = ceil(PI.toFloat() * radius / (4 * density)).toInt().coerceIn(12, 32)
     val perimeter = 2 * horizontal + 2 * vertical + 4 * arc
     val rings = 32
