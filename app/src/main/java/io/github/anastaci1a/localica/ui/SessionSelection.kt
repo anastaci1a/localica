@@ -2,9 +2,16 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModel
+import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.library.SongRow
 import io.github.anastaci1a.localica.navigation.MediaRef
 import java.util.UUID
+
+/** Collections own their occurrences; a song row inherits the list containing it. */
+internal data class SongSelectionTarget(val source: MediaRef?, val rows: List<SongRow>)
+
+internal fun BrowserItem.selectionTarget(containingSource: MediaRef? = null) =
+    if (row == null) SongSelectionTarget(ref, songs) else SongSelectionTarget(containingSource, listOf(row))
 
 internal data class SelectedSong(val id: String = UUID.randomUUID().toString(), val source: MediaRef?, val row: SongRow)
 
