@@ -44,6 +44,48 @@ class BrowseRetentionTest {
         assertTrue("Home should reuse the completed query immediately", tasks.isEmpty())
     }
 
+    @Test fun pinnedCollectionUpdatesAfterInheritedSortOverrideAndReset() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = context.getSharedPreferences("browse-style", 0)
+        val legacy = context.getSharedPreferences("library-query", 0)
+        store.edit().clear().commit(); legacy.edit().clear().commit()
+        val preferences = BrowsePreferences(context)
+        val first = Track("first", "Alpha", album = "Pinned album", trackNumber = 2, fileName = "a.mp3", relativePath = "a.mp3")
+        val second = first.copy(uri = "second", id = "second", title = "Zulu", trackNumber = 1)
+        val library = LibraryUiState(LibrarySnapshot(tracks = listOf(first, second)), loading = false)
+        val playlists = PlaylistState(loading = false)
+        val album = BrowseQueries.evaluate(library.snapshot, emptyList(), BrowseRoute(MainTab.Albums)).items.single()
+        val detail = BrowseRoute(MainTab.Albums, album.ref)
+        val pins = listOf(album.ref)
+        val cache = BrowsePresentationCache()
+        val tasks = LinkedBlockingQueue<Runnable>()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { tasks.add(block) }
+        }
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalBrowsePresentationCache provides cache) {
+            PinnedHome(library, playlists, pins, {}, {}, { _, _ -> }, {}, { _, _ -> }, queryDispatcher = dispatcher)
+        } } }
+        fun finishQuery(expected: String) {
+            compose.waitUntil(5000) { tasks.isNotEmpty() }
+            requireNotNull(tasks.poll(5, TimeUnit.SECONDS)).run()
+            compose.waitForIdle()
+            assertEquals(listOf(expected), cache.home(library.snapshot, playlists.playlists, pins,
+                preferences.sortSnapshot())?.single()?.coverUris)
+        }
+        try {
+            finishQuery("second")
+            compose.runOnIdle { preferences.write(detail, BrowseStyle(sort = TrackSort.Title), false) }
+            compose.onNodeWithText("Pinned album").assertIsNotEnabled()
+            finishQuery("first")
+            compose.onNodeWithText("Pinned album").assertIsEnabled()
+            compose.runOnIdle { preferences.write(detail, BrowseStyle(sort = TrackSort.Title, ascending = false), true) }
+            finishQuery("second")
+            compose.runOnIdle { preferences.reset(detail) }
+            finishQuery("first")
+            compose.onNodeWithText("Pinned album").assertIsDisplayed()
+        } finally { store.edit().clear().commit(); legacy.edit().clear().commit() }
+    }
+
     @Test fun returningPageHasResultsBeforeAnyNewQueryAndLibraryChangesInvalidateThem() {
         InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("browse-style", 0).edit().clear().commit()
         val tasks = LinkedBlockingQueue<Runnable>()

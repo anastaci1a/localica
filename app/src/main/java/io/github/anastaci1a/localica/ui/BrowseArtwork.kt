@@ -43,7 +43,10 @@ internal class BrowseArtworkScope {
         val cover = visible.remove(token)
         if (!active && cover != null) retained = retained.filterNot { it.first == cover.first } + cover
     }
-    fun preview(): ArtworkCache.CachedArtwork? { current(); return preview }
+    fun preview(uri: String? = null): ArtworkCache.CachedArtwork? {
+        current()
+        return preview.takeIf { uri == null || collection == null || collection?.coverUris == listOf(uri) }
+    }
     fun visual(uri: String?): PlayerVisual? { current(); return prepared?.takeIf { it.first == uri }?.second }
     fun keepVisual(uri: String, visual: PlayerVisual) { current(); prepared = uri to visual }
 }
@@ -75,3 +78,8 @@ internal val LocalBrowseArtwork = compositionLocalOf<BrowseArtworkScope?> { null
     }
 }
 internal val LocalArtworkTransit = staticCompositionLocalOf<ArtworkTransit?> { null }
+
+/** A completed empty result must clear an old seed as well as a changed first member. */
+internal fun collectionHeroUri(result: io.github.anastaci1a.localica.browse.BrowseResult?,
+    seed: io.github.anastaci1a.localica.browse.BrowserItem?): String? =
+    if (result == null) seed?.coverUris?.firstOrNull() else result.rows.firstOrNull()?.track?.uri
