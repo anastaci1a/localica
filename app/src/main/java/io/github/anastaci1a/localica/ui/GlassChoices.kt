@@ -10,6 +10,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -80,7 +81,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                     val next = position.value.roundToInt().coerceIn(labels.indices)
                     pressure = 0f; dragging = false; settleRequest++
                     if (!cancelled) change(next)
-                })) {
+                }), contentAlignment = AbsoluteAlignment.TopLeft) {
             Box(Modifier.selectorTrackPlacement(trackBounds).testTag("choice-track-shell")
                 .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .10f),
                     RoundedCornerShape(with(density) { radius.toDp() })))
