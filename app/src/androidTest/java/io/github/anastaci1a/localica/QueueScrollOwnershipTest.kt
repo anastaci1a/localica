@@ -95,6 +95,18 @@ class QueueScrollOwnershipTest {
         compose.runOnIdle { assertEquals(0f, progress.value, .001f) }
     }
 
+    @Test fun heldPullStillCommitsOnRealReleaseAfterVelocityHasExpired() {
+        showQueue()
+        val songs = compose.onNodeWithTag("ownership-list")
+        songs.performTouchInput {
+            down(Offset(centerX, height * .15f))
+            repeat(4) { moveBy(Offset(0f, height * .05f), delayMillis = 60) }
+        }
+        compose.runOnIdle { assertTrue(progress.value < 1f) }
+        songs.performTouchInput { advanceEventTime(300); up() }
+        compose.runOnIdle { assertEquals(0f, progress.value, .001f) }
+    }
+
     @Test fun secondPointerCancelsPullAndCannotRestartItUntilAllPointersLift() {
         showQueue()
         val songs = compose.onNodeWithTag("ownership-list")

@@ -25,13 +25,16 @@ internal object HorizontalGestureOwner : NestedScrollConnection {
 internal class ScrollGestureOwnership {
     private var active = false
     private var handoffBlocked = false
+    private var released = false
     var contentOwned = false
         private set
     val mayHandoff get() = active && !contentOwned && !handoffBlocked
+    val mayCommitPull get() = released && !contentOwned && !handoffBlocked
 
-    fun begin() { active = true; contentOwned = false; handoffBlocked = false }
+    fun begin() { active = true; contentOwned = false; handoffBlocked = false; released = false }
     fun recordScroll(consumed: Float) { if (active && consumed != 0f) contentOwned = true }
     fun blockHandoff() { handoffBlocked = true }
+    fun release() { if (active) released = true }
     // Keep the decision through the trailing fling; only a new down resets it.
     fun end() { active = false }
 }
@@ -56,10 +59,13 @@ internal fun Modifier.observeScrollOwnership(ownership: ScrollGestureOwnership,
                         ownership.blockHandoff()
                         cancel()
                     }
-                    // Observe a real up before children consume it. Compose's synthetic
-                    // cancellation has already-consumed changes; coroutine cancellation
-                    // reaches finally without a real up. Neither commits a partial pull.
-                    if (event.changes.none { it.pressed }) released = event.changes.any { it.changedToUp() }
+                    // A normal up traverses Initial before children handle Main. Synthetic
+                    // cancellation is dispatched child-first, so its nested pre-fling may
+                    // already have run: only this explicit real-up signal permits a commit.
+                    if (event.changes.none { it.pressed }) {
+                        released = event.changes.any { it.changedToUp() }
+                        if (released) ownership.release()
+                    }
                     awaitPointerEvent(PointerEventPass.Main)
                     if (ownership.contentOwned && !multiplePointers) event.changes.filter {
                         it.pressed && it.positionChangedIgnoreConsumed()

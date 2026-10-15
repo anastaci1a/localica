@@ -86,6 +86,12 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             }
             override suspend fun onPreFling(available: Velocity): Velocity {
                 if (!pulling) return Velocity.Zero
+                // Scrollable also dispatches a zero-velocity pre-fling on cancellation,
+                // potentially before our observer receives its synthetic cancel event.
+                if (!scrollOwnership.mayCommitPull) {
+                    cancelPull()
+                    return Velocity(0f, available.y)
+                }
                 pulling = false
                 currentSettle(settleOpen(-pulled / density.density, -available.y / density.density,
                     progress.value, opening = false))
