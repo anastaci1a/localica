@@ -26,14 +26,14 @@ internal fun glassWallAffinity(position: Float, last: Float): Float {
 
 /** Position is owned by the gesture; acceleration, contact and pressure drive its shape. */
 internal class GlassMomentum(var damping: Float = 8f) {
-    private class Spring {
+    private class Spring(val stiffness: Float = 380f) {
         var value = 0f
         var velocity = 0f
         var target = 0f
         val settled get() = abs(value - target) < .0003f && abs(velocity) < .003f
         fun advance(dt: Float, damping: Float, held: Boolean = false) {
             val before = value
-            velocity += (380f * (target - value) - damping * velocity) * dt
+            velocity += (stiffness * (target - value) - damping * velocity) * dt
             value += velocity * dt
             // A held finger constrains the surface: it stores strain, never rings.
             if (held) {
@@ -45,7 +45,8 @@ internal class GlassMomentum(var damping: Float = 8f) {
     }
     private val motion = Spring()
     private val pressure = Spring()
-    private val depth = Spring()
+    // Isolated comparison: faster depth while preserving the damping ratio.
+    private val depth = Spring(760f)
     private var travelVelocity = 0f
     val strain get() = .12f * tanh(motion.value / .12f) + pressure.value
     val shape get() = GlassShape(strain, .24f * tanh(depth.value / .24f))
@@ -72,7 +73,7 @@ internal class GlassMomentum(var damping: Float = 8f) {
         while (remaining > 0f) {
             val dt = minOf(remaining, 1f / 240f)
             val resistance = if (held) maxOf(40f, drag) else drag
-            motion.advance(dt, resistance, held); this.pressure.advance(dt, resistance, held); depth.advance(dt, resistance, held)
+            motion.advance(dt, resistance, held); this.pressure.advance(dt, resistance, held); depth.advance(dt, resistance * kotlin.math.sqrt(2f), held)
             remaining -= dt
         }
     }
