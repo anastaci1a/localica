@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,10 +19,14 @@ class SelectionPanelClearanceTest {
     @get:Rule val compose = createComposeRule()
     private var visible by mutableStateOf(false)
     private lateinit var panel: FloatingSelectionPanelState
+    private lateinit var referenceProgress: State<Float>
 
     private fun fixture(chrome: Int, reducedMotion: Boolean = false, inline: Boolean = false, cap: Int = 160) {
         compose.setContent {
             panel = rememberFloatingSelectionPanel(visible, reducedMotion)
+            // Independent clock oracle: unlike the panel this has no measurement/occupancy state.
+            referenceProgress = animateFloatAsState(if (visible) 1f else 0f,
+                tween(if (reducedMotion) 0 else 220), label = "Reference panel motion")
             CompositionLocalProvider(LocalBrowseObscuredInset provides (chrome.dp + panel.clearance)) {
                 Box(Modifier.size(320.dp, 480.dp).testTag("viewport")) {
                     if (inline) Column(Modifier.fillMaxSize()) {
@@ -48,7 +54,11 @@ class SelectionPanelClearanceTest {
         val control = compose.onNodeWithTag("control").fetchSemanticsNode().boundsInRoot
         val density = viewport.width / 320f
         var progress = 0f
-        compose.runOnIdle { progress = panel.progress }
+        compose.runOnIdle {
+            progress = panel.progress
+            assertEquals("Panel retains the uninterrupted tween at this clock phase",
+                referenceProgress.value, progress, .0001f)
+        }
         assertEquals("Every frame uses the panel's same occupancy", (chrome + 104f * progress) * density,
             viewport.bottom - control.bottom, 1.1f)
         if (progress > 0f) {
@@ -74,7 +84,9 @@ class SelectionPanelClearanceTest {
             // Cancel/interrupt hide before completion, then repeat a complete hide/reveal.
             compose.runOnIdle { visible = true }
             compose.mainClock.advanceTimeByFrame()
-            assertEquals("Reversal starts at current geometry", middle, assertFrame(chrome), .12f)
+            // Clock subscribers animate before recomposition accepts the new target. Compare
+            // against the same-frame oracle, not the preceding outgoing frame's value.
+            assertFrame(chrome)
             compose.mainClock.advanceTimeBy(300)
             assertEquals(1f, assertFrame(chrome), 0f)
             compose.runOnIdle { visible = false }

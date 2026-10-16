@@ -30,6 +30,8 @@ class DragReorderTest {
     @get:Rule val compose = createComposeRule()
     private val selection = SessionSelection()
     private var interactionEnabled by mutableStateOf(true)
+    private lateinit var fixtureDragHost: SongDragHost
+    private lateinit var fixtureFloatingPanel: FloatingSelectionPanelState
     private lateinit var backDispatcher: androidx.activity.OnBackPressedDispatcher
     private fun fixture(gallery: Boolean = false, failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, filtered: Boolean = false, panelClearance: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -60,6 +62,8 @@ class DragReorderTest {
                 val host = remember { SongDragHost() }
                 val route = remember(playlist.id) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), text = if (filtered) "Song" else "") }
                 val floatingPanel = rememberFloatingSelectionPanel(selection.panelVisible && host.state?.drag == null, false)
+                fixtureDragHost = host
+                fixtureFloatingPanel = floatingPanel
                 val chrome = if (foregroundFooter) 80.dp else 0.dp
                 Box(Modifier.fillMaxSize().testTag("fixture-viewport")) {
                 Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter && !panelClearance) chrome else 0.dp).clipToBounds()) {
@@ -325,13 +329,30 @@ class DragReorderTest {
                 compose.mainClock.autoAdvance = false
                 try {
                     row.performTouchInput { moveBy(Offset(70f, 0f)); advanceEventTime(32) }
+                    // Source recomposition publishes the recognized drag through its SideEffect.
+                    // The foreground and panel consume that published state on the next frame.
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.runOnIdle {
+                        assertNotNull("The source must publish the recognized drag", fixtureDragHost.state?.drag)
+                        assertFalse("Publication must retain the active pointer", fixtureDragHost.state!!.drag!!.dropping)
+                        assertEquals("Publication must not skip the panel's shown geometry", 1f, fixtureFloatingPanel.progress, 0f)
+                    }
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onNodeWithTag("cancel-drag").assertExists()
                     var previousBottom = controlBottom()
+                    assertEquals("The first published X uses the same clearance", 20f * scale,
+                        previousBottom - compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom, 1.1f)
                     var intermediate = false
                     repeat(18) {
                         compose.mainClock.advanceTimeByFrame()
                         val bottom = controlBottom()
                         val cancelBottom = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom
                         assertEquals("X and other controls share each animation frame", 20f * scale, bottom - cancelBottom, 1.1f)
+                        compose.runOnIdle {
+                            val source = fixtureDragHost.state!!
+                            assertEquals("Hit geometry reads the same published inset without another composition",
+                                cancelBottom - source.cancelRadius, source.viewportOrigin.y + source.cancelCenter.y, 1.1f)
+                        }
                         assertTrue("Hide never jumps back upward", bottom >= previousBottom - 1.1f)
                         val remaining = root.bottom - bottom - base * scale
                         if (remaining > scale && remaining < 103f * scale) intermediate = true

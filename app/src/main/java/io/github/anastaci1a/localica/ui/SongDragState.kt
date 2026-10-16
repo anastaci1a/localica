@@ -63,9 +63,9 @@ internal class SongDragState(val grid: LazyGridState, private val scope: Corouti
     var viewportWidth by mutableIntStateOf(0)
     var obscuredBottom by mutableFloatStateOf(0f)
     var cancelRadius = 0f
-    var cancelBottom = 0f
+    var cancelMargin = 0f
     var onCancelHover: (Boolean) -> Unit = {}
-    val cancelCenter get() = Offset(viewportWidth / 2f, viewportHeight - cancelBottom - cancelRadius)
+    val cancelCenter get() = Offset(viewportWidth / 2f, viewportHeight - obscuredBottom - cancelMargin - cancelRadius)
     fun rendered(fallback: List<BrowserItem>): List<BrowserItem?> = drag?.let { d ->
         d.dropItems ?: (d.remaining.take(d.insertion) + listOf(null) + d.remaining.drop(d.insertion))
     } ?: optimistic ?: fallback
