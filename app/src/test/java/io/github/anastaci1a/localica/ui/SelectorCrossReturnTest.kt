@@ -70,4 +70,42 @@ class SelectorCrossReturnTest {
         assertTrue(release.frame(.1f).corner in rest.corner..start.corner)
     }
 
+    @Test fun horizontalFullContactRetainsTheAuthoritativeExtentDespiteRectangleRounding() {
+        val geometry = SelectorTrackGeometry(497f, 105f, .04f, -1f)
+        val lens = geometry.lens(0f, 3, SelectorTrackInsets(7f, 0f, 7f),
+            vertical = false, rtl = false, GlassShape(), 42f)
+        // This is the exact API36 regression: the two translated edges round independently.
+        assertTrue(lens.bounds.height > geometry.crossExtent)
+        assertEquals(Math.ulp(geometry.crossExtent), lens.bounds.height - geometry.crossExtent, 0f)
+        val frame = lens.crossFrame(geometry)
+        assertEquals(geometry.crossExtent, frame.lens, 0f)
+        assertEquals(lens.bounds, lens.withCrossFrame(frame, geometry.cross, false).bounds)
+    }
+
+    @Test fun authoritativeCrossExtentMatchesDrawnBoundsAcrossAxesAndDensities() {
+        for (density in listOf(1f, 1.75f, 2.625f, 3f))
+            for (vertical in listOf(false, true)) for (rtl in listOf(false, true))
+                for (stretch in listOf(0f, .013f, .04f)) for (wall in listOf(-1f, 1f)) {
+                    val geometry = SelectorTrackGeometry(284f * density, 60f * density, stretch, wall)
+                    val lens = geometry.lens(if (wall < 0f) 0f else 2f, 3,
+                        SelectorTrackInsets(4f * density, 0f, 4f * density), vertical, rtl,
+                        GlassShape(), 24f * density)
+                    val frame = lens.crossFrame(geometry)
+                    assertTrue(frame.lens <= frame.shell)
+                    val drawn = lens.withCrossFrame(frame, geometry.cross, vertical)
+                    val tolerance = 2f * Math.ulp(maxOf(geometry.travel, geometry.cross))
+                    assertEquals(lens.bounds.left, drawn.bounds.left, tolerance)
+                    assertEquals(lens.bounds.top, drawn.bounds.top, tolerance)
+                    assertEquals(lens.bounds.right, drawn.bounds.right, tolerance)
+                    assertEquals(lens.bounds.bottom, drawn.bounds.bottom, tolerance)
+                    assertEquals(frame.lens, drawn.crossExtent, 0f)
+                    val measured = if (vertical) drawn.bounds.width else drawn.bounds.height
+                    assertEquals(frame.lens, measured, 2f * Math.ulp(frame.shell))
+                    val start = if (vertical) drawn.bounds.left else drawn.bounds.top
+                    val end = if (vertical) drawn.bounds.right else drawn.bounds.bottom
+                    assertTrue(start >= geometry.crossStart - Math.ulp(frame.shell))
+                    assertTrue(end <= geometry.crossStart + frame.shell + Math.ulp(frame.shell))
+                }
+    }
+
 }
