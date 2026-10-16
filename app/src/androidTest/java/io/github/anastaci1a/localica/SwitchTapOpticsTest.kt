@@ -10,6 +10,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -25,6 +26,7 @@ class SwitchTapOpticsTest {
     @get:Rule val compose = createComposeRule()
     private var stage by mutableIntStateOf(0)
     private lateinit var view: View
+    private var pixelDensity = 1f
     private val backings = mutableMapOf<String, FrostedBackdrop>()
 
     @Test fun recordShortTapAndHeldReleasePatternDuringTravel() {
@@ -35,6 +37,7 @@ class SwitchTapOpticsTest {
         var reduced by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
             view = LocalView.current
+            pixelDensity = LocalDensity.current.density
             CompositionLocalProvider(LocalMotionSpeed provides speed, LocalReducedMotion provides reduced) {
                 key(generation) {
                     Column(Modifier.width(280.dp)) {
@@ -113,6 +116,7 @@ class SwitchTapOpticsTest {
                 CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                     GlassMenu(open, anchor, { open = false }) {
                         view = LocalView.current
+                        pixelDensity = LocalDensity.current.density
                         val backing = LocalFrostedBackdrop.current
                         SideEffect { material = backing; backing?.let { backings["popup-switch"] = it } }
                         Box(Modifier.width(260.dp).height(96.dp).testTag("popup-switch")) {
@@ -151,6 +155,7 @@ class SwitchTapOpticsTest {
         var opticalDraws = 0
         compose.setContent { LocalicaTheme {
             view = LocalView.current
+            pixelDensity = LocalDensity.current.density
             CompositionLocalProvider(LocalControlLensDraw provides { opticalDraws++ }) {
                 Box(Modifier.width(280.dp)) { Sample("cold", checked, record) { checked = it } }
             }
@@ -183,7 +188,7 @@ class SwitchTapOpticsTest {
             Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, enabled = recordingAllowed)) {
                 val cell = 8.dp.toPx()
                 for (x in 0..(size.width / cell).toInt()) drawRect(
-                    if (x % 2 == 0) Color.Green else Color.Black,
+                    if (x % 2 == 0) Color.Green else Color.Yellow,
                     Offset(x * cell, 0f), Size(cell, size.height))
             }
             Canvas(Modifier.matchParentSize()) { drawRect(Color.Blue) }
@@ -217,13 +222,16 @@ class SwitchTapOpticsTest {
         val control = compose.onAllNodes(hasTestTag("settings-switch") and hasAnyAncestor(hasTestTag(tag)),
             useUnmergedTree = true)[0].fetchSemanticsNode().boundsInRoot
         val centerY = control.center.y - host.top
-        val halfTrack = control.height / 3f // 32 dp track in a 48 dp switch.
+        val halfTrack = 16f * pixelDensity // Track drawing stays 32 dp even when row constraints shorten the control.
         val left = (control.left - host.left - control.height / 4).toInt().coerceAtLeast(0)
         val right = (control.right - host.left + control.height / 4).toInt().coerceAtMost(pixels.width)
         var green = 0; var outsideGreen = 0; var white = 0
         for (y in 0 until pixels.height) for (x in left until right) {
             val c = pixels[x, y]
-            if (c.green > .45f && c.red < .25f && c.blue < .25f) {
+            // Both patterned source colors share this signature. A black stripe
+            // made a green-only check depend on which stripe crossed the curved band.
+            // The blue cover, red track, white face and shadows cannot qualify.
+            if (c.green > .45f && c.blue < .25f) {
                 green++
                 if (kotlin.math.abs(y - centerY) > halfTrack) outsideGreen++
             }
