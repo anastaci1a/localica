@@ -143,7 +143,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         // horizontalScroll installs a clipping viewport even when disabled. A fitting
         // track must be free to draw its stretched end outside the fixed gesture host.
         Box(Modifier.fillMaxHeight().then(if (!fits) Modifier.nestedScroll(HorizontalGestureOwner)
-            .horizontalScroll(scroll, enabled = !dragging) else Modifier)
+            .controlHorizontalScroll(scroll, enabled = !dragging) else Modifier)
             .testTag("tab-scroll").observeGlassContact { pressed = it }.pointerInput(tabs, pixels, viewport, fits, rtl) {
                 if (!fits) return@pointerInput
                 awaitEachGesture {
