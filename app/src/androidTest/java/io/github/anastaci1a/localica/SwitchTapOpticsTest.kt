@@ -52,6 +52,7 @@ class SwitchTapOpticsTest {
             // Find the switch through the unmerged tree; the row owns public semantics.
             val heldSwitch = compose.onAllNodesWithTag("settings-switch", useUnmergedTree = true)[1]
             heldSwitch.performTouchInput { down(center) }
+            awaitRecording("held")
             compose.mainClock.advanceTimeBy(320)
             capture("held-ready-$mode-$faster", "held")
             android.util.Log.i("SwitchTapOptics", "before-input clock=${compose.mainClock.currentTime}")
@@ -165,6 +166,7 @@ class SwitchTapOpticsTest {
         capture("cold-unready", "cold")
         compose.runOnIdle { record = true }
         compose.onNodeWithTag("settings-switch", useUnmergedTree = true).performTouchInput { down(center) }
+        awaitRecording("cold")
         compose.mainClock.advanceTimeBy(320)
         capture("held-ready-cold", "cold")
         compose.onNodeWithTag("settings-switch", useUnmergedTree = true).performTouchInput { up() }
@@ -191,6 +193,17 @@ class SwitchTapOpticsTest {
                 }
             }
             PresentationMarker { stage }
+        }
+    }
+
+    private fun awaitRecording(tag: String) {
+        // Readback uses real rendering as well as Compose frames. Prime the held
+        // reference from source readiness, never by waiting for the optical pixels.
+        compose.waitUntil(10_000) {
+            compose.mainClock.advanceTimeByFrame()
+            val source = backings[tag]
+            source != null && if (android.os.Build.VERSION.SDK_INT >= 33)
+                source.recorded && !source.layer.isReleased else source.snapshot != null
         }
     }
 
