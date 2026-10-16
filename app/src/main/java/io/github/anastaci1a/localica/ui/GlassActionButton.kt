@@ -33,7 +33,10 @@ internal fun GlassActionButton(icon: Int, label: String, modifier: Modifier = Mo
         Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(painterResource(icon), null, Modifier.size(24.dp))
-            Text(label, style = MaterialTheme.typography.labelLarge)
+            // A horizontal action strip measures its children with infinite width.
+            // Bound the paragraph to its natural width before laying out text;
+            // otherwise its paragraph can retain Infinity despite a finite glyph size.
+            Text(label, Modifier.width(IntrinsicSize.Max), style = MaterialTheme.typography.labelLarge)
         }
     }
 }
