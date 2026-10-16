@@ -27,6 +27,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
@@ -37,7 +39,8 @@ internal val CollapsedQueueHeight = 64.dp
 
 @Composable
 internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>, settings: InterfaceSettings,
-    onSettled: (Boolean) -> Unit, playerProgress: () -> Float = { 1f }, content: @Composable ColumnScope.() -> Unit) {
+    onSettled: (Boolean) -> Unit, playerProgress: () -> Float = { 1f },
+    onDragTrace: ((String) -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -51,33 +54,44 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         scope.launch { progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400))) }
     }
     val currentSettle by rememberUpdatedState<(Boolean) -> Unit>(::settle)
+    // Optional test diagnostics observe existing callbacks without adding a pointer node.
+    // A stationary pointer observer would itself change Compose's hit-path dispatch.
+    val currentTrace by rememberUpdatedState(onDragTrace)
     val scrollOwnership = remember { ScrollGestureOwnership() }
     val listPull = remember(progress, distance, density.density) {
         object : NestedScrollConnection {
             var pulling = false
             var pulled = 0f
             fun cancelPull() {
+                currentTrace?.invoke("nested-cancel pulling=$pulling pulled=$pulled progress=${progress.value}")
                 if (!pulling) return
                 pulling = false
                 pulled = 0f
                 currentSettle(true)
             }
             fun move(dy: Float): Offset {
+                currentTrace?.invoke("nested-move dy=$dy pulled=$pulled progress=${progress.value}")
                 val before = pulled
                 pulled = (pulled + dy).coerceIn(0f, distance)
                 val consumed = pulled - before
                 if (pulled == 0f) pulling = false
-                scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(1f - pulled / distance) }
+                scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    progress.snapTo(1f - pulled / distance)
+                    currentTrace?.invoke("nested-applied pulled=$pulled consumed=$consumed progress=${progress.value}")
+                }
                 return Offset(0f, consumed)
             }
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
-                if (pulling && source == NestedScrollSource.UserInput) move(available.y) else Offset.Zero
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                currentTrace?.invoke("nested-pre source=$source available=$available pulling=$pulling pulled=$pulled progress=${progress.value}")
+                return if (pulling && source == NestedScrollSource.UserInput) move(available.y) else Offset.Zero
+            }
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
                 // Even a partial final list delta owns the rest of this contact. A fresh
                 // downward pull already at the top still starts the documented drawer drag.
                 scrollOwnership.recordScroll(consumed.y)
+                currentTrace?.invoke("nested-post consumed=$consumed available=$available pulling=$pulling contentOwned=${scrollOwnership.contentOwned} mayHandoff=${scrollOwnership.mayHandoff} progress=${progress.value}")
                 if (scrollOwnership.contentOwned) return Offset(0f, available.y)
                 if (!scrollOwnership.mayHandoff || available.y <= 0f) return Offset.Zero
                 if (!pulling) pulled = (1f - progress.value) * distance
@@ -85,6 +99,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                 return move(available.y)
             }
             override suspend fun onPreFling(available: Velocity): Velocity {
+                currentTrace?.invoke("nested-fling available=$available pulling=$pulling mayCommit=${scrollOwnership.mayCommitPull} progress=${progress.value}")
                 if (!pulling) return Velocity.Zero
                 // Scrollable also dispatches a zero-velocity pre-fling on cancellation,
                 // potentially before our observer receives its synthetic cancel event.
@@ -114,10 +129,22 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
         .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
         .draggable(rememberDraggableState { dy ->
+            currentTrace?.invoke("direct-delta dy=$dy start=$start delta=$delta progress=${progress.value}")
             delta += dy
-            scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo((start - delta / distance).coerceIn(0f, 1f)) }
-        }, Orientation.Vertical, onDragStarted = { progress.stop(); start = progress.value; delta = 0f },
-            onDragStopped = { velocity -> settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f)) })
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                progress.snapTo((start - delta / distance).coerceIn(0f, 1f))
+                currentTrace?.invoke("direct-applied delta=$delta progress=${progress.value}")
+            }
+        }, Orientation.Vertical, onDragStarted = { position ->
+            currentTrace?.invoke("direct-start position=$position progress=${progress.value}")
+            progress.stop(); start = progress.value; delta = 0f
+        }, onDragStopped = { velocity ->
+            currentTrace?.invoke("direct-stop velocity=$velocity delta=$delta progress=${progress.value}")
+            settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f))
+        })
+        .then(if (onDragTrace == null) Modifier else Modifier.onGloballyPositioned {
+            currentTrace?.invoke("layout top=${it.positionInRoot().y} progress=${progress.value} distance=$distance")
+        })
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = rememberDeviceCorners().shape(), darkening = { .22f + .28f * progress.value }) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
