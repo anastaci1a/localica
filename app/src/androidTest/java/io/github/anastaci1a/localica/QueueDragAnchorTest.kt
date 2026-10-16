@@ -46,6 +46,11 @@ class QueueDragAnchorTest {
         var slop = 0f
         var step = 0f
         var pointersDown = false
+        val trace = java.util.Collections.synchronizedList(mutableListOf<String>())
+        fun record(event: String) {
+            val line = "uptime=${android.os.SystemClock.uptimeMillis()} clock=${compose.mainClock.currentTime} $event"
+            trace += line
+        }
         preferences.write(route, BrowseStyle(quickSearch = false,
             presentation = if (gallery) Presentation.Standard else Presentation.List,
             itemsPerRow = if (gallery) 3 else null), true)
@@ -54,7 +59,7 @@ class QueueDragAnchorTest {
                 slop = LocalViewConfiguration.current.touchSlop
                 step = with(LocalDensity.current) { 16.dp.toPx() }
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    QueueSurface(progress, InterfaceSettings(), { settlements += it }) {
+                    QueueSurface(progress, InterfaceSettings(), { settlements += it }, onDragTrace = ::record) {
                         // Use the actual queue BrowserScreen, with its grid, overscroll,
                         // selection and pinch observers, rather than a bare LazyColumn.
                         Box(Modifier.weight(1f)) {
@@ -80,21 +85,32 @@ class QueueDragAnchorTest {
             var finger = (if (fromHandle) headerBefore.center else
                 Offset(listBefore.center.x, listBefore.top + step * 2f)) - rootOrigin
             val originalFinger = finger
+            fun observe(phase: String) {
+                val range = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+                record("$phase rootOrigin=$rootOrigin finger=$finger header=${header.fetchSemanticsNode().boundsInRoot} " +
+                    "progress=${progress.value} listScroll=${range.value()}/${range.maxValue()} slop=$slop step=$step")
+            }
+            observe("before-down")
             compose.mainClock.autoAdvance = false
             root.performTouchInput { down(finger) }
             pointersDown = true
             fun move(dy: Float) {
                 finger += Offset(0f, dy)
+                record("inject-move dy=$dy rootLocal=$finger")
                 root.performTouchInput { moveTo(finger, delayMillis = 32) }
+                // Do not add an idle wait here: that would change the scheduling
+                // being diagnosed before the existing frame advance.
+                record("after-injection-before-frame progress=${progress.value}")
                 compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
+                observe("after-frame")
             }
             // Account for touch slop exactly once. The initial acquisition is not the
             // invariant: all subsequent travel must retain this single fixed baseline.
             move(slop + step)
             val acquiredTop = header.fetchSemanticsNode().boundsInRoot.top
             val acquiredFinger = finger.y
-            assertTrue("A fresh pull must acquire the drawer", acquiredTop > headerBefore.top + 1f)
+            assertTrue("A fresh pull must acquire the drawer; trace=$trace", acquiredTop > headerBefore.top + 1f)
             assertTrue("Acquisition cannot move farther than the finger", acquiredTop - headerBefore.top <=
                 finger.y - originalFinger.y + 2f)
             val samples = mutableListOf<String>()
@@ -103,7 +119,7 @@ class QueueDragAnchorTest {
                 val expected = acquiredTop + finger.y - acquiredFinger
                 samples += "$phase finger=${finger.y} top=$top expected=$expected progress=${progress.value}"
                 android.util.Log.i("QueueDragAnchor", "handle=$fromHandle gallery=$gallery ${samples.last()}")
-                assertEquals("The original held anchor must survive $phase: $samples", expected, top, 2f)
+                assertEquals("The original held anchor must survive $phase: $samples; trace=$trace", expected, top, 2f)
                 assertTrue("No settle before release: $samples", settlements.isEmpty())
                 assertTrue("Keep this regression away from endpoint clamping", progress.value > 0f && progress.value < 1f)
             }
@@ -122,9 +138,17 @@ class QueueDragAnchorTest {
             compose.waitForIdle()
             assertEquals("Exactly one release settles the drawer", 1, settlements.size)
         } finally {
-            if (pointersDown) compose.onRoot().performTouchInput { cancel() }
-            compose.mainClock.autoAdvance = true
-            preferences.write(route, previous, overridden)
+            try {
+                if (pointersDown) compose.onRoot().performTouchInput { cancel() }
+                compose.mainClock.autoAdvance = true
+                preferences.write(route, previous, overridden)
+            } finally {
+                // Buffer callback observations during contact; synchronous logging
+                // must not add work between an injected move and its frame sample.
+                synchronized(trace) {
+                    trace.forEach { android.util.Log.i("QueueDragTrace", "handle=$fromHandle gallery=$gallery $it") }
+                }
+            }
         }
     }
 }
