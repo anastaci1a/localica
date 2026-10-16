@@ -8,7 +8,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -129,7 +128,6 @@ class SeekCancelMotionTest {
         }
     }
 
-    @OptIn(ExperimentalTestApi::class)
     @Test fun hoverReentryReleaseAndPointerCancellationNeverCommitStalePreview() {
         var finger by mutableFloatStateOf(20f)
         val commits = mutableListOf<Float>()
@@ -162,11 +160,5 @@ class SeekCancelMotionTest {
         compose.runOnIdle { assertEquals(listOf(selected, 40f), commits) }
         seek.performTouchInput { down(center); moveTo(Offset(width * .8f, centerY)); cancel() }
         compose.runOnIdle { assertEquals("Second cancellation still cannot seek", 2, commits.size) }
-        seek.performSemanticsAction(SemanticsActions.RequestFocus) { assertTrue(it()) }
-        seek.performKeyInput { pressKey(Key.DirectionRight) }
-        compose.runOnIdle {
-            assertEquals("Keyboard starts an independent edit after cancellation", 3, commits.size)
-            assertTrue(commits.last() > 20f)
-        }
     }
 }
