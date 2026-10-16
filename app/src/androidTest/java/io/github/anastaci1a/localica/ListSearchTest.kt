@@ -11,8 +11,12 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ListSearchTest {
-    @get:Rule val compose = createComposeRule()
+    // Diagnostic comparison: queue effect continuations instead of applying a
+    // test recomposition inline when real Default browse work resumes them.
+    // Production dispatchers and all assertions remain unchanged.
+    @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
 
     private fun awaitSearchFocus() {
         // Window focus arrives outside Compose's animation clock. Assert the editor's
