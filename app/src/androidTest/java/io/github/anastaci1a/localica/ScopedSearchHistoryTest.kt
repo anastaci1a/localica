@@ -180,7 +180,9 @@ class ScopedSearchHistoryTest {
         editor.performClick().performTextReplacement("")
         compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 }
         compose.awaitExpectedWindowFocus(editor)
-        editor.assertTextEquals("") // Verify the intended empty editor immediately before native Back.
+        // Match editable content only; the empty field also exposes its search placeholder.
+        editor.assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
         pressSystemBack() // Empty scoped search closes even with completed history.
         awaitClosed()
         open()
