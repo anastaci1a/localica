@@ -16,6 +16,25 @@ public class TestDocumentsProvider extends DocumentsProvider {
     private static final String[] ROOTS = {Root.COLUMN_ROOT_ID, Root.COLUMN_DOCUMENT_ID, Root.COLUMN_TITLE,
         Root.COLUMN_FLAGS, Root.COLUMN_MIME_TYPES, Root.COLUMN_ICON};
 
+    private static volatile boolean lyricReadStarted;
+    public static class LyricsGrantActivity extends android.app.Activity {
+        @Override public void onCreate(android.os.Bundle state) {
+            super.onCreate(state);
+            android.net.Uri tree = DocumentsContractTree();
+            if ("revoke".equals(getIntent().getAction()))
+                revokeUriPermission("io.github.anastaci1a.localica.debug", tree, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            else {
+                lyricReadStarted = false;
+                grantUriPermission("io.github.anastaci1a.localica.debug", tree,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+            }
+            finish();
+        }
+        private android.net.Uri DocumentsContractTree() {
+            return android.provider.DocumentsContract.buildTreeDocumentUri("io.github.anastaci1a.localica.test.documents", "lyrics");
+        }
+    }
+
     @Override public boolean onCreate() { return true; }
 
     @Override public Cursor queryRoots(String[] projection) {
@@ -29,23 +48,41 @@ public class TestDocumentsProvider extends DocumentsProvider {
 
     @Override public Cursor queryDocument(String id, String[] projection) {
         MatrixCursor cursor = new MatrixCursor(projection == null ? DOCUMENTS : projection);
-        addDocument(cursor, id);
+        if (id.equals("lyrics-status")) {
+            cursor.newRow().add(Document.COLUMN_SIZE, lyricReadStarted ? 1 : 0);
+        } else addDocument(cursor, id);
         return cursor;
     }
 
     @Override public Cursor queryChildDocuments(String parent, String[] projection, String sortOrder) {
         MatrixCursor cursor = new MatrixCursor(projection == null ? DOCUMENTS : projection);
-        if (parent.equals("root")) {
+        if (parent.equals("lyrics")) {
+            addDocument(cursor, "lyrics/song.LRC"); addDocument(cursor, "lyrics/song.lrc");
+            addDocument(cursor, "lyrics/plain.lrc");
+        } else if (parent.equals("root")) {
             addDocument(cursor, "tone.mp3"); addDocument(cursor, "nested"); addDocument(cursor, "notes.txt"); addDocument(cursor, "tone.lrc"); addDocument(cursor, "import.m3u8");
         } else if (parent.equals("nested")) addDocument(cursor, "tone.m4a");
         return cursor;
     }
 
     @Override public boolean isChildDocument(String parent, String id) {
-        return (parent.equals("root") && !id.equals("root")) || (parent.equals("nested") && id.equals("tone.m4a"));
+        return (parent.equals("lyrics") && (id.startsWith("lyrics/") || id.equals("lyrics-status"))) || (parent.equals("root") && !id.equals("root")) || (parent.equals("nested") && id.equals("tone.m4a"));
     }
 
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
+        if (id.startsWith("lyrics/")) {
+            if (!mode.equals("r")) throw new FileNotFoundException(id);
+            lyricReadStarted = true;
+            android.os.SystemClock.sleep(500);
+            File fixture = new File(getContext().getCacheDir(), id.replace('/', '-'));
+            try (OutputStream out = new FileOutputStream(fixture)) {
+                if (id.equals("lyrics/song.LRC")) {
+                    byte[] oversized = new byte[2 * 1024 * 1024 + 1];
+                    java.util.Arrays.fill(oversized, (byte) 'x'); out.write(oversized);
+                } else out.write((id.equals("lyrics/plain.lrc") ? "Sidecar plain" : "[00:01]Sidecar timed").getBytes("UTF-8"));
+            } catch (IOException error) { throw new FileNotFoundException(error.getMessage()); }
+            return ParcelFileDescriptor.open(fixture, ParcelFileDescriptor.MODE_READ_ONLY);
+        }
         boolean metadataFixture = id.matches("tagged\\.(mp3|m4a|flac|ogg|opus)") || id.equals("provider-lyrics.mp3");
         if (!(id.equals("tone.mp3") || id.equals("tone.m4a") || ((id.equals("tone.lrc") || id.equals("import.m3u8") || metadataFixture) && mode.equals("r")))) throw new FileNotFoundException(id);
         // Model provider latency so background/lifecycle checks exercise an in-flight scan.
@@ -62,11 +99,11 @@ public class TestDocumentsProvider extends DocumentsProvider {
     }
 
     private void addDocument(MatrixCursor cursor, String id) {
-        boolean directory = id.equals("root") || id.equals("nested");
+        boolean directory = id.equals("root") || id.equals("nested") || id.equals("lyrics");
         String mime = directory ? Document.MIME_TYPE_DIR : id.equals("tone.mp3") ? "audio/mpeg" :
             id.equals("tone.m4a") ? "audio/mp4" : id.equals("import.m3u8") ? "audio/x-mpegurl" : "text/plain";
         cursor.newRow().add(Document.COLUMN_DOCUMENT_ID, id)
-            .add(Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "Test tones" : id)
+            .add(Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "Test tones" : id.substring(id.lastIndexOf('/') + 1))
             .add(Document.COLUMN_MIME_TYPE, mime).add(Document.COLUMN_FLAGS, directory ? 0 : Document.FLAG_SUPPORTS_WRITE)
             .add(Document.COLUMN_SIZE, directory ? null : 1024);
     }
