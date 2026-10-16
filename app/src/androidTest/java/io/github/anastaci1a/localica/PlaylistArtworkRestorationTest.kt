@@ -149,7 +149,7 @@ class PlaylistArtworkRestorationTest {
                     "cropNodes=$cropCount saveEnabled=$enabled preparing=$preparing; " +
                     "bitmap not directly observed; crop node presence implies loaded bitmap; error/loading text follows")
                 for (unmerged in listOf(false, true)) {
-                    val tree = compose.onAllNodes(isRoot(), useUnmergedTree = unmerged).printToString()
+                    val tree = compose.onAllNodes(isRoot(), useUnmergedTree = unmerged).printToString(maxDepth = Int.MAX_VALUE)
                     // Only the synthetic fixture URI is relevant; omit other URI text from diagnostics.
                     val sanitized = Regex("(?:file|content)://[^\\s,)]+")
                         .replace(tree) { if (it.value == fixtureUri) it.value else "<other-uri>" }
