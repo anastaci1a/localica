@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
@@ -29,6 +31,31 @@ class QueueDragAnchorTest {
     @Test fun freshTopGalleryPullRetainsItsAnchorAcrossFramesPauseAndReversal() =
         heldPull(fromHandle = false, gallery = true)
 
+    @Test fun collapsedDrawerLeavesBackgroundAboveShelfHittable() {
+        val progress = Animatable(0f)
+        var backgroundClicks = 0
+        val settlements = mutableListOf<Boolean>()
+        compose.setContent { LocalicaTheme {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().clickable { backgroundClicks++ }.testTag("background"))
+                QueueSurface(progress, InterfaceSettings(), { settlements += it }) {}
+            }
+        } }
+        val root = compose.onRoot()
+        val origin = root.fetchSemanticsNode().boundsInRoot.topLeft
+        val shelf = compose.onNodeWithContentDescription("Open queue").fetchSemanticsNode().boundsInRoot
+        root.performTouchInput { click(Offset(shelf.center.x, shelf.top / 2f) - origin) }
+        compose.runOnIdle {
+            assertEquals("Hidden drawer space must not intercept the background", 1, backgroundClicks)
+            assertTrue(settlements.isEmpty())
+        }
+        root.performTouchInput { click(shelf.center - origin) }
+        compose.runOnIdle {
+            assertEquals("The visible shelf must still receive taps", listOf(true), settlements)
+            assertEquals(1, backgroundClicks)
+        }
+    }
+
     private fun heldPull(fromHandle: Boolean, gallery: Boolean = false) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = BrowsePreferences(context)
@@ -51,7 +78,9 @@ class QueueDragAnchorTest {
             val line = "uptime=${android.os.SystemClock.uptimeMillis()} clock=${compose.mainClock.currentTime} $event"
             trace += line
         }
-        preferences.write(route, BrowseStyle(quickSearch = false,
+        // Retain the normal nonzero search-header slot. With it disabled, the
+        // leading notice item is empty and does not establish a measured top.
+        preferences.write(route, BrowseStyle(quickSearch = true,
             presentation = if (gallery) Presentation.Standard else Presentation.List,
             itemsPerRow = if (gallery) 3 else null), true)
         try {
@@ -59,7 +88,7 @@ class QueueDragAnchorTest {
                 slop = LocalViewConfiguration.current.touchSlop
                 step = with(LocalDensity.current) { 16.dp.toPx() }
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    QueueSurface(progress, InterfaceSettings(), { settlements += it }, onDragTrace = ::record) {
+                    QueueSurface(progress, InterfaceSettings(), { settlements += it }) {
                         // Use the actual queue BrowserScreen, with its grid, overscroll,
                         // selection and pinch observers, rather than a bare LazyColumn.
                         Box(Modifier.weight(1f)) {
@@ -76,14 +105,17 @@ class QueueDragAnchorTest {
                 if (gallery) "Gallery, 3 columns" else "List, Normal"))
             list.performScrollToIndex(0)
             compose.waitForIdle()
+            val initialRange = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+            assertEquals("The fresh contact must start at the measured list top", 0f, initialRange.value(), .001f)
             val header = compose.onNodeWithContentDescription("Close queue")
             val root = compose.onRoot()
             val rootOrigin = root.fetchSemanticsNode().boundsInRoot.topLeft
             val headerBefore = header.fetchSemanticsNode().boundsInRoot
-            val listBefore = list.fetchSemanticsNode().boundsInRoot
+            val firstSong = compose.onNodeWithTag("media-anchor:0").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val search = compose.onNodeWithTag("list-search-pill").fetchSemanticsNode().boundsInRoot
+            assertTrue("Start on song content below the floating search control", firstSong.center.y > search.bottom)
             // Root-local coordinates stay fixed while every child moves with the drawer.
-            var finger = (if (fromHandle) headerBefore.center else
-                Offset(listBefore.center.x, listBefore.top + step * 2f)) - rootOrigin
+            var finger = (if (fromHandle) headerBefore.center else firstSong.center) - rootOrigin
             val originalFinger = finger
             fun observe(phase: String) {
                 val range = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
