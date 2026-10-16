@@ -25,7 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 
-/** Keep Slider's touch, keyboard and accessibility behavior; draw a quiet, continuous track. */
+/** Keep Slider's touch and accessibility behavior; draw a quiet, continuous track. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRange: ClosedFloatingPointRange<Float>,
