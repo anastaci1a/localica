@@ -19,6 +19,9 @@ class QueueRestoreTest {
     @Test fun newControllerRestoresPersistedOccurrencePositionAndPausedState() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
+        val preferences = QueuePreferences(context)
+        val original = preferences.read()
+        preferences.write(QueueSettings(repeat = QueueRepeat.All))
         val file = File(context.cacheDir, "restore-tone.mp3")
         instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
         val database = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
@@ -34,7 +37,7 @@ class QueueRestoreTest {
         try {
             instrumentation.runOnMainSync {
                 player = ExoPlayer.Builder(context).build()
-                queues = QueueController(database.queues(), QueuePreferences(context), (context.applicationContext as LocalicaApplication).library, scope)
+                queues = QueueController(database.queues(), preferences, (context.applicationContext as LocalicaApplication).library, scope)
                 queues.attach(player)
             }
             await { !queues.state.value.loading }
@@ -48,7 +51,8 @@ class QueueRestoreTest {
             instrumentation.runOnMainSync {
                 assertFalse(player.playWhenReady)
                 assertEquals(queues.state.value.library.active!!.journey!!.window().size, player.mediaItemCount)
-                assertNull(queues.state.value.library.active!!.journey!!.previous)
+                assertEquals(1, queues.state.value.library.active!!.journey!!.history.size)
+                assertEquals(saved.entries.first().id, queues.state.value.library.active!!.journey!!.previous!!.entryId)
                 assertEquals(saved.entries.last().id, player.currentMediaItem?.mediaId)
                 queues.seek(3456)
             }
@@ -62,6 +66,7 @@ class QueueRestoreTest {
             }
             database.close()
             file.delete()
+            preferences.write(original)
         }
     }
 }
