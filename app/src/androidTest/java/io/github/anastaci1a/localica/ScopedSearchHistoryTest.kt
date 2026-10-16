@@ -34,9 +34,9 @@ class ScopedSearchHistoryTest {
             .items.associate { it.title to it.key }
         try {
             BrowseSchedulerWatchdog.phase("install scoped history fixture")
-            compose.setContent { LocalicaTheme { LocalicaScreen(
+            compose.setContent { androidx.compose.runtime.CompositionLocalProvider(LocalSearchEditTrace provides { event -> android.util.Log.i("SearchEditTrace", event) }) { LocalicaTheme { LocalicaScreen(
                 LibraryUiState(snapshot, loading = false), PlaybackState(connected = true),
-                {}, {}, {}, {}, {}, {}) } }
+                {}, {}, {}, {}, {}, {}) } } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 000").fetchSemanticsNodes().isNotEmpty() }
             open()
             test()
@@ -52,7 +52,9 @@ class ScopedSearchHistoryTest {
 
     private fun submit(text: String) {
         BrowseSchedulerWatchdog.phase("submit $text")
+        android.util.Log.i("SearchEditTrace", "before click/replacement requestedLength=${text.length}")
         editor.performClick().performTextReplacement(text)
+        android.util.Log.i("SearchEditTrace", "after single replacement requestedLength=${text.length}")
         compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 }
         editor.assertTextEquals(text)
         compose.awaitSearchImeHandoff {
