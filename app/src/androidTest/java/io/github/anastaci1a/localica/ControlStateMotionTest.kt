@@ -23,53 +23,76 @@ class ControlStateMotionTest {
     private var presentationStage by mutableIntStateOf(0)
     private lateinit var sceneView: android.view.View
 
-    @Test fun oppositeDirectionsShareProgressAndRapidReversalContinuesFromVisibleValue() {
+    @Test fun semanticActivationWorksInEitherFloatDirectionAndReversalContinuesFromVisibleValue() {
         var selected by mutableStateOf(false)
         var reduced by mutableStateOf(false)
         var forward = 0f
-        var reverse = 1f
+        var inverse = 1f
         compose.setContent {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
-                val a by animateControlStateFloat(if (selected) 1f else 0f, "Forward")
-                val b by animateControlStateFloat(if (selected) 0f else 1f, "Reverse")
-                // Exercise rendered clients rather than an empty composition.
+                val a by animateControlStateFloat(if (selected) 1f else 0f, selected, "Forward")
+                // Semantic activation can lower a visual value; do not infer from alpha.
+                val b by animateControlStateFloat(if (selected) 0f else 1f, selected, "Inverse")
                 Row {
                     Box(Modifier.size(32.dp).background(Color.White.copy(alpha = a)))
                     Box(Modifier.size(32.dp).background(Color.White.copy(alpha = b)))
                 }
-                SideEffect { forward = a; reverse = b }
+                SideEffect { forward = a; inverse = b }
             }
         }
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { selected = true }
-        var previous = 0f
-        repeat(8) {
-            compose.mainClock.advanceTimeBy(32)
-            compose.runOnIdle {
-                assertEquals("Both directions have identical elapsed progress", 1f, forward + reverse, .001f)
-                assertTrue(forward >= previous)
-                previous = forward
-                android.util.Log.i("ControlStateMotionTest", "t=${compose.mainClock.currentTime} forward=$forward reverse=$reverse")
-            }
-        }
+        compose.mainClock.advanceTimeBy(48)
         compose.runOnIdle {
-            assertTrue("Rendered fade must make intermediate progress", forward > 0f)
-            assertTrue("Normal fade remains visible beyond 250 ms", forward < 1f)
+            assertTrue("Activation starts within the first rendered frames", forward > .1f)
+            assertEquals("Semantic activation owns either float direction", 1f, forward + inverse, .001f)
         }
-        compose.mainClock.advanceTimeBy(96)
+        compose.mainClock.advanceTimeBy(176)
         compose.runOnIdle { assertEquals(1f, forward, 0f); selected = false }
-        compose.mainClock.advanceTimeBy(128)
+        compose.mainClock.advanceTimeBy(208)
+        compose.runOnIdle { assertTrue("Deactivation lasts longer than activation", forward > 0f) }
+        compose.mainClock.advanceTimeBy(112)
+        compose.runOnIdle { assertEquals(0f, forward, 0f); selected = true }
+        compose.mainClock.advanceTimeBy(64)
         var interrupted = 0f
-        compose.runOnIdle { interrupted = forward; selected = true }
+        compose.runOnIdle { interrupted = forward; selected = false }
         compose.mainClock.advanceTimeByFrame()
+        var handoff = 0f
         compose.runOnIdle {
-            assertTrue("Reversal cannot jump to an endpoint", forward in .05f.. .95f)
-            assertEquals("Reversal begins at the current appearance", interrupted, forward, .12f)
+            // MainTestClock advances the old animation before recomposition delivers
+            // the new target. Continuity starts at that real handoff, not the prior frame.
+            assertTrue("Reversal cannot jump to an endpoint", forward > 0f && forward < 1f)
+            assertTrue("The last old-direction frame can still advance", forward >= interrupted)
+            handoff = forward
+        }
+        compose.mainClock.advanceTimeBy(32)
+        compose.runOnIdle {
+            assertTrue("Reversal continues from the rendered handoff", forward > 0f && forward < handoff)
         }
         compose.mainClock.advanceTimeBy(400)
-        compose.runOnIdle { assertEquals(1f, forward, 0f); reduced = true; selected = false }
+        compose.runOnIdle { assertEquals(0f, forward, 0f); reduced = true; selected = true }
         compose.mainClock.advanceTimeByFrame()
-        compose.runOnIdle { assertEquals("Reduced motion snaps", 0f, forward, 0f) }
+        compose.runOnIdle { assertEquals("Reduced motion snaps", 1f, forward, 0f) }
+    }
+
+    @Test fun fasterMotionSettlesActivationBeforeDeactivation() {
+        var active by mutableStateOf(false)
+        var value = 0f
+        compose.setContent {
+            CompositionLocalProvider(LocalMotionSpeed provides 2f) {
+                val shown by animateControlStateFloat(if (active) 1f else 0f, active, "Faster")
+                Box(Modifier.size(32.dp).background(Color.White.copy(alpha = shown)))
+                SideEffect { value = shown }
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { active = true }
+        compose.mainClock.advanceTimeBy(160)
+        compose.runOnIdle { assertEquals(1f, value, 0f); active = false }
+        compose.mainClock.advanceTimeBy(160)
+        compose.runOnIdle { assertTrue(value > 0f) }
+        compose.mainClock.advanceTimeBy(80)
+        compose.runOnIdle { assertEquals(0f, value, 0f) }
     }
 
     @Test fun reducedMotionSnapsAvailabilityAndInheritedInkDoesNotAcquireASecondFade() {
@@ -95,7 +118,7 @@ class ControlStateMotionTest {
         compose.runOnIdle { assertEquals(Color.Black, shown) }
     }
 
-    @Test fun applyFadesWhiteAndGraySymmetricallyWhileDisabledClicksStopImmediately() {
+    @Test fun applyActivatesFasterWhileDisabledClicksStopImmediately() {
         var enabled by mutableStateOf(true)
         var calls = 0
         compose.setContent { LocalicaTheme { GlassPanelTheme(true) { CaptureScene {
@@ -117,8 +140,8 @@ class ControlStateMotionTest {
         compose.runOnIdle { enabled = true }
         compose.mainClock.advanceTimeBy(144)
         val fadingIn = ink("apply-ink")
-        assertEquals("Matching elapsed time has equal forward/reverse progress",
-            (full - fadingOut) / (full - dim), (fadingIn - dim) / (full - dim), .08)
+        assertTrue("Activation is ahead of deactivation at equal elapsed time",
+            (fadingIn - dim) / (full - dim) > (full - fadingOut) / (full - dim))
         compose.onNodeWithText("Apply").assertIsEnabled().performTouchInput { click() }
         compose.runOnIdle { assertEquals(1, calls) }
         compose.mainClock.advanceTimeBy(400)
@@ -161,7 +184,8 @@ class ControlStateMotionTest {
         compose.onAllNodesWithContentDescription("Repeat All").assertCountEquals(1)
         compose.onAllNodesWithContentDescription("Repeat One").assertCountEquals(0)
         assertEquals(bounds, compose.onNodeWithTag(repeatTag).fetchSemanticsNode().boundsInRoot)
-        assertEquals((entering - off) / (on - off), (on - ink(shuffleTag)) / (on - off), .06)
+        assertTrue("Mode activation is faster than deactivation",
+            (entering - off) / (on - off) > (on - ink(shuffleTag)) / (on - off))
         val badgeLeaving = ink(repeatTag)
         assertTrue("Outgoing badge remains drawn during fade", badgeLeaving > badgeAbsent && badgeLeaving < badgePresent)
         compose.mainClock.advanceTimeBy(400)

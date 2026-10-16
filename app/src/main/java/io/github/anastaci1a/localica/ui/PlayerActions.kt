@@ -55,7 +55,7 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
                 // fixed bounds and fade independently, even when reversed mid-transition.
                 Box(Modifier.size(24.dp).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
                     listOf("1", "■", "Ⅱ", "Q").forEach { variant ->
-                        val opacity by animateControlStateFloat(if (badge == variant) 1f else 0f, "Repeat badge $variant")
+                        val opacity by animateControlStateFloat(if (badge == variant) 1f else 0f, badge == variant, "Repeat badge $variant")
                         if (opacity > 0f) Text(variant, fontSize = 10.sp,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                             modifier = Modifier.graphicsLayer { alpha = opacity })
@@ -87,7 +87,7 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                         else -> false
                     }
                     val mode = action in setOf(PlayerAction.Shuffle, PlayerAction.Repeat, PlayerAction.Lyrics, PlayerAction.Pin)
-                    val opacity by animateControlStateFloat(if (mode && !active) .5f else 1f, "Player action state")
+                    val opacity by animateControlStateFloat(if (mode && !active) .5f else 1f, !mode || active, "Player action state")
                     Box(Modifier.fillMaxWidth().height(48.dp).clip(Corners.card)
                         .testTag("player-slot-${slot.key}")
                         .semantics {
