@@ -156,7 +156,10 @@ class SelectorTrackControlsTest {
             val oldGap = if (vertical) lens.top.value - shell.top.value else lens.left.value - shell.left.value
             val newGap = if (vertical) pressed.top.value - stretched.top.value else pressed.left.value - stretched.left.value
             android.util.Log.i("SelectorTrack", "$hostTag shell=$shell lens=$lens stretched=$stretched pressed=$pressed content=$content movedContent=$movedContent")
-            assertEquals("The measured resting lens includes the actual four-dp inset", 4f, oldGap, .1f)
+            val expectedGap = if (hostTag == "choice-track-host") with(compose.density) {
+                ChoiceInnerInset.roundToPx().toDp().value
+            } else 4f
+            assertEquals("The resting lens uses the independently rounded layout inset", expectedGap, oldGap, .1f)
             assertTrue("The contact gap must progressively close: $oldGap -> $newGap", newGap < oldGap - .1f)
             assertTrue("The outer track stretches along travel", if (vertical) stretched.height > shell.height else stretched.width > shell.width)
             assertTrue("Option content follows the moving wall", if (vertical) movedContent.top + movedContent.bottom < content.top + content.bottom else movedContent.left + movedContent.right < content.left + content.right)
