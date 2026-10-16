@@ -16,7 +16,6 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -113,40 +112,18 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center) {
-        val playingIndex = state.library.queues.indexOfFirst { it.id == state.library.activeId }.coerceAtLeast(0)
-        val queueList = rememberLazyListState(initialFirstVisibleItemIndex = playingIndex)
-        LaunchedEffect(selector) { if (selector) queueList.requestScrollToItem(playingIndex) }
-        Box(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+            val showHeading = maxHeight >= 240.dp
             Column(Modifier.padding(vertical = 12.dp)) {
-                Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (showHeading) Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(painterResource(R.drawable.ic_queue), null, Modifier.size(24.dp))
                     Text("Queues", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.titleLarge)
                 }
-                SelectionViewport(Modifier.weight(1f, fill = false)) { overscroll ->
-                LazyColumn(Modifier.selectableGroup().padding(horizontal = 8.dp), state = queueList, overscrollEffect = overscroll) {
-                    itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { index, queue ->
-                        val chosen = queue.id == active?.id
-                        Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
-                            modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ReorderHandle("Reorder " + queue.name) { controller?.moveQueue(queue.id, it) }
-                                Row(Modifier.weight(1f).selectable(chosen, role = Role.RadioButton,
-                                    onClick = { controller?.switchTo(queue.id); selector = false }).heightIn(min = 56.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                                        if (chosen) MarqueeTitle("${index + 1}. ${queue.name}", reducedMotion,
-                                            style = MaterialTheme.typography.bodyLarge)
-                                        else Text("${index + 1}. ${queue.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        if (queue.id == state.library.activeId) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-                                ActionIcon(R.drawable.ic_edit, "Rename " + queue.name, glass = false, quiet = true) { renameId = queue.id }
-                                ActionIcon(R.drawable.ic_close, "Delete " + queue.name, glass = false, quiet = true) { deleting = setOf(queue.id) }
-                            }
-                        }
-                    }
-                }
-                }
+                QueueSelectorList(state.library.queues, active?.id, state.library.activeId, isPlaying, reducedMotion,
+                    enabled = selector && enabled && controller != null, modifier = Modifier.weight(1f, fill = false),
+                    onSelect = { controller?.switchTo(it); selector = false }, onRename = { renameId = it },
+                    onDelete = { deleting = setOf(it) }, onOffset = { id, offset -> controller?.moveQueue(id, offset) },
+                    onMove = { id, before, complete -> controller?.moveQueueBefore(id, before, complete) ?: complete(false) })
                 SideEffect { removeOthersAnchor.face = { Text("Remove all other queues", maxLines = 1, overflow = TextOverflow.Ellipsis) } }
                 if (state.library.queues.size > 1) GlassActionButton(R.drawable.ic_trash, "Remove all other queues",
                     Modifier.padding(horizontal = 12.dp, vertical = 8.dp).glassAnchor(removeOthersAnchor),

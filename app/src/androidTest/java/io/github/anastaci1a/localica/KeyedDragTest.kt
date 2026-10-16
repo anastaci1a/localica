@@ -21,15 +21,16 @@ class KeyedDragTest {
     @get:Rule val compose = createComposeRule()
     private data class Entry(val id: String, val name: String)
     private val entries = (0 until 6).map { Entry("queue-$it", "Queue $it") }
+    private var published by mutableStateOf(entries)
     private lateinit var reorder: KeyedDragState<Entry, String>
     private var appearance = "at lift"
 
-    private fun fixture() {
+    private fun fixture(optimisticCommit: Boolean = true) {
         compose.setContent { LocalicaTheme {
             val grid = rememberLazyGridState()
             val scope = rememberCoroutineScope()
             reorder = remember {
-                object : KeyedDragState<Entry, String>(grid, scope, { it.id }) {
+                object : KeyedDragState<Entry, String>(grid, scope, { it.id }, optimisticCommit) {
                     override fun capturePresentation() = appearance
                 }.also { it.items = entries }
             }
@@ -37,7 +38,7 @@ class KeyedDragTest {
                 reorder.viewportWidth = it.width; reorder.viewportHeight = it.height
             }) {
                 LazyVerticalGrid(columns = GridCells.Fixed(1), state = grid) {
-                    items(reorder.rendered(entries), key = { it?.id ?: DropGapKey }) { entry ->
+                    items(reorder.rendered(published), key = { it?.id ?: DropGapKey }) { entry ->
                         Box(Modifier.fillMaxWidth().height(52.dp)) { entry?.let { Text(it.name) } }
                     }
                 }
@@ -89,6 +90,7 @@ class KeyedDragTest {
         compose.runOnIdle {
             assertEquals(1, commits); assertEquals(1, moved)
             assertEquals(expected, reorder.rendered(entries))
+            published = expected
             reorder.reconcile(expected)
             assertNull(reorder.optimistic)
             assertEquals(expected, reorder.rendered(expected))
@@ -119,4 +121,27 @@ class KeyedDragTest {
         compose.waitUntil(5000) { reorder.drag == null }
         compose.runOnIdle { assertEquals(entries, reorder.rendered(entries)); assertNull(reorder.optimistic) }
     }
+    @Test fun authoritativeReceiptNeverHidesConcurrentIdentitiesOrMetadata() {
+        fixture(optimisticCommit = false)
+        val expected = moveDown()
+        val authoritative = expected.filterNot { it.id == "queue-3" }.map {
+            if (it.id == "queue-1") it.copy(name = "Renamed during save") else it
+        } + Entry("new-queue", "New queue")
+        compose.runOnIdle {
+            reorder.finish(cancel = false, reducedMotion = true) { _, _, complete ->
+                published = authoritative
+                reorder.reconcile(authoritative)
+                complete(true)
+            }
+        }
+        compose.waitUntil(5000) { reorder.drag == null }
+        compose.runOnIdle {
+            assertNull(reorder.optimistic)
+            assertEquals(authoritative, reorder.rendered(published))
+        }
+        compose.onNodeWithText("Renamed during save").assertIsDisplayed()
+        compose.onNodeWithText("New queue").assertIsDisplayed()
+        compose.onNodeWithText("Queue 3").assertDoesNotExist()
+    }
+
 }
