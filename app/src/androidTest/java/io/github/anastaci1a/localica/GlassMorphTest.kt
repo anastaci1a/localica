@@ -302,24 +302,39 @@ class GlassMorphTest {
         assertNotNull("Direct surfaces must carry their backing into the returning morph", anchor.source)
         val start = compose.onNodeWithTag("trigger").fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { open = true }
-        compose.mainClock.advanceTimeBy(176)
-        compose.waitForIdle()
-        val middle = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
-        assertTrue("The original trigger is hidden throughout the morph", anchor.hidden)
-        assertTrue("The original circle grows into the menu", middle.width > start.width)
-        compose.mainClock.advanceTimeBy(1000)
-        val expanded = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
-        assertTrue("Opening passes through an intermediate width", expanded.width > middle.width)
-        compose.onNodeWithText("Create playlist").assertIsDisplayed()
-        compose.runOnIdle { open = false }
-        compose.mainClock.advanceTimeBy(176)
-        assertTrue("Do not expose a second surface during the return", anchor.hidden)
-        compose.onNodeWithTag("glass-morph-surface").assertExists()
-        compose.mainClock.advanceTimeBy(1000)
-        compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
-        assertFalse(anchor.hidden)
-        compose.onNodeWithTag("trigger").assertIsDisplayed()
+        try {
+            val openingStart = compose.mainClock.currentTime
+            compose.runOnIdle { open = true }
+            // Native Dialog registration needs Android frames as well as Compose frames.
+            // Yield between frames without moving the original 176 ms sampling deadline.
+            try {
+                compose.waitUntil(5000) {
+                    if (compose.mainClock.currentTime - openingStart < 176) compose.mainClock.advanceTimeByFrame()
+                    compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().size == 1
+                }
+            } finally {
+                android.util.Log.i("GlassMorphProbe", "opening registration elapsed=${compose.mainClock.currentTime - openingStart} progress=${anchor.contact.expansion.value} modal=${anchor.modalPresent}")
+            }
+            val registrationElapsed = compose.mainClock.currentTime - openingStart
+            assertTrue("Registration must not advance beyond the intermediate sample", registrationElapsed <= 176)
+            if (registrationElapsed < 176) compose.mainClock.advanceTimeBy(176 - registrationElapsed)
+            compose.waitForIdle()
+            val middle = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            assertTrue("The original trigger is hidden throughout the morph", anchor.hidden)
+            assertTrue("The original circle grows into the menu", middle.width > start.width)
+            compose.mainClock.advanceTimeBy(1000)
+            val expanded = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            assertTrue("Opening passes through an intermediate width", expanded.width > middle.width)
+            compose.onNodeWithText("Create playlist").assertIsDisplayed()
+            compose.runOnIdle { open = false }
+            compose.mainClock.advanceTimeBy(176)
+            assertTrue("Do not expose a second surface during the return", anchor.hidden)
+            compose.onNodeWithTag("glass-morph-surface").assertExists()
+            compose.mainClock.advanceTimeBy(1000)
+            compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
+            assertFalse(anchor.hidden)
+            compose.onNodeWithTag("trigger").assertIsDisplayed()
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     @Test fun interruptedMorphKeepsItsSurfaceAndRestoresTheTriggerOnce() {
