@@ -341,6 +341,23 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             save(state.value.library.copy(queues = OccurrenceMoves.byOffset(queues, from, offset)))
         }
     }
+    /** Resolve a drag's identities at execution time; null appends to the latest queue order. */
+    fun moveQueueBefore(id: String, beforeId: String?, complete: (Boolean) -> Unit = {}) = submit {
+        val before = state.value.library
+        if (before.queues.none { it.id == id } ||
+            beforeId != null && before.queues.none { it.id == beforeId }) return@submit complete(false)
+        if (id == beforeId) return@submit complete(true)
+        val reordered = OccurrenceMoves.before(before.queues, setOf(id), beforeId) { it.id }
+        try {
+            if (reordered != before.queues) {
+                val next = before.copy(queues = reordered)
+                // Only ordering changes: do not reconcile journeys or touch the native timeline.
+                persist(next)
+                mutable.update { it.copy(library = next, problem = problemAfterSuccess(it, next)) }
+            }
+        } catch (failure: Exception) { complete(false); throw failure }
+        complete(true)
+    }
     fun removeQueues(ids: Set<String>, protectActive: Boolean = false) = submit {
         val wasPlaying = desiredPlayIntent()
         capture()
