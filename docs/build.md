@@ -40,3 +40,9 @@ The [Android workflow](../.github/workflows/android.yml) builds main/PR changes 
 Review README screenshots/GIF for each release. Recapture changed screens from the candidate, inspect at README size, update version/credits and remove obsolete images. Keep navigation recordings short/silent and third-party demo media outside Git/APK.
 
 Reuse `${XDG_DATA_HOME:-$HOME/.local/share}/localica/previews/` for the local library, setup notes and raw captures. Preserve emulator music/app data; update with `adb install -r` rather than recreating the library.
+
+Current player/Queue stills were captured from real `MainActivity` in [run 38835172621](https://github.com/anastaci1a/localica/actions/runs/38835172621), using production base `73be3492cc238a81069dcaefc7b214a5bb757581` (version code 53) and test-only capture commit `ea3e4e20e98fb8d950871e96cce00a47da0435a5`. Production sources and workflow files matched the base. API 36 reported no hardware rounded corners: 720×1280, player bounds `(0,0)–(720,1280)`, Queue bounds `(0,42)–(720,1280)`. Both PNGs are unmodified native screenshots with synthetic tone fixtures and placeholder artwork; this does not verify a physically rounded display.
+
+The checksummed log exports were decoded and visually reviewed before copying the stills byte-for-byte. SHA-256: `player.png` = `dfcb09096ff75651292a76cdef482c072e93c0eeb8b3d92ffdcd85ceaabb5d1d`; `queue.png` = `d90b6acd79552552770de9350a3e0d860478e218f0d0c76880682071b47c6bcb`.
+
+The older `navigation.gif` remains historical, not evidence of current corner behavior. The real-clock diagnostic recording was visibly jumpy on the hosted emulator (app frame durations 87–452 ms); it was not substituted for the GIF. A smooth replacement remains part of [#208](https://github.com/anastaci1a/localica/issues/208). Existing artwork credits still apply to the unchanged older previews.
