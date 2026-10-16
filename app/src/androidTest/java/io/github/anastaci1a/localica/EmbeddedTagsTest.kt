@@ -40,6 +40,21 @@ class EmbeddedTagsTest {
         }
     }
 
+    @Test fun technicalCommentsNeverBecomeLibraryComments() = runBlocking {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        for (name in listOf("tagged.mp3", "tone.wav")) for (technicalFirst in listOf(true, false))
+            for (userComment in listOf(true, false)) {
+                val file = File(context.cacheDir, "comments-${java.util.UUID.randomUUID()}.${name.substringAfterLast('.')}")
+                instrumentation.context.assets.open(name).use { input -> file.outputStream().use(input::copyTo) }
+                try {
+                    seedComments(file, technicalFirst, userComment)
+                    val tags = AndroidDocuments(context).metadata(Uri.fromFile(file).toString(), file.name)
+                    assertEquals("$name technicalFirst=$technicalFirst", if (userComment) "Personal notes" else null, tags.comment)
+                } finally { file.delete() }
+            }
+    }
+
     @Test fun missingOrCorruptArtworkFallsBackWithoutThrowing() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         assertNull(ArtworkReader(context).read("file:///missing.mp3"))
