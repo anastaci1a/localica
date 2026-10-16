@@ -14,6 +14,7 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.roundToInt
 
 class SelectionPanelClearanceTest {
     @get:Rule val compose = createComposeRule()
@@ -33,12 +34,12 @@ class SelectionPanelClearanceTest {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             Box(Modifier.align(Alignment.BottomEnd).size(48.dp).testTag("control"))
                         }
-                        FloatingSelectionPanel(panel, Modifier.heightIn(max = cap.dp)) {
+                        FloatingSelectionPanel(panel, Modifier.heightIn(max = cap.dp).testTag("panel-window")) {
                             Box(Modifier.fillMaxWidth().height(96.dp).testTag("panel"))
                         }
                         Spacer(Modifier.height(chrome.dp))
                     } else {
-                    FloatingSelectionPanel(panel, Modifier.align(Alignment.BottomCenter).padding(bottom = chrome.dp).heightIn(max = cap.dp)) {
+                    FloatingSelectionPanel(panel, Modifier.align(Alignment.BottomCenter).padding(bottom = chrome.dp).heightIn(max = cap.dp).testTag("panel-window")) {
                         Box(Modifier.fillMaxWidth().height(96.dp).testTag("panel"))
                     }
                     Box(Modifier.align(Alignment.BottomEnd).padding(bottom = LocalBrowseObscuredInset.current)
@@ -59,13 +60,42 @@ class SelectionPanelClearanceTest {
             assertEquals("Panel retains the uninterrupted tween at this clock phase",
                 referenceProgress.value, progress, .0001f)
         }
-        assertEquals("Every frame uses the panel's same occupancy", (chrome + 104f * progress) * density,
+        val contentPixels = (96f * density).roundToInt()
+        val chromePixels = (chrome * density).roundToInt()
+        val occupiedPixels = contentPixels * progress
+        val clearancePixels = occupiedPixels + 8f * density * progress
+        assertEquals("Every frame uses the panel's same occupancy", chromePixels + clearancePixels,
             viewport.bottom - control.bottom, 1.1f)
-        if (progress > 0f) {
-            val bounds = compose.onNodeWithTag("panel").fetchSemanticsNode().boundsInRoot
-            assertEquals("Gap follows visible panel without an extra frame", 8f * progress * density,
-                bounds.top - control.bottom, 1.1f)
-        }
+        if (progress > 0f || visible) {
+            val content = compose.onNodeWithTag("panel")
+            val node = content.fetchSemanticsNode()
+            val bounds = node.boundsInRoot
+            val window = compose.onNodeWithTag("panel-window").fetchSemanticsNode()
+            val windowPixels = clearancePixels.roundToInt()
+            val gapPixels = (clearancePixels - occupiedPixels).roundToInt()
+            val visiblePixels = (windowPixels - gapPixels).coerceIn(0, contentPixels)
+            assertEquals("Reveal window matches rounded occupancy on every frame",
+                windowPixels, window.size.height)
+            assertEquals("Content keeps its measured height even behind an empty clip",
+                contentPixels, node.size.height)
+            assertEquals("Unclipped placement remains anchored to actual bottom chrome",
+                viewport.bottom - chromePixels - windowPixels + gapPixels, node.positionInRoot.y, 1.1f)
+            assertEquals("Unclipped placement retains its gap even when the clip rounds to zero",
+                gapPixels.toFloat(), node.positionInRoot.y - control.bottom, 1.1f)
+            if (visiblePixels == 0) {
+                // Clipped bounds report an empty rectangle at the origin, not the content's
+                // placement. A positive animation fraction can still occupy zero pixels.
+                assertEquals("Zero-pixel reveal must have empty clipped bounds", androidx.compose.ui.geometry.Rect.Zero, bounds)
+                content.assertIsNotDisplayed()
+            } else {
+                assertEquals("Gap follows visible panel without an extra frame", gapPixels.toFloat(),
+                    bounds.top - control.bottom, 1.1f)
+                assertEquals("Every nonempty clipped pixel band remains visible",
+                    visiblePixels.toFloat(), bounds.height, .01f)
+                assertEquals("Visible pixels end at remaining bottom chrome",
+                    viewport.bottom - chromePixels, bounds.bottom, 1.1f)
+            }
+        } else compose.onNodeWithTag("panel").assertDoesNotExist()
         return progress
     }
 
