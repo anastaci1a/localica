@@ -39,8 +39,11 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     var cancelRelease by remember { mutableStateOf(false) }
     var wasOver by remember { mutableStateOf(false) }
     var previewActive by remember { mutableStateOf(false) }
+    var previewGesture by remember { mutableIntStateOf(0) }
     // A fresh touch or keyboard/accessibility edit must not inherit a cancelled hover.
-    val preview = if (previewActive) seekCancelPreview(value, liveValue, wasOver) else value
+    val preview = if (previewActive) key(previewGesture) {
+        seekCancelPreview(value, liveValue, wasOver)
+    } else value
     val view = androidx.compose.ui.platform.LocalView.current
     val target by rememberUpdatedState(cancelBounds)
     val report by rememberUpdatedState(onDrag)
@@ -50,6 +53,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             cancelRelease = false
             wasOver = false
+            previewGesture++
             previewActive = true
             report(true, false)
             var released = false
@@ -63,11 +67,13 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                             view.performHapticFeedback(if (over) android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK)
                             wasOver = over
                         }
-                        cancelRelease = over
+                        // Compose sends ACTION_CANCEL as an already-consumed up event.
+                        // Observe it before Slider's Main-pass completion can commit the preview.
+                        cancelRelease = over || (!change.pressed && change.isConsumed)
                         report(change.pressed, over)
                         released = !change.pressed
                         if (released) {
-                            if (over) cancel()
+                            if (cancelRelease) cancel()
                             // Keep touch-origin updates distinct from subsequent keyboard/TalkBack edits.
                             awaitPointerEvent(PointerEventPass.Final)
                         }
