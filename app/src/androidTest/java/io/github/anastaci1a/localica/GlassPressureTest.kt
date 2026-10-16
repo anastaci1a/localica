@@ -29,13 +29,19 @@ class GlassPressureTest {
     }
     @Test fun heldSortLensCompressesAtTheBoundaryAndRecoversOnRelease() {
         pressureChoices(listOf("Title", "Artist", "Year"))
-        val initial = displayedLensBounds()
+        val (initial, initialShell) = displayedTrackFrame()
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText("Title").performTouchInput { down(center); moveBy(Offset(0f, -initial.height * 2)) }
         compose.mainClock.advanceTimeBy(300)
-        val held = displayedLensBounds()
+        val (held, heldShell) = displayedTrackFrame()
         assertTrue("A held overdrag compresses the vertical lens: $initial -> $held", held.height < initial.height * .97f)
-        assertEquals("Compression pins the contacting top edge", initial.top, held.top, 1f)
+        // The shared track now moves its wall under pressure (#209). Contact is
+        // measured against that rendered wall, not the obsolete resting y value.
+        val restingGap = initial.top - initialShell.top
+        val heldGap = held.top - heldShell.top
+        assertTrue("The rendered shell extends toward the pull", heldShell.top < initialShell.top - 1f)
+        assertTrue("The lens remains inside the current wall: gap=$heldGap", heldGap >= -1f)
+        assertTrue("The rendered contact gap closes: $restingGap -> $heldGap", heldGap < restingGap - 1f)
         compose.onNodeWithText("Title").performTouchInput { up() }
         repeat(12) {
             compose.mainClock.advanceTimeBy(32)
@@ -85,21 +91,31 @@ class GlassPressureTest {
         compose.waitForIdle()
     }
 
-    private fun displayedLensBounds(): Rect {
+    private fun displayedLensBounds(): Rect = displayedTrackFrame().first
+
+    /** Read both silhouettes from the same presented frame, never layout semantics. */
+    private fun displayedTrackFrame(): Pair<Rect, Rect> {
         compose.runOnIdle { presentationStage++ }
         val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("pressure-scene"), presentationStage) { pressureView }
-        var left = pixels.width; var top = pixels.height; var right = -1; var bottom = -1
-        for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
-            val color = pixels[x, y]
-            if (color.red > .6f && color.green < .4f && color.blue < .4f) {
-                left = minOf(left, x); top = minOf(top, y)
-                right = maxOf(right, x); bottom = maxOf(bottom, y)
+        fun scan(accepts: (Color) -> Boolean): Rect {
+            var left = pixels.width; var top = pixels.height; var right = -1; var bottom = -1
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                if (accepts(pixels[x, y])) {
+                    left = minOf(left, x); top = minOf(top, y)
+                    right = maxOf(right, x); bottom = maxOf(bottom, y)
+                }
             }
+            assertTrue("The rendered silhouette must be visible", right >= left && bottom >= top)
+            return Rect(left.toFloat(), top.toFloat(), (right + 1).toFloat(), (bottom + 1).toFloat())
         }
-        assertTrue("Real selected lens must have a visible red silhouette", right >= left && bottom >= top)
-        return Rect(left.toFloat(), top.toFloat(), (right + 1).toFloat(), (bottom + 1).toFloat()).also {
-            android.util.Log.i("GlassPressure", "stage=$presentationStage displayedBounds=$it")
-        }
+        fun red(color: Color) = color.red > .6f && color.green < .4f && color.blue < .4f
+        val lens = scan(::red)
+        // The gray track is 10% black over the fixture's solid blue; include its
+        // red lens where that covers the track. Untinted exterior blue is excluded.
+        val shell = scan { color -> red(color) ||
+            (color.blue > .75f && color.blue < .97f && color.red < .15f && color.green < .15f) }
+        android.util.Log.i("GlassPressure", "stage=$presentationStage displayedBounds=$lens shellBounds=$shell")
+        return lens to shell
     }
 
     @OptIn(ExperimentalLayoutApi::class)
