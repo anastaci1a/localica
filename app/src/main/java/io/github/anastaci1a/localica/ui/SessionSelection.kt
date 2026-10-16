@@ -94,10 +94,5 @@ internal fun SessionSelectionPanel(session: SessionSelection, queues: io.github.
 @Composable
 internal fun SelectionPanelVisibility(visible: Boolean, modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
     reducedMotion: Boolean = false, content: @Composable () -> Unit) {
-    val duration = if (reducedMotion) 0 else 220
-    androidx.compose.animation.AnimatedVisibility(visible, modifier,
-        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(duration)) +
-            androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(duration)) { it / 2 },
-        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(duration)) +
-            androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(duration)) { it / 2 }) { content() }
+    FloatingSelectionPanel(rememberFloatingSelectionPanel(visible, reducedMotion), modifier, content)
 }

@@ -31,7 +31,7 @@ class DragReorderTest {
     private val selection = SessionSelection()
     private var interactionEnabled by mutableStateOf(true)
     private lateinit var backDispatcher: androidx.activity.OnBackPressedDispatcher
-    private fun fixture(gallery: Boolean = false, failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, filtered: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
+    private fun fixture(gallery: Boolean = false, failWrites: Boolean = false, count: Int = 8, foregroundFooter: Boolean = false, filtered: Boolean = false, panelClearance: Boolean = false, test: (PlaylistController, ManualPlaylist) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         val db = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
@@ -59,15 +59,24 @@ class DragReorderTest {
                 val state by controller.state.collectAsState()
                 val host = remember { SongDragHost() }
                 val route = remember(playlist.id) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), text = if (filtered) "Song" else "") }
-                Box(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter) 80.dp else 0.dp).clipToBounds()) {
-                CompositionLocalProvider(LocalSessionSelection provides selection, LocalSongDragHost provides host) {
+                val floatingPanel = rememberFloatingSelectionPanel(selection.panelVisible && host.state?.drag == null, false)
+                val chrome = if (foregroundFooter) 80.dp else 0.dp
+                Box(Modifier.fillMaxSize().testTag("fixture-viewport")) {
+                Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter && !panelClearance) chrome else 0.dp).clipToBounds()) {
+                CompositionLocalProvider(LocalSessionSelection provides selection, LocalSongDragHost provides host,
+                    LocalBrowseObscuredInset provides if (panelClearance) chrome + floatingPanel.clearance else 0.dp) {
                     BrowserScreen(library, state,
                         route, {}, {}, {},
                         { _, _, _ -> fail("A held song must not play") }, null, controller, interactionEnabled, false)
                 } }
                 if (foregroundFooter) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(80.dp).background(Color.Magenta).testTag("fixture-footer"))
-                SelectionPanelVisibility(selection.panelVisible && host.state?.drag == null,
+                if (panelClearance) {
+                    FloatingSelectionPanel(floatingPanel, Modifier.align(Alignment.BottomCenter).padding(bottom = chrome)) {
+                        Box(Modifier.fillMaxWidth().height(96.dp).testTag("fixture-selection-panel"))
+                    }
+                    Box(Modifier.align(Alignment.BottomEnd).padding(bottom = chrome + floatingPanel.clearance)
+                        .size(48.dp).testTag("fixture-lifted-control"))
+                } else SelectionPanelVisibility(selection.panelVisible && host.state?.drag == null,
                     Modifier.align(Alignment.BottomCenter)) {
                     Box(Modifier.size(1.dp).testTag("fixture-selection-panel"))
                 }
@@ -295,6 +304,61 @@ class DragReorderTest {
         assertEquals(playlist.entries, controller.state.value.playlists.single().entries)
         compose.runOnIdle { assertFalse(selection.active); assertTrue(selection.entries.isEmpty()) }
     }
+    private fun openPanelDragClearance(chrome: Boolean) = fixture(foregroundFooter = chrome, panelClearance = true) { controller, playlist ->
+        val id = playlist.entries[1].id
+        val row = compose.onNodeWithTag("media-$id")
+        row.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnLongClick) { assertTrue(it()) }
+        val root = compose.onNodeWithTag("fixture-viewport").fetchSemanticsNode().boundsInRoot
+        val scale = compose.onNodeWithTag("fixture-lifted-control").fetchSemanticsNode().boundsInRoot.width / 48f
+        val base = if (chrome) 80f else 0f
+        fun controlBottom() = compose.onNodeWithTag("fixture-lifted-control").fetchSemanticsNode().boundsInRoot.bottom
+        fun assertShown() {
+            val panelTop = compose.onNodeWithTag("fixture-selection-panel").fetchSemanticsNode().boundsInRoot.top
+            assertEquals(8f * scale, panelTop - controlBottom(), 1.1f)
+        }
+        assertShown()
+        // Existing selection stays active throughout both pointer cancellation and X release.
+        for (cancelPointer in listOf(true, false)) {
+            var held = false
+            try {
+                row.performTouchInput { down(center); held = true; advanceEventTime(650); moveTo(center) }
+                compose.mainClock.autoAdvance = false
+                try {
+                    row.performTouchInput { moveBy(Offset(70f, 0f)); advanceEventTime(32) }
+                    var previousBottom = controlBottom()
+                    var intermediate = false
+                    repeat(18) {
+                        compose.mainClock.advanceTimeByFrame()
+                        val bottom = controlBottom()
+                        val cancelBottom = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom
+                        assertEquals("X and other controls share each animation frame", 20f * scale, bottom - cancelBottom, 1.1f)
+                        assertTrue("Hide never jumps back upward", bottom >= previousBottom - 1.1f)
+                        val remaining = root.bottom - bottom - base * scale
+                        if (remaining > scale && remaining < 103f * scale) intermediate = true
+                        previousBottom = bottom
+                    }
+                    assertTrue("The open panel must animate to hidden", intermediate)
+                } finally { compose.mainClock.autoAdvance = true }
+                compose.onNodeWithTag("drag-stack").assertExists()
+                compose.onNodeWithTag("fixture-selection-panel").assertDoesNotExist()
+                assertEquals(base * scale, root.bottom - controlBottom(), 1.1f)
+                val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
+                assertEquals("X follows remaining chrome", (base + 20f) * scale, root.bottom - cancel.bottom, 1.1f)
+                val list = compose.onNodeWithTag("browser-list")
+                if (cancelPointer) list.performTouchInput { cancel(); held = false }
+                else {
+                    val target = cancel.center - list.fetchSemanticsNode().boundsInRoot.topLeft
+                    list.performTouchInput { moveTo(target); advanceEventTime(32); up(); held = false }
+                }
+                compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
+                assertEquals(playlist, controller.state.value.playlists.single())
+                compose.runOnIdle { assertTrue(selection.panelVisible); assertEquals(listOf(id), selection.entries.map { it.row.id }) }
+                assertShown()
+            } finally { if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() } }
+        }
+    }
+    @Test fun openPanelDragReturnsXAndControlsAboveChrome() = openPanelDragClearance(true)
+    @Test fun openPanelDragReturnsXAndControlsWithoutChrome() = openPanelDragClearance(false)
     @Test fun canceledDragKeepsOrderAndSelection() = fixture { controller, playlist ->
         val id = playlist.entries[1].id
         compose.onNodeWithTag("media-$id").performTouchInput {
