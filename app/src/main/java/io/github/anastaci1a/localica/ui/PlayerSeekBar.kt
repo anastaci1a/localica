@@ -51,7 +51,9 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     val touch = if (!enabled) Modifier else Modifier.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            cancelRelease = false
+            // Cancellation is dispatched to Slider before this outer pointer modifier.
+            // Permit a touch commit only after observing a genuine release outside X.
+            cancelRelease = true
             wasOver = false
             previewGesture++
             previewActive = true
@@ -67,9 +69,8 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                             view.performHapticFeedback(if (over) android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK)
                             wasOver = over
                         }
-                        // Compose sends ACTION_CANCEL as an already-consumed up event.
-                        // Observe it before Slider's Main-pass completion can commit the preview.
-                        cancelRelease = over || (!change.pressed && change.isConsumed)
+                        // A consumed synthetic up is cancellation, not commit permission.
+                        cancelRelease = change.pressed || over || change.isConsumed
                         report(change.pressed, over)
                         released = !change.pressed
                         if (released) {
