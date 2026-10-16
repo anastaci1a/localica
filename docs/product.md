@@ -49,9 +49,9 @@ Implementation and supported-write limitations: [Structure](structure.md#file-op
 
 ## Lyrics sources
 
-Read embedded synced/plain lyrics and same-basename `.lrc` sidecars in the song's actual granted folder. Keep distinct sources selectable without a duplicate plain rendition of a synced source; prefer usable synced lyrics, then sidecars over embedded sources of equal timing type. Missing, malformed, inaccessible, or untimed lyrics must not interrupt playback or invent timestamps. Viewing is local, with no online lookup.
+Read embedded synced/plain lyrics and same-basename `.lrc` sidecars in the song's actual granted folder. Keep distinct sources selectable without a duplicate plain rendition of a synced source; prefer usable synced lyrics, then sidecars over embedded sources of equal timing type. A failed source must not hide usable siblings; directory failures affect only that location. Missing, malformed, inaccessible, or untimed lyrics must not interrupt playback or invent timestamps. Viewing is local, with no online lookup.
 
-LRC supports offsets/repeated timestamps; ID3 SYLT supports millisecond timing. Frame-count SYLT is unsupported. Use word timing only when a supported source actually supplies it. Presentation and gesture rules: [Artwork and lyrics](interface.md#artwork-and-lyrics).
+LRC supports offsets/repeated timestamps; ID3v2.2 SLT and ID3v2.3/2.4 SYLT support millisecond timing. Frame-count SYLT is unsupported. Use word timing only when a supported source actually supplies it. Presentation and gesture rules: [Artwork and lyrics](interface.md#artwork-and-lyrics).
 
 Timed lyrics interpolate Media3's latency-aware position between samples, freezing during pause/buffering and bounding stale extrapolation. A persisted −2000…+2000 ms correction (50 ms steps; positive means later) changes only lyric highlighting, never seek targets or audio. Do not add a guessed Bluetooth delay: [Media3 already tracks available output timestamps/latency](https://github.com/androidx/media/blob/1.10.1/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/audio/AudioTrackPositionTracker.java); [Android timestamps can be unavailable for a route](https://developer.android.com/reference/android/media/AudioTrack#getTimestamp(android.media.AudioTimestamp)). Physical-device calibration remains necessary for inaccurate outputs.
 
