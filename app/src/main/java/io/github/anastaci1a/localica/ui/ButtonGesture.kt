@@ -12,14 +12,20 @@ import androidx.compose.ui.input.pointer.pointerInput
  * Leave down/up to clickable (including long press and accessibility); consuming motion
  * cancels activation after dragging and prevents a containing scroller stealing the contact.
  * Content selections/carousels and controls with their own drag recognizer do not use this. */
-internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventPass = PointerEventPass.Initial): Modifier = if (!enabled) this else pointerInput(pass) {
+internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventPass = PointerEventPass.Initial, traceYear: Boolean = false): Modifier = if (!enabled) this else pointerInput(pass) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
+        if (traceYear) BufferedChoiceTrace.active?.record(BufferedChoiceTrace.YEAR_DOWN,
+            bits = (if (down.pressed) 1 else 0) or (if (down.isConsumed) 2 else 0),
+            eventTime = down.uptimeMillis, x = down.position.x, y = down.position.y)
         var dragged = false
         do {
             val event = awaitPointerEvent(pass)
             val point = event.changes.firstOrNull { it.id == down.id } ?: break
             if ((point.position - down.position).getDistance() > viewConfiguration.touchSlop) dragged = true
+            if (traceYear) BufferedChoiceTrace.active?.record(BufferedChoiceTrace.YEAR_EVENT,
+                bits = (if (point.pressed) 1 else 0) or (if (point.isConsumed) 2 else 0) or (if (dragged) 4 else 0),
+                eventTime = point.uptimeMillis, x = point.position.x, y = point.position.y)
             if (dragged) point.consume()
         } while (event.changes.any { it.id == down.id && it.pressed })
     }
