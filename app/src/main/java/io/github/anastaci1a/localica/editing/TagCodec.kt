@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.editing
 
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import io.github.anastaci1a.localica.library.SemanticTagFields
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.Tag
 import org.jaudiotagger.tag.TagOptionSingleton
@@ -32,6 +33,10 @@ object TagCodec {
         val trackTotal = runCatching { tag.getFirst(org.jaudiotagger.tag.FieldKey.TRACK_TOTAL) }.getOrDefault("")
         val discTotal = runCatching { tag.getFirst(org.jaudiotagger.tag.FieldKey.DISC_TOTAL) }.getOrDefault("")
         val touched = patch.fields.keys.flatMap { tag.getFields(it.key).map { field -> field.id } }.toMutableSet()
+        val technicalComments = if (EditField.Comment in patch.fields)
+            tag.getFields(org.jaudiotagger.tag.FieldKey.COMMENT).filter(SemanticTagFields::isTechnicalComment)
+        else emptyList()
+        val technicalCommentBytes = technicalComments.map { digest(it.rawContent).toList() }
         val retainedCustomComments = mutableMapOf<String, List<String>>()
         if (EditField.Comment in patch.fields) {
             for (id in listOf("TXXX", "TXX")) {
@@ -54,11 +59,11 @@ object TagCodec {
         val beforeArtwork = if (patch.artwork == ArtworkChange.Keep) tag.artworkList.map { it.binaryData?.let(::digest)?.toList() } else null
         val beforeAudio = audioHash(file)
         patch.fields.forEach { (field, value) ->
-            val technicalComments = if (field == EditField.Comment) tag.getFields(field.key).filter {
-                ((it as? AbstractID3v2Frame)?.body as? org.jaudiotagger.tag.id3.framebody.FrameBodyCOMM)?.description?.startsWith("iTun") == true
-            } else emptyList()
+            // setField may replace the first COMM, including a technical frame. Rebuild only
+            // the user-comment group, then restore the original technical frame objects.
+            if (field == EditField.Comment) tag.deleteField(field.key)
             if (value.isBlank()) tag.deleteField(field.key) else tag.setField(field.key, value)
-            if (value.isBlank()) technicalComments.forEach(tag::addField)
+            if (field == EditField.Comment) technicalComments.forEach(tag::addField)
             if (field == EditField.TrackNumber && trackTotal.isNotEmpty()) tag.setField(org.jaudiotagger.tag.FieldKey.TRACK_TOTAL, trackTotal)
             if (field == EditField.Disc && discTotal.isNotEmpty()) tag.setField(org.jaudiotagger.tag.FieldKey.DISC_TOTAL, discTotal)
             touched += tag.getFields(field.key).map { it.id }
@@ -89,8 +94,14 @@ object TagCodec {
         check(runCatching { read.getFirst(org.jaudiotagger.tag.FieldKey.TRACK_TOTAL) }.getOrDefault("") == trackTotal &&
             runCatching { read.getFirst(org.jaudiotagger.tag.FieldKey.DISC_TOTAL) }.getOrDefault("") == discTotal) { "Track/disc totals did not verify." }
         patch.fields.forEach { (field, value) ->
-            check(read.getFirst(field.key).orEmpty() == value.takeUnless(String::isBlank).orEmpty()) { "${field.label} did not verify; original kept." }
+            val expected = if (field == EditField.TrackNumber || field == EditField.Disc)
+                SemanticTagFields.number(value)?.toString().orEmpty() else value.takeUnless(String::isBlank).orEmpty()
+            check(SemanticTagFields.read(read, field.key).orEmpty() == expected) { "${field.label} did not verify; original kept." }
         }
+        if (EditField.Comment in patch.fields) check(
+            read.getFields(org.jaudiotagger.tag.FieldKey.COMMENT).filter(SemanticTagFields::isTechnicalComment)
+                .map { digest(it.rawContent).toList() } == technicalCommentBytes
+        ) { "Technical comments did not verify; original kept." }
         val after = fields(read)
         check(retainedCustomComments.all { (id, contents) -> after[id].orEmpty() == contents }) { "Custom tags did not verify; original kept." }
         if (read is WavTag) check(oldInfo.filterKeys { it !in touchedInfo }.all { (id, contents) -> fields(read.infoTag)[id] == contents }) {
