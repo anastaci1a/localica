@@ -12,7 +12,7 @@ import kotlin.coroutines.resume
 data class TagEditorState(val tracks: List<Track> = emptyList(), val busy: Boolean = false,
     val results: List<EditResult> = emptyList(), val recovery: String? = null, val error: String? = null,
     val background: Boolean = false, val artworkOnly: Boolean = false, val jobsVisible: Boolean = false, val jobs: List<TagJob> = emptyList(),
-    val recoveryProblem: String? = null)
+    val recoveryProblem: String? = null, val sessionId: String = "")
 
 class TagEditingController(private val context: Context, private val library: LibraryRepository,
     private val queues: QueueController, private val playlists: PlaylistController,
@@ -35,7 +35,7 @@ class TagEditingController(private val context: Context, private val library: Li
     fun open(tracks: List<Track>, complete: (Boolean) -> Unit = {}) {
         if (state.value.busy) { showJobs(); return }
         completion?.invoke(false); completion = complete
-        mutable.update { it.copy(tracks = tracks.distinctBy(Track::id), results = emptyList(), error = null, background = false, artworkOnly = false) }
+        mutable.update { it.copy(sessionId = java.util.UUID.randomUUID().toString(), tracks = tracks.distinctBy(Track::id), results = emptyList(), error = null, background = false, artworkOnly = false) }
     }
     fun openArtwork(track: Track) {
         if (state.value.busy) { showJobs(); return }
