@@ -87,10 +87,22 @@ internal fun SettingsHeading(title: String) {
 internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, label: (T) -> String,
     onDismiss: () -> Unit, onSelect: (T) -> Unit) {
     var draft by remember { mutableStateOf(choices.firstOrNull { it == selected } ?: choices.firstOrNull() ?: selected) }
+    val tapTrace = LocalChoiceTapTrace.current
+    val traceIdentity = remember { Any() }
+    val traceId = System.identityHashCode(traceIdentity)
+    DisposableEffect(tapTrace, traceIdentity) {
+        tapTrace?.invoke("draft-mount id=$traceId title=$title selected=$selected draft=$draft")
+        onDispose { tapTrace?.invoke("draft-dispose id=$traceId title=$title") }
+    }
+    SideEffect { tapTrace?.invoke("draft-composed id=$traceId title=$title selected=$selected draft=$draft") }
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         val scroll = rememberScrollState()
         Column(Modifier.scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = 8.dp, vertical = 12.dp).selectableGroup()) {
-            GlassChoices(choices.map(label), choices.indexOf(draft).coerceAtLeast(0)) { index -> draft = choices[index] }
+            GlassChoices(choices.map(label), choices.indexOf(draft).coerceAtLeast(0)) { index ->
+                tapTrace?.invoke("draft-callback id=$traceId before=$draft next=${choices[index]}")
+                draft = choices[index]
+                tapTrace?.invoke("draft-assigned id=$traceId draft=$draft")
+            }
         }
     }, confirmButton = { ActionTextButton(enabled = choices.isNotEmpty(), onClick = { onSelect(draft); onDismiss() }) { Text("Select") } },
         dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
