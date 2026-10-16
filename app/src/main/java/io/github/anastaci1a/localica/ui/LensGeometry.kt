@@ -51,6 +51,20 @@ internal data class LensGeometry(val bounds: Rect, val corner: Float) {
 internal data class LensField(val distance: Float, val inward: Offset)
 internal data class LensRay(val offset: Offset, val normalZ: Float, val height: Float, val normalXY: Offset = Offset.Zero)
 
+/** Shared vertex illumination for ordinary and layered legacy lenses. */
+internal fun lensReflectionColor(ray: LensRay, tone: GlassTone, power: Float = 1f): Int {
+    val facing = (ray.normalXY.x * -.45f + ray.normalXY.y * -.75f + ray.normalZ * .6f) / 1.06066f
+    val grazing = 1f - ray.normalZ
+    val opacity = (.018f * grazing + .26f * grazing * grazing * grazing) * power *
+        if (facing >= 0f) facing else -facing * .3f
+    return glassGray(tone.channel(if (facing >= 0f) 1f else 0f), opacity)
+}
+
+internal fun glassGray(value: Float, opacity: Float): Int {
+    val c = (value * 255f).toInt().coerceIn(0, 255)
+    return ((opacity * 255f).toInt().coerceIn(0, 255) shl 24) or (c shl 16) or (c shl 8) or c
+}
+
 /** Shared mathematical model for both execution adapters. Shape depth changes the
  * surface normal and ray path together; there is no zoom transform or inset plate. */
 internal fun lensRay(field: LensField, span: Float, depth: Float, flattening: Float = 0f): LensRay {

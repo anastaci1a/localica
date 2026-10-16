@@ -10,13 +10,14 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -43,38 +44,68 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
             else position.animateTo(selected.toFloat(), spring(1f, 650f * speed * speed))
         }
     }
-    BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = ChoiceOuterVerticalInset)
-        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .10f), RoundedCornerShape(24.dp))
-        .padding(ChoiceInnerInset).selectableGroup()) {
-        val width = if (horizontal) maxWidth / labels.size else maxWidth
-        val height = glassChoiceCellHeight()
-        val stride = with(LocalDensity.current) { (if (horizontal) width else height).toPx() }
-        SelectionLens(Modifier.testTag("choice-lens").offset { androidx.compose.ui.unit.IntOffset(
-            if (horizontal) (stride * position.value).roundToInt() else 0,
-            if (horizontal) 0 else (stride * position.value).roundToInt()) }.width(width).height(height),
-            position, vertical = !horizontal, pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f }, wall = {
-                direction * glassWallAffinity(position.value, labels.lastIndex.toFloat())
-            }, cornerRadius = 20.dp)
-        @Composable fun Item(index: Int, modifier: Modifier) {
-            Box(modifier.height(height).selectable(index == selected, role = role,
-                interactionSource = null, indication = null, onClick = { change(index) })
-                .then(if (index == selected) Modifier.observeGlassContact { pressed = it }.elasticControlDrag(horizontal,
-                    onStart = { dragging = true; scope.launch(start = CoroutineStart.UNDISPATCHED) { position.stop(); raw = position.value } },
-                    onDelta = { delta ->
-                        raw += direction * delta / stride
-                        val next = raw.coerceIn(0f, labels.lastIndex.toFloat())
-                        pressure = glassEdgePressure(raw - next)
-                        scope.launch(start = CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(next)) }
-                    }, onEnd = { cancelled ->
-                        val next = position.value.roundToInt().coerceIn(labels.indices)
-                        pressure = 0f; dragging = false; settleRequest++
-                        if (!cancelled) change(next)
-                    }) else Modifier.ownButtonDrag()), contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
-                GlassChoiceFace(labels[index], icons?.getOrNull(index), role == Role.Tab)
+    val density = LocalDensity.current
+    var logicalWall by remember { mutableFloatStateOf(1f) }
+    val shell = rememberGlassBody({ 0f }, pressure = { pressure }, contact = { if (dragging) 1f else 0f })
+    val height = glassChoiceCellHeight()
+    BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = ChoiceOuterVerticalInset)) {
+        val baseWidth = with(density) { maxWidth.toPx() }
+        val rowHeight = with(density) { height.toPx() }
+        val inset = with(density) { ChoiceInnerInset.toPx() }
+        val baseHeight = (if (horizontal) rowHeight else rowHeight * labels.size) + 2f * inset
+        val stride = if (horizontal) (baseWidth - 2f * inset) / labels.size else rowHeight
+        val geometry = selectorTrackGeometry(if (horizontal) baseWidth else baseHeight,
+            if (horizontal) baseHeight else baseWidth,
+            (-shell.value.strain).coerceIn(0f, .16f) * .25f, logicalWall,
+            !horizontal, rtl, reduced, overflow = false)
+        val insets = SelectorTrackInsets(inset, 0f, inset)
+        val trackBounds = if (horizontal) androidx.compose.ui.geometry.Rect(geometry.travelStart, geometry.crossStart,
+            geometry.travelEnd, geometry.crossStart + geometry.crossExtent)
+            else androidx.compose.ui.geometry.Rect(geometry.crossStart, geometry.travelStart,
+                geometry.crossStart + geometry.crossExtent, geometry.travelEnd)
+        val radius = with(density) { 24.dp.toPx() }.coerceAtMost(minOf(trackBounds.width, trackBounds.height) / 2f)
+        Box(Modifier.fillMaxWidth().height(with(density) { baseHeight.toDp() }).selectableGroup()
+            .testTag("choice-track-host").selectorTrackDrag(horizontal,
+                eligible = { point -> geometry.slot(selected.coerceIn(labels.indices), labels.size, insets, !horizontal, rtl).cell.contains(point) },
+                contact = { pressed = it },
+                onStart = { dragging = true; raw = position.value; scope.launch(start = CoroutineStart.UNDISPATCHED) { position.stop() } },
+                onDelta = { delta ->
+                    raw += direction * delta / stride
+                    val next = raw.coerceIn(0f, labels.lastIndex.toFloat())
+                    val excess = raw - next
+                    if (excess != 0f) logicalWall = if (excess < 0f) -1f else 1f
+                    pressure = glassEdgePressure(excess)
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(next)) }
+                }, onEnd = { cancelled ->
+                    val next = position.value.roundToInt().coerceIn(labels.indices)
+                    pressure = 0f; dragging = false; settleRequest++
+                    if (!cancelled) change(next)
+                }), contentAlignment = AbsoluteAlignment.TopLeft) {
+            Box(Modifier.selectorTrackPlacement(trackBounds).testTag("choice-track-shell")
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .10f),
+                    RoundedCornerShape(with(density) { radius.toDp() })))
+            SelectionLens(Modifier.testTag("choice-lens"), position, vertical = !horizontal,
+                pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f },
+                placement = { shape -> geometry.lens(position.value, labels.size, insets, !horizontal, rtl, shape, radius) })
+            labels.indices.forEach { index ->
+                val cell = geometry.slot(index, labels.size, insets, !horizontal, rtl).cell
+                val contentBounds = if (horizontal) androidx.compose.ui.geometry.Rect(cell.left, cell.top + inset, cell.right, cell.bottom - inset)
+                    else androidx.compose.ui.geometry.Rect(cell.left + inset, cell.top, cell.right - inset, cell.bottom)
+                val originalWidth = if (horizontal) stride else baseWidth - 2f * inset
+                Box(Modifier.selectorTrackPlacement(contentBounds).testTag("choice-option-$index")
+                    .selectable(index == selected, role = role, interactionSource = null, indication = null, onClick = { change(index) })
+                    .then(if (index == selected) Modifier else Modifier.ownButtonDrag()),
+                    contentAlignment = Alignment.Center) {
+                    Box(Modifier.requiredSize(with(density) { originalWidth.toDp() }, height)
+                        .graphicsLayer { scaleX = contentBounds.width / originalWidth; scaleY = contentBounds.height / rowHeight },
+                        contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
+                        Box(Modifier.testTag("choice-option-content-$index")) {
+                            GlassChoiceFace(labels[index], icons?.getOrNull(index), role == Role.Tab)
+                        }
+                    }
+                }
             }
         }
-        if (horizontal) Row { labels.indices.forEach { Item(it, Modifier.width(width)) } }
-        else Column { labels.indices.forEach { Item(it, Modifier.fillMaxWidth()) } }
     }
 }
 

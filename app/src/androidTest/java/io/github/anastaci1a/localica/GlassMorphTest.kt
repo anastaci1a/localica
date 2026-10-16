@@ -26,6 +26,34 @@ import org.junit.Test
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun cancelledShapeClockRetainsItsBodyUntilANewOwnerFinishesNormally() {
+        val state = GlassBodyState()
+        var present by mutableStateOf(true)
+        var contact by mutableFloatStateOf(1f)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { LocalicaTheme {
+            if (present) rememberGlassBody({ 0f }, contact = { contact }, state = state)
+        } }
+        try {
+            compose.mainClock.advanceTimeBy(80)
+            compose.runOnIdle { present = false }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            val interrupted = state.output.value
+            assertNotEquals("Disposing the clock cannot reset shared deformation", GlassShape(), interrupted)
+            assertFalse("The cancelled clock was still converging", state.momentum.settled)
+            compose.mainClock.advanceTimeBy(1000)
+            assertEquals("Cancellation retains displacement and does not complete the old target", interrupted, state.output.value)
+            assertEquals(interrupted, state.momentum.shape)
+            compose.runOnIdle { contact = 0f; present = true }
+            compose.mainClock.advanceTimeBy(5000)
+            compose.waitForIdle()
+            assertTrue(state.momentum.settled)
+            assertEquals("Normal completion publishes exact rest", GlassShape(), state.output.value)
+            assertEquals(GlassShape(), state.momentum.shape)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun popupChildShadowTravelsAndFadesWithItsOwner() {
         var moved by mutableStateOf(false)
         var visible by mutableStateOf(true)
