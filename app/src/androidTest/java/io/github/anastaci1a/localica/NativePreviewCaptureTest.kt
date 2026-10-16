@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.view.Window
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
@@ -145,10 +146,15 @@ class NativePreviewCaptureTest {
                 instrumentation.runOnMainSync { connection.toggle(); connection.seekTo(500) }
                 await { !connection.state.value.playWhenReady && !connection.state.value.isPlaying && !connection.state.value.isBuffering }
                 fun tap(description: String) {
-                    val target = requireNotNull(device.wait(Until.findObject(By.desc(description)), 5000)) { "Missing native control: $description" }
+                    var target: Surface? = null
+                    await(5000) { target = findSemantics(scenario, description = description); target != null }
+                    val bounds = requireNotNull(target).screenBounds
+                    val point = bounds.center
+                    check(bounds.width > 0 && bounds.height > 0 && point.x >= 0 && point.y >= 0 &&
+                        point.x < device.displayWidth && point.y < device.displayHeight) { "Control is outside display: $description" }
                     val start = SystemClock.elapsedRealtimeNanos()
-                    target.click()
-                    Log.i(TAG, "TAP control=$description startNs=$start endNs=${SystemClock.elapsedRealtimeNanos()}")
+                    check(device.click(point.x.toInt(), point.y.toInt())) { "Native tap rejected: $description" }
+                    Log.i(TAG, "TAP control=$description target=live-clickable-semantics screenBounds=$bounds startNs=$start endNs=${SystemClock.elapsedRealtimeNanos()}")
                 }
                 if (!device.hasObject(By.desc("Collapse player"))) {
                     val bounds = surface(scenario, "player-surface").screenBounds
@@ -167,12 +173,12 @@ class NativePreviewCaptureTest {
                 screenshot("player.png")
                 tap("Open queue")
                 val expanded = settledSurface(scenario, "queue-surface")
-                check(expanded.bounds.top < collapsed.bounds.top && device.hasObject(By.desc("Close queue"))) { "Queue did not expand" }
+                check(expanded.bounds.top < collapsed.bounds.top && findSemantics(scenario, description = "Close queue") != null) { "Queue did not expand" }
                 logGeometry(scenario, "queue", "queue-surface")
                 screenshot("queue.png")
                 tap("Close queue")
                 settledSurface(scenario, "queue-surface", collapsed.bounds)
-                check(device.hasObject(By.desc("Open queue")))
+                check(findSemantics(scenario, description = "Open queue") != null)
                 scenario.onActivity { activity ->
                     frameWindow = activity.window
                     activity.window.addOnFrameMetricsAvailableListener(frameListener, Handler(frameThread.looper))
@@ -296,14 +302,23 @@ class NativePreviewCaptureTest {
         val screenBounds: Rect get() = bounds.translate(origin[0].toFloat(), origin[1].toFloat())
     }
 
-    private fun surface(scenario: ActivityScenario<MainActivity>, tag: String): Surface {
+    private fun surface(scenario: ActivityScenario<MainActivity>, tag: String): Surface =
+        requireNotNull(findSemantics(scenario, tag = tag)) { "Missing real surface: $tag" }
+
+    private fun findSemantics(scenario: ActivityScenario<MainActivity>, tag: String? = null, description: String? = null): Surface? {
+        check((tag == null) != (description == null))
         var found: Surface? = null
         scenario.onActivity { activity ->
             fun visit(view: View) {
                 if (view is ViewRootForTest) {
                     val nodes = view.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false)
-                    nodes.filter { it.config.getOrNull(SemanticsProperties.TestTag) == tag }.forEach { node ->
-                        check(found == null) { "Ambiguous surface: $tag" }
+                    nodes.filter { node ->
+                        if (tag != null) node.config.getOrNull(SemanticsProperties.TestTag) == tag
+                        else node.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(description) == true &&
+                            node.config.getOrNull(SemanticsActions.OnClick)?.action != null &&
+                            !node.config.contains(SemanticsProperties.Disabled)
+                    }.forEach { node ->
+                        check(found == null) { "Ambiguous semantics target: ${tag ?: description}" }
                         val origin = IntArray(2); view.view.getLocationOnScreen(origin)
                         found = Surface(node.boundsInRoot, origin, view.hasPendingMeasureOrLayout)
                     }
@@ -312,7 +327,7 @@ class NativePreviewCaptureTest {
             }
             visit(activity.window.decorView)
         }
-        return requireNotNull(found) { "Missing real surface: $tag" }
+        return found
     }
 
     private fun settledSurface(scenario: ActivityScenario<MainActivity>, tag: String, expected: Rect? = null): Surface {
