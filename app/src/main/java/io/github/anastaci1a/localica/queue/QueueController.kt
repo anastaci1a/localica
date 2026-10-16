@@ -24,7 +24,8 @@ import kotlin.coroutines.resumeWithException
 class QueueController(private val dao: QueueDao, private val preferences: QueuePreferences,
                       private val library: LibraryRepository,
                       private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-                      private val readers: NativeReaders = NativeReaders()) {
+                      private val readers: NativeReaders = NativeReaders(),
+                      private val sortSnapshot: suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot = { library.snapshots.first() }) {
     private val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
     private val commandJob: Job
     private val intents = PlaybackIntents()
@@ -389,7 +390,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         QueueEdits.randomize(queue, queue.id == state.value.library.activeId && player?.isPlaying == true)
     }
     fun applySort(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
-        editQueue(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.sort(queue, method, ascending) } }
+        editQueue(queueId, complete) { queue ->
+            val snapshot = if (method == io.github.anastaci1a.localica.library.TrackSort.Manual) null else sortSnapshot()
+            withContext(Dispatchers.Default) { QueueEdits.sort(queue, method, ascending, snapshot) }
+        }
     fun revertOrder(queueId: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (Boolean) -> Unit = {}) =
         editQueue(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.revertOrder(queue, checkpoint) } }
     private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: suspend (ListeningQueue) -> ListeningQueue) = submit {

@@ -105,9 +105,11 @@ object QueueEdits {
         else queue.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
     fun moveBefore(queue: ListeningQueue, ids: Set<String>, beforeId: String?) = reordered(queue,
         OccurrenceMoves.before(queue.entries, ids, beforeId) { it.id })
-    fun sort(queue: ListeningQueue, method: TrackSort, ascending: Boolean): ListeningQueue {
+    fun sort(queue: ListeningQueue, method: TrackSort, ascending: Boolean, snapshot: LibrarySnapshot? = null): ListeningQueue {
         val byId = queue.entries.associateBy { it.id }
-        val ids = queue.order.apply(queue.entries.map { SongRow(it.id, it.track) }, method, ascending)
+        val rows = queue.entries.map { SongRow(it.id, it.track) }
+        val ids = snapshot?.let { LiveOrder(it).target(queue.order, rows, method, ascending) }
+            ?: queue.order.apply(rows, method, ascending)
         return queue.copy(entries = ids.map { byId.getValue(it) }, order = queue.order.copy(sort = method, ascending = ascending))
     }
     fun revertOrder(queue: ListeningQueue, checkpoint: OrderCheckpoint): ListeningQueue {
