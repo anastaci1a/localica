@@ -108,7 +108,9 @@ class GlassActionRowTest {
             compose.runOnIdle { assertEquals(clicksBeforeDrag, randomizations) }
             randomize.performClick()
             assertWholeLabel("Randomize"); assertWholeLabel("Revert")
-            val expandedHeight = compose.onNodeWithTag("actions").getUnclippedBoundsInRoot().let { it.bottom - it.top }
+            // Compare the native layout footprint, not two separately converted Dp
+            // edges: scrolling changes their subtraction's floating-point rounding.
+            val expandedSize = compose.onNodeWithTag("actions").fetchSemanticsNode().size
             compose.onNodeWithContentDescription("More actions").performScrollTo().assertIsEnabled()
                 .performTouchInput { click(center) }
             val revert = compose.onNodeWithText("Revert")
@@ -118,7 +120,7 @@ class GlassActionRowTest {
                 button.right <= viewport.right && button.top >= viewport.top && button.bottom <= viewport.bottom)
             revert.assertIsDisplayed().performClick()
             compose.onNodeWithText("Revert").assertDoesNotExist()
-            assertEquals(expandedHeight, compose.onNodeWithTag("actions").getUnclippedBoundsInRoot().let { it.bottom - it.top })
+            assertEquals(expandedSize, compose.onNodeWithTag("actions").fetchSemanticsNode().size)
             compose.onNodeWithContentDescription("Previous actions").performScrollTo().assertIsEnabled()
                 .performTouchInput { click(center) }
             compose.onNodeWithText("Randomize").assertIsDisplayed()
