@@ -59,6 +59,16 @@ class QueuePlaybackTest {
                 assertEquals(third.id, queues.state.value.library.activeId)
                 assertEquals("Three", playback.state.value.trackId)
                 assertTrue("Appending to an inactive destination preserves playback", playback.state.value.isPlaying)
+                val playbackVisit = queues.state.value.library.active!!.journey!!.current
+                val reordered = java.util.concurrent.atomic.AtomicBoolean(false)
+                queues.moveQueueBefore(third.id, first.id) { reordered.set(it) }
+                await { reordered.get() }
+                assertEquals(listOf(third.id, first.id, second.id), queues.state.value.library.queues.map { it.id })
+                assertEquals(first.id, queues.state.value.browsedId)
+                assertEquals(third.id, queues.state.value.library.activeId)
+                assertEquals(playbackVisit, queues.state.value.library.active!!.journey!!.current)
+                assertEquals("Three", playback.state.value.trackId)
+                assertTrue("Reordering queues preserves active native playback", playback.state.value.isPlaying)
                 queues.rename(first.id, "Renamed")
                 queues.moveQueue(first.id, 2)
                 await { queues.state.value.library.queues.last().id == first.id }
