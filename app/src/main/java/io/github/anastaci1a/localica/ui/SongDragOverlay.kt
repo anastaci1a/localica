@@ -20,6 +20,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -33,7 +35,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
     val view = LocalView.current
     SideEffect {
         state.cancelRadius = with(density) { 30.dp.toPx() }
-        state.cancelBottom = with(density) { 20.dp.toPx() } + state.obscuredBottom
+        state.cancelMargin = with(density) { 20.dp.toPx() }
         state.onCancelHover = { entering -> view.performHapticFeedback(if (entering)
             android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
     }
@@ -133,7 +135,10 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
     } }
     if (!drag.dropping) {
         DragCancelTarget(drag.overCancel, "move",
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() })
+            Modifier.align(Alignment.BottomCenter)
+                // The source publishes its inset after composition. Read it during placement
+                // so the X and controls using the current panel occupancy share this frame.
+                .offset { IntOffset(0, -(20.dp.toPx() + state.obscuredBottom).roundToInt()) }
                 .zIndex(10f).testTag("cancel-drag"))
     }
 }
