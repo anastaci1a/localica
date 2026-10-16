@@ -65,7 +65,7 @@ internal fun controlValue(fraction: Float, range: ClosedFloatingPointRange<Float
 @Composable
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true) {
-    val enabledProgress by animateControlStateFloat(if (enabled) 1f else 0f, "Slider availability")
+    val enabledProgress by animateControlStateFloat(if (enabled) 1f else 0f, enabled, "Slider availability")
     val actualSteps = if (steps == 0 && valueRange.start == 0f && valueRange.endInclusive == 1f) 19 else steps
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val current by rememberUpdatedState(value)
@@ -256,8 +256,8 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
 @Composable
 internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier,
     enabled: Boolean = true) {
-    val progress by animateControlStateFloat(if (checked) 1f else 0f, "Checkmark")
-    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, "Checkbox availability")
+    val progress by animateControlStateFloat(if (checked) 1f else 0f, checked, "Checkmark")
+    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Checkbox availability")
     val foreground = LocalContentColor.current
     Box(modifier.size(48.dp).then(if (onCheckedChange != null)
         Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange) else Modifier)
@@ -276,8 +276,8 @@ internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> 
 
 @Composable
 internal fun GlassFilterChoice(checked: Boolean, onClick: () -> Unit, label: String, enabled: Boolean) {
-    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, "Filter availability")
-    val selection by animateControlStateFloat(if (checked) .09f else 0f, "Filter selection")
+    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Filter availability")
+    val selection by animateControlStateFloat(if (checked) .09f else 0f, checked, "Filter selection")
     Box(Modifier.heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically)) {
         LiquidGlassSurface(Modifier.height(40.dp).toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() })
             .semantics { selected = checked }.graphicsLayer { alpha = opacity },
