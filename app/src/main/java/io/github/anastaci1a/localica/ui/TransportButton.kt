@@ -26,7 +26,7 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
     modifier: Modifier, iconSize: Dp, tint: Color, enabled: Boolean, reducedMotion: Boolean) {
     val pause by animateFloatAsState(if (playing) 1f else 0f,
         tween(if (reducedMotion) 0 else 260, easing = FastOutSlowInEasing), label = "Play pause morph")
-    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, "Transport availability", reducedMotion)
+    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Transport availability", reducedMotion)
     val travel = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var animation by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
