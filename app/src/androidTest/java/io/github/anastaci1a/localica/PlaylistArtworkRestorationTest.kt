@@ -4,6 +4,10 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
+import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -92,6 +96,10 @@ class PlaylistArtworkRestorationTest {
     }
     private var fixtureIndex = 0
     private var fixtureTag = ""
+    private var fixtureUri = ""
+    private var diagnosticRegistry: SaveableStateRegistry? = null
+    private var diagnosticView: android.view.View? = null
+    private var diagnosticLifecycle: androidx.lifecycle.Lifecycle? = null
     private fun chooseRecent() {
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().isNotEmpty() }
         compose.awaitExpectedWindowFocus(compose.onNodeWithText("Open gallery"))
@@ -102,7 +110,61 @@ class PlaylistArtworkRestorationTest {
         awaitCrop()
     }
     private fun awaitCrop() {
-        compose.waitUntil(10000) { compose.onAllNodesWithTag("artwork-crop").fetchSemanticsNodes().isNotEmpty() }
+        try {
+            compose.waitUntil(10000) { compose.onAllNodesWithTag("artwork-crop").fetchSemanticsNodes().isNotEmpty() }
+        } catch (failure: Throwable) {
+            // Inspect only after the original timeout. Never retry input, extend it, or replace it.
+            fun capture(block: () -> Unit) {
+                runCatching(block).exceptionOrNull()?.let(failure::addSuppressed)
+            }
+            capture { compose.runOnUiThread {
+                val saved = diagnosticRegistry?.performSave()
+                val workflows = mutableListOf<String>()
+                fun inspect(value: Any?) {
+                    when (value) {
+                        is Map<*, *> -> value.values.forEach(::inspect)
+                        is List<*> -> {
+                            if (value.size == 4 && (value[0] as? String)?.startsWith("Playlist:") == true &&
+                                value[1] in ArtworkStage.entries.map { it.name }) {
+                                val crop = value[2] as? String
+                                workflows += "target=${value[0]} stage=${value[1]} " +
+                                    "cropMatchesFixture=${crop == fixtureUri} " +
+                                    "crop=${if (crop == fixtureUri) crop else "<absent-or-other>"}"
+                            }
+                            value.forEach(::inspect)
+                        }
+                    }
+                }
+                inspect(saved)
+                android.util.Log.e("ArtworkRestoration", "awaitCrop timeout savedEntries=${saved?.size} " +
+                    "workflows=$workflows lifecycle=${diagnosticLifecycle?.currentState} " +
+                    "attached=${diagnosticView?.isAttachedToWindow} windowFocus=${diagnosticView?.hasWindowFocus()}")
+            } }
+            capture {
+                val cropCount = compose.onAllNodesWithTag("artwork-crop").fetchSemanticsNodes().size
+                val saveButtons = compose.onAllNodesWithText("Use square crop").fetchSemanticsNodes()
+                val enabled = saveButtons.map { !it.config.contains(SemanticsProperties.Disabled) }
+                val preparing = compose.onAllNodesWithText("Preparing…").fetchSemanticsNodes().size
+                android.util.Log.e("ArtworkRestoration", "readiness from existing semantics: " +
+                    "cropNodes=$cropCount saveEnabled=$enabled preparing=$preparing; " +
+                    "bitmap not directly observed; crop node presence implies loaded bitmap; error/loading text follows")
+                for (unmerged in listOf(false, true)) {
+                    val tree = compose.onAllNodes(isRoot(), useUnmergedTree = unmerged).printToString()
+                    // Only the synthetic fixture URI is relevant; omit other URI text from diagnostics.
+                    val sanitized = Regex("(?:file|content)://[^\\s,)]+")
+                        .replace(tree) { if (it.value == fixtureUri) it.value else "<other-uri>" }
+                    sanitized.chunked(3000).forEachIndexed { index, chunk ->
+                        android.util.Log.e("ArtworkRestoration", "unmerged=$unmerged part=$index $chunk")
+                    }
+                }
+            }
+            capture { android.util.Log.e("ArtworkRestoration", InstrumentationRegistry.getInstrumentation()
+                .uiAutomation.windows.joinToString { window ->
+                    "id=${window.id} type=${window.type} focused=${window.isFocused} " +
+                        "active=${window.isActive} package=${window.root?.packageName}"
+                }) }
+            throw failure
+        }
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("artwork-crop"))
     }
 
@@ -125,7 +187,7 @@ class PlaylistArtworkRestorationTest {
                 bitmap.recycle()
             }
             preferences.edit().remove("recent").commit()
-            val fixtureUri = Uri.fromFile(input).toString()
+            fixtureUri = Uri.fromFile(input).toString()
             fixtureTag = "recent-artwork-$fixtureUri"
             CoverImages(context).remember(fixtureUri)
             fixtureIndex = kotlinx.coroutines.runBlocking {
@@ -150,6 +212,11 @@ class PlaylistArtworkRestorationTest {
             val target = mutableStateOf(controller.state.value.playlists.first().id)
             val restore = StateRestorationTester(compose)
             restore.setContent { LocalicaTheme {
+                // Retain references only. No save/read/log work is performed on the passing path.
+                val registry = LocalSaveableStateRegistry.current
+                val view = LocalView.current
+                val lifecycle = LocalLifecycleOwner.current.lifecycle
+                SideEffect { diagnosticRegistry = registry; diagnosticView = view; diagnosticLifecycle = lifecycle }
                 val state by controller.state.collectAsState()
                 val playlist = state.playlists.first { it.id == target.value }
                 var open by remember { mutableStateOf(false) }
