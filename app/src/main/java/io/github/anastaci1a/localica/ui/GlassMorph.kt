@@ -232,6 +232,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val p = progress.value.coerceIn(0f, 1f)
+        // Composition observation only, not proof of a committed/presented frame.
+        BufferedChoiceTrace.active?.record(BufferedChoiceTrace.MORPH_COMPOSED,
+            identity = System.identityHashCode(anchor), bits = (if (visible) 1 else 0) or
+                (if (!visible || p < .85f) 4 else 0), x = p)
         val geometry = if (anchor.quiet) ((p - .14f) / .86f).coerceIn(0f, 1f) else p
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
             .pointerInput(visible) { detectTapGestures { if (visible) dismissNow() } }) {
@@ -354,7 +358,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
                             .then(if (!visible || p < .85f) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
-                                awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
+                                awaitPointerEventScope {
+                                    while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach {
+                                        BufferedChoiceTrace.active?.record(BufferedChoiceTrace.GATE_CONSUME,
+                                            identity = System.identityHashCode(anchor),
+                                            bits = (if (it.pressed) 1 else 0) or (if (it.isConsumed) 2 else 0),
+                                            eventTime = it.uptimeMillis, x = it.position.x, y = it.position.y)
+                                        it.consume()
+                                    }
+                                }
                             } else Modifier)) {
                             CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
                                 LocalModalBackdrop provides completePanel,

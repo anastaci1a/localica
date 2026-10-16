@@ -51,41 +51,66 @@ class ChoiceControlsTest {
     }
 
     @Test fun sortAndViewTabsKeepOneDraftAndSaveBothTogether() {
-        var saved: BrowseStyle? = null
-        compose.setContent { LocalicaTheme {
-            BrowseSortDialog(BrowseRoute(MainTab.Albums), BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
-        } }
-        choicePhase("open sort choices") { compose.onNodeWithText("Sort by").performClick() }
-        choicePhase("single Year tap selects draft") {
-            val year = compose.onNodeWithText("Year").performScrollTo()
-            android.util.Log.i("ChoiceControlsTest", "Year tap bounds=${year.fetchSemanticsNode().boundsInRoot}")
-            year.performClick().assertIsSelected()
-        }
-        choicePhase("Select commits Year to parent") {
-            compose.onNodeWithText("Select", substring = false).performClick()
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Select", substring = false).fetchSemanticsNodes().isEmpty() }
-            compose.onNodeWithText("Year").assertIsDisplayed()
-        }
-        val body = compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot
-        compose.onNodeWithText("Save only for this list").assertDoesNotExist()
-        compose.onNodeWithText("View", substring = false).performClick().assertIsSelected()
-        assertEquals(body, compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot)
-        compose.onNodeWithText("Save only for this list").assertDoesNotExist()
-        compose.onNodeWithText("Gallery", substring = false).performClick()
-        compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
-        compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
-        choicePhase("return to Sort retains Year") {
-            // Selected tab semantics update before the incoming page is placed.
-            compose.waitUntil(5000) {
-                runCatching { compose.onNodeWithText("Year").assertIsDisplayed() }.isSuccess
+        val trace = ChoiceTraceBuffer()
+        BufferedChoiceTrace.active = trace
+        var primaryFailure: Throwable? = null
+        try {
+            var saved: BrowseStyle? = null
+            compose.setContent { LocalicaTheme {
+                BrowseSortDialog(BrowseRoute(MainTab.Albums), BrowseStyle(), false, {}, { value, _ -> saved = value }, {})
+            } }
+            choicePhase("open sort choices") { compose.onNodeWithText("Sort by").performClick() }
+            choicePhase("single Year tap selects draft") {
+                val year = compose.onNodeWithText("Year").performScrollTo()
+                android.util.Log.i("ChoiceControlsTest", "Year tap bounds=${year.fetchSemanticsNode().boundsInRoot}")
+                year.performClick().assertIsSelected()
             }
-            compose.onNodeWithText("Year").assertIsDisplayed()
-        }
-        compose.onNodeWithText("Save").performClick()
-        compose.runOnIdle {
-            assertEquals(TrackSort.Year, saved!!.sort)
-            assertEquals(Presentation.Standard, saved!!.presentation)
-            assertEquals(3, saved!!.itemsPerRow)
+            choicePhase("Select commits Year to parent") {
+                compose.onNodeWithText("Select", substring = false).performClick()
+                compose.waitUntil(5000) { compose.onAllNodesWithText("Select", substring = false).fetchSemanticsNodes().isEmpty() }
+                compose.onNodeWithText("Year").assertIsDisplayed()
+            }
+            val body = compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithText("Save only for this list").assertDoesNotExist()
+            compose.onNodeWithText("View", substring = false).performClick().assertIsSelected()
+            assertEquals(body, compose.onNodeWithTag("browse-options-body").fetchSemanticsNode().boundsInRoot)
+            compose.onNodeWithText("Save only for this list").assertDoesNotExist()
+            compose.onNodeWithText("Gallery", substring = false).performClick()
+            compose.onNodeWithContentDescription("Items per row").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
+            compose.onNodeWithText("Sort", substring = false).performClick().assertIsSelected()
+            choicePhase("return to Sort retains Year") {
+                // Selected tab semantics update before the incoming page is placed.
+                compose.waitUntil(5000) {
+                    runCatching { compose.onNodeWithText("Year").assertIsDisplayed() }.isSuccess
+                }
+                compose.onNodeWithText("Year").assertIsDisplayed()
+            }
+            compose.onNodeWithText("Save").performClick()
+            compose.runOnIdle {
+                assertEquals(TrackSort.Year, saved!!.sort)
+                assertEquals(Presentation.Standard, saved!!.presentation)
+                assertEquals(3, saved!!.itemsPerRow)
+            }
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
+        } finally {
+            // No added synchronization or logging until the original test flow has ended.
+            val exportFailure = runCatching {
+                try { compose.runOnUiThread { BufferedChoiceTrace.active = null } }
+                catch (detachFailure: Throwable) {
+                    runCatching { android.util.Log.e("ChoiceOriginalBuffer",
+                        "BUFFER unavailable: UI-thread detach failed; unsafe export omitted", detachFailure) }
+                        .exceptionOrNull()?.let(detachFailure::addSuppressed)
+                    throw detachFailure
+                }
+                trace.export().forEach { android.util.Log.i("ChoiceOriginalBuffer", it) }
+            }.exceptionOrNull()
+            BufferedChoiceTrace.active = null
+            if (exportFailure != null) {
+                val primary = primaryFailure
+                if (primary != null) primary.addSuppressed(exportFailure) else throw exportFailure
+            }
         }
     }
 
