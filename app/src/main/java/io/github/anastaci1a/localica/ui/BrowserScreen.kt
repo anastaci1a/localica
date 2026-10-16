@@ -52,6 +52,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0, sortOrigin: GlassAnchor? = null,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, initialPlayingPosition: Boolean = false, onBack: () -> Unit = {},
     onAppearance: (androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color) -> Unit = { _, _ -> }) {
+    val searchEditTrace = LocalSearchEditTrace.current
+    if (searchEditTrace != null && route.search) {
+        DisposableEffect(route.key) {
+            searchEditTrace("editor composition attach key=${route.key.hashCode()} length=${route.text.length} committed=${route.queryCommitted}")
+            onDispose { searchEditTrace("editor composition dispose key=${route.key.hashCode()}") }
+        }
+        SideEffect { searchEditTrace("editor composition render key=${route.key.hashCode()} length=${route.text.length} committed=${route.queryCommitted}") }
+    }
     var localSearchOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val searchAnchor = rememberGlassAnchor()
     val modalBackdrop = LocalModalBackdrop.current
@@ -83,6 +91,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             style = updated.copy(sort = currentRoute.querySort ?: updated.sort, ascending = currentRoute.queryAscending ?: updated.ascending)
         }
         onDispose(unsubscribe)
+    }
+    fun editSearchText(text: String) {
+        searchEditTrace?.invoke("editor value key=${route.key.hashCode()} oldLength=${route.text.length} newLength=${text.length} committed=${route.queryCommitted}")
+        onSearchEdit(route.copy(text = text, querySort = style.sort, queryAscending = style.ascending))
     }
     val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
     val showFilters = route.collection == null && (route.tab == MainTab.Library || route.globalSearch) && filters.isNotEmpty()
@@ -354,7 +366,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
         .then(if (searchAnchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)) {
         header()
-        if (route.search && popupDismiss != null) ClearableTextField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) },
+        if (route.search && popupDismiss != null) ClearableTextField(route.text, ::editSearchText,
             singleLine = true, placeholder = { Text("Search " + (route.title ?: route.tab.label), maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null) },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
@@ -364,7 +376,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                 unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
-        else if (route.search) GlassSearchField(route.text, { onSearchEdit(route.copy(text = it, querySort = style.sort, queryAscending = style.ascending)) },
+        else if (route.search) GlassSearchField(route.text, ::editSearchText,
             if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}", enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submitSearch() }),
@@ -598,7 +610,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     BrowserScreen(library, playlists, searchRoute, { localSearch = localSearch.update(it) }, onOpen, onSettings,
                         onPlay, queues, playlistController, enabled, playerOpen, pins, onPin, queueState = queueState,
                         playingTrackId = playingTrackId, playingEntryId = playingEntryId, reducedMotion = reducedMotion,
-                        onSearchEdit = { localSearch = localSearch.editSearch(it) },
+                        onSearchEdit = { incoming ->
+                            val before = localSearch.route
+                            val next = localSearch.editSearch(incoming)
+                            searchEditTrace?.invoke("route edit currentKey=${before.key.hashCode()} incomingKey=${incoming.key.hashCode()} nextKey=${next.route.key.hashCode()} oldLength=${before.text.length} incomingLength=${incoming.text.length} nextLength=${next.route.text.length} committed=${before.queryCommitted}")
+                            localSearch = next
+                        },
                         onSearchCommit = { localSearch = localSearch.commitSearch() },
                         libraryFilters = libraryFilters, popupDismiss = ::closeSearch, focusRequest = localFocusRequest)
                 } }
