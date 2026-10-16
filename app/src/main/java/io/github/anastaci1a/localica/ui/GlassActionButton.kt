@@ -18,6 +18,8 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.offset
 import io.github.anastaci1a.localica.R
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.Role
@@ -73,10 +75,15 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
         // horizontalScroll updates maxValue during measurement. Decide the footer
         // in this same pass, avoiding a delayed popup-envelope height change.
         val navigation = if (scroll.maxValue > 0) children[1].measure(
-            constraints.copy(minHeight = 0, maxHeight = (constraints.maxHeight - strip.height).coerceAtLeast(0))) else null
+            glassActionNavigationConstraints(constraints, strip.height)) else null
         layout(strip.width, strip.height + (navigation?.height ?: 0)) {
             strip.placeRelative(0, 0)
             navigation?.placeRelative(0, strip.height)
         }
     }
 }
+
+/** offset preserves Infinity for a vertically scrolling parent; arithmetic on
+ * that sentinel would produce an unrepresentable finite Compose constraint. */
+internal fun glassActionNavigationConstraints(constraints: Constraints, stripHeight: Int): Constraints =
+    constraints.copy(minHeight = 0).offset(vertical = -stripHeight)

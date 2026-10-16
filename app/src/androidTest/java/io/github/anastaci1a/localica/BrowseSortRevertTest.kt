@@ -44,7 +44,10 @@ class BrowseSortRevertTest {
             compose.onNodeWithText(label, useUnmergedTree = true)
                 .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
             assertEquals("Action labels must stay whole", 1, layouts.single().lineCount)
-            assertFalse(layouts.single().hasVisualOverflow)
+            val layout = layouts.single()
+            assertFalse("$label overflow: size=${layout.size}, paragraph=${layout.multiParagraph.width}x${layout.multiParagraph.height}, " +
+                "constraints=${layout.layoutInput.constraints}, width=${layout.didOverflowWidth}, height=${layout.didOverflowHeight}",
+                layout.hasVisualOverflow)
         }
         compose.onNodeWithText("Revert").assertIsDisplayed().performClick()
         compose.onNodeWithText("Couldn’t save this order. Try again.").assertExists()
