@@ -9,7 +9,16 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
+import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.MainTab
+import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.TabLensStyle
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -18,16 +27,54 @@ import org.junit.Test
 /** Exercises the production controls; optical raster registration has its own acceptance gate. */
 class SelectorTrackControlsTest {
     @get:Rule val compose = createComposeRule()
+    private var reviewStage by mutableIntStateOf(0)
+    private lateinit var reviewView: android.view.View
+    private var reviewName: String? = null
 
-    @Test fun navbarPullMovesTheShellLabelsAndSelectorTowardTheSameWall() {
+    @Test fun navbarPullMovesTheShellLabelsAndSelectorTowardTheSameWall() = navbar(TabLensStyle.Adjustable)
+    @Test fun clearOverlayPullKeepsItsCurrentInkAndShellGeometry() = navbar(TabLensStyle.Overlay)
+
+    private fun navbar(style: TabLensStyle) {
+        reviewName = style.name
+        var source: FrostedBackdrop? = null
         compose.setContent { LocalicaTheme {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(280.dp, 64.dp)) {
-                    SlidingTabs(listOf(MainTab.Home, MainTab.Library, MainTab.Songs), MainTab.Home, { 0f }) {}
+            reviewView = LocalView.current
+            val backdrop = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+            source = backdrop
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
+                overlayForeground = true, blur = 0f, whiteTint = 0f, contrast = 0f)) {
+                Box(Modifier.fillMaxSize().testTag("selector-review"), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop)) {
+                        val cell = 24.dp.toPx()
+                        for (y in 0..(size.height / cell).toInt()) for (x in 0..(size.width / cell).toInt())
+                            drawRect(if ((x + y) % 2 == 0) Color(0xffc8e5ef) else Color(0xffe8d9bc),
+                                Offset(x * cell, y * cell), Size(cell, cell))
+                    }
+                    Box(Modifier.size(280.dp, 64.dp)) {
+                        SlidingTabs(listOf(MainTab.Home, MainTab.Library, MainTab.Songs), MainTab.Home,
+                            { 0f }, source = backdrop) {}
+                    }
+                    PresentationMarker(Modifier.align(Alignment.TopStart)) { reviewStage }
                 }
             }
         } }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
         checkPull("tab-track-host", "tab-track-shell", "tab-selector", "tab-option-content-0", false)
+    }
+
+    private fun review(stage: String) {
+        val name = reviewName ?: return
+        if (InstrumentationRegistry.getArguments().getString("selectorReview") != "true") return
+        compose.runOnIdle { reviewStage++ }
+        compose.mainClock.advanceTimeByFrame()
+        val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("selector-review"), reviewStage) { reviewView }
+        val image = android.graphics.Bitmap.createBitmap(IntArray(pixels.width * pixels.height) {
+            pixels[it % pixels.width, it / pixels.width].toArgb()
+        }, pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
+        try {
+            java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir,
+                "selector-$name-$stage.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        } finally { image.recycle() }
     }
 
     @Test fun horizontalChoicesShareTheSameContactGeometry() {
@@ -91,6 +138,7 @@ class SelectorTrackControlsTest {
         val shell = bounds(shellTag)
         val lens = bounds(lensTag)
         val content = transformedBounds(contentTag)
+        review("rest")
         compose.mainClock.autoAdvance = false
         var held = false
         try {
@@ -103,6 +151,7 @@ class SelectorTrackControlsTest {
             val stretched = bounds(shellTag)
             val pressed = bounds(lensTag)
             val movedContent = transformedBounds(contentTag)
+            review("held")
             assertEquals(restingHost, bounds(hostTag))
             val oldGap = if (vertical) lens.top.value - shell.top.value else lens.left.value - shell.left.value
             val newGap = if (vertical) pressed.top.value - stretched.top.value else pressed.left.value - stretched.left.value
@@ -118,6 +167,7 @@ class SelectorTrackControlsTest {
             val settled = bounds(shellTag)
             assertEquals(shell.width.value, settled.width.value, .1f)
             assertEquals(shell.height.value, settled.height.value, .1f)
+            review("released")
         } finally {
             if (held) host.performTouchInput { cancel() }
             compose.mainClock.autoAdvance = true

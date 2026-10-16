@@ -71,12 +71,7 @@ internal class LensMeshRenderer {
                 // a sawtooth along the curve when those triangles interpolate.
                 val ray = lensRay(f.copy(distance = f.distance.coerceAtLeast(0f)), shape.span, depth, flattening)
                 rays[2 * i] = ray.offset.x * power; rays[2 * i + 1] = ray.offset.y * power
-                val facing = (ray.normalXY.x * -.45f + ray.normalXY.y * -.75f + ray.normalZ * .6f) / 1.06066f
-                val grazing = 1f - ray.normalZ
-                val reflection = (.018f * grazing + .26f * grazing * grazing * grazing) * power
-                val opacity = reflection * if (facing >= 0f) facing else -facing * .3f
-                val light = (tone.channel(if (facing >= 0f) 1f else 0f) * 255).toInt()
-                highlights[i] = android.graphics.Color.argb((opacity * 255).toInt().coerceIn(0, 255), light, light, light)
+                highlights[i] = lensReflectionColor(ray, tone, power)
             }
         }
         scenePaint.shader = snapshot?.let { shaders.getOrPut(it) {
