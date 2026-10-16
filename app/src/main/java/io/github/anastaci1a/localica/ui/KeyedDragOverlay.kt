@@ -16,6 +16,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -28,11 +30,9 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     val density = LocalDensity.current
     val view = LocalView.current
     val cancelSize = minOf(with(density) { CompactControlSize.toPx() }, state.viewportHeight.toFloat()).coerceAtLeast(1f)
-    val cancelBottom = (with(density) { 20.dp.toPx() } + state.obscuredBottom)
-        .coerceIn(0f, (state.viewportHeight - cancelSize).coerceAtLeast(0f))
     SideEffect {
         state.cancelRadius = cancelSize / 2f
-        state.cancelBottom = cancelBottom
+        state.cancelMargin = with(density) { 20.dp.toPx() }
         state.onCancelHover = { entering -> view.performHapticFeedback(if (entering)
             android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
     }
@@ -125,7 +125,9 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     } }
     if (!drag.dropping) {
         DragCancelTarget(drag.overCancel, "move",
-            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { cancelBottom.toDp() })
+            Modifier.align(Alignment.BottomCenter)
+                // Read late-published panel occupancy during placement, as hit testing does.
+                .offset { IntOffset(0, -state.cancelBottom.roundToInt()) }
                 .size(with(density) { cancelSize.toDp() })
                 .zIndex(10f).testTag("cancel-drag"))
     }

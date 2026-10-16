@@ -59,7 +59,11 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
     var viewportWidth by mutableIntStateOf(0)
     var obscuredBottom by mutableFloatStateOf(0f)
     var cancelRadius = 0f
-    var cancelBottom = 0f
+    var cancelMargin = 0f
+    // Occupancy can change after composition. Hit testing and placement must read
+    // the same current inset, including the bounded selector's small-height clamp.
+    val cancelBottom get() = (cancelMargin + obscuredBottom)
+        .coerceIn(0f, (viewportHeight - cancelRadius * 2f).coerceAtLeast(0f))
     var onCancelHover: (Boolean) -> Unit = {}
     val cancelCenter get() = Offset(viewportWidth / 2f, viewportHeight - cancelBottom - cancelRadius)
     fun rendered(fallback: List<T>): List<T?> = drag?.let { d ->
