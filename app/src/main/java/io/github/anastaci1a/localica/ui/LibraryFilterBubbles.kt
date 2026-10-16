@@ -105,7 +105,7 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
         .padding(vertical = shadowInset).padding(horizontal = horizontalInset).width(total).height(listPillTargetHeight())) {
         GlassShadowScope(Modifier.fillMaxSize()) {
         items.forEach { item -> key(item) {
-            val selection by animateControlStateFloat(if (item in selected) .07f else 0f, "Library filter selection", reducedMotion)
+            val selection by animateControlStateFloat(if (item in selected) .07f else 0f, item in selected, "Library filter selection", reducedMotion)
             val anchor = rememberGlassAnchor()
             val source = LocalFrostedBackdrop.current
             SideEffect { anchor.source = source; anchor.face = { Text(label(item), style = style, maxLines = 1) } }
