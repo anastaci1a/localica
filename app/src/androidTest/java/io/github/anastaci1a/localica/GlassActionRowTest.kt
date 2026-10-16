@@ -29,6 +29,7 @@ class GlassActionRowTest {
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
         assertEquals(1, results.single().lineCount)
         val layout = results.single()
+        assertTrue("$label must receive a bounded paragraph width", layout.layoutInput.constraints.hasBoundedWidth)
         assertFalse("$label overflow: size=${layout.size}, paragraph=${layout.multiParagraph.width}x${layout.multiParagraph.height}, " +
             "constraints=${layout.layoutInput.constraints}, width=${layout.didOverflowWidth}, height=${layout.didOverflowHeight}",
             layout.hasVisualOverflow)
