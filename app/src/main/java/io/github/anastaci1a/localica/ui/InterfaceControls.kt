@@ -205,9 +205,17 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val scope = rememberCoroutineScope()
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val direction = if (rtl) -1f else 1f
-    val body = rememberGlassBody({ position.value }, { pressure }, { if (pressed || dragging) 1f else 0f })
-    val active by animateFloatAsState(if (pressed || dragging || position.isRunning) 1f else 0f,
-        tween(if (reduced) 0 else 180), label = "Switch lens")
+    // A tap's destination is already committed before the settling effect starts.
+    // Keep the same optical body through direct contact and automatic travel:
+    // releasing into a thick neutral lens would sample only the opaque track.
+    val engaged by remember(checked, reduced) { derivedStateOf {
+        pressed || dragging || (!reduced && (position.isRunning || position.value != if (checked) 1f else 0f))
+    } }
+    val active by animateFloatAsState(if (engaged) 1f else 0f,
+        tween(if (reduced) 0 else if (engaged) (80f / speed).toInt().coerceAtLeast(1) else 180,
+            easing = if (engaged) androidx.compose.animation.core.LinearOutSlowInEasing
+                else androidx.compose.animation.core.FastOutSlowInEasing), label = "Switch lens")
+    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
     Box(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.pointerInput(rtl) {
