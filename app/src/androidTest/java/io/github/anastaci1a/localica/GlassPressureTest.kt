@@ -66,10 +66,110 @@ class GlassPressureTest {
         assertEquals(initial.height, displayedLensBounds().height, 1f)
         compose.mainClock.autoAdvance = true
     }
+    @Test fun verticalReleaseKeepsTheRenderedReboundOnTravelAtDefaultDamping() = axisRelease(false, 8f)
+    @Test fun verticalReleaseKeepsTheRenderedReboundOnTravelAtHigherDamping() = axisRelease(false, 20f)
+    @Test fun horizontalReleaseUsesTheSameRenderedCrossReturnAtDefaultDamping() = axisRelease(true, 8f)
+    @Test fun horizontalReleaseUsesTheSameRenderedCrossReturnAtHigherDamping() = axisRelease(true, 20f)
+
+    @Test fun retouchAndCancelKeepThePresentedCrossContourContinuous() {
+        checkRoundedContainment = true
+        pressureChoices(listOf("First", "Second"))
+        val rest = displayedTrackFrame()
+        compose.mainClock.autoAdvance = false
+        var heldPointer = false
+        var failure: Throwable? = null
+        try {
+            compose.onNodeWithText("First").performTouchInput {
+                down(center); heldPointer = true; moveBy(Offset(0f, -rest.first.height * 2f))
+            }
+            compose.mainClock.advanceTimeBy(400)
+            displayedTrackFrame()
+            compose.onNodeWithText("First").performTouchInput { up(); heldPointer = false }
+            compose.mainClock.advanceTimeBy(96)
+            val before = displayedTrackFrame()
+            compose.onNodeWithText("First").performTouchInput { down(center); heldPointer = true }
+            compose.mainClock.advanceTimeByFrame()
+            val after = displayedTrackFrame()
+            assertEquals("Re-touch inherits the presented lens width", before.first.width, after.first.width, 1f)
+            assertEquals("Re-touch inherits the presented shell width", before.second.width, after.second.width, 1f)
+            compose.mainClock.advanceTimeBy(240)
+            val held = displayedTrackFrame()
+            assertTrue("The re-grab stays inside the current shell", held.first.left >= held.second.left - 1f && held.first.right <= held.second.right + 1f)
+            compose.onNodeWithText("First").performTouchInput { cancel(); heldPointer = false }
+            compose.mainClock.advanceTimeBy(1800)
+            val final = displayedTrackFrame()
+            assertEquals(rest.first.width, final.first.width, 1f)
+            assertEquals(rest.first.height, final.first.height, 1f)
+        } catch (error: Throwable) {
+            failure = error
+            throw error
+        } finally {
+            finishAxisInput(heldPointer, failure)
+        }
+    }
+
+    private fun axisRelease(horizontal: Boolean, damping: Float) {
+        checkRoundedContainment = true
+        pressureChoices(listOf("First", "Second", "Third"), horizontal, damping)
+        val rest = displayedLensBounds()
+        fun cross(rect: Rect) = if (horizontal) rect.height else rect.width
+        fun axial(rect: Rect) = if (horizontal) rect.width else rect.height
+        compose.mainClock.autoAdvance = false
+        var heldPointer = false
+        var failure: Throwable? = null
+        try {
+            compose.onNodeWithText("First").performTouchInput {
+                down(center); heldPointer = true
+                moveBy(if (horizontal) Offset(-rest.width * 2f, 0f) else Offset(0f, -rest.height * 2f))
+            }
+            compose.mainClock.advanceTimeBy(400)
+            val held = displayedLensBounds()
+            assertTrue("Held warp remains axial: $rest -> $held", axial(held) < axial(rest) - 1f)
+            compose.onNodeWithText("First").performTouchInput { up(); heldPointer = false }
+            val frames = mutableListOf(held)
+            var previousDistance = kotlin.math.abs(cross(held) - cross(rest))
+            repeat(30) {
+                compose.mainClock.advanceTimeBy(32)
+                val frame = displayedLensBounds()
+                frames += frame
+                val distance = kotlin.math.abs(cross(frame) - cross(rest))
+                assertTrue("Cross return must not grow a new lateral excursion: $held -> $frames", distance <= previousDistance + 1f)
+                assertTrue("Cross return stays between held and rest, with raster tolerance: $frame",
+                    cross(frame) >= minOf(cross(held), cross(rest)) - 1f &&
+                        cross(frame) <= maxOf(cross(held), cross(rest)) + 1f)
+                previousDistance = distance
+            }
+            val travelSpan = frames.maxOf(::axial) - frames.minOf(::axial)
+            val crossSpan = frames.maxOf(::cross) - frames.minOf(::cross)
+            android.util.Log.i("GlassAxisReturn", "horizontal=$horizontal damping=$damping rest=$rest held=$held travelSpan=$travelSpan crossSpan=$crossSpan frames=$frames")
+            assertTrue("The actual rendered release must be travel-axis dominant", travelSpan > crossSpan + 1f)
+            compose.mainClock.advanceTimeBy(1600)
+            val final = displayedLensBounds()
+            assertEquals(rest.width, final.width, 1f)
+            assertEquals(rest.height, final.height, 1f)
+        } catch (error: Throwable) {
+            failure = error
+            throw error
+        } finally {
+            finishAxisInput(heldPointer, failure)
+        }
+    }
+
+    private fun finishAxisInput(held: Boolean, failure: Throwable?) {
+        try {
+            if (held) compose.onNodeWithText("First").performTouchInput { cancel() }
+        } catch (cleanup: Throwable) {
+            if (failure != null) failure.addSuppressed(cleanup) else throw cleanup
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
+    private var checkRoundedContainment = false
     private var presentationStage by mutableIntStateOf(0)
     private lateinit var pressureView: View
 
-    private fun pressureChoices(labels: List<String>) {
+    private fun pressureChoices(labels: List<String>, horizontal: Boolean = false, damping: Float = 8f) {
         var source: FrostedBackdrop? = null
         compose.setContent { LocalicaTheme {
             pressureView = LocalView.current
@@ -81,8 +181,9 @@ class GlassPressureTest {
                 // track remain on blue, allowing a renderer-independent scan.
                 Canvas(Modifier.matchParentSize().recordFrostedBackdrop(backing)) { drawRect(Color.Red) }
                 Canvas(Modifier.matchParentSize()) { drawRect(Color.Blue) }
-                CompositionLocalProvider(LocalFrostedBackdrop provides backing) {
-                    Box(Modifier.padding(12.dp)) { GlassChoices(labels, 0) { } }
+                CompositionLocalProvider(LocalFrostedBackdrop provides backing,
+                    LocalGlassAppearance provides io.github.anastaci1a.localica.navigation.GlassAppearance(shapeDamping = damping)) {
+                    Box(Modifier.padding(12.dp)) { GlassChoices(labels, 0, horizontal = horizontal) { } }
                 }
                 PresentationMarker { presentationStage }
             }
@@ -95,7 +196,9 @@ class GlassPressureTest {
 
     /** Read both silhouettes from the same presented frame, never layout semantics. */
     private fun displayedTrackFrame(): Pair<Rect, Rect> {
-        compose.runOnIdle { presentationStage++ }
+        // The shared marker encodes one five-bit token in its red channel.
+        // Reuse only after a full capture cycle, always distinct from the previous frame.
+        compose.runOnIdle { presentationStage = (presentationStage + 1) % 32 }
         val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("pressure-scene"), presentationStage) { pressureView }
         fun scan(accepts: (Color) -> Boolean): Rect {
             var left = pixels.width; var top = pixels.height; var right = -1; var bottom = -1
@@ -110,6 +213,21 @@ class GlassPressureTest {
         }
         fun red(color: Color) = color.red > .6f && color.green < .4f && color.blue < .4f
         val lens = scan(::red)
+        if (checkRoundedContainment) {
+            val sceneBounds = compose.onNodeWithTag("pressure-scene").fetchSemanticsNode().boundsInRoot
+            val layoutShell = compose.onNodeWithTag("choice-track-shell").fetchSemanticsNode().boundsInRoot
+                .translate(-sceneBounds.topLeft)
+            val radius = with(compose.density) { 24.dp.toPx() }.coerceAtMost(minOf(layoutShell.width, layoutShell.height) / 2f)
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) if (red(pixels[x, y])) {
+                val px = x + .5f; val py = y + .5f
+                val horizontalStraight = (layoutShell.width / 2f - radius).coerceAtLeast(0f)
+                val verticalStraight = (layoutShell.height / 2f - radius).coerceAtLeast(0f)
+                val cx = px.coerceIn(layoutShell.center.x - horizontalStraight, layoutShell.center.x + horizontalStraight)
+                val cy = py.coerceIn(layoutShell.center.y - verticalStraight, layoutShell.center.y + verticalStraight)
+                val distance = kotlin.math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy))
+                assertTrue("Rendered lens escaped the rounded wall at ($x,$y), shell=$layoutShell radius=$radius", distance <= radius + 1f)
+            }
+        }
         // The gray track is 10% black over the fixture's solid blue; include its
         // red lens where that covers the track. Untinted exterior blue is excluded.
         val shell = scan { color -> red(color) ||

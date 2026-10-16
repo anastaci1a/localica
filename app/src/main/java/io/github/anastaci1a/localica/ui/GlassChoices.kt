@@ -55,16 +55,28 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
         val inset = with(density) { ChoiceInnerInset.roundToPx().toFloat() }
         val baseHeight = (if (horizontal) rowHeight else rowHeight * labels.size) + 2f * inset
         val stride = if (horizontal) (baseWidth - 2f * inset) / labels.size else rowHeight
-        val geometry = selectorTrackGeometry(if (horizontal) baseWidth else baseHeight,
+        val rawGeometry = selectorTrackGeometry(if (horizontal) baseWidth else baseHeight,
             if (horizontal) baseHeight else baseWidth,
             (-shell.value.strain).coerceIn(0f, .16f) * .25f, logicalWall,
             !horizontal, rtl, reduced, overflow = false)
         val insets = SelectorTrackInsets(inset, 0f, inset)
+        val lensBody = rememberGlassBody({ position.value }, { pressure }, { if (pressed || dragging) 1f else 0f })
+        val rawRadius = with(density) { 24.dp.toPx() }.coerceAtMost(minOf(rawGeometry.crossExtent, rawGeometry.travelExtent) / 2f)
+        val rawLens = rawGeometry.lens(position.value, labels.size, insets, !horizontal, rtl, lensBody.value, rawRadius)
+        val restGeometry = rawGeometry.copy(stretch = 0f)
+        val restRadius = with(density) { 24.dp.toPx() }.coerceAtMost(minOf(restGeometry.cross, restGeometry.travel) / 2f)
+        val cross = rememberSelectorCrossFrame(rawLens.crossFrame(rawGeometry, !horizontal),
+            SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset, (restRadius - inset).coerceAtLeast(0f), restRadius),
+            pressed || dragging, shell.value == GlassShape() && lensBody.value == GlassShape(),
+            maximumCorner = (if (horizontal) rawLens.bounds.width else rawLens.bounds.height) / 2f,
+            maximumOuterCorner = rawGeometry.travelExtent / 2f)
+        val geometry = rawGeometry.copy(crossExtentOverride = cross.shell)
+        val lensFrame = rawLens.withCrossFrame(cross, geometry.cross, !horizontal)
         val trackBounds = if (horizontal) androidx.compose.ui.geometry.Rect(geometry.travelStart, geometry.crossStart,
             geometry.travelEnd, geometry.crossStart + geometry.crossExtent)
             else androidx.compose.ui.geometry.Rect(geometry.crossStart, geometry.travelStart,
                 geometry.crossStart + geometry.crossExtent, geometry.travelEnd)
-        val radius = with(density) { 24.dp.toPx() }.coerceAtMost(minOf(trackBounds.width, trackBounds.height) / 2f)
+        val radius = cross.outerCorner
         Box(Modifier.fillMaxWidth().height(with(density) { baseHeight.toDp() }).selectableGroup()
             .testTag("choice-track-host").selectorTrackDrag(horizontal,
                 eligible = { point -> geometry.slot(selected.coerceIn(labels.indices), labels.size, insets, !horizontal, rtl).cell.contains(point) },
@@ -87,7 +99,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                     RoundedCornerShape(with(density) { radius.toDp() })))
             SelectionLens(Modifier.testTag("choice-lens"), position, vertical = !horizontal,
                 pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f },
-                placement = { shape -> geometry.lens(position.value, labels.size, insets, !horizontal, rtl, shape, radius) })
+                placement = { lensFrame }, deformation = lensBody)
             labels.indices.forEach { index ->
                 val cell = geometry.slot(index, labels.size, insets, !horizontal, rtl).cell
                 val contentBounds = if (horizontal) androidx.compose.ui.geometry.Rect(cell.left, cell.top + inset, cell.right, cell.bottom - inset)
