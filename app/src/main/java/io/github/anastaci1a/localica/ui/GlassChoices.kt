@@ -65,7 +65,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
         val rawLens = rawGeometry.lens(position.value, labels.size, insets, !horizontal, rtl, lensBody.value, rawRadius)
         val restGeometry = rawGeometry.copy(stretch = 0f)
         val restRadius = with(density) { 24.dp.toPx() }.coerceAtMost(minOf(restGeometry.cross, restGeometry.travel) / 2f)
-        val cross = rememberSelectorCrossFrame(rawLens.crossFrame(rawGeometry, !horizontal),
+        val cross = rememberSelectorCrossFrame(rawLens.crossFrame(rawGeometry),
             SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset, (restRadius - inset).coerceAtLeast(0f), restRadius),
             pressed || dragging, shell.value == GlassShape() && lensBody.value == GlassShape(),
             maximumCorner = (if (horizontal) rawLens.bounds.width else rawLens.bounds.height) / 2f,
