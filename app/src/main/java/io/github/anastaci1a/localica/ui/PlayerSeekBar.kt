@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -37,11 +38,9 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     var origin by remember { mutableStateOf(Offset.Zero) }
     var cancelRelease by remember { mutableStateOf(false) }
     var wasOver by remember { mutableStateOf(false) }
-    var previewReturning by remember { mutableStateOf(false) }
-    val reduced = LocalReducedMotion.current
-    LaunchedEffect(previewReturning) { if (previewReturning) { kotlinx.coroutines.delay(180); previewReturning = false } }
-    val preview by androidx.compose.animation.core.animateFloatAsState(if (wasOver) liveValue else value,
-        if (!reduced && (wasOver || previewReturning)) tween(180) else androidx.compose.animation.core.snap(), label = "Seek cancel preview")
+    var previewActive by remember { mutableStateOf(false) }
+    // A fresh touch or keyboard/accessibility edit must not inherit a cancelled hover.
+    val preview = if (previewActive) seekCancelPreview(value, liveValue, wasOver) else value
     val view = androidx.compose.ui.platform.LocalView.current
     val target by rememberUpdatedState(cancelBounds)
     val report by rememberUpdatedState(onDrag)
@@ -51,6 +50,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             cancelRelease = false
             wasOver = false
+            previewActive = true
             report(true, false)
             var released = false
             try {
@@ -62,7 +62,6 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                         if (over != wasOver) {
                             view.performHapticFeedback(if (over) android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK)
                             wasOver = over
-                            previewReturning = !over
                         }
                         cancelRelease = over
                         report(change.pressed, over)
@@ -75,6 +74,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                     }
                 } while (!released && event.changes.any { it.pressed })
             } finally {
+                previewActive = false
                 report(false, false)
                 if (!released) { cancelRelease = true; cancel() }
             }
@@ -109,4 +109,13 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                 if (dragging) drawCircle(Color.White.copy(alpha = .9f), h * .7f, Offset(size.width * fraction, size.height / 2))
             }
         })
+}
+
+/** Animate ownership, not the moving endpoints: ordinary finger tracking never trails a tween. */
+@Composable
+internal fun seekCancelPreview(value: Float, liveValue: Float, overCancel: Boolean): Float {
+    val duration = if (LocalReducedMotion.current) 0 else (240 / LocalMotionSpeed.current).toInt()
+    val liveWeight by animateFloatAsState(if (overCancel) 1f else 0f,
+        tween(duration), label = "Seek cancel preview")
+    return value + (liveValue - value) * liveWeight
 }
