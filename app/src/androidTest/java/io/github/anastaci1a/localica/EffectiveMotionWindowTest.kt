@@ -64,7 +64,9 @@ class EffectiveMotionWindowTest {
                     val reduced = rememberEffectiveReducedMotion(appReduced)
                     LocalicaTheme {
                         CompositionLocalProvider(LocalReducedMotion provides reduced) {
-                            val shape by rememberGlassBody(position = { 0f }, pressure = { pressure }, contact = { contact })
+                            // Observe the output during composition; a delegated read only inside
+                            // SideEffect would never subscribe this publisher to body frames.
+                            val shape = rememberGlassBody(position = { 0f }, pressure = { pressure }, contact = { contact }).value
                             SideEffect {
                                 sample.set(Sample(system?.scaleFactor, reduced, shape))
                                 if (recordRelease.get()) releasePeak.updateAndGet { maxOf(it, abs(shape.strain), abs(shape.depth)) }
