@@ -21,6 +21,66 @@ import org.junit.Test
 class PopupEnvelopeTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun dialogHostUsesNaturalWidthWithoutQueryingTheLiveSubcomposition() {
+        var natural by mutableStateOf(220.dp)
+        var expected = 0
+        compose.setContent { LocalicaTheme {
+            expected = with(LocalDensity.current) { natural.roundToPx() }
+            CompositionLocalProvider(LocalReducedMotion provides true) {
+                GlassAlertDialog({}, { ActionTextButton({}) { androidx.compose.material3.Text("Save") } },
+                    modifier = Modifier.testTag("natural-dialog"),
+                    title = { androidx.compose.material3.Text("Options") },
+                    widthMeasurement = {
+                        Box(Modifier.width(natural)) { androidx.compose.material3.Text("inert width face") }
+                    }, text = {
+                        // This cannot answer intrinsic requests: only the declared face may do so.
+                        BoxWithConstraints {
+                            check(constraints.hasBoundedWidth)
+                            androidx.compose.material3.Text("Live choices")
+                        }
+                    })
+            }
+        } }
+        compose.onNodeWithText("Live choices").assertIsDisplayed()
+        compose.onNodeWithText("inert width face").assertDoesNotExist()
+        assertEquals(expected, compose.onNodeWithTag("natural-dialog").fetchSemanticsNode().size.width)
+        compose.runOnIdle { natural = 260.dp }
+        compose.onNodeWithText("Save").assertIsDisplayed()
+        assertEquals(expected, compose.onNodeWithTag("natural-dialog").fetchSemanticsNode().size.width)
+    }
+
+    @Test fun widthEnvelopeReactsToWindowAndDeclarationWithoutExposingMeasurement() {
+        var cap by mutableStateOf(300.dp)
+        var wide by mutableStateOf(true)
+        var expected = 0
+        compose.setContent { LocalicaTheme {
+            expected = with(LocalDensity.current) { minOf(cap, if (wide) 240.dp else 160.dp).roundToPx() }
+            Box(Modifier.width(cap)) {
+                PopupNaturalWidth(measurement = {
+                    PopupMeasurementMaximum {
+                        Box(Modifier.width(160.dp)) { androidx.compose.material3.Text("hidden short") }
+                        if (wide) Box(Modifier.width(240.dp)) { androidx.compose.material3.Text("hidden wide") }
+                    }
+                }) {
+                    BoxWithConstraints(Modifier.fillMaxWidth().height(48.dp).testTag("natural-body")) {
+                        check(constraints.hasBoundedWidth)
+                        androidx.compose.material3.Text("Visible")
+                    }
+                }
+            }
+        } }
+        fun checkWidth() {
+            val actual = compose.onNodeWithTag("natural-body").fetchSemanticsNode().size.width
+            assertEquals(expected, actual)
+            compose.onNodeWithText("hidden short").assertDoesNotExist()
+            compose.onNodeWithText("hidden wide").assertDoesNotExist()
+        }
+        checkWidth()
+        compose.runOnIdle { wide = false }; checkWidth()
+        compose.runOnIdle { cap = 120.dp }; checkWidth()
+        compose.runOnIdle { cap = 300.dp }; checkWidth()
+    }
+
     @Test fun statelessFacesMatchLiveFieldHeightsAtLargeFontsAndNarrowWidths() {
         var scale by mutableFloatStateOf(1f)
         var width by mutableStateOf(180.dp)
@@ -40,6 +100,14 @@ class PopupEnvelopeTest {
                     Sample("face-switch") { BooleanPreferenceFrame("Save only for this list") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) } }
                     Sample("live-action") { GlassActionButton(R.drawable.ic_shuffle, "Randomize") {} }
                     Sample("face-action") { Box(Modifier.heightIn(min = CompactControlSize)) { GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize") } }
+                    Sample("live-strip") { GlassActionRow {
+                        GlassActionButton(R.drawable.ic_shuffle, "Randomize") {}
+                        GlassActionButton(R.drawable.ic_seek_back, "Revert") {}
+                    } }
+                    Sample("face-strip") { GlassActionRowMeasurement {
+                        GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
+                        GlassActionButtonFace(R.drawable.ic_seek_back, "Revert", Modifier.heightIn(min = CompactControlSize))
+                    } }
                     val labels = listOf("Compact", "Normal", "Large")
                     Sample("live-choice") { ChoicePreference("Size", "Normal", labels, { it }) {} }
                     Sample("face-choice") {
@@ -64,7 +132,7 @@ class PopupEnvelopeTest {
         for (fieldWidth in listOf(180.dp, 360.dp)) for (fontScale in listOf(1f, 1.5f, 2f)) {
             compose.runOnIdle { scale = fontScale; width = fieldWidth }
             compose.runOnIdle {
-                for (kind in listOf("link", "slider", "switch", "button", "action", "choice"))
+                for (kind in listOf("link", "slider", "switch", "button", "action", "strip", "choice"))
                     assertEquals("$kind at font scale $fontScale, width $fieldWidth", sizes.getValue("live-$kind").height, sizes.getValue("face-$kind").height)
                 assertEquals("Action envelope at $fontScale / $fieldWidth",
                     maxOf(sizes.getValue("live-apply-actions").height, sizes.getValue("live-save-actions").height),
