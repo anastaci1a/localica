@@ -59,7 +59,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         }
     }
     CompositionLocalProvider(LocalArtworkTransit provides artworkTransit) {
-    LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
+    LazyColumn(Modifier.fillMaxSize().controlScrollParent(scroll, ControlScrollAxis.Vertical), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
@@ -68,7 +68,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
-        item { LazyRow(state = carousel, modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { LazyRow(state = carousel, modifier = Modifier.nestedScroll(HorizontalGestureOwner)
+            .controlScrollParent(carousel, ControlScrollAxis.Horizontal), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
                 val anchor = rememberGlassAnchor()
                 Column(Modifier.width(160.dp).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },

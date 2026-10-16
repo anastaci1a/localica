@@ -7,7 +7,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.anastaci1a.localica.R
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.activity.compose.BackHandler
@@ -18,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -123,7 +121,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     Text("Queues", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.titleLarge)
                 }
                 SelectionViewport(Modifier.weight(1f, fill = false)) { overscroll ->
-                LazyColumn(Modifier.selectableGroup().padding(horizontal = 8.dp), state = queueList, overscrollEffect = overscroll) {
+                LazyColumn(Modifier.selectableGroup().padding(horizontal = 8.dp)
+                    .controlScrollParent(queueList, ControlScrollAxis.Vertical), state = queueList, overscrollEffect = overscroll) {
                     itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { index, queue ->
                         val chosen = queue.id == active?.id
                         Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
@@ -183,7 +182,7 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
         var removals by remember(pending) { mutableStateOf(setOfNotNull(pending.suggestedRemoval)) }
         GlassAlertDialog(onDismissRequest = { controller?.cancelCreation() }, title = { Text("Make room for a new queue") },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.controlVerticalScroll(rememberScrollState())) {
                     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     Text("Queue limit: ${state.settings.maximum}. Choose queues to remove. Your current queue is protected.")
                     val inactive = state.library.queues.filterNot { it.id == state.library.activeId }
