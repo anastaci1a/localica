@@ -28,7 +28,10 @@ class GlassActionRowTest {
         compose.onNodeWithText(label, useUnmergedTree = true)
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
         assertEquals(1, results.single().lineCount)
-        assertFalse("$label must fit at its configured font size", results.single().hasVisualOverflow)
+        val layout = results.single()
+        assertFalse("$label overflow: size=${layout.size}, paragraph=${layout.multiParagraph.width}x${layout.multiParagraph.height}, " +
+            "constraints=${layout.layoutInput.constraints}, width=${layout.didOverflowWidth}, height=${layout.didOverflowHeight}",
+            layout.hasVisualOverflow)
     }
 
     @Test fun naturalWidthsKeepActionsBesideEachOtherAndReserveHiddenRevert() {
