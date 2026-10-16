@@ -19,7 +19,7 @@ internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, a
     SideEffect { anchor?.quiet = quiet; anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(iconSize)) } }
     val modifier = Modifier.size(if (glass) CompactControlSize else 48.dp).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)
     if (quiet) {
-        val opacity by animateControlStateFloat(if (enabled) 1f else .38f, "Quiet action availability")
+        val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Quiet action availability")
         anchor?.captureInk()
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
         Box(modifier.alpha(opacity).ownButtonDrag(enabled).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
