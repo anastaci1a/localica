@@ -30,5 +30,11 @@
         </provider>
         <activity android:name="io.github.anastaci1a.localica.IncompleteScanGrantActivity"
             android:exported="true" android:theme="@android:style/Theme.NoDisplay" />
+        <provider android:name="io.github.anastaci1a.localica.ArtworkGrantProvider"
+            android:authorities="io.github.anastaci1a.localica.test.artwork.grants"
+            android:exported="true" android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS" />
+        <activity android:name="io.github.anastaci1a.localica.ArtworkGrantActivity"
+            android:exported="true" android:theme="@android:style/Theme.NoDisplay" />
     </application>
 </manifest>
