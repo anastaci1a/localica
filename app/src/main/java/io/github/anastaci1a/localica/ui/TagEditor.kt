@@ -29,7 +29,7 @@ internal val LocalArtworkEdit = staticCompositionLocalOf<((Track) -> Unit)?> { n
 internal fun TagEditorHost(controller: TagEditingController, content: @Composable () -> Unit) {
     val state by controller.state.collectAsState()
     CompositionLocalProvider(LocalTagEdit provides controller::open, LocalArtworkEdit provides controller::openArtwork) { content() }
-    if (state.tracks.isNotEmpty() && !state.background) TagEditorDialog(state, controller)
+    if (state.tracks.isNotEmpty() && !state.background) key(state.sessionId) { TagEditorDialog(state, controller) }
     if (state.jobsVisible) TagJobsDialog(state, controller)
     var recoveryDismissed by remember(state.recovery) { mutableStateOf(false) }
     if (state.recovery != null && !recoveryDismissed && state.tracks.isEmpty()) GlassAlertDialog(
@@ -54,23 +54,31 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
 }
 
 @Composable
-private fun TagEditorDialog(state: TagEditorState, controller: TagEditingController) {
+internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingController,
+    readCover: (suspend (String) -> CoverImage)? = null, onSave: (TagPatch) -> Unit = controller::save) {
     val context = LocalContext.current
     val identity = state.tracks.joinToString { it.id }
     var values by rememberSaveable(identity) { mutableStateOf(JSONObject().apply {
         EditField.entries.forEach { field -> put(field.name, state.tracks.map(field::value).distinct().singleOrNull().orEmpty()) }
     }.toString()) }
     var changed by rememberSaveable(identity) { mutableStateOf(emptyList<String>()) }
-    var imageUri by rememberSaveable(identity) { mutableStateOf<String?>(null) }
+    val artwork = rememberArtworkWorkflow(state.sessionId, startChoosing = state.artworkOnly)
+    val imageUri = artwork.imageUri
     var removeImage by rememberSaveable(identity) { mutableStateOf(false) }
-    var choosing by remember(identity, state.artworkOnly) { mutableStateOf(state.artworkOnly) }
+    val choosing = artwork.choosing
     var viewing by remember { mutableStateOf(false) }
-    var confirming by remember { mutableStateOf(false) }
+    var confirming by rememberSaveable { mutableStateOf(false) }
     var imageError by remember { mutableStateOf<String?>(null) }
     var grantMessage by remember { mutableStateOf<String?>(null) }
-    val cover by produceState<CoverImage?>(null, imageUri) {
-        value = null; imageError = null
-        imageUri?.let { uri -> try { value = CoverImages(context).read(uri) } catch (failure: Exception) { imageError = failure.message } }
+    val cover by key(imageUri) {
+        produceState<CoverImage?>(null, imageUri) {
+            imageError = null
+            imageUri?.let { uri ->
+                try { value = readCover?.invoke(uri) ?: CoverImages(context).read(uri) }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (failure: Exception) { imageError = failure.message ?: "Couldn’t open this image." }
+            }
+        }
     }
     val grant = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -81,6 +89,8 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
             }.getOrElse { "This folder provider did not grant write access." }
         }
     }
+    val canReview = !state.busy && state.recovery == null && imageError == null && (imageUri == null || cover != null) &&
+        (changed.isNotEmpty() || cover != null || removeImage)
     fun patch() = TagPatch(changed.associate { name -> EditField.valueOf(name) to JSONObject(values).getString(name) },
         if (removeImage) ArtworkChange.Remove else cover?.let { ArtworkChange.Replace(it) } ?: ArtworkChange.Keep)
     if (!state.artworkOnly || !choosing) GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Sheet) {
@@ -107,8 +117,8 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                         }
                         CompositionLocalProvider(LocalFrostedBackdrop provides artworkBackdrop) {
                         Row(Modifier.align(Alignment.BottomCenter).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_edit, "Choose artwork", enabled = !state.busy) { choosing = true }
-                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_trash, "Remove artwork from selected songs", enabled = !state.busy) { removeImage = true; imageUri = null }
+                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_edit, "Choose artwork", enabled = !state.busy) { artwork.choose() }
+                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_trash, "Remove artwork from selected songs", enabled = !state.busy) { removeImage = true; artwork.clearImage() }
                         }
                         }
                     }
@@ -116,7 +126,7 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                     imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     if (removeImage) Text("Artwork will be removed", Modifier.align(Alignment.CenterHorizontally))
                     if (imageUri != null || removeImage) ActionTextButton(enabled = !state.busy,
-                        onClick = { imageUri = null; removeImage = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Keep existing artwork") }
+                        onClick = { artwork.clearImage(); removeImage = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Keep existing artwork") }
                     if (!state.artworkOnly) EditField.entries.forEach { field ->
                         val common = state.tracks.map(field::value).distinct().size == 1
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -147,19 +157,19 @@ private fun TagEditorDialog(state: TagEditorState, controller: TagEditingControl
                         ActionTextButton(onClick = controller::continueInBackground) { Text("Continue in background") }
                         ActionTextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
                     }
-                    Button(enabled = !state.busy && state.recovery == null && imageError == null && (imageUri == null || cover != null) &&
-                        (changed.isNotEmpty() || cover != null || removeImage), onClick = { confirming = true }) { Text("Review changes") }
+                    Button(enabled = canReview, onClick = { confirming = true }) { Text("Review changes") }
                 }
             }
         }
     }
-    if (choosing) ImageChooser({ choosing = false; if (state.artworkOnly && imageUri == null) controller.close() }) { imageUri = it; removeImage = false; choosing = false }
+    if (choosing) ImageChooser(artwork, { artwork.cancelChooser(); if (state.artworkOnly && imageUri == null) controller.close() }) { artwork.chosen(it); removeImage = false }
     if (viewing) ArtworkViewer(state.tracks.first().uri) { viewing = false }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Save changes to ${state.tracks.size} files?") },
         text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }
-            if (removeImage) Text("Remove artwork") else if (cover != null) Text("Replace artwork")
+            if (removeImage) Text("Remove artwork") else if (imageUri != null) Text("Replace artwork")
+            imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text("Changes are written to the audio files. Playback pauses while editing a file in the active queue, then resumes after verification.") } },
-        confirmButton = { ActionTextButton(onClick = { confirming = false; controller.save(patch()) }) { Text("Save changes") } },
+        confirmButton = { ActionTextButton(enabled = canReview, onClick = { confirming = false; onSave(patch()) }) { Text("Save changes") } },
         dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }
 

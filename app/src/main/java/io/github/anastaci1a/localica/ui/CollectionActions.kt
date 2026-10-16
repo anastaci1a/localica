@@ -28,7 +28,8 @@ import kotlinx.coroutines.*
     var queuePicker by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    var image by remember { mutableStateOf(false) }
+    val artworkTarget = "${item.ref.kind}:${item.ref.id}"
+    val artwork = rememberArtworkWorkflow(artworkTarget)
     var busy by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -62,7 +63,7 @@ import kotlinx.coroutines.*
             ActionMenuItem(if (customCover != null) "Remove playlist image" else "Set playlist image",
                 enabled = controller != null && !busy, onClick = {
                     onDismiss()
-                    if (customCover == null) image = true
+                    if (customCover == null) artwork.choose()
                     else {
                         busy = true
                         controller?.cover(item.ref.id, null) { ok ->
@@ -107,22 +108,25 @@ import kotlinx.coroutines.*
         confirmButton = { ActionTextButton(enabled = !busy, onClick = {
             busy = true; controller?.delete(item.ref.id) { ok -> busy = false; if (ok) { deleting = false; onDeleted() } }
         }) { Text("Delete") } }, dismissButton = { ActionTextButton(enabled = !busy, onClick = { deleting = false }) { Text("Cancel") } })
-    if (image) ImageChooser({ image = false }) { cropped ->
-        image = false
-        scope.launch {
-            var stored: java.io.File? = null
-            try {
-                stored = withContext(Dispatchers.IO) {
-                    val bytes = io.github.anastaci1a.localica.editing.CoverImages(context).read(cropped).bytes
-                    val directory = java.io.File(context.filesDir, "playlist-covers").apply { mkdirs() }
-                    java.io.File(directory, "${java.util.UUID.randomUUID()}.png").apply { writeBytes(bytes) }
-                }
-                val output = stored
-                controller?.cover(item.ref.id, android.net.Uri.fromFile(output).toString()) { ok ->
-                    if (!ok) { output?.delete(); failure = "Couldn’t save the playlist image." }
-                }
-            } catch (cancelled: CancellationException) { stored?.delete(); throw cancelled }
-            catch (_: Exception) { stored?.delete(); failure = "Couldn’t save the playlist image." }
+    if (artwork.choosing) key(artworkTarget) {
+        ImageChooser(artwork, artwork::cancelChooser) { cropped ->
+            artwork.clearImage()
+            val playlistId = item.ref.id
+            scope.launch {
+                var stored: java.io.File? = null
+                try {
+                    stored = withContext(Dispatchers.IO) {
+                        val bytes = io.github.anastaci1a.localica.editing.CoverImages(context).read(cropped).bytes
+                        val directory = java.io.File(context.filesDir, "playlist-covers").apply { mkdirs() }
+                        java.io.File(directory, "${java.util.UUID.randomUUID()}.png").apply { writeBytes(bytes) }
+                    }
+                    val output = stored
+                    controller?.cover(playlistId, android.net.Uri.fromFile(output).toString()) { ok ->
+                        if (!ok) { output?.delete(); failure = "Couldn’t save the playlist image." }
+                    }
+                } catch (cancelled: CancellationException) { stored?.delete(); throw cancelled }
+                catch (_: Exception) { stored?.delete(); failure = "Couldn’t save the playlist image." }
+            }
         }
     }
     failure?.let { message -> GlassAlertDialog({ failure = null }, title = { Text("Collection") }, text = { Text(message) },
