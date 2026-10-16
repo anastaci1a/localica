@@ -50,8 +50,9 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
     val height = glassChoiceCellHeight()
     BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = ChoiceOuterVerticalInset)) {
         val baseWidth = with(density) { maxWidth.toPx() }
-        val rowHeight = with(density) { height.toPx() }
-        val inset = with(density) { ChoiceInnerInset.toPx() }
+        // Match the inert measurement face: round each cell and inset before summing.
+        val rowHeight = with(density) { height.roundToPx().toFloat() }
+        val inset = with(density) { ChoiceInnerInset.roundToPx().toFloat() }
         val baseHeight = (if (horizontal) rowHeight else rowHeight * labels.size) + 2f * inset
         val stride = if (horizontal) (baseWidth - 2f * inset) / labels.size else rowHeight
         val geometry = selectorTrackGeometry(if (horizontal) baseWidth else baseHeight,
