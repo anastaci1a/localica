@@ -1,6 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -12,22 +12,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import kotlin.math.roundToInt
 
-// LocalMotionSpeed is 4/3 at normal speed and 2 for Faster: 300 ms / 200 ms.
-// A time-symmetric ease keeps both directions equally legible. This animates only
-// presentation; callers must use the current logical state for input and semantics.
-internal val ControlStateEasing = CubicBezierEasing(.4f, 0f, .6f, 1f)
-internal fun controlStateDuration(reducedMotion: Boolean, speed: Float): Int =
-    if (reducedMotion) 0 else (400f / speed).roundToInt().coerceAtLeast(0)
+// Semantic activation is supplied by the caller, never inferred from alpha direction.
+// Normal 180/270 ms makes activation decisive while gently shortening the former
+// 300 ms deactivation; Faster preserves the ratio at 120/180 ms. No onset delay.
+// Input and semantics always use the logical state, independent of this clock.
+internal val ControlStateEasing = LinearOutSlowInEasing
+internal fun controlStateDuration(active: Boolean, reducedMotion: Boolean, speed: Float): Int =
+    if (reducedMotion) 0 else ((if (active) 240f else 360f) / speed).roundToInt().coerceAtLeast(0)
 
 @Composable
-private fun <T> controlStateAnimationSpec(reducedMotion: Boolean): TweenSpec<T> =
-    tween(controlStateDuration(reducedMotion, LocalMotionSpeed.current), easing = ControlStateEasing)
+private fun <T> controlStateAnimationSpec(active: Boolean, reducedMotion: Boolean): TweenSpec<T> =
+    tween(controlStateDuration(active, reducedMotion, LocalMotionSpeed.current), easing = ControlStateEasing)
 
 /** Retargets from the displayed value, including rapid reversals; reduced motion snaps. */
 @Composable
-internal fun animateControlStateFloat(target: Float, label: String,
+internal fun animateControlStateFloat(target: Float, active: Boolean, label: String,
     reducedMotion: Boolean = LocalReducedMotion.current): State<Float> {
-    val animated = animateFloatAsState(target, controlStateAnimationSpec(reducedMotion), label = label)
+    val animated = animateFloatAsState(target, controlStateAnimationSpec(active, reducedMotion), label = label)
     val immediate = rememberUpdatedState(target)
     return if (reducedMotion) immediate else animated
 }
@@ -35,6 +36,6 @@ internal fun animateControlStateFloat(target: Float, label: String,
 /** Inherited ink can change independently; only availability owns this clock. */
 @Composable
 internal fun controlStateColor(enabled: Boolean, enabledColor: Color, disabledColor: Color, label: String): Color {
-    val progress by animateControlStateFloat(if (enabled) 1f else 0f, label)
+    val progress by animateControlStateFloat(if (enabled) 1f else 0f, enabled, label)
     return lerp(disabledColor, enabledColor, progress)
 }

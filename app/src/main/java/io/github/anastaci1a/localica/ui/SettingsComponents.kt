@@ -65,7 +65,7 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = n
         SettingsLinkFace(title, summary, icon, modifier, headlineStyle, summaryStyle, colors)
     }
     SideEffect { if (anchor != null) anchor.face = { Foreground() } }
-    val opacity by animateControlStateFloat(if (enabled) 1f else .45f, "Settings link availability")
+    val opacity by animateControlStateFloat(if (enabled) 1f else .45f, enabled, "Settings link availability")
     LiquidGlassSurface(Modifier.fillMaxWidth().alpha(opacity)
         .then(if (anchor == null) Modifier else Modifier.glassAnchor(anchor)), cornerRadius = 20.dp, pressFeedback = enabled) {
         Foreground(Modifier.ownButtonDrag(enabled).clickable(enabled, role = Role.Button, onClick = onClick))
