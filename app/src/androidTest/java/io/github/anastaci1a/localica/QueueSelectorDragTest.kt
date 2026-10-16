@@ -279,29 +279,63 @@ class QueueSelectorDragTest {
     }
 
     @Test(timeout = 15000) fun openingGateRejectsHeldContactEvenWhenPanelBecomesReady() = fixture { _, _ ->
-        android.util.Log.i("QueueSelectorDragTest", "opening gate: fixture ready")
-        val start = localHandle("q1")
+        val phase = java.util.concurrent.atomic.AtomicReference("fixture ready")
+        fun mark(value: String) {
+            phase.set(value)
+            android.util.Log.i("QueueSelectorDragTest", "opening gate: $value")
+        }
+        val testThread = Thread.currentThread()
+        val mainThread = android.os.Looper.getMainLooper().thread
+        val watchdog = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { task ->
+            Thread(task, "queue-gate-watchdog").apply { isDaemon = true }
+        }
+        watchdog.schedule({
+            android.util.Log.e("QueueSelectorDragTest", "opening gate watchdog: ${phase.get()}")
+            for (thread in listOf(mainThread, testThread).distinct()) {
+                android.util.Log.e("QueueSelectorDragTest", "thread=${thread.name} state=${thread.state}")
+                thread.stackTrace.take(80).forEach { android.util.Log.e("QueueSelectorDragTest", "  at $it") }
+            }
+        }, 5, java.util.concurrent.TimeUnit.SECONDS)
         val viewport = list()
-        compose.runOnIdle { panelReady = false }
-        compose.mainClock.autoAdvance = false
         var held = false
         try {
+            mark("before handle lookup")
+            val start = localHandle("q1")
+            mark("before close gate")
+            compose.runOnIdle { panelReady = false }
+            mark("after close gate")
+            compose.mainClock.autoAdvance = false
             // A rejected handle contact can belong to scrolling. Do not wait for idleness
             // while that pointer is held; explicitly advance the gate's recomposition.
-            android.util.Log.i("QueueSelectorDragTest", "opening gate: inject held contact")
-            viewport.performTouchInput { down(start); held = true }
+            mark("before down injection")
+            viewport.performTouchInput { down(start); held = true; mark("down queued") }
+            mark("after down injection")
             viewport.performTouchInput { moveTo(start + Offset(0f, 35f)) }
-            android.util.Log.i("QueueSelectorDragTest", "opening gate: enable while held")
-            compose.runOnUiThread { panelReady = true }
+            mark("after held move; before gate UI call")
+            compose.runOnUiThread { mark("inside gate UI call"); panelReady = true; mark("gate state written") }
+            mark("after gate UI call; before frame")
             compose.mainClock.advanceTimeByFrame()
-            viewport.performTouchInput { moveTo(start + Offset(0f, 140f)); up(); held = false }
-            android.util.Log.i("QueueSelectorDragTest", "opening gate: released")
+            mark("after frame; before release injection")
+            viewport.performTouchInput {
+                mark("inside release injection")
+                moveTo(start + Offset(0f, 140f)); up(); held = false
+                mark("release queued")
+            }
+            mark("after release injection")
         } finally {
-            try { if (held) viewport.performTouchInput { cancel() } }
-            finally { compose.mainClock.autoAdvance = true }
+            try {
+                mark("before pointer cleanup")
+                if (held) viewport.performTouchInput { cancel() }
+                mark("after pointer cleanup")
+            } finally {
+                compose.mainClock.autoAdvance = true
+                watchdog.shutdownNow()
+            }
         }
+        mark("before no-acquisition assertions")
         compose.onNodeWithTag("drag-stack").assertDoesNotExist()
         assertEquals(0, commits); assertNoActions()
+        mark("assertions passed")
     }
 
     @Test fun scaledRtlHandleUsesLocalHitBoundsAndKeepsLiftWidth() = fixture(rtl = true, scale = .8f) { _, _ ->
