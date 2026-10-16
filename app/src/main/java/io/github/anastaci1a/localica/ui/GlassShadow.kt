@@ -24,11 +24,12 @@ import kotlinx.coroutines.*
 @Composable internal fun glassShadowInset(): Dp = (6f + 28f * LocalGlassAppearance.current.shadowSpread).dp
 
 /** Expand a scrolling strip's clip, without changing its content's layout slot.
- * Pair with equal inner vertical padding after horizontalScroll. */
-internal fun Modifier.shadowViewportOutset(inset: Dp): Modifier = layout { measurable, constraints ->
+ * Pair with matching inner padding after horizontalScroll. */
+internal fun Modifier.shadowViewportOutset(inset: Dp, horizontal: Boolean = false): Modifier = layout { measurable, constraints ->
     val pad = inset.roundToPx()
-    val child = measurable.measure(constraints.offset(vertical = pad * 2))
-    layout(child.width, (child.height - pad * 2).coerceAtLeast(0)) { child.place(0, -pad) }
+    val side = if (horizontal) pad else 0
+    val child = measurable.measure(constraints.offset(horizontal = side * 2, vertical = pad * 2))
+    layout((child.width - side * 2).coerceAtLeast(0), (child.height - pad * 2).coerceAtLeast(0)) { child.place(-side, -pad) }
 }
 
 internal class GlassShadowEntry {
