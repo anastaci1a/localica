@@ -211,10 +211,18 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val engaged by remember(checked, reduced) { derivedStateOf {
         pressed || dragging || (!reduced && (position.isRunning || position.value != if (checked) 1f else 0f))
     } }
-    val active by animateFloatAsState(if (engaged) 1f else 0f,
-        tween(if (reduced) 0 else if (engaged) (80f / speed).toInt().coerceAtLeast(1) else 180,
-            easing = if (engaged) androidx.compose.animation.core.LinearOutSlowInEasing
+    val source = LocalFrostedBackdrop.current
+    val ready = source == null || if (android.os.Build.VERSION.SDK_INT >= 33)
+        source.recorded && !source.layer.isReleased else source.snapshot != null
+    // Start the lease at commitment, but retain the opaque resting face until
+    // the first real recording is sampleable. Logical travel never waits for it.
+    val materialEngaged = engaged && ready
+    val active by animateFloatAsState(if (materialEngaged) 1f else 0f,
+        tween(if (reduced) 0 else if (materialEngaged) (80f / speed).toInt().coerceAtLeast(1) else 180,
+            easing = if (materialEngaged) androidx.compose.animation.core.LinearOutSlowInEasing
                 else androidx.compose.animation.core.FastOutSlowInEasing), label = "Switch lens")
+    // A replaced/unready source cannot become a track-only lens during exit.
+    val availableActive by remember(ready) { derivedStateOf { if (ready) active else 0f } }
     val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
@@ -244,17 +252,17 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
             }
         }
     })) {
-        GlassControlScene(Modifier.matchParentSize(), horizontalPadding = 24.dp, geometry = {
+        GlassControlScene(Modifier.matchParentSize(), horizontalPadding = 24.dp, source = source, prepare = { engaged }, geometry = {
             val fraction = position.value.coerceIn(0f, 1f)
             val shape = body.value
-            val scale = 1f + (expansion - 1f) * active
+            val scale = 1f + (expansion - 1f) * availableActive
             val width = 28.dp.toPx() * scale * shape.scaleX()
             val height = 28.dp.toPx() * scale * shape.scaleY()
             val wall = direction * glassWallAffinity(fraction, 1f)
             val x = (16.dp + 28.dp * (if (rtl) 1f - fraction else fraction)).toPx() + glassWallTranslation(28.dp.toPx() * scale, shape.scaleX(), wall)
             LensGeometry(androidx.compose.ui.geometry.Rect(x - width / 2f, center.y - height / 2f,
                 x + width / 2f, center.y + height / 2f), height / 2f)
-        }, body = { body.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {
+        }, body = { body.value }, active = { availableActive }, face = { Color.White.copy(alpha = 1f - availableActive) }) {
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 topLeft = Offset(0f, center.y - 16.dp.toPx()), size = Size(size.width, 32.dp.toPx()), cornerRadius = CornerRadius(16.dp.toPx()))
         }
