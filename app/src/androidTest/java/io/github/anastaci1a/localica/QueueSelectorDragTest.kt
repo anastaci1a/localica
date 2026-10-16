@@ -34,6 +34,7 @@ class QueueSelectorDragTest {
     private var renames = 0
     private var deletions = 0
     private val results = mutableListOf<Boolean>()
+    private val moves = mutableListOf<Pair<String, String?>>()
 
     private fun fixture(count: Int = 8, width: Int = 380, height: Int = 420, fontScale: Float = 1f,
         rtl: Boolean = false, scale: Float = 1f, densityScale: Float = 1f, reducedMotion: Boolean = false, fullPopup: Boolean = false,
@@ -64,6 +65,7 @@ class QueueSelectorDragTest {
                             onOffset = { id, offset -> controller.moveQueue(id, offset) },
                             onMove = { id, before, complete ->
                                 commits++
+                                moves.add(id to before)
                                 controller.moveQueueBefore(id, before) { result -> results.add(result); complete(result) }
                             })
                     }
@@ -163,17 +165,28 @@ class QueueSelectorDragTest {
 
     @Test fun failedPersistenceLandsBackAndRetryWorks() = fixture { controller, db ->
         val before = order(controller)
+        fun movePastMeasuredRow() {
+            val start = begin()
+            val target = compose.onNodeWithTag("queue-row-q4").fetchSemanticsNode().boundsInRoot
+            val targetY = target.bottom - list().fetchSemanticsNode().boundsInRoot.top - 2f
+            list().performTouchInput { moveTo(Offset(start.x, targetY)); up() }
+            awaitLanding()
+            val (id, beforeId) = moves.last()
+            assertEquals("q1", id)
+            val requested = before.filterNot { it == id }.toMutableList().apply {
+                add(beforeId?.let { indexOf(it) } ?: size, id)
+            }
+            assertNotEquals("Rejection must exercise a real reorder, not a successful no-op", before, requested)
+        }
         db.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_selector_move BEFORE UPDATE ON queues BEGIN SELECT RAISE(ABORT, 'Injected failure'); END")
-        val start = begin()
-        list().performTouchInput { moveTo(start + Offset(0f, 150f)); up() }
-        awaitLanding()
+        movePastMeasuredRow()
         assertEquals(listOf(false), results); assertEquals(before, order(controller))
+        assertNotNull(controller.state.value.problem)
         assertEquals(before, runBlocking { db.queues().read() }.queues.map { it.id })
         db.openHelper.writableDatabase.execSQL("DROP TRIGGER reject_selector_move")
-        val retry = begin()
-        list().performTouchInput { moveTo(retry + Offset(0f, 150f)); up() }
-        awaitLanding()
+        movePastMeasuredRow()
         assertEquals(listOf(false, true), results); assertNotEquals(before, order(controller)); assertNoActions()
+        assertEquals(order(controller), runBlocking { db.queues().read() }.queues.map { it.id })
     }
 
     @Test fun concurrentRemovalCancelsStaleDragWithoutRestoringRemovedQueue() = fixture { controller, _ ->
@@ -265,12 +278,28 @@ class QueueSelectorDragTest {
         compose.onNodeWithText("Playback queue").assertIsDisplayed()
     }
 
-    @Test fun openingGateRejectsHeldContactEvenWhenPanelBecomesReady() = fixture { _, _ ->
+    @Test(timeout = 15000) fun openingGateRejectsHeldContactEvenWhenPanelBecomesReady() = fixture { _, _ ->
+        android.util.Log.i("QueueSelectorDragTest", "opening gate: fixture ready")
         val start = localHandle("q1")
+        val viewport = list()
         compose.runOnIdle { panelReady = false }
-        list().performTouchInput { down(start); moveTo(start + Offset(0f, 35f)) }
-        compose.runOnIdle { panelReady = true }
-        list().performTouchInput { moveTo(start + Offset(0f, 140f)); up() }
+        compose.mainClock.autoAdvance = false
+        var held = false
+        try {
+            // A rejected handle contact can belong to scrolling. Do not wait for idleness
+            // while that pointer is held; explicitly advance the gate's recomposition.
+            android.util.Log.i("QueueSelectorDragTest", "opening gate: inject held contact")
+            viewport.performTouchInput { down(start); held = true }
+            viewport.performTouchInput { moveTo(start + Offset(0f, 35f)) }
+            android.util.Log.i("QueueSelectorDragTest", "opening gate: enable while held")
+            compose.runOnUiThread { panelReady = true }
+            compose.mainClock.advanceTimeByFrame()
+            viewport.performTouchInput { moveTo(start + Offset(0f, 140f)); up(); held = false }
+            android.util.Log.i("QueueSelectorDragTest", "opening gate: released")
+        } finally {
+            try { if (held) viewport.performTouchInput { cancel() } }
+            finally { compose.mainClock.autoAdvance = true }
+        }
         compose.onNodeWithTag("drag-stack").assertDoesNotExist()
         assertEquals(0, commits); assertNoActions()
     }
