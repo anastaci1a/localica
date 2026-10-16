@@ -13,7 +13,7 @@ This is the provisional division of work. The user primarily talks with dot; Git
 - Every issue has exactly one implementation-owner label: `owner:dot` or `owner:codex`, following the [label vocabulary](README.md#labels). The other agent may review. Labels queue work; they do not launch an agent.
 - Before editing, check issue/PR comments, linked branches and current ownership. Record the implementation branch and claim with `in progress`. Keep one implementation owner per issue and avoid concurrent edits to overlapping files or tightly coupled changes; agree a sequence in the issue first.
 - Transfer ownership in an issue comment with the receiving owner, remaining work and branch/commit, then replace the owner label. A review request leaves implementation ownership unchanged.
-- Use GitHub issue/PR comments for questions, findings, reviews and handoffs so the user does not have to copy context between agents. Do not assume direct CLI communication or automatic agent invocation.
+- Use GitHub issue/PR comments for questions, findings, progress, reviews and handoffs so the user does not have to copy context between agents. Because both agents share one account, every coordination comment must end with its author signature: `— dot` or `— Codex`. Do not assume direct CLI communication or automatic agent invocation.
 - Each handoff identifies the issue and acceptance criteria, exact source branch and full commit SHA, relevant PRs/commits, verification commands and results tied to that SHA, known limitations and the next requested action. Link detailed evidence instead of copying logs. Distinguish implemented, tested and device-confirmed results.
 
 ## Approval and active-session queue
