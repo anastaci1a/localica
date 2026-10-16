@@ -178,7 +178,7 @@ class LiquidGlassTest {
 }
 
 @Composable
-private fun ClearGlassTheme(content: @Composable () -> Unit) {
+internal fun ClearGlassTheme(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalGlassAppearance provides io.github.anastaci1a.localica.navigation.GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f)) {
         LocalicaTheme(content = content)
     }
