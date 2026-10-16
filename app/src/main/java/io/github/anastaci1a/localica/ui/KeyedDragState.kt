@@ -37,13 +37,17 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
  * Presentation is captured once at lift; adapters own activation and content rendering. */
 @Stable
 internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, private val scope: CoroutineScope,
-    val keyOf: (T) -> String) {
+    val keyOf: (T) -> String, private val optimisticCommit: Boolean = true) {
     var items: List<T> = emptyList()
     protected abstract fun capturePresentation(): P
+    var viewportCoordinates: LayoutCoordinates? = null
     val itemCoordinates = mutableMapOf<String, LayoutCoordinates>()
     fun visualBounds() = bounds() + itemCoordinates.filterValues { it.isAttached }.mapValues { (_, coordinates) ->
-        val at = coordinates.positionInRoot() - viewportOrigin
-        Rect(at, androidx.compose.ui.geometry.Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
+        viewportCoordinates?.takeIf { it.isAttached }?.localBoundingBoxOf(coordinates, clipBounds = false)
+            ?: run {
+                val at = coordinates.positionInRoot() - viewportOrigin
+                Rect(at, androidx.compose.ui.geometry.Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
+            }
     }
     var drag by mutableStateOf<KeyedDrag<T, P>?>(null)
         private set
@@ -107,11 +111,15 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
         }
     }
     suspend fun autoScroll(edge: Float) {
-        fun speed(d: KeyedDrag<T, P>) = when {
-            d.overCancel -> 0f
-            d.pointer.y < edge -> -((edge - d.pointer.y) / edge).coerceIn(0f, 1f)
-            d.pointer.y > viewportHeight - obscuredBottom - edge -> ((d.pointer.y - viewportHeight + obscuredBottom + edge) / edge).coerceIn(0f, 1f)
-            else -> 0f
+        fun effectiveEdge() = minOf(edge, (viewportHeight - obscuredBottom).coerceAtLeast(0f) / 2f)
+        fun speed(d: KeyedDrag<T, P>): Float {
+            val zone = effectiveEdge()
+            return when {
+                d.overCancel || zone <= 0f -> 0f
+                d.pointer.y < zone -> -((zone - d.pointer.y) / zone).coerceIn(0f, 1f)
+                d.pointer.y > viewportHeight - obscuredBottom - zone -> ((d.pointer.y - viewportHeight + obscuredBottom + zone) / zone).coerceIn(0f, 1f)
+                else -> 0f
+            }
         }
         var previousFrame = withFrameNanos { it }
         while (currentCoroutineContext().isActive) {
@@ -126,7 +134,7 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
             if (d.dropping || drag !== d) return
             val velocity = speed(d)
             if (velocity != 0f) {
-                val consumed = grid.scrollBy(velocity * edge * 12f * seconds)
+                val consumed = grid.scrollBy(velocity * effectiveEdge() * 12f * seconds)
                 updateInsertion(d)
                 if (consumed == 0f) {
                     val resting = d.pointer
@@ -158,7 +166,20 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
                 d.destinations = visualBounds()
                 d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
             }
-            if (saved && items.map { keyOf(it) } != expected.map { keyOf(it) }) {
+            if (saved && !optimisticCommit) {
+                // Publish-before-acknowledgement controllers are authoritative. Never hide new
+                // identities (or resurrect removed ones) behind the pointer's original snapshot.
+                withFrameNanos { }; withFrameNanos { }
+                if (items.map { keyOf(it) } != expected.map { keyOf(it) }) {
+                    d.returnFrom = d.destinations
+                    d.landing.snapTo(0f)
+                    d.dropItems = items
+                    withFrameNanos { }; withFrameNanos { }
+                    d.destinations = visualBounds()
+                    d.landing.animateTo(1f, tween(if (reducedMotion) 0 else 350))
+                } else d.dropItems = items
+            }
+            if (saved && optimisticCommit && items.map { keyOf(it) } != expected.map { keyOf(it) }) {
                 optimisticBase = items.map { keyOf(it) }
                 optimistic = expected
             }

@@ -1,0 +1,346 @@
+package io.github.anastaci1a.localica
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.room.Room
+import androidx.test.platform.app.InstrumentationRegistry
+import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.ui.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+
+class QueueSelectorDragTest {
+    @get:Rule val compose = createComposeRule()
+    private var enabled by mutableStateOf(true)
+    private var present by mutableStateOf(true)
+    private var panelReady by mutableStateOf(true)
+    private var commits = 0
+    private var selections = 0
+    private var renames = 0
+    private var deletions = 0
+    private val results = mutableListOf<Boolean>()
+
+    private fun fixture(count: Int = 8, width: Int = 380, height: Int = 420, fontScale: Float = 1f,
+        rtl: Boolean = false, scale: Float = 1f, densityScale: Float = 1f, reducedMotion: Boolean = false, fullPopup: Boolean = false,
+        test: (QueueController, QueueDatabase) -> Unit) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+        val preferences = QueuePreferences(context)
+        val original = preferences.read()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        try {
+            preferences.write(QueueSettings())
+            val queues = (0 until count).map { ListeningQueue(id = "q$it", name = "Queue $it", entries = emptyList()) }
+            runBlocking { db.queues().save(QueueLibrary(), QueueLibrary(queues, "q0")) }
+            val controller = runBlocking(Dispatchers.Main) {
+                QueueController(db.queues(), preferences, (context.applicationContext as LocalicaApplication).library, scope)
+            }
+            runBlocking { withTimeout(5000) { controller.state.first { !it.loading } } }
+            compose.setContent { LocalicaTheme {
+                val state by controller.state.collectAsState()
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density * densityScale, fontScale),
+                    LocalGlassPanelReady provides panelReady, LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                    if (fullPopup) QueueScreen(state, controller, reducedMotion = reducedMotion)
+                    else Box(Modifier.width(width.dp).height(height.dp).graphicsLayer { scaleX = scale; scaleY = scale }) {
+                        if (present) QueueSelectorList(state.library.queues, "q2", state.library.activeId, false,
+                            reducedMotion, enabled, Modifier.fillMaxSize(),
+                            onSelect = { selections++; controller.switchTo(it) }, onRename = { renames++ }, onDelete = { deletions++ },
+                            onOffset = { id, offset -> controller.moveQueue(id, offset) },
+                            onMove = { id, before, complete ->
+                                commits++
+                                controller.moveQueueBefore(id, before) { result -> results.add(result); complete(result) }
+                            })
+                    }
+                }
+            } }
+            compose.waitForIdle()
+            test(controller, db)
+        } finally {
+            runBlocking { scope.coroutineContext[Job]!!.cancelAndJoin() }
+            preferences.write(original)
+            db.close()
+        }
+    }
+
+    private fun list() = compose.onNodeWithTag("queue-selector-list")
+    private fun localHandle(id: String): Offset = compose.onNodeWithTag("queue-handle-$id", useUnmergedTree = true)
+        .fetchSemanticsNode().boundsInRoot.center - list().fetchSemanticsNode().boundsInRoot.topLeft
+    private fun begin(id: String = "q1"): Offset {
+        val start = localHandle(id)
+        list().performTouchInput { down(start); moveTo(start + Offset(0f, 35f), delayMillis = 80) }
+        compose.onNodeWithTag("drag-stack").assertExists()
+        return start
+    }
+    private fun awaitLanding() = compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
+    private fun order(controller: QueueController) = controller.state.value.library.queues.map { it.id }
+    private fun assertNoActions() { assertEquals(0, selections); assertEquals(0, renames); assertEquals(0, deletions) }
+
+    @Test fun handleTracksContinuouslyAndCommitsOnlyOnRelease() = fixture { controller, db ->
+        val before = controller.state.value
+        val originalWidth = compose.onNodeWithTag("queue-row-q1").fetchSemanticsNode().boundsInRoot.width
+        val start = begin()
+        val first = compose.onNodeWithTag("drag-stack").fetchSemanticsNode().boundsInRoot
+        assertEquals("Lift preserves row width", originalWidth, first.width, 1.5f)
+        list().performTouchInput { moveTo(start + Offset(0f, 48f), delayMillis = 80) }
+        val second = compose.onNodeWithTag("drag-stack").fetchSemanticsNode().boundsInRoot
+        assertEquals("Sub-row movement must track the finger", 13f, second.top - first.top, 1.5f)
+        assertEquals(0, commits)
+        assertEquals(before.library, controller.state.value.library)
+        val target = compose.onNodeWithTag("queue-row-q4").fetchSemanticsNode().boundsInRoot
+        val targetY = target.bottom - list().fetchSemanticsNode().boundsInRoot.top - 2f
+        list().performTouchInput { moveTo(Offset(start.x, targetY)); up() }
+        awaitLanding()
+        assertEquals(listOf(true), results); assertEquals(1, commits)
+        assertNotEquals(before.library.queues.map { it.id }, order(controller))
+        assertEquals(before.library.queues.associateBy { it.id }, controller.state.value.library.queues.associateBy { it.id })
+        assertEquals(before.library.activeId, controller.state.value.library.activeId)
+        assertEquals(before.browsedId, controller.state.value.browsedId)
+        assertEquals(controller.state.value.library, runBlocking { db.queues().read() })
+        assertNoActions()
+    }
+
+    @Test fun unchangedDropAcknowledgesWithoutWriting() = fixture { controller, db ->
+        val before = order(controller)
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_noop_write BEFORE UPDATE ON queues BEGIN SELECT RAISE(ABORT, 'Unexpected write'); END")
+        begin()
+        list().performTouchInput { up() }
+        awaitLanding()
+        assertEquals(listOf(true), results); assertEquals(1, commits)
+        assertEquals(before, order(controller)); assertNull(controller.state.value.problem); assertNoActions()
+    }
+
+    @Test fun cancelTargetAndPointerCancellationDoNotSave() = fixture { controller, _ ->
+        val before = order(controller)
+        begin()
+        val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.center - list().fetchSemanticsNode().boundsInRoot.topLeft
+        list().performTouchInput { moveTo(cancel); up() }
+        awaitLanding()
+        assertEquals(before, order(controller)); assertEquals(0, commits)
+        begin()
+        list().performTouchInput { cancel() }
+        awaitLanding()
+        assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun disablingOrUnmountingDuringDragNeverCommits() = fixture { controller, _ ->
+        val before = order(controller)
+        begin()
+        compose.runOnIdle { enabled = false }
+        list().performTouchInput { up() }
+        awaitLanding()
+        compose.runOnIdle { enabled = true }
+        begin()
+        compose.runOnIdle { present = false }
+        compose.onRoot().performTouchInput { cancel() }
+        compose.runOnIdle { present = true }
+        compose.waitForIdle()
+        assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun secondPointerCancelsInsteadOfHandingOffToScroll() = fixture { controller, _ ->
+        val before = order(controller)
+        val start = begin()
+        list().performTouchInput { down(1, start + Offset(80f, 0f)); moveBy(Offset(0f, 80f)); up(1); up(0) }
+        awaitLanding()
+        assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun failedPersistenceLandsBackAndRetryWorks() = fixture { controller, db ->
+        val before = order(controller)
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_selector_move BEFORE UPDATE ON queues BEGIN SELECT RAISE(ABORT, 'Injected failure'); END")
+        val start = begin()
+        list().performTouchInput { moveTo(start + Offset(0f, 150f)); up() }
+        awaitLanding()
+        assertEquals(listOf(false), results); assertEquals(before, order(controller))
+        assertEquals(before, runBlocking { db.queues().read() }.queues.map { it.id })
+        db.openHelper.writableDatabase.execSQL("DROP TRIGGER reject_selector_move")
+        val retry = begin()
+        list().performTouchInput { moveTo(retry + Offset(0f, 150f)); up() }
+        awaitLanding()
+        assertEquals(listOf(false, true), results); assertNotEquals(before, order(controller)); assertNoActions()
+    }
+
+    @Test fun concurrentRemovalCancelsStaleDragWithoutRestoringRemovedQueue() = fixture { controller, _ ->
+        begin()
+        controller.removeQueues(setOf("q3"))
+        compose.waitUntil(5000) { "q3" !in order(controller) }
+        list().performTouchInput { up() }
+        awaitLanding()
+        assertFalse("q3" in order(controller)); assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun renameDuringDragRetainsCurrentMetadataAfterDrop() = fixture { controller, _ ->
+        val start = begin()
+        controller.rename("q1", "Updated queue")
+        compose.waitUntil(5000) { controller.state.value.library.queues.first { it.id == "q1" }.name == "Updated queue" }
+        compose.onNodeWithText("2. Updated queue").assertExists()
+        list().performTouchInput { moveTo(start + Offset(0f, 150f)); up() }
+        awaitLanding()
+        assertEquals(listOf(true), results)
+        assertEquals("Updated queue", controller.state.value.library.queues.first { it.id == "q1" }.name)
+        assertNoActions()
+    }
+
+    @Test fun ordinaryRowSwipeScrollsAndHandleTapDoesNotSelect() = fixture(count = 40) { _, _ ->
+        val handle = localHandle("q1")
+        list().performTouchInput { click(handle) }
+        assertEquals(0, commits); assertNoActions()
+        list().performTouchInput { swipe(Offset(center.x, height * .8f), Offset(center.x, height * .2f)) }
+        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        compose.onNodeWithTag("queue-row-q0").assertDoesNotExist()
+        assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun reducedMotionRtlLargeFontShortViewportKeepsActionsAndCancellation() = fixture(
+        count = 20, width = 320, height = 240, fontScale = 1.6f, rtl = true, reducedMotion = true) { controller, _ ->
+        val before = order(controller)
+        val handle = compose.onNodeWithTag("queue-handle-q1", useUnmergedTree = true).fetchSemanticsNode()
+        val row = compose.onNodeWithTag("queue-row-q1").fetchSemanticsNode().boundsInRoot
+        assertTrue("RTL handle must be on the row's right", handle.boundsInRoot.center.x > row.center.x)
+        val actions = handle.config[SemanticsActions.CustomActions]
+        assertEquals(listOf("Move up", "Move down"), actions.map { it.label })
+        begin()
+        list().performTouchInput { cancel() }
+        awaitLanding()
+        assertEquals(before, order(controller)); assertEquals(0, commits)
+        compose.runOnIdle { assertTrue(actions.first { it.label == "Move up" }.action()) }
+        compose.waitUntil(5000) { order(controller).first() == "q1" }
+    }
+
+    @Test fun edgeScrollingKeepsThePointerAndStillCancels() = fixture(count = 60) { controller, _ ->
+        val before = order(controller)
+        val start = begin()
+        list().performTouchInput { moveTo(Offset(start.x, height - 2f)) }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("queue-row-q0").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("drag-stack").assertExists()
+        list().performTouchInput { moveTo(Offset(start.x, 2f)) }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("queue-row-q0").fetchSemanticsNodes().isNotEmpty() }
+        list().performTouchInput { cancel() }
+        awaitLanding()
+        assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun tinyViewportStillScrollsDownAndContainsCancelTarget() = fixture(count = 60, height = 48) { controller, _ ->
+        val before = order(controller)
+        val start = localHandle("q0")
+        compose.mainClock.autoAdvance = false
+        try {
+            list().performTouchInput { down(start); moveTo(start + Offset(0f, 35f)) }
+            compose.mainClock.advanceTimeByFrame()
+            val viewport = list().fetchSemanticsNode().boundsInRoot
+            val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
+            assertTrue(cancel.top >= viewport.top - 1f && cancel.bottom <= viewport.bottom + 1f)
+            val range = compose.onNodeWithTag("queue-selector-grid").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+            val initialPosition = range.value()
+            list().performTouchInput { moveTo(Offset(start.x, height - 2f)) }
+            repeat(30) { compose.mainClock.advanceTimeByFrame() }
+            assertTrue("Bottom edge must scroll downward even below the default edge height", range.value() > initialPosition)
+            list().performTouchInput { cancel() }
+        } finally { compose.mainClock.autoAdvance = true }
+        awaitLanding()
+        assertEquals(before, order(controller)); assertEquals(0, commits)
+    }
+
+    @Test fun retainedListReopensAtPlaybackAfterInterruptedDismissal() = fixture(count = 40) { _, _ ->
+        list().performTouchInput { swipe(Offset(center.x, height * .8f), Offset(center.x, height * .2f)) }
+        compose.onNodeWithTag("queue-row-q0").assertDoesNotExist()
+        compose.runOnIdle { enabled = false }
+        compose.runOnIdle { enabled = true }
+        compose.onNodeWithText("Playback queue").assertIsDisplayed()
+    }
+
+    @Test fun openingGateRejectsHeldContactEvenWhenPanelBecomesReady() = fixture { _, _ ->
+        val start = localHandle("q1")
+        compose.runOnIdle { panelReady = false }
+        list().performTouchInput { down(start); moveTo(start + Offset(0f, 35f)) }
+        compose.runOnIdle { panelReady = true }
+        list().performTouchInput { moveTo(start + Offset(0f, 140f)); up() }
+        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun scaledRtlHandleUsesLocalHitBoundsAndKeepsLiftWidth() = fixture(rtl = true, scale = .8f) { _, _ ->
+        val root = compose.onRoot()
+        val origin = root.fetchSemanticsNode().boundsInRoot.topLeft
+        val handle = compose.onNodeWithTag("queue-handle-q1", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center - origin
+        val rowWidth = compose.onNodeWithTag("queue-row-q1").fetchSemanticsNode().boundsInRoot.width
+        root.performTouchInput { down(handle); moveTo(handle + Offset(0f, 45f)) }
+        val lifted = compose.onNodeWithTag("drag-stack").fetchSemanticsNode().boundsInRoot
+        assertEquals(rowWidth, lifted.width, 1.5f)
+        root.performTouchInput { cancel() }
+        awaitLanding()
+        assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun wideViewportDoesNotLetReorderActivateRenameDeleteOrBrowse() = fixture(width = 800, height = 600, densityScale = .5f) { _, _ ->
+        begin()
+        list().performTouchInput { moveTo(Offset(width - 24f, center.y)); cancel() }
+        awaitLanding()
+        assertEquals(0, commits); assertNoActions()
+        compose.onNodeWithContentDescription("Rename Queue 1").performClick()
+        compose.onNodeWithContentDescription("Delete Queue 1").performClick()
+        assertEquals(1, renames); assertEquals(1, deletions)
+    }
+
+    @Test fun constrainedPopupKeepsListAndFooterReachableAtLargeFont() = fixture(
+        count = 20, fontScale = 1.6f, fullPopup = true) { controller, _ ->
+        val before = order(controller)
+        compose.onNodeWithContentDescription("Select queue").performClick()
+        compose.awaitExpectedWindowFocus(list())
+        val node = list().fetchSemanticsNode()
+        val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+        val window = (view.parent as androidx.compose.ui.window.DialogWindowProvider).window
+        val originalWidth = window.attributes.width
+        val originalHeight = window.attributes.height
+        val density = view.resources.displayMetrics.density
+        val originalListHeight = node.boundsInRoot.height
+        try {
+            compose.runOnIdle { window.setLayout((320 * density).toInt(), (220 * density).toInt()) }
+            compose.waitUntil(5000) { list().fetchSemanticsNode().boundsInRoot.height < originalListHeight }
+            val viewport = list().fetchSemanticsNode().boundsInRoot
+            assertTrue("Short popup must retain a nonempty scrolling list", viewport.height > 0f)
+            compose.onNodeWithText("Queues", substring = false).assertDoesNotExist()
+            compose.onNodeWithText("Remove all other queues").assertIsDisplayed()
+            begin("q0")
+            val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
+            assertTrue(cancel.top >= viewport.top - 1f && cancel.bottom <= viewport.bottom + 1f)
+            list().performTouchInput { cancel() }
+            awaitLanding()
+            assertEquals(before, order(controller))
+        } finally { compose.runOnIdle { window.setLayout(originalWidth, originalHeight) } }
+    }
+
+    @Test fun popupDismissReopenStartsAtPlaybackAndCancelsHeldReorder() = fixture(count = 30, fullPopup = true) { controller, _ ->
+        val before = order(controller)
+        compose.onNodeWithContentDescription("Select queue").performClick()
+        compose.onNodeWithText("Playback queue").assertIsDisplayed()
+        begin()
+        compose.awaitExpectedWindowFocus(list())
+        val dialog = compose.onNode(isDialog())
+        compose.mainClock.autoAdvance = false
+        try {
+            pressSystemBack()
+            dialog.performTouchInput { cancel() }
+        } finally { compose.mainClock.autoAdvance = true }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("queue-selector-list").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithContentDescription("Select queue").performClick()
+        compose.onNodeWithText("Playback queue").assertIsDisplayed()
+        assertEquals(before, order(controller))
+    }
+}
