@@ -86,11 +86,25 @@ internal fun SettingsHeading(title: String) {
 @Composable
 internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, label: (T) -> String,
     onDismiss: () -> Unit, onSelect: (T) -> Unit) {
-    var draft by remember { mutableStateOf(choices.firstOrNull { it == selected } ?: choices.firstOrNull() ?: selected) }
+    val draftState = remember {
+        val initial = choices.firstOrNull { it == selected } ?: choices.firstOrNull() ?: selected
+        mutableStateOf(initial).also {
+            BufferedChoiceTrace.active?.record(BufferedChoiceTrace.DRAFT_CREATED,
+                identity = System.identityHashCode(it), value = choices.indexOf(initial))
+        }
+    }
+    var draft by draftState
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         val scroll = rememberScrollState()
         Column(Modifier.scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = 8.dp, vertical = 12.dp).selectableGroup()) {
-            GlassChoices(choices.map(label), choices.indexOf(draft).coerceAtLeast(0)) { index -> draft = choices[index] }
+            val draftIndex = choices.indexOf(draft)
+            BufferedChoiceTrace.active?.record(BufferedChoiceTrace.DRAFT_COMPOSED,
+                identity = System.identityHashCode(draftState), value = draftIndex)
+            GlassChoices(choices.map(label), draftIndex.coerceAtLeast(0)) { index ->
+                BufferedChoiceTrace.active?.record(BufferedChoiceTrace.DRAFT_ASSIGN,
+                    identity = System.identityHashCode(draftState), value = index, bits = choices.indexOf(draft))
+                draft = choices[index]
+            }
         }
     }, confirmButton = { ActionTextButton(enabled = choices.isNotEmpty(), onClick = { onSelect(draft); onDismiss() }) { Text("Select") } },
         dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })

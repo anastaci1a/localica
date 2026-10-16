@@ -57,7 +57,11 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
             }, cornerRadius = 20.dp)
         @Composable fun Item(index: Int, modifier: Modifier) {
             Box(modifier.height(height).selectable(index == selected, role = role,
-                interactionSource = null, indication = null, onClick = { change(index) })
+                interactionSource = null, indication = null, onClick = {
+                    if (labels[index] == "Year") BufferedChoiceTrace.active?.record(BufferedChoiceTrace.YEAR_CLICK,
+                        value = index, bits = selected)
+                    change(index)
+                })
                 .then(if (index == selected) Modifier.observeGlassContact { pressed = it }.elasticControlDrag(horizontal,
                     onStart = { dragging = true; scope.launch(start = CoroutineStart.UNDISPATCHED) { position.stop(); raw = position.value } },
                     onDelta = { delta ->
@@ -69,7 +73,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                         val next = position.value.roundToInt().coerceIn(labels.indices)
                         pressure = 0f; dragging = false; settleRequest++
                         if (!cancelled) change(next)
-                    }) else Modifier.ownButtonDrag()), contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
+                    }) else Modifier.ownButtonDrag(traceYear = labels[index] == "Year")), contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
                 Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     icons?.getOrNull(index)?.let { Icon(painterResource(it), null, Modifier.size(24.dp)) }
                     Text(labels[index], style = if (role == Role.Tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
