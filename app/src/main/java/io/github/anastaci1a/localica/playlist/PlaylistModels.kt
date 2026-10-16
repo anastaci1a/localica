@@ -41,9 +41,10 @@ object PlaylistEdits {
         val entries = playlist.entries.shuffled()
         return playlist.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
     }
-    fun sort(playlist: ManualPlaylist, method: TrackSort, ascending: Boolean): ManualPlaylist {
+    fun sort(playlist: ManualPlaylist, method: TrackSort, ascending: Boolean, snapshot: LibrarySnapshot? = null): ManualPlaylist {
         val byId = playlist.entries.associateBy { it.id }
-        return playlist.copy(entries = playlist.order.apply(playlist.entries, method, ascending).map { byId.getValue(it) },
+        return playlist.copy(entries = (snapshot?.let { LiveOrder(it).target(playlist.order, playlist.entries, method, ascending) }
+            ?: playlist.order.apply(playlist.entries, method, ascending)).map { byId.getValue(it) },
             order = playlist.order.copy(sort = method, ascending = ascending))
     }
     fun revertOrder(playlist: ManualPlaylist, checkpoint: OrderCheckpoint): ManualPlaylist {
