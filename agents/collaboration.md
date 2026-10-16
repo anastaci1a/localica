@@ -5,7 +5,7 @@ This is the provisional division of work. The user primarily talks with dot; Git
 ## Responsibilities
 
 - **dot:** investigate user observations and independently found bugs, inconsistencies, refactors and consolidation opportunities; file actionable issues with evidence and observable acceptance criteria. Implement bounded fixes and long, repetitive or lower-complexity work.
-- **Codex:** implement larger, tightly coupled architecture, rendering and other high-complexity changes; independently review dot batches and perform local/device checks; own advancement of main and creation/publication of releases, subject to user approval.
+- **Codex:** implement larger, tightly coupled architecture, rendering and other high-complexity changes; independently review dot batches and perform local/device checks; own advancement of main and creation/publication of releases under the user’s standing project approval, without asking again for each integration or release.
 - dot uses judgment to route each issue. Reassess ownership when investigation changes the scope. These roles do not promise unlimited usage or availability.
 
 ## Ownership and handoff
@@ -24,10 +24,10 @@ This is the provisional division of work. The user primarily talks with dot; Git
 
 ## Integration and delivery
 
-- dot delivers development branches, reviewable fixes and test APKs. Codex alone advances main and creates/publishes releases, with explicit user approval before main integration or release publication. Codex changes may flow into the agreed development branch before that approval. Do not alter a frozen candidate: create a separate branch from its recorded SHA for follow-on work.
+- dot delivers development branches, reviewable fixes and test APKs. Codex alone advances main and creates/publishes releases under the user’s standing approval for this project; no repeated per-merge or per-release approval is needed. Required exact-commit verification, review, ownership coordination and mandatory protections still apply; standing approval does not waive them or authorize dot to advance main or publish releases. Codex changes may also flow into the agreed development branch. Do not alter a frozen candidate: create a separate branch from its recorded SHA for follow-on work.
 - Follow the existing [working instructions](README.md), [verification](../docs/build.md#local-verification) and [release preparation](../docs/build.md#release-preparation); this division of roles does not weaken those gates.
 - dot normally offers a test APK when a batch contains at least ten potentially new resolutions, unless the user requests one sooner. List those candidate resolutions and known limits without presenting them as confirmed fixes before verification.
 
 ## Starting a review or implementation handoff
 
-Point the receiving agent to this document and the issue/PR comment containing the exact source SHA, scope, acceptance criteria, test evidence and remaining limitations. State whether the request is implementation, independent review, local/device verification or release preparation. A handoff prepares the work; the approval rules above still govern starting Codex and publishing to main or releasing.
+Point the receiving agent to this document and the issue/PR comment containing the exact source SHA, scope, acceptance criteria, test evidence and remaining limitations. State whether the request is implementation, independent review, local/device verification or release preparation. A handoff prepares the work; starting a new Codex task/session still requires approval. Once running within the approved scope, Codex may integrate to main and publish releases under the standing project approval while preserving all required gates.
