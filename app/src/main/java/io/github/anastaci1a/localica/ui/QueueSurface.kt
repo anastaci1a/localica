@@ -27,6 +27,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.PointerInputModifierNode
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
@@ -123,9 +132,13 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
     }
     // Keep the list viewport fixed while the drawer moves. Resizing every frame
     // repeatedly measures/virtualizes rows and their glass; the window clips the reveal.
-    FrostedSurface(Modifier.offset { androidx.compose.ui.unit.IntOffset(0,
-        kotlin.math.round((top + (status - top) * progress.value + 80.dp * (1f - playerProgress())).toPx()).toInt()) }
-        .width(maxWidth).height(maxHeight - status)
+    val viewportHeight = with(density) { (maxHeight - status).roundToPx() }
+    fun shelfY() = with(density) {
+        kotlin.math.round((top + 80.dp * (1f - playerProgress())).toPx()).toInt()
+    }
+    Layout(modifier = Modifier.offset { IntOffset(0, shelfY()) }
+        .width(maxWidth).height(CollapsedQueueHeight).then(QueuePointerFrame), content = {
+    FrostedSurface(Modifier.width(maxWidth).height(maxHeight - status)
         .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
         .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
         .draggable(rememberDraggableState { dy ->
@@ -163,4 +176,35 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             }
         }
     }
+    }) { measurables, constraints ->
+        val drawer = measurables.single().measure(Constraints.fixed(constraints.maxWidth, viewportHeight))
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            // Preserve the original final pixel rounding, including player translation.
+            val drawerY = with(density) {
+                kotlin.math.round((top + (status - top) * progress.value +
+                    80.dp * (1f - playerProgress())).toPx()).toInt()
+            }
+            drawer.place(0, drawerY - shelfY())
+        }
+    }
+}
+
+// Compose 1.8 compares successive event positions in each pointer node's local
+// frame. A drawer moving exactly with the finger can otherwise suppress the next
+// move. Keep one stable ancestor in the hit path without moving the recognizers.
+// Its bounds cover only the collapsed shelf, so hidden drawer space cannot steal
+// background hits. Expanded descendants remain hittable outside this unclipped
+// ancestor; the node neither consumes events nor installs gesture ownership.
+private object QueuePointerFrame : ModifierNodeElement<QueuePointerFrameNode>() {
+    override fun create() = QueuePointerFrameNode()
+    override fun update(node: QueuePointerFrameNode) {}
+    override fun equals(other: Any?) = this === other
+    override fun hashCode() = javaClass.hashCode()
+    override fun InspectorInfo.inspectableProperties() { name = "queuePointerFrame" }
+}
+
+private class QueuePointerFrameNode : Modifier.Node(), PointerInputModifierNode {
+    override fun interceptOutOfBoundsChildEvents() = true
+    override fun onPointerEvent(pointerEvent: PointerEvent, pass: PointerEventPass, bounds: IntSize) {}
+    override fun onCancelPointerInput() {}
 }
