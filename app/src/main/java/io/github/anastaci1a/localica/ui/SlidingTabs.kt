@@ -90,7 +90,9 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
     val refractForeground = appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
-    val decorated = rememberFrostedBackdrop(appearance, enabled = refractForeground, dark = false)
+    val legacyOverlay = android.os.Build.VERSION.SDK_INT < 33 && appearance.tabStyle == TabLensStyle.Overlay
+    val recordForeground = refractForeground && !legacyOverlay
+    val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val minimumWidth = maxOf(68.dp, with(density) {
@@ -113,6 +115,11 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             false, rtl, reduced, overflow = !fits)
         val inset = with(density) { 4.dp.toPx() }
         val insets = SelectorTrackInsets(0f, inset, inset)
+        val atlasGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, 0f, 1f,
+            false, rtl, reduced, overflow = !fits)
+        val inkAtlas = if (legacyOverlay && refractForeground)
+            rememberFrostedBackdrop(listOf(tabs, width, labelStyle, density.density, density.fontScale),
+                dark = false, glassBlur = 0f, whiteTint = 0f) else null
         val track = if (fits) androidx.compose.ui.geometry.Rect(geometry.travelStart, geometry.crossStart,
             geometry.travelEnd, geometry.crossStart + geometry.crossExtent)
             else androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
@@ -171,15 +178,15 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                     }
                 }
             }, contentAlignment = AbsoluteAlignment.TopLeft) {
-            @Composable fun Labels(color: Color, interactive: Boolean) {
+            @Composable fun Labels(color: Color, interactive: Boolean, atlas: Boolean = false) {
                 Box(Modifier.width(width * tabs.size).fillMaxHeight()
                     .then(if (interactive) Modifier else Modifier.clearAndSetSemantics {})
-                    .drawWithContent {
+                    .then(if (atlas) Modifier else Modifier.drawWithContent {
                         val path = Path().apply { addRoundRect(RoundRect(selectorFrame.bounds, CornerRadius(selectorFrame.corner))) }
                         clipPath(path, if (interactive) ClipOp.Difference else ClipOp.Intersect) { this@drawWithContent.drawContent() }
-                    }, contentAlignment = AbsoluteAlignment.TopLeft) {
+                    }), contentAlignment = AbsoluteAlignment.TopLeft) {
                     tabs.forEachIndexed { index, tab ->
-                        val cell = geometry.slot(index, tabs.size, insets, false, rtl).cell
+                        val cell = (if (atlas) atlasGeometry else geometry).slot(index, tabs.size, insets, false, rtl).cell
                         Box(Modifier.selectorTrackPlacement(cell)
                             .then(if (interactive) Modifier.testTag("tab-option-$index").selectable(active == tab,
                                 interactionSource = null, indication = null, role = Role.Tab, onClick = { tap(index) }) else Modifier),
@@ -200,6 +207,14 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 if (appearance.tabStyle == TabLensStyle.Classic) {
                     Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),
                         androidx.compose.foundation.shape.RoundedCornerShape(with(density) { selectorFrame.corner.toDp() })))
+                } else if (legacyOverlay) {
+                    LegacySelectorLens(modifier, source, inkAtlas, appearance,
+                        selectorFrame, LensGeometry(track, radius), shell.value, selectorBody.value,
+                        tabs.indices.map { index -> SelectorInkSlot(
+                            atlasGeometry.slot(index, tabs.size, insets, false, rtl).cell,
+                            geometry.slot(index, tabs.size, insets, false, rtl).cell) },
+                        MaterialTheme.colorScheme.onSurfaceVariant, NavigationAccent,
+                        shellOrigin = { composite.origin - recording.topLeft })
                 } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
                     blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
@@ -214,12 +229,17 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 }
             }
             Box(Modifier.width(width * tabs.size).fillMaxHeight(), contentAlignment = AbsoluteAlignment.TopLeft) {
+                if (inkAtlas != null) {
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(inkAtlas, displayCutout = {
+                        Path().apply { addRect(androidx.compose.ui.geometry.Rect(Offset.Zero, size)) }
+                    })) { Labels(Color.White, false, atlas = true) }
+                }
                 if (!refractForeground) Lens()
                 val foregroundRecording = androidx.compose.ui.geometry.Rect(
                     -geometry.travel * .04f, 0f, geometry.travel * 1.04f, baseHeight)
                 val foregroundContent = androidx.compose.ui.geometry.Rect(
                     -foregroundRecording.left, 0f, geometry.travel - foregroundRecording.left, baseHeight)
-                Box(if (refractForeground) Modifier.selectorTrackPlacement(foregroundRecording)
+                Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundRecording)
                     .recordFrostedBackdrop(decorated).drawWithContent {
                         if (composite.recorded && !composite.layer.isReleased) {
                             val delta = composite.origin - decorated.origin
@@ -229,7 +249,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                     } else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
                     // Record padded visual overflow without changing the gesture or
                     // scrolling host. Both sample origin and label coordinates move once.
-                    Box(if (refractForeground) Modifier.selectorTrackPlacement(foregroundContent)
+                    Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundContent)
                         else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
                         Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
                         Labels(NavigationAccent, false)
