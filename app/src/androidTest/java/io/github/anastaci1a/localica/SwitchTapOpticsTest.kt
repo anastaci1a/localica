@@ -144,11 +144,41 @@ class SwitchTapOpticsTest {
         }
     }
 
-    @Composable private fun Sample(tag: String, checked: Boolean, change: (Boolean) -> Unit) {
-        val source = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+    @Test fun coldRecordingKeepsTheWhiteFaceWithoutDelayingTheToggle() {
+        var checked by mutableStateOf(false)
+        var record by mutableStateOf(false)
+        var opticalDraws = 0
+        compose.setContent { LocalicaTheme {
+            view = LocalView.current
+            CompositionLocalProvider(LocalControlLensDraw provides { opticalDraws++ }) {
+                Box(Modifier.width(280.dp)) { Sample("cold", checked, record) { checked = it } }
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("cold switch").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        compose.runOnIdle {
+            assertTrue("Logical toggle does not wait for recording", checked)
+            assertTrue("Engagement requests its source before optical drawing", backings.getValue("cold").consumers > 0)
+            assertEquals("No track-only optical frame before backing", 0, opticalDraws)
+        }
+        capture("cold-unready", "cold")
+        compose.runOnIdle { record = true }
+        compose.onNodeWithTag("settings-switch", useUnmergedTree = true).performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(320)
+        capture("held-ready-cold", "cold")
+        compose.onNodeWithTag("settings-switch", useUnmergedTree = true).performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1200)
+        capture("settled-cold", "cold")
+        compose.runOnIdle { assertEquals("Settling releases the prewarm lease", 0, backings.getValue("cold").consumers) }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Composable private fun Sample(tag: String, checked: Boolean, recordingAllowed: Boolean = true, change: (Boolean) -> Unit) {
+        val source = rememberFrostedBackdrop(Unit, enabled = recordingAllowed, glassBlur = 0f, whiteTint = 0f)
         SideEffect { backings[tag] = source }
         Box(Modifier.fillMaxWidth().height(96.dp).testTag(tag)) {
-            Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) {
+            Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, enabled = recordingAllowed)) {
                 val cell = 8.dp.toPx()
                 for (x in 0..(size.width / cell).toInt()) drawRect(
                     if (x % 2 == 0) Color.Green else Color.Black,
@@ -169,6 +199,8 @@ class SwitchTapOpticsTest {
         val host = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
         val sample = if (tag == "popup-switch") IntOffset(host.width.toInt() / 2, 2) else IntOffset(2, 2)
         val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag(tag), stage, sample) { view }
+        val rasterReady = backings[tag]?.snapshot != null
+        val recorded = backings[tag]?.recorded == true
         val control = compose.onAllNodes(hasTestTag("settings-switch") and hasAnyAncestor(hasTestTag(tag)),
             useUnmergedTree = true)[0].fetchSemanticsNode().boundsInRoot
         val centerY = control.center.y - host.top
@@ -184,7 +216,7 @@ class SwitchTapOpticsTest {
             }
             if (c.red > .85f && c.green > .85f && c.blue > .85f) white++
         }
-        android.util.Log.i("SwitchTapOptics", "$label clock=${compose.mainClock.currentTime} green=$green outsideTrackGreen=$outsideGreen white=$white backingRecorded=${backings[tag]?.recorded} raster=${backings[tag]?.snapshot != null} size=${pixels.width}x${pixels.height}")
+        android.util.Log.i("SwitchTapOptics", "$label clock=${compose.mainClock.currentTime} green=$green outsideTrackGreen=$outsideGreen white=$white backingRecorded=$recorded raster=$rasterReady size=${pixels.width}x${pixels.height}")
         // Small PNGs preserve the actual presented contour and pattern for review.
         val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
         try {
@@ -192,14 +224,24 @@ class SwitchTapOpticsTest {
                 android.graphics.Color.argb((it.alpha * 255).toInt(), (it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt())
             })
             val bytes = java.io.ByteArrayOutputStream().also { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).chunked(2500).forEachIndexed { i, chunk ->
+            val chunks = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).chunked(2500)
+            android.util.Log.i("SwitchTapPixels", "$label total=${chunks.size} bytes=${bytes.size}")
+            chunks.forEachIndexed { i, chunk ->
                 android.util.Log.i("SwitchTapPixels", "$label part=$i $chunk")
+                // Avoid overflowing legacy logcat while the captured frame/Compose clock stays frozen.
+                android.os.SystemClock.sleep(2)
             }
         } finally { bitmap.recycle() }
+        if (label == "cold-unready") {
+            assertEquals("Unready switch does not expose missing backing", 0, green)
+            assertTrue("Unready switch retains opaque white", white > 10)
+        }
         if (label.startsWith("settled-")) {
             assertEquals("Settled controls stop exposing the backing", 0, green)
             assertTrue("Settled switch thumb returns to white", white > 10)
         }
+        if (label.startsWith("tap-") && android.os.Build.VERSION.SDK_INT < 33 && !rasterReady)
+            assertTrue("Cold legacy travel remains white until sampleable", white > 10)
         if (label == "reduced-snap") assertEquals("Reduced motion settles without a travelling optical lens", 0, green)
         if (label.startsWith("held-ready")) assertTrue("Held lens must visibly sample its green backing", green > 10)
         return outsideGreen
