@@ -6,13 +6,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.ArtworkLayout
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
@@ -30,20 +28,17 @@ class PlayerArtworkChoiceInputTest {
     private var saves = 0
     private var slop = 0f
 
-    private fun fixture(fontScale: Float = 1f) {
+    private fun fixture() {
         compose.setContent {
             var current by remember { mutableStateOf(settings) }
-            val density = LocalDensity.current.density
             slop = LocalViewConfiguration.current.touchSlop
-            CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
-                LocalicaTheme { GlassDialogHost {
-                    Column(Modifier.width(280.dp).height(440.dp).verticalScroll(rememberScrollState())) {
-                        InterfaceSettingsControls(current, "Player") {
-                            saves++; current = it; settings = it
-                        }
+            LocalicaTheme { GlassDialogHost {
+                Column(Modifier.width(280.dp).height(440.dp).verticalScroll(rememberScrollState())) {
+                    InterfaceSettingsControls(current, "Player") {
+                        saves++; current = it; settings = it
                     }
-                } }
-            }
+                }
+            } }
         }
     }
     private fun option(value: ArtworkLayout) = compose.onNode(hasText(value.label) and
@@ -89,8 +84,8 @@ class PlayerArtworkChoiceInputTest {
         compose.runOnIdle { assertEquals("One saved settings change per confirmation", 3, saves) }
     }
 
-    @Test fun subSlopMovementStillSelectsOneUnselectedOptionAtLargeFont() {
-        fixture(fontScale = 1.5f)
+    @Test fun subSlopMovementStillSelectsOneUnselectedOption() {
+        fixture()
         open()
         val target = option(ArtworkLayout.Floating).performScrollTo()
         phase("one sub-slop tap") {

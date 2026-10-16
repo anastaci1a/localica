@@ -393,7 +393,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     height.toFloat() / foreground.height.coerceAtLeast(1)).coerceAtMost(1f)
                                 scaleX = fit; scaleY = fit
                             }
-                            face.place((width - face.width) / 2, (height - face.height) / 2)
+                            // A retained face may contain a Material Surface with a pointer node.
+                            // Alpha and cleared semantics do not remove that invisible hit target.
+                            // Keep measuring it for the return morph, but place it only while visible.
+                            if (p < .55f) face.place((width - face.width) / 2, (height - face.height) / 2)
                         }
                     }
                 }
