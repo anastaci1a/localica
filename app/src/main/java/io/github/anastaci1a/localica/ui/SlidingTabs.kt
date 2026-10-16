@@ -127,7 +127,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val rawFrame = rawGeometry.lens(lens.value, tabs.size, insets, false, rtl,
             if (appearance.tabStyle == TabLensStyle.Classic) GlassShape() else selectorBody.value, rawTrack.height / 2f)
         val restGeometry = rawGeometry.copy(stretch = 0f)
-        val cross = rememberSelectorCrossFrame(rawFrame.crossFrame(rawGeometry, false),
+        val cross = rememberSelectorCrossFrame(rawFrame.crossFrame(rawGeometry),
             SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset, (baseHeight / 2f - inset).coerceAtLeast(0f), baseHeight / 2f), pressed || dragging,
             shell.value == GlassShape() && selectorBody.value == GlassShape(),
             maximumCorner = rawFrame.bounds.width / 2f, maximumOuterCorner = rawGeometry.travelExtent / 2f,

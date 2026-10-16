@@ -56,7 +56,7 @@ internal data class SelectorTrackSlot(
 
 /** Circular contact corners are constructed in final layout space, never stretched after drawing. */
 internal data class SelectorTrackLens(val bounds: androidx.compose.ui.geometry.Rect, val corner: Float,
-    val wall: Float, val gap: Float, val outerCorner: Float) {
+    val wall: Float, val gap: Float, val outerCorner: Float, val crossExtent: Float) {
     fun contactCenters(vertical: Boolean): Pair<androidx.compose.ui.geometry.Offset, androidx.compose.ui.geometry.Offset> {
         val b = bounds
         return if (vertical) {
@@ -95,7 +95,7 @@ internal fun SelectorTrackGeometry.lens(position: Float, count: Int, insets: Sel
     val crossStart = this.crossStart + (crossExtent - across) / 2f
     val bounds = if (vertical) androidx.compose.ui.geometry.Rect(crossStart, start, crossStart + across, start + main)
         else androidx.compose.ui.geometry.Rect(start, crossStart, start + main, crossStart + across)
-    return SelectorTrackLens(bounds, corner.coerceAtMost(minOf(main, across) / 2f), affinity, gap, radius)
+    return SelectorTrackLens(bounds, corner.coerceAtMost(minOf(main, across) / 2f), affinity, gap, radius, across)
 }
 
 internal fun SelectorTrackGeometry.slot(index: Int, count: Int, insets: SelectorTrackInsets,
@@ -138,9 +138,10 @@ internal fun SelectorTrackLens.withCrossFrame(frame: SelectorCrossFrame, hostCro
     val start = (hostCross - extent) / 2f
     val adjusted = if (vertical) androidx.compose.ui.geometry.Rect(start, bounds.top, start + extent, bounds.bottom)
         else androidx.compose.ui.geometry.Rect(bounds.left, start, bounds.right, start + extent)
-    return copy(bounds = adjusted, outerCorner = frame.outerCorner,
+    return copy(bounds = adjusted, crossExtent = extent, outerCorner = frame.outerCorner,
         corner = frame.corner.coerceIn(0f, minOf(adjusted.width, adjusted.height) / 2f))
 }
 
-internal fun SelectorTrackLens.crossFrame(geometry: SelectorTrackGeometry, vertical: Boolean) =
-    SelectorCrossFrame(geometry.crossExtent, if (vertical) bounds.width else bounds.height, corner, outerCorner)
+// Retain the calculated extent: subtracting translated Rect edges can add one Float ULP.
+internal fun SelectorTrackLens.crossFrame(geometry: SelectorTrackGeometry) =
+    SelectorCrossFrame(geometry.crossExtent, crossExtent, corner, outerCorner)
