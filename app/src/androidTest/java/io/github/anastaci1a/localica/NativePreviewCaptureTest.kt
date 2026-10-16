@@ -8,8 +8,19 @@ import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
 import android.view.RoundedCorner
-import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import android.os.Handler
+import android.os.HandlerThread
+import android.view.FrameMetrics
+import android.view.View
+import android.view.ViewGroup
+import android.view.Window
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getAllSemanticsNodes
+import androidx.compose.ui.semantics.getOrNull
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Until
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -19,7 +30,6 @@ import io.github.anastaci1a.localica.queue.QueueSettings
 import io.github.anastaci1a.localica.scanner.ScanPreferences
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
-import org.junit.Rule
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -37,7 +47,6 @@ import kotlinx.coroutines.flow.first
 
 /** Transport pilot only. Captures the real activity; never supplies replacement UI or edge masks. */
 class NativePreviewCaptureTest {
-    @get:Rule val compose = createEmptyComposeRule()
 
     @Test fun exportRealPlayerAndQueueThroughExistingDeviceReports() {
         val arguments = InstrumentationRegistry.getArguments()
@@ -85,6 +94,14 @@ class NativePreviewCaptureTest {
         var recording: Future<String>? = null
         val recordDescriptor = AtomicReference<ParcelFileDescriptor?>()
         var originalFailure: Throwable? = null
+        val frameThread = HandlerThread("preview-frame-metrics").apply { start() }
+        val frames = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val frameOverflow = AtomicBoolean(false)
+        var frameWindow: Window? = null
+        val frameListener = Window.OnFrameMetricsAvailableListener { _, metrics, dropped ->
+            if (frames.size < 1200) frames.add("callbackNs=${SystemClock.elapsedRealtimeNanos()} intendedVsyncNs=${metrics.getMetric(FrameMetrics.INTENDED_VSYNC_TIMESTAMP)} vsyncNs=${metrics.getMetric(FrameMetrics.VSYNC_TIMESTAMP)} totalNs=${metrics.getMetric(FrameMetrics.TOTAL_DURATION)} droppedCallbacks=$dropped")
+            else frameOverflow.set(true)
+        }
         val recorderPid = CompletableFuture<Int>()
         val recorderEnded = AtomicBoolean(false)
         fun shellBytes(command: String, limit: Int = 4096): ByteArray {
@@ -127,32 +144,41 @@ class NativePreviewCaptureTest {
                 await { connection.state.value.trackId == tracks.first().id && connection.state.value.isPlaying }
                 instrumentation.runOnMainSync { connection.toggle(); connection.seekTo(500) }
                 await { !connection.state.value.playWhenReady && !connection.state.value.isPlaying && !connection.state.value.isBuffering }
-                compose.waitForIdle()
-                if (compose.onAllNodesWithContentDescription("Collapse player").fetchSemanticsNodes().isEmpty()) {
-                    compose.onNodeWithTag("player-surface").performClick()
+                fun tap(description: String) {
+                    val target = requireNotNull(device.wait(Until.findObject(By.desc(description)), 5000)) { "Missing native control: $description" }
+                    val start = SystemClock.elapsedRealtimeNanos()
+                    target.click()
+                    Log.i(TAG, "TAP control=$description startNs=$start endNs=${SystemClock.elapsedRealtimeNanos()}")
                 }
-                compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
-                val openPoint = compose.onNodeWithContentDescription("Open queue").fetchSemanticsNode().boundsInRoot.center
+                if (!device.hasObject(By.desc("Collapse player"))) {
+                    val bounds = surface(scenario, "player-surface").screenBounds
+                    check(device.click(bounds.center.x.toInt(), bounds.center.y.toInt()))
+                }
+                check(device.wait(Until.hasObject(By.desc("Collapse player")), 5000))
+                val collapsed = settledSurface(scenario, "queue-surface")
                 logGeometry(scenario, "player", "player-surface")
-                val screenshot = requireNotNull(automation.takeScreenshot()) { "Native screenshot unavailable" }
-                val png = ByteArrayOutputStream().also { screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-                Log.i(TAG, "SCREEN player width=${screenshot.width} height=${screenshot.height}")
-                screenshot.recycle()
-                export("player.png", png, 1024 * 1024)
-                compose.onNodeWithContentDescription("Open queue").performClick()
-                compose.onNodeWithContentDescription("Close queue").assertIsDisplayed()
-                val closePoint = compose.onNodeWithContentDescription("Close queue").fetchSemanticsNode().boundsInRoot.center
-                logGeometry(scenario, "queue", "queue-surface")
-                compose.onNodeWithContentDescription("Close queue").performClick()
-                compose.onNodeWithContentDescription("Open queue").assertIsDisplayed()
-                var rootX = 0; var rootY = 0
-                scenario.onActivity { activity ->
-                    val content = activity.findViewById<android.view.View>(android.R.id.content)
-                    val xy = IntArray(2); content.getLocationOnScreen(xy); rootX = xy[0]; rootY = xy[1]
+                fun screenshot(name: String) {
+                    val bitmap = requireNotNull(automation.takeScreenshot()) { "Native screenshot unavailable" }
+                    val png = ByteArrayOutputStream().also { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+                    Log.i(TAG, "SCREEN name=$name width=${bitmap.width} height=${bitmap.height}")
+                    bitmap.recycle()
+                    export(name, png, 1024 * 1024)
                 }
-                // Do not ask Compose to fast-forward to idle while recording. Advance its test clock
-                // at wall-clock cadence, with real native taps and screenrecord's untouched display.
-                compose.mainClock.autoAdvance = false
+                screenshot("player.png")
+                tap("Open queue")
+                val expanded = settledSurface(scenario, "queue-surface")
+                check(expanded.bounds.top < collapsed.bounds.top && device.hasObject(By.desc("Close queue"))) { "Queue did not expand" }
+                logGeometry(scenario, "queue", "queue-surface")
+                screenshot("queue.png")
+                tap("Close queue")
+                settledSurface(scenario, "queue-surface", collapsed.bounds)
+                check(device.hasObject(By.desc("Open queue")))
+                scenario.onActivity { activity ->
+                    frameWindow = activity.window
+                    activity.window.addOnFrameMetricsAvailableListener(frameListener, Handler(frameThread.looper))
+                }
+                Log.i(TAG, "CLOCK native-choreographer manualClockSteps=0 composeTestRule=false")
+                val commandNs = SystemClock.elapsedRealtimeNanos()
                 val pipes = automation.executeShellCommandRw("sh")
                 recordDescriptor.set(pipes[0])
                 recording = executor.submit<String> {
@@ -172,26 +198,42 @@ class NativePreviewCaptureTest {
                 }
                 ParcelFileDescriptor.AutoCloseOutputStream(pipes[1]).use { input ->
                     // exec preserves the PID emitted by our shell; never kill by process name.
-                    input.write(("echo PID:${'$'}${'$'}\nexec screenrecord --time-limit 8 --bit-rate 1000000 $recordPath 2>&1\n").toByteArray())
+                    input.write(("echo PID:${'$'}${'$'}\nexec screenrecord --time-limit 10 --bit-rate 1000000 $recordPath 2>&1\n").toByteArray())
                 }
                 recorderPid.get(5, TimeUnit.SECONDS)
                 val started = SystemClock.elapsedRealtime()
-                val taps = listOf(1000L to openPoint, 3000L to closePoint, 5000L to openPoint, 7000L to closePoint)
-                var nextTap = 0
-                var advanced = 0L
-                while (SystemClock.elapsedRealtime() - started < 8500L) {
+                Log.i(TAG, "RECORDER commandNs=$commandNs pidHandshakeNs=${SystemClock.elapsedRealtimeNanos()} systemNanoTime=${System.nanoTime()} readySignal=unavailable durationLimitSeconds=10")
+                fun requireRecordingWindow(stage: String) {
                     val elapsed = SystemClock.elapsedRealtime() - started
-                    if (nextTap < taps.size && elapsed >= taps[nextTap].first) {
-                        val point = taps[nextTap++].second
-                        check(device.click((point.x + rootX).toInt(), (point.y + rootY).toInt())) { "Native navigation tap rejected" }
-                    }
-                    val target = (elapsed / 16) * 16
-                    if (target > advanced) { compose.mainClock.advanceTimeBy(target - advanced, ignoreFrameDuration = true); advanced = target }
-                    SystemClock.sleep(16)
+                    check(!recorderEnded.get() && elapsed < 8000L) { "$stage missed the recording window: elapsedMs=$elapsed" }
+                    Log.i(TAG, "RECORDING_WINDOW stage=$stage elapsedMs=$elapsed")
                 }
+                // Timing offsets only schedule actions; geometry checks, not sleeps, prove completion.
+                SystemClock.sleep((1000L - (SystemClock.elapsedRealtime() - started)).coerceAtLeast(0))
+                tap("Open queue")
+                requireRecordingWindow("open-tap")
+                settledSurface(scenario, "queue-surface", expanded.bounds)
+                requireRecordingWindow("open-settled")
+                SystemClock.sleep((4000L - (SystemClock.elapsedRealtime() - started)).coerceAtLeast(0))
+                tap("Close queue")
+                requireRecordingWindow("close-tap")
+                settledSurface(scenario, "queue-surface", collapsed.bounds)
+                requireRecordingWindow("close-settled")
                 val recorderOutput = requireNotNull(recording).get(15, TimeUnit.SECONDS)
+                Log.i(TAG, "RECORDER eofNs=${SystemClock.elapsedRealtimeNanos()}")
                 check(recorderOutput.isBlank()) { "screenrecord reported an error: ${recorderOutput.take(500)}" }
-                compose.mainClock.autoAdvance = true
+                settledSurface(scenario, "queue-surface", collapsed.bounds)
+                scenario.onActivity { it.window.removeOnFrameMetricsAvailableListener(frameListener) }
+                frameWindow = null
+                val drained = java.util.concurrent.CountDownLatch(1)
+                Handler(frameThread.looper).post { drained.countDown() }
+                check(drained.await(2, TimeUnit.SECONDS)) { "Frame timing callbacks did not drain" }
+                check(!frameOverflow.get()) { "Frame timing budget exceeded" }
+                synchronized(frames) {
+                    check(frames.isNotEmpty()) { "No app frame timing callbacks received" }
+                    Log.i(TAG, "FRAMES count=${frames.size} scope=app-window-completion-not-display-presentation")
+                    frames.forEachIndexed { index, value -> Log.i(TAG, "FRAME index=$index $value"); SystemClock.sleep(20) }
+                }
                 val mp4 = shellBytes("cat $recordPath", 2 * 1024 * 1024)
                 check(mp4.size > 32 && String(mp4, 4, 4, Charsets.US_ASCII) == "ftyp") { "Missing or invalid native MP4" }
                 export("navigation.mp4", mp4, 2 * 1024 * 1024)
@@ -207,7 +249,8 @@ class NativePreviewCaptureTest {
                     if (cleanupFailure == null) cleanupFailure = failure else cleanupFailure!!.addSuppressed(failure)
                 }
             }
-            cleanup { compose.mainClock.autoAdvance = true }
+            cleanup { instrumentation.runOnMainSync { frameWindow?.removeOnFrameMetricsAvailableListener(frameListener) } }
+            cleanup { frameThread.quitSafely(); frameThread.join(2000); check(!frameThread.isAlive) { "Frame callback thread did not stop" } }
             // Kill only this invocation's exact PID after verifying its unique file argument.
             cleanup {
                 val current = recording
@@ -249,18 +292,60 @@ class NativePreviewCaptureTest {
         }
     }
 
+    private data class Surface(val bounds: Rect, val origin: IntArray, val pending: Boolean) {
+        val screenBounds: Rect get() = bounds.translate(origin[0].toFloat(), origin[1].toFloat())
+    }
+
+    private fun surface(scenario: ActivityScenario<MainActivity>, tag: String): Surface {
+        var found: Surface? = null
+        scenario.onActivity { activity ->
+            fun visit(view: View) {
+                if (view is ViewRootForTest) {
+                    val nodes = view.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false)
+                    nodes.filter { it.config.getOrNull(SemanticsProperties.TestTag) == tag }.forEach { node ->
+                        check(found == null) { "Ambiguous surface: $tag" }
+                        val origin = IntArray(2); view.view.getLocationOnScreen(origin)
+                        found = Surface(node.boundsInRoot, origin, view.hasPendingMeasureOrLayout)
+                    }
+                }
+                if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index))
+            }
+            visit(activity.window.decorView)
+        }
+        return requireNotNull(found) { "Missing real surface: $tag" }
+    }
+
+    private fun settledSurface(scenario: ActivityScenario<MainActivity>, tag: String, expected: Rect? = null): Surface {
+        val observedSince = SystemClock.elapsedRealtime()
+        var previous: Rect? = null
+        var stableSince = SystemClock.elapsedRealtime()
+        var result: Surface? = null
+        await {
+            val current = surface(scenario, tag)
+            if (current.pending || current.bounds != previous || (expected != null && current.bounds != expected)) {
+                stableSince = SystemClock.elapsedRealtime()
+            }
+            previous = current.bounds
+            result = current
+            !current.pending && (expected == null || current.bounds == expected) &&
+                SystemClock.elapsedRealtime() - observedSince >= 600 && SystemClock.elapsedRealtime() - stableSince >= 250
+        }
+        Log.i(TAG, "SETTLED tag=$tag atNs=${SystemClock.elapsedRealtimeNanos()} bounds=${result!!.bounds}")
+        return requireNotNull(result)
+    }
+
     @androidx.annotation.RequiresApi(31)
     private fun logGeometry(scenario: ActivityScenario<MainActivity>, stage: String, tag: String) {
-        val bounds = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val measured = surface(scenario, tag)
+        val bounds = measured.bounds
         scenario.onActivity { activity ->
             val decor = activity.window.decorView
-            val content = activity.findViewById<android.view.View>(android.R.id.content)
-            val xy = IntArray(2); content.getLocationOnScreen(xy)
+            val xy = measured.origin
             val insets = decor.rootWindowInsets
             val info = activity.packageManager.getPackageInfo(activity.packageName, 0)
             Log.i(TAG, "GEOMETRY stage=$stage api=${Build.VERSION.SDK_INT} package=${activity.packageName} version=${info.versionName} " +
                 "density=${activity.resources.displayMetrics.density} rotation=${decor.display.rotation} decor=${decor.width}x${decor.height} " +
-                "rootOrigin=${xy[0]},${xy[1]} surfaceBoundsInRoot=$bounds clock=wall-paced-16ms sourceAttribution=external-run-manifest-required")
+                "rootOrigin=${xy[0]},${xy[1]} surfaceBoundsInRoot=$bounds clock=native-choreographer sourceAttribution=external-run-manifest-required")
             check(insets != null) { "Missing window insets; cannot establish runtime corner geometry" }
             for (position in listOf(RoundedCorner.POSITION_TOP_LEFT, RoundedCorner.POSITION_TOP_RIGHT,
                 RoundedCorner.POSITION_BOTTOM_RIGHT, RoundedCorner.POSITION_BOTTOM_LEFT)) {
