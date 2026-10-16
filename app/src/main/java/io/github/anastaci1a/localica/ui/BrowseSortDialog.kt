@@ -83,8 +83,8 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                     if (mutableOrder != null) scopeFields()
                 } else {
                     if (onRandomize != null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            GlassActionButton(R.drawable.ic_shuffle, "Randomize", modifier = Modifier.weight(1f), enabled = !busy, onClick = {
+                        GlassActionRow {
+                            GlassActionButton(R.drawable.ic_shuffle, "Randomize", enabled = !busy, onClick = {
                                 busy = true; failure = false
                                 onRandomize { ok -> busy = false; failure = !ok
                                     if (ok) {
@@ -93,8 +93,8 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                                     }
                                 }
                             })
-                            if (checkpoint != null && onRevertOrder != null) GlassPresence(canRevert, Modifier.weight(1f)) {
-                                GlassActionButton(R.drawable.ic_seek_back, "Revert", modifier = Modifier.fillMaxWidth(), enabled = !busy, onClick = {
+                            if (checkpoint != null && onRevertOrder != null) GlassPresence(canRevert) {
+                                GlassActionButton(R.drawable.ic_seek_back, "Revert", enabled = !busy, onClick = {
                                     busy = true; failure = false
                                     onRevertOrder(checkpoint) { ok -> busy = false; failure = !ok
                                         if (ok) {
@@ -135,7 +135,10 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
             } else onSave(edited, override)
         }) { Text(if (applying) "Apply" else "Save") }
     }, dismissButton = { ActionTextButton(enabled = !busy, onClick = onDismiss) { Text(if (applying) "Close" else "Cancel") } },
-        actionsMeasurement = if (mutableOrder != null) ({ BrowseOptionsActionsMeasurement() }) else null)
+        actionsMeasurement = if (mutableOrder != null) ({ BrowseOptionsActionsMeasurement() }) else null,
+        widthMeasurement = {
+            BrowseOptionsWidthMeasurement(route, fields, mutableOrder != null, onRandomize != null, overridden, shadowInset)
+        })
 }
 
 internal fun sortLabel(sort: TrackSort) = when (sort) {

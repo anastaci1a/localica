@@ -19,6 +19,14 @@ private fun ChoiceMeasurement(title: String, labels: List<String>, popup: Boolea
     val cellWidth = with(density) { required.toPx() }
     val policy = androidx.compose.runtime.remember(labels, popup, cellWidth) {
         object : androidx.compose.ui.layout.MeasurePolicy {
+            override fun androidx.compose.ui.layout.IntrinsicMeasureScope.maxIntrinsicWidth(
+                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, height: Int): Int =
+                children[if (!popup && labels.size in 2..3) 0 else 1].maxIntrinsicWidth(height)
+
+            override fun androidx.compose.ui.layout.IntrinsicMeasureScope.minIntrinsicWidth(
+                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, height: Int): Int =
+                children[if (!popup && labels.size in 2..3) 0 else 1].minIntrinsicWidth(height)
+
             override fun androidx.compose.ui.layout.MeasureScope.measure(children: List<androidx.compose.ui.layout.Measurable>,
                 constraints: androidx.compose.ui.unit.Constraints): androidx.compose.ui.layout.MeasureResult {
                 val index = if (choiceFitsInline(labels.size, cellWidth, constraints.maxWidth.toFloat(), popup)) 0 else 1
@@ -52,9 +60,9 @@ internal fun BrowseOptionsMeasurement(route: BrowseRoute, sortFields: List<Track
         Column(Modifier.fillMaxWidth().padding(horizontal = shadowInset, vertical = shadowInset),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (randomize) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.weight(1f).heightIn(min = CompactControlSize))
-                    GlassActionButtonFace(R.drawable.ic_seek_back, "Revert", Modifier.weight(1f).heightIn(min = CompactControlSize))
+                GlassActionRowMeasurement {
+                    GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
+                    GlassActionButtonFace(R.drawable.ic_seek_back, "Revert", Modifier.heightIn(min = CompactControlSize))
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
@@ -86,5 +94,20 @@ internal fun BrowseOptionsActionsMeasurement() {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 labels.forEach { TextButtonMeasurement(it) }
             }
+    }
+}
+
+/** Entire supported envelope, including chrome; independent of the current draft/tab. */
+@Composable
+internal fun BrowseOptionsWidthMeasurement(route: BrowseRoute, fields: List<TrackSort>, mutable: Boolean,
+    randomize: Boolean, overridden: Boolean, shadowInset: Dp) {
+    Column(Modifier.padding(24.dp)) {
+        GlassChoicesMeasurement(listOf("Sort", "View"), listOf(R.drawable.ic_sort, R.drawable.ic_eye), tab = true)
+        BrowseOptionsMeasurement(route, fields, mutable, randomize, overridden, shadowInset)
+        if (!mutable && (route.collection != null || route.search)) {
+            BooleanPreferenceFrame("Save only for this list") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }
+            if (overridden) TextButtonMeasurement("Use list-type defaults")
+        }
+        BrowseOptionsActionsMeasurement()
     }
 }
