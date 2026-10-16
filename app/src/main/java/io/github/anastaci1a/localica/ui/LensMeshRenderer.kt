@@ -6,6 +6,7 @@ import android.os.Build
 import android.graphics.Paint
 import android.graphics.Shader
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -49,12 +50,16 @@ internal class LensMeshRenderer {
     fun DrawScope.draw(shape: LensGeometry, snapshot: ImageBitmap?, sourceSize: IntSize,
         sourceOffset: Offset, depth: Float, power: Float = 1f, alpha: Float = 1f,
         field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false,
-        flattening: Float = 0f, tone: GlassTone = GlassTone()) {
-        val next = listOf(shape, density, fieldKey ?: Unit)
+        flattening: Float = 0f, tone: GlassTone = GlassTone(), outlines: List<RoundRect>? = null) {
+        val next = listOf(shape, density, fieldKey ?: Unit, outlines ?: Unit)
         val geometryChanged = geometryKey != next
         if (geometryChanged) {
             geometryKey = next
-            val nextMesh = if (field == null) curvedLensMesh(shape, density) else sampledLensMesh(shape, density, field)
+            val nextMesh = when {
+                outlines != null -> outlinedLensMesh(outlines, density, field ?: shape::field)
+                field == null -> curvedLensMesh(shape, density)
+                else -> sampledLensMesh(shape, density, field)
+            }
             vertices = nextMesh.vertices; fields = nextMesh.fields; indices = nextMesh.indices
             rays = FloatArray(vertices.size); texture = FloatArray(vertices.size)
             conditionedIndices = ShortArray(indices.size)
