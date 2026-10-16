@@ -6,6 +6,7 @@ internal data class SelectorTrackGeometry(
     val cross: Float,
     val stretch: Float,
     val wall: Float,
+    val crossExtentOverride: Float? = null,
 ) {
     init {
         require(travel.isFinite() && travel > 0f && cross.isFinite() && cross > 0f)
@@ -14,7 +15,7 @@ internal data class SelectorTrackGeometry(
     val expansion = stretch.coerceIn(0f, .04f)
     val pullFraction get() = expansion / .04f
     val travelExtent = travel * (1f + expansion)
-    val crossExtent = cross / (1f + expansion)
+    val crossExtent = crossExtentOverride ?: (cross / (1f + expansion))
     val travelStart = (travelExtent - travel) * (wall.coerceIn(-1f, 1f) - 1f) / 2f
     val crossStart = (cross - crossExtent) / 2f
     val travelEnd get() = travelStart + travelExtent
@@ -129,3 +130,17 @@ internal fun selectorTrackGeometry(travel: Float, cross: Float, stretch: Float, 
     vertical: Boolean, rtl: Boolean, reducedMotion: Boolean, overflow: Boolean) = SelectorTrackGeometry(
         travel, cross, if (reducedMotion || overflow) 0f else stretch,
         selectorTrackPhysicalWall(logicalWall, vertical, rtl))
+
+/** Project the captured contour as well as its extents; optical body/axial bounds stay unchanged. */
+internal fun SelectorTrackLens.withCrossFrame(frame: SelectorCrossFrame, hostCross: Float,
+    vertical: Boolean): SelectorTrackLens {
+    val extent = frame.lens
+    val start = (hostCross - extent) / 2f
+    val adjusted = if (vertical) androidx.compose.ui.geometry.Rect(start, bounds.top, start + extent, bounds.bottom)
+        else androidx.compose.ui.geometry.Rect(bounds.left, start, bounds.right, start + extent)
+    return copy(bounds = adjusted, outerCorner = frame.outerCorner,
+        corner = frame.corner.coerceIn(0f, minOf(adjusted.width, adjusted.height) / 2f))
+}
+
+internal fun SelectorTrackLens.crossFrame(geometry: SelectorTrackGeometry, vertical: Boolean) =
+    SelectorCrossFrame(geometry.crossExtent, if (vertical) bounds.width else bounds.height, corner, outerCorner)
