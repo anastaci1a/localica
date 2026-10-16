@@ -27,15 +27,19 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     val drag = state.drag ?: return
     val density = LocalDensity.current
     val view = LocalView.current
+    val cancelSize = minOf(with(density) { CompactControlSize.toPx() }, state.viewportHeight.toFloat()).coerceAtLeast(1f)
+    val cancelBottom = (with(density) { 20.dp.toPx() } + state.obscuredBottom)
+        .coerceIn(0f, (state.viewportHeight - cancelSize).coerceAtLeast(0f))
     SideEffect {
-        state.cancelRadius = with(density) { 30.dp.toPx() }
-        state.cancelBottom = with(density) { 20.dp.toPx() } + state.obscuredBottom
+        state.cancelRadius = cancelSize / 2f
+        state.cancelBottom = cancelBottom
         state.onCancelHover = { entering -> view.performHapticFeedback(if (entering)
             android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
     }
     val offset = with(density) { 7.dp.toPx() }
     val margin = with(density) { 8.dp.toPx() }
-    val stackWidth = minOf(drag.cardSize.width, state.viewportWidth - margin * 6).coerceAtLeast(margin)
+    val trailingWidth = if (drag.moving.size > 1) offset * 2 else 0f
+    val stackWidth = minOf(drag.cardSize.width, state.viewportWidth - margin * (if (drag.moving.size > 1) 6 else 2)).coerceAtLeast(margin)
     val width = with(density) { stackWidth.toDp() }
     val height = with(density) { drag.cardSize.height.toDp() }
     var lifted by remember(drag) { mutableStateOf(false) }
@@ -43,7 +47,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     fun homePosition(): Offset {
         val raw = drag.pointer - drag.grab
         return raw.copy(x = raw.x.coerceIn(margin,
-            (state.viewportWidth - stackWidth - offset * 2 - margin).coerceAtLeast(margin)))
+            (state.viewportWidth - stackWidth - trailingWidth - margin).coerceAtLeast(margin)))
     }
     // Sample all trailing cards together. A stale trailing *delta* added to the latest
     // pointer used to jump forward on input, then backward on the next animation frame.
@@ -121,7 +125,8 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     } }
     if (!drag.dropping) {
         DragCancelTarget(drag.overCancel, "move",
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp + with(density) { state.obscuredBottom.toDp() })
+            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { cancelBottom.toDp() })
+                .size(with(density) { cancelSize.toDp() })
                 .zIndex(10f).testTag("cancel-drag"))
     }
 }
