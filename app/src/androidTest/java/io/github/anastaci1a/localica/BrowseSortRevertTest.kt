@@ -39,6 +39,17 @@ class BrowseSortRevertTest {
         compose.onNodeWithText("Revert").assertDoesNotExist()
         compose.runOnIdle { failRandomize = false }
         repeat(2) { compose.onNodeWithText("Randomize").performScrollTo().performClick() }
+        for (label in listOf("Randomize", "Revert")) {
+            val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            compose.onNodeWithText(label, useUnmergedTree = true)
+                .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertEquals("Action labels must stay whole", 1, layouts.single().lineCount)
+            val layout = layouts.single()
+            assertTrue("$label must receive a bounded paragraph width", layout.layoutInput.constraints.hasBoundedWidth)
+            assertFalse("$label overflow: size=${layout.size}, paragraph=${layout.multiParagraph.width}x${layout.multiParagraph.height}, " +
+                "constraints=${layout.layoutInput.constraints}, width=${layout.didOverflowWidth}, height=${layout.didOverflowHeight}",
+                layout.hasVisualOverflow)
+        }
         compose.onNodeWithText("Revert").assertIsDisplayed().performClick()
         compose.onNodeWithText("Couldn’t save this order. Try again.").assertExists()
         compose.onNodeWithText("Revert").assertIsDisplayed()
