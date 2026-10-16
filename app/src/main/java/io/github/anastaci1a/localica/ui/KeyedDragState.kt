@@ -111,13 +111,15 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
         }
     }
     suspend fun autoScroll(edge: Float) {
-        fun effectiveEdge() = minOf(edge, (viewportHeight - obscuredBottom).coerceAtLeast(0f) / 2f)
+        // State-only adapters can scroll before an overlay has supplied host dimensions.
+        fun visibleHeight() = (viewportHeight.takeIf { it > 0 } ?: grid.layoutInfo.viewportSize.height) - obscuredBottom
+        fun effectiveEdge() = minOf(edge, visibleHeight().coerceAtLeast(0f) / 2f)
         fun speed(d: KeyedDrag<T, P>): Float {
             val zone = effectiveEdge()
             return when {
                 d.overCancel || zone <= 0f -> 0f
                 d.pointer.y < zone -> -((zone - d.pointer.y) / zone).coerceIn(0f, 1f)
-                d.pointer.y > viewportHeight - obscuredBottom - zone -> ((d.pointer.y - viewportHeight + obscuredBottom + zone) / zone).coerceIn(0f, 1f)
+                d.pointer.y > visibleHeight() - zone -> ((d.pointer.y - visibleHeight() + zone) / zone).coerceIn(0f, 1f)
                 else -> 0f
             }
         }
