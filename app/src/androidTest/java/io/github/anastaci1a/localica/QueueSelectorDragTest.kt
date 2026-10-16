@@ -296,36 +296,66 @@ class QueueSelectorDragTest {
                 thread.stackTrace.take(80).forEach { android.util.Log.e("QueueSelectorDragTest", "  at $it") }
             }
         }, 5, java.util.concurrent.TimeUnit.SECONDS)
-        val viewport = list()
+        var view: android.view.View? = null
         var held = false
+        var pointer = Offset.Zero
+        var downTime = 0L
+        var eventTime = 0L
+        fun send(action: Int, point: Offset = pointer) {
+            pointer = point
+            eventTime = maxOf(android.os.SystemClock.uptimeMillis(), eventTime + 1)
+            if (action == android.view.MotionEvent.ACTION_DOWN) { downTime = eventTime; held = true }
+            compose.runOnUiThread {
+                val target = checkNotNull(view)
+                val location = IntArray(2).also(target::getLocationOnScreen)
+                val properties = android.view.MotionEvent.PointerProperties().apply {
+                    id = 0; toolType = android.view.MotionEvent.TOOL_TYPE_FINGER
+                }
+                val coordinates = android.view.MotionEvent.PointerCoords().apply {
+                    x = point.x + location[0]; y = point.y + location[1]; pressure = 1f; size = 1f
+                }
+                val event = android.view.MotionEvent.obtain(downTime, eventTime, action, 1,
+                    arrayOf(properties), arrayOf(coordinates), 0, 0, 1f, 1f, 0, 0,
+                    android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
+                event.offsetLocation(-location[0].toFloat(), -location[1].toFloat())
+                try {
+                    val delivered = target.dispatchTouchEvent(event)
+                    // Compose consumes cancellation while legitimately returning false.
+                    if (action != android.view.MotionEvent.ACTION_CANCEL)
+                        assertTrue("The captured root must receive the pointer stream", delivered)
+                } finally { event.recycle() }
+            }
+            if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) held = false
+        }
         try {
             mark("before handle lookup")
-            val start = localHandle("q1")
+            val handle = compose.onNodeWithTag("queue-handle-q1", useUnmergedTree = true).fetchSemanticsNode()
+            val start = handle.boundsInRoot.center
+            view = (handle.root as androidx.compose.ui.platform.ViewRootForTest).view
             mark("before close gate")
             compose.runOnIdle { panelReady = false }
             mark("after close gate")
             compose.mainClock.autoAdvance = false
-            // A rejected handle contact can belong to scrolling. Do not wait for idleness
-            // while that pointer is held; explicitly advance the gate's recomposition.
+            compose.mainClock.advanceTimeByFrame()
+            mark("closed gate frame applied")
+            // Native events keep one pointer stream without querying semantics while held.
+            // Such a query waits for Espresso idleness during API36 stretch rendering.
             mark("before down injection")
-            viewport.performTouchInput { down(start); held = true; mark("down queued") }
+            send(android.view.MotionEvent.ACTION_DOWN, start)
             mark("after down injection")
-            viewport.performTouchInput { moveTo(start + Offset(0f, 35f)) }
+            send(android.view.MotionEvent.ACTION_MOVE, start + Offset(0f, 35f))
             mark("after held move; before gate UI call")
             compose.runOnUiThread { mark("inside gate UI call"); panelReady = true; mark("gate state written") }
             mark("after gate UI call; before frame")
             compose.mainClock.advanceTimeByFrame()
             mark("after frame; before release injection")
-            viewport.performTouchInput {
-                mark("inside release injection")
-                moveTo(start + Offset(0f, 140f)); up(); held = false
-                mark("release queued")
-            }
+            send(android.view.MotionEvent.ACTION_MOVE, start + Offset(0f, 140f))
+            send(android.view.MotionEvent.ACTION_UP)
             mark("after release injection")
         } finally {
             try {
                 mark("before pointer cleanup")
-                if (held) viewport.performTouchInput { cancel() }
+                if (held) send(android.view.MotionEvent.ACTION_CANCEL)
                 mark("after pointer cleanup")
             } finally {
                 compose.mainClock.autoAdvance = true
