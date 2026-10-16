@@ -92,7 +92,43 @@ class ScopedSearchHistoryTest {
 
     private fun awaitClosed() {
         BrowseSchedulerWatchdog.phase("await scoped popup removed")
-        compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+        try {
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+        } catch (failure: Throwable) {
+            // Inspect the failed close without extra Back input or an extended deadline.
+            fun capture(block: () -> Unit) {
+                runCatching(block).exceptionOrNull()?.let(failure::addSuppressed)
+            }
+            capture {
+                val editors = compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes()
+                editors.forEach { node ->
+                    val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+                    val text = node.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.EditableText) {
+                        androidx.compose.ui.text.AnnotatedString("<absent>")
+                    }
+                    val focused = node.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Focused) { false }
+                    compose.runOnUiThread {
+                        val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+                        android.util.Log.e("ScopedSearchHistory", "awaitClosed timeout editor=$text focused=$focused " +
+                            "attached=${view.isAttachedToWindow} windowFocus=${view.hasWindowFocus()} " +
+                            "ime=${insets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())} " +
+                            "bottom=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom}")
+                    }
+                }
+            }
+            for (unmerged in listOf(false, true)) capture {
+                compose.onAllNodes(isRoot(), useUnmergedTree = unmerged).printToString()
+                    .chunked(3000).forEachIndexed { index, chunk ->
+                        android.util.Log.e("ScopedSearchHistory", "awaitClosed unmerged=$unmerged part=$index $chunk")
+                    }
+            }
+            capture { android.util.Log.e("ScopedSearchHistory", InstrumentationRegistry.getInstrumentation()
+                .uiAutomation.windows.joinToString { window ->
+                    "id=${window.id} type=${window.type} focused=${window.isFocused} " +
+                        "active=${window.isActive} package=${window.root?.packageName}"
+                }) }
+            throw failure
+        }
     }
 
     private fun scrollToAlbum(title: String) {
@@ -144,6 +180,9 @@ class ScopedSearchHistoryTest {
         editor.performClick().performTextReplacement("")
         compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1 }
         compose.awaitExpectedWindowFocus(editor)
+        // Match editable content only; the empty field also exposes its search placeholder.
+        editor.assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
         pressSystemBack() // Empty scoped search closes even with completed history.
         awaitClosed()
         open()
