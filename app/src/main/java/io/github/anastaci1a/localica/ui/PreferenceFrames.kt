@@ -110,6 +110,20 @@ internal fun GlassChoicesMeasurement(labels: List<String>, icons: List<Int>? = n
     androidx.compose.ui.layout.Layout(modifier = Modifier.padding(vertical = ChoiceOuterVerticalInset).padding(ChoiceInnerInset),
         content = { labels.forEachIndexed { index, label -> GlassChoiceFace(label, icons?.getOrNull(index), tab) } },
         measurePolicy = object : androidx.compose.ui.layout.MeasurePolicy {
+            override fun androidx.compose.ui.layout.IntrinsicMeasureScope.maxIntrinsicHeight(
+                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, width: Int): Int = height.roundToPx()
+
+            override fun androidx.compose.ui.layout.IntrinsicMeasureScope.minIntrinsicHeight(
+                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, width: Int): Int = height.roundToPx()
+
+            override fun androidx.compose.ui.layout.IntrinsicMeasureScope.maxIntrinsicWidth(
+                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, height: Int): Int =
+                (children.maxOfOrNull { it.maxIntrinsicWidth(height) } ?: 0) * children.size
+
+            override fun androidx.compose.ui.layout.IntrinsicMeasureScope.minIntrinsicWidth(
+                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, height: Int): Int =
+                (children.maxOfOrNull { it.minIntrinsicWidth(height) } ?: 0) * children.size
+
             override fun androidx.compose.ui.layout.MeasureScope.measure(children: List<androidx.compose.ui.layout.Measurable>, constraints: androidx.compose.ui.unit.Constraints): androidx.compose.ui.layout.MeasureResult {
                 require(constraints.hasBoundedWidth)
                 val width = constraints.maxWidth
