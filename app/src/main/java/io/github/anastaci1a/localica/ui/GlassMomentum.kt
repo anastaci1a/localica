@@ -49,6 +49,7 @@ internal class GlassMomentum(var damping: Float = 8f) {
                 if (value == target || value == before) velocity = 0f
             }
         }
+        fun finish() { value = if (target == 0f) 0f else target; velocity = 0f }
         fun reset() { value = 0f; velocity = 0f; target = 0f }
     }
     private val motion = Spring()
@@ -60,6 +61,13 @@ internal class GlassMomentum(var damping: Float = 8f) {
     val scaleX get() = shape.scaleX()
     val scaleY get() = shape.scaleY()
     val settled get() = motion.settled && pressure.settled && depth.settled
+
+    /** Called only after the owning clock completes normally, never during cancellation. */
+    fun finishSettlement(): Boolean {
+        if (!settled) return false
+        motion.finish(); pressure.finish(); depth.finish()
+        return true
+    }
 
     fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f }
 

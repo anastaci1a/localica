@@ -5,6 +5,44 @@ import org.junit.Test
 import kotlin.math.abs
 
 class GlassMomentumTest {
+    @Test fun normalConvergencePublishesExactTargetsInsteadOfResidualLayoutRounding() {
+        for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f)) {
+            val body = GlassMomentum(damping)
+            repeat(fps) { body.advance(3f, 1f / fps, pressure = -.15f, contact = 1f) }
+            var frames = 0
+            do { body.advance(0f, 1f / fps); frames++ } while (!body.settled && frames < fps * 20)
+            assertTrue("Normal return converges at $fps fps, damping=$damping", body.settled)
+            assertTrue("The convergence epsilon leaves a real residual", body.shape.strain != 0f || body.shape.depth != 0f)
+            assertTrue(body.finishSettlement())
+            assertEquals(GlassShape(), body.shape)
+            assertEquals(1f, body.scaleX, 0f)
+            assertEquals(1f, body.scaleY, 0f)
+        }
+    }
+
+    @Test fun unfinishedSettlementPreservesTheShapeAndVelocityForTheNextOwner() {
+        val body = GlassMomentum(); val uninterrupted = GlassMomentum()
+        repeat(5) { for (item in listOf(body, uninterrupted)) item.advance(3f, 1f / 60, contact = 1f) }
+        val shape = body.shape
+        assertFalse(body.finishSettlement())
+        assertEquals(shape, body.shape)
+        repeat(120) {
+            body.advance(-2f, 1f / 60)
+            uninterrupted.advance(-2f, 1f / 60)
+            assertEquals("Rejected completion preserves momentum as well as shape", uninterrupted.shape, body.shape)
+        }
+    }
+
+    @Test fun heldConvergenceFinishesAtItsForcedTargetInsteadOfResettingToRest() {
+        val body = GlassMomentum()
+        var frames = 0
+        do { body.advance(0f, 1f / 60, pressure = -.15f, contact = 1f); frames++ }
+        while (!body.settled && frames < 1200)
+        assertTrue(body.finishSettlement())
+        assertEquals(-.15f, body.strain, 0f)
+        assertTrue(body.shape.depth < 0f)
+    }
+
     @Test fun heldAccelerationAndBrakingRemainVisibleWithoutRinging() {
         for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f))
             for (direction in listOf(-1f, 1f)) for (braking in listOf(false, true)) {
