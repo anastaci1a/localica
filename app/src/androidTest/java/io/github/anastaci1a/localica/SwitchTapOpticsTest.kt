@@ -4,6 +4,7 @@ import android.view.View
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -13,17 +14,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** Baseline diagnostic: presented pixels establish tap/held differences before a fix.
- * Passing logical/held-source checks alone does not establish correct short-tap optics. */
+/** Presented-pixel regression plus retained baseline comparison frames for tap/held optics. */
 class SwitchTapOpticsTest {
     @get:Rule val compose = createComposeRule()
     private var stage by mutableIntStateOf(0)
     private lateinit var view: View
+    private val backings = mutableMapOf<String, FrostedBackdrop>()
 
     @Test fun recordShortTapAndHeldReleasePatternDuringTravel() {
         var tapped by mutableStateOf(false)
@@ -63,7 +65,8 @@ class SwitchTapOpticsTest {
             var elapsed = 0L
             for (at in listOf(16L, 48L, 96L, 160L, 240L)) {
                 compose.mainClock.advanceTimeBy(at - elapsed); elapsed = at
-                capture("tap-$mode-$faster-$at", "tap")
+                val visibleBackdrop = capture("tap-$mode-$faster-$at", "tap")
+                if (at == 160L) assertTrue("Automatic travel must retain a refracted backdrop band ($mode, faster=$faster)", visibleBackdrop > 10)
                 capture("held-$mode-$faster-$at", "held")
             }
             compose.runOnIdle { assertTrue(tapped); assertTrue(held) }
@@ -72,7 +75,12 @@ class SwitchTapOpticsTest {
             capture("reverse-$mode-$faster", "tap")
             compose.mainClock.advanceTimeBy(1000)
             compose.runOnIdle { assertFalse(tapped); assertTrue(held) }
-            heldSwitch.performTouchInput { down(Offset(width - 8f, centerY)); moveTo(Offset(8f, centerY), delayMillis = 64) }
+            capture("settled-off-$mode-$faster", "tap")
+            capture("settled-on-$mode-$faster", "held")
+            heldSwitch.performTouchInput { down(Offset(width - 8f, centerY)) }
+            compose.mainClock.advanceTimeBy(320)
+            capture("held-on-$mode-$faster", "held")
+            heldSwitch.performTouchInput { moveTo(Offset(8f, centerY), delayMillis = 64) }
             compose.mainClock.advanceTimeBy(240)
             capture("held-drag-$mode-$faster", "held")
             heldSwitch.performTouchInput { up() }
@@ -105,10 +113,10 @@ class SwitchTapOpticsTest {
                     GlassMenu(open, anchor, { open = false }) {
                         view = LocalView.current
                         val backing = LocalFrostedBackdrop.current
-                        SideEffect { material = backing }
+                        SideEffect { material = backing; backing?.let { backings["popup-switch"] = it } }
                         Box(Modifier.width(260.dp).height(96.dp).testTag("popup-switch")) {
                             Box(Modifier.padding(24.dp)) { BooleanPreference("Popup switch", checked) { checked = it } }
-                            PresentationMarker { stage }
+                            PresentationMarker(Modifier.align(Alignment.TopCenter)) { stage }
                         }
                     }
                 }
@@ -138,6 +146,7 @@ class SwitchTapOpticsTest {
 
     @Composable private fun Sample(tag: String, checked: Boolean, change: (Boolean) -> Unit) {
         val source = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+        SideEffect { backings[tag] = source }
         Box(Modifier.fillMaxWidth().height(96.dp).testTag(tag)) {
             Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) {
                 val cell = 8.dp.toPx()
@@ -155,10 +164,11 @@ class SwitchTapOpticsTest {
         }
     }
 
-    private fun capture(label: String, tag: String) {
+    private fun capture(label: String, tag: String): Int {
         compose.runOnIdle { stage = stage % 30 + 1 }
-        val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag(tag), stage) { view }
         val host = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        val sample = if (tag == "popup-switch") IntOffset(host.width.toInt() / 2, 2) else IntOffset(2, 2)
+        val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag(tag), stage, sample) { view }
         val control = compose.onAllNodes(hasTestTag("settings-switch") and hasAnyAncestor(hasTestTag(tag)),
             useUnmergedTree = true)[0].fetchSemanticsNode().boundsInRoot
         val centerY = control.center.y - host.top
@@ -174,7 +184,7 @@ class SwitchTapOpticsTest {
             }
             if (c.red > .85f && c.green > .85f && c.blue > .85f) white++
         }
-        android.util.Log.i("SwitchTapOptics", "$label clock=${compose.mainClock.currentTime} green=$green outsideTrackGreen=$outsideGreen white=$white size=${pixels.width}x${pixels.height}")
+        android.util.Log.i("SwitchTapOptics", "$label clock=${compose.mainClock.currentTime} green=$green outsideTrackGreen=$outsideGreen white=$white backingRecorded=${backings[tag]?.recorded} raster=${backings[tag]?.snapshot != null} size=${pixels.width}x${pixels.height}")
         // Small PNGs preserve the actual presented contour and pattern for review.
         val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
         try {
@@ -186,7 +196,12 @@ class SwitchTapOpticsTest {
                 android.util.Log.i("SwitchTapPixels", "$label part=$i $chunk")
             }
         } finally { bitmap.recycle() }
+        if (label.startsWith("settled-")) {
+            assertEquals("Settled controls stop exposing the backing", 0, green)
+            assertTrue("Settled switch thumb returns to white", white > 10)
+        }
         if (label == "reduced-snap") assertEquals("Reduced motion settles without a travelling optical lens", 0, green)
         if (label.startsWith("held-ready")) assertTrue("Held lens must visibly sample its green backing", green > 10)
+        return outsideGreen
     }
 }
