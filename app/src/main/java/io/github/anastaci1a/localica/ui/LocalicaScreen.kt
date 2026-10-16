@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -61,8 +60,6 @@ fun LocalicaScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val session: SessionSelection = androidx.lifecycle.viewmodel.compose.viewModel()
-    var selectionHeight by remember { mutableStateOf(0.dp) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
     val editTags = LocalTagEdit.current
     val browseSorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
@@ -222,6 +219,10 @@ fun LocalicaScreen(
         androidx.compose.animation.core.tween(settings.motionDuration(300)), label = "Detail navigation")
     SideEffect { if (!insideCollection) { browseInk = androidx.compose.ui.graphics.Color.Black; pageBackground = androidx.compose.ui.graphics.Color(0xFFF9F9FB) } }
     val bottomChrome = 8.dp + 72.dp * chromeVisibility
+    val selectionPanel = rememberFloatingSelectionPanel(
+        session.panelVisible && !expanded && dragHost.state?.drag == null, settings.reducedMotion)
+    val browseBottomChrome = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+        if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White, glassBlur = settings.glass.blur)
     val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual),
         dark = expanded, glassBlur = settings.glass.blur)
@@ -237,8 +238,7 @@ fun LocalicaScreen(
         LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
-        LocalBrowseObscuredInset provides (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
-            (if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome) + if (session.panelVisible) selectionHeight else 0.dp)) {
+        LocalBrowseObscuredInset provides (browseBottomChrome + selectionPanel.clearance)) {
     BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val queueSelectionMaxHeight = maxHeight / 3
@@ -328,9 +328,9 @@ fun LocalicaScreen(
                 ActionMenuItem("Settings", onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             }
         }
-        SelectionPanelVisibility(session.panelVisible && !expanded && dragHost.state?.drag == null, Modifier.align(Alignment.BottomCenter)
-            .padding(horizontal = 8.dp).padding(bottom = inset + if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome)
-            .fillMaxWidth().heightIn(max = maxHeight / 2).onSizeChanged { selectionHeight = with(density) { it.height.toDp() } }, settings.reducedMotion) {
+        FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)
+            .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
+            .fillMaxWidth().heightIn(max = maxHeight / 2)) {
             FrostedSurface(shape = Corners.panel) {
             Column(Modifier.verticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }
         } }

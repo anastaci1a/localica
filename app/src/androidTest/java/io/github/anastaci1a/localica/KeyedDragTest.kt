@@ -144,4 +144,31 @@ class KeyedDragTest {
         compose.onNodeWithText("Queue 3").assertDoesNotExist()
     }
 
+    @Test fun cancelHitGeometryReadsCurrentOccupancyBeforeRecomposition() {
+        fixture()
+        compose.runOnIdle {
+            val oldCenter = reorder.cancelCenter
+            reorder.obscuredBottom = 100f
+            assertEquals(oldCenter.y - 100f, reorder.cancelCenter.y, 0.01f)
+            reorder.move(reorder.cancelCenter)
+            assertTrue(reorder.drag!!.overCancel)
+            reorder.move(oldCenter)
+            assertFalse(reorder.drag!!.overCancel)
+        }
+    }
+
+    @Test fun cancelClearanceClampsInsideSmallViewport() {
+        fixture()
+        compose.runOnIdle {
+            reorder.viewportHeight = 40
+            reorder.cancelRadius = 20f
+            reorder.cancelMargin = 20f
+            reorder.obscuredBottom = 100f
+            assertEquals(0f, reorder.cancelBottom, 0.01f)
+            assertEquals(20f, reorder.cancelCenter.y, 0.01f)
+            reorder.move(reorder.cancelCenter)
+            assertTrue(reorder.drag!!.overCancel)
+        }
+    }
+
 }
