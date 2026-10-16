@@ -15,6 +15,12 @@ Verify affected contracts: migrations/recovery and failed operations; occurrence
 
 Local and CI verification use the same tests and Gradle launcher. Use focused tests during iteration, then run the complete build/check commands and `connectedDebugAndroidTest` on both API 26 and 36 against the final candidate before pushing. Match the emulator configuration below; code, test or build-configuration changes after that gate require another full run. CI repeats verification in a fresh environment on the pushed commit before release.
 
+## Development-only schema compatibility build
+
+This branch retains delivered traversal behavior while opening the newer queue schema. Reading or changing only queue metadata preserves ordered-projection columns; any legacy journey mutation clears them transactionally so a newer controller regenerates its traversal identity. It does not restore history deliberately reset by the newer behavior. The original schema-6 APK cannot open schema 7, and there is no destructive fallback.
+
+Before distributing this as a rollback package, verify a same-package/same-signature candidate → compatibility build → candidate installation sequence with increasing test version codes. Run `ShuffleApkCompatibilityTest` with instrumentation argument `shuffleCompatibilityPhase=seed`, `bridge`, then `verify` respectively, without clearing app data. Its dedicated persistent fixtures check duplicate occurrences, saved order/cursor, controller reopening and statistics. Ordinary migration tests do not replace this gate; retain current safety fixes in the compatibility build. Track artifacts and results in [#295](https://github.com/anastaci1a/localica/issues/295).
+
 ## Compatibility and dependencies
 
 - Android 8+; MP3 and AAC/M4A are primary formats, with WAV/FLAC/Ogg/Opus using available device decoders. No decoder extensions. Boundary tests check decoded samples, MP3 waveform alignment and transition buffering; sample counts alone are insufficient.
