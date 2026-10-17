@@ -25,9 +25,12 @@ class QueueSqlCountBenchmarkTest {
         val track = Track("content://fixture", "Fixture", fileName = "fixture.mp3", relativePath = "fixture.mp3")
         val seed = QueueEdits.create(List(1000) { track }, 0, "Count diagnostic")
         val ids = seed.entries.map { it.id }
-        var before = QueueJourney.start(ids, ids.first(), JourneyModes(loop = true))
+        var before = QueueJourney.start(ids, ids.first(), JourneyModes(shuffle = true, loop = true), Random(19))
         repeat(3) { before = before.arrive(before.next!!.token, ids) }
-        val after = before.reconcile(ids, before.current!!.entryId, JourneyModes(shuffle = true, loop = true), Random(19))
+        // A retained-row UPDATE diagnostic, not a mode transition: fresh shuffle deliberately
+        // replaces planned tokens. Reverse concrete row order while keeping every existing key.
+        val after = before.copy(future = before.future.groupBy { it.cycle }.values.flatMap { it.reversed() },
+            plans = before.plans.mapValues { (_, order) -> order.reversed() })
         val queue = seed.copy(journey = before, currentEntryId = before.current!!.entryId)
         val oldVisits = before.visitRecords(queue.id).associateBy { it.token }
         val newVisits = after.visitRecords(queue.id).associateBy { it.token }
@@ -38,7 +41,9 @@ class QueueSqlCountBenchmarkTest {
         val reverseVisits = forwardVisits.map { oldVisits.getValue(it.token) }
         val reverseMembers = forwardMembers.map { oldMembers.getValue(it.cycle to it.entryId) }
         val expected = forwardVisits.size + forwardMembers.size
-        assertEquals(5991, expected)
+        assertEquals(2996, forwardVisits.size)
+        assertEquals(3000, forwardMembers.size)
+        assertEquals(5996, expected)
         suspend fun assertRows(journey: QueueJourney) {
             val stored = db.queues().read().active!!.journey!!
             assertEquals(journey.visitRecords(queue.id), stored.visitRecords(queue.id))

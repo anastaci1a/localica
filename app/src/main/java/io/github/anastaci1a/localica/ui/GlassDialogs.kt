@@ -23,6 +23,7 @@ internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLoca
     var dismiss by mutableStateOf(dismiss)
     var dark by mutableStateOf(dark)
     var content by mutableStateOf(content)
+    var fitContent by mutableStateOf(false)
 }
 
 internal val LocalGlassDialogs = staticCompositionLocalOf<GlassDialogs?> { null }
@@ -41,7 +42,7 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
             // view/focus locals; replacing those with Activity locals breaks keyboard input.
             CompositionLocalProvider(entry.locals) {
                 GlassMorphPopup(entry.mounted, entry.anchor, { if (entry.mounted) entry.dismiss() },
-                    entry.placement, darkOverride = entry.dark, content = entry.content)
+                    entry.placement, darkOverride = entry.dark, fitContent = entry.fitContent, content = entry.content)
             }
             LaunchedEffect(entry.mounted, entry.anchor.modalPresent) {
                 if (!entry.mounted && !entry.anchor.modalPresent) host.entries.remove(entry)
@@ -51,7 +52,8 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
 }
 
 @Composable
-internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = GlassPlacement.Center, content: @Composable () -> Unit) {
+internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = GlassPlacement.Center,
+    fitContent: Boolean = placement == GlassPlacement.Menu, content: @Composable () -> Unit) {
     if (LocalInlineGlassDialog.current) {
         CompositionLocalProvider(LocalInlineGlassDialog provides false, content = content)
         return
@@ -65,6 +67,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     SideEffect {
         if (origin.source == null) origin.source = source
         entry.locals = locals; entry.dismiss = onDismiss; entry.dark = dark; entry.content = content
+        entry.fitContent = fitContent
     }
     DisposableEffect(host, entry) {
         host.entries.add(entry)
@@ -76,16 +79,28 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
 internal fun GlassAlertDialog(onDismissRequest: () -> Unit, confirmButton: @Composable () -> Unit,
     modifier: Modifier = Modifier, dismissButton: (@Composable () -> Unit)? = null,
     icon: (@Composable () -> Unit)? = null, title: (@Composable () -> Unit)? = null,
-    text: (@Composable () -> Unit)? = null, footer: (@Composable () -> Unit)? = null) {
-    GlassDialog(onDismissRequest) {
-        Column(modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            icon?.let { Box(Modifier.align(Alignment.CenterHorizontally)) { it() } }
-            title?.let { ProvideTextStyle(MaterialTheme.typography.titleLarge, it) }
-            text?.let { Box(Modifier.weight(1f, fill = false)) { ProvideTextStyle(MaterialTheme.typography.bodyMedium, it) } }
-            footer?.invoke()
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                dismissButton?.invoke(); confirmButton()
-            }
+    text: (@Composable () -> Unit)? = null, actionsMeasurement: (@Composable () -> Unit)? = null,
+    widthMeasurement: (@Composable () -> Unit)? = null,
+    footer: (@Composable () -> Unit)? = null) {
+    GlassDialog(onDismissRequest, fitContent = widthMeasurement != null) {
+        PopupNaturalWidth(widthMeasurement) {
+            DialogViewport(modifier, header = if (icon == null && title == null) null else ({
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    icon?.let { Box(Modifier.align(Alignment.CenterHorizontally)) { it() } }
+                    title?.let { ProvideTextStyle(MaterialTheme.typography.titleLarge, it) }
+                }
+            }), body = text?.let { body -> ({ ProvideTextStyle(MaterialTheme.typography.bodyMedium, body) }) }, footer = {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    footer?.invoke()
+                    @Composable fun Actions() {
+                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            dismissButton?.invoke(); confirmButton()
+                        }
+                    }
+                    if (actionsMeasurement == null) Actions()
+                    else StablePopupBody(measurement = actionsMeasurement) { Actions() }
+                }
+            })
         }
     }
 }
