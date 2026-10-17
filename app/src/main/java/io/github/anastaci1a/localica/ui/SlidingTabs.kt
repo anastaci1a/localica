@@ -108,9 +108,12 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val shell = rememberGlassBody({ 0f }, contact = { if (dragging) 1f else 0f }, pressure = { pressure })
         val baseHeight = with(density) { maxHeight.toPx() }
         val stretch = (-shell.value.strain).coerceIn(0f, .16f) * .25f
-        val rawGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, stretch, logicalWall,
-            false, rtl, reduced, overflow = !fits)
         val inset = with(density) { 4.dp.toPx() }
+        val maximumExtension = with(density) { SelectorMaximumExtension.toPx() }
+        val rawGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, stretch, logicalWall,
+            false, rtl, reduced, overflow = !fits, maximumExtension = maximumExtension,
+            heldCrossInset = inset.takeIf { (pressed || dragging) && appearance.tabStyle != TabLensStyle.Classic },
+            heldContact = if (tabs.size == 1) 1f else abs(glassWallAffinity(lens.value, tabs.lastIndex.toFloat())))
         val insets = SelectorTrackInsets(0f, inset, inset)
         val atlasGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, 0f, 1f,
             false, rtl, reduced, overflow = !fits)
@@ -123,7 +126,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val selectorBody = rememberGlassBody({ lens.value }, { pressure }, { if (pressed || dragging) 1f else 0f })
         val rawFrame = rawGeometry.lens(lens.value, tabs.size, insets, false, rtl,
             if (appearance.tabStyle == TabLensStyle.Classic) GlassShape() else selectorBody.value, rawTrack.height / 2f)
-        val restGeometry = rawGeometry.copy(stretch = 0f)
+        val restGeometry = rawGeometry.copy(stretch = 0f, heldCrossInset = null)
         val cross = rememberSelectorCrossFrame(rawFrame.crossFrame(rawGeometry),
             SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset, (baseHeight / 2f - inset).coerceAtLeast(0f), baseHeight / 2f), pressed || dragging,
             shell.value == GlassShape() && selectorBody.value == GlassShape(),
@@ -137,7 +140,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             rawFrame.withCrossFrame(cross, geometry.cross, false) else rawFrame
         // Fixed padded recording dimensions avoid size-driven legacy recapture on
         // each deformation frame. Dynamic legacy foreground freshness is gated separately.
-        val recording = androidx.compose.ui.geometry.Rect(-viewport * .04f, 0f, viewport * 1.04f, baseHeight)
+        val recording = androidx.compose.ui.geometry.Rect(-maximumExtension, 0f, viewport + maximumExtension, baseHeight)
         Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {
             LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
                 .testTag("tab-track-shell").bottomGlassShadow(opacity = shadowOpacity), source,
@@ -254,7 +257,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 }
                 if (!refractForeground) Lens()
                 val foregroundRecording = androidx.compose.ui.geometry.Rect(
-                    -geometry.travel * .04f, 0f, geometry.travel * 1.04f, baseHeight)
+                    -maximumExtension, 0f, geometry.travel + maximumExtension, baseHeight)
                 val foregroundContent = androidx.compose.ui.geometry.Rect(
                     -foregroundRecording.left, 0f, geometry.travel - foregroundRecording.left, baseHeight)
                 Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundRecording)

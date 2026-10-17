@@ -9,9 +9,9 @@ class SelectorTrackGeometryTest {
     @Test fun navigationKeepsOppositeWallAndMovesSlotCentersWithItsShell() {
         val g = SelectorTrackGeometry(360f, 64f, .04f, 1f)
         near(0f, g.travelStart)
-        near(374.4f, g.travelEnd)
-        near(64f / 1.04f, g.crossExtent)
-        listOf(46.8f, 140.4f, 234f, 327.6f).forEachIndexed { i, center ->
+        near(364f, g.travelEnd)
+        near(64f * 360f / 364f, g.crossExtent)
+        listOf(45.5f, 136.5f, 227.5f, 318.5f).forEachIndexed { i, center ->
             near(center, g.slotCenter(i, 4, 0f))
         }
         near(g.travelEnd - 4f, g.slotStart(3, 4, 0f) + g.slotExtent(4, 0f) - 4f)
@@ -158,6 +158,94 @@ class SelectorViewportPickupTest {
             org.junit.Assert.assertFalse(selectorVisibleLensContains(androidx.compose.ui.geometry.Offset(21f, 5f), lens, offset, viewport))
             org.junit.Assert.assertFalse(selectorVisibleLensContains(androidx.compose.ui.geometry.Offset(90f, 32f), lens, offset, viewport))
             org.junit.Assert.assertFalse(selectorVisibleLensContains(androidx.compose.ui.geometry.Offset(10f, 32f), lens, offset, viewport))
+        }
+    }
+}
+
+/** Physical-distance acceptance, independent of the legacy percentage fixture above. */
+class SelectorBoundedHeldGeometryTest {
+    private fun near(expected: Float, actual: Float, density: Float = 1f) =
+        assertEquals(expected, actual, .001f * density)
+
+    @Test fun extensionHasOnePhysicalLimitAcrossLengthsDensitiesAxesAndDirections() {
+        for (density in listOf(1f, 1.75f, 2.625f, 3f))
+            for (length in listOf(64f, 280f, 720f, 1200f))
+                for (vertical in listOf(false, true)) for (rtl in listOf(false, true))
+                    for (wall in listOf(-1f, 1f)) for (pull in listOf(0f, .25f, .7f, 1f)) {
+                        val g = selectorTrackGeometry(length * density, 64f * density, .04f * pull,
+                            wall, vertical, rtl, false, false, maximumExtension = 4f * density)
+                        near(4f * pull, (g.travelExtent - g.travel) / density)
+                        val physical = selectorTrackPhysicalWall(wall, vertical, rtl)
+                        near(if (physical < 0f) g.travel else 0f,
+                            if (physical < 0f) g.travelEnd else g.travelStart, density)
+                        repeat(4) { index ->
+                            val slot = g.slot(index, 4, SelectorTrackInsets(0f, 0f, 4f * density), vertical, rtl)
+                            near(index.toFloat(), g.logicalPositionAt(slot.glyphCenter, 4, 0f, vertical, rtl))
+                        }
+                    }
+    }
+
+    @Test fun heldCrossDimensionIsFixedWhileContactCornersRemainConcentric() {
+        for (density in listOf(1f, 1.75f, 2.625f, 3f))
+            for (vertical in listOf(false, true)) for (rtl in listOf(false, true))
+                for (count in listOf(1, 3, 12)) for (wall in listOf(-1f, 1f))
+                    for (pull in listOf(0f, .25f, .7f, 1f)) {
+                        val cross = (if (vertical) 300f else 64f) * density
+                        val travel = (if (vertical) count * 52f + 8f else 280f) * density
+                        val inset = 4f * density
+                        for (position in listOf(0f, .125f, (count - 1f) / 2f, count - 1f)) {
+                            val bounded = position.coerceIn(0f, count - 1f)
+                            val contact = if (count == 1) 1f else kotlin.math.abs(glassWallAffinity(bounded, count - 1f))
+                            val g = selectorTrackGeometry(travel, cross, .04f * pull, wall,
+                                vertical, rtl, false, false, maximumExtension = 4f * density,
+                                heldCrossInset = inset, heldContact = contact)
+                            val radius = 24f * density - inset * pull * contact
+                            val lens = g.lens(bounded, count, SelectorTrackInsets(inset, 0f, inset),
+                                vertical, rtl, GlassShape(-.16f, -.2f), radius)
+                            near(cross - 2f * inset, lens.crossExtent, density)
+                            near(cross / 2f, if (vertical) lens.bounds.center.x else lens.bounds.center.y, density)
+                            org.junit.Assert.assertTrue(lens.crossExtent <= g.crossExtent)
+                            if (kotlin.math.abs(lens.wall) == 1f) {
+                                val expectedAlong = if (lens.wall < 0f) g.travelStart + radius else g.travelEnd - radius
+                                val centers = lens.contactCenters(vertical)
+                                for (center in listOf(centers.first, centers.second))
+                                    near(expectedAlong, if (vertical) center.y else center.x, density)
+                                near(g.crossStart + radius, if (vertical) centers.first.x else centers.first.y, density)
+                                near(g.crossStart + g.crossExtent - radius,
+                                    if (vertical) centers.second.x else centers.second.y, density)
+                                near(inset * (1f - pull), lens.gap, density)
+                            }
+                        }
+                    }
+    }
+
+    @Test fun heldNavigationUsesTheSameFixedCrossAndConcentricContactWithSlotInsets() {
+        for (density in listOf(1f, 1.75f, 2.625f, 3f)) for (rtl in listOf(false, true))
+            for (wall in listOf(-1f, 1f)) for (pull in listOf(0f, .25f, .7f, 1f)) {
+                val inset = 4f * density
+                val g = selectorTrackGeometry(280f * density, 64f * density, .04f * pull,
+                    wall, false, rtl, false, false, maximumExtension = 4f * density,
+                    heldCrossInset = inset)
+                val lens = g.lens(if (wall < 0f) 0f else 2f, 3, SelectorTrackInsets(0f, inset, inset),
+                    false, rtl, GlassShape(-.16f, -.2f), g.crossExtent / 2f)
+                near(56f * density, lens.crossExtent, density)
+                val (top, bottom) = lens.contactCenters(false)
+                val along = if (lens.wall < 0f) g.travelStart + lens.outerCorner else g.travelEnd - lens.outerCorner
+                near(along, top.x, density); near(along, bottom.x, density)
+                near(g.crossStart + lens.outerCorner, top.y, density)
+                near(g.crossStart + g.crossExtent - lens.outerCorner, bottom.y, density)
+                near(inset * (1f - pull), lens.gap, density)
+            }
+    }
+
+    @Test fun suppressedGeometryDoesNotApplyHeldCrossContraction() {
+        for (reduced in listOf(false, true)) for (overflow in listOf(false, true)) {
+            if (!reduced && !overflow) continue
+            val g = selectorTrackGeometry(900f, 300f, .04f, 1f, true, false,
+                reduced, overflow, maximumExtension = 12f, heldCrossInset = 12f)
+            near(900f, g.travelExtent)
+            near(300f, g.crossExtent)
+            org.junit.Assert.assertNull(g.heldCrossInset)
         }
     }
 }

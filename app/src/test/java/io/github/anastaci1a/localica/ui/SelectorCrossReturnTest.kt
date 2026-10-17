@@ -71,7 +71,7 @@ class SelectorCrossReturnTest {
     }
 
     @Test fun horizontalFullContactRetainsTheAuthoritativeExtentDespiteRectangleRounding() {
-        val geometry = SelectorTrackGeometry(497f, 105f, .04f, -1f)
+        val geometry = SelectorTrackGeometry(497f, 105f, .04f, -1f, maximumExtension = 497f * .04f)
         val lens = geometry.lens(0f, 3, SelectorTrackInsets(7f, 0f, 7f),
             vertical = false, rtl = false, GlassShape(), 42f)
         // This is the exact API36 regression: the two translated edges round independently.
