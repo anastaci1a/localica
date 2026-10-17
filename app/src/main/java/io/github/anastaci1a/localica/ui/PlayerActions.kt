@@ -94,7 +94,7 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                             if (action == null) contentDescription = "Empty player action slot, ${slot.label}"
                             if (mode) { selected = active; stateDescription = label(action!!) }
                         }
-                        .ownButtonDrag().combinedClickable(interactionSource = null, indication = null, onClick = { if (action != null) onAction(action) },
+                        .ownButtonDrag().combinedClickable(interactionSource = null, indication = null, onClick = controlActivation(action != null) { if (action != null) onAction(action) },
                             onLongClickLabel = if (action == PlayerAction.Repeat && onRepeatOptions != null) "Repeat options" else "Customize player actions",
                             onLongClick = if (action == PlayerAction.Repeat && onRepeatOptions != null) onRepeatOptions else onCustomize),
                         contentAlignment = Alignment.Center) {
