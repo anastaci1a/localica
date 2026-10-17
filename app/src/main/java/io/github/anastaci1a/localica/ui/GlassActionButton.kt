@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 internal fun GlassActionButton(icon: Int, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Glass action availability")
     LiquidGlassSurface(modifier.alpha(opacity).heightIn(min = CompactControlSize).ownButtonDrag(enabled)
-        .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = onClick), pressFeedback = enabled) {
+        .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = controlActivation(enabled, onClick)), pressFeedback = enabled) {
         GlassActionButtonFace(icon, label)
     }
 }

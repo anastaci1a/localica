@@ -31,6 +31,18 @@ internal fun rememberControlHaptics(): ControlHaptics {
     }
 }
 
+/** Install only at the clickable owner, never around a domain callback or its parent wrapper. */
+@Composable
+internal fun controlActivation(enabled: Boolean = true, onClick: () -> Unit): () -> Unit {
+    val haptics = rememberControlHaptics()
+    return {
+        if (enabled) {
+            haptics.emit(ControlHaptic.Weak)
+            onClick()
+        }
+    }
+}
+
 /** One owned drag, independent of recomposition and of the number of active pointers. */
 internal class ControlDragHaptics(private val haptics: ControlHaptics) {
     private var option: Int? = null

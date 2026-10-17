@@ -112,7 +112,7 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
             Box(Modifier.offset { IntOffset(offsets.getValue(item).value.roundToInt(), 0) }
                 .zIndex(if (item in moving) 2f else if (item in selected) 1f else 0f)
                 .width(widths.getValue(item)).fillMaxHeight().testTag(tag(item))
-                .ownButtonDrag(enabled && role != Role.Checkbox).combinedClickable(enabled = enabled, role = role, onClick = { onSelect(item) },
+                .ownButtonDrag(enabled && role != Role.Checkbox).combinedClickable(enabled = enabled, role = role, onClick = controlActivation(enabled) { onSelect(item) },
                     onLongClick = onLongClick?.let { callback -> { callback(item) } })
                 .semantics { this.selected = item in selected }, contentAlignment = Alignment.Center) {
                 LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(anchor),
