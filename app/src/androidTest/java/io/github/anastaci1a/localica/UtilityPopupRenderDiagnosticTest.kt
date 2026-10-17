@@ -134,16 +134,28 @@ class UtilityPopupRenderDiagnosticTest {
             compose.runOnIdle { open = false }
             awaitRestoredDrawAcknowledgement()
             capture("restored-draw-ack", save = true)
-            // Do not advance another frame between observing the acknowledged draw
-            // and requesting reopen: the close coroutine would remove the dialog.
+            // Request reopen at the draw acknowledgement, without another frame.
+            // Close may release logical ownership before the reopen effect runs,
+            // while Compose still retains this same native window.
             beforeOpenRaster = rasterRefs(modalSource)
             compose.runOnIdle { open = true }
             advanceFrame()
             capture("reopen-during-ack", save = true)
             assertTrue("Reopen cancels disposal of the returning window", anchor.modalPresent)
+            assertTrue("Reopen immediately restores modal body ownership", anchor.contact.modal)
             assertSame("Acknowledgement reopen retains the original dialog", firstWindow, popupWindow)
+            assertTrue("The first reopened frame immediately hides the restored trigger", anchor.hidden)
+            assertTrue("The retained modal immediately reclaims shadow ownership", anchor.shadowInModal)
+            assertEquals("Reopening leaves only the mini-player and tabs in the bottom group", 2,
+                group.entries.values.count { it.anchor?.shadowInModal != true })
             advanceFrame()
             capture("reopen-second-frame", save = false)
+            assertSame("The second reopened frame retains the original dialog", firstWindow, popupWindow)
+            assertTrue("The second reopened frame retains modal body ownership", anchor.modalPresent && anchor.contact.modal)
+            assertTrue("The trigger stays hidden on the second reopened frame", anchor.hidden)
+            assertTrue("The modal keeps shadow ownership on the second reopened frame", anchor.shadowInModal)
+            assertEquals("No duplicate bottom-group body appears on the second reopened frame", 2,
+                group.entries.values.count { it.anchor?.shadowInModal != true })
             settleEndpoint(beforeOpenRaster)
 
             compose.runOnIdle { open = false }
@@ -152,6 +164,10 @@ class UtilityPopupRenderDiagnosticTest {
             val before = anchor.contact.body.value
             advanceFrame()
             assertFalse("Acknowledged trigger takes over on the next frame", anchor.modalPresent)
+            assertFalse("The acknowledged trigger owns its visible surface", anchor.hidden)
+            assertFalse("The acknowledged trigger owns its shadow", anchor.shadowInModal)
+            assertEquals("Normal handoff restores all three bottom-group bodies", 3,
+                group.entries.values.count { it.anchor?.shadowInModal != true })
             val after = anchor.contact.body.value
             trace.put(stateJson().put("observation", "first-trigger-owned-frame"))
             assertTrue("Actual pill keeps its depth through handoff", abs(after.depth - before.depth) < .03f)
