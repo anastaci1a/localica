@@ -44,7 +44,7 @@ class GlassActionRowTest {
                 GlassActionRow(Modifier.testTag("actions")) {
                     GlassActionButton(R.drawable.ic_shuffle, "Randomize", onClick = { visible = true })
                     GlassPresence(visible) {
-                        GlassActionButton(R.drawable.ic_seek_back, "Revert", onClick = { visible = false })
+                        GlassActionButton(R.drawable.ic_revert, "Revert", onClick = { visible = false })
                     }
                 }
             }
@@ -86,7 +86,7 @@ class GlassActionRowTest {
                                 randomizations++; visible = true
                             })
                             GlassPresence(visible) {
-                                GlassActionButton(R.drawable.ic_seek_back, "Revert", onClick = {
+                                GlassActionButton(R.drawable.ic_revert, "Revert", onClick = {
                                     reversions++; visible = false
                                 })
                             }
