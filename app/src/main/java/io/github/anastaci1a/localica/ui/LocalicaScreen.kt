@@ -237,7 +237,7 @@ fun LocalicaScreen(
     PlayerSystemBars(hasPlayer && playerFullyOpen || insideCollection && browseInk == androidx.compose.ui.graphics.Color.White)
     val bottomShadows = remember { GlassShadowGroup() }
     LocalicaTheme(grayTone = settings.grayTone) {
-    CompositionLocalProvider(LocalGlassBackend provides backendState, LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides settings.reducedMotion, LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalGlassBackend provides backendState, LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache, LocalBrowseSortSnapshot provides browseSorts,
         LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
         LocalModalBackdrop provides modalBackdrop,
