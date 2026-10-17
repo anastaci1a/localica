@@ -91,6 +91,12 @@ class SongInformationTest {
         assertLocation("Renamed/Album/missing.mp3")
         compose.runOnIdle { roots = roots.filter { it.uri == "root" } }
         assertLocation("Album/missing.mp3")
+        compose.runOnIdle { roots = listOf(FolderSelection("other-root", "Downloads")) }
+        assertLocation("Album/missing.mp3")
+        compose.waitUntil(5000) {
+            compose.onAllNodes(hasTestTag("song-information-Location") and hasClickAction()).fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("song-information-Location").assertHasNoClickAction()
     }
 
     @Test fun unavailableProviderKeepsCachedDisplayNameAndNeverParsesOpaqueIds() = runBlocking(Dispatchers.IO) {
