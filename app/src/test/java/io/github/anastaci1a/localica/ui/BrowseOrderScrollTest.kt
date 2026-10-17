@@ -93,6 +93,46 @@ class BrowseOrderScrollTest {
         assertFalse(coordinator.isCurrent(moving, owner, route))
     }
 
+    @Test fun dismissalSynchronouslyRejectsAPendingReceiptBeforePopupDisposal() {
+        val coordinator = BrowseOrderScrollCoordinator()
+        val token = coordinator.begin(owner, route)
+        val revision = coordinator.revision
+        coordinator.cancelPending()
+        assertFalse(complete(coordinator, token))
+        assertNull(coordinator.request)
+        assertEquals(revision, coordinator.revision)
+    }
+
+    @Test fun dismissalPreservesAnAlreadyAcceptedFollowAndItsRevision() {
+        val coordinator = BrowseOrderScrollCoordinator()
+        val token = coordinator.begin(owner, route)
+        assertTrue(coordinator.complete(token, owner, route, true, committed, rows.last().id, followCurrent = true))
+        val request = coordinator.request!!
+        val revision = coordinator.revision
+        coordinator.cancelPending()
+        assertSame(request, coordinator.request)
+        assertEquals(revision, coordinator.revision)
+        assertTrue(coordinator.isCurrent(request, owner, route))
+        assertTrue(request.followCurrent)
+        assertEquals(rows.last().id, request.targetOccurrenceId)
+        assertFalse(complete(coordinator, token))
+        assertSame(request, coordinator.request)
+    }
+
+    @Test fun reopeningAdmitsOnlyTheNewTokenAfterDismissal() {
+        val coordinator = BrowseOrderScrollCoordinator()
+        val dismissed = coordinator.begin(owner, route)
+        coordinator.cancelPending()
+        val reopened = coordinator.begin(owner, route)
+        assertFalse(complete(coordinator, dismissed))
+        assertNull(coordinator.request)
+        assertTrue(complete(coordinator, reopened, target = rows.last().id))
+        val request = coordinator.request!!
+        assertFalse(complete(coordinator, dismissed, target = rows.first().id))
+        assertSame(request, coordinator.request)
+        assertTrue(coordinator.isCurrent(request, owner, route))
+    }
+
     @Test fun duplicateCompletionAndOldMotionFinishCannotReplaceOrCancelNewerWork() {
         val coordinator = BrowseOrderScrollCoordinator()
         val token = coordinator.begin(owner, route)

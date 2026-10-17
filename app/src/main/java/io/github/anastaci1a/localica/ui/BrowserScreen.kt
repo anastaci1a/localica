@@ -196,10 +196,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var collectionView by remember { mutableStateOf(false) }
     var collectionMenu by remember { mutableStateOf(false) }
     val collectionMenuAnchor = rememberGlassAnchor()
-    fun dismissSorting() { collectionMenu = false; onSortDismiss() }
     val gridState = rememberLazyGridState()
     var positionedPlaying by remember(route.key) { mutableStateOf(false) }
     val orderScroll = remember { BrowseOrderScrollCoordinator() }
+    fun dismissSorting() {
+        // Retire pending receipts before visibility changes; disposal can happen later.
+        orderScroll.cancelPending()
+        collectionMenu = false
+        onSortDismiss()
+    }
     val orderOwner = remember(route, selectionVisible, playerOpen) { Any() }
     val currentOrderOwner by rememberUpdatedState(orderOwner)
     DisposableEffect(orderOwner) { onDispose { orderScroll.cancel() } }
