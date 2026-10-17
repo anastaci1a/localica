@@ -120,12 +120,16 @@ class PlayerSeekHapticsTest {
         liveValue = 100f
         fixture()
         seek().performTouchInput {
-            down(track(.99f)); moveTo(track(1.15f)); moveTo(track(1.25f))
+            // Material adds 10 dp semantics-only margins. Start inside the real
+            // 300 dp track, then cross slop directly into the clamped endpoint.
+            down(track(.85f)); moveTo(track(1.15f))
         }
         compose.runOnIdle {
             assertTrue("Clamping must not invent a value callback", changes.isEmpty())
             assertEquals(listOf(ControlHaptic.Weak), pulses)
         }
+        seek().performTouchInput { moveTo(track(1.25f)) }
+        compose.runOnIdle { assertTrue(changes.isEmpty()); assertEquals(listOf(ControlHaptic.Weak), pulses) }
         seek().performTouchInput { up() }
         compose.runOnIdle {
             assertEquals(listOf(100f), commits)
