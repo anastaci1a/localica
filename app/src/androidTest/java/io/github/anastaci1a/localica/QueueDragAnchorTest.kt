@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -115,8 +116,12 @@ class QueueDragAnchorTest {
             val initialRange = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
             assertEquals("The fresh contact must start at the measured list top", 0f, initialRange.value(), .001f)
             if (boundaryDebt) {
-                list.performScrollToIndex(if (gallery) 4 else 2)
+                // Row indexes imply different travel in list/gallery and at each density.
+                // Start a known short pixel distance from the edge before holding contact.
+                list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, step * 3f) }
                 compose.waitForIdle()
+                assertTrue("Boundary fixture must start away from the top",
+                    list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value() > 0f)
             }
             val header = compose.onNode(hasContentDescription("Close queue") or hasContentDescription("Open queue"))
             val root = compose.onRoot()
@@ -127,7 +132,16 @@ class QueueDragAnchorTest {
             val search = compose.onNodeWithTag("list-search-pill").fetchSemanticsNode().boundsInRoot
             assertTrue("Start on song content below the floating search control", firstSong.center.y > search.bottom)
             // Root-local coordinates stay fixed while every child moves with the drawer.
-            var finger = (if (fromHandle) headerBefore.center else firstSong.center) - rootOrigin
+            var finger = (if (fromHandle) headerBefore.center else if (boundaryDebt)
+                Offset(firstSong.center.x, maxOf(firstSong.top + step, search.bottom + step))
+                else firstSong.center) - rootOrigin
+            if (boundaryDebt) {
+                // Acquisition + at most four approach steps + four edge steps must all
+                // remain inside the viewport. Reversals then retrace that same path.
+                val bottom = minOf(firstSong.bottom, root.fetchSemanticsNode().boundsInRoot.bottom) - rootOrigin.y
+                assertTrue("Boundary fixture must keep its entire held trajectory on screen",
+                    finger.y + slop + step * 9f < bottom)
+            }
             val originalFinger = finger
             fun observe(phase: String) {
                 val range = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
@@ -153,7 +167,7 @@ class QueueDragAnchorTest {
             if (boundaryDebt) {
                 move(slop + step)
                 var moves = 0
-                while (scrollPosition() > .001f && moves++ < 12) move(step)
+                while (scrollPosition() > .001f && moves++ < 4) move(step)
                 assertEquals("Reach top within the same list-owned contact", 0f, scrollPosition(), .001f)
                 repeat(4) { move(step) }
                 repeat(3) {
