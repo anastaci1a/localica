@@ -64,16 +64,19 @@ class SelectorPopupClearanceTest {
     private fun showDialog(count: Int, fontScale: Float, horizontal: Boolean) {
         val labels = List(count) { "Row ${it + 1}" }
         compose.setContent { LocalicaTheme {
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
-                // Keep a real modal window, production panel clip and constraints.
-                // Inline only the inner GlassDialog call: ChoiceDialog itself,
-                // its DialogViewport, scroll/fade layers and all padding are real.
-                // This existing inline path lets the fixture supply a diagnostic
-                // source *inside* GlassMorphPopup's own backdrop provider, without
-                // adding hooks or reproducing ChoiceDialog's content in the test.
-                GlassMorphPopup(true, rememberGlassAnchor(), {}, GlassPlacement.Center,
-                    darkOverride = false, fitContent = false) {
+            // Keep a real modal window, production panel clip and constraints.
+            // Inline only the inner GlassDialog call: ChoiceDialog itself,
+            // its DialogViewport, scroll/fade layers and all padding are real.
+            // This existing inline path lets the fixture supply a diagnostic
+            // source *inside* GlassMorphPopup's own backdrop provider, without
+            // adding hooks or reproducing ChoiceDialog's content in the test.
+            GlassMorphPopup(true, rememberGlassAnchor(), {}, GlassPlacement.Center,
+                darkOverride = false, fitContent = false) {
+                // Dialog installs its window density. Override font scale after
+                // that boundary so the real viewport, chrome and choices all
+                // measure large text within the unchanged physical window cap.
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                     popupView = LocalView.current
                     val popupDensity = LocalDensity.current
                     corner = with(popupDensity) { 24.dp.toPx() - ChoiceInnerInset.roundToPx() }
@@ -111,7 +114,7 @@ class SelectorPopupClearanceTest {
         } }
         if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
         compose.waitForIdle()
-        assertEquals("The real popup must inherit the requested font scale", fontScale, popupFontScale, .001f)
+        assertEquals("The real dialog content must use the requested font scale", fontScale, popupFontScale, .001f)
     }
 
     private fun checkEndpoints(count: Int, fontScale: Float = 1f, horizontal: Boolean = false) {
