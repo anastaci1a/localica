@@ -97,7 +97,7 @@ class PreparedQueuePlaybackTest {
             assertEquals(repaired, runBlocking { db.queues().read().queues.last().journey })
             move("previous", active.journey.current!!) { queues.previous(alwaysSong = true) }
             move("forward-history", firstNext) { queues.next() }
-            for (shuffle in listOf(false, true)) {
+            for (shuffle in listOf(false, true, false)) {
                 val before = observed.committed!!.sequence
                 val settingsAt = SystemClock.elapsedRealtime()
                 val deadline = settingsAt + 30_000
@@ -108,8 +108,15 @@ class PreparedQueuePlaybackTest {
                     instrumentation.runOnMainSync { applied = queues.state.value.settings == settings }
                     applied
                 }
+                val stateAt = SystemClock.elapsedRealtime()
+                instrumentation.runOnMainSync {
+                    assertEquals(shuffle, player.shuffleModeEnabled)
+                    assertEquals(queues.state.value.library.active!!.journey!!.current!!.token,
+                        player.currentMediaItem!!.mediaMetadata.extras!!.getString("queueVisit"))
+                }
+                val nativeAt = SystemClock.elapsedRealtime()
                 val committedAt = checkpoint(before, deadline)
-                Log.i("QueueScale", "entries=13000 action=repeat-settings-shuffle-$shuffle checkpointMs=${committedAt - settingsAt}")
+                Log.i("QueueScale", "entries=13000 action=repeat-settings-shuffle-$shuffle stateObservedMs=${stateAt - settingsAt} nativeObservedMs=${nativeAt - settingsAt} checkpointMs=${committedAt - settingsAt}")
                 val next = queues.state.value.library.active!!.journey!!.next!!
                 move("repeat-next-shuffle-$shuffle", next) { queues.next() }
                 val previous = queues.state.value.library.active!!.journey!!.previous!!
