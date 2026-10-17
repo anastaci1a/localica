@@ -4,15 +4,15 @@ Android APK for Android 8 or newer. Keeps the existing `.debug` application ID a
 
 ## Changes
 
-- Keep queue order, shuffle transitions and playback navigation consistent across edits and app restarts; improve large-queue persistence and queue-follow scrolling.
-- Make library search and sorting more responsive, add finer list densities, and settle pinch and collection gestures more reliably.
-- Protect folder scans, playlist imports, artwork permissions and bulk metadata edits from incomplete or interrupted work.
-- Refine player controls, lyrics source transitions, and Song Information navigation with readable library paths.
-- Improve shared selectors, popup transitions, haptics and reduced-motion behavior; refresh the README previews.
+- Improve queue order, shuffle transitions, large-queue persistence and queue-follow scrolling (#281, #286, #295).
+- Refine library search, sorted artwork, per-type details, list densities and pinch gestures (#283, #294, #306, #308, #309).
+- Protect incomplete folder scans, large playlist imports and pending metadata refreshes (#210, #211, #213).
+- Refine player controls, lyrics source transitions, Android Back behavior and Song Information navigation (#205, #285, #290).
+- Improve selector geometry, popup transitions and reduced-motion behavior (#209, #259, #282); refresh the README previews.
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/334 - Restore artwork editing after activity recreation.
+- None closed specifically for v0.29.0. The linked issues above remain open for their remaining acceptance work.
 
 ## Install
 
