@@ -166,10 +166,12 @@ class GlassPressureTest {
     }
 
     private var checkRoundedContainment = false
+    private var horizontalChoices = false
     private var presentationStage by mutableIntStateOf(0)
     private lateinit var pressureView: View
 
     private fun pressureChoices(labels: List<String>, horizontal: Boolean = false, damping: Float = 8f) {
+        horizontalChoices = horizontal
         var source: FrostedBackdrop? = null
         compose.setContent { LocalicaTheme {
             pressureView = LocalView.current
@@ -217,7 +219,13 @@ class GlassPressureTest {
             val sceneBounds = compose.onNodeWithTag("pressure-scene").fetchSemanticsNode().boundsInRoot
             val layoutShell = compose.onNodeWithTag("choice-track-shell").fetchSemanticsNode().boundsInRoot
                 .translate(-sceneBounds.topLeft)
-            val radius = with(compose.density) { 24.dp.toPx() }.coerceAtMost(minOf(layoutShell.width, layoutShell.height) / 2f)
+            val layoutHost = compose.onNodeWithTag("choice-track-host").fetchSemanticsNode().boundsInRoot
+            val hostCross = if (horizontalChoices) layoutHost.height else layoutHost.width
+            val shellCross = if (horizontalChoices) layoutShell.height else layoutShell.width
+            // Closing the held cross inset moves each enclosing corner inward by
+            // half the shell contraction. Its captured return preserves this relation.
+            val radius = (with(compose.density) { 24.dp.toPx() } - (hostCross - shellCross) / 2f)
+                .coerceIn(0f, minOf(layoutShell.width, layoutShell.height) / 2f)
             for (y in 0 until pixels.height) for (x in 0 until pixels.width) if (red(pixels[x, y])) {
                 val px = x + .5f; val py = y + .5f
                 val horizontalStraight = (layoutShell.width / 2f - radius).coerceAtLeast(0f)
