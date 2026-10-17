@@ -296,14 +296,15 @@ fun LocalicaScreen(
             }
             }
         }
+        val tabActivity = rememberSelectorTrackActivity()
         Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
             .padding(bottom = inset + 8.dp).height(NavigationPillHeight).fillMaxWidth()
             .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(progress.value, 1f - chromeVisibility)).toInt()) }
             .graphicsLayer { alpha = chromeVisibility }
             .then(if (insideCollection || hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).fillMaxHeight().testTag("tab-pill")) {
-                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->
+            Box(Modifier.weight(1f).fillMaxHeight().selectorTrackStacking(tabActivity).testTag("tab-pill")) {
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->
                     navigation = navigation.resetTab(tab, clearLibraryFilter = false)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
                 }) { tab ->
