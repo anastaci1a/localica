@@ -5,10 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -332,7 +330,7 @@ fun LocalicaScreen(
             .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
             .fillMaxWidth().heightIn(max = maxHeight / 2)) {
             FrostedSurface(shape = Corners.panel) {
-            Column(Modifier.verticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }
+            Column(Modifier.controlVerticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }
         } }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
@@ -364,7 +362,7 @@ fun LocalicaScreen(
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false }) } }
             SelectionPanelVisibility(session.panelVisible && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
-            Column(Modifier.heightIn(max = queueSelectionMaxHeight).verticalScroll(rememberScrollState())) {
+            Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)
             } }
         }
@@ -406,7 +404,7 @@ fun LocalicaScreen(
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Column(Modifier.fillMaxWidth().controlVerticalScroll(rememberScrollState()).padding(16.dp)) {
             PlayerAction.entries.filterNot { it == PlayerAction.More }
                 .forEach { action -> ActionTextButton(onClick = { playerMore = false; playerAction(action) }) { Text(action.label) } }
         }

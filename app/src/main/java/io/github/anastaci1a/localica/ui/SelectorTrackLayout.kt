@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -36,7 +37,8 @@ import kotlin.math.floor
     val start by rememberUpdatedState(onStart)
     val delta by rememberUpdatedState(onDelta)
     val end by rememberUpdatedState(onEnd)
-    return pointerInput(horizontal) {
+    val parent = rememberControlScrollContext()
+    return readControlScrollContext(parent).pointerInput(horizontal) {
         awaitEachGesture {
             // Finish the down event in Main before waiting for slop. Starting in Initial
             // lets the slop waiter see this same down after selectable consumes it,
@@ -45,20 +47,36 @@ import kotlin.math.floor
             if (!accepts(down.position)) return@awaitEachGesture
             touch(true)
             var started = false
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes,
+                if (horizontal) ControlScrollAxis.Horizontal else ControlScrollAxis.Vertical)
             try {
-                val drag = if (horizontal) awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
-                    change.consume(); started = true; start(); delta(over)
-                } else awaitVerticalTouchSlopOrCancellation(down.id) { change, over ->
-                    change.consume(); started = true; start(); delta(over)
-                }
-                if (drag != null) {
-                    val completed = if (horizontal) horizontalDrag(drag.id) { change ->
-                        delta(change.positionChange().x); change.consume()
-                    } else verticalDrag(drag.id) { change ->
-                        delta(change.positionChange().y); change.consume()
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val point = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (point.isConsumed || event.changes.count { it.pressed } > 1) break
+                    if (!point.pressed) {
+                        if (started) {
+                            point.consume(); started = false; end(false)
+                        }
+                        break
                     }
-                    started = false
-                    end(!completed)
+                    val movement = point.position - down.position
+                    when (intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)) {
+                        ControlGestureOwner.Pending -> Unit
+                        ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
+                        ControlGestureOwner.Control -> {
+                            val travel = if (horizontal) movement.x else movement.y
+                            if (!started) {
+                                started = true; start()
+                                delta(kotlin.math.sign(travel) *
+                                    (kotlin.math.abs(travel) - viewConfiguration.touchSlop).coerceAtLeast(0f))
+                            } else {
+                                val change = point.positionChange()
+                                delta(if (horizontal) change.x else change.y)
+                            }
+                            point.consume()
+                        }
+                    }
                 }
             } finally {
                 if (started) end(true)

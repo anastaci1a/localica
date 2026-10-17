@@ -7,7 +7,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -130,7 +129,7 @@ private fun android.view.Window.glassInput(enabled: Boolean) {
 @Composable
 internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     GlassMorphPopup(visible, anchor, onDismiss, if (anchor.bounds == Rect.Zero) GlassPlacement.Center else GlassPlacement.Menu) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).verticalScroll(rememberScrollState()), content = content)
+        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).controlVerticalScroll(rememberScrollState()), content = content)
     }
 }
 
