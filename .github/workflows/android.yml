@@ -148,7 +148,7 @@ jobs:
           path: /tmp/android-runner/emu-crash-*/
 
   compatibility:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.compatibility }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.compatibility }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -276,7 +276,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > verified-run.json
           jq -e --arg commit "$commit" '.head_sha == $commit and .head_branch == "main" and .event == "push" and .conclusion == "success"' verified-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" > verified-jobs.json
-          jq -e '["build", "device-tests (26)", "device-tests (36)"] - [.jobs[] | select(.conclusion == "success") | .name] | length == 0' verified-jobs.json
+          jq -e '["build", "device-tests (26)", "device-tests (36)", "compatibility (26)", "compatibility (36)"] - [.jobs[] | select(.conclusion == "success") | .name] | length == 0' verified-jobs.json
           echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
