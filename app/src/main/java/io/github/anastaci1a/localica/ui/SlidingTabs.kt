@@ -18,7 +18,6 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalView
 import io.github.anastaci1a.localica.navigation.TabLensStyle
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
@@ -60,15 +59,15 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     val direction = if (rtl) -1f else 1f
     var chosen by remember { mutableIntStateOf(tabs.indexOf(active).coerceAtLeast(0)) }
     val selected by rememberUpdatedState(onSelect)
-    val view = LocalView.current
+    val haptics by rememberUpdatedState(rememberControlHaptics())
     val appearance = LocalGlassAppearance.current
     var requested by remember { mutableStateOf<Int?>(null) }
     fun focus(index: Int, notify: Boolean = true) {
-        if (index != chosen) view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         chosen = index
         if (notify) selected(tabs[index])
     }
     fun tap(index: Int) {
+        haptics.emit(ControlHaptic.Weak)
         if (tabs[index] == active && abs(page - index) < .001f && !pageDragging) {
             onReselect(tabs[index]); return
         }
@@ -160,6 +159,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     var started = false
+                    val feedback = ControlDragHaptics(haptics)
                     fun move(delta: Float) {
                         raw += direction * delta / pixels
                         val low = scroll.value / pixels
@@ -171,17 +171,27 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         val position = magneticTabPosition(bounded).coerceIn(low, high)
                         scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
                         val candidate = position.roundToInt().coerceIn(tabs.indices)
-                        if (candidate != chosen && abs(position - chosen) > .52f) focus(candidate)
+                        if (candidate != chosen && abs(position - chosen) > .52f) {
+                            focus(candidate)
+                            feedback.move(candidate)
+                        }
                     }
                     val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
                         change.consume(); started = true; requested = null
                         raw = lens.value; dragging = true
                         scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.stop() }
                         move(over)
+                        // Ownership begins after slop. The initial move establishes the
+                        // baseline, rather than producing an engagement and tick together.
+                        feedback.engage(chosen)
                     }
                     try {
-                        if (drag != null) horizontalDrag(drag.id) { change -> move(change.positionChange().x); change.consume() }
+                        if (drag != null) {
+                            val released = horizontalDrag(drag.id) { change -> move(change.positionChange().x); change.consume() }
+                            feedback.finish(released)
+                        }
                     } finally {
+                        feedback.finish(false)
                         if (started) {
                             pressure = 0f; requested = chosen; dragging = false
                             scope.launch { if (reduced) lens.snapTo(chosen.toFloat()) else lens.animateTo(chosen.toFloat(), spring(1f, 650f)) }
