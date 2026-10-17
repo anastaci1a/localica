@@ -1,6 +1,6 @@
 <!-- Release: v{{VERSION}} -->
 
-Development APK for Android 8 or newer. Signed with the project development key; uses a separate `.debug` application ID. Production distribution signing is not configured.
+Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
 ## Changes
 

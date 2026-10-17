@@ -17,6 +17,9 @@ Local and CI verification use the same tests and Gradle launcher. Use focused te
 
 ## Compatibility and dependencies
 
+- Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing it, dispatch the exact candidate through the Android workflow with `compatibility=true`. Its API 26/36 gate installs candidate → legacy-behavior bridge → candidate with the same package/signature and increasing private version codes, without clearing data. The [isolated overlay](../.github/compatibility/prepare.py) retains current schema, journal and recovery safety; only traversal behavior changes. `ShuffleApkCompatibilityTest` checks duplicate occurrences, saved order/cursor, controller reopening and statistics across `seed`, `bridge`, then `verify`; bridge journal/recovery checks run separately. Private compatibility artifacts are never distributed: use the canonical `localica-debug` APK. Ordinary migration tests do not replace this gate. Track exact-source evidence in [#295](https://github.com/anastaci1a/localica/issues/295).
+
+- Finish tag editing, recovery and pending metadata refreshes before downgrading: older builds cannot read the incremental metadata-refresh records. The existing array journal migrates on upgrade; queue database schemas are independent.
 - Android 8+; MP3 and AAC/M4A are primary formats, with WAV/FLAC/Ogg/Opus using available device decoders. No decoder extensions. Boundary tests check decoded samples, MP3 waveform alignment and transition buffering; sample counts alone are insufficient.
 - FLAC tests require a decoder (stock Android supplies one from API 27). Known padding limits: some shortened-final-sample FFmpeg M4A files ([#28](https://github.com/anastaci1a/localica/issues/28)) and the legacy Android 8 MP3 decoder ([#30](https://github.com/anastaci1a/localica/issues/30)). Only the precise known Android 8 failure is skipped after playback checks; other failures remain failures.
 - Media3 stays pinned to 1.10.1 pending a stable [MP3 trimming fix](https://github.com/androidx/media/issues/3425); rerun waveform checks before upgrading.
@@ -26,7 +29,7 @@ Local and CI verification use the same tests and Gradle launcher. Use focused te
 
 The [Android workflow](../.github/workflows/android.yml) builds main/PR changes and tests API 26/36. API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes; zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
-`ANDROID_DEBUG_KEYSTORE` holds the base64 development key; CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key; PRs use a disposable key. Production distribution/signing remains separate.
+`ANDROID_DEBUG_KEYSTORE` holds the base64 development key; CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key; PRs use a disposable key. Regular GitHub releases retain the existing `.debug` application ID and development key for in-place updates; separate production signing is not configured.
 
 ## Release preparation
 
