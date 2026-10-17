@@ -201,7 +201,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
         dismissSorting()
     }
-    @Composable fun sortingPanel() { BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
+    @Composable fun sortingPanel() {
+        val mutableRows = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
+            mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
+        }
+        BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
         preferences.write(route, value, override)
         commitStyle(value)
     }, { preferences.reset(route); commitStyle(preferences.read(route)) }, presentationOnly || collectionView,
@@ -210,6 +214,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             mutablePlaylist != null && playlistController != null -> ({ done -> playlistController.randomize(mutablePlaylist.id, done) })
             else -> null
         }, mutableOrder = savedOrder, manualNeedsRestore = savedOrder != null && savedOrder.manual != physicalOrder,
+        mutableOrderRows = mutableRows, orderSnapshot = library.snapshot,
         mutableOrderIds = physicalOrder, onRevertOrder = when {
             mutableQueue != null && queues != null -> ({ checkpoint, done -> queues.revertOrder(mutableQueue.id, checkpoint, done) })
             mutablePlaylist != null && playlistController != null -> ({ checkpoint, done -> playlistController.revertOrder(mutablePlaylist.id, checkpoint, done) })
