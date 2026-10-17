@@ -19,6 +19,14 @@ import org.junit.Test
 class LyricsHeaderActionsTest {
     @get:Rule val compose = createComposeRule()
 
+    private fun advanceWithNativeFrames(durationMillis: Long) {
+        val start = compose.mainClock.currentTime
+        while (compose.mainClock.currentTime - start < durationMillis) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+    }
+
     @Test fun realHeaderSplitsBeforeOwnershipAndRejoinsAfterReturn() {
         var sources by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
@@ -70,7 +78,7 @@ class LyricsHeaderActionsTest {
                 assertFalse(anchor.modalPresent)
             }
             compose.onNodeWithContentDescription("Hide lyrics").assertExists()
-            compose.mainClock.advanceTimeBy(4000)
+            advanceWithNativeFrames(4000)
             capture("modal-owned")
             compose.runOnIdle {
                 assertTrue(anchor.modalPresent)
@@ -80,7 +88,7 @@ class LyricsHeaderActionsTest {
             compose.runOnIdle { sources = false }
             compose.mainClock.advanceTimeBy(100)
             compose.runOnIdle { assertEquals(1f, preparation.progress, 0f) }
-            compose.mainClock.advanceTimeBy(4000)
+            advanceWithNativeFrames(4000)
             capture("rejoined")
             compose.runOnIdle {
                 assertFalse(anchor.hidden)

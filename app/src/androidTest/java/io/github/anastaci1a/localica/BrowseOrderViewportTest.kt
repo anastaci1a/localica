@@ -175,8 +175,20 @@ class BrowseOrderViewportTest {
         compose.waitForIdle()
         return queries.next()
     }
-    private fun assertTop() {
-        compose.waitUntil(5000) { position() == 0f }
+    private fun assertTop(fixture: Fixture? = null, action: String? = null) {
+        try {
+            compose.waitUntil(5000) { position() == 0f }
+        } catch (failure: ComposeTimeoutException) {
+            val library = fixture?.queues?.state?.value?.library
+            val queue = library?.queues?.firstOrNull { it.id == fixture?.route?.collection?.id }
+            throw AssertionError("Top did not settle: action=$action route=${fixture?.route} " +
+                "scroll=${runCatching { position() }.getOrNull()} " +
+                "activeQueue=${library?.activeId} activeOccurrence=${library?.active?.currentEntryId} " +
+                "controllerOrder=${queue?.order} " +
+                "controllerEntriesGeneration=${queue?.entries?.let(System::identityHashCode)} " +
+                "controllerOccurrenceIds=${queue?.entries?.map { it.id }} " +
+                "visibleSemantics=${runCatching { list.printToString(maxDepth = 3) }.getOrNull()}", failure)
+        }
         assertEquals(0f, position(), 0f)
     }
     private fun assertCurrentAtInset(fixture: Fixture, occurrenceId: String = currentId) {
@@ -240,17 +252,17 @@ class BrowseOrderViewportTest {
         list.performScrollToIndex(85)
         openSort(); chooseTitle(); action("Apply")
         compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Title }
-        assertTop()
+        assertTop(fixture, "Apply")
         action("Close")
         list.performScrollToIndex(75)
         openSort(); action("Randomize")
         compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Manual }
-        assertTop()
+        assertTop(fixture, "Randomize")
         // Keep this popup's opening checkpoint while moving the underlying grid through its semantics action.
         list.performScrollToIndex(65)
         action("Revert")
         compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Title }
-        assertTop()
+        assertTop(fixture, "Revert")
         assertEquals("other", fixture.queues!!.state.value.library.activeId)
     }
 

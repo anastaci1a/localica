@@ -27,9 +27,10 @@ internal class SongDragState(grid: LazyGridState, scope: CoroutineScope) :
 /** Song selection adapts the shared whole-row long-press gesture. */
 @Composable
 internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: MediaRef?, selection: SessionSelection,
-    reducedMotion: Boolean, trailingActions: Boolean, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier {
+    reducedMotion: Boolean, trailingActions: Boolean, acquisitionReady: Boolean = true, sourceOrder: List<String>? = null,
+    routeKey: Any? = source, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier {
     val density = androidx.compose.ui.platform.LocalDensity.current.density
-    return sharedKeyedDrag(state, enabled, reducedMotion, ownerKey = source to trailingActions,
+    return sharedKeyedDrag(state, enabled, reducedMotion, ownerKey = Triple(routeKey, sourceOrder, trailingActions), acquisitionReady = acquisitionReady,
         itemAt = { point ->
             state.hit(point)?.takeIf { item ->
                 item.row != null && (!trailingActions || state.bounds()[item.key]?.let { point.x <= it.right - 48 * density } == true)

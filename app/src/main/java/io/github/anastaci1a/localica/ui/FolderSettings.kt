@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.library.FolderSelection
+import io.github.anastaci1a.localica.library.scanFolderLabels
 import io.github.anastaci1a.localica.scanner.ScanPreferences
 
 private data class SettingsDestination(val title: String, val parent: String?, val icon: Int, val summary: String)
@@ -46,6 +47,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     var search by rememberSaveable { mutableStateOf("") }
     var folderUri by rememberSaveable { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<FolderSelection?>(null) }
+    val folderLabels = remember(state.snapshot.folders) { scanFolderLabels(state.snapshot.folders) }
     val page = path.lastOrNull()
     val holder = rememberSaveableStateHolder()
     val context = LocalContext.current
@@ -85,7 +87,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         LibraryNotice(state)
                         state.snapshot.folders.forEach { folder ->
                             val count = state.snapshot.tracks.count { track -> track.locations.any { it.folderUri == folder.uri } }
-                            SettingsLink(folder.name, if (folder.uri in state.unavailableFolders) "Access lost · select this folder again" else "$count songs", R.drawable.ic_folder) {
+                            SettingsLink(folderLabels.getValue(folder.uri), if (folder.uri in state.unavailableFolders) "Access lost · select this folder again" else "$count songs", R.drawable.ic_folder) {
                                 folderUri = folder.uri; path = path + "Folder options"
                             }
                         }
@@ -94,7 +96,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                             modifier = Modifier.fillMaxWidth()) { Text(if (state.snapshot.folders.isEmpty()) "Choose folder" else "Add folder") }
                     }
                     "Folder options" -> state.snapshot.folders.firstOrNull { it.uri == folderUri }?.let { folder ->
-                        Text(folder.name, style = MaterialTheme.typography.titleMedium)
+                        Text(folderLabels.getValue(folder.uri), style = MaterialTheme.typography.titleMedium)
                         Text("Removing a folder only removes it from Localica. Audio files are kept.")
                         ExcludedFoldersPreference(folder, preferences, !state.scanning && !state.updatingFolders)
                         ActionTextButton(onClick = { removing = folder }, enabled = !state.scanning && !state.updatingFolders) { Text("Remove folder") }
@@ -104,7 +106,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
             }
         } }
     }
-    removing?.let { folder -> GlassAlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folder.name}?") },
+    removing?.let { folder -> GlassAlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folderLabels[folder.uri] ?: folder.name}?") },
         text = { Text("Audio files are kept. Queues and playlists keep their references to these songs.") },
         confirmButton = { ActionTextButton(onClick = { onRemove(folder.uri); removing = null; back() }) { Text("Remove") } },
         dismissButton = { ActionTextButton(onClick = { removing = null }) { Text("Cancel") } }) }

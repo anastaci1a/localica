@@ -455,10 +455,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     SideEffect { reorder.reconcile(result.items); reorder.obscuredBottom = with(density) { obscuredInset.toPx() } }
     val edge = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
     LaunchedEffect(reorder.drag) { if (reorder.drag != null) reorder.autoScroll(edge) }
+    // Only this collection's canonical occurrence order owns the drag lifetime. A
+    // playback checkpoint can refresh all browse presentations without changing it.
+    val dragSourceOrder = remember(queueState.library.queues, playlists.playlists, route.collection) { when (route.collection?.kind) {
+        MediaKind.Queue -> queueState.library.queues.firstOrNull { it.id == route.collection.id }?.entries?.map { it.id }
+        MediaKind.Playlist -> playlists.playlists.firstOrNull { it.id == route.collection.id }?.entries?.map { it.id }
+        else -> null
+    } }
     val moveSongs: (Set<String>, String?, (Boolean) -> Unit) -> Unit = { ids, before, done ->
         when (route.collection?.kind) {
-            MediaKind.Queue -> if (queues != null) queues.moveBefore(route.collection.id, ids, before, done) else done(false)
-            MediaKind.Playlist -> if (playlistController != null) playlistController.moveBefore(route.collection.id, ids, before, done) else done(false)
+            MediaKind.Queue -> if (queues != null) queues.moveBefore(route.collection.id, ids, before, dragSourceOrder, done) else done(false)
+            MediaKind.Playlist -> if (playlistController != null) playlistController.moveBefore(route.collection.id, ids, before, dragSourceOrder, done) else done(false)
             else -> done(false)
         }
     }
@@ -503,7 +510,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 item?.row != null && bounds != null &&
                     (displayedStyle.presentation != Presentation.List || position.x <= bounds.right - with(density) { 48.dp.toPx() })
             }
-            .songDrag(reorder, editableOrder && enabled && !queryPending, route.collection, session, reducedMotion, displayedStyle.presentation == Presentation.List, moveSongs)) {
+            .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion,
+                displayedStyle.presentation == Presentation.List, acquisitionReady = !queryPending,
+                sourceOrder = dragSourceOrder, routeKey = route, commit = moveSongs)) {
             val viewportWidth = constraints.maxWidth
             val columns = galleryColumns(displayedStyle.presentation, with(density) { viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val cellGeometry = BrowseCellGeometry(columns)
@@ -741,11 +750,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     addingSong?.let { song -> AddToPlaylistDialog(listOf(song), playlists, playlistController, { addingSong = null }, { addingSong = null }) }
-    info?.let { song -> SongInformation(song, { info = null }, { editTags?.invoke(listOf(song)) {} }) { action ->
+    info?.let { song -> SongInformation(song, { info = null }, { editTags?.invoke(listOf(song)) {} }, folders = library.snapshot.folders) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
         BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
-            .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
+            .firstOrNull { item -> item.songs.any { it.track.id == song.id &&
+                (action != PlayerAction.Folder || io.github.anastaci1a.localica.library.sameSongInformationLocation(it.track, song)) } }?.let { info = null; onOpen(it) }
     } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }
