@@ -144,6 +144,15 @@ class KeyedDragTest {
         compose.onNodeWithText("Queue 3").assertDoesNotExist()
     }
 
+    @Test fun standaloneCancelRetainsItsBottomMargin() {
+        fixture()
+        val margin = with(compose.density) { 20.dp.toPx() }
+        compose.runOnIdle {
+            assertEquals(margin, reorder.cancelBottom, 0.01f)
+            assertEquals(reorder.viewportHeight - margin - reorder.cancelRadius, reorder.cancelCenter.y, 0.01f)
+        }
+    }
+
     @Test fun cancelHitGeometryReadsCurrentOccupancyBeforeRecomposition() {
         fixture()
         compose.runOnIdle {
