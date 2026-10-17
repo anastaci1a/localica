@@ -70,7 +70,8 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
         }, commit = commit)) {
         SelectionViewport { overscroll ->
             LazyVerticalGrid(columns = GridCells.Fixed(1), state = grid,
-                modifier = Modifier.testTag("queue-selector-grid").selectableGroup().padding(horizontal = 8.dp), overscrollEffect = overscroll) {
+                modifier = Modifier.testTag("queue-selector-grid").selectableGroup().padding(horizontal = 8.dp)
+                    .controlScrollParent(grid, ControlScrollAxis.Vertical), overscrollEffect = overscroll) {
                 items(reorder.rendered(queues), key = { it?.id ?: DropGapKey }) { queue ->
                     if (queue == null) {
                         Spacer(Modifier.fillMaxWidth().height(with(density) { (reorder.drag?.cardSize?.height ?: 0f).toDp() }))

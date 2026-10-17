@@ -107,7 +107,8 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                 val originalWidth = if (horizontal) stride else baseWidth - 2f * inset
                 Box(Modifier.selectorTrackPlacement(contentBounds).testTag("choice-option-$index")
                     .selectable(index == selected, role = role, interactionSource = null, indication = null, onClick = { change(index) })
-                    .then(if (index == selected) Modifier else Modifier.ownButtonDrag()),
+                    .then(if (index == selected) Modifier else Modifier.ownButtonDrag(
+                        axis = if (horizontal) ControlScrollAxis.Horizontal else ControlScrollAxis.Vertical)),
                     contentAlignment = Alignment.Center) {
                     Box(Modifier.requiredSize(with(density) { originalWidth.toDp() }, height)
                         .graphicsLayer { scaleX = contentBounds.width / originalWidth; scaleY = contentBounds.height / rowHeight },
