@@ -57,10 +57,10 @@ data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading:
 
 /** Pure queue edits keep occurrence identity separate from the song's library identity. */
 object QueueEdits {
-    fun randomize(queue: ListeningQueue, keepPlayingFirst: Boolean, random: kotlin.random.Random = kotlin.random.Random.Default): ListeningQueue {
-        val playing = queue.entries.firstOrNull { keepPlayingFirst && it.id == queue.currentEntryId }
-        val remaining = queue.entries.filterNot { it.id == playing?.id }.shuffled(random)
-        val entries = if (playing == null) remaining else listOf(playing) + remaining
+    fun randomize(queue: ListeningQueue, keepCurrentFirst: Boolean, random: kotlin.random.Random = kotlin.random.Random.Default): ListeningQueue {
+        val current = queue.entries.firstOrNull { keepCurrentFirst && it.id == queue.currentEntryId }
+        val remaining = queue.entries.filterNot { it.id == current?.id }.shuffled(random)
+        val entries = if (current == null) remaining else listOf(current) + remaining
         return queue.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
     }
 

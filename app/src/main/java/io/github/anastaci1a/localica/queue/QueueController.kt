@@ -386,9 +386,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun shuffle() = settings { it.copy(shuffle = !it.shuffle) }
     fun repeat() = settings { it.copy(advancedRepeat = null,
         repeat = QueueRepeat.entries[(it.repeat.ordinal + 1) % QueueRepeat.entries.size]) }
-    fun randomize(queueId: String, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { queue ->
-        QueueEdits.randomize(queue, queue.id == state.value.library.activeId && player?.isPlaying == true)
-    }
+    fun randomize(queueId: String, complete: (Boolean) -> Unit = {}) =
+        randomize(queueId, kotlin.random.Random.Default, complete)
+    internal fun randomize(queueId: String, random: kotlin.random.Random, complete: (Boolean) -> Unit) =
+        editQueue(queueId, complete) { queue ->
+            QueueEdits.randomize(queue, queue.id == state.value.library.activeId, random)
+        }
     fun applySort(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
         editQueue(queueId, complete) { queue ->
             val snapshot = if (method == io.github.anastaci1a.localica.library.TrackSort.Manual) null else sortSnapshot()
