@@ -48,7 +48,7 @@ class SettingsLinkMorphTest {
         } }
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { open = true }
-        compose.mainClock.advanceTimeBy(1500)
+        compose.advanceMorphOpening(1500, anchor) { if (::popupView.isInitialized) popupView else null }
         assertTrue(anchor.hidden)
         val expanded = returningInk()
         compose.runOnIdle { open = false }
@@ -60,7 +60,7 @@ class SettingsLinkMorphTest {
         val late = returningInk()
         assertTrue("Trigger ink fades in before the final handoff", late > early)
         compose.runOnIdle { open = true }
-        compose.mainClock.advanceTimeBy(1500)
+        compose.advanceMorphOpening(1500, anchor) { if (::popupView.isInitialized) popupView else null }
         assertTrue("Reopening retains one modal-owned trigger", anchor.hidden)
         assertTrue("Expanded content does not retain trigger ink", returningInk() < early)
         compose.runOnIdle { open = false }
@@ -74,12 +74,14 @@ class SettingsLinkMorphTest {
     @Test fun nestedChoiceReturnsItsForegroundBeforeRestoringParentTrigger() {
         var parentOpen by mutableStateOf(false)
         var childOpen by mutableStateOf(false)
+        var parentView: android.view.View? = null
         lateinit var parent: GlassAnchor
         lateinit var child: GlassAnchor
         compose.setContent { LocalicaTheme {
             parent = rememberGlassAnchor()
             SettingsLink("Settings", anchor = parent) { parentOpen = true }
             GlassMorphPopup(parentOpen, parent, { parentOpen = false }) {
+                parentView = androidx.compose.ui.platform.LocalView.current
                 MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.Red, onSurfaceVariant = Color.Red)) {
                     child = rememberGlassAnchor()
                     Column(Modifier.fillMaxWidth().padding(24.dp)) {
@@ -95,9 +97,9 @@ class SettingsLinkMorphTest {
         } }
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { parentOpen = true }
-        compose.mainClock.advanceTimeBy(1500)
+        compose.advanceMorphOpening(1500, parent) { parentView }
         compose.runOnIdle { childOpen = true }
-        compose.mainClock.advanceTimeBy(1500)
+        compose.advanceMorphOpening(1500, child) { if (::popupView.isInitialized) popupView else null }
         compose.runOnIdle { childOpen = false }
         compose.mainClock.advanceTimeBy(400)
         assertTrue(child.hidden)

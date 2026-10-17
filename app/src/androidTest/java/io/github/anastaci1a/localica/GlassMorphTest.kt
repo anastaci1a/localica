@@ -16,12 +16,39 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+
+// Bulk clock advancement monopolizes the UI thread, delaying native Dialog attachment.
+// Yield Android idleness between opening frames without waiting for a desired morph
+// state or adding time beyond advanceTimeBy's original frame-rounded budget.
+internal fun ComposeTestRule.advanceMorphOpening(
+    durationMillis: Long,
+    anchor: GlassAnchor,
+    popupView: () -> android.view.View?,
+) {
+    val start = mainClock.currentTime
+    try {
+        while (mainClock.currentTime - start < durationMillis) {
+            mainClock.advanceTimeByFrame()
+            waitForIdle()
+        }
+    } finally {
+        runOnUiThread {
+            val view = popupView()
+            val window = (view?.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            android.util.Log.i("GlassMorphProbe", "opening budget=$durationMillis elapsed=${mainClock.currentTime - start} " +
+                "clock=${mainClock.currentTime} window=${window?.let { System.identityHashCode(it) }} " +
+                "attached=${view?.isAttachedToWindow} laidOut=${view?.isLaidOut} size=${view?.width}x${view?.height} " +
+                "hidden=${anchor.hidden} modal=${anchor.modalPresent} progress=${anchor.contact.expansion.value}")
+        }
+    }
+}
 
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
@@ -157,6 +184,7 @@ class GlassMorphTest {
     @Test fun returnedTriggerKeepsTheSameLowDampingRebound() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
+        var popupView: android.view.View? = null
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides
                 io.github.anastaci1a.localica.navigation.GlassAppearance(shapeDamping = 2f)) {
@@ -165,6 +193,7 @@ class GlassMorphTest {
                     LiquidGlassSurface(Modifier.align(Alignment.BottomEnd).padding(24.dp)
                         .size(CompactControlSize).glassAnchor(anchor)) { }
                     GlassMorphPopup(open, anchor, { open = false }) {
+                        popupView = androidx.compose.ui.platform.LocalView.current
                         Box(Modifier.fillMaxWidth().height(220.dp)) { Text("Persistent surface") }
                     }
                 }
@@ -172,7 +201,7 @@ class GlassMorphTest {
         } }
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { open = true }
-        compose.mainClock.advanceTimeBy(1600)
+        compose.advanceMorphOpening(1600, anchor) { popupView }
         compose.runOnIdle { open = false }
         var previous = anchor.contact.body.value
         var returned = false
@@ -444,22 +473,24 @@ class GlassMorphTest {
     @Test fun interruptedMorphKeepsItsSurfaceAndRestoresTheTriggerOnce() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
+        var popupView: android.view.View? = null
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
             anchor = rememberGlassAnchor()
             Box(Modifier.align(Alignment.BottomEnd).padding(20.dp).size(CompactControlSize).glassAnchor(anchor).testTag("reversal-trigger"))
             GlassMorphPopup(open, anchor, { open = false }) {
+                popupView = androidx.compose.ui.platform.LocalView.current
                 Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Reversible menu") }
             }
         } } }
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { open = true }
-        compose.mainClock.advanceTimeBy(176)
+        compose.advanceMorphOpening(176, anchor) { popupView }
         compose.onNodeWithTag("glass-morph-surface").assertExists()
         compose.runOnIdle { open = false }
         compose.mainClock.advanceTimeBy(96)
         assertTrue(anchor.hidden)
         compose.runOnIdle { open = true }
-        compose.mainClock.advanceTimeBy(96)
+        compose.advanceMorphOpening(96, anchor) { popupView }
         assertTrue("Reopening cannot reveal a duplicate trigger", anchor.hidden)
         compose.onNodeWithTag("glass-morph-surface").assertExists()
         compose.mainClock.advanceTimeBy(1500)
