@@ -78,8 +78,13 @@ internal class BrowseOrderScrollCoordinator {
         if (request === value) cancel()
     }
 
-    fun cancel() {
+    /** Dismissal rejects pending receipts without interrupting an already accepted follow. */
+    fun cancelPending() {
         activeToken = null
+    }
+
+    fun cancel() {
+        cancelPending()
         request = null
         revision++
     }

@@ -5,6 +5,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.room.Room
@@ -414,17 +415,36 @@ class BrowseOrderViewportTest {
             list.performScrollToIndex(85)
             val anchor = compose.onNodeWithTag("media-occurrence-84")
             val originalTop = anchor.fetchSemanticsNode().boundsInRoot.top
+            val listNode = list.fetchSemanticsNode()
+            fun logViewport(stage: String) = compose.runOnUiThread {
+                // Read the existing semantics tree on main without an idle wait or advancing time.
+                val viewport = listNode.boundsInRoot
+                val occurrences = mutableListOf<Pair<String, androidx.compose.ui.geometry.Rect>>()
+                fun collect(node: androidx.compose.ui.semantics.SemanticsNode) {
+                    val tag = node.config.getOrNull(SemanticsProperties.TestTag)
+                    if (tag?.startsWith("media-occurrence-") == true) occurrences += tag to node.boundsInRoot
+                    node.children.forEach(::collect)
+                }
+                collect(listNode)
+                val visible = occurrences.filter { (_, bounds) -> bounds.overlaps(viewport) }
+                android.util.Log.i("BrowseOrderViewportTest", "$stage sorting=${fixture.sorting} " +
+                    "gridPosition=${listNode.config[SemanticsProperties.VerticalScrollAxisRange].value()} " +
+                    "visibleKeys=${visible.take(20).map { it.first }} " +
+                    "occurrence84Bounds=${occurrences.firstOrNull { it.first == "media-occurrence-84" }?.second}")
+            }
             openSort(); chooseTitle(); action("Apply")
             compose.waitUntil(5000) { gate.entered.isCompleted }
             compose.onNodeWithText("Close").assertIsNotEnabled()
             // Back can dismiss the popup while the serialized command is still reading its sort source.
             compose.awaitExpectedWindowFocus(compose.onNodeWithTag("browse-options-dialog"))
+            logViewport("beforeBack")
             pressSystemBack()
             compose.waitUntil(5000) { !fixture.sorting }
             gate.release.complete(Unit)
             compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Title }
             compose.waitForIdle()
             compose.mainClock.advanceTimeBy(1000)
+            logViewport("afterCommitAndSettle")
             assertEquals("A closed popup's completion cannot navigate the browser", originalTop,
                 anchor.fetchSemanticsNode().boundsInRoot.top, 1.1f)
             compose.onNodeWithTag("media-$currentId").assertIsNotDisplayed()
