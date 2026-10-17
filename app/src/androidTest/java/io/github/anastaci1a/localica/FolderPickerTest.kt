@@ -52,7 +52,8 @@ class FolderPickerTest {
         }
         compose.onNode(hasText("Choose folder") or hasText("Add folder")).performClick()
         // DocumentsUI can use either the Android or Google package depending on the image.
-        device.openTestLibraryRoot(By.text("tone.mp3"))
+        // Tree pickers can omit non-directory entries; the fixture always has this child folder.
+        device.openTestLibraryRoot(By.text("nested"))
         device.clickWhenReady(By.text(Pattern.compile("use this folder|select", Pattern.CASE_INSENSITIVE)))
         // Older pickers grant directly; newer versions show a second confirmation dialog.
         device.wait(Until.findObject(By.text(Pattern.compile("allow", Pattern.CASE_INSENSITIVE))), 2000)?.click()
@@ -149,17 +150,25 @@ class FolderPickerTest {
 
 /** A matching breadcrumb is not a drawer root. Verify navigation before selecting a file. */
 private fun UiDevice.openTestLibraryRoot(expectedEntry: BySelector) {
-    if (wait(Until.hasObject(expectedEntry), 2000)) return
-    val roots = By.res(Pattern.compile("(?:com.android|com.google.android).documentsui:id/roots_list"))
-    val rootRow = By.res("android:id/title").text("Localica test library").hasAncestor(roots)
-    if (!hasObject(roots)) clickWhenReady(By.desc("Show roots"))
-    await(timeoutMs = 30000) {
-        try {
-            findObject(rootRow)?.let { it.isEnabled && it.clickSystemAction() } == true
-        } catch (_: StaleObjectException) { false }
+    try {
+        if (wait(Until.hasObject(expectedEntry), 2000)) return
+        val roots = By.res(Pattern.compile("(?:com.android|com.google.android).documentsui:id/roots_list"))
+        val rootRow = By.res("android:id/title").text("Localica test library").hasAncestor(roots)
+        if (!hasObject(roots)) clickWhenReady(By.desc("Show roots"))
+        await(timeoutMs = 30000) {
+            try {
+                findObject(rootRow)?.let { it.isEnabled && it.clickSystemAction() } == true
+            } catch (_: StaleObjectException) { false }
+        }
+        assertTrue("Test-library navigation did not expose $expectedEntry",
+            wait(Until.hasObject(expectedEntry), 30000))
+    } catch (failure: AssertionError) {
+        runCatching {
+            val hierarchy = ByteArrayOutputStream().also { dumpWindowHierarchy(it) }.toString("UTF-8")
+            hierarchy.chunked(3000).forEach { Log.e("FolderPickerTest", it) }
+        }.exceptionOrNull()?.let(failure::addSuppressed)
+        throw failure
     }
-    assertTrue("Test-library navigation did not expose $expectedEntry",
-        wait(Until.hasObject(expectedEntry), 30000))
 }
 
 internal fun UiDevice.clickWhenReady(selector: BySelector) {
