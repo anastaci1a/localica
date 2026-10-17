@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.clickable
@@ -16,7 +15,7 @@ import io.github.anastaci1a.localica.library.Track
 internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> Unit, onAction: (PlayerAction) -> Unit) {
     var viewingArtwork by remember(track.uri) { mutableStateOf(false) }
     GlassDialog(onDismiss, GlassPlacement.Sheet) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().controlVerticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AlbumArtwork(track.uri, Modifier.size(144.dp).align(androidx.compose.ui.Alignment.CenterHorizontally)
                 .ownButtonDrag().clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "View artwork",
                     interactionSource = null, indication = null) { viewingArtwork = true })

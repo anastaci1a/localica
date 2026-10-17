@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,7 +17,7 @@ internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit,
         songEnd = if (settings.repeat == QueueRepeat.One) SongEnd.Repeat else SongEnd.Next,
         queueEnd = if (settings.repeat == QueueRepeat.All) QueueEnd.Repeat else QueueEnd.Stop)) }
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Repeat modes") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.controlVerticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassChoices(listOf("Simple", "Advanced"), if (advanced) 1 else 0, horizontal = true) { advanced = it == 1 }
             Spacer(Modifier.height(12.dp))
             if (!advanced) RepeatChoices(QueueRepeat.entries, simple, { when (it) {

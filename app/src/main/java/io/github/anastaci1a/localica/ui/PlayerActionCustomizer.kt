@@ -9,7 +9,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.rememberScrollState
@@ -176,7 +175,7 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
                 })
                 BoxWithConstraints(Modifier.fillMaxWidth().onGloballyPositioned { preview = it.boundsInRoot() }) {
                     val width = if (value.centered) (maxWidth / value.columns.size).coerceAtLeast(48.dp) else if (value.small) 48.dp else 64.dp
-                    Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll).testTag("customization-slots")) {
+                    Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner).controlHorizontalScroll(scroll).testTag("customization-slots")) {
                         value.columns.forEach { column -> Column(Modifier.width(width)) {
                             kotlin.repeat(value.rows) { row ->
                                 val slot = ActionSlot(row, column)
@@ -206,7 +205,8 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
                     Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
                 HorizontalDivider(color = LocalContentColor.current.copy(alpha = .12f))
                 Text("Available actions", style = MaterialTheme.typography.titleSmall)
-                LazyVerticalGrid(GridCells.Adaptive(88.dp), Modifier.weight(1f).onGloballyPositioned { poolBounds = it.boundsInRoot() }.testTag("action-palette"),
+                LazyVerticalGrid(GridCells.Adaptive(88.dp), Modifier.weight(1f).onGloballyPositioned { poolBounds = it.boundsInRoot() }.testTag("action-palette")
+                    .controlScrollParent(pool, ControlScrollAxis.Vertical),
                     state = pool, contentPadding = PaddingValues(vertical = 8.dp)) {
                     items(PlayerAction.entries.filter { it !in value.slots.values && (it != drag?.action || drag?.landing == true) }, key = { it.name }) { action ->
                         Column(Modifier.animateItem().padding(3.dp).clip(Corners.card).actionPosition(action)

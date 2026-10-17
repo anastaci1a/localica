@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -23,7 +22,7 @@ internal fun LibraryLicenses() {
             }
         } }
         GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Open-source licenses") },
-            text = { Text(text, Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
+            text = { Text(text, Modifier.heightIn(max = 400.dp).controlVerticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
             confirmButton = { ActionTextButton(onClick = { open = false }) { Text("Close") } })
     }
 }

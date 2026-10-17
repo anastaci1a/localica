@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -84,7 +83,7 @@ internal fun <T> ChoiceDialog(title: String, choices: List<T>, selected: T, labe
     var draft by remember { mutableStateOf(choices.firstOrNull { it == selected } ?: choices.firstOrNull() ?: selected) }
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         val scroll = rememberScrollState()
-        Column(Modifier.scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = 8.dp, vertical = 12.dp).selectableGroup()) {
+        Column(Modifier.scrollEdgeFade(scroll).controlVerticalScroll(scroll).padding(horizontal = 8.dp, vertical = 12.dp).selectableGroup()) {
             GlassChoices(choices.map(label), choices.indexOf(draft).coerceAtLeast(0)) { index -> draft = choices[index] }
         }
     }, confirmButton = { ActionTextButton(enabled = choices.isNotEmpty(), onClick = { onSelect(draft); onDismiss() }) { Text("Select") } },

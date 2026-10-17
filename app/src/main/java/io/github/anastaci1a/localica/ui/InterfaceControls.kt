@@ -81,27 +81,32 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val shown by animateFloatAsState(finger ?: ((value - valueRange.start) / span).coerceIn(0f, 1f),
         if (finger != null || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
     val body = rememberGlassBody({ shown }, { pressure }, { if (contact) 1f else 0f })
-    val touch = if (!enabled) Modifier else Modifier.pointerInput(valueRange, actualSteps, rtl) {
+    val parent = rememberControlScrollContext()
+    val touch = if (!enabled) Modifier else Modifier.readControlScrollContext(parent).pointerInput(valueRange, actualSteps, rtl) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, ControlScrollAxis.Horizontal)
             val inset = 14.dp.toPx()
             val extent = (size.width - inset * 2f).coerceAtLeast(1f)
             fun fraction(x: Float): Float { val at = (x - inset) / extent; return if (rtl) 1f - at else at }
             val initial = ((current - valueRange.start) / span).coerceIn(0f, 1f)
             val grabbed = kotlin.math.abs(fraction(down.position.x) - initial) * extent <= 24.dp.toPx()
             val offset = if (grabbed) initial - fraction(down.position.x) else 0f
-            var owned = grabbed
-            if (owned) { down.consume(); contact = true; finger = initial }
+            var owned = false
+            contact = true; finger = initial
             try {
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val point = event.changes.firstOrNull { it.id == down.id } ?: break
                     // Compose marks every change consumed for a system cancellation.
-                    if (point.isConsumed) break
+                    if (point.isConsumed || event.changes.count { it.pressed } > 1) break
                     val delta = point.position - down.position
                     if (!owned) {
-                        if (point.isConsumed || kotlin.math.abs(delta.y) > viewConfiguration.touchSlop && kotlin.math.abs(delta.y) > kotlin.math.abs(delta.x)) break
-                        if (kotlin.math.abs(delta.x) > viewConfiguration.touchSlop || !point.pressed) owned = true
+                        when (intent.move(delta.x, delta.y, point.uptimeMillis - down.uptimeMillis)) {
+                            ControlGestureOwner.Control -> owned = true
+                            ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
+                            ControlGestureOwner.Pending -> if (!point.pressed) owned = true
+                        }
                     }
                     if (owned) {
                         contact = point.pressed
@@ -226,18 +231,30 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
-    Box(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.pointerInput(rtl) {
+    val parent = rememberControlScrollContext()
+    Box(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.readControlScrollContext(parent).pointerInput(rtl) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            down.consume(); pressed = true; dragging = true
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.stop() }
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, ControlScrollAxis.Horizontal)
+            pressed = true
             val initial = position.value
             var moved = false
             var released = false
             try {
                 while (true) {
-                    val point = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                    if (point.isConsumed) break
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val point = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (point.isConsumed || event.changes.count { it.pressed } > 1) break
+                    val movement = point.position - down.position
+                    if (!dragging) {
+                        when (intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)) {
+                            ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
+                            ControlGestureOwner.Pending -> if (point.pressed) continue
+                            ControlGestureOwner.Control -> Unit
+                        }
+                        dragging = true
+                        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.stop() }
+                    }
                     val dx = point.position.x - down.position.x
                     moved = moved || kotlin.math.abs(dx) > viewConfiguration.touchSlop
                     raw = initial + direction * dx / 28.dp.toPx()

@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
@@ -17,7 +16,7 @@ internal fun DialogViewport(modifier: Modifier = Modifier, header: (@Composable 
         require(constraints.hasBoundedHeight && constraints.hasBoundedWidth)
         val viewportHeight = constraints.maxHeight
         val overflow = rememberScrollState()
-        Layout(modifier = Modifier.fillMaxWidth().scrollEdgeFade(overflow).verticalScroll(overflow).padding(24.dp),
+        Layout(modifier = Modifier.fillMaxWidth().scrollEdgeFade(overflow).controlVerticalScroll(overflow).padding(24.dp),
             content = {
                 Box { header?.invoke() }
                 Box { footer() }
