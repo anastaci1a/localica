@@ -71,14 +71,26 @@ class SongInformationTest {
     @Test fun rootSnapshotChangesRefreshReadableLocationWithoutShowingUris() {
         var roots by mutableStateOf(listOf(FolderSelection("root", "Music")))
         compose.setContent { LocalicaTheme { SongInformation(track, {}, {}, folders = roots) {} } }
-        compose.onNodeWithText("Album/missing.mp3").performScrollTo().assertIsDisplayed()
+        fun assertLocation(expected: String) {
+            // Root metadata resolves on IO and the retained popup receives content in a side effect.
+            // Wait for the exact required value rather than assuming external work is Compose-idle.
+            try {
+                compose.waitUntil(5000) { compose.onAllNodesWithText(expected).fetchSemanticsNodes().size == 1 }
+            } catch (failure: ComposeTimeoutException) {
+                val actual = compose.onAllNodesWithTag("song-information-Location", useUnmergedTree = true)
+                    .printToString(maxDepth = Int.MAX_VALUE)
+                throw AssertionError("Expected Location '$expected'; actual semantics:\n$actual", failure)
+            }
+            compose.onNodeWithText(expected).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText(track.uri).assertDoesNotExist()
+        }
+        assertLocation("Album/missing.mp3")
         compose.runOnIdle { roots = roots + FolderSelection("other-root", "Downloads") }
-        compose.onNodeWithText("Music/Album/missing.mp3").performScrollTo().assertIsDisplayed()
+        assertLocation("Music/Album/missing.mp3")
         compose.runOnIdle { roots = roots.map { if (it.uri == "root") it.copy(name = "Renamed") else it } }
-        compose.onNodeWithText("Renamed/Album/missing.mp3").performScrollTo().assertIsDisplayed()
+        assertLocation("Renamed/Album/missing.mp3")
         compose.runOnIdle { roots = roots.filter { it.uri == "root" } }
-        compose.onNodeWithText("Album/missing.mp3").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(track.uri).assertDoesNotExist()
+        assertLocation("Album/missing.mp3")
     }
 
     @Test fun unavailableProviderKeepsCachedDisplayNameAndNeverParsesOpaqueIds() = runBlocking(Dispatchers.IO) {
