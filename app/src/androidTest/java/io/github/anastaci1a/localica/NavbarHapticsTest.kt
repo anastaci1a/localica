@@ -173,13 +173,16 @@ class NavbarHapticsTest {
         compose.onNodeWithTag("tab-option-0").performTouchInput {
             down(center)
             moveBy(Offset(width * 1.2f * if (rtl) -1f else 1f, 0f), delayMillis = 100)
-            up()
         }
+        compose.runOnIdle { assertEquals(1f, page); assertEquals(listOf(ControlHaptic.Weak), pulses) }
+        assertEquals("The owned contact cannot scroll the strip", before, scrollValue(), 0f)
+        compose.onNodeWithTag("tab-option-0").performTouchInput { up() }
         compose.runOnIdle {
             assertEquals(1f, page)
             assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
         }
-        assertEquals(before, scrollValue(), 0f)
+        // Existing selected-page centering may move the strip after genuine release.
+        compose.onNodeWithTag("tab-option-1").assertIsDisplayed()
     }
 
     @Test fun overflowOtherOriginScrollsSilentlyThenTapSelects() {
