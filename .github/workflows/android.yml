@@ -106,9 +106,7 @@ jobs:
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
             sleep 60
-            # Keep capture and exit handling in one shell: the emulator runner executes script lines separately.
-            # Pull only synthetic utility-popup evidence, including when instrumentation fails.
-            bash -c 'status=0; ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 || status=$?; mkdir -p app/build/reports/androidTests/utility-popup-diagnostics; adb pull /sdcard/Android/data/io.github.anastaci1a.localica.debug/files/utility-popup-diagnostics/. app/build/reports/androidTests/utility-popup-diagnostics/ || echo "::warning::Utility popup diagnostic capture unavailable"; exit "$status"'
+            ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
       - name: Capture host diagnostics on emulator failure
         if: failure()
         run: |
@@ -122,6 +120,7 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/**/utility-popup-diagnostics/**
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
