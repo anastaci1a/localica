@@ -122,12 +122,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val keyboardClosing = WindowInsets.ime.getBottom(density) > 0 && WindowInsets.imeAnimationTarget.getBottom(density) == 0
     var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
     LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing) {
+        searchEditTrace?.invoke("focus gate key=${route.key.hashCode()} request=$focusRequest once=$focusedOnce previous=$focusedRequest ready=$panelReady window=$windowFocused closing=$keyboardClosing active=${scopedEditor?.active}")
         // Dialog attachment and IME focus happen outside Compose's animation clock.
         // Do not consume an autofocus request while the returning window still owns input.
         if (!panelReady || !windowFocused || keyboardClosing) return@LaunchedEffect
         if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
             withFrameNanos { } // Wait until the field is attached.
             if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
+            searchEditTrace?.invoke("focus apply key=${route.key.hashCode()} request=$focusRequest")
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
             restoreResultsFocus = false
         } else if (restoreResultsFocus && !playerOpen) {
@@ -535,6 +537,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     searchVacancy = (with(density) { pillSlotHeight.toPx() } - searchOriginalOffset).coerceAtLeast(0f)
                 }
                 localSearch = freshSearch(); localFocusRequest++; localSearchOpen = true
+                searchEditTrace?.invoke("search open key=${localSearch.route.key.hashCode()} request=$localFocusRequest generation=$editorGeneration")
             }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
             if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
             val playingIndex = result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
@@ -596,8 +599,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     } } }
 
     if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
-        fun closeSearch() { retireSearchEditor(); localSearchOpen = false }
+        fun closeSearch() {
+            searchEditTrace?.invoke("search close key=${localSearch.route.key.hashCode()} open=$localSearchOpen generation=$editorGeneration")
+            retireSearchEditor(); localSearchOpen = false
+        }
         fun backSearch() {
+            searchEditTrace?.invoke("search back key=${localSearch.route.key.hashCode()} length=${localSearch.route.text.length}")
             val previous = if (localSearch.route.text.isNotBlank()) localSearch.back(false) else null
             if (previous != null) { retireSearchEditor(); localSearch = previous } else closeSearch()
         }

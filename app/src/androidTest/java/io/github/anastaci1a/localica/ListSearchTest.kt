@@ -13,13 +13,42 @@ import org.junit.Test
 
 class ListSearchTest {
     @get:Rule val compose = createComposeRule()
+    private val events = java.util.ArrayDeque<String>()
+    private val trace: (String) -> Unit = { message -> synchronized(events) {
+        if (events.size >= 600) events.removeFirst()
+        events.addLast("${android.os.SystemClock.uptimeMillis()} $message")
+    } }
 
     private fun awaitSearchFocus() {
         // Window focus arrives outside Compose's animation clock. Assert the editor's
         // state directly: a visible IME isn't guaranteed to appear in the accessibility
         // window list. GlassPressureTest separately exercises IME-owned Back via insets.
-        compose.waitUntil(5000) {
-            compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
+        try {
+            compose.waitUntil(5000) {
+                compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
+            }
+        } catch (failure: Throwable) {
+            synchronized(events) { events.forEach { android.util.Log.e("SearchFocusTimeout", it) } }
+            // Observe only after the original timeout; never retry input or alter focus.
+            fun capture(block: () -> Unit) {
+                runCatching(block).exceptionOrNull()?.let(failure::addSuppressed)
+            }
+            capture {
+                android.util.Log.e("SearchFocusTimeout", "editors=" + compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().size +
+                    " focused=" + compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size +
+                    " popups=" + compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().size)
+                val tree = compose.onAllNodes(isRoot(), useUnmergedTree = true).printToString(maxDepth = Int.MAX_VALUE)
+                tree.chunked(3000).forEachIndexed { index, part -> android.util.Log.e("SearchFocusTimeout", "tree[$index]=$part") }
+            }
+            capture {
+                val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+                android.util.Log.e("SearchFocusTimeout", automation.windows.joinToString { window ->
+                    "id=${window.id} type=${window.type} focused=${window.isFocused} active=${window.isActive} package=${window.root?.packageName}"
+                })
+                androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).takeScreenshot(
+                    java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "search-focus-timeout.png"))
+            }
+            throw failure
         }
     }
 
@@ -41,18 +70,20 @@ class ListSearchTest {
         val tracks = (0..30).map { n -> Track("vacancy:$n", "Song $n", album = "Album " + n.toString().padStart(3, '0'),
             fileName = "$n.mp3", relativePath = "$n.mp3") }
         try {
-            compose.setContent { LocalicaTheme { LocalicaScreen(
+            compose.setContent { androidx.compose.runtime.CompositionLocalProvider(LocalSearchEditTrace provides trace) { LocalicaTheme { LocalicaScreen(
                 LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaybackState(connected = true),
-                {}, {}, {}, {}, {}, {}) } }
+                {}, {}, {}, {}, {}, {}) } } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 000").fetchSemanticsNodes().isNotEmpty() }
-            repeat(3) { pass ->
+            val stress = InstrumentationRegistry.getArguments().getString("stressSearchReopen") == "true"
+            repeat(if (stress) 12 else 3) { pass ->
+                trace("test pass=$pass")
                 if (pass == 1) compose.onNodeWithTag("browser-list").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, 20f) }
                 val before = compose.onNodeWithText("Album 000").fetchSemanticsNode().boundsInRoot
                 compose.onNodeWithTag("list-search-pill").performClick()
                 awaitSearchFocus()
                 compose.onNode(hasSetTextAction()).assert(SemanticsMatcher.expectValue(
                     androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
-                if (pass == 0) {
+                if (pass == 0 || stress) {
                     pressSystemBack()
                     compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
                     compose.onNodeWithTag("list-search-pill").performClick()
