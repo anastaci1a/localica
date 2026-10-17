@@ -5,6 +5,52 @@ import org.junit.Test
 import kotlin.math.abs
 
 class GlassMomentumTest {
+    @Test fun axisTransferPreservesScreenShapeAndReleaseVelocity() {
+        val horizontal = GlassMomentum()
+        repeat(12) { horizontal.advance(3f, 1f / 120) }
+        val vertical = GlassMomentum().apply { blendFrom(horizontal, aAxis = -1f, bAxis = -1f) }
+        assertEquals(horizontal.shape.scaleX(), vertical.shape.scaleX(true), .000001f)
+        assertEquals(horizontal.shape.scaleY(), vertical.shape.scaleY(true), .000001f)
+        // Maintain constant travel speed so no new directional impulse is injected.
+        repeat(120) {
+            horizontal.advance(3f, 1f / 120)
+            vertical.advance(3f, 1f / 120)
+            assertEquals(horizontal.shape.scaleX(), vertical.shape.scaleX(true), .000001f)
+            assertEquals(horizontal.shape.scaleY(), vertical.shape.scaleY(true), .000001f)
+        }
+    }
+
+    @Test fun splittingRetainsReleaseEnergyAndSubsequentMotion() {
+        for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f)) {
+            val joined = GlassMomentum(damping)
+            repeat(fps / 4) { joined.advance(2f, 1f / fps, contact = 1f) }
+            repeat(3) { joined.advance(0f, 1f / fps) }
+            val split = GlassMomentum(damping).apply { blendFrom(joined) }
+            assertEquals(joined.shape, split.shape)
+            repeat(fps) {
+                val velocity = if (it < fps / 3) -1f else 0f
+                joined.advance(velocity, 1f / fps)
+                split.advance(velocity, 1f / fps)
+                assertEquals("Transfer retains velocity, not merely the current scale", joined.shape, split.shape)
+            }
+        }
+    }
+
+    @Test fun rejoiningIsIndependentOfWhichHalfOwnsTheMergedClock() {
+        val left = GlassMomentum(); val right = GlassMomentum()
+        repeat(20) { left.advance(2f, 1f / 120, contact = 1f); right.advance(-1f, 1f / 120) }
+        val joined = GlassMomentum().apply { blendFrom(left, right, .5f) }
+        val reversed = GlassMomentum().apply { blendFrom(right, left, .5f) }
+        left.blendFrom(left, right, .5f)
+        repeat(240) {
+            for (body in listOf(joined, reversed, left)) body.advance(0f, 1f / 120)
+            assertEquals(joined.shape.strain, reversed.shape.strain, .000001f)
+            assertEquals(joined.shape.depth, reversed.shape.depth, .000001f)
+            assertEquals("In-place adoption must retain the same state", joined.shape, left.shape)
+        }
+        assertTrue(joined.settled)
+    }
+
     @Test fun heldAccelerationAndBrakingRemainVisibleWithoutRinging() {
         for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f))
             for (direction in listOf(-1f, 1f)) for (braking in listOf(false, true)) {

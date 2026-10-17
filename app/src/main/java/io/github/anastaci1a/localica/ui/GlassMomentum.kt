@@ -50,6 +50,11 @@ internal class GlassMomentum(var damping: Float = 8f) {
             }
         }
         fun reset() { value = 0f; velocity = 0f; target = 0f }
+        fun blendFrom(a: Spring, b: Spring, weight: Float, aAxis: Float = 1f, bAxis: Float = 1f) {
+            value = a.value * aAxis * (1f - weight) + b.value * bAxis * weight
+            velocity = a.velocity * aAxis * (1f - weight) + b.velocity * bAxis * weight
+            target = a.target * aAxis * (1f - weight) + b.target * bAxis * weight
+        }
     }
     private val motion = Spring()
     private val pressure = Spring()
@@ -62,6 +67,24 @@ internal class GlassMomentum(var damping: Float = 8f) {
     val settled get() = motion.settled && pressure.settled && depth.settled
 
     fun reset() { motion.reset(); pressure.reset(); depth.reset(); travelVelocity = 0f }
+
+    /** A separating/rejoining body transfers stored energy as well as its shape.
+     * Copying only the visible scale would discard the next frame's rebound. */
+    fun blendFrom(a: GlassMomentum, b: GlassMomentum = a, weight: Float = 0f,
+        aAxis: Float = 1f, bAxis: Float = 1f) {
+        val fraction = weight.coerceIn(0f, 1f)
+        motion.blendFrom(a.motion, b.motion, fraction, aAxis, bAxis)
+        pressure.blendFrom(a.pressure, b.pressure, fraction, aAxis, bAxis)
+        depth.blendFrom(a.depth, b.depth, fraction)
+        travelVelocity = a.travelVelocity + (b.travelVelocity - a.travelVelocity) * fraction
+    }
+
+    fun blendedShape(other: GlassMomentum, weight: Float, otherAxis: Float = 1f): GlassShape {
+        val fraction = weight.coerceIn(0f, 1f)
+        fun mix(a: Float, b: Float) = a + (b - a) * fraction
+        return GlassShape(.12f * tanh(mix(motion.value, other.motion.value * otherAxis) / .12f) +
+            mix(pressure.value, other.pressure.value * otherAxis), .24f * tanh(mix(depth.value, other.depth.value) / .24f))
+    }
 
     fun advance(velocity: Float, seconds: Float, pressure: Float = 0f, contact: Float = 0f, impulseScale: Float = 1f) {
         if (!seconds.isFinite() || seconds <= 0f) return

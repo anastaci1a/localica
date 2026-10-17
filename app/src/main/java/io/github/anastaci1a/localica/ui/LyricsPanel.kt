@@ -56,7 +56,9 @@ private sealed interface LyricsPresentation {
 internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null,
     sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null,
-    contentHeight: Dp? = null, result: LyricsResult? = rememberLyrics(track)) {
+    contentHeight: Dp? = null, result: LyricsResult? = rememberLyrics(track),
+    sourcesVisible: Boolean? = null, onSourcesDismiss: (() -> Unit)? = null,
+    originPreparation: GlassOriginPreparation? = null) {
     val lyricClock by produceState(positionMs, positionMs, sampledAtMs, playing, speed, delayMs, durationMs) {
         do {
             value = lyricPosition(positionMs, sampledAtMs, android.os.SystemClock.elapsedRealtime(), playing, speed, delayMs, durationMs)
@@ -84,22 +86,34 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         result.problem != null -> LyricsPresentation.Unavailable
         else -> LyricsPresentation.Missing
     }
-    var sourcesOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(sourcesRequest) { if (sourcesRequest > 0) sourcesOpen = true }
+    var requestedSources by remember(track?.id) { mutableStateOf(false) }
+    var sourcesTrack by remember { mutableStateOf(track?.id) }
+    LaunchedEffect(sourcesRequest) { if (sourcesRequest > 0) requestedSources = true }
+    val sourcesOpen = (sourcesVisible ?: requestedSources) && source != null && sourcesTrack == track?.id
+    val dismissSources = { requestedSources = false; onSourcesDismiss?.invoke(); Unit }
+    LaunchedEffect(source == null, sourcesVisible, sourcesRequest) { if (source == null) dismissSources() }
+    LaunchedEffect(track?.id) {
+        if (sourcesTrack != track?.id) { sourcesTrack = track?.id; dismissSources() }
+    }
+    // Keep the outgoing menu composed until its shared return handoff finishes.
+    // Retained labels are visual only: a changed track cannot receive an old choice.
+    var menuSources by remember { mutableStateOf(emptyList<LyricSource>()) }
+    var menuTrack by remember { mutableStateOf<String?>(null) }
+    SideEffect { if (sourcesOpen) { menuSources = result?.sources.orEmpty(); menuTrack = track?.id } }
+    GlassMenu(sourcesOpen, sourcesAnchor ?: rememberGlassAnchor(), dismissSources,
+        originPreparation = originPreparation) {
+        menuSources.forEach { item -> DropdownMenuItem(text = {
+            Text(item.label + if (item.document.synced) " · synced" else "")
+        }, enabled = sourcesOpen && track?.id == menuTrack, onClick = {
+            if (sourcesOpen && track?.id == menuTrack) {
+                chosen = item.id
+                preferences.edit().putString(track?.id ?: "", item.id).apply()
+                dismissSources()
+            }
+        }) }
+    }
     // The empty decoration uses the stable background viewport. Only actual lyrics resize with metadata.
     Column(modifier.testTag("lyrics-panel")) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.weight(1f))
-            if (source != null) Box {
-                GlassMenu(sourcesOpen, sourcesAnchor ?: rememberGlassAnchor(), { sourcesOpen = false }) {
-                    result?.sources?.forEach { item -> DropdownMenuItem(text = {
-                        Text(item.label + if (item.document.synced) " · synced" else "")
-                    }, onClick = {
-                        chosen = item.id; preferences.edit().putString(track?.id ?: "", item.id).apply(); sourcesOpen = false
-                    }) }
-                }
-            }
-        }
         androidx.compose.animation.Crossfade(presentation, Modifier.weight(1f),
             animationSpec = tween(if (reducedMotion) 0 else 300), label = "Song lyrics") { shown ->
             when (shown) {
