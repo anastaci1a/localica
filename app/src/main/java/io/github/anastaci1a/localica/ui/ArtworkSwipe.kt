@@ -104,6 +104,14 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
     fun finish(velocity: Float) {
         swipe.dragging = false
         swipe.animation = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            // Playback may have changed before its cancellation effect gets a frame.
+            // Validate at the navigation boundary too, rather than trusting that effect's flag.
+            if (swipe.pending == null && swipe.origin != currentVisit) {
+                swipe.cancelled = true
+                swipe.offset.snapTo(0f)
+                swipe.clear()
+                return@launch
+            }
             if (!swipe.cancelled && swipe.pending == null) {
                 val amount = swipe.offset.value
                 val target = swipe.destination
