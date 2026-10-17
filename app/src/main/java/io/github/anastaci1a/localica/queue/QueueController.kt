@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.queue
 
 import io.github.anastaci1a.localica.library.OccurrenceMoves
+import io.github.anastaci1a.localica.library.OrderCommit
 import android.os.Bundle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -389,16 +390,43 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun randomize(queueId: String, complete: (Boolean) -> Unit = {}) =
         randomize(queueId, kotlin.random.Random.Default, complete)
     internal fun randomize(queueId: String, random: kotlin.random.Random, complete: (Boolean) -> Unit) =
-        editQueue(queueId, complete) { queue ->
+        randomizeOrder(queueId, random) { complete(it != null) }
+    internal fun randomizeOrder(queueId: String, complete: (OrderCommit?) -> Unit) =
+        randomizeOrder(queueId, kotlin.random.Random.Default, complete)
+    internal fun randomizeOrder(queueId: String, random: kotlin.random.Random, complete: (OrderCommit?) -> Unit) =
+        editOrder(queueId, complete) { queue ->
             QueueEdits.randomize(queue, queue.id == state.value.library.activeId, random)
         }
     fun applySort(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
-        editQueue(queueId, complete) { queue ->
+        applySortOrder(queueId, method, ascending) { complete(it != null) }
+    internal fun applySortOrder(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (OrderCommit?) -> Unit) =
+        editOrder(queueId, complete) { queue ->
             val snapshot = if (method == io.github.anastaci1a.localica.library.TrackSort.Manual) null else sortSnapshot()
             withContext(Dispatchers.Default) { QueueEdits.sort(queue, method, ascending, snapshot) }
         }
     fun revertOrder(queueId: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (Boolean) -> Unit = {}) =
-        editQueue(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.revertOrder(queue, checkpoint) } }
+        revertOrderWithCommit(queueId, checkpoint) { complete(it != null) }
+    internal fun revertOrderWithCommit(queueId: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (OrderCommit?) -> Unit) =
+        editOrder(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.revertOrder(queue, checkpoint) } }
+    private fun editOrder(queueId: String, complete: (OrderCommit?) -> Unit, edit: suspend (ListeningQueue) -> ListeningQueue) {
+        var before: ListeningQueue? = null
+        editQueue(queueId, complete = { success ->
+            val library = state.value.library
+            val after = library.queues.firstOrNull { it.id == queueId }
+            val previous = before
+            // StateFlow retains its old value for equivalent replacements. Its published
+            // entries, rather than the edit's temporary list, own the completion revision.
+            complete(if (success && previous != null && after != null) OrderCommit(
+                revision = after.entries,
+                order = after.order,
+                changed = previous.order != after.order || previous.entries !== after.entries &&
+                    (previous.entries.size != after.entries.size || previous.entries.indices.any {
+                        previous.entries[it].id != after.entries[it].id
+                    }),
+                currentEntryId = after.currentEntryId.takeIf { after.id == library.activeId },
+            ) else null)
+        }) { current -> before = current; edit(current) }
+    }
     private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: suspend (ListeningQueue) -> ListeningQueue) = submit {
         try {
         capture()
