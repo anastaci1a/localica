@@ -13,6 +13,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -108,6 +110,31 @@ class IncompleteScanTest {
         assertCursorsClosed()
     }
 
+    @Test fun songInfoUsesVerifiedAncestorNamesWithinExistingGrantAndSurvivesRevocation() = fixture {
+        repository.scan(root) // The existing fixture persists only this explicitly granted synthetic tree.
+        val folders = listOf(
+            FolderSelection(songInfoTree("si-a-90"), "Cached A"),
+            FolderSelection(songInfoTree("si-b-44"), "Cached B"))
+        val before = persisted()
+        assertTrue("The broader existing root grant is readable", before.any { it.first == root && it.second })
+        val resolved = songInfoNames(folders)
+        assertEquals(listOf("root", "1", "Media"), resolved[0].components)
+        assertEquals(listOf("root", "2", "Media"), resolved[1].components)
+        assertEquals(listOf("1/Media", "2/Media"), songRootLabels(resolved).values.toList())
+        assertEquals("Name resolution must not acquire or widen grants", before, persisted())
+        val unsupported = songInfoNames(listOf(FolderSelection(songInfoTree("nested"), "Cached nested")))
+        assertEquals(listOf("Cached nested"), unsupported.single().components)
+        assertEquals(before, persisted())
+        assertCursorsClosed()
+        grant(IncompleteScanGrantActivity.REVOKE)
+        val afterRevoke = persisted()
+        assertFalse("Revocation removes the root read grant", afterRevoke.any { it.first == root && it.second })
+        val unavailable = songInfoNames(folders)
+        assertEquals(listOf("Cached A"), unavailable[0].components)
+        assertEquals(listOf("Cached B"), unavailable[1].components)
+        assertEquals("Revoked access must stay revoked", afterRevoke, persisted())
+    }
+
     private fun fixture(block: suspend Fixture.() -> Unit) = runBlocking {
         val fixture = Fixture()
         try { fixture.prepare(); fixture.block() } finally { fixture.close() }
@@ -136,6 +163,8 @@ class IncompleteScanTest {
         }
         val repository = LibraryRepository(store, TreeScanner(source), permissions)
         private fun tree(id: String) = DocumentsContract.buildTreeDocumentUri(IncompleteScanGrantActivity.AUTHORITY, id).toString()
+        fun songInfoTree(id: String) = tree(id)
+        suspend fun songInfoNames(folders: List<FolderSelection>) = withContext(Dispatchers.IO) { resolveSongRootNames(context, folders) }
         suspend fun grant(action: String) {
             val completed = CompletableDeferred<Unit>()
             val completion = object : ResultReceiver(Handler(Looper.getMainLooper())) {

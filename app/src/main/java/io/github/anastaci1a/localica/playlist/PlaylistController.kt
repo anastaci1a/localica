@@ -79,7 +79,14 @@ class PlaylistController(private val dao: PlaylistDao,
     fun removeEntries(id: String, entries: Set<String>, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.remove(it, entries) }
     fun move(id: String, entry: String, offset: Int, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.move(it, entry, offset) }
     fun moveBefore(id: String, entries: Set<String>, beforeId: String?, complete: (Boolean) -> Unit = {}) =
-        edit(id, complete) { PlaylistEdits.moveBefore(it, entries, beforeId) }
+        moveBefore(id, entries, beforeId, null, complete)
+    internal fun moveBefore(id: String, entries: Set<String>, beforeId: String?, expectedOrder: List<String>?,
+        complete: (Boolean) -> Unit) = edit(id, complete) {
+        require(expectedOrder == null || it.entries.map { entry -> entry.id } == expectedOrder) {
+            "The playlist changed. Try dragging again."
+        }
+        PlaylistEdits.moveBefore(it, entries, beforeId)
+    }
     fun applySort(id: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
         edit(id, complete) {
             val snapshot = if (method == io.github.anastaci1a.localica.library.TrackSort.Manual) null else sortSnapshot?.invoke()

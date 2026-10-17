@@ -69,6 +69,22 @@ public class IncompleteScanDocumentsProvider extends DocumentsProvider {
     @Override public boolean isChildDocument(String parent, String id) {
         return parent.equals("root") || parent.equals("other") || parent.equals("new-root") || parent.equals("nested");
     }
+    // Opaque Song Info fixtures are query-only and never enter scanner child listings.
+    @Override public DocumentsContract.Path findDocumentPath(String parent, String child) throws FileNotFoundException {
+        if ("root".equals(parent) && ("si-a-90".equals(child) || "si-b-44".equals(child))) {
+            String ancestor = "si-a-90".equals(child) ? "si-parent-x7" : "si-parent-y8";
+            return new DocumentsContract.Path(null, java.util.Arrays.asList("root", ancestor, child));
+        }
+        throw new FileNotFoundException("Path unavailable for this fixture");
+    }
+    private static String songInfoDisplayName(String id) {
+        switch (id) {
+            case "si-a-90": case "si-b-44": return "Media";
+            case "si-parent-x7": return "1";
+            case "si-parent-y8": return "2";
+            default: return id;
+        }
+    }
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
         throw new FileNotFoundException("Metadata is supplied by the scan test");
     }
@@ -85,7 +101,8 @@ public class IncompleteScanDocumentsProvider extends DocumentsProvider {
         MatrixCursor.RowBuilder row = cursor.newRow();
         for (String column : cursor.getColumnNames()) {
             switch (column) {
-                case Document.COLUMN_DOCUMENT_ID: case Document.COLUMN_DISPLAY_NAME: row.add(id); break;
+                case Document.COLUMN_DOCUMENT_ID: row.add(id); break;
+                case Document.COLUMN_DISPLAY_NAME: row.add(songInfoDisplayName(id)); break;
                 case Document.COLUMN_MIME_TYPE: row.add(directory ? Document.MIME_TYPE_DIR : "audio/mpeg"); break;
                 case Document.COLUMN_LAST_MODIFIED: row.add(123456L); break;
                 default: row.add(null);
