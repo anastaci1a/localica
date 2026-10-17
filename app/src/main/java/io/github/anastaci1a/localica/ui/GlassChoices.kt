@@ -38,8 +38,8 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
     var pressure by remember { mutableFloatStateOf(0f) }
     var settleRequest by remember { mutableIntStateOf(0) }
     val change by rememberUpdatedState(onSelect)
-    LaunchedEffect(selected, dragging, reduced, speed, settleRequest) {
-        if (!dragging) {
+    LaunchedEffect(selected, pressed, dragging, reduced, speed, settleRequest) {
+        if (!pressed && !dragging) {
             if (reduced) position.snapTo(selected.toFloat())
             else position.animateTo(selected.toFloat(), spring(1f, 650f * speed * speed))
         }
@@ -79,9 +79,20 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
         val radius = cross.outerCorner
         Box(Modifier.fillMaxWidth().height(with(density) { baseHeight.toDp() }).selectableGroup()
             .testTag("choice-track-host").selectorTrackDrag(horizontal,
-                eligible = { point -> geometry.slot(selected.coerceIn(labels.indices), labels.size, insets, !horizontal, rtl).cell.contains(point) },
+                eligible = { point -> trackBounds.contains(point) },
                 contact = { pressed = it },
-                onStart = { dragging = true; raw = position.value; scope.launch(start = CoroutineStart.UNDISPATCHED) { position.stop() } },
+                onPreview = { point ->
+                    // Preserve the grab offset on the moving lens; other options pick up
+                    // at the finger using the undeformed host map, never animated geometry.
+                    raw = if (lensFrame.bounds.contains(point)) position.value else restGeometry
+                        .logicalPositionAt(point, labels.size, inset, !horizontal, rtl)
+                        .coerceIn(0f, labels.lastIndex.toFloat())
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        if (reduced) position.snapTo(magneticChoicePosition(raw))
+                        else position.animateTo(magneticChoicePosition(raw), spring(1f, 650f * speed * speed))
+                    }
+                },
+                onStart = { dragging = true },
                 onDelta = { delta ->
                     raw += direction * delta / stride
                     val next = raw.coerceIn(0f, labels.lastIndex.toFloat())
@@ -89,11 +100,12 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                     if (excess != 0f) logicalWall = if (excess < 0f) -1f else 1f
                     pressure = glassEdgePressure(excess)
                     scope.launch(start = CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(next)) }
-                }, onEnd = { cancelled ->
-                    val next = position.value.roundToInt().coerceIn(labels.indices)
+                }, option = { magneticChoicePosition(raw.coerceIn(0f, labels.lastIndex.toFloat())).roundToInt() },
+                onEnd = { owned, cancelled ->
+                    val next = raw.roundToInt().coerceIn(labels.indices)
                     pressure = 0f; dragging = false; settleRequest++
-                    if (!cancelled) change(next)
-                }), contentAlignment = AbsoluteAlignment.TopLeft) {
+                    if (owned && !cancelled) change(next)
+                }, gestureKey = listOf(labels.size, stride, rtl)), contentAlignment = AbsoluteAlignment.TopLeft) {
             Box(Modifier.selectorTrackPlacement(trackBounds).testTag("choice-track-shell")
                 .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .10f),
                     RoundedCornerShape(with(density) { radius.toDp() })))
@@ -106,9 +118,8 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                     else androidx.compose.ui.geometry.Rect(cell.left + inset, cell.top, cell.right - inset, cell.bottom)
                 val originalWidth = if (horizontal) stride else baseWidth - 2f * inset
                 Box(Modifier.selectorTrackPlacement(contentBounds).testTag("choice-option-$index")
-                    .selectable(index == selected, role = role, interactionSource = null, indication = null, onClick = { change(index) })
-                    .then(if (index == selected) Modifier else Modifier.ownButtonDrag(
-                        axis = if (horizontal) ControlScrollAxis.Horizontal else ControlScrollAxis.Vertical)),
+                    .selectable(index == selected, role = role, interactionSource = null, indication = null,
+                        onClick = controlActivation { change(index) }),
                     contentAlignment = Alignment.Center) {
                     Box(Modifier.requiredSize(with(density) { originalWidth.toDp() }, height)
                         .graphicsLayer { scaleX = contentBounds.width / originalWidth; scaleY = contentBounds.height / rowHeight },
