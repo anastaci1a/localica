@@ -8,6 +8,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
@@ -32,6 +35,7 @@ class SliderSwitchHapticsTest {
     private var reduced by mutableStateOf(false)
     private val sliderFocus = FocusRequester()
     private lateinit var scroll: ScrollState
+    private lateinit var inputMode: InputModeManager
     private enum class Parent { None, Vertical, Horizontal }
 
     private fun fixture(preference: Boolean = true, parent: Parent = Parent.None,
@@ -39,6 +43,7 @@ class SliderSwitchHapticsTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalControlHaptics provides sink, LocalReducedMotion provides reduced) {
                 scroll = rememberScrollState()
+                inputMode = LocalInputModeManager.current
                 val changeSwitch: (Boolean) -> Unit = { checked = it; switchChanges += it }
                 val controls: @Composable () -> Unit = {
                     Column(Modifier.width(300.dp)) {
@@ -130,7 +135,9 @@ class SliderSwitchHapticsTest {
         compose.runOnIdle {
             assertEquals(4, sliderChanges.size)
             listOf(65f, 80f, 40f, 40f).zip(sliderChanges).forEach { (expected, actual) ->
-                assertEquals(expected, actual, .001f)
+                // Fractional MotionEvent pixels map through the density-scaled 272 dp
+                // travel into 0..100; tolerate .01 value units, not extra callbacks/ticks.
+                assertEquals(expected, actual, .01f)
             }
             assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
         }
@@ -145,6 +152,9 @@ class SliderSwitchHapticsTest {
         // The label side exercises the row owner instead of hitting its child.
         row.performTouchInput { click(Offset(width * .2f, centerY)) }
         row.performClick()
+        // Toggleable uses SystemDefined focusability, unavailable in Touch mode.
+        compose.runOnIdle { assertTrue(inputMode.requestInputMode(InputMode.Keyboard)) }
+        compose.waitForIdle()
         row.performSemanticsAction(SemanticsActions.RequestFocus) { assertTrue(it()) }
         row.performKeyInput { pressKey(Key.Spacebar) }
         compose.waitForIdle()
