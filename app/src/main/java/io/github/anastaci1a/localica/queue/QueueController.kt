@@ -383,7 +383,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     fun moveEntry(id: String, offset: Int, queueId: String? = null, complete: (Boolean) -> Unit = {}) = editQueue(queueId, complete) { QueueEdits.move(it, id, offset) }
     fun moveBefore(queueId: String, entries: Set<String>, beforeId: String?, complete: (Boolean) -> Unit = {}) =
-        editQueue(queueId, complete) { QueueEdits.moveBefore(it, entries, beforeId) }
+        moveBefore(queueId, entries, beforeId, null, complete)
+    internal fun moveBefore(queueId: String, entries: Set<String>, beforeId: String?, expectedOrder: List<String>?,
+        complete: (Boolean) -> Unit) = editQueue(queueId, complete) {
+        require(expectedOrder == null || it.entries.map { entry -> entry.id } == expectedOrder) {
+            "The queue changed. Try dragging again."
+        }
+        QueueEdits.moveBefore(it, entries, beforeId)
+    }
     fun shuffle() = settings { it.copy(shuffle = !it.shuffle) }
     fun repeat() = settings { it.copy(advancedRepeat = null,
         repeat = QueueRepeat.entries[(it.repeat.ordinal + 1) % QueueRepeat.entries.size]) }

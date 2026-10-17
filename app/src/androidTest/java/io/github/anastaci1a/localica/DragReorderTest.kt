@@ -19,6 +19,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.*
+import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
@@ -30,6 +31,23 @@ class DragReorderTest {
     @get:Rule val compose = createComposeRule()
     private val selection = SessionSelection()
     private var interactionEnabled by mutableStateOf(true)
+    private var checkpoint by mutableStateOf(QueueUiState(loading = false), neverEqualPolicy())
+    private var routeGeneration by mutableIntStateOf(0)
+    private class QueryGate : CoroutineDispatcher() {
+        @Volatile var blocked = false
+        val pending = java.util.concurrent.LinkedBlockingQueue<Pair<kotlin.coroutines.CoroutineContext, Runnable>>()
+        override fun dispatch(context: kotlin.coroutines.CoroutineContext, block: Runnable) {
+            if (blocked) pending.add(context to block) else Dispatchers.Default.dispatch(context, block)
+        }
+        fun release() {
+            blocked = false
+            while (true) {
+                val task = pending.poll() ?: break
+                Dispatchers.Default.dispatch(task.first, task.second)
+            }
+        }
+    }
+    private val queries = QueryGate()
     private lateinit var fixtureDragHost: SongDragHost
     private lateinit var fixtureFloatingPanel: FloatingSelectionPanelState
     private lateinit var backDispatcher: androidx.activity.OnBackPressedDispatcher
@@ -60,7 +78,7 @@ class DragReorderTest {
                 backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
                 val state by controller.state.collectAsState()
                 val host = remember { SongDragHost() }
-                val route = remember(playlist.id) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), text = if (filtered) "Song" else "") }
+                val route = remember(playlist.id, routeGeneration) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), text = if (filtered) "Song" else "", key = "drag-fixture-$routeGeneration") }
                 val floatingPanel = rememberFloatingSelectionPanel(selection.panelVisible && host.state?.drag == null, false)
                 fixtureDragHost = host
                 fixtureFloatingPanel = floatingPanel
@@ -71,7 +89,7 @@ class DragReorderTest {
                     LocalBrowseObscuredInset provides if (panelClearance) chrome + floatingPanel.clearance else 0.dp) {
                     BrowserScreen(library, state,
                         route, {}, {}, {},
-                        { _, _, _ -> fail("A held song must not play") }, null, controller, interactionEnabled, false)
+                        { _, _, _ -> fail("A held song must not play") }, null, controller, interactionEnabled, false, queueState = checkpoint, queryDispatcher = queries)
                 } }
                 if (foregroundFooter) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(80.dp).background(Color.Magenta).testTag("fixture-footer"))
                 if (panelClearance) {
@@ -89,7 +107,7 @@ class DragReorderTest {
             } }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty() }
             test(controller, playlist)
-        } finally { scope.cancel(); db.close() }
+        } finally { queries.release(); scope.cancel(); db.close() }
     }
     private fun assertReleasePresentation(filtered: Boolean) = fixture(filtered = filtered) { _, playlist ->
         val id = playlist.entries[1].id
@@ -167,6 +185,127 @@ class DragReorderTest {
                 try { list.performTouchInput { cancel() } } finally { compose.mainClock.autoAdvance = true }
             }
         }
+    }
+
+    /** Reproduces the presentation invalidation caused by QueueController's checkpoint publication.
+     * The query gate makes even a fast device observe the pending interval deterministically. */
+    private fun retainedAcrossCheckpoints(multiple: Boolean, moving: Boolean, edgeScroll: Boolean = false) =
+        fixture(count = if (edgeScroll) 60 else 8) { controller, playlist ->
+            val ids = playlist.entries.map { it.id }
+            val list = compose.onNodeWithTag("browser-list")
+            if (multiple) {
+                compose.onNodeWithTag("media-${ids[1]}").performTouchInput { longClick() }
+                compose.onNodeWithTag("media-${ids[2]}").performClick()
+            }
+            val bounds = list.fetchSemanticsNode().boundsInRoot
+            val from = compose.onNodeWithTag("media-${ids[1]}").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+            val destination = compose.onNodeWithTag("media-${ids[4]}").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+            var held = false
+            try {
+                list.performTouchInput { down(from); held = true; advanceEventTime(650); moveTo(from + Offset(0f, 40f)) }
+                val owner = compose.runOnIdle { requireNotNull(fixtureDragHost.state) }
+                val transaction = compose.runOnIdle { requireNotNull(owner.drag) }
+                val originalScroll = compose.runOnIdle { owner.grid.firstVisibleItemIndex }
+                compose.mainClock.autoAdvance = false
+                compose.runOnIdle {
+                    queries.blocked = true
+                    checkpoint = QueueUiState(loading = false, library = QueueLibrary(listOf(
+                        ListeningQueue(id = "unrelated", name = "Playback", entries = emptyList(), positionMs = 5000))))
+                }
+                compose.mainClock.advanceTimeBy(64)
+                compose.waitUntil(5000) { queries.pending.isNotEmpty() }
+                compose.runOnIdle { assertSame(transaction, owner.drag); assertFalse(transaction.dropping) }
+                if (moving || edgeScroll) list.performTouchInput {
+                    moveTo(if (edgeScroll) Offset(8f, bounds.height - 8f) else destination)
+                }
+                // A stationary finger receives no move event throughout the checkpoint interval.
+                compose.mainClock.advanceTimeBy(6200)
+                compose.runOnIdle {
+                    assertSame(transaction, owner.drag)
+                    assertFalse(transaction.dropping)
+                    assertEquals(if (multiple) setOf(ids[1], ids[2]) else setOf(ids[1]), transaction.keys)
+                    if (edgeScroll) assertTrue(owner.grid.firstVisibleItemIndex > originalScroll)
+                }
+                queries.release()
+                compose.mainClock.advanceTimeBy(64)
+                // Independently publish equal content with a fresh identity. Production
+                // StateFlow may suppress a truly unchanged paused capture; this fixture
+                // deliberately exercises a refresh even when its content is unchanged.
+                compose.runOnIdle {
+                    queries.blocked = true
+                    checkpoint = checkpoint.copy(library = checkpoint.library.copy(queues = checkpoint.library.queues.map { it }))
+                }
+                compose.mainClock.advanceTimeBy(64)
+                compose.waitUntil(5000) { queries.pending.isNotEmpty() }
+                compose.runOnIdle { assertSame(transaction, owner.drag); assertFalse(transaction.dropping) }
+                queries.release()
+                compose.runOnIdle {
+                    checkpoint = checkpoint.copy(library = checkpoint.library.update(checkpoint.library.queues.single().copy(positionMs = 10_000)))
+                }
+                compose.mainClock.advanceTimeBy(128)
+                compose.runOnIdle { assertSame(transaction, owner.drag); assertFalse(transaction.dropping) }
+                list.performTouchInput { up(); held = false }
+                compose.mainClock.autoAdvance = true
+                compose.waitUntil(5000) { owner.drag == null }
+                compose.runOnIdle {
+                    assertFalse(selection.active)
+                    val saved = controller.state.value.playlists.single().entries.map { it.id }
+                    assertEquals(ids.toSet(), saved.toSet())
+                    if (moving || edgeScroll) assertNotEquals(ids, saved)
+                    if (multiple) assertEquals(saved.indexOf(ids[1]) + 1, saved.indexOf(ids[2]))
+                }
+            } finally {
+                queries.release()
+                if (held) { compose.mainClock.autoAdvance = false; list.performTouchInput { cancel() } }
+                compose.mainClock.autoAdvance = true
+            }
+        }
+    @Test fun stationarySingleDragSurvivesPlaybackCheckpoint() = retainedAcrossCheckpoints(false, false)
+    @Test fun stationaryMultiDragSurvivesPlaybackCheckpoint() = retainedAcrossCheckpoints(true, false)
+    @Test fun movingMultiDragSurvivesPlaybackCheckpoint() = retainedAcrossCheckpoints(true, true)
+    @Test fun edgeScrollingMultiDragSurvivesPlaybackCheckpoint() = retainedAcrossCheckpoints(true, true, true)
+
+    @Test fun removedOccurrenceCancelsBeforePendingPresentationPublishes() = fixture { controller, playlist ->
+        val ids = playlist.entries.map { it.id }
+        val list = compose.onNodeWithTag("browser-list")
+        val bounds = list.fetchSemanticsNode().boundsInRoot
+        val from = compose.onNodeWithTag("media-${ids[1]}").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+        list.performTouchInput { down(from); advanceEventTime(650); moveTo(from + Offset(0f, 40f)) }
+        val owner = compose.runOnIdle { requireNotNull(fixtureDragHost.state) }
+        try {
+            queries.blocked = true
+            compose.runOnIdle { controller.removeEntries(playlist.id, setOf(ids[1])) }
+            compose.waitUntil(5000) { controller.state.value.playlists.single().entries.none { it.id == ids[1] } }
+            compose.waitUntil(5000) { owner.drag == null || owner.drag!!.dropping }
+            compose.runOnIdle { assertTrue(selection.active) }
+            list.performTouchInput { up() }
+            assertEquals(ids.filterNot { it == ids[1] }, controller.state.value.playlists.single().entries.map { it.id })
+        } finally { queries.release() }
+    }
+
+    @Test fun routeChangeCancelsHeldDrag() = fixture { controller, playlist ->
+        val ids = playlist.entries.map { it.id }
+        val list = compose.onNodeWithTag("browser-list")
+        val bounds = list.fetchSemanticsNode().boundsInRoot
+        val from = compose.onNodeWithTag("media-${ids[1]}").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+        list.performTouchInput { down(from); advanceEventTime(650); moveTo(from + Offset(0f, 40f)) }
+        val owner = compose.runOnIdle { requireNotNull(fixtureDragHost.state) }
+        compose.runOnIdle { routeGeneration++ }
+        compose.waitUntil(5000) { owner.drag == null || owner.drag!!.dropping }
+        list.performTouchInput { up() }
+        assertEquals(ids, controller.state.value.playlists.single().entries.map { it.id })
+    }
+
+    @Test fun queuedPlaylistDropRejectsAnInterveningOrderChange() = fixture { controller, playlist ->
+        val ids = playlist.entries.map { it.id }
+        val first = CompletableDeferred<Boolean>()
+        val stale = CompletableDeferred<Boolean>()
+        compose.runOnIdle {
+            controller.moveBefore(playlist.id, setOf(ids.last()), ids.first()) { first.complete(it) }
+            controller.moveBefore(playlist.id, setOf(ids[1]), null, ids) { stale.complete(it) }
+        }
+        runBlocking { assertTrue(withTimeout(5000) { first.await() }); assertFalse(withTimeout(5000) { stale.await() }) }
+        assertEquals(listOf(ids.last()) + ids.dropLast(1), controller.state.value.playlists.single().entries.map { it.id })
     }
 
     @Test fun disjointSelectionLiftsIntoStackAndMovesInSourceOrder() = fixture { controller, playlist ->
