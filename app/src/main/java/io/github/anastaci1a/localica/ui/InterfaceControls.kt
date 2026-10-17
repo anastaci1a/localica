@@ -212,7 +212,8 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
         pressed || dragging || (!reduced && (position.isRunning || position.value != if (checked) 1f else 0f))
     } }
     val source = LocalFrostedBackdrop.current
-    val ready = source == null || if (android.os.Build.VERSION.SDK_INT >= 33)
+    val modern = useModernGlass(glassBackend(), android.os.Build.VERSION.SDK_INT, source == null || source.snapshot != null)
+    val ready = source == null || if (modern)
         source.recorded && !source.layer.isReleased else source.snapshot != null
     // Start the lease at commitment, but retain the opaque resting face until
     // the first real recording is sampleable. Logical travel never waits for it.

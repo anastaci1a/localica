@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.*
 import kotlin.math.ceil
 
 /** Optional instrumentation; no snapshot writes or work when no observer is installed. */
-internal val LocalControlLensDraw = staticCompositionLocalOf<(() -> Unit)?> { null }
+internal val LocalControlLensDraw = staticCompositionLocalOf<((GlassBackend) -> Unit)?> { null }
 
 /** Draw the track once. Only the lens replaces pixels with the sampled track/backdrop.
  * A settled white thumb has no recording, backdrop subscription or optical renderer. */
@@ -28,10 +28,11 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val currentPrepare by rememberUpdatedState(prepare)
     val sampled by remember { derivedStateOf { currentActive() > 0f || currentPrepare() } }
     if (sampled) BackdropLease(source)
+    val modern = useModernGlass(glassBackend(), Build.VERSION.SDK_INT, source == null || source.snapshot != null)
     val location = remember { BackdropLocation() }
-    val renderer = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
-    val mesh = remember { lazy { LensMeshRenderer() } }
-    val layer = if (optical && Build.VERSION.SDK_INT >= 33) rememberGraphicsLayer() else null
+    val renderer = remember(modern) { lazy { if (modern && Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
+    val mesh = remember(modern) { lazy { LensMeshRenderer() } }
+    val layer = if (optical && modern && Build.VERSION.SDK_INT >= 33) rememberGraphicsLayer() else null
     val onLensDraw = LocalControlLensDraw.current
     Canvas(modifier.backdropLocation(location)) {
         val shape = geometry()
@@ -54,7 +55,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             val backing = source
             if (backing != null) {
                 val delta = backing.origin - location.position() - origin
-                if (Build.VERSION.SDK_INT >= 33 && backing.recorded && !backing.layer.isReleased) {
+                if (modern && Build.VERSION.SDK_INT >= 33 && backing.recorded && !backing.layer.isReleased) {
                     translate(delta.x, delta.y) { drawLayer(backing.layer) }
                 } else backing.snapshot?.let { image -> translate(delta.x, delta.y) { drawImage(image, dstSize = backing.size) } }
             }
@@ -63,7 +64,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
                 size.height - controlSize.height + origin.y) { scene() }
         }
         clipPath(silhouette, ClipOp.Difference) { scene() }
-        onLensDraw?.invoke()
+        onLensDraw?.invoke(if (modern) GlassBackend.Modern else GlassBackend.Legacy)
         if (layer != null && Build.VERSION.SDK_INT >= 33) {
             layer.renderEffect = renderer.value?.effect(shifted, 0f, 1.35f * thickness, flattening = flattening)
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }

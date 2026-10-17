@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.graphicsLayer
@@ -22,6 +23,18 @@ internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 @Composable
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
+    val modernSupported = android.os.Build.VERSION.SDK_INT >= 33
+    val modes = GlassRendererMode.entries.filter {
+        modernSupported || it != GlassRendererMode.Modern
+    }
+    ChoicePreference("Renderer", value.renderer.takeIf { it in modes }
+        ?: GlassRendererMode.Legacy, modes, { it.label }) {
+        onChange(value.copy(renderer = it))
+    }
+    Text(if (!modernSupported) "Using Legacy. Modern requires Android 13 or newer."
+        else if (value.renderer == GlassRendererMode.Automatic)
+            "Automatic uses Modern on this device." else "Changes apply without restarting Localica.",
+        style = MaterialTheme.typography.bodySmall)
     var previewLightInk by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalGlassAppearance provides value) {
         Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {

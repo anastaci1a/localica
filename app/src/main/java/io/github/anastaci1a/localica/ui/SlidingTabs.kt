@@ -90,9 +90,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
     val refractForeground = appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
-    val legacyOverlay = android.os.Build.VERSION.SDK_INT < 33 && appearance.tabStyle == TabLensStyle.Overlay
-    val recordForeground = refractForeground && !legacyOverlay
-    val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)
+    val backend = glassBackend()
+    val wantsLegacyOverlay = backend == GlassBackend.Legacy && appearance.tabStyle == TabLensStyle.Overlay
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val minimumWidth = maxOf(68.dp, with(density) {
@@ -117,9 +116,14 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val insets = SelectorTrackInsets(0f, inset, inset)
         val atlasGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, 0f, 1f,
             false, rtl, reduced, overflow = !fits)
-        val inkAtlas = if (legacyOverlay && refractForeground)
+        val inkAtlas = if (wantsLegacyOverlay && refractForeground)
             rememberFrostedBackdrop(listOf(tabs, width, labelStyle, density.density, density.fontScale),
                 dark = false, glassBlur = 0f, whiteTint = 0f) else null
+        if (wantsLegacyOverlay) { BackdropLease(source); BackdropLease(inkAtlas) }
+        val legacyOverlay = wantsLegacyOverlay && !useModernGlass(backend, android.os.Build.VERSION.SDK_INT,
+            source?.legacyAvailable != false && (!refractForeground || inkAtlas?.snapshot != null))
+        val recordForeground = refractForeground && !legacyOverlay
+        val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)
         val rawTrack = if (fits) androidx.compose.ui.geometry.Rect(rawGeometry.travelStart, rawGeometry.crossStart,
             rawGeometry.travelEnd, rawGeometry.crossStart + rawGeometry.crossExtent)
             else androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
