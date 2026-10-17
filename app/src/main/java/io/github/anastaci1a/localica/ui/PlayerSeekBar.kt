@@ -32,7 +32,9 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     onValueChangeFinished: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier,
     cancelBounds: Rect? = null, onCancel: () -> Unit = {}, onDrag: (Boolean, Boolean) -> Unit = { _, _ -> },
     liveValue: Float = value) {
-    val interaction = remember { MutableInteractionSource() }
+    val sink by rememberUpdatedState(rememberControlHaptics())
+    val feedback = remember { SeekControlHaptics(ControlHaptics { sink.emit(it) }) }
+    val interaction = remember { SeekInteractionSource(MutableInteractionSource(), feedback) }
     val dragging by interaction.collectIsDraggedAsState()
     val thickness by animateDpAsState(if (dragging) 9.dp else 5.dp, tween(if (LocalReducedMotion.current) 0 else 160), label = "Seek thickness")
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -44,7 +46,6 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     val preview = if (previewActive) key(previewGesture) {
         seekCancelPreview(value, liveValue, wasOver)
     } else value
-    val view = androidx.compose.ui.platform.LocalView.current
     val target by rememberUpdatedState(cancelBounds)
     val report by rememberUpdatedState(onDrag)
     val cancel by rememberUpdatedState(onCancel)
@@ -53,6 +54,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             // Cancellation is dispatched to Slider before this outer pointer modifier.
             // Permit a touch commit only after observing a genuine release outside X.
+            feedback.beginTouch()
             cancelRelease = true
             wasOver = false
             previewGesture++
@@ -66,41 +68,50 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                     if (change != null) {
                         val over = target?.contains(origin + change.position) == true
                         if (over != wasOver) {
-                            view.performHapticFeedback(if (over) android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK)
                             wasOver = over
                         }
                         // A consumed synthetic up is cancellation, not commit permission.
                         cancelRelease = change.pressed || over || change.isConsumed
+                        feedback.pointer(over, genuineUp = !change.pressed && !change.isConsumed,
+                            cancelled = !change.pressed && (over || change.isConsumed))
                         report(change.pressed, over)
                         released = !change.pressed
                         if (released) {
                             if (cancelRelease) cancel()
                             // Keep touch-origin updates distinct from subsequent keyboard/TalkBack edits.
                             awaitPointerEvent(PointerEventPass.Final)
+                            feedback.pointerFinal()
                         }
                     }
                 } while (!released && event.changes.any { it.pressed })
             } finally {
+                feedback.pointerFinal()
                 previewActive = false
                 report(false, false)
-                if (!released) { cancelRelease = true; cancel() }
+                if (!released) { feedback.cancelTouch(); cancelRelease = true; cancel() }
             }
         }
     }
-    Slider(value, onValueChange, modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(touch)
-        .onPreviewKeyEvent { cancelRelease = false; false }
+    Slider(value, { next ->
+        feedback.valueChange()
+        onValueChange(next)
+    }, modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(touch)
+        .onPreviewKeyEvent { feedback.nonTouchInput(); cancelRelease = false; false }
         .semantics {
-            if (enabled) setProgress { requested ->
+            setProgress { requested ->
                 val next = requested.coerceIn(valueRange.start, valueRange.endInclusive)
-                if (next == value) false else {
+                if (!enabled || next == value) false else {
                     // A cancelled touch may not finish Slider's drag recognizer.
                     // Accessibility starts an independent edit, never that old touch.
+                    feedback.nonTouchInput()
+                    feedback.activation()
                     cancelRelease = false
                     onValueChange(next); onValueChangeFinished(); true
                 }
             }
         }, enabled,
         valueRange = valueRange, onValueChangeFinished = {
+            feedback.materialFinish()
             if (cancelRelease) onCancel() else onValueChangeFinished()
             cancelRelease = false
         },
