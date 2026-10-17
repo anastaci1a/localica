@@ -19,7 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import io.github.anastaci1a.localica.browse.*
-import io.github.anastaci1a.localica.library.TrackSort
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.library.OrderCheckpoint
 import io.github.anastaci1a.localica.navigation.*
 
@@ -28,6 +30,8 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     onDismiss: () -> Unit, onSave: (BrowseStyle, Boolean) -> Unit, onReset: () -> Unit, presentationOnly: Boolean = false, onRandomize: ((((Boolean) -> Unit)) -> Unit)? = null,
     mutableOrder: io.github.anastaci1a.localica.library.SavedOrder? = null,
     manualNeedsRestore: Boolean = false,
+    mutableOrderRows: List<SongRow>? = null,
+    orderSnapshot: LibrarySnapshot? = null,
     mutableOrderIds: List<String>? = null,
     onRevertOrder: ((OrderCheckpoint, (Boolean) -> Unit) -> Unit)? = null,
     onApplySort: ((TrackSort, Boolean, (Boolean) -> Unit) -> Unit)? = null) {
@@ -46,9 +50,21 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     var busy by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf(false) }
     val applying = mutableOrder != null && tab == 0
-    val applied = mutableOrder != null && edited.sort == mutableOrder.sort &&
+    val evaluatedApplied = if (mutableOrder != null && mutableOrderRows != null && orderSnapshot != null) {
+        var result by remember(mutableOrder, mutableOrderRows, orderSnapshot, edited.sort, edited.ascending) {
+            mutableStateOf<Boolean?>(null)
+        }
+        LaunchedEffect(mutableOrder, mutableOrderRows, orderSnapshot, edited.sort, edited.ascending) {
+            result = withContext(Dispatchers.Default) {
+                LiveOrder(orderSnapshot).isApplied(mutableOrder, mutableOrderRows, edited.sort, edited.ascending)
+            }
+        }
+        // Pending/obsolete evaluations cannot enable an actionable stale Apply.
+        result ?: true
+    } else null
+    val applied = evaluatedApplied ?: (mutableOrder != null && edited.sort == mutableOrder.sort &&
         (edited.sort == TrackSort.Manual || edited.ascending == mutableOrder.ascending) &&
-        !(edited.sort == TrackSort.Manual && manualNeedsRestore)
+        !(edited.sort == TrackSort.Manual && manualNeedsRestore))
     var override by remember { mutableStateOf(overridden) }
     @Composable fun scopeFields() {
         HorizontalDivider(color = LocalContentColor.current.copy(alpha = .12f))
