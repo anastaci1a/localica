@@ -186,7 +186,8 @@ fun LocalicaScreen(
                 val tab = when (kind) { MediaKind.Album -> MainTab.Albums; MediaKind.Artist -> MainTab.Artists
                     MediaKind.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
                 val item = io.github.anastaci1a.localica.browse.BrowseQueries.evaluate(library.snapshot, playlist.playlists, BrowseRoute(tab), sorts = browseSorts)
-                    .items.firstOrNull { item -> item.songs.any { it.track.id == track.id } }
+                    .items.firstOrNull { item -> item.songs.any { it.track.id == track.id &&
+                        (action != PlayerAction.Folder || io.github.anastaci1a.localica.library.sameSongInformationLocation(it.track, track)) } }
                 if (item != null) openCollection(item)
             }
         }
@@ -400,7 +401,7 @@ fun LocalicaScreen(
         dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
     if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
     if (customizeActions) PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false }, settings.reducedMotion)
-    if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { songInfo = false }, { playerAction(PlayerAction.Edit) }, ::playerAction)
+    if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { songInfo = false }, { playerAction(PlayerAction.Edit) }, folders = library.snapshot.folders, onAction = ::playerAction)
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {

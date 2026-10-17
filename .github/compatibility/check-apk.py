@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 badging = Path(sys.argv[1]).read_text()
 kind, code = sys.argv[2:4]
-package = re.search(r"^package: name='([^']+)' versionCode='([^']+)'", badging, re.M)
+package = re.search(r"^package: name='([^']+)' versionCode='([^']*)'", badging, re.M)
 assert package, badging
 assert package[1] == 'io.github.anastaci1a.localica.debug' + ('.test' if kind == 'test' else '')
 if kind == 'app':

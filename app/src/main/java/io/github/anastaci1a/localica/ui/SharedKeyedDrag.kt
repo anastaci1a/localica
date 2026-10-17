@@ -10,9 +10,10 @@ import androidx.compose.ui.input.pointer.*
 /** Shared long-press ownership for mutable songs and queue-selector rows. */
 @Composable
 internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, enabled: Boolean,
-    reducedMotion: Boolean, ownerKey: Any? = null, itemAt: (Offset) -> T?,
+    reducedMotion: Boolean, ownerKey: Any? = null, acquisitionReady: Boolean = true, itemAt: (Offset) -> T?,
     onHold: (T) -> Unit = {}, keysFor: (T) -> Set<String>? = { setOf(state.keyOf(it)) },
     onCommitted: () -> Unit = {}, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier {
+    val currentAcquisitionReady by rememberUpdatedState(acquisitionReady)
     val currentItemAt by rememberUpdatedState(itemAt)
     val currentOnHold by rememberUpdatedState(onHold)
     val currentKeysFor by rememberUpdatedState(keysFor)
@@ -21,10 +22,11 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
     return pointerInput(state, ownerKey, reducedMotion, enabled) {
         // Keep this ancestor node installed: removing it cancels every descendant's
         // hit path, including a pinch that temporarily makes the browse query pending.
-        // Keying enabled cancels only our own active drag when availability changes.
+        // Eligibility/owner changes cancel this transaction; asynchronous presentation
+        // readiness gates acquisition only and cannot revoke an owned contact.
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            if (!enabled) return@awaitEachGesture
+            if (!enabled || !currentAcquisitionReady) return@awaitEachGesture
             if (state.drag != null) return@awaitEachGesture
             val item = currentItemAt(down.position) ?: return@awaitEachGesture
             val held = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
@@ -36,9 +38,10 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                 }
                 @Suppress("UNREACHABLE_CODE") false
             }
-            if (held != null) return@awaitEachGesture
+            if (held != null || !currentAcquisitionReady) return@awaitEachGesture
             currentOnHold(item)
             var moving = false
+            var gestureCommit = currentCommit
             try {
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -50,18 +53,22 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                         change.consume()
                         if (moving) {
                             if (!canceled) state.move(change.position)
-                            state.finish(canceled || state.drag?.overCancel == true, reducedMotion, currentOnCommitted, currentCommit)
+                            state.finish(canceled || state.drag?.overCancel == true, reducedMotion, currentOnCommitted, gestureCommit)
                         }
                         break
                     }
                     change.consume()
                     if (!moving && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
                         val selected = currentKeysFor(item)
-                        if (selected != null) moving = state.begin(item, selected, down.position)
+                        if (selected != null) {
+                            moving = state.begin(item, selected, down.position)
+                            // Freeze the adapter's source precondition, not the live insertion target.
+                            if (moving) gestureCommit = currentCommit
+                        }
                     }
                     if (moving) state.move(change.position)
                 }
-            } finally { if (moving && state.drag?.dropping == false) state.finish(true, reducedMotion, currentOnCommitted, currentCommit) }
+            } finally { if (moving && state.drag?.dropping == false) state.finish(true, reducedMotion, currentOnCommitted, gestureCommit) }
         }
     }
 }
