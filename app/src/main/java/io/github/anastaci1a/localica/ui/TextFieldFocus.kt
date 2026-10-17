@@ -45,25 +45,32 @@ private val LocalRestingTextFocus = staticCompositionLocalOf<FocusRequester> { e
     var sawKeyboard by remember { mutableStateOf(false) }
     val keyboardVisible = WindowInsets.isImeVisible
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val keyboardSettled = WindowInsets.imeAnimationSource.getBottom(density) == WindowInsets.imeAnimationTarget.getBottom(density)
+    val imeSource = WindowInsets.imeAnimationSource.getBottom(density)
+    val imeTarget = WindowInsets.imeAnimationTarget.getBottom(density)
+    val keyboardSettled = imeSource == imeTarget
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     // Keep native window focus, but move Compose focus out of the editor. Clearing
     // the window owner can immediately focus its first editor again in key mode.
     val restingFocus = LocalRestingTextFocus.current
     val keyboard = LocalSoftwareKeyboardController.current
     val emptySearchBack by rememberUpdatedState(LocalEmptySearchBack.current)
-    fun endEditing() { restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke() }
-    BackHandler(focused) { endEditing() }
+    val trace = LocalSearchEditTrace.current
+    fun endEditing(reason: String) {
+        trace?.invoke("end editing reason=$reason focused=$focused seen=$sawKeyboard visible=$keyboardVisible settled=$keyboardSettled window=$windowFocused empty=${emptySearchBack != null}")
+        restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
+    }
+    BackHandler(focused) { endEditing("back handler") }
     LaunchedEffect(focused, keyboardVisible, keyboardSettled, windowFocused) {
+        trace?.invoke("ime state focused=$focused seen=$sawKeyboard visible=$keyboardVisible settled=$keyboardSettled window=$windowFocused source=$imeSource target=$imeTarget")
         if (!focused || !windowFocused) sawKeyboard = false
         // A newly focused popup may inherit the previous window's closing IME.
         // Only a settled keyboard belongs to this editing session.
         else if (keyboardVisible && keyboardSettled) sawKeyboard = true
-        else if (!keyboardVisible && sawKeyboard) { sawKeyboard = false; endEditing() }
+        else if (!keyboardVisible && sawKeyboard) { sawKeyboard = false; endEditing("ime hidden") }
     }
     return onFocusChanged { focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
         if (focused && event.key == Key.Back) {
-            if (event.type == KeyEventType.KeyUp) endEditing()
+            if (event.type == KeyEventType.KeyUp) endEditing("pre-IME key up")
             true
         } else false
     }
