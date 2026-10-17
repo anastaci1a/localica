@@ -49,7 +49,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     onSearchEdit: (BrowseRoute) -> Unit = onRoute, onSearchCommit: () -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
     listBackEnabled: Boolean = false,
     libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {},
-    popupDismiss: (() -> Unit)? = null, focusRequest: Int = 0, sortOrigin: GlassAnchor? = null,
+    popupDismiss: (() -> Unit)? = null, scopedEditor: ScopedSearchEditorSession? = null, focusRequest: Int = 0, sortOrigin: GlassAnchor? = null,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, initialPlayingPosition: Boolean = false, onBack: () -> Unit = {},
     onAppearance: (androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color) -> Unit = { _, _ -> }) {
     val searchEditTrace = LocalSearchEditTrace.current
@@ -73,6 +73,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     var localFocusRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
     val searchHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    var editorGeneration by remember { mutableIntStateOf(0) }
+    val searchEditor = remember(editorGeneration) { ScopedSearchEditorSession() }
+    DisposableEffect(searchEditor) { onDispose { searchEditor.retire() } }
+    fun retireSearchEditor() { searchEditor.retire(); editorGeneration++ }
     val obscuredInset = LocalBrowseObscuredInset.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -100,13 +104,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val showFilters = route.collection == null && (route.tab == MainTab.Library || route.globalSearch) && filters.isNotEmpty()
     val pillSlotHeight = listPillSlotHeight()
     val showSearchPill = !route.search && route.collection?.kind != MediaKind.Album && style.quickSearch && (route.collection != null || route.tab != MainTab.Library)
-    val focus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
+    val routeFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
+    val focus = scopedEditor?.focus ?: routeFocus
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val resultsFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
     var focusedRequest by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(-1) }
     var inputCompletion by remember(route.key) { mutableIntStateOf(0) }
     fun submitSearch() {
+        if (scopedEditor != null && !scopedEditor.active) return
         // Cancel a pending frame-delayed focus request before ending this input session.
         focusedOnce = true; focusedRequest = focusRequest; inputCompletion++
         onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
@@ -120,13 +126,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         // Do not consume an autofocus request while the returning window still owns input.
         if (!panelReady || !windowFocused || keyboardClosing) return@LaunchedEffect
         if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
-            withFrameNanos { } // Wait until the newly keyed field is attached.
+            withFrameNanos { } // Wait until the field is attached.
+            if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
             restoreResultsFocus = false
         } else if (restoreResultsFocus && !playerOpen) {
             // Replacing a focused field can transfer focus to the restored field even without
             // requestFocus. Back restores results, so explicitly end that input session.
             withFrameNanos { }
+            if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
             resultsFocus.requestFocus(); keyboard?.hide()
             restoreResultsFocus = false
         }
@@ -371,16 +379,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
         .then(if (searchAnchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)) {
         header()
-        if (route.search && popupDismiss != null) ClearableTextField(route.text, ::editSearchText,
-            singleLine = true, placeholder = { Text("Search " + (route.title ?: route.tab.label), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            leadingIcon = { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search), null) },
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submitSearch() }),
-            colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus))
+        if (route.search && popupDismiss != null) {
+            val input = ScopedSearchEditorParameters(route.text, ::editSearchText,
+                "Search " + (route.title ?: route.tab.label), focus, ::submitSearch)
+            if (scopedEditor != null) scopedEditor.content(input) else ScopedSearchEditor(input)
+        }
         else if (route.search) GlassSearchField(route.text, ::editSearchText,
             if (route.globalSearch) "Search library" else "Search ${route.title ?: route.tab.label}", enabled = !playerOpen,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
@@ -598,10 +601,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     } } }
 
     if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
-        fun closeSearch() { localSearchOpen = false }
+        fun closeSearch() { retireSearchEditor(); localSearchOpen = false }
         fun backSearch() {
             val previous = if (localSearch.route.text.isNotBlank()) localSearch.back(false) else null
-            if (previous != null) localSearch = previous else closeSearch()
+            if (previous != null) { retireSearchEditor(); localSearch = previous } else closeSearch()
         }
         LaunchedEffect(localSearchOpen, searchAnchor.modalPresent) {
             if (!localSearchOpen && !searchAnchor.modalPresent) {
@@ -617,12 +620,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         playingTrackId = playingTrackId, playingEntryId = playingEntryId, reducedMotion = reducedMotion,
                         onSearchEdit = { incoming ->
                             val before = localSearch.route
-                            val next = localSearch.editSearch(incoming)
+                            // History route keys may change while this editor session continues.
+                            // Resolve edits against its current route; retired sessions own nothing.
+                            val next = if (searchEditor.active && localSearchOpen) localSearch.editSearch(
+                                before.copy(text = incoming.text, querySort = incoming.querySort,
+                                    queryAscending = incoming.queryAscending)) else localSearch
                             searchEditTrace?.invoke("route edit currentKey=${before.key.hashCode()} incomingKey=${incoming.key.hashCode()} nextKey=${next.route.key.hashCode()} oldLength=${before.text.length} incomingLength=${incoming.text.length} nextLength=${next.route.text.length} committed=${before.queryCommitted}")
                             localSearch = next
                         },
-                        onSearchCommit = { localSearch = localSearch.commitSearch() },
-                        libraryFilters = libraryFilters, popupDismiss = ::closeSearch, focusRequest = localFocusRequest)
+                        onSearchCommit = { if (searchEditor.active && localSearchOpen) localSearch = localSearch.commitSearch() },
+                        libraryFilters = libraryFilters, popupDismiss = ::closeSearch, scopedEditor = searchEditor, focusRequest = localFocusRequest)
                 } }
             }
         }

@@ -194,6 +194,36 @@ class ScopedSearchHistoryTest {
         awaitClosed()
     }
 
+    @Test fun editorSurvivesDraftRekeyAndRapidReversalButRetiresOnHistoryBack() = fixture {
+        submit("Album")
+        val committedEditor = editor.fetchSemanticsNode().id
+        editor.performClick()
+        val setText = requireNotNull(editor.fetchSemanticsNode().config[
+            androidx.compose.ui.semantics.SemanticsActions.SetText].action)
+        val submitRetired = requireNotNull(editor.fetchSemanticsNode().config[
+            androidx.compose.ui.semantics.SemanticsActions.OnImeAction].action)
+        // One UI turn, with no frame/recomposition between genuine forward/reverse edits.
+        compose.runOnUiThread {
+            assertTrue(setText(androidx.compose.ui.text.AnnotatedString("Album 0")))
+            assertTrue(setText(androidx.compose.ui.text.AnnotatedString("Album")))
+        }
+        editor.assertTextEquals("Album")
+        assertEquals("Draft history must not replace the actual editor", committedEditor,
+            editor.fetchSemanticsNode().id)
+        editor.assertIsFocused()
+        compose.awaitExpectedWindowFocus(editor)
+        compose.awaitSearchImeHandoff { pressSystemBack() }
+        backTo("Album")
+        assertNotEquals("Back retires the previous editing session", committedEditor,
+            editor.fetchSemanticsNode().id)
+        compose.runOnUiThread {
+            setText(androidx.compose.ui.text.AnnotatedString("Album 099"))
+            submitRetired()
+        }
+        editor.assertTextEquals("Album")
+        editor.assertIsNotFocused()
+    }
+
     @Test fun outsideTapDismissesWholeHistoryInsteadOfRetracingIt() = fixture {
         submit("Album 01")
         submit("Album 02")
