@@ -4,6 +4,34 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ScrollGestureOwnershipTest {
+    @Test fun drawerClaimCannotBecomeContentOwnershipUntilNewDown() {
+        val owner = ScrollGestureOwnership()
+        owner.begin(); owner.claimDrawer(); owner.recordScroll(-80f)
+        assertTrue(owner.drawerOwned)
+        assertFalse(owner.contentOwned)
+        assertFalse(owner.mayHandoff)
+        owner.release(); owner.end()
+        assertTrue(owner.mayCommitPull)
+        owner.begin(); owner.recordScroll(-1f)
+        assertFalse(owner.drawerOwned)
+        assertTrue(owner.contentOwned)
+    }
+
+    @Test fun edgeTravelMustBeRetracedIncludingPartialCrossingAndBothEdges() {
+        val owner = ScrollGestureOwnership()
+        owner.begin(); owner.recordScroll(1f)
+        owner.recordBoundary(30f); owner.recordBoundary(20f)
+        assertEquals(-20f, owner.consumeRetrace(-20f), 0f)
+        assertEquals(-30f, owner.consumeRetrace(-40f), 0f)
+        assertEquals(0f, owner.consumeRetrace(-10f), 0f)
+        owner.recordBoundary(-50f)
+        assertEquals(25f, owner.consumeRetrace(25f), 0f)
+        owner.blockHandoff()
+        assertEquals(0f, owner.consumeRetrace(25f), 0f)
+        owner.end(); owner.begin(); owner.recordScroll(1f)
+        assertEquals(0f, owner.consumeRetrace(25f), 0f)
+    }
+
     @Test fun freshEdgeMayHandoffButPartialContentConsumptionLocksTheContact() {
         val owner = ScrollGestureOwnership()
         owner.begin()
