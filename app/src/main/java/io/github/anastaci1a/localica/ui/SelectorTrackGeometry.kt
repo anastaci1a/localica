@@ -1,5 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
+// Shared physical limit; also fits the existing 4 dp choice-track clearance.
+private const val SelectorMaximumExtensionDp = 4f
+internal val SelectorMaximumExtension = androidx.compose.ui.unit.Dp(SelectorMaximumExtensionDp)
+
 /** Layout-space track expansion; gesture distances stay in the original host's coordinates. */
 internal data class SelectorTrackGeometry(
     val travel: Float,
@@ -7,23 +11,32 @@ internal data class SelectorTrackGeometry(
     val stretch: Float,
     val wall: Float,
     val crossExtentOverride: Float? = null,
+    val maximumExtension: Float = SelectorMaximumExtensionDp,
+    val heldCrossInset: Float? = null,
+    val heldContact: Float = 1f,
 ) {
     init {
         require(travel.isFinite() && travel > 0f && cross.isFinite() && cross > 0f)
         require(stretch.isFinite() && wall.isFinite())
+        require(heldContact.isFinite() && heldContact in 0f..1f)
+        require(maximumExtension.isFinite() && maximumExtension >= 0f)
+        require(heldCrossInset == null || heldCrossInset.isFinite() && heldCrossInset >= 0f && 2f * heldCrossInset < cross)
     }
     val expansion = stretch.coerceIn(0f, .04f)
     val pullFraction get() = expansion / .04f
-    val travelExtent = travel * (1f + expansion)
-    val crossExtent = crossExtentOverride ?: (cross / (1f + expansion))
+    val travelExtent = travel + maximumExtension * pullFraction
+    // A held lens keeps its resting cross dimension. Close its physical inset by
+    // bringing the shell inward, rather than inflating the lens at the endpoint.
+    val crossExtent = crossExtentOverride ?: heldCrossInset?.let { cross - 2f * it * pullFraction * heldContact }
+        ?: (cross / shellTravelScale)
     val travelStart = (travelExtent - travel) * (wall.coerceIn(-1f, 1f) - 1f) / 2f
     val crossStart = (cross - crossExtent) / 2f
     val travelEnd get() = travelStart + travelExtent
 
     // Keep the shell's recording size unchanged; only its existing graphics layer
     // consumes these values. Foreground slots consume the matching layout frame.
-    val shellTravelScale get() = 1f + expansion
-    val shellCrossScale get() = 1f / shellTravelScale
+    val shellTravelScale get() = travelExtent / travel
+    val shellCrossScale get() = crossExtent / cross
     val shellTranslation get() = travelStart + (travelExtent - travel) / 2f
 
     fun slotExtent(count: Int, outerInset: Float): Float {
@@ -74,7 +87,7 @@ internal fun SelectorTrackGeometry.lens(position: Float, count: Int, insets: Sel
     vertical: Boolean, rtl: Boolean, shape: GlassShape, outerCorner: Float): SelectorTrackLens {
     val logical = position.coerceIn(0f, count - 1f)
     val physical = if (!vertical && rtl) count - 1f - logical else logical
-    val affinity = if (count == 1) wall * pullFraction else
+    val affinity = if (count == 1) wall else
         selectorTrackPhysicalWall(glassWallAffinity(logical, count - 1f), vertical, rtl)
     val contact = kotlin.math.abs(affinity)
     val baseGap = insets.outerTravel + insets.slotTravel
@@ -89,7 +102,8 @@ internal fun SelectorTrackGeometry.lens(position: Float, count: Int, insets: Sel
     val allowance = insets.cross * 1.5f
     val main = (baseMain * mainScale).coerceIn(maxOf(1f, 2f * corner), maxOf(baseMain + allowance, 2f * corner))
     val freeCross = (baseCross * crossScale).coerceIn(maxOf(1f, baseCross - allowance), baseCross + allowance)
-    val across = freeCross * (1f - contact) + (crossExtent - 2f * crossGap) * contact
+    val across = heldCrossInset?.let { cross - 2f * it }
+        ?: (freeCross * (1f - contact) + (crossExtent - 2f * crossGap) * contact)
     val baselineStart = travelStart + insets.outerTravel + physical * slotExtent(count, insets.outerTravel) + insets.slotTravel
     val start = baselineStart + (baseMain - main) * (affinity + 1f) / 2f + affinity * (baseGap - gap)
     val crossStart = this.crossStart + (crossExtent - across) / 2f
@@ -127,9 +141,12 @@ internal fun selectorTrackPhysicalWall(logicalWall: Float, vertical: Boolean, rt
 
 /** Reduced motion and overflow have exactly the undeformed base frame. */
 internal fun selectorTrackGeometry(travel: Float, cross: Float, stretch: Float, logicalWall: Float,
-    vertical: Boolean, rtl: Boolean, reducedMotion: Boolean, overflow: Boolean) = SelectorTrackGeometry(
+    vertical: Boolean, rtl: Boolean, reducedMotion: Boolean, overflow: Boolean,
+    maximumExtension: Float = SelectorMaximumExtensionDp, heldCrossInset: Float? = null, heldContact: Float = 1f) = SelectorTrackGeometry(
         travel, cross, if (reducedMotion || overflow) 0f else stretch,
-        selectorTrackPhysicalWall(logicalWall, vertical, rtl))
+        selectorTrackPhysicalWall(logicalWall, vertical, rtl), maximumExtension = maximumExtension,
+        heldCrossInset = heldCrossInset.takeUnless { reducedMotion || overflow },
+        heldContact = heldContact)
 
 /** Project the captured contour as well as its extents; optical body/axial bounds stay unchanged. */
 internal fun SelectorTrackLens.withCrossFrame(frame: SelectorCrossFrame, hostCross: Float,

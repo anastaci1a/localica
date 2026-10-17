@@ -58,12 +58,16 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
         val rawGeometry = selectorTrackGeometry(if (horizontal) baseWidth else baseHeight,
             if (horizontal) baseHeight else baseWidth,
             (-shell.value.strain).coerceIn(0f, .16f) * .25f, logicalWall,
-            !horizontal, rtl, reduced, overflow = false)
+            !horizontal, rtl, reduced, overflow = false,
+            maximumExtension = with(density) { SelectorMaximumExtension.toPx() },
+            heldCrossInset = inset.takeIf { pressed || dragging },
+            heldContact = if (labels.size == 1) 1f else kotlin.math.abs(glassWallAffinity(position.value, labels.lastIndex.toFloat())))
         val insets = SelectorTrackInsets(inset, 0f, inset)
         val lensBody = rememberGlassBody({ position.value }, { pressure }, { if (pressed || dragging) 1f else 0f })
-        val rawRadius = with(density) { 24.dp.toPx() }.coerceAtMost(minOf(rawGeometry.crossExtent, rawGeometry.travelExtent) / 2f)
+        val rawRadius = (with(density) { 24.dp.toPx() } -
+            (rawGeometry.heldCrossInset?.let { it * rawGeometry.pullFraction * rawGeometry.heldContact } ?: 0f)).coerceAtMost(minOf(rawGeometry.crossExtent, rawGeometry.travelExtent) / 2f)
         val rawLens = rawGeometry.lens(position.value, labels.size, insets, !horizontal, rtl, lensBody.value, rawRadius)
-        val restGeometry = rawGeometry.copy(stretch = 0f)
+        val restGeometry = rawGeometry.copy(stretch = 0f, heldCrossInset = null)
         val restRadius = with(density) { 24.dp.toPx() }.coerceAtMost(minOf(restGeometry.cross, restGeometry.travel) / 2f)
         val cross = rememberSelectorCrossFrame(rawLens.crossFrame(rawGeometry),
             SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset, (restRadius - inset).coerceAtLeast(0f), restRadius),
