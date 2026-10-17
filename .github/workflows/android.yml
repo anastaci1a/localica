@@ -7,6 +7,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      risk_classes:
+        description: Optional comma-separated instrumentation classes to run before the complete device suite
+        type: string
+        required: false
+        default: ''
       compatibility:
         description: Run private candidate / legacy-behavior bridge / candidate compatibility gate
         type: boolean
@@ -72,6 +77,9 @@ jobs:
     # API 26 needs ~33 minutes for the suite alone; include SDK/build/emulator startup.
     # Keep every test and its assertion timeout unchanged.
     timeout-minutes: 60
+    env:
+      RISK_CLASSES: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_classes || '' }}
+      TEST_API: ${{ matrix.api }}
     strategy:
       fail-fast: false
       matrix:
@@ -112,7 +120,13 @@ jobs:
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
             sleep 60
-            ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
+            bash .github/run-device-tests.sh
+      - name: Preserve focused preflight evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.risk_classes != ''
+        with:
+          name: preflight-reports-api-${{ matrix.api }}
+          path: preflight-reports/
       - name: Capture host diagnostics on emulator failure
         if: failure()
         run: |
