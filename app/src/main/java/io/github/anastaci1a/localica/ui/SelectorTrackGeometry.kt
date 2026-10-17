@@ -145,3 +145,21 @@ internal fun SelectorTrackLens.withCrossFrame(frame: SelectorCrossFrame, hostCro
 // Retain the calculated extent: subtracting translated Rect edges can add one Float ULP.
 internal fun SelectorTrackLens.crossFrame(geometry: SelectorTrackGeometry) =
     SelectorCrossFrame(geometry.crossExtent, crossExtent, corner, outerCorner)
+
+/** Foundation's RTL strip starts at its right edge; pointer coordinates stay physical. */
+internal fun selectorContentScrollOffset(value: Int, maximum: Int, rtl: Boolean): Float =
+    (if (rtl) maximum - value else value).toFloat()
+
+/** Hit the visible rounded moving lens, rather than its selected option's entire cell. */
+internal fun selectorVisibleLensContains(point: androidx.compose.ui.geometry.Offset,
+    lens: SelectorTrackLens, contentOffset: Float, viewport: androidx.compose.ui.geometry.Rect): Boolean {
+    if (!viewport.contains(point)) return false
+    val content = point.copy(x = point.x + contentOffset)
+    val bounds = lens.bounds
+    if (!bounds.contains(content)) return false
+    val radius = lens.corner.coerceIn(0f, minOf(bounds.width, bounds.height) / 2f)
+    val x = content.x.coerceIn(bounds.left + radius, bounds.right - radius)
+    val y = content.y.coerceIn(bounds.top + radius, bounds.bottom - radius)
+    val dx = content.x - x; val dy = content.y - y
+    return dx * dx + dy * dy <= radius * radius
+}

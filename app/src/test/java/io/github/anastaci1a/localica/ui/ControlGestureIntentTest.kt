@@ -70,6 +70,17 @@ class ControlGestureIntentTest {
         }
     }
 
+    @Test fun stationaryHoldAcquiresOnlyAnUnresolvedContact() {
+        val pending = ControlGestureIntent(10f, vertical, horizontal)
+        pending.hold()
+        assertEquals(ControlGestureOwner.Control, pending.move(0f, 100f, 800))
+        val scrolling = ControlGestureIntent(10f, vertical, horizontal)
+        scrolling.move(0f, 30f, 16); scrolling.hold()
+        assertEquals(ControlGestureOwner.Scroll, scrolling.owner)
+        scrolling.cancel(); scrolling.hold()
+        assertEquals(ControlGestureOwner.Cancelled, scrolling.owner)
+    }
+
     @Test fun cancellationIsTerminalRegardlessOfPriorOwner() {
         for (elapsed in listOf(16L, 200L)) {
             val intent = ControlGestureIntent(10f, horizontal, horizontal)
