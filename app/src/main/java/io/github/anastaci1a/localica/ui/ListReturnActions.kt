@@ -7,7 +7,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 /** Shared list step only. The tab caller, not Back, owns any preceding root navigation. */
 @Composable
 internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEnabled: Boolean,
-    action: ListReturnAction, ready: suspend () -> Unit, execute: suspend (ListReturnAction) -> Unit) {
+    action: ListReturnAction, onSubmit: () -> Unit = {}, ready: suspend () -> Unit, execute: suspend (ListReturnAction) -> Unit) {
     val scope = rememberCoroutineScope()
     val executor = remember(scope) { ListReturnExecutor(scope) }
     val currentOwner by rememberUpdatedState(owner)
@@ -15,9 +15,11 @@ internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEn
     val currentReady by rememberUpdatedState(ready)
     val currentExecute by rememberUpdatedState(execute)
     val currentAction by rememberUpdatedState(action)
+    val currentSubmit by rememberUpdatedState(onSubmit)
     var consumed by rememberSaveable { mutableIntStateOf(0) }
     DisposableEffect(owner, active) { onDispose { executor.cancel() } }
     fun submit(captured: ListReturnAction?) {
+        currentSubmit()
         val token = owner
         executor.submit({ currentActive && currentOwner === token }, { currentReady() },
             { captured ?: currentAction }, { currentExecute(it) })
