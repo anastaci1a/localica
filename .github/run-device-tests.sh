@@ -44,9 +44,8 @@ printf 'preflight_exit=%s\nfull=not-started\n' "$result" > "$reports/status.txt"
 # Restore fresh-install app state before the complete suite; never touch other packages.
 for package in io.github.anastaci1a.localica.debug io.github.anastaci1a.localica.debug.test; do
   # AGP may already uninstall a test APK after instrumentation; absent is fresh.
-  installed=$(adb shell pm path "$package" | tr -d '\r')
-  if [[ -n "$installed" ]]; then
-    [[ "$installed" == package:* ]] || { echo "Unexpected package lookup for $package" >&2; exit 3; }
+  installed=$(adb shell pm list packages "$package" | tr -d '\r')
+  if grep -Fxq "package:$package" <<< "$installed"; then
     [[ $(adb shell pm clear "$package" | tr -d '\r') == Success ]] || { echo "Unable to reset $package" >&2; exit 3; }
   fi
 done
