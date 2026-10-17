@@ -337,6 +337,110 @@ class GlassMorphTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
+    @Test fun unreadyAndDisposedWindowsCannotSkipNativePreparation() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        var popupWindow: android.view.Window? = null
+        data class Mount(val window: android.view.Window, val clockMs: Long,
+            val hidden: Boolean, val shadowOwned: Boolean, val expansion: Float)
+        val mounts = mutableListOf<Mount>()
+        val disposed = mutableListOf<android.view.Window>()
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+            Box(Modifier.fillMaxSize()) {
+                anchor = rememberGlassAnchor()
+                Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
+                    .glassAnchor(anchor).testTag("preparation-trigger"))
+                GlassMorphPopup(open, anchor, { open = false }) {
+                    val view = androidx.compose.ui.platform.LocalView.current
+                    val window = (view.parent as androidx.compose.ui.window.DialogWindowProvider).window
+                    DisposableEffect(window) {
+                        popupWindow = window
+                        mounts += Mount(window, compose.mainClock.currentTime,
+                            anchor.hidden, anchor.shadowInModal, anchor.contact.expansion.value)
+                        onDispose {
+                            disposed += window
+                            if (popupWindow === window) popupWindow = null
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Measured menu") }
+                }
+            }
+        } } }
+        compose.mainClock.autoAdvance = false
+        fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        fun awaitWindow(): android.view.Window {
+            repeat(12) {
+                popupWindow?.let { return it }
+                frame()
+            }
+            error("The native dialog did not mount within twelve controlled frames")
+        }
+        fun assertUnready(reason: String) {
+            assertFalse("$reason: the trigger stays visible during preparation", anchor.hidden)
+            assertFalse("$reason: the trigger still owns its shadow", anchor.shadowInModal)
+            assertEquals("$reason: expansion cannot precede preparation", 0f, anchor.contact.expansion.value, 0f)
+        }
+        fun awaitReady(window: android.view.Window) {
+            repeat(12) {
+                if (!anchor.hidden) frame()
+            }
+            assertSame("Preparation belongs to this native window", window, popupWindow)
+            assertTrue("The prepared window hides its trigger", anchor.hidden)
+            assertTrue("The prepared window takes its shadow", anchor.shadowInModal)
+            assertEquals("Reduced motion expands only after preparation", 1f, anchor.contact.expansion.value, 0f)
+        }
+        try {
+            compose.runOnIdle { open = true }
+            val firstWindow = awaitWindow()
+            assertUnready("First native mount")
+            assertEquals(1, mounts.size)
+            assertSame(firstWindow, mounts.single().window)
+            assertFalse("A native window must not mount already owning its trigger", mounts.single().hidden)
+            assertFalse(mounts.single().shadowOwned)
+            assertEquals(0f, mounts.single().expansion, 0f)
+
+            // Cancel after native registration but before either measured frame.
+            // The actual trigger remains present throughout this unready lifetime.
+            compose.runOnIdle { open = false }
+            frame()
+            assertUnready("Cancelled unready window")
+            assertSame(firstWindow, popupWindow)
+            compose.runOnIdle { open = true }
+            frame()
+            assertSame("Unready cancellation/reopen retains the existing dialog", firstWindow, popupWindow)
+            assertUnready("First unready-reopen frame")
+            awaitReady(firstWindow)
+            assertTrue("First readiness follows the native mount by at least two frames",
+                compose.mainClock.currentTime - mounts.single().clockMs >= 32)
+
+            compose.runOnIdle { open = false }
+            repeat(12) { if (popupWindow != null) frame() }
+            assertNull("The closed native window must actually dispose", popupWindow)
+            assertEquals(listOf(firstWindow), disposed)
+            assertFalse(anchor.modalPresent)
+            assertFalse(anchor.hidden)
+            assertFalse(anchor.shadowInModal)
+
+            compose.runOnIdle { open = true }
+            val replacement = awaitWindow()
+            assertNotSame("A fully disposed native window cannot be reused", firstWindow, replacement)
+            assertEquals(2, mounts.size)
+            assertSame(replacement, mounts.last().window)
+            assertUnready("Replacement native mount")
+            assertFalse("Disposed readiness cannot hide a newly mounted trigger", mounts.last().hidden)
+            assertFalse(mounts.last().shadowOwned)
+            assertEquals(0f, mounts.last().expansion, 0f)
+            frame()
+            assertUnready("First replacement preparation frame")
+            awaitReady(replacement)
+            assertTrue("Replacement readiness follows its own two measured frames",
+                compose.mainClock.currentTime - mounts.last().clockMs >= 32)
+        } finally {
+            compose.runOnIdle { open = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
     @Test fun interruptedMorphKeepsItsSurfaceAndRestoresTheTriggerOnce() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
