@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -25,14 +26,14 @@ import kotlin.math.exp
 
 @Composable
 internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>, reducedMotion: Boolean,
-    countDescription: (Int) -> String, content: @Composable BoxScope.(T, P) -> Unit) {
+    countDescription: (Int) -> String, cancelBottomMargin: Dp = 20.dp, content: @Composable BoxScope.(T, P) -> Unit) {
     val drag = state.drag ?: return
     val density = LocalDensity.current
     val view = LocalView.current
     val cancelSize = minOf(with(density) { CompactControlSize.toPx() }, state.viewportHeight.toFloat()).coerceAtLeast(1f)
     SideEffect {
         state.cancelRadius = cancelSize / 2f
-        state.cancelMargin = with(density) { 20.dp.toPx() }
+        state.cancelMargin = with(density) { cancelBottomMargin.toPx() }
         state.onCancelHover = { entering -> view.performHapticFeedback(if (entering)
             android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
     }

@@ -320,6 +320,11 @@ class DragReorderTest {
             val panelTop = compose.onNodeWithTag("fixture-selection-panel").fetchSemanticsNode().boundsInRoot.top
             assertEquals(8f * scale, panelTop - controlBottom(), 1.1f)
         }
+        fun assertUtilityRow() {
+            val utility = compose.onNodeWithContentDescription("Playlist actions").fetchSemanticsNode().boundsInRoot
+            val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
+            assertEquals("X and the actual collection utility control share one row", utility.center.y, cancel.center.y, 1.1f)
+        }
         assertShown()
         // Existing selection stays active throughout both pointer cancellation and X release.
         for (cancelPointer in listOf(true, false)) {
@@ -339,15 +344,17 @@ class DragReorderTest {
                     }
                     compose.mainClock.advanceTimeByFrame()
                     compose.onNodeWithTag("cancel-drag").assertExists()
+                    assertUtilityRow()
                     var previousBottom = controlBottom()
-                    assertEquals("The first published X uses the same clearance", 20f * scale,
+                    assertEquals("The first published X uses the same clearance", 0f,
                         previousBottom - compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom, 1.1f)
                     var intermediate = false
                     repeat(18) {
                         compose.mainClock.advanceTimeByFrame()
+                        assertUtilityRow()
                         val bottom = controlBottom()
                         val cancelBottom = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom
-                        assertEquals("X and other controls share each animation frame", 20f * scale, bottom - cancelBottom, 1.1f)
+                        assertEquals("X and other controls share each animation frame", 0f, bottom - cancelBottom, 1.1f)
                         compose.runOnIdle {
                             val source = fixtureDragHost.state!!
                             assertEquals("Hit geometry reads the same published inset without another composition",
@@ -364,7 +371,8 @@ class DragReorderTest {
                 compose.onNodeWithTag("fixture-selection-panel").assertDoesNotExist()
                 assertEquals(base * scale, root.bottom - controlBottom(), 1.1f)
                 val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
-                assertEquals("X follows remaining chrome", (base + 20f) * scale, root.bottom - cancel.bottom, 1.1f)
+                assertEquals("X follows remaining chrome", base * scale, root.bottom - cancel.bottom, 1.1f)
+                assertUtilityRow()
                 val list = compose.onNodeWithTag("browser-list")
                 if (cancelPointer) list.performTouchInput { cancel(); held = false }
                 else {
