@@ -67,6 +67,7 @@ internal fun rememberGlassAnchor(): GlassAnchor {
 
 /** Context menus return to the actual artwork shape, never an invented menu button. */
 @Composable internal fun Modifier.contextMenuAnchor(anchor: GlassAnchor, circular: Boolean = false): Modifier {
+    anchor.captureInk()
     val view = LocalView.current
     val source = LocalFrostedBackdrop.current
     val density = LocalDensity.current
