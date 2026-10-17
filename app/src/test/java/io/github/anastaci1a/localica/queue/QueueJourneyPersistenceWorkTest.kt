@@ -4,16 +4,15 @@ import io.github.anastaci1a.localica.library.Track
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
-import kotlin.random.Random
 
 class QueueJourneyPersistenceWorkTest {
-    @Test fun thirteenThousandOccurrenceShuffleUsesBatchedUpdatesWithoutRetainedRowUpserts() = runBlocking {
+    @Test fun thirteenThousandOccurrencePlanReorderUsesBatchedUpdatesWithoutRetainedRowUpserts() = runBlocking {
         val before = queue(13_000, loop = true)
-        val after = shuffled(before, loop = true)
+        val after = reorderedPlans(before, loop = true)
         val dao = RecordingDao(before)
         dao.save(library(before), library(after))
-        assertEquals(38_994, dao.visitUpdates.single().size)
-        assertEquals(38_997, dao.memberUpdates.single().size)
+        assertEquals(38_996, dao.visitUpdates.single().size)
+        assertEquals(39_000, dao.memberUpdates.single().size)
         assertTrue(dao.visitUpserts.isEmpty())
         assertTrue(dao.memberUpserts.isEmpty())
         dao.assertRows(after)
@@ -22,9 +21,31 @@ class QueueJourneyPersistenceWorkTest {
         assertEquals(1, dao.memberUpdates.size)
     }
 
+    @Test fun freshShuffleResetKeepsOnlyTheCurrentTokenAndAccountsForEveryNewVisit() = runBlocking {
+        val before = queue(13_000, loop = true, shuffle = false).copy(positionMs = 2345, repeat = QueueRepeat.All)
+        val after = before.copy(journey = before.journey!!.reconcile(before.entries.map { it.id },
+            before.currentEntryId, JourneyModes(shuffle = true, loop = true), kotlin.random.Random(19)))
+        val dao = RecordingDao(before)
+        val old = before.journey!!.visitRecords(before.id).map { it.token }.toSet()
+        dao.save(library(before), library(after))
+        assertEquals(listOf(before.journey.current!!), after.journey!!.history)
+        assertEquals(2345L, after.positionMs)
+        assertEquals(before.repeat, after.repeat)
+        assertEquals(before.order, after.order)
+        assertEquals(1, dao.visitUpdates.single().size)
+        assertEquals(before.journey.current!!.token, dao.visitUpdates.single().single().token)
+        assertEquals(38_999, dao.visitUpserts.single().size)
+        assertTrue(dao.visitUpserts.single().none { it.token in old })
+        assertEquals(old - before.journey.current!!.token, dao.deletedVisits.toSet())
+        assertTrue(dao.memberUpserts.isEmpty())
+        assertEquals(before.journey.cycleRecords(before.id).map { it.cycle to it.entryId }.toSet(),
+            after.journey.cycleRecords(after.id).map { it.cycle to it.entryId }.toSet())
+        dao.assertRows(after)
+    }
+
     @Test fun mixedNewCyclesAndRetainedRowsKeepTheirOriginalUpsertAndUpdateSemantics() = runBlocking {
         val before = queue(20, loop = false)
-        val after = shuffled(before, loop = true)
+        val after = reorderedPlans(before, loop = true)
         val dao = RecordingDao(before)
         dao.save(library(before), library(after))
         val oldTokens = before.journey!!.visitRecords(before.id).map { it.token }.toSet()
@@ -39,7 +60,7 @@ class QueueJourneyPersistenceWorkTest {
 
     @Test fun missingRetainedRowsRepairTheWholeChangedBatchWithoutDroppingOtherUpdates() = runBlocking {
         val before = queue(20, loop = true)
-        val after = shuffled(before, loop = true)
+        val after = reorderedPlans(before, loop = true)
         val dao = RecordingDao(before)
         val missingVisit = after.journey!!.visitRecords(after.id).first { dao.visits[it.token] != it }
         val missingMember = after.journey.cycleRecords(after.id).first { dao.members[it.cycle to it.entryId] != it }
@@ -54,7 +75,7 @@ class QueueJourneyPersistenceWorkTest {
     @Test fun impossibleUpdateCountsFailBeforeFallbackAndRemainRetryable() = runBlocking {
         for (badCount in listOf(-1, Int.MAX_VALUE)) {
             val before = queue(20, loop = true)
-            val after = shuffled(before, loop = true)
+            val after = reorderedPlans(before, loop = true)
             val dao = RecordingDao(before).apply { visitCountOverride = badCount }
             try { dao.save(library(before), library(after)); fail("Impossible row count must fail") }
             catch (_: IllegalStateException) { }
@@ -67,21 +88,32 @@ class QueueJourneyPersistenceWorkTest {
         }
     }
 
-    private fun queue(size: Int, loop: Boolean): ListeningQueue {
+    private fun queue(size: Int, loop: Boolean, shuffle: Boolean = true): ListeningQueue {
         val track = Track("content://song", "Song", fileName = "song.mp3", relativePath = "song.mp3")
         val seed = QueueEdits.create(List(size) { track }, 0, "Queue")
         val ids = seed.entries.map { it.id }
-        var journey = QueueJourney.start(ids, ids.first(), JourneyModes(loop = loop))
+        var journey = QueueJourney.start(ids, ids.first(), JourneyModes(shuffle = shuffle, loop = loop))
         repeat(3) { journey = journey.arrive(journey.next!!.token, ids) }
         return seed.copy(currentEntryId = journey.current!!.entryId, journey = journey)
     }
-    private fun shuffled(queue: ListeningQueue, loop: Boolean) = queue.copy(journey = queue.journey!!.reconcile(
-        queue.entries.map { it.id }, queue.currentEntryId, JourneyModes(shuffle = true, loop = loop), Random(19)))
+    /** Storage fixture: retain every old key while changing concrete plan/visit ordinals.
+     * Real OFF→ON deliberately replaces planned token identities and is covered separately. */
+    private fun reorderedPlans(queue: ListeningQueue, loop: Boolean): ListeningQueue {
+        val journey = queue.journey!!
+        val ids = queue.entries.map { it.id }.reversed()
+        val added = if (loop && !journey.modes.loop) (1L..2L).associateWith { ids } else emptyMap()
+        return queue.copy(journey = journey.copy(
+            future = journey.future.groupBy { it.cycle }.values.flatMap { it.reversed() } +
+                added.flatMap { (cycle, order) -> order.map { QueueVisit(it, cycle) } },
+            plans = journey.plans.mapValues { (_, order) -> order.reversed() } + added,
+            modes = journey.modes.copy(loop = loop)))
+    }
     private fun library(queue: ListeningQueue) = QueueLibrary(listOf(queue), queue.id)
 
     private class RecordingDao(before: ListeningQueue) : QueueDao() {
         val visits = before.journey!!.visitRecords(before.id).associateBy { it.token }.toMutableMap()
         val members = before.journey!!.cycleRecords(before.id).associateBy { it.cycle to it.entryId }.toMutableMap()
+        val deletedVisits = mutableListOf<String>()
         val visitUpdates = mutableListOf<List<VisitRecord>>()
         val visitUpserts = mutableListOf<List<VisitRecord>>()
         val memberUpdates = mutableListOf<List<CycleMemberRecord>>()
@@ -117,7 +149,7 @@ class QueueJourneyPersistenceWorkTest {
         override suspend fun readQueues(): List<StoredQueue> = error("Not needed")
         override suspend fun readActive(): ActiveQueueRecord? = error("Not needed")
         override suspend fun clearJourney(id: String): Unit = error("Unexpected clear")
-        override suspend fun deleteVisits(queueId: String, tokens: List<String>) { tokens.forEach { visits.remove(it) } }
+        override suspend fun deleteVisits(queueId: String, tokens: List<String>) { deletedVisits += tokens; tokens.forEach { visits.remove(it) } }
         override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>) { entries.forEach { members.remove(cycle to it) } }
         override suspend fun insertEntries(entries: List<EntryRecord>): Unit = error("Unchanged entries")
         override suspend fun clearEntries(id: String): Unit = error("Unchanged entries")

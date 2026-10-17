@@ -60,7 +60,9 @@ class QueuePersistenceWorkTest {
             assertEquals(1, dao.metadata.size)
             assertEquals(0, dao.fullRows)
             assertEquals(1, dao.journeys)
-            assertEquals(0, dao.visits)
+            // Ordered projection owns a distinct token from the redundant stored future row.
+            assertEquals(1, dao.visits)
+            assertEquals(listOf(journey.future.first().token), dao.deletedVisits)
             assertEquals(1, dao.members)
         }
     }
@@ -95,6 +97,7 @@ class QueuePersistenceWorkTest {
         var updatedRows = 1
         var fullRows = 0
         var journeys = 0
+        val deletedVisits = mutableListOf<String>()
         var visits = 0
         var members = 0
         var activeWrites = 0
@@ -109,7 +112,7 @@ class QueuePersistenceWorkTest {
         override suspend fun readQueues(): List<StoredQueue> = error("Not needed")
         override suspend fun readActive(): ActiveQueueRecord? = error("Not needed")
         override suspend fun clearJourney(id: String) = error("Unexpected clear")
-        override suspend fun deleteVisits(queueId: String, tokens: List<String>) = error("Unexpected delete")
+        override suspend fun deleteVisits(queueId: String, tokens: List<String>) { deletedVisits += tokens }
         override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>) = error("Unexpected delete")
         override suspend fun insertEntries(entries: List<EntryRecord>) = error("Unchanged entries must not be written")
         override suspend fun clearEntries(id: String) = error("Unchanged entries must not be cleared")
