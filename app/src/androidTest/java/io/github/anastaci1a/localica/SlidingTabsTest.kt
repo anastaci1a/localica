@@ -125,7 +125,7 @@ class SlidingTabsTest {
         compose.onAllNodesWithContentDescription("Library").assertCountEquals(1)
     }
 
-    @Test fun everyOverflowDragScrollsTabsIncludingADragFromTheLens() {
+    @Test fun overflowLensOwnsBoundaryDragWhileOtherOriginsScrollTabs() {
         val tabs = MainTab.entries.take(8)
         val calls = mutableListOf<MainTab>()
         compose.setContent { LocalicaTheme { Box(Modifier.size(260.dp, 64.dp)) {
@@ -134,8 +134,10 @@ class SlidingTabsTest {
         val strip = compose.onNodeWithTag("tab-scroll")
         strip.performTouchInput { swipe(Offset(width * .18f, centerY), Offset(width * .02f, centerY), 400) }
         compose.waitForIdle()
-        assertTrue("Dragging the selected overflow tab cannot move its lens", calls.isEmpty())
-        assertTrue(strip.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value() > 0f)
+        // #366 makes the actual lens origin own adjustment. At the first boundary
+        // this outward drag selects no new page and must not scroll the strip.
+        assertTrue("Outward lens drag stays at the first page", calls.isEmpty())
+        assertEquals(0f, strip.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value(), 0f)
         strip.performTouchInput { swipe(Offset(width * .8f, centerY), Offset(width * .25f, centerY), 400) }
         compose.waitForIdle()
         assertTrue("Scrolling the track cannot switch pages", calls.isEmpty())
@@ -152,7 +154,7 @@ class SlidingTabsTest {
         compose.onNodeWithTag("tabs").performTouchInput {
             swipe(Offset(width * .5f, centerY), Offset(width * .88f, centerY), 400)
         }
-        compose.runOnIdle { assertEquals("A track drag moves the lens relatively without teleporting it", MainTab.Library, active) }
+        compose.runOnIdle { assertEquals("#366 picks up the touched Library option and continues to Songs", MainTab.Songs, active) }
     }
 
     @Test fun longestLabelFitsInsideItsSelectorWithRoundedEndPadding() {
