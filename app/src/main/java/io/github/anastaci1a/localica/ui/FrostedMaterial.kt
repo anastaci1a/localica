@@ -48,6 +48,7 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
         set(value) { location.fallback = value }
     var size by mutableStateOf(IntSize.Zero)
     var fallback by mutableStateOf<ImageBitmap?>(null)
+    // Clear software-safe pixels shared by every legacy CPU consumer.
     var snapshot by mutableStateOf<ImageBitmap?>(null)
     var glassFallback by mutableStateOf<ImageBitmap?>(null)
     var lensSnapshot by mutableStateOf<ImageBitmap?>(null)
@@ -100,7 +101,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
             else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
         source.dark = dark
     }
-    // Android 8–11 have no RenderEffect. Read back only when the scene/size changes,
+    // Legacy adapters read back only when the scene/size changes,
     // then scatter a small snapshot off the main thread; never blur on each gesture frame.
     // Keep a completed sample across temporary visibility changes. Modal sources
     // with no open consumer never need a CPU readback at all.
@@ -116,9 +117,13 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 // Layout can exist before the first recorded draw, or survive a restored
                 // player layer briefly. ImageReader rejects a zero-sized recording.
                 if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return false
-                val snapshot = source.layer.toImageBitmap()
-                source.snapshot = snapshot
-                source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
+                val recorded = source.layer.toImageBitmap()
+                val (clear, scattered) = withContext(Dispatchers.Default) {
+                    val clear = softwareGlassSnapshot(recorded)
+                    clear to scatterSnapshot(clear)
+                }
+                source.snapshot = clear
+                source.fallback = scattered
                 return true
             }
             capture()
@@ -211,7 +216,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
-    val material = rememberFrostedBackdrop(source?.fallback, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
+    val material = rememberFrostedBackdrop(source?.fallback, dark = dark)
     val density = LocalDensity.current
     SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { 28.dp.toPx() } }
     Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)
@@ -261,16 +266,15 @@ private val frostGrain: ImageBitmap by lazy {
 }
 
 private fun scatterSnapshot(image: ImageBitmap): ImageBitmap {
-    val original = image.asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+    val original = image.asAndroidBitmap()
     val w = (original.width / 8).coerceAtLeast(1)
     val h = (original.height / 8).coerceAtLeast(1)
     val small = android.graphics.Bitmap.createScaledBitmap(original, w, h, true)
-    if (original !== small) original.recycle()
     var pixels = IntArray(w * h)
     small.getPixels(pixels, 0, w, 0, 0, w, h)
     // This panel treatment has always been opaque; preserve RGB while sharing the filter.
     pixels.indices.forEach { pixels[it] = pixels[it] or (255 shl 24) }
     repeat(3) { pixels = boxBlur(pixels, w, h, 3) }
-    small.recycle()
+    if (small !== original) small.recycle()
     return android.graphics.Bitmap.createBitmap(pixels, w, h, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
 }
