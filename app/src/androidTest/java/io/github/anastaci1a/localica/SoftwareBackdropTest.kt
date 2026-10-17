@@ -15,6 +15,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -28,6 +30,15 @@ class SoftwareBackdropTest {
 
     @Test fun legacyCaptureSharesClearSoftwarePixelsAcrossControlsAndSelections() {
         assumeTrue(Build.VERSION.SDK_INT < 33)
+        verifyCapture(GlassRendererMode.Automatic)
+    }
+
+    @Test fun forcedLegacyUsesRealSoftwareControlsOnModernAndroid() {
+        assumeTrue(Build.VERSION.SDK_INT >= 33)
+        verifyCapture(GlassRendererMode.Legacy)
+    }
+
+    private fun verifyCapture(mode: GlassRendererMode) {
         lateinit var source: FrostedBackdrop
         lateinit var scope: CoroutineScope
         var value by mutableFloatStateOf(.5f)
@@ -36,7 +47,10 @@ class SoftwareBackdropTest {
         var keepLease by mutableStateOf(true)
         var sliderDraws = 0
         var switchDraws = 0
+        var sliderBackend: GlassBackend? = null
+        var switchBackend: GlassBackend? = null
         compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(renderer = mode)) {
             scope = rememberCoroutineScope()
             source = rememberFrostedBackdrop(Unit, glassBlur = 1f, whiteTint = 1f)
             if (keepLease) BackdropLease(source)
@@ -47,10 +61,10 @@ class SoftwareBackdropTest {
                 }
                 CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                     Column(Modifier.padding(16.dp)) {
-                        CompositionLocalProvider(LocalControlLensDraw provides { sliderDraws++ }) {
+                        CompositionLocalProvider(LocalControlLensDraw provides { sliderDraws++; sliderBackend = it }) {
                             InterfaceSlider(value, { value = it }, Modifier.testTag("software-slider"))
                         }
-                        CompositionLocalProvider(LocalControlLensDraw provides { switchDraws++ }) {
+                        CompositionLocalProvider(LocalControlLensDraw provides { switchDraws++; switchBackend = it }) {
                             BooleanPreference("Software switch", checked) { checked = it }
                         }
                         ConnectedSelectionHost(Modifier.fillMaxWidth().height(100.dp)) {
@@ -59,7 +73,7 @@ class SoftwareBackdropTest {
                     }
                 }
             }
-        } }
+        } } }
         compose.waitUntil(10000) { source.snapshot != null && source.lensSnapshot != null }
         if (Build.VERSION.SDK_INT >= 28) {
             var raw by mutableStateOf<ImageBitmap?>(null)
@@ -81,6 +95,8 @@ class SoftwareBackdropTest {
         compose.waitUntil(5000) { SystemClock.uptimeMillis() >= deadline }
         val clear = source.snapshot!!
         assertNotEquals(Bitmap.Config.HARDWARE, clear.asAndroidBitmap().config)
+        assertEquals("Legacy capture must not scale padded modern allocations", source.size.width, clear.width)
+        assertEquals(source.size.height, clear.height)
         val pixels = clear.toPixelMap()
         val red = pixels[pixels.width / 4, pixels.height / 2]
         val blue = pixels[pixels.width * 3 / 4, pixels.height / 2]
@@ -90,10 +106,10 @@ class SoftwareBackdropTest {
         android.graphics.Canvas(target).drawBitmap(clear.asAndroidBitmap(), 0f, 0f, null)
         target.recycle()
         compose.onNodeWithTag("software-slider").performTouchInput { down(center) }
-        compose.waitUntil(5000) { sliderDraws > 0 }
+        compose.waitUntil(5000) { sliderDraws > 0 && sliderBackend == GlassBackend.Legacy }
         compose.onNodeWithTag("software-slider").performTouchInput { moveBy(Offset(30f, 0f)); up() }
         compose.onNodeWithTag("settings-switch", useUnmergedTree = true).performTouchInput { down(center) }
-        compose.waitUntil(5000) { switchDraws > 0 }
+        compose.waitUntil(5000) { switchDraws > 0 && switchBackend == GlassBackend.Legacy }
         compose.onNodeWithTag("settings-switch", useUnmergedTree = true).performTouchInput { up() }
         compose.runOnIdle { selected = true }
         compose.onNodeWithTag("software-host").captureToImage()

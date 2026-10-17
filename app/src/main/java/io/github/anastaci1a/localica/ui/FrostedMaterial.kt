@@ -50,6 +50,11 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
     var fallback by mutableStateOf<ImageBitmap?>(null)
     // Clear software-safe pixels shared by every legacy CPU consumer.
     var snapshot by mutableStateOf<ImageBitmap?>(null)
+    var preparedSnapshot by mutableStateOf<ImageBitmap?>(null)
+    // Once warm, stay on Legacy while a newer sample is prepared. Scene refreshes
+    // must not briefly switch the entire surface back to the modern renderer.
+    val legacyAvailable get() = preparedSnapshot != null
+    val legacyReady get() = snapshot != null && preparedSnapshot === snapshot
     var glassFallback by mutableStateOf<ImageBitmap?>(null)
     var lensSnapshot by mutableStateOf<ImageBitmap?>(null)
     var lensFrostSnapshot by mutableStateOf<ImageBitmap?>(null)
@@ -90,7 +95,8 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true,
     glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true,
-    whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
+    whiteTint: Float = LocalGlassAppearance.current.whiteTint,
+    backend: GlassBackend = glassBackend()): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val source = remember(layer) { FrostedBackdrop(layer, dark) }
     // An unreferenced scene needs a display list, not another full-window raster.
@@ -106,10 +112,14 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Keep a completed sample across temporary visibility changes. Modal sources
     // with no open consumer never need a CPU readback at all.
     var captured by remember(source) { mutableStateOf<List<Any?>?>(null) }
-    LaunchedEffect(source, key, enabled, sampled) {
+    LaunchedEffect(source, key, enabled, sampled, backend) {
         // Size belongs to sampling, not the caller's composition. Reading it above
         // this effect would recompose the whole player host on every resize frame.
-        if (Build.VERSION.SDK_INT < 33 && enabled && sampled) snapshotFlow { source.size to source.revision }.collectLatest { (size, revision) ->
+        if (backend == GlassBackend.Modern) {
+            captured = null
+            source.snapshot = null; source.fallback = null; source.preparedSnapshot = null
+            source.glassFallback = null; source.lensSnapshot = null; source.lensFrostSnapshot = null
+        } else if (enabled && sampled) snapshotFlow { source.size to source.revision }.collectLatest { (size, revision) ->
             val captureKey = listOf(key, size, revision)
             if (size == IntSize.Zero || captured == captureKey) return@collectLatest
             suspend fun capture(): Boolean {
@@ -134,8 +144,8 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
         }
     }
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() } * glassBlur.coerceIn(0f, 1f)
-    LaunchedEffect(source, source.snapshot, source.fallback, blurRadius, whiteTint) {
-        if (Build.VERSION.SDK_INT < 33) {
+    LaunchedEffect(source, source.snapshot, source.fallback, blurRadius, whiteTint, backend) {
+        if (backend == GlassBackend.Legacy) {
             val snapshot = source.snapshot
             if (snapshot == null) { source.glassFallback = null; source.lensSnapshot = null; source.lensFrostSnapshot = null }
             else {
@@ -149,6 +159,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 source.glassFallback = blurred.takeIf { blurRadius > 0f }
                 source.lensSnapshot = tinted.first
                 source.lensFrostSnapshot = tinted.second
+                source.preparedSnapshot = snapshot
             }
         }
     }
@@ -174,6 +185,7 @@ internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view:
 @Composable
 internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null,
     enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null): Modifier {
+    val backend = glassBackend()
     BackdropLease(backing.takeIf { enabled })
     return backdropLocation(source.location)
         .onSizeChanged { source.size = it }
@@ -185,7 +197,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             }
             val viewport = size
             val extent = IntSize(size.width.toInt(), size.height.toInt())
-            source.layer.record(size = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent) {
+            source.layer.record(size = if (backend == GlassBackend.Modern) glassLayerExtent(extent) else extent) {
                 clipRect(right = viewport.width, bottom = viewport.height) {
                 if (backing != null && !backing.layer.isReleased) {
                     val offset = backing.origin - source.origin

@@ -94,7 +94,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val visible = LocalGlassVisible.current
-    if (visible && Build.VERSION.SDK_INT < 33) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
+    val backend = glassBackend()
+    val modern = useModernGlass(backend, Build.VERSION.SDK_INT,
+        source?.legacyAvailable != false && homeSource?.legacyAvailable != false)
+    if (visible && backend == GlassBackend.Legacy) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
@@ -113,8 +116,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         anchor.source = source; anchor.cornerRadius = cornerRadius; anchor.depthScale = depthScale
         anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
     } }
-    val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
-    val mesh = remember { lazy { LensMeshRenderer() } }
+    val lens = remember(modern) { lazy { if (modern && Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
+    val mesh = remember(modern) { lazy { LensMeshRenderer() } }
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact) else if (anchor != null) Modifier.drawWithContent {
@@ -123,7 +126,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         .then(if (shadow) Modifier.surfaceGlassShadow(cornerRadius, anchor) else Modifier)
         .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape)
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
-        if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
+        if (visible && source != null && modern && Build.VERSION.SDK_INT >= 33) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
             val padding = with(density) { 32.dp.toPx() }
@@ -148,7 +151,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             }
         }
 
-        if (visible && Build.VERSION.SDK_INT < 33) {
+        if (visible && !modern) {
         val endpointTone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
         @Composable fun prepared(backing: FrostedBackdrop?): List<ImageBitmap?> {
             val clear = backing?.glassFallback ?: backing?.snapshot
