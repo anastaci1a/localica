@@ -8,7 +8,7 @@ Android APK for Android 8 or newer. Keeps the existing `.debug` application ID a
 - Make library search and sorting more responsive, add finer list densities, and settle pinch and collection gestures more reliably.
 - Protect folder scans, playlist imports, artwork permissions and bulk metadata edits from incomplete or interrupted work.
 - Refine player controls, lyrics source transitions, and Song Information navigation with readable library paths.
-- Improve shared selectors, popup transitions, haptics and reduced-motion behavior; update the in-app previews.
+- Improve shared selectors, popup transitions, haptics and reduced-motion behavior; refresh the README previews.
 
 ## Resolved issues
 
@@ -19,3 +19,5 @@ Android APK for Android 8 or newer. Keeps the existing `.debug` application ID a
 1. Download `localica-v0.29.0-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. It updates the existing development app.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
+
+Before installing an older build, finish pending tag edits and recovery. Original schema 6 builds cannot reopen schema 7 queues.
