@@ -67,10 +67,17 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
     // A stationary pointer observer would itself change Compose's hit-path dispatch.
     val currentTrace by rememberUpdatedState(onDragTrace)
     val scrollOwnership = remember { ScrollGestureOwnership() }
-    val listPull = remember(progress, distance, density.density) {
+    val currentDistance by rememberUpdatedState(distance)
+    val currentDensity by rememberUpdatedState(density.density)
+    // Geometry changes must not replace the connection midway through its contact.
+    // Keep that contact's pixel-to-progress scale until release; the next pull
+    // acquires the latest viewport and density.
+    val listPull = remember(progress) {
         object : NestedScrollConnection {
             var pulling by mutableStateOf(false)
             var pulled = 0f
+            var pullDistance = currentDistance
+            var pullDensity = currentDensity
             fun cancelPull() {
                 currentTrace?.invoke("nested-cancel pulling=$pulling pulled=$pulled progress=${progress.value}")
                 if (!pulling) return
@@ -85,7 +92,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                 pulled += dy
                 val consumed = dy
                 scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                    progress.snapTo((1f - pulled / distance).coerceIn(0f, 1f))
+                    progress.snapTo((1f - pulled / pullDistance).coerceIn(0f, 1f))
                     currentTrace?.invoke("nested-applied pulled=$pulled consumed=$consumed progress=${progress.value}")
                 }
                 return Offset(0f, consumed)
@@ -107,7 +114,11 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                     return Offset(0f, available.y)
                 }
                 if (!scrollOwnership.mayHandoff || available.y <= 0f) return Offset.Zero
-                if (!pulling) pulled = (1f - progress.value) * distance
+                if (!pulling) {
+                    pullDistance = currentDistance
+                    pullDensity = currentDensity
+                    pulled = (1f - progress.value) * pullDistance
+                }
                 scrollOwnership.claimDrawer()
                 pulling = true
                 return move(available.y)
@@ -122,7 +133,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                     return Velocity(0f, available.y)
                 }
                 pulling = false
-                currentSettle(settleOpen(-pulled / density.density, -available.y / density.density,
+                currentSettle(settleOpen(-pulled / pullDensity, -available.y / pullDensity,
                     progress.value, opening = false))
                 pulled = 0f
                 return Velocity(0f, available.y)
