@@ -68,7 +68,7 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = n
     val opacity by animateControlStateFloat(if (enabled) 1f else .45f, enabled, "Settings link availability")
     LiquidGlassSurface(Modifier.fillMaxWidth().alpha(opacity)
         .then(if (anchor == null) Modifier else Modifier.glassAnchor(anchor)), cornerRadius = 20.dp, pressFeedback = enabled) {
-        Foreground(Modifier.ownButtonDrag(enabled).clickable(enabled, role = Role.Button, onClick = onClick))
+        Foreground(Modifier.ownButtonDrag(enabled).clickable(enabled, role = Role.Button, onClick = controlActivation(enabled, onClick)))
     }
 }
 

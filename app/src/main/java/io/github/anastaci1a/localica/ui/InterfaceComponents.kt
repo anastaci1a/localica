@@ -23,7 +23,7 @@ internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, a
         anchor?.captureInk()
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
         Box(modifier.alpha(opacity).ownButtonDrag(enabled).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
-            interactionSource = interaction, indication = null, onClick = onClick), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            interactionSource = interaction, indication = null, onClick = controlActivation(enabled, onClick)), contentAlignment = androidx.compose.ui.Alignment.Center) {
             Icon(painterResource(resource), label, Modifier.size(iconSize))
         }
     } else if (glass) LiquidGlassSurface(modifier, pressFeedback = enabled) {

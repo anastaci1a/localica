@@ -22,7 +22,7 @@ internal fun ReturnToPositionButton(up: Boolean, label: String, visible: Boolean
     SideEffect { if (visible) direction = up }
     LiquidGlassSurface(Modifier.size(CompactControlSize).ownButtonDrag().clip(CircleShape)
         .semantics { stateDescription = if (direction) "Scroll up" else "Scroll down" }
-        .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)) {
+        .clickable(role = Role.Button, onClickLabel = label, onClick = controlActivation(onClick = onClick))) {
         Icon(painterResource(R.drawable.ic_arrow_down), label,
             Modifier.align(Alignment.Center).size(24.dp).graphicsLayer { rotationZ = if (direction) 180f else 0f })
     }
