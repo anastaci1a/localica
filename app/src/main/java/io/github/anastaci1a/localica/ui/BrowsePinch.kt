@@ -56,6 +56,7 @@ internal class BrowsePinchMotion {
     var anchorTop = 0f
     var rowHeight = 64f
     var viewportWidth = 1f
+    var rightToLeft = false
     fun clearTransaction() {
         held = false; fingerProgress = 0f; capturing = false
         source = null; target = null; focusKey = null
@@ -69,22 +70,27 @@ internal class BrowsePinchMotion {
         clearTransaction()
     }
     var pixelDensity = 1f
-    fun highlightHeight(key: Any, index: Int, targetHeight: Float): Float {
-        if (source == null) return targetHeight
+    fun highlightSize(key: Any, index: Int, target: androidx.compose.ui.geometry.Size): androidx.compose.ui.geometry.Size {
+        if (source == null) return target
         val inset = (BrowseCellGeometry(sourceColumns).cardInset * pixelDensity).roundToInt()
-        val sourceHeight = (sourceBounds(key, index).height - 2 * inset).coerceAtLeast(0f)
-        return sourceHeight + (targetHeight - sourceHeight) * progress.value.coerceIn(0f, 1f)
+        val bounds = sourceBounds(key, index)
+        val sourceWidth = (bounds.width - 2 * inset).coerceAtLeast(0f)
+        val sourceHeight = (bounds.height - 2 * inset).coerceAtLeast(0f)
+        val p = progress.value.coerceIn(0f, 1f)
+        return androidx.compose.ui.geometry.Size(sourceWidth + (target.width - sourceWidth) * p,
+            sourceHeight + (target.height - sourceHeight) * p)
     }
-    fun sourceContentWidth(key: Any): Int {
+    fun sourceContentWidth(key: Any, index: Int = 0): Int {
         val geometry = BrowseCellGeometry(sourceColumns)
-        val cellWidth = bounds[key]?.width?.toInt() ?: geometry.cellWidth(viewportWidth.toInt(), pixelDensity)
+        val cellWidth = bounds[key]?.width?.toInt() ?: geometry.cellWidth(viewportWidth.toInt(), pixelDensity, index % sourceColumns)
         return geometry.contentWidth(cellWidth, pixelDensity)
     }
     fun sourceBounds(key: Any, index: Int): Rect = bounds[key] ?: run {
         val geometry = BrowseCellGeometry(sourceColumns)
         val column = index % sourceColumns
-        val left = geometry.cellLeft(viewportWidth.toInt(), pixelDensity, column).toFloat()
         val width = geometry.cellWidth(viewportWidth.toInt(), pixelDensity, column)
+        val leading = geometry.cellLeft(viewportWidth.toInt(), pixelDensity, column).toFloat()
+        val left = if (rightToLeft) viewportWidth - leading - width else leading
         Rect(left,
             anchorTop + ((index / sourceColumns) - (anchorIndex / sourceColumns)) * rowHeight,
             left + width,
@@ -203,17 +209,21 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             motion.held = true
             motion.fingerProgress = 0f
             motion.viewportWidth = width.toFloat()
+            motion.rightToLeft = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
             motion.pixelDensity = density.density
             motion.sourceColumns = galleryColumns(style.presentation, with(density) { width.toDp().value }, style.itemsPerRow)
-            motion.bounds = visible.associate { it.key to androidx.compose.ui.geometry.Rect(it.offset.x.toFloat(), it.offset.y.toFloat(),
-                (it.offset.x + it.size.width).toFloat(), (it.offset.y + it.size.height).toFloat()) }
+            // LazyGridItemInfo omits the content-padding offset added at placement.
+            // Frozen, live and inferred bounds must all use viewport coordinates.
+            val sourceInset = (BrowseCellGeometry(motion.sourceColumns).gridInset * density.density).roundToInt()
+            motion.bounds = visible.associate { it.key to androidx.compose.ui.geometry.Rect((it.offset.x + sourceInset).toFloat(), it.offset.y.toFloat(),
+                (it.offset.x + sourceInset + it.size.width).toFloat(), (it.offset.y + it.size.height).toFloat()) }
             visible.firstOrNull()?.let { first ->
                 motion.anchorIndex = first.index - 1; motion.anchorTop = first.offset.y.toFloat()
                 motion.rowHeight = first.size.height.toFloat()
             }
             scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { motion.progress.snapTo(if (reducedMotion) 1f else 0f) }
             val nearest = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }.minByOrNull {
-                val x = it.offset.x + it.size.width / 2f - midpoint.x
+                val x = it.offset.x + sourceInset + it.size.width / 2f - midpoint.x
                 val y = it.offset.y + it.size.height / 2f - midpoint.y
                 x * x + y * y
             }
@@ -307,11 +317,19 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val geometry = BrowseCellGeometry(motion.targetColumns)
             val column = index % motion.targetColumns
             val width = geometry.cellWidth(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
-            val x = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
+            val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
+            val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * targetHeight
-            translate(old.left + (x - old.left) * p, old.top + (y - old.top) * p) {
-                scale(1f + (width / old.width - 1f) * p, 1f + (targetHeight / old.height - 1f) * p, Offset.Zero) {
-                    drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size)
+            val inset = (geometry.cardInset * motion.pixelDensity).roundToInt()
+            // A retained card is a source snapshot, not a destination row. Keep
+            // its aspect ratio and fade it reversibly while live content reflows.
+            val fit = minOf((width - 2 * inset).coerceAtLeast(0f) / image.size.width,
+                (targetHeight - 2 * inset).coerceAtLeast(0f) / image.size.height)
+            val factor = 1f + (fit - 1f) * p
+            val alpha = 1f - p * p * (3f - 2f * p)
+            translate(old.left + (x - old.left) * p + inset, old.top + (y - old.top) * p + inset) {
+                scale(factor, factor, Offset.Zero) {
+                    drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = alpha)
                 }
             }
         }
