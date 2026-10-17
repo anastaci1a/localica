@@ -46,5 +46,8 @@ internal class ControlGestureIntent(
         return owner
     }
 
+    /** Deliberate stationary contact can acquire without inventing another movement policy. */
+    fun hold() { if (owner == ControlGestureOwner.Pending) owner = ControlGestureOwner.Control }
+
     fun cancel() { owner = ControlGestureOwner.Cancelled }
 }

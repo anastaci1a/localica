@@ -12,9 +12,7 @@ import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -78,9 +76,9 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             else lens.animateTo(index.toFloat(), spring(1f, 650f))
         }
     }
-    LaunchedEffect(page, dragging, pageDragging) {
+    LaunchedEffect(page, dragging, pageDragging, pressed) {
         if (pageDragging) requested = null
-        if (!dragging && requested == null) {
+        if (!pressed && !dragging && requested == null) {
             lens.snapTo(magneticTabPosition(page.coerceIn(0f, tabs.lastIndex.toFloat())))
             val candidate = lens.value.roundToInt().coerceIn(tabs.indices)
             if (candidate != chosen && abs(lens.value - chosen) >= .54f) focus(candidate, false)
@@ -146,59 +144,58 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 pressFeedback = false, shadow = false, cornerRadius = with(density) { radius.toDp() },
                 body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale)
         }
-        Box(Modifier.fillMaxSize().testTag("tab-track-host").drawWithContent {
-            val path = Path().apply { addRoundRect(RoundRect(track, CornerRadius(radius))) }
-            clipPath(path) { this@drawWithContent.drawContent() }
-        }, contentAlignment = AbsoluteAlignment.TopLeft) {
+        val contentOffset = selectorContentScrollOffset(scroll.value, scroll.maxValue, rtl)
+        val viewportBounds = androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
+        fun move(delta: Float) {
+            raw += direction * delta / pixels
+            val low = (scroll.value / pixels).coerceAtMost(tabs.lastIndex.toFloat())
+            val high = ((scroll.value + viewport) / pixels - 1f).coerceIn(low, tabs.lastIndex.toFloat())
+            val bounded = raw.coerceIn(low, high)
+            val excess = raw - bounded
+            if (excess != 0f) logicalWall = if (excess < 0f) -1f else 1f
+            pressure = glassEdgePressure(excess)
+            val position = magneticTabPosition(bounded).coerceIn(low, high)
+            scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
+            val candidate = position.roundToInt().coerceIn(tabs.indices)
+            if (candidate != chosen && abs(position - chosen) > .52f) focus(candidate)
+        }
+        // The fixed viewport owns lens gestures before its scrolling child. Its context
+        // includes ancestors, not the strip itself: only non-lens overflow origins scroll it.
+        Box(Modifier.fillMaxSize().testTag("tab-track-host")
+            .selectorTrackDrag(horizontal = true,
+                eligible = { point -> if (fits) viewportBounds.contains(point) else
+                    selectorVisibleLensContains(point, selectorFrame, contentOffset, viewportBounds) },
+                contact = { pressed = it },
+                onPreview = { point ->
+                    val content = point.copy(x = point.x + if (fits) 0f else contentOffset)
+                    raw = if (selectorFrame.bounds.contains(content)) lens.value else
+                        atlasGeometry.logicalPositionAt(content, tabs.size, 0f, vertical = false, rtl = rtl)
+                            .coerceIn(0f, tabs.lastIndex.toFloat())
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        if (!fits) scroll.stopScroll()
+                        if (reduced) lens.snapTo(magneticTabPosition(raw))
+                        else lens.animateTo(magneticTabPosition(raw), spring(1f, 650f))
+                    }
+                },
+                onStart = { requested = null; dragging = true },
+                onDelta = ::move, option = { chosen },
+                onEnd = { owned, _ ->
+                    pressure = 0f; dragging = false
+                    if (owned) requested = chosen
+                    // Pending contact may interrupt an unfinished tap/page transition.
+                    // Return to its existing destination without changing domain selection.
+                    val target = requested?.toFloat() ?: magneticTabPosition(page.coerceIn(0f, tabs.lastIndex.toFloat()))
+                    scope.launch { if (reduced) lens.snapTo(target) else lens.animateTo(target, spring(1f, 650f)) }
+                }, gestureKey = listOf(tabs, pixels, viewport, fits, rtl))
+            .drawWithContent {
+                val path = Path().apply { addRoundRect(RoundRect(track, CornerRadius(radius))) }
+                clipPath(path) { this@drawWithContent.drawContent() }
+            }, contentAlignment = AbsoluteAlignment.TopLeft) {
         // horizontalScroll installs a clipping viewport even when disabled. A fitting
         // track must be free to draw its stretched end outside the fixed gesture host.
         Box(Modifier.fillMaxHeight().then(if (!fits) Modifier.nestedScroll(HorizontalGestureOwner)
             .controlHorizontalScroll(scroll, enabled = !dragging) else Modifier)
-            .testTag("tab-scroll").observeGlassContact { pressed = it }.pointerInput(tabs, pixels, viewport, fits, rtl) {
-                if (!fits) return@pointerInput
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    var started = false
-                    val feedback = ControlDragHaptics(haptics)
-                    fun move(delta: Float) {
-                        raw += direction * delta / pixels
-                        val low = scroll.value / pixels
-                        val high = ((scroll.value + viewport) / pixels - 1f).coerceAtLeast(low).coerceAtMost(tabs.lastIndex.toFloat())
-                        val bounded = raw.coerceIn(low, high)
-                        val excess = raw - bounded
-                        if (excess != 0f) logicalWall = if (excess < 0f) -1f else 1f
-                        pressure = glassEdgePressure(excess)
-                        val position = magneticTabPosition(bounded).coerceIn(low, high)
-                        scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
-                        val candidate = position.roundToInt().coerceIn(tabs.indices)
-                        if (candidate != chosen && abs(position - chosen) > .52f) {
-                            focus(candidate)
-                            feedback.move(candidate)
-                        }
-                    }
-                    val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
-                        change.consume(); started = true; requested = null
-                        raw = lens.value; dragging = true
-                        scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.stop() }
-                        move(over)
-                        // Ownership begins after slop. The initial move establishes the
-                        // baseline, rather than producing an engagement and tick together.
-                        feedback.engage(chosen)
-                    }
-                    try {
-                        if (drag != null) {
-                            val released = horizontalDrag(drag.id) { change -> move(change.positionChange().x); change.consume() }
-                            feedback.finish(released)
-                        }
-                    } finally {
-                        feedback.finish(false)
-                        if (started) {
-                            pressure = 0f; requested = chosen; dragging = false
-                            scope.launch { if (reduced) lens.snapTo(chosen.toFloat()) else lens.animateTo(chosen.toFloat(), spring(1f, 650f)) }
-                        }
-                    }
-                }
-            }, contentAlignment = AbsoluteAlignment.TopLeft) {
+            .testTag("tab-scroll"), contentAlignment = AbsoluteAlignment.TopLeft) {
             @Composable fun Labels(color: Color, interactive: Boolean, atlas: Boolean = false) {
                 Box(Modifier.width(width * tabs.size).fillMaxHeight()
                     .then(if (interactive) Modifier else Modifier.clearAndSetSemantics {})
