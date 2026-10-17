@@ -15,6 +15,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
@@ -29,6 +31,52 @@ class LyricsLoadingStateTest {
             compose.mainClock.advanceTimeByFrame()
             compose.onAllNodesWithTag("empty-lyrics", true).assertCountEquals(0)
         }
+    }
+
+    @Test fun disappearingSourcesRetainTheReturnSurfaceAndDoNotReopenOnArrival() {
+        var result by mutableStateOf<LyricsResult?>(lyrics("A source"))
+        var track by mutableStateOf(Track("file:///first.mp3", "First", fileName = "first.mp3", relativePath = "first.mp3"))
+        var visible by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        compose.setContent { LocalicaTheme {
+            anchor = rememberGlassAnchor()
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(48.dp).glassAnchor(anchor))
+            LyricsPanel(track, 0, false, {}, Modifier.fillMaxWidth().height(360.dp), result = result,
+                sourcesAnchor = anchor, sourcesVisible = visible, onSourcesDismiss = { visible = false })
+        } }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { visible = true }
+            compose.mainClock.advanceTimeBy(4000)
+            compose.runOnIdle { assertTrue(anchor.modalPresent) }
+            compose.runOnIdle { result = null }
+            compose.mainClock.advanceTimeBy(80)
+            compose.runOnIdle {
+                assertFalse(visible)
+                assertTrue("Outgoing surface must survive the start of its return", anchor.modalPresent)
+            }
+            compose.mainClock.advanceTimeBy(4000)
+            compose.runOnIdle {
+                assertFalse(anchor.modalPresent)
+                assertFalse(anchor.hidden)
+                result = lyrics("New source")
+            }
+            compose.mainClock.advanceTimeBy(4000)
+            compose.runOnIdle { assertFalse(visible); assertFalse(anchor.modalPresent) }
+            compose.runOnIdle { visible = true }
+            compose.mainClock.advanceTimeBy(4000)
+            compose.runOnIdle {
+                assertTrue(anchor.modalPresent)
+                // Cached lyrics may be immediately available for the next song.
+                track = track.copy(id = "second", uri = "file:///second.mp3")
+                result = lyrics("Second song source")
+            }
+            compose.mainClock.advanceTimeBy(80)
+            compose.runOnIdle { assertFalse(visible); assertTrue(anchor.modalPresent) }
+            compose.mainClock.advanceTimeBy(4000)
+            compose.runOnIdle { assertFalse(anchor.modalPresent); assertFalse(anchor.hidden) }
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     @Test fun loadingAndOutgoingLoadingLayersNeverBecomeMissingWhenLyricsArrive() {

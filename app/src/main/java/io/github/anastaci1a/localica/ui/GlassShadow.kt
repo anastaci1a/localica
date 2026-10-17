@@ -75,9 +75,11 @@ internal class GlassShadowGeometry {
             // Boolean path union has the same coverage but rebuilds intersections
             // for every ring on every frame of a changing player/menu outline.
             bodies.forEach { r ->
+                fun expand(corner: CornerRadius) = CornerRadius(corner.x + expansion, corner.y + expansion)
                 addRoundRect(RoundRect(r.left - expansion, r.top - expansion + y,
                     r.right + expansion, r.bottom + expansion + y,
-                    CornerRadius(r.topLeftCornerRadius.x + expansion, r.topLeftCornerRadius.y + expansion)))
+                    expand(r.topLeftCornerRadius), expand(r.topRightCornerRadius),
+                    expand(r.bottomRightCornerRadius), expand(r.bottomLeftCornerRadius)))
             }
         }
         body = outline(0f)
@@ -115,7 +117,9 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float) {
         if (bodies.isEmpty() || strength <= 0f) return
         val origin = Offset(bodies.minOf { it.first.left }, bodies.minOf { it.first.top })
-        val normalized = bodies.map { (r, alpha) -> RoundRect(r.boundingRect.translate(-origin), r.topLeftCornerRadius) to alpha }
+        val normalized = bodies.map { (r, alpha) -> RoundRect(r.left - origin.x, r.top - origin.y,
+            r.right - origin.x, r.bottom - origin.y, r.topLeftCornerRadius, r.topRightCornerRadius,
+            r.bottomRightCornerRadius, r.bottomLeftCornerRadius) to alpha }
         val key = Key(normalized, strength, spread, density)
         if (key != requested) {
             requested = key
@@ -172,6 +176,14 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     if (!visible()) return@drawBehind
     val corner = (radius?.toPx() ?: size.minDimension / 2).coerceIn(0f, size.minDimension / 2)
     with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread) }
+    }
+}
+
+@Composable internal fun Modifier.silhouetteGlassShadow(shape: GlassSilhouette): Modifier {
+    val cache = rememberGlassShadow()
+    val appearance = LocalGlassAppearance.current
+    return drawBehind {
+        with(cache) { draw(shape.frame(size).bodies.map { it to 1f }, appearance.shadowStrength, appearance.shadowSpread) }
     }
 }
 
