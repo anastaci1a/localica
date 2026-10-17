@@ -128,8 +128,10 @@ private fun android.view.Window.glassInput(enabled: Boolean) {
 }
 
 @Composable
-internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    GlassMorphPopup(visible, anchor, onDismiss, if (anchor.bounds == Rect.Zero) GlassPlacement.Center else GlassPlacement.Menu) {
+internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit,
+    originPreparation: GlassOriginPreparation? = null, content: @Composable ColumnScope.() -> Unit) {
+    GlassMorphPopup(visible, anchor, onDismiss, if (anchor.bounds == Rect.Zero) GlassPlacement.Center else GlassPlacement.Menu,
+        originPreparation = originPreparation) {
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).verticalScroll(rememberScrollState()), content = content)
     }
 }
@@ -138,7 +140,8 @@ internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> U
 @Composable
 internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit,
     placement: GlassPlacement = GlassPlacement.Menu, darkOverride: Boolean? = null,
-    fitContent: Boolean = placement == GlassPlacement.Menu, content: @Composable () -> Unit) {
+    fitContent: Boolean = placement == GlassPlacement.Menu,
+    originPreparation: GlassOriginPreparation? = null, content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
     val progress = anchor.contact.expansion
@@ -160,9 +163,19 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         dismissalAttempt++
     }
     val ambientSource = LocalModalBackdrop.current
-    LaunchedEffect(visible, reduced, speed) {
-        if (!visible && !present) { anchor.hidden = false; return@LaunchedEffect }
+    androidx.activity.compose.BackHandler(visible && originPreparation != null && !present) { dismissNow() }
+    DisposableEffect(originPreparation) { onDispose { originPreparation?.reset() } }
+    LaunchedEffect(visible, reduced, speed, originPreparation) {
+        if (!visible && !present) {
+            anchor.hidden = false
+            originPreparation?.settle(false, reduced, speed)
+            return@LaunchedEffect
+        }
         if (visible) {
+            originPreparation?.settle(true, reduced, speed)
+            // Let the final prepared geometry reach placement before capturing
+            // the popup origin; it may have moved without being newly mounted.
+            if (originPreparation != null) withFrameNanos { }
             if (!present && anchor.bounds == Rect.Zero) withFrameNanos { }
             if (!present) { origin = anchor.bounds; source = ambientSource ?: anchor.source }
             source?.refresh()
@@ -185,6 +198,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             while (anchor.triggerMounted && !anchor.restoredDrawn && frames++ < 6) withFrameNanos { }
             present = false; surfaceReady = false; anchor.modalPresent = false; anchor.shadowInModal = false
             anchor.contact.modal = false
+            originPreparation?.settle(false, reduced, speed)
         }
     }
     DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false } }
