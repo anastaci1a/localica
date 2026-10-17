@@ -1,7 +1,9 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -22,6 +24,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
+import kotlin.math.roundToInt
 
 /** Exercises the actual browser controls, committed controller state and lazy-grid layout together. */
 class BrowseOrderViewportTest {
@@ -68,6 +71,7 @@ class BrowseOrderViewportTest {
         var route by mutableStateOf(route)
         var sorting by mutableStateOf(false)
         var topInset = 0f
+        var cardInsetPx = 0
         val queue get() = queues!!.state.value.library.queues.first { it.id == "mix" }
         val playlist get() = playlists!!.state.value.playlists.first { it.id == "mix" }
     }
@@ -128,6 +132,7 @@ class BrowseOrderViewportTest {
                     val playlistState = fixture.playlists?.state?.collectAsState()?.value ?: noPlaylists
                     val anchor = rememberGlassAnchor()
                     fixture.topInset = with(LocalDensity.current) { listPillSlotHeight().toPx() }
+                    fixture.cardInsetPx = with(LocalDensity.current) { BrowseCellGeometry(1).cardInset.dp.roundToPx() }
                     BrowserScreen(library, playlistState, fixture.route, { fixture.route = it }, {}, {},
                         { _, _, _ -> fail("Ordering must not start playback") }, fixture.queues, fixture.playlists,
                         true, false, sorting = fixture.sorting, onSortDismiss = { fixture.sorting = false },
@@ -174,15 +179,41 @@ class BrowseOrderViewportTest {
         assertEquals(0f, position(), 0f)
     }
     private fun assertCurrentAtInset(fixture: Fixture, occurrenceId: String = currentId) {
-        compose.waitUntil(5000) {
-            runCatching {
-                val row = compose.onNodeWithTag("media-$occurrenceId").fetchSemanticsNode().boundsInRoot
-                kotlin.math.abs(row.top - list.fetchSemanticsNode().boundsInRoot.top - fixture.topInset) <= 1.1f
-            }.getOrDefault(false)
+        // ListMotion aligns the outer lazy cell. The media semantics tag is inside
+        // animateBounds' shared card padding, which is rounded independently at layout.
+        val expectedCellTop = fixture.topInset.roundToInt().toFloat()
+        val expectedCardTop = expectedCellTop + fixture.cardInsetPx
+        try {
+            compose.waitUntil(5000) {
+                runCatching {
+                    val row = compose.onNodeWithTag("media-$occurrenceId").fetchSemanticsNode().boundsInRoot
+                    kotlin.math.abs(row.top - list.fetchSemanticsNode().boundsInRoot.top - expectedCardTop) <= 1.1f
+                }.getOrDefault(false)
+            }
+        } catch (failure: ComposeTimeoutException) {
+            val node = runCatching { compose.onNodeWithTag("media-$occurrenceId").fetchSemanticsNode() }.getOrNull()
+            val row = node?.boundsInRoot
+            val cell = node?.layoutInfo?.parentInfo?.coordinates?.boundsInRoot()
+            val viewport = runCatching { list.fetchSemanticsNode().boundsInRoot }.getOrNull()
+            val library = fixture.queues?.state?.value?.library
+            val queue = library?.queues?.firstOrNull { it.id == fixture.route.collection?.id }
+            throw AssertionError("Follow did not settle: occurrence=$occurrenceId " +
+                "expectedCellTop=$expectedCellTop expectedCardTop=$expectedCardTop " +
+                "cardBounds=$row outerCellBounds=$cell " +
+                "viewport=$viewport scroll=${runCatching { position() }.getOrNull()} " +
+                "controllerSourceIndex=${queue?.entries?.indexOfFirst { it.id == occurrenceId }} " +
+                "expectedIndexWithHeader=${queue?.entries?.indexOfFirst { it.id == occurrenceId }?.takeIf { it >= 0 }?.plus(1)} " +
+                "activeQueue=${library?.activeId} activeOccurrence=${library?.active?.currentEntryId} " +
+                "controllerEntriesGeneration=${queue?.entries?.let(System::identityHashCode)} " +
+                "visibleSemantics=${runCatching { list.printToString(maxDepth = 3) }.getOrNull()}", failure)
         }
-        val row = compose.onNodeWithTag("media-$occurrenceId").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        assertEquals("Follow the exact occurrence below the floating search pill, including the full-span header",
-            fixture.topInset, row.top - list.fetchSemanticsNode().boundsInRoot.top, 1.1f)
+        val node = compose.onNodeWithTag("media-$occurrenceId").assertIsDisplayed().fetchSemanticsNode()
+        val row = node.boundsInRoot
+        val cell = requireNotNull(node.layoutInfo.parentInfo).coordinates.boundsInRoot()
+        assertEquals("The outer lazy cell aligns with the floating-pill inset",
+            expectedCellTop, cell.top - list.fetchSemanticsNode().boundsInRoot.top, 1.1f)
+        assertEquals("Follow the exact occurrence below the floating search pill and shared card inset, including the full-span header",
+            expectedCardTop, row.top - list.fetchSemanticsNode().boundsInRoot.top, 1.1f)
     }
 
     @Test fun activeQueueApplyRandomizeAndRevertUseTheExactOccurrenceAndHeaderInset() = fixture { fixture ->
