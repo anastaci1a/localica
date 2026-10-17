@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.playlist
 
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.OrderCommit
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -84,7 +85,22 @@ class PlaylistController(private val dao: PlaylistDao,
             val snapshot = if (method == io.github.anastaci1a.localica.library.TrackSort.Manual) null else sortSnapshot?.invoke()
             PlaylistEdits.sort(it, method, ascending, snapshot)
         }
-    fun randomize(id: String, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.randomize(it) }
+    fun randomize(id: String, complete: (Boolean) -> Unit = {}) = randomizeOrder(id) { complete(it != null) }
+    internal fun randomizeOrder(id: String, complete: (OrderCommit?) -> Unit) {
+        var before: ManualPlaylist? = null
+        edit(id, complete = { success ->
+            val after = state.value.playlists.firstOrNull { it.id == id }
+            val previous = before
+            complete(if (success && previous != null && after != null) OrderCommit(
+                revision = after.entries,
+                order = after.order,
+                changed = previous.order != after.order || previous.entries !== after.entries &&
+                    (previous.entries.size != after.entries.size || previous.entries.indices.any {
+                        previous.entries[it].id != after.entries[it].id
+                    }),
+            ) else null)
+        }) { current -> before = current; PlaylistEdits.randomize(current) }
+    }
     fun revertOrder(id: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (Boolean) -> Unit = {}) =
         edit(id, complete) { PlaylistEdits.revertOrder(it, checkpoint) }
     fun delete(id: String, complete: (Boolean) -> Unit = {}) { submit(complete) { playlists -> playlists.filterNot { it.id == id } } }
