@@ -86,9 +86,15 @@ class UtilityPopupRenderDiagnosticTest {
 
     private fun diagnose(scene: Scene) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        output = File(requireNotNull(context.getExternalFilesDir(null)), "utility-popup-diagnostics")
+        // AGP/UTP copies this instrumentation output before uninstalling the app.
+        // External app files only survive direct instrumentation runs without UTP.
+        val additionalOutput = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+            ?.takeIf { it.isNotBlank() }
+        val outputRoot = additionalOutput?.let(::File) ?: requireNotNull(context.getExternalFilesDir(null))
+        output = File(outputRoot, "utility-popup-diagnostics")
         assertTrue("Diagnostic directory must be writable", output.isDirectory || output.mkdirs())
         report = JSONObject().put("scene", scene.name).put("api", Build.VERSION.SDK_INT)
+            .put("outputRoute", if (additionalOutput != null) "additionalTestOutputDir" else "external-files")
             .put("density", compose.density.density)
             .put("interpretation", "App-shadow-on/off pairs are intended controls for configured app shadows, including recorded backdrops. Existing source metadata cannot prove completion of a particular legacy raster revision: fresh prepared identities and endpoint quiescence reduce, but cannot exclude, stale material sampling. These pairs do not by themselves prove cause. Residual edges can still be material/refraction/rim, scrim or native-window effects. A bright contour is not by itself the reported straight stripe. Compare central top/bottom scans with all four corner normals. No optical fix or shadow accumulation is presumed.")
             .put("frames", records).put("closingTrace", trace).put("observedEndpointQuiescence", endpointObservations)
@@ -145,12 +151,17 @@ class UtilityPopupRenderDiagnosticTest {
             capture("handoff-before", save = false)
             val before = anchor.contact.body.value
             advanceFrame()
-            capture("handoff-after", save = true)
             assertFalse("Acknowledged trigger takes over on the next frame", anchor.modalPresent)
             val after = anchor.contact.body.value
+            trace.put(stateJson().put("observation", "first-trigger-owned-frame"))
             assertTrue("Actual pill keeps its depth through handoff", abs(after.depth - before.depth) < .03f)
             assertTrue("Actual pill keeps its strain through handoff", abs(after.strain - before.strain) < .03f)
             assertFalse("Low damping still rebounds after the window returns", anchor.contact.state.momentum.settled)
+            // Ownership transfers before Compose disposes the Dialog on API 26.
+            // Preserve the first-frame body assertions above; separately finish
+            // disposal before asking the compositor to prove the window is gone.
+            awaitDialogDisposal()
+            capture("handoff-after", save = true)
             settleEndpoint()
             val returned = capture("returned-rest", save = true)
             assertMatchedGeometry(rest, returned, "rest before/after repeated interruptions")
@@ -283,38 +294,101 @@ class UtilityPopupRenderDiagnosticTest {
     private fun rasterRefs(source: FrostedBackdrop): List<Any?> = listOf(
         source.snapshot, source.fallback, source.glassFallback, source.lensSnapshot, source.lensFrostSnapshot)
 
+    private data class NativeLayout(val origin: Offset, val width: Int, val height: Int,
+        val attached: Boolean, val layoutRequested: Boolean) {
+        fun json() = JSONObject().put("origin", JSONArray().put(origin.x).put(origin.y))
+            .put("width", width).put("height", height).put("attached", attached).put("layoutRequested", layoutRequested)
+    }
+
+    private data class EndpointLayout(val utility: Rect, val popup: Rect?, val page: NativeLayout,
+        val modal: NativeLayout?, val decor: NativeLayout?, val scene: Rect, val safe: Rect,
+        val pageMarker: Rect, val revealMarker: Rect) {
+        val ready get() = utility.width > 0f && safe.width > 0f && safe.height > 0f &&
+            page.width > 0 && page.height > 0 && page.attached && !page.layoutRequested &&
+            (popup == null || popup.width > 0f && popup.height > 0f &&
+                modal?.attached == true && modal.width > 0 && modal.height > 0 && !modal.layoutRequested &&
+                decor?.attached == true && decor.width > 0 && decor.height > 0 && !decor.layoutRequested)
+    }
+
+    private fun endpointLayout(): EndpointLayout {
+        val popupBounds = if (anchor.modalPresent)
+            compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot else null
+        return compose.runOnIdle {
+            fun native(view: View): NativeLayout {
+                val origin = IntArray(2)
+                view.getLocationOnScreen(origin)
+                return NativeLayout(Offset(origin[0].toFloat(), origin[1].toFloat()), view.width, view.height,
+                    view.isAttachedToWindow, view.isLayoutRequested)
+            }
+            val modal = popupView?.let(::native)
+            EndpointLayout(anchor.bounds, popupBounds?.translate(requireNotNull(modal).origin), native(pageView),
+                modal, popupWindow?.decorView?.let(::native), sceneBounds, safeSceneBounds, pageMarkerBounds, pageRevealBounds)
+        }
+    }
+
+    private fun EndpointLayout.json() = JSONObject().put("utility", utility.json())
+        .put("popupScreenBounds", popup?.json() ?: JSONObject.NULL).put("pageNative", page.json())
+        .put("popupNative", modal?.json() ?: JSONObject.NULL).put("decorNative", decor?.json() ?: JSONObject.NULL)
+        .put("sceneBounds", scene.json()).put("safeBounds", safe.json())
+        .put("pageMarkerBounds", pageMarker.json()).put("revealMarkerBounds", revealMarker.json())
+
     private fun settleEndpoint(previousModal: List<Any?>? = null) {
         advance(12000)
-        if (Build.VERSION.SDK_INT >= 33) return
+        val legacy = Build.VERSION.SDK_INT < 33
         var last = emptyList<Any?>()
+        var lastLayout: EndpointLayout? = null
         var unchangedSince = SystemClock.uptimeMillis()
         var unchangedFrameSince = compose.mainClock.currentTime
-        // Endpoint-only: virtual time alone cannot finish readback/scatter/tint
-        // jobs on Dispatchers.Default. Allow their delayed frame requests to run.
-        // Do not do this during the acknowledgement/reversal captures.
+        var stableSamples = 0
+        var layoutChanges = 0
+        val observation = JSONObject().put("requestedOpen", open).put("legacyRasterRequired", legacy)
+            .put("freshModalRequired", legacy && previousModal != null)
+        endpointObservations.put(observation)
+        // Endpoint-only, both APIs: virtual time alone cannot finish native inset/
+        // layout callbacks or legacy readback/scatter/tint. Observe unchanged layout
+        // across real UI turns as well as clock time. Never wait for an expected
+        // alignment or pixel result, and never use this in frozen transition captures.
         compose.mainClock.autoAdvance = true
         try {
             compose.waitUntil(10000) {
-                val browse = rasterRefs(browseSource)
-                val modal = if (open) rasterRefs(modalSource) else emptyList()
+                val layout = endpointLayout()
+                val browse = if (legacy) rasterRefs(browseSource) else emptyList()
+                val modal = if (legacy && open) rasterRefs(modalSource) else emptyList()
                 val current = browse + modal
-                if (current != last) {
-                    last = current; unchangedSince = SystemClock.uptimeMillis()
+                if (lastLayout == null) observation.put("firstLayout", layout.json())
+                else if (layout != lastLayout) layoutChanges++
+                if (current != last || layout != lastLayout) {
+                    last = current; lastLayout = layout; unchangedSince = SystemClock.uptimeMillis()
                     unchangedFrameSince = compose.mainClock.currentTime
+                    stableSamples = 0
                 }
-                val refreshed = !open || previousModal == null ||
+                stableSamples++
+                val refreshed = !legacy || !open || previousModal == null ||
                     modal.indices.all { modal[it] !== previousModal[it] }
-                browseSource.recorded && (!open || modalSource.recorded) &&
+                layout.ready && browseSource.recorded && (!open || modalSource.recorded) &&
                     current.all { it != null } && refreshed && SystemClock.uptimeMillis() - unchangedSince >= 200 &&
-                    compose.mainClock.currentTime - unchangedFrameSince >= 600
+                    compose.mainClock.currentTime - unchangedFrameSince >= 600 && stableSamples >= 4
             }
-            compose.waitForIdle()
-            endpointObservations.put(JSONObject().put("clockMs", compose.mainClock.currentTime)
-                .put("requestedOpen", open).put("freshModalRequired", previousModal != null)
+            observation.put("complete", true)
+        } finally {
+            observation.put("clockMs", compose.mainClock.currentTime).put("stableSamples", stableSamples)
+                .put("layoutChanges", layoutChanges)
                 .put("quietWallMs", SystemClock.uptimeMillis() - unchangedSince)
-                .put("quietClockMs", compose.mainClock.currentTime - unchangedFrameSince))
-        } finally { compose.mainClock.autoAdvance = false }
+                .put("quietClockMs", compose.mainClock.currentTime - unchangedFrameSince)
+                .put("lastLayout", lastLayout?.json() ?: JSONObject.NULL)
+            compose.mainClock.autoAdvance = false
+        }
         advanceFrame()
+    }
+
+    private fun awaitDialogDisposal() {
+        repeat(12) {
+            if (popupWindow == null && popupView == null && dialogMarker == null) return
+            advanceFrame()
+            trace.put(stateJson().put("observation", "awaiting-dialog-disposal"))
+        }
+        assertTrue("Dialog window, view and marker must dispose within twelve extra frames",
+            popupWindow == null && popupView == null && dialogMarker == null)
     }
 
     private fun advanceFrame() {
@@ -466,6 +540,7 @@ class UtilityPopupRenderDiagnosticTest {
             .put("modalSize", "${modalSource.size.width}x${modalSource.size.height}")
             .put("windowFlags", window?.attributes?.flags ?: JSONObject.NULL)
             .put("windowIdentity", window?.let(System::identityHashCode) ?: JSONObject.NULL)
+            .put("popupViewPresent", popupView != null).put("dialogMarkerPresent", dialogMarker != null)
             .put("nativeDimBehind", window?.let { it.attributes.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND != 0 } ?: false)
             .put("windowDimAmount", window?.attributes?.dimAmount ?: JSONObject.NULL)
             .put("decorElevation", window?.decorView?.elevation ?: JSONObject.NULL)
