@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.*
@@ -48,6 +50,62 @@ class CollectionDetailTest {
             compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
             compose.onNodeWithTag("browse-options-trigger").assertIsDisplayed()
             compose.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test fun albumOptionsUseTheirTappedTabAfterRootView() =
+        collectionOptionsUseTheirTappedTabAfterRootView(MainTab.Albums, MediaKind.Album, SongListView.Albums)
+
+    @Test fun artistOptionsUseTheirTappedTabAfterRootView() =
+        collectionOptionsUseTheirTappedTabAfterRootView(MainTab.Artists, MediaKind.Artist, SongListView.Artists)
+
+    @Test fun albumArtistOptionsUseTheirTappedTabAfterRootView() =
+        collectionOptionsUseTheirTappedTabAfterRootView(MainTab.AlbumArtists, MediaKind.AlbumArtist, SongListView.AlbumArtists)
+
+    private fun collectionOptionsUseTheirTappedTabAfterRootView(tab: MainTab, kind: MediaKind, view: SongListView) {
+        val collection = LibraryViews.groups(snapshot, view, LibraryQuery()).first()
+        var route by mutableStateOf(BrowseRoute(tab))
+        // Match LocalicaScreen: root opening preference survives detail navigation.
+        var rootView by mutableStateOf(false)
+        var rootSorting by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            val rootAnchor = rememberGlassAnchor()
+            Column(Modifier.fillMaxSize()) {
+                if (route.collection == null) BrowseOptionsPill(rootAnchor) {
+                    rootView = it
+                    rootSorting = true
+                }
+                Box(Modifier.weight(1f)) {
+                    key(route.key) {
+                        BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route,
+                            {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                            sorting = rootSorting, onSortDismiss = { rootSorting = false },
+                            presentationOnly = rootView, sortOrigin = rootAnchor,
+                            queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+                    }
+                }
+            }
+        } }
+        compose.onNodeWithContentDescription("View options").performTouchInput { click(center) }
+        compose.onNodeWithText("View").assertIsSelected()
+        compose.onNodeWithText("View mode").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle {
+            assertTrue("Root View preference remains retained", rootView)
+            route = BrowseRoute(tab, MediaRef(kind, collection.id), collection.title)
+        }
+        // A prior popup's internal tab also must not seed the next opening.
+        for (openView in listOf(false, true, false)) {
+            compose.onNodeWithContentDescription(if (openView) "View options" else "Sort")
+                .performTouchInput { click(center) }
+            compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
+            compose.onNodeWithText(if (openView) "View" else "Sort").assertIsSelected()
+            compose.onNodeWithText(if (openView) "View mode" else "Sort by").assertIsDisplayed()
+            compose.onNodeWithText(if (openView) "Sort" else "View").performClick()
+            compose.onNodeWithText(if (openView) "Sort by" else "View mode").assertIsDisplayed()
+            compose.onNodeWithText("Cancel").performClick()
+            compose.onNodeWithTag("browse-options-trigger").assertIsDisplayed()
+            compose.runOnIdle { assertTrue("Collection choices do not mutate the root preference", rootView) }
         }
     }
 

@@ -8,7 +8,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
@@ -79,7 +78,7 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
             }
         }
         GlassMorphPopup(menu, menuAnchor, { menu = false }) {
-            Column(Modifier.padding(vertical = 8.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.padding(vertical = 8.dp).controlVerticalScroll(rememberScrollState())) {
             ActionMenuItem("Create playlist", enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
             ActionMenuItem("Import playlist from file", enabled = !state.loading && !loading,
                 onClick = { menu = false; picker.launch(arrayOf("*/*")) })
@@ -122,7 +121,7 @@ internal fun PlaylistImportDialog(preview: PlaylistImportPreview, controller: Pl
     val found = preview.tracks
     val missing = preview.entries.size - found.size
     GlassAlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("Import playlist") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GlassTextField(name, { name = it }, label = { Text("Playlist name") }, singleLine = true, enabled = !saving)
             Text("${found.size} matched · $missing unresolved. Song order and repeated entries are preserved.")
             if (missing > 0) Text("Unresolved entries will be skipped. Scan missing folders first if you want to include them.")

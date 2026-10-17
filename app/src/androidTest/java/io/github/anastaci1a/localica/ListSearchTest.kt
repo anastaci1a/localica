@@ -13,6 +13,7 @@ import org.junit.Test
 
 class ListSearchTest {
     @get:Rule val compose = createComposeRule()
+    @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
 
     private fun awaitSearchFocus() {
         // Window focus arrives outside Compose's animation clock. Assert the editor's
@@ -24,12 +25,13 @@ class ListSearchTest {
     }
 
     private fun dismissSearch() {
-        if (compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isNotEmpty()) {
-            pressSystemBack()
-            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
-        }
+        val editing = compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isNotEmpty()
+        compose.awaitSearchImeHandoff { if (editing) pressSystemBack() }
+        compose.awaitExpectedWindowFocus(compose.onNodeWithTag("list-search-popup"))
+        android.util.Log.i("SearchImeHandoff", "${android.os.SystemClock.uptimeMillis()} phase=before popup Back")
         pressSystemBack()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+        android.util.Log.i("SearchImeHandoff", "${android.os.SystemClock.uptimeMillis()} phase=popup removed")
     }
 
     @Test fun visibleSearchVacancyRestoresWithoutCumulativeListMovement() {
@@ -40,25 +42,30 @@ class ListSearchTest {
         val tracks = (0..30).map { n -> Track("vacancy:$n", "Song $n", album = "Album " + n.toString().padStart(3, '0'),
             fileName = "$n.mp3", relativePath = "$n.mp3") }
         try {
+            BrowseSchedulerWatchdog.phase("install list search fixture")
             compose.setContent { LocalicaTheme { LocalicaScreen(
                 LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaybackState(connected = true),
                 {}, {}, {}, {}, {}, {}) } }
+            BrowseSchedulerWatchdog.phase("await initial album")
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 000").fetchSemanticsNodes().isNotEmpty() }
             repeat(3) { pass ->
                 if (pass == 1) compose.onNodeWithTag("browser-list").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, 20f) }
                 val before = compose.onNodeWithText("Album 000").fetchSemanticsNode().boundsInRoot
-                compose.onNodeWithTag("list-search-pill").performClick()
+                BrowseSchedulerWatchdog.phase("open list search")
+            compose.onNodeWithTag("list-search-pill").performClick()
                 awaitSearchFocus()
                 compose.onNode(hasSetTextAction()).assert(SemanticsMatcher.expectValue(
                     androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
                 if (pass == 0) {
                     pressSystemBack()
                     compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
-                    compose.onNodeWithTag("list-search-pill").performClick()
+                    BrowseSchedulerWatchdog.phase("open list search")
+            compose.onNodeWithTag("list-search-pill").performClick()
                     awaitSearchFocus()
                 }
                 compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("Album")
-                dismissSearch()
+                BrowseSchedulerWatchdog.phase("dismiss list search")
+            dismissSearch()
                 compose.onNodeWithTag("list-search-popup").assertDoesNotExist()
                 assertEquals("Restore both full and partially visible pill space", before,
                     compose.onNodeWithText("Album 000").fetchSemanticsNode().boundsInRoot)
@@ -79,19 +86,23 @@ class ListSearchTest {
             Track("track:$n", "Song $name", album = "Album $name", fileName = "$n.mp3", relativePath = "$n.mp3")
         }
         try {
+            BrowseSchedulerWatchdog.phase("install list search fixture")
             compose.setContent { LocalicaTheme { LocalicaScreen(
                 LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaybackState(connected = true),
                 {}, {}, {}, {}, {}, {}) } }
+            BrowseSchedulerWatchdog.phase("await initial album")
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 000").fetchSemanticsNodes().isNotEmpty() }
             val pill = compose.onNodeWithTag("list-search-pill").fetchSemanticsNode().boundsInRoot
             assertTrue("First item rests below the floating search pill", compose.onNodeWithText("Album 000").fetchSemanticsNode().boundsInRoot.top >= pill.bottom)
             compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
             compose.scrollToUncoveredItem(hasText("Album 060"))
             val before = compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot
+            BrowseSchedulerWatchdog.phase("open list search")
             compose.onNodeWithTag("list-search-pill").performClick()
             compose.onNodeWithTag("list-search-popup").assertIsDisplayed()
             awaitSearchFocus()
             compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("Album")
+            BrowseSchedulerWatchdog.phase("submit list search")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.waitUntil(5000) { InstrumentationRegistry.getInstrumentation().uiAutomation.windows.none {
                 it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD
@@ -101,20 +112,25 @@ class ListSearchTest {
             androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
                 .takeScreenshot(java.io.File(context.getExternalFilesDir(null), "list-search-popup.png"))
             val resultPosition = compose.onNodeWithText("Album 061").fetchSemanticsNode().boundsInRoot
+            BrowseSchedulerWatchdog.phase("open search result")
             compose.onNodeWithText("Album 061").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Song 061").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("list-search-popup").assertDoesNotExist()
+            BrowseSchedulerWatchdog.phase("return to search results")
             compose.onNodeWithContentDescription("Back").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 061").fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(hasSetTextAction()).assertTextContains("Album")
             assertEquals(resultPosition, compose.onNodeWithText("Album 061").fetchSemanticsNode().boundsInRoot)
+            BrowseSchedulerWatchdog.phase("dismiss list search")
             dismissSearch()
             assertEquals(before, compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot)
+            BrowseSchedulerWatchdog.phase("open list search")
             compose.onNodeWithTag("list-search-pill").performClick()
             awaitSearchFocus()
             compose.onNode(hasSetTextAction()).assertIsFocused().assert(SemanticsMatcher.expectValue(
                 androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
             compose.onNode(hasSetTextAction()).performTextReplacement("061")
+            BrowseSchedulerWatchdog.phase("submit list search")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.onNode(hasSetTextAction()).assertIsNotFocused()
             compose.waitUntil(5000) { InstrumentationRegistry.getInstrumentation().uiAutomation.windows.none {

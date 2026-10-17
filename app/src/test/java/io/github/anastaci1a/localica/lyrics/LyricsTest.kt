@@ -44,4 +44,19 @@ class LyricsTest {
         assertEquals(listOf("One two", "Next"), parsed.lines.map { it.text })
         assertEquals(listOf(100L, 2000L), parsed.lines.map { it.timeMs })
     }
+    @Test fun syltBoundsAndEncodingFailuresDoNotMakeInvalidTimingUsable() {
+        fun piece(text: ByteArray, terminator: ByteArray = byteArrayOf(0)) =
+            text + terminator + ByteBuffer.allocate(4).putInt(-1).array()
+        val latin = SyltParser.parse(piece(byteArrayOf(0xe9.toByte())), 0, 2)
+        assertEquals("é", latin.lines.single().text)
+        assertEquals(4294967295L, latin.lines.single().timeMs)
+        val bigEndian = SyltParser.parse(piece("Wide".toByteArray(Charsets.UTF_16BE), byteArrayOf(0, 0)), 2, 2)
+        assertEquals("Wide", bigEndian.lines.single().text)
+        assertTrue(runCatching { SyltParser.parse(piece(byteArrayOf(65)), 4, 2) }.isFailure)
+        assertTrue(runCatching { SyltParser.parse(byteArrayOf(0, 65, 0), 2, 2) }.isFailure)
+        assertTrue(runCatching { SyltParser.parse(ByteArray(2 * 1024 * 1024 + 1), 0, 2) }.isFailure)
+        assertTrue(runCatching { SyltParser.parse(ByteArray(5 * 10001), 0, 2) }.isFailure)
+        assertTrue(runCatching { LrcParser.parse("line\n".repeat(10000)) }.isFailure)
+    }
+
 }

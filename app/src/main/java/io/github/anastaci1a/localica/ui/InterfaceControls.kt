@@ -50,11 +50,8 @@ import kotlin.math.roundToInt
 @Composable internal fun SliderPreference(label: String, value: Float, onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier, valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0,
     low: String? = null, high: String? = null, description: String? = null) {
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
+    SliderPreferenceFrame(label, low, high, description) {
         InterfaceSlider(value, onValueChange, modifier, valueRange, steps)
-        if (low != null && high != null) SliderEndpoints(low, high)
-        if (description != null) Text(description, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -68,10 +65,12 @@ internal fun controlValue(fraction: Float, range: ClosedFloatingPointRange<Float
 @Composable
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true) {
+    val enabledProgress by animateControlStateFloat(if (enabled) 1f else 0f, enabled, "Slider availability")
     val actualSteps = if (steps == 0 && valueRange.start == 0f && valueRange.endInclusive == 1f) 19 else steps
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onValueChange)
+    val haptics by rememberUpdatedState(rememberControlHaptics())
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
     var finger by remember { mutableStateOf<Float?>(null) }
     var contact by remember { mutableStateOf(false) }
@@ -83,50 +82,77 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val shown by animateFloatAsState(finger ?: ((value - valueRange.start) / span).coerceIn(0f, 1f),
         if (finger != null || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
     val body = rememberGlassBody({ shown }, { pressure }, { if (contact) 1f else 0f })
-    val touch = if (!enabled) Modifier else Modifier.pointerInput(valueRange, actualSteps, rtl) {
+    val parent = rememberControlScrollContext()
+    val touch = if (!enabled) Modifier else Modifier.readControlScrollContext(parent).pointerInput(valueRange, actualSteps, rtl) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, ControlScrollAxis.Horizontal)
             val inset = 14.dp.toPx()
             val extent = (size.width - inset * 2f).coerceAtLeast(1f)
             fun fraction(x: Float): Float { val at = (x - inset) / extent; return if (rtl) 1f - at else at }
             val initial = ((current - valueRange.start) / span).coerceIn(0f, 1f)
             val grabbed = kotlin.math.abs(fraction(down.position.x) - initial) * extent <= 24.dp.toPx()
             val offset = if (grabbed) initial - fraction(down.position.x) else 0f
-            var owned = grabbed
-            if (owned) { down.consume(); contact = true; finger = initial }
+            var owned = false
+            var released = false
+            val feedback = ControlDragHaptics(haptics)
+            var feedbackEngaged = false
+            contact = true; finger = initial
             try {
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val point = event.changes.firstOrNull { it.id == down.id } ?: break
                     // Compose marks every change consumed for a system cancellation.
-                    if (point.isConsumed) break
+                    if (point.isConsumed || event.changes.count { it.pressed } > 1) break
                     val delta = point.position - down.position
                     if (!owned) {
-                        if (point.isConsumed || kotlin.math.abs(delta.y) > viewConfiguration.touchSlop && kotlin.math.abs(delta.y) > kotlin.math.abs(delta.x)) break
-                        if (kotlin.math.abs(delta.x) > viewConfiguration.touchSlop || !point.pressed) owned = true
+                        when (intent.move(delta.x, delta.y, point.uptimeMillis - down.uptimeMillis)) {
+                            ControlGestureOwner.Control -> owned = true
+                            ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
+                            ControlGestureOwner.Pending -> if (!point.pressed) owned = true
+                        }
                     }
                     if (owned) {
                         contact = point.pressed
                         val raw = fraction(point.position.x) + offset
                         pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
                         finger = if (actualSteps > 0) magneticChoicePosition(raw.coerceIn(0f, 1f) * (actualSteps + 1)) / (actualSteps + 1) else raw.coerceIn(0f, 1f)
-                        change(controlValue(raw, valueRange, actualSteps))
+                        val next = controlValue(raw, valueRange, actualSteps)
+                        val step = if (actualSteps > 0)
+                            (((next - valueRange.start) / span) * (actualSteps + 1)).roundToInt() else 0
+                        if (point.pressed) {
+                            feedback.engage(step)
+                            feedbackEngaged = true
+                            feedback.move(step)
+                        } else {
+                            // A tap never entered the owned-drag feedback lifecycle.
+                            if (!feedbackEngaged) haptics.emit(ControlHaptic.Weak)
+                            else feedback.move(step)
+                            released = true
+                        }
+                        change(next)
                         point.consume()
                     }
                     if (!point.pressed) { break }
                 }
-            } finally { contact = false; pressure = 0f; finger = null }
+            } finally {
+                feedback.finish(released)
+                contact = false; pressure = 0f; finger = null
+            }
         }
     }
     val semantics = Modifier.semantics {
         progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(value.coerceIn(valueRange), valueRange, actualSteps)
         if (!enabled) disabled()
         setProgress { requested ->
-            if (enabled) change(controlValue((requested - valueRange.start) / span, valueRange, actualSteps))
+            if (enabled) {
+                haptics.emit(ControlHaptic.Weak)
+                change(controlValue((requested - valueRange.start) / span, valueRange, actualSteps))
+            }
             enabled
         }
     }
-    BoxWithConstraints(modifier.fillMaxWidth().height(48.dp).then(semantics).then(touch)
+    BoxWithConstraints(modifier.fillMaxWidth().height(InterfaceSliderHeight).then(semantics).then(touch)
         .onKeyEvent { event ->
             if (!enabled || event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) false
             else {
@@ -137,7 +163,10 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
                     androidx.compose.ui.input.key.Key.DirectionDown -> -1
                     else -> 0
                 }
-                if (direction != 0) change(controlValue((current - valueRange.start) / span + direction.toFloat() / if (actualSteps > 0) actualSteps + 1 else 100, valueRange, actualSteps))
+                if (direction != 0) {
+                    haptics.emit(ControlHaptic.Weak)
+                    change(controlValue((current - valueRange.start) / span + direction.toFloat() / if (actualSteps > 0) actualSteps + 1 else 100, valueRange, actualSteps))
+                }
                 direction != 0
             }
         }.focusable(enabled)) {
@@ -156,7 +185,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
         geometry = { thumbBounds(size.width).let { LensGeometry(it, it.height / 2) } },
         body = { body.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {
         inset(14.dp.toPx(), 0f) {
-            drawSliderTrack(shown, actualSteps, enabled, rtl, NavigationAccent, active)
+            drawSliderTrack(shown, actualSteps, enabled, rtl, NavigationAccent, active, enabledProgress)
         }
     }
     // Keep test/accessibility geometry aligned without composing the entire control
@@ -173,11 +202,12 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
 
 /** Stop markers live inside rounded caps, including the current active endpoint. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSliderTrack(fraction: Float, steps: Int,
-    enabled: Boolean, rtl: Boolean, color: Color, dots: Float = 1f) {
+    enabled: Boolean, rtl: Boolean, color: Color, dots: Float = 1f,
+    enabledProgress: Float = if (enabled) 1f else 0f) {
     val h = 5.dp.toPx(); val radius = h / 2; val top = (size.height - h) / 2
-    drawRoundRect(color.copy(alpha = if (enabled) .16f else .08f), Offset(0f, top), Size(size.width, h), CornerRadius(radius))
+    drawRoundRect(color.copy(alpha = .08f + .08f * enabledProgress), Offset(0f, top), Size(size.width, h), CornerRadius(radius))
     val length = size.width * fraction
-    if (fraction > 0f) drawRoundRect(color.copy(alpha = if (enabled) .8f else .3f),
+    if (fraction > 0f) drawRoundRect(color.copy(alpha = .3f + .5f * enabledProgress),
         Offset(if (rtl) size.width - length else 0f, top), Size(length, h), CornerRadius(radius))
     if (steps > 0) for (index in 0..steps + 1) {
         val point = index.toFloat() / (steps + 1)
@@ -206,48 +236,91 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val scope = rememberCoroutineScope()
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val direction = if (rtl) -1f else 1f
-    val body = rememberGlassBody({ position.value }, { pressure }, { if (pressed || dragging) 1f else 0f })
-    val active by animateFloatAsState(if (pressed || dragging || position.isRunning) 1f else 0f,
-        tween(if (reduced) 0 else 180), label = "Switch lens")
+    // A tap's destination is already committed before the settling effect starts.
+    // Keep the same optical body through direct contact and automatic travel:
+    // releasing into a thick neutral lens would sample only the opaque track.
+    val engaged by remember(checked, reduced) { derivedStateOf {
+        pressed || dragging || (!reduced && (position.isRunning || position.value != if (checked) 1f else 0f))
+    } }
+    val source = LocalFrostedBackdrop.current
+    val ready = source == null || if (android.os.Build.VERSION.SDK_INT >= 33)
+        source.recorded && !source.layer.isReleased else source.snapshot != null
+    // Start the lease at commitment, but retain the opaque resting face until
+    // the first real recording is sampleable. Logical travel never waits for it.
+    val materialEngaged = engaged && ready
+    val active by animateFloatAsState(if (materialEngaged) 1f else 0f,
+        tween(if (reduced) 0 else if (materialEngaged) (80f / speed).toInt().coerceAtLeast(1) else 180,
+            easing = if (materialEngaged) androidx.compose.animation.core.LinearOutSlowInEasing
+                else androidx.compose.animation.core.FastOutSlowInEasing), label = "Switch lens")
+    // A replaced/unready source cannot become a track-only lens during exit.
+    val availableActive by remember(ready) { derivedStateOf { if (ready) active else 0f } }
+    val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
-    Box(Modifier.size(60.dp, 48.dp).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.pointerInput(rtl) {
+    val haptics by rememberUpdatedState(rememberControlHaptics())
+    val parent = rememberControlScrollContext()
+    Box(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.readControlScrollContext(parent).pointerInput(rtl) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            down.consume(); pressed = true; dragging = true
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.stop() }
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, ControlScrollAxis.Horizontal)
+            pressed = true
             val initial = position.value
             var moved = false
             var released = false
+            val feedback = ControlDragHaptics(haptics)
+            var feedbackEngaged = false
             try {
                 while (true) {
-                    val point = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val point = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (point.isConsumed) break
+                    if (event.changes.count { it.pressed } > 1) {
+                        event.changes.forEach { it.consume() }
+                        break
+                    }
+                    val movement = point.position - down.position
+                    if (!dragging) {
+                        when (intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)) {
+                            ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
+                            ControlGestureOwner.Pending -> if (point.pressed) continue
+                            ControlGestureOwner.Control -> Unit
+                        }
+                        dragging = true
+                        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.stop() }
+                    }
                     val dx = point.position.x - down.position.x
                     moved = moved || kotlin.math.abs(dx) > viewConfiguration.touchSlop
                     raw = initial + direction * dx / 28.dp.toPx()
                     pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
                     scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(raw.coerceIn(0f, 1f))) }
+                    val option = if (position.value >= .5f) 1 else 0
+                    if (point.pressed) {
+                        feedback.engage(option)
+                        feedbackEngaged = true
+                        feedback.move(option)
+                    } else if (!feedbackEngaged) haptics.emit(ControlHaptic.Weak)
+                    else feedback.move(option)
                     point.consume()
                     if (!point.pressed) { released = true; break }
                 }
             } finally {
+                feedback.finish(released)
                 pressure = 0f; pressed = false; dragging = false; settleRequest++
                 if (released) change?.invoke(if (moved) position.value >= .5f else initial < .5f)
             }
         }
     })) {
-        GlassControlScene(Modifier.matchParentSize(), horizontalPadding = 24.dp, geometry = {
+        GlassControlScene(Modifier.matchParentSize(), horizontalPadding = 24.dp, source = source, prepare = { engaged }, geometry = {
             val fraction = position.value.coerceIn(0f, 1f)
             val shape = body.value
-            val scale = 1f + (expansion - 1f) * active
+            val scale = 1f + (expansion - 1f) * availableActive
             val width = 28.dp.toPx() * scale * shape.scaleX()
             val height = 28.dp.toPx() * scale * shape.scaleY()
             val wall = direction * glassWallAffinity(fraction, 1f)
             val x = (16.dp + 28.dp * (if (rtl) 1f - fraction else fraction)).toPx() + glassWallTranslation(28.dp.toPx() * scale, shape.scaleX(), wall)
             LensGeometry(androidx.compose.ui.geometry.Rect(x - width / 2f, center.y - height / 2f,
                 x + width / 2f, center.y + height / 2f), height / 2f)
-        }, body = { body.value }, active = { active }, face = { Color.White.copy(alpha = 1f - active) }) {
+        }, body = { body.value }, active = { availableActive }, face = { Color.White.copy(alpha = 1f - availableActive) }) {
             drawRoundRect(androidx.compose.ui.graphics.lerp(neutral, NavigationAccent, position.value.coerceIn(0f, 1f)),
                 topLeft = Offset(0f, center.y - 16.dp.toPx()), size = Size(size.width, 32.dp.toPx()), cornerRadius = CornerRadius(16.dp.toPx()))
         }
@@ -257,12 +330,12 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
 @Composable
 internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier,
     enabled: Boolean = true) {
-    val progress by animateFloatAsState(if (checked) 1f else 0f,
-        tween(if (LocalReducedMotion.current) 0 else (160 / LocalMotionSpeed.current).toInt()), label = "Checkmark")
+    val progress by animateControlStateFloat(if (checked) 1f else 0f, checked, "Checkmark")
+    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Checkbox availability")
     val foreground = LocalContentColor.current
     Box(modifier.size(48.dp).then(if (onCheckedChange != null)
         Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange) else Modifier)
-        .graphicsLayer { alpha = if (enabled) 1f else .38f }, contentAlignment = Alignment.Center) {
+        .graphicsLayer { alpha = opacity }, contentAlignment = Alignment.Center) {
         SelectionPane(Modifier.size(26.dp))
         Canvas(Modifier.fillMaxSize()) {
         val radius = 10.dp.toPx()
@@ -277,10 +350,12 @@ internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> 
 
 @Composable
 internal fun GlassFilterChoice(checked: Boolean, onClick: () -> Unit, label: String, enabled: Boolean) {
+    val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Filter availability")
+    val selection by animateControlStateFloat(if (checked) .09f else 0f, checked, "Filter selection")
     Box(Modifier.heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically)) {
         LiquidGlassSurface(Modifier.height(40.dp).toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() })
-            .semantics { selected = checked }.graphicsLayer { alpha = if (enabled) 1f else .38f },
-            tint = Color.Black.copy(alpha = if (checked) .09f else 0f), pressFeedback = enabled) {
+            .semantics { selected = checked }.graphicsLayer { alpha = opacity },
+            tint = Color.Black.copy(alpha = selection), pressFeedback = enabled) {
             Text(label, Modifier.align(Alignment.Center).padding(horizontal = 14.dp), style = MaterialTheme.typography.labelLarge)
         }
     }

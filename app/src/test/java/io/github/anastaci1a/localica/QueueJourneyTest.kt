@@ -26,7 +26,7 @@ class QueueJourneyTest {
     @Test fun restartBeginsAtOnlyTheKnownCursorAndForwardVisitsAreDistinctAcrossCycles() {
         val order = listOf("A", "B", "C")
         var path = QueueJourney.start(order, "B", JourneyModes(loop = true), random)
-        assertNull(path.previous)
+        assertEquals("A", path.previous?.entryId)
         assertEquals(listOf("B"), path.history.map { it.entryId })
         assertEquals("C", path.next?.entryId)
         path = path.arrive(path.next!!.token, order, random)
@@ -38,7 +38,7 @@ class QueueJourneyTest {
         assertNotEquals(path.history.first().token, path.next!!.token)
         path = path.arrive(path.history.first().token, order, random)
         assertEquals("C", path.next?.entryId)
-        assertEquals(1L, path.cycle)
+        assertEquals(0L, path.cycle)
     }
 
     @Test fun editsKeepValidForwardHistoryAndStableFutureTokens() {

@@ -100,10 +100,13 @@ class QueueBrowsingTest {
             compose.onNode(hasSetTextAction()).performTextInput("First")
             compose.onNodeWithTag("media-${queue.entries[1].id}").assertIsDisplayed()
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertDoesNotExist()
-            pressSystemBack()
-            compose.waitUntil(5000) { compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
+            compose.onNode(hasSetTextAction()).assertIsFocused()
+            compose.awaitSearchImeHandoff { pressSystemBack() }
+            compose.awaitExpectedWindowFocus(compose.onNodeWithTag("list-search-popup"))
+            android.util.Log.i("SearchImeHandoff", "${android.os.SystemClock.uptimeMillis()} phase=before queue popup Back")
             pressSystemBack()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
+            android.util.Log.i("SearchImeHandoff", "${android.os.SystemClock.uptimeMillis()} phase=queue popup removed")
             compose.onNodeWithTag("media-${queue.entries[0].id}").assertIsDisplayed()
             compose.onNodeWithContentDescription("Sort queue").performClick()
             compose.onNodeWithText("Sort by").performClick()

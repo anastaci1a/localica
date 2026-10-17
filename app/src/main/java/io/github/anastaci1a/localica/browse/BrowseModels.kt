@@ -12,19 +12,27 @@ data class BrowserItem(val ref: MediaRef, val title: String, val subtitle: Strin
     val modifiedAt: Long? = songs.mapNotNull { it.track.modifiedAt }.maxOrNull(),
     val playCount: Long = songs.distinctBy { it.track.id }.sumOf { it.track.playCount }, val coverUri: String? = null) {
     val key: String get() = row?.id ?: "${ref.kind}:${ref.id}"
-    val coverUris: List<String> = listOfNotNull(coverUri) + songs.sortedBy { it.track.id }.map { it.track.uri }.distinct()
+    val coverUris: List<String> = collectionCoverUris(coverUri, songs.firstOrNull()?.track?.uri)
 }
 
-internal fun BrowseResult.groupAlbumSongs(grouping: SongGrouping): BrowseResult {
+internal fun SongGrouping.label(row: SongRow): String = row.track.let { track -> when (this) {
+    SongGrouping.Artist -> track.artist
+    SongGrouping.AlbumArtist -> track.albumArtist ?: track.artist
+    SongGrouping.Composer -> track.composer
+    SongGrouping.None -> null
+} }?.takeIf { it.isNotBlank() } ?: "Unknown ${if (this == SongGrouping.AlbumArtist) label else label.lowercase(Locale.ROOT)}"
+
+internal fun BrowseResult.groupAlbumSongs(grouping: SongGrouping, checkActive: () -> Unit = {}): BrowseResult {
     if (grouping == SongGrouping.None) return this
-    fun label(item: BrowserItem): String = item.row?.track?.let { track -> when (grouping) {
-        SongGrouping.Artist -> track.artist
-        SongGrouping.AlbumArtist -> track.albumArtist ?: track.artist
-        SongGrouping.Composer -> track.composer
-        SongGrouping.None -> null
-    } }?.takeIf { it.isNotBlank() } ?: "Unknown ${if (grouping == SongGrouping.AlbumArtist) grouping.label else grouping.label.lowercase(Locale.ROOT)}"
-    val grouped = items.groupBy(::label).toSortedMap(compareBy<String> { it.lowercase(Locale.ROOT) }.thenBy { it })
-    return copy(items = grouped.flatMap { (name, songs) -> songs.mapIndexed { index, item -> item.copy(groupHeading = name.takeIf { index == 0 }) } })
+    var visits = 0
+    val grouped = items.groupBy {
+        if (visits++ % 128 == 0) checkActive()
+        it.row?.let { row -> grouping.label(row) }.orEmpty()
+    }.toSortedMap(compareBy<String> { it.lowercase(Locale.ROOT) }.thenBy { it })
+    return copy(items = grouped.flatMap { (name, songs) -> songs.mapIndexed { index, item ->
+        if (index % 128 == 0) checkActive()
+        item.copy(groupHeading = name.takeIf { index == 0 })
+    } })
 }
 data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: SongListView = SongListView.Songs) {
     val rows: List<SongRow> get() = items.mapNotNull { it.row }
@@ -34,8 +42,9 @@ data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: S
 object BrowseQueries {
     private data class Catalog(val snapshot: LibrarySnapshot, val playlists: List<ManualPlaylist>,
         val queues: List<ListeningQueue>, val route: BrowseRoute, val query: LibraryQuery,
-        val kinds: Set<MediaKind>, val result: BrowseResult, val search: List<String>)
+        val kinds: Set<MediaKind>, val sorts: BrowseSortSnapshot, val result: BrowseResult, val search: List<String>)
     private val catalogs = ArrayDeque<Catalog>()
+    private var catalogSource: LibrarySnapshot? = null
     val libraryKinds = MediaKind.entries.filterNot { it == MediaKind.Queue }
     fun scope(route: BrowseRoute): SongListView = if (route.search) SongListView.Search else when (route.collection?.kind) {
         MediaKind.Album -> SongListView.Albums
@@ -59,37 +68,60 @@ object BrowseQueries {
         else -> LibraryQuery()
     }
     fun evaluate(snapshot: LibrarySnapshot, playlists: List<ManualPlaylist>, route: BrowseRoute,
-        query: LibraryQuery = defaultQuery(route), queues: List<ListeningQueue> = emptyList(), allCollections: Set<MediaKind> = LibraryFilters().allCollections): BrowseResult {
-        val baseRoute = route.copy(text = "")
-        val baseQuery = query.copy(text = "")
-        val relevantQueues = if (route.collection?.kind == MediaKind.Queue || route.tab == MainTab.Queues) queues else emptyList()
-        val cached = synchronized(catalogs) { catalogs.firstOrNull {
-            it.snapshot === snapshot && it.playlists == playlists && it.queues == relevantQueues &&
-                it.route == baseRoute && it.query == baseQuery && it.kinds == allCollections
-        } }
+        query: LibraryQuery? = null, queues: List<ListeningQueue> = emptyList(),
+        allCollections: Set<MediaKind> = LibraryFilters().allCollections,
+        sorts: BrowseSortSnapshot = BrowseSortSnapshot.Default, checkActive: () -> Unit = {}): BrowseResult {
+        checkActive()
+        val effectiveQuery = query ?: sorts.query(route)
+        // Navigation/session identity and draft state do not change the computed catalog.
+        val baseRoute = route.copy(text = "", key = "", title = null, queryCommitted = false,
+            querySort = null, queryAscending = null,
+            tab = if (route.globalSearch && route.search) MainTab.Library else route.tab,
+            collection = route.collection.takeUnless { route.globalSearch && route.search })
+        val baseQuery = effectiveQuery.copy(text = "")
+        val relevantQueues = if (!route.globalSearch && (route.collection?.kind == MediaKind.Queue || route.tab == MainTab.Queues)) queues else emptyList()
+        val cached = synchronized(catalogs) {
+            if (catalogSource !== snapshot) {
+                catalogs.clear()
+                catalogSource = snapshot
+            }
+            catalogs.firstOrNull {
+                it.playlists == playlists && it.queues == relevantQueues &&
+                    it.route == baseRoute && it.query == baseQuery && it.kinds == allCollections && it.sorts.sameCollections(sorts)
+            }
+        }
         val catalog = cached ?: run {
-            val result = evaluateCatalog(snapshot, playlists, baseRoute, baseQuery, relevantQueues, allCollections)
-            val search = result.items.map { item -> item.row?.track?.let { track ->
-                val paths = if (query.folderUri == null) track.locations.map { it.relativePath } + track.relativePath else listOf(track.relativePath)
-                (listOfNotNull(track.title, track.artist, track.album, track.albumArtist, track.genre, track.comment,
-                    track.composer, track.lyricist, track.year?.toString(), track.fileName) + paths).joinToString("\n")
-            } ?: (item.title + "\n" + item.subtitle.orEmpty()) }.map { it.lowercase(Locale.ROOT) }
-            Catalog(snapshot, playlists, relevantQueues, baseRoute, baseQuery, allCollections.toSet(), result, search).also { entry ->
+            val result = evaluateCatalog(snapshot, playlists, baseRoute, baseQuery, relevantQueues, allCollections, sorts, checkActive)
+            val search = result.items.mapIndexed { index, item ->
+                if (index % 128 == 0) checkActive()
+                item.row?.track?.let { track ->
+                    snapshot.searchIndex?.text(track, effectiveQuery.folderUri) ?: LibrarySearchIndex.text(track, effectiveQuery.folderUri)
+                } ?: (item.title + "\n" + item.subtitle.orEmpty()).lowercase(Locale.ROOT)
+            }
+            checkActive()
+            Catalog(snapshot, playlists, relevantQueues, baseRoute, baseQuery, allCollections.toSet(), sorts, result, search).also { entry ->
                 synchronized(catalogs) {
-                    catalogs.removeAll { it.snapshot !== snapshot }
-                    catalogs.addFirst(entry)
-                    while (catalogs.size > 1 && (catalogs.size > 12 || catalogs.sumOf { it.result.items.size } > 40_000)) catalogs.removeLast()
+                    // A superseded preparation can finish, but must not evict the current generation.
+                    if (catalogSource === snapshot) {
+                        catalogs.addFirst(entry)
+                        while (catalogs.size > 1 && (catalogs.size > 12 || catalogs.sumOf { it.result.items.size } > 40_000)) catalogs.removeLast()
+                    }
                 }
             }
         }
         val terms = route.text.lowercase(Locale.ROOT).split(Regex("\\s+")).filter(String::isNotBlank)
-        if (terms.isEmpty()) return catalog.result
-        return catalog.result.copy(items = catalog.result.items.filterIndexed { index, _ -> terms.all { it in catalog.search[index] } })
+        val result = if (terms.isEmpty()) catalog.result else catalog.result.copy(items = catalog.result.items.filterIndexed { index, _ ->
+            if (index % 128 == 0) checkActive()
+            terms.all { it in catalog.search[index] }
+        })
+        return if (route.collection?.kind == MediaKind.Album && !route.globalSearch) result.groupAlbumSongs(sorts.grouping(route), checkActive) else result
     }
 
     private fun evaluateCatalog(snapshot: LibrarySnapshot, playlists: List<ManualPlaylist>, route: BrowseRoute,
-        query: LibraryQuery, queues: List<ListeningQueue>, allCollections: Set<MediaKind>): BrowseResult {
+        query: LibraryQuery, queues: List<ListeningQueue>, allCollections: Set<MediaKind>, sorts: BrowseSortSnapshot, checkActive: () -> Unit): BrowseResult {
         val effective = query.copy(text = route.text)
+        val collection = route.collection.takeUnless { route.globalSearch }
+        val currentTracks by lazy { snapshot.tracks.associateBy { it.id } }
         fun songItems(rows: List<SongRow>) = rows.map { BrowserItem(MediaRef(MediaKind.Song, it.track.id),
             it.track.title, it.track.artist ?: it.track.albumArtist, listOf(it), it) }
         fun groups(kind: MediaKind): List<BrowserItem> {
@@ -100,29 +132,29 @@ object BrowseQueries {
                 MediaKind.Folder -> SongListView.Folders
                 else -> return emptyList()
             }
-            return LibraryViews.groups(snapshot, view, LibraryViews.defaults(view)).map { group ->
-                BrowserItem(MediaRef(kind, group.id), group.title, group.subtitle ?: songCountLabel(group.tracks.size),
-                    group.tracks.map { SongRow(it.id, it) })
+            return LibraryViews.groups(snapshot, view, LibraryViews.defaults(view), checkActive).map { group ->
+                val ref = MediaRef(kind, group.id)
+                val rows = group.tracks.map { SongRow(it.id, it) }
+                BrowserItem(ref, group.title, group.subtitle ?: songCountLabel(group.tracks.size),
+                    if (collection == null) sorts.rows(ref, rows, checkActive) else rows)
             }
         }
         fun playlistItems() = playlists.map { playlist -> BrowserItem(MediaRef(MediaKind.Playlist, playlist.id), playlist.name,
-            songCountLabel(playlist.entries.size), PlaylistEdits.rows(playlist, snapshot, LibraryViews.defaults(SongListView.Playlists)),
+            songCountLabel(playlist.entries.size), PlaylistEdits.rows(playlist, snapshot, LibraryQuery(sort = TrackSort.Manual), currentTracks),
             addedAt = playlist.createdAt, modifiedAt = playlist.modifiedAt, playCount = snapshot.playlistPlays[playlist.id] ?: 0, coverUri = playlist.coverUri) }
         fun catalog(kind: MediaKind): List<BrowserItem> = when (kind) {
-            MediaKind.Song -> songItems(LibraryQueries.rows(snapshot.tracks.map { SongRow(it.id, it) }, effective))
+            MediaKind.Song -> songItems(LibraryQueries.rows(snapshot.tracks.map { SongRow(it.id, it) }, effective, checkActive))
             MediaKind.Playlist -> playlistItems()
             MediaKind.Queue -> {
-                val current = snapshot.tracks.associateBy { it.id }
                 queues.map { queue -> BrowserItem(MediaRef(MediaKind.Queue, queue.id), queue.name,
-                    songCountLabel(queue.entries.size), queue.entries.map { SongRow(it.id, current[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), it.sourcePlaylistId) }) }
+                    songCountLabel(queue.entries.size), queue.entries.map { SongRow(it.id, currentTracks[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), it.sourcePlaylistId) }) }
             }
             else -> groups(kind)
         }
-        val collection = route.collection.takeUnless { route.globalSearch }
         if (collection != null) {
             val source = catalog(collection.kind).firstOrNull { it.ref == collection }?.songs.orEmpty()
             val order = if (collection.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) effective.copy(sort = TrackSort.Manual, ascending = true) else effective
-            return BrowseResult(songItems(LibraryQueries.rows(source, order)), scope(route))
+            return BrowseResult(songItems(LibraryQueries.rows(source, order, checkActive)), scope(route))
         }
         val kinds = if (route.globalSearch) route.filter?.let(::listOf) ?: libraryKinds else when (route.tab) {
             MainTab.Library -> route.filter?.let(::listOf) ?: libraryKinds.filter { it in allCollections && it != MediaKind.Song }
@@ -135,14 +167,16 @@ object BrowseQueries {
             else -> emptyList()
         }
         val terms = effective.text.lowercase(Locale.ROOT).split(Regex("\\s+")).filter { it.isNotBlank() }
-        val items = kinds.flatMap(::catalog).filter { item ->
+        val items = kinds.flatMap { kind -> checkActive(); catalog(kind) }.filter { item ->
             if (route.tab == MainTab.MostPlayed && !route.globalSearch && item.playCount == 0L) false
             else if (item.row != null) true
             else terms.all { it in (item.title + "\n" + item.subtitle.orEmpty()).lowercase(Locale.ROOT) }
         }
         if (kinds == listOf(MediaKind.Song)) return BrowseResult(items, scope(route))
         fun <T : Comparable<T>> compare(a: T?, b: T?) = compareKnown(a, b, effective.ascending)
+        var comparisons = 0
         val ordered = items.sortedWith { a, b ->
+            if (comparisons++ % 128 == 0) checkActive()
             val primary = when (effective.sort) {
                 TrackSort.Count -> compare(a.songs.size, b.songs.size)
                 TrackSort.Duration -> compare(a.duration(), b.duration())
@@ -156,6 +190,7 @@ object BrowseQueries {
             }
             primary.takeIf { it != 0 } ?: a.title.lowercase(Locale.ROOT).compareTo(b.title.lowercase(Locale.ROOT)).takeIf { it != 0 } ?: a.key.compareTo(b.key)
         }
+        checkActive()
         return BrowseResult(ordered, scope(route))
     }
 }
@@ -168,7 +203,11 @@ internal fun BrowserItem.metadataText(sort: TrackSort): String? = songs.mapNotNu
     }
 }.distinct().sorted().takeIf { it.isNotEmpty() }?.joinToString(", ")
 
-internal fun BrowserItem.information(style: BrowseStyle): String? {
+internal fun BrowserItem.information(style: BrowseStyle, inherited: Map<MediaKind, BrowseStyle> = emptyMap()): String? {
+    if (style.extraInfo == ExtraInfo.Inherited) {
+        val own = inherited[ref.kind] ?: BrowseStyle()
+        return information(own.copy(extraInfo = own.extraInfo.takeUnless { it == ExtraInfo.Inherited } ?: ExtraInfo.Automatic))
+    }
     val info = if (style.extraInfo != ExtraInfo.Automatic) style.extraInfo else
         ExtraInfo.entries.firstOrNull { it.name == style.sort.name } ?: return subtitle
     return when (info) {
@@ -180,7 +219,7 @@ internal fun BrowserItem.information(style: BrowseStyle): String? {
         ExtraInfo.Added -> addedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Modified -> modifiedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Artist, ExtraInfo.AlbumArtist, ExtraInfo.Composer, ExtraInfo.Genre -> metadataText(TrackSort.valueOf(info.name))
-        ExtraInfo.Automatic -> subtitle
+        ExtraInfo.Automatic, ExtraInfo.Inherited -> subtitle
     }
 }
 

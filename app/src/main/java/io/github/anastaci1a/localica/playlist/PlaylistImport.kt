@@ -16,6 +16,7 @@ data class PlaylistImportPreview(val name: String, val entries: List<PlaylistImp
 object PlaylistImport {
     const val MAX_BYTES = 5 * 1024 * 1024
     const val MAX_ENTRIES = 20000
+    private val plsFilePattern = Regex("(?i)^File([0-9]+)=(.*)$")
     fun parse(bytes: ByteArray, fileName: String, library: LibrarySnapshot, parentPath: String? = null): PlaylistImportPreview {
         require(bytes.size <= MAX_BYTES) { "Playlist exceeds the 5 MB limit." }
         val extension = fileName.substringAfterLast('.', "").lowercase()
@@ -28,20 +29,28 @@ object PlaylistImport {
             bytes.toString(Charsets.ISO_8859_1)
         }
         require('\u0000' !in text) { "The playlist contains unsupported binary or UTF-16 data." }
-        val lines = text.removePrefix("\uFEFF").lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        val lines = text.removePrefix("\uFEFF").lineSequence().map { it.trim() }
         val paths = if (extension == "pls") {
-            require(lines.any { it.equals("[playlist]", true) }) { "This is not a PLS playlist." }
+            var hasHeader = false
             val files = sortedMapOf<Int, String>()
             lines.forEach { line ->
-                val match = Regex("(?i)^File([0-9]+)=(.*)$").matchEntire(line) ?: return@forEach
+                if (line.equals("[playlist]", true)) hasHeader = true
+                val match = plsFilePattern.matchEntire(line) ?: return@forEach
                 val index = match.groupValues[1].toIntOrNull()
                 require(index != null && index > 0 && index !in files) { "The PLS file has invalid or repeated entry numbers." }
+                require(files.size < MAX_ENTRIES) { "Playlist exceeds the 20,000-song limit." }
                 files[index] = match.groupValues[2].trim()
             }
+            require(hasHeader) { "This is not a PLS playlist." }
             files.values.toList()
-        } else lines.filterNot { it.startsWith('#') }
+        } else buildList {
+            lines.forEach { line ->
+                if (line.isEmpty() || line.startsWith('#')) return@forEach
+                require(size < MAX_ENTRIES) { "Playlist exceeds the 20,000-song limit." }
+                add(line)
+            }
+        }
         require(paths.isNotEmpty()) { "This playlist contains no songs." }
-        require(paths.size <= MAX_ENTRIES) { "Playlist exceeds the 20,000-song limit." }
         val folders = library.folders.associate { it.uri to it.name }
         val candidates = library.tracks.map { track ->
             track to buildSet {

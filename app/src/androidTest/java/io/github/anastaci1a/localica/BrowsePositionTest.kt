@@ -69,8 +69,21 @@ class BrowsePositionTest {
                         runCatching { compose.onNodeWithText("Song 060").assertIsDisplayed() }.isSuccess
                     }
                     compose.onNodeWithText("Song 060").assertIsDisplayed()
-                    if (hardware) pressSystemBack()
-                    else compose.onNodeWithContentDescription("Back").performClick()
+                    if (hardware) {
+                        val list = compose.onNodeWithTag("browser-list")
+                        val scrolled = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value() > 0f
+                        compose.awaitExpectedWindowFocus(list)
+                        pressSystemBack()
+                        if (scrolled) {
+                            compose.waitUntil(5000) {
+                                list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value() == 0f
+                            }
+                            // The first press only scrolls this detail; history is a separate action.
+                            compose.onNodeWithContentDescription("Back").assertExists()
+                            compose.awaitExpectedWindowFocus(list)
+                            pressSystemBack()
+                        }
+                    } else compose.onNodeWithContentDescription("Back").performClick()
                     try {
                         compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty() &&
                             compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }

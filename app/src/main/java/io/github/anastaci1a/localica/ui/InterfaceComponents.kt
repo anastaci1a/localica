@@ -19,13 +19,14 @@ internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, a
     SideEffect { anchor?.quiet = quiet; anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(iconSize)) } }
     val modifier = Modifier.size(if (glass) CompactControlSize else 48.dp).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)
     if (quiet) {
+        val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Quiet action availability")
         anchor?.captureInk()
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-        Box(modifier.ownButtonDrag(enabled).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
-            interactionSource = interaction, indication = null, onClick = onClick), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Box(modifier.alpha(opacity).ownButtonDrag(enabled).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
+            interactionSource = interaction, indication = null, onClick = controlActivation(enabled, onClick)), contentAlignment = androidx.compose.ui.Alignment.Center) {
             Icon(painterResource(resource), label, Modifier.size(iconSize))
         }
-    } else if (glass) LiquidGlassSurface(modifier.alpha(if (enabled) 1f else .38f), pressFeedback = enabled) {
+    } else if (glass) LiquidGlassSurface(modifier, pressFeedback = enabled) {
         anchor?.captureInk()
         ActionIconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(resource), label, Modifier.size(iconSize)) }
     } else ActionIconButton(onClick, modifier, enabled = enabled) {
@@ -70,7 +71,7 @@ internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () 
         label.contains("Settings", true) || label.contains("Configure", true) -> R.drawable.ic_settings
         else -> R.drawable.ic_more
     }
-    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).alpha(if (enabled) 1f else .38f)) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         GlassActionButton(icon, label, Modifier.fillMaxWidth(), enabled = enabled, onClick = onClick)
     }
 }

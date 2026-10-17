@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -10,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -50,8 +50,16 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
                     advancedRepeat?.queueEnd == QueueEnd.NextQueue -> "Q"
                     else -> null
                 }
-                if (badge != null) Text(badge, fontSize = 10.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, modifier = Modifier.clearAndSetSemantics {})
+                // The icon owns the single live description. Decorative variants keep
+                // fixed bounds and fade independently, even when reversed mid-transition.
+                Box(Modifier.size(24.dp).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+                    listOf("1", "■", "Ⅱ", "Q").forEach { variant ->
+                        val opacity by animateControlStateFloat(if (badge == variant) 1f else 0f, badge == variant, "Repeat badge $variant")
+                        if (opacity > 0f) Text(variant, fontSize = 10.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            modifier = Modifier.graphicsLayer { alpha = opacity })
+                    }
+                }
             }
         }
     }
@@ -65,7 +73,7 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
     advancedRepeat: AdvancedRepeat? = null) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columnWidth = if (value.centered) (maxWidth / value.columns.size).coerceAtLeast(48.dp) else if (value.small) 48.dp else 64.dp
-        Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner).horizontalScroll(rememberScrollState()).testTag("player-action-slots")) {
+        Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner).controlHorizontalScroll(rememberScrollState()).testTag("player-action-slots")) {
             value.playbackColumns.forEach { column -> Column(Modifier.width(columnWidth)) {
                 kotlin.repeat(value.rows) { row ->
                     val slot = ActionSlot(row, column)
@@ -78,17 +86,18 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                         else -> false
                     }
                     val mode = action in setOf(PlayerAction.Shuffle, PlayerAction.Repeat, PlayerAction.Lyrics, PlayerAction.Pin)
+                    val opacity by animateControlStateFloat(if (mode && !active) .5f else 1f, !mode || active, "Player action state")
                     Box(Modifier.fillMaxWidth().height(48.dp).clip(Corners.card)
                         .testTag("player-slot-${slot.key}")
                         .semantics {
                             if (action == null) contentDescription = "Empty player action slot, ${slot.label}"
                             if (mode) { selected = active; stateDescription = label(action!!) }
                         }
-                        .ownButtonDrag().combinedClickable(interactionSource = null, indication = null, onClick = { if (action != null) onAction(action) },
+                        .ownButtonDrag().combinedClickable(interactionSource = null, indication = null, onClick = controlActivation(action != null) { if (action != null) onAction(action) },
                             onLongClickLabel = if (action == PlayerAction.Repeat && onRepeatOptions != null) "Repeat options" else "Customize player actions",
                             onLongClick = if (action == PlayerAction.Repeat && onRepeatOptions != null) onRepeatOptions else onCustomize),
                         contentAlignment = Alignment.Center) {
-                        if (action != null) CompositionLocalProvider(LocalContentColor provides LocalContentColor.current.copy(alpha = if (mode && !active) .5f else 1f)) {
+                        if (action != null) CompositionLocalProvider(LocalContentColor provides LocalContentColor.current.copy(alpha = LocalContentColor.current.alpha * opacity)) {
                             PlayerActionGlyph(action, label(action), repeat, count, advancedRepeat)
                         }
                     }

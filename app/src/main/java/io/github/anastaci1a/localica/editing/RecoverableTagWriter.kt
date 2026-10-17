@@ -8,6 +8,9 @@ import android.system.OsConstants
 import android.util.AtomicFile
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.TrackSnapshot
+import io.github.anastaci1a.localica.library.documentIdentity
+import io.github.anastaci1a.localica.playback.NativeReaders
+import io.github.anastaci1a.localica.playback.RecoveryAdmission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
@@ -49,25 +52,76 @@ class AndroidEditableDocuments(context: Context) : EditableDocuments {
     }
 }
 
-/** A durable original and journal precede every destructive byte write; rollback is verified too. */
-class RecoverableTagWriter(private val directory: File, private val documents: EditableDocuments) {
+/** The existing single journal owns restart recovery; native admission also tracks verified bytes. */
+class RecoverableTagWriter(private val directory: File, private val documents: EditableDocuments,
+    private val readers: NativeReaders = NativeReaders()) {
     private val gate = Mutex()
     private val journal get() = AtomicFile(File(directory, "pending.json"))
+    private var unsafe: Recovery? = null
+    private var verified: Recovery? = null
     data class Recovery(val track: Track, val uri: String, val original: File, val hash: String)
-    fun pending(): Recovery? {
+
+    /** Startup and every later probe share the same mutex as outcome publication. */
+    suspend fun initialize() = withContext(Dispatchers.IO) { gate.withLock { inspect() }; Unit }
+    suspend fun pending(): Recovery? = withContext(Dispatchers.IO) { gate.withLock { inspect() } }
+
+    private fun inspect(): Recovery? = try {
+        val pending = readPending()
+        check(pending != null || unsafe == null) { "The tag recovery record disappeared before byte verification." }
+        check(unsafe == null || (pending != null && sameRecord(pending, unsafe))) {
+            "The retained recovery record changed before byte verification."
+        }
+        when {
+            pending == null || sameRecord(pending, verified) -> readers.publishRecovery(RecoveryAdmission.Clear)
+            else -> {
+                unsafe = pending
+                readers.publishRecovery(RecoveryAdmission.Pending(documentIdentity(pending.uri)))
+            }
+        }
+        pending
+    } catch (failure: Exception) {
+        val message = "Tag recovery could not be read. Retry Tag editing jobs and recovery in Settings; keep the retained original. ${failure.message.orEmpty()}"
+        val remembered = unsafe
+        if (remembered != null && !journal.baseFile.exists() &&
+            !File(directory, "pending.json.bak").exists() && !File(directory, "pending.json.new").exists()) {
+            // The running writer still knows the only affected source. Do not disable unrelated
+            // playback just because its retained record is unexpectedly unavailable.
+            readers.publishRecovery(RecoveryAdmission.Pending(documentIdentity(remembered.uri), message))
+        } else readers.publishRecovery(RecoveryAdmission.Unknown(message))
+        throw failure
+    }
+
+    private fun readPending(): Recovery? {
+        // A .new artifact is ambiguous on newer Android. Do not claim checked storage-commit or
+        // power-loss durability from AtomicFile.finishWrite returning normally.
+        check(!File(directory, "pending.json.new").exists()) { "An unfinished recovery journal needs verification." }
         if (!journal.baseFile.exists() && !File(directory, "pending.json.bak").exists()) return null
         val json = JSONObject(journal.readFully().toString(Charsets.UTF_8))
-        return Recovery(TrackSnapshot.decode(json.getString("track")), json.getString("uri"),
-            File(directory, json.getString("original")), json.getString("hash"))
+        val track = TrackSnapshot.decode(json.getString("track"))
+        val uri = json.getString("uri")
+        val original = File(directory, json.getString("original"))
+        val hash = json.getString("hash")
+        check(uri.isNotBlank() && track.id.isNotBlank() && documentIdentity(uri) == documentIdentity(track.id)) {
+            "Recovery source identity does not match its song."
+        }
+        check(original.parentFile?.canonicalFile == directory.canonicalFile && original.name.startsWith("original.")) {
+            "Recovery copy location is invalid."
+        }
+        check(hash.matches(Regex("[0-9a-f]{64}"))) { "Recovery verification hash is invalid." }
+        // Missing/bad backup does not make the known source identity ambiguous. Keep it selectively
+        // blocked; recover() verifies the retained bytes before any replacement.
+        return Recovery(track, uri, original, hash)
     }
+
     fun canWrite(track: Track) = documents.writable(track) != null
 
     suspend fun edit(track: Track, patch: TagPatch): Track = withContext(Dispatchers.IO) { gate.withLock {
-        check(pending() == null) { "Recover the interrupted tag edit before making another change." }
+        check(inspect() == null) { "Recover the interrupted tag edit before making another change." }
         patch.validate()
         val extension = track.fileName.substringAfterLast('.', "").lowercase()
         require(extension in TagCodec.extensions) { "${extension.ifEmpty { "This format" }} is read-only for tag editing." }
         val uri = documents.writable(track) ?: error("Grant write access to this song’s folder first.")
+        check(documentIdentity(uri) == documentIdentity(track.id)) { "The writable document does not match this song’s playback source." }
         directory.mkdirs()
         // Unjournaled files are preparation leftovers; no document has been touched yet.
         directory.listFiles()?.forEach { it.delete() }
@@ -82,32 +136,61 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         currentCoroutineContext().ensureActive()
         check(hash(documents.open(uri)) == originalHash) { "The song changed during editing. Reload it and try again." }
         val recovery = Recovery(track, uri, original, originalHash)
-        writeJournal(recovery)
-        // Cancellation must wait until the document is verified or rolled back.
+        unsafe = recovery
+        verified = null
+        readers.publishRecovery(RecoveryAdmission.Pending(documentIdentity(uri)))
+        try { writeJournal(recovery) }
+        catch (failure: Exception) {
+            // This transaction has not entered replace; its original document is still untouched.
+            markVerified(recovery)
+            throw failure
+        }
+        // Cancellation must wait until the document is verified or rollback has finished. Pending
+        // admission was published while the caller still owns its drained temporary reader lease.
         withContext(NonCancellable) {
             try {
                 documents.replace(uri, candidate)
                 check(hash(documents.open(uri)) == hash(candidate.inputStream())) { "Saved file did not verify." }
+                markVerified(recovery)
             } catch (failure: Exception) {
                 try { restore(recovery) }
-                catch (_: Exception) { error("Write interrupted. The original is retained; use Recover tag edit in Settings.") }
+                catch (rollback: Exception) {
+                    failure.addSuppressed(rollback)
+                    throw IOException("Write interrupted. The original is retained; use Recover tag edit in Settings.", failure)
+                }
                 throw IOException("Write failed; the original was restored. ${failure.message.orEmpty()}", failure)
             }
         }
         track.copy(uri = uri)
     } }
-    suspend fun complete() = withContext(Dispatchers.IO) { gate.withLock { clear() } }
+
+    suspend fun complete() = withContext(Dispatchers.IO) { gate.withLock {
+        val pending = inspect()
+        check(pending == null || sameRecord(pending, verified)) { "Unverified recovery cannot be discarded." }
+        clear()
+    } }
     suspend fun recover(): Track = withContext(Dispatchers.IO + NonCancellable) { gate.withLock {
-        val recovery = pending() ?: error("No interrupted edit.")
+        val recovery = inspect() ?: error("No interrupted edit.")
         restore(recovery)
         recovery.track
     } }
+    private fun sameRecord(left: Recovery, right: Recovery?) = right != null &&
+        left.uri == right.uri && left.original == right.original && left.hash == right.hash
+
+    private fun markVerified(recovery: Recovery) {
+        verified = recovery
+        unsafe = null
+        readers.publishRecovery(RecoveryAdmission.Clear)
+    }
     private fun restore(recovery: Recovery) {
+        check(recovery.original.isFile) { "Recovery copy is missing. Keep the recovery record and restore this song from another backup." }
         check(hash(recovery.original.inputStream()) == recovery.hash) { "Recovery copy failed verification; original retained." }
         if (hash(runCatching { documents.open(recovery.uri) }.getOrElse { ByteArrayInputStream(byteArrayOf()) }) != recovery.hash) {
             documents.replace(recovery.uri, recovery.original)
         }
         check(hash(documents.open(recovery.uri)) == recovery.hash) { "Recovery could not be verified." }
+        // Byte safety is published before metadata refresh, which has its own durable retry journal.
+        markVerified(recovery)
         clear()
     }
     private fun writeJournal(recovery: Recovery) {

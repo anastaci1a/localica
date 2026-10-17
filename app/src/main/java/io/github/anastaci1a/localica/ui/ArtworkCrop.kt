@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.editing.CoverImages
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -37,14 +40,8 @@ internal fun ArtworkCrop(uri: String, onDismiss: () -> Unit, onCropped: (String)
     var zoom by rememberSaveable(uri) { mutableFloatStateOf(1f) }
     var centerX by rememberSaveable(uri) { mutableFloatStateOf(.5f) }
     var centerY by rememberSaveable(uri) { mutableFloatStateOf(.5f) }
-    val bitmap by produceState<Bitmap?>(null, uri) {
-        try {
-            value = withContext(Dispatchers.IO) {
-                val bytes = CoverImages(context).read(uri, 4096).bytes
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            }
-        } catch (error: Exception) { failure = error.message ?: "Couldn’t open this image." }
-    }
+    val load = rememberCropImage(uri)
+    val bitmap = (load as? CropImageState.Ready)?.bitmap
     fun constrain(image: Bitmap) {
         val half = minOf(image.width, image.height) / zoom / 2f
         centerX = centerX.coerceIn(half / image.width, 1f - half / image.width)
@@ -80,9 +77,9 @@ internal fun ArtworkCrop(uri: String, onDismiss: () -> Unit, onCropped: (String)
                             drawLine(Color.White.copy(alpha = .45f), Offset(0f, at), Offset(size.width, at), 1.dp.toPx())
                         }
                     }
-                } ?: run { if (failure == null) CircularProgressIndicator() }
+                } ?: run { if (load is CropImageState.Loading) CircularProgressIndicator() }
             }
-            failure?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            (failure ?: (load as? CropImageState.Failed)?.message)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text("Zoom", style = MaterialTheme.typography.labelLarge)
             InterfaceSlider(zoom, { zoom = it; bitmap?.let(::constrain) },
                 Modifier.semantics { contentDescription = "Crop zoom" }, valueRange = 1f..8f, enabled = !saving)
@@ -112,11 +109,73 @@ internal fun ArtworkCrop(uri: String, onDismiss: () -> Unit, onCropped: (String)
                                 android.net.Uri.fromFile(file).toString()
                             }
                             onCropped(output)
-                        } catch (error: Exception) { failure = error.message ?: "Couldn’t crop this image." }
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (error: Exception) { failure = error.message ?: "Couldn’t crop this image." }
                         finally { saving = false }
                     }
                 }) { Text(if (saving) "Preparing…" else "Use square crop") }
             }
         }
     }
+}
+
+/** One composition-owned load per source; no bitmap or coroutine is restored as saved state. */
+internal sealed interface CropImageState {
+    data object Loading : CropImageState
+    data class Ready(val bitmap: Bitmap) : CropImageState
+    data class Failed(val message: String) : CropImageState
+}
+
+internal enum class CropLoadPhase { Started, Reading, Decoding, Ready, Failed, Cancelled, Disposed }
+/** Deliberately contains no URI or exception text. Observers are for failure-only test diagnostics. */
+internal data class CropLoadEvent(val generation: Any, val phase: CropLoadPhase, val active: Boolean, val errorType: String? = null)
+internal fun interface CropImageLoader {
+    suspend fun load(uri: String, phase: (CropLoadPhase) -> Unit): Bitmap?
+}
+internal val LocalCropImageLoader = staticCompositionLocalOf<CropImageLoader?> { null }
+internal val LocalCropLoadObserver = staticCompositionLocalOf<((CropLoadEvent) -> Unit)?> { null }
+
+@Composable
+private fun rememberCropImage(uri: String): CropImageState {
+    val context = LocalContext.current
+    val loader = LocalCropImageLoader.current ?: remember(context) {
+        CropImageLoader { source, phase ->
+            withContext(Dispatchers.IO) {
+                phase(CropLoadPhase.Reading)
+                val bytes = CoverImages(context).read(source, 4096).bytes
+                phase(CropLoadPhase.Decoding)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+        }
+    }
+    val observer = LocalCropLoadObserver.current
+    val state = remember(uri, loader) { mutableStateOf<CropImageState>(CropImageState.Loading) }
+    val generation = remember(uri, loader) { Any() }
+    LaunchedEffect(uri, loader) {
+        val job = currentCoroutineContext()
+        fun report(phase: CropLoadPhase, errorType: String? = null) {
+            observer?.invoke(CropLoadEvent(generation, phase, job[kotlinx.coroutines.Job]?.isActive == true, errorType))
+        }
+        report(CropLoadPhase.Started)
+        try {
+            val image = loader.load(uri) { report(it) }
+            // A non-cooperative old loader must not publish after disposal or source replacement.
+            currentCoroutineContext().ensureActive()
+            state.value = CropImageState.Ready(image ?: error("Couldn’t decode the image. Choose it again."))
+            report(CropLoadPhase.Ready)
+        } catch (cancelled: CancellationException) {
+            report(CropLoadPhase.Cancelled)
+            throw cancelled
+        } catch (error: Exception) {
+            // A cancelled non-cooperative read can throw an ordinary error on its way out.
+            try { currentCoroutineContext().ensureActive() }
+            catch (cancelled: CancellationException) { report(CropLoadPhase.Cancelled); throw cancelled }
+            state.value = CropImageState.Failed(error.message ?: "Couldn’t open this image.")
+            report(CropLoadPhase.Failed, error.javaClass.simpleName)
+        }
+    }
+    DisposableEffect(generation) {
+        onDispose { observer?.invoke(CropLoadEvent(generation, CropLoadPhase.Disposed, false)) }
+    }
+    return state.value
 }
