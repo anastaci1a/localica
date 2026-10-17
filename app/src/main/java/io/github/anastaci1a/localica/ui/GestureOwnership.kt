@@ -28,12 +28,24 @@ internal class ScrollGestureOwnership {
     private var released = false
     var contentOwned = false
         private set
-    val mayHandoff get() = active && !contentOwned && !handoffBlocked
+    var drawerOwned = false
+        private set
+    private var boundaryTravel = 0f
+    val mayHandoff get() = active && !contentOwned && !drawerOwned && !handoffBlocked
     val mayCommitPull get() = released && !contentOwned && !handoffBlocked
 
-    fun begin() { active = true; contentOwned = false; handoffBlocked = false; released = false }
-    fun recordScroll(consumed: Float) { if (active && consumed != 0f) contentOwned = true }
-    fun blockHandoff() { handoffBlocked = true }
+    fun begin() { active = true; contentOwned = false; drawerOwned = false; boundaryTravel = 0f; handoffBlocked = false; released = false }
+    fun recordScroll(consumed: Float) { if (active && !drawerOwned && consumed != 0f) contentOwned = true }
+    fun claimDrawer() { if (mayHandoff) drawerOwned = true }
+    fun recordBoundary(delta: Float) { if (active && contentOwned && !handoffBlocked) boundaryTravel += delta }
+    /** Consume the retrace before the child can scroll away from its boundary. */
+    fun consumeRetrace(delta: Float): Float {
+        if (!active || !contentOwned || handoffBlocked || boundaryTravel * delta >= 0f) return 0f
+        val consumed = if (kotlin.math.abs(delta) <= kotlin.math.abs(boundaryTravel)) delta else -boundaryTravel
+        boundaryTravel += consumed
+        return consumed
+    }
+    fun blockHandoff() { handoffBlocked = true; boundaryTravel = 0f }
     fun release() { if (active) released = true }
     // Keep the decision through the trailing fling; only a new down resets it.
     fun end() { active = false }
