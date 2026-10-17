@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
@@ -101,22 +100,22 @@ internal fun <T : Any> OrderedGlassBubbles(items: List<T>, selected: Set<T>, lab
     val total = widths.values.fold(0.dp) { sum, width -> sum + width } + 8.dp * (items.size - 1).coerceAtLeast(0)
     val shadowInset = glassShadowInset()
     Box(modifier.fillMaxWidth().padding(vertical = ListPillVerticalInset).nestedScroll(HorizontalGestureOwner)
-        .shadowViewportOutset(shadowInset).horizontalScroll(scroll)
+        .shadowViewportOutset(shadowInset).controlHorizontalScroll(scroll)
         .padding(vertical = shadowInset).padding(horizontal = horizontalInset).width(total).height(listPillTargetHeight())) {
         GlassShadowScope(Modifier.fillMaxSize()) {
         items.forEach { item -> key(item) {
+            val selection by animateControlStateFloat(if (item in selected) .07f else 0f, item in selected, "Library filter selection", reducedMotion)
             val anchor = rememberGlassAnchor()
             val source = LocalFrostedBackdrop.current
             SideEffect { anchor.source = source; anchor.face = { Text(label(item), style = style, maxLines = 1) } }
             Box(Modifier.offset { IntOffset(offsets.getValue(item).value.roundToInt(), 0) }
                 .zIndex(if (item in moving) 2f else if (item in selected) 1f else 0f)
                 .width(widths.getValue(item)).fillMaxHeight().testTag(tag(item))
-                .ownButtonDrag(enabled && role != Role.Checkbox).combinedClickable(enabled = enabled, role = role, onClick = { onSelect(item) },
+                .ownButtonDrag(enabled && role != Role.Checkbox).combinedClickable(enabled = enabled, role = role, onClick = controlActivation(enabled) { onSelect(item) },
                     onLongClick = onLongClick?.let { callback -> { callback(item) } })
                 .semantics { this.selected = item in selected }, contentAlignment = Alignment.Center) {
                 LiquidGlassSurface(Modifier.fillMaxWidth().height(listPillHeight()).glassAnchor(anchor),
-                    tint = if (item in selected) androidx.compose.ui.graphics.Color.Black.copy(alpha = .07f)
-                        else androidx.compose.ui.graphics.Color.Transparent) {
+                    tint = androidx.compose.ui.graphics.Color.Black.copy(alpha = selection)) {
                     anchor.captureInk()
                     Text(label(item), Modifier.align(Alignment.Center), style = style, maxLines = 1)
                 }

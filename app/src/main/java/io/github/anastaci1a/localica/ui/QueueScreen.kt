@@ -7,7 +7,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.anastaci1a.localica.R
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.activity.compose.BackHandler
@@ -16,9 +15,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +32,7 @@ import io.github.anastaci1a.localica.library.SongListView
 fun QueueScreen(state: QueueUiState, controller: QueueController?, library: LibraryUiState = LibraryUiState(loading = false),
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
-    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null) {
+    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null, listBackEnabled: Boolean = false) {
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
@@ -108,45 +105,23 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (active == null) Text("Tap a song in Library to start a queue.")
                 }
-            }, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor, initialPlayingPosition = onMinimize != null)
+            }, listBackEnabled = listBackEnabled, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor, initialPlayingPosition = onMinimize != null)
     }
     }
     if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center) {
-        val playingIndex = state.library.queues.indexOfFirst { it.id == state.library.activeId }.coerceAtLeast(0)
-        val queueList = rememberLazyListState(initialFirstVisibleItemIndex = playingIndex)
-        LaunchedEffect(selector) { if (selector) queueList.requestScrollToItem(playingIndex) }
-        Box(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+            val showHeading = maxHeight >= 240.dp
             Column(Modifier.padding(vertical = 12.dp)) {
-                Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (showHeading) Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(painterResource(R.drawable.ic_queue), null, Modifier.size(24.dp))
                     Text("Queues", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.titleLarge)
                 }
-                SelectionViewport(Modifier.weight(1f, fill = false)) { overscroll ->
-                LazyColumn(Modifier.selectableGroup().padding(horizontal = 8.dp), state = queueList, overscrollEffect = overscroll) {
-                    itemsIndexed(state.library.queues, key = { _, queue -> queue.id }) { index, queue ->
-                        val chosen = queue.id == active?.id
-                        Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
-                            modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ReorderHandle("Reorder " + queue.name) { controller?.moveQueue(queue.id, it) }
-                                Row(Modifier.weight(1f).selectable(chosen, role = Role.RadioButton,
-                                    onClick = { controller?.switchTo(queue.id); selector = false }).heightIn(min = 56.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                                        if (chosen) MarqueeTitle("${index + 1}. ${queue.name}", reducedMotion,
-                                            style = MaterialTheme.typography.bodyLarge)
-                                        else Text("${index + 1}. ${queue.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        if (queue.id == state.library.activeId) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-                                ActionIcon(R.drawable.ic_edit, "Rename " + queue.name, glass = false, quiet = true) { renameId = queue.id }
-                                ActionIcon(R.drawable.ic_close, "Delete " + queue.name, glass = false, quiet = true) { deleting = setOf(queue.id) }
-                            }
-                        }
-                    }
-                }
-                }
+                QueueSelectorList(state.library.queues, active?.id, state.library.activeId, isPlaying, reducedMotion,
+                    enabled = selector && enabled && controller != null, modifier = Modifier.weight(1f, fill = false),
+                    onSelect = { controller?.switchTo(it); selector = false }, onRename = { renameId = it },
+                    onDelete = { deleting = setOf(it) }, onOffset = { id, offset -> controller?.moveQueue(id, offset) },
+                    onMove = { id, before, complete -> controller?.moveQueueBefore(id, before, complete) ?: complete(false) })
                 SideEffect { removeOthersAnchor.face = { Text("Remove all other queues", maxLines = 1, overflow = TextOverflow.Ellipsis) } }
                 if (state.library.queues.size > 1) GlassActionButton(R.drawable.ic_trash, "Remove all other queues",
                     Modifier.padding(horizontal = 12.dp, vertical = 8.dp).glassAnchor(removeOthersAnchor),
@@ -183,7 +158,7 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
         var removals by remember(pending) { mutableStateOf(setOfNotNull(pending.suggestedRemoval)) }
         GlassAlertDialog(onDismissRequest = { controller?.cancelCreation() }, title = { Text("Make room for a new queue") },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.controlVerticalScroll(rememberScrollState())) {
                     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     Text("Queue limit: ${state.settings.maximum}. Choose queues to remove. Your current queue is protected.")
                     val inactive = state.library.queues.filterNot { it.id == state.library.activeId }
@@ -209,31 +184,31 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
 }
 
 @Composable
-internal fun QueueSettingsControls(settings: QueueSettings, section: String = "Playback and queues", onChange: (QueueSettings) -> Unit) {
+internal fun QueueSettingsControls(settings: QueueSettings, section: String = "Playback and queues", onChange: ((QueueSettings) -> QueueSettings) -> Unit) {
     var limitOpen by remember { mutableStateOf(false) }
     var thresholdOpen by remember { mutableStateOf(false) }
     if (section == "Song tap behavior") {
         SettingsHeading("Default song action")
-        ChoicePreference("Song tap", settings.songTap, SongTap.entries, { it.label() }) { onChange(settings.copy(songTap = it)) }
+        ChoicePreference("Song tap", settings.songTap, SongTap.entries, { it.label() }) { action -> onChange { it.copy(songTap = action) } }
         SettingsHeading("List overrides")
         SongListView.entries.forEach { view ->
             ChoicePreference(view.label, settings.tapOverrides[view], listOf(null) + SongTap.entries,
                 { it?.label() ?: "Inherit app default" }) { action ->
-                onChange(settings.copy(tapOverrides = if (action == null) settings.tapOverrides - view else settings.tapOverrides + (view to action)))
+                onChange { it.copy(tapOverrides = if (action == null) it.tapOverrides - view else it.tapOverrides + (view to action)) }
             }
         }
-        ActionTextButton(onClick = { onChange(settings.copy(tapOverrides = emptyMap())) }) { Text("Reset all tap overrides") }
+        ActionTextButton(onClick = { onChange { it.copy(tapOverrides = emptyMap()) } }) { Text("Reset all tap overrides") }
     } else {
         SettingsHeading("Playback")
-        BooleanPreference("Preload next track", settings.preloadNext) { onChange(settings.copy(preloadNext = it)) }
-        ChoicePreference("Previous button", settings.previousBehavior, PreviousBehavior.entries, { it.label() }) {
-            onChange(settings.copy(previousBehavior = it))
+        BooleanPreference("Preload next track", settings.preloadNext) { enabled -> onChange { it.copy(preloadNext = enabled) } }
+        ChoicePreference("Previous button", settings.previousBehavior, PreviousBehavior.entries, { it.label() }) { behavior ->
+            onChange { it.copy(previousBehavior = behavior) }
         }
         if (settings.previousBehavior == PreviousBehavior.RestartAfterThreshold) {
             SettingsLink("Restart threshold", "${settings.previousThresholdSeconds} seconds; earlier taps go to the previous song") { thresholdOpen = true }
         }
         SettingsHeading("Queues")
-        ChoicePreference("Switch queue", settings.switching, QueueSwitch.entries, { it.label() }) { onChange(settings.copy(switching = it)) }
+        ChoicePreference("Switch queue", settings.switching, QueueSwitch.entries, { it.label() }) { switching -> onChange { it.copy(switching = switching) } }
         SettingsLink("Maximum queues: " + (settings.maximum ?: "unlimited"), "A limit never deletes existing queues automatically.") { limitOpen = true }
     }
     if (thresholdOpen) {
@@ -244,7 +219,8 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = !valid)
         }, confirmButton = { ActionTextButton(enabled = valid, onClick = {
-            onChange(settings.copy(previousThresholdSeconds = seconds.toInt())); thresholdOpen = false
+            val threshold = seconds.toInt()
+            onChange { it.copy(previousThresholdSeconds = threshold) }; thresholdOpen = false
         }) { Text("Save") } }, dismissButton = { ActionTextButton(onClick = { thresholdOpen = false }) { Text("Cancel") } })
     }
     if (limitOpen) {
@@ -254,7 +230,8 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 isError = limit.isNotBlank() && (limit.toIntOrNull() ?: 0) < 1)
         }, confirmButton = { ActionTextButton(enabled = limit.isBlank() || (limit.toIntOrNull() ?: 0) > 0, onClick = {
-            onChange(settings.copy(maximum = limit.toIntOrNull())); limitOpen = false
+            val maximum = limit.toIntOrNull()
+            onChange { it.copy(maximum = maximum) }; limitOpen = false
         }) { Text("Save queue limit") } }, dismissButton = { ActionTextButton(onClick = { limitOpen = false }) { Text("Cancel") } })
     }
 }

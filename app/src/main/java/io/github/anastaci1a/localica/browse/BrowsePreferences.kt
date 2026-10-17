@@ -5,9 +5,13 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 
 enum class Presentation(val label: String) { List("List"), Compact("Compact gallery"), Standard("Standard gallery"), Large("Large gallery") }
-enum class ExtraInfo { Automatic, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
+enum class ExtraInfo { Automatic, Inherited, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
 enum class SongGrouping(val label: String) { None("None"), Artist("Artist"), AlbumArtist("Album Artist"), Composer("Composer") }
-enum class ListSize { Compact, Normal, Large }
+// Names are persisted; density order is explicit so existing values stay compatible.
+enum class ListSize { Compact, Normal, Large, Small, Smallest;
+    val trailingInformation get() = this == Compact || this == Small || this == Smallest
+    companion object { val densityOrder = listOf(Smallest, Small, Compact, Normal, Large) }
+}
 data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boolean = true,
     val presentation: Presentation = Presentation.List, val extraInfo: ExtraInfo = ExtraInfo.Automatic,
     val quickSearch: Boolean = true, val songGrouping: SongGrouping = SongGrouping.None,
@@ -19,23 +23,10 @@ data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boo
 class BrowsePreferences(context: Context) {
     private val store = context.getSharedPreferences("browse-style", Context.MODE_PRIVATE)
     private val legacyStore = context.getSharedPreferences("library-query", Context.MODE_PRIVATE)
-    private val legacy = AndroidLibraryQueryPreferences(context)
-    fun type(route: BrowseRoute): String = when {
-        route.search -> "search"
-        route.collection != null -> "contents.${route.collection.kind}"
-        else -> "catalog.${route.filter?.name ?: when (route.tab) {
-            MainTab.Songs -> MediaKind.Song.name
-            MainTab.Albums -> MediaKind.Album.name
-            MainTab.Artists -> MediaKind.Artist.name
-            MainTab.AlbumArtists -> MediaKind.AlbumArtist.name
-            MainTab.Folders -> MediaKind.Folder.name
-            MainTab.Playlists -> MediaKind.Playlist.name
-            else -> route.tab.name
-        }}"
-    }
+    fun type(route: BrowseRoute): String = BrowsePreferenceKeys.type(route)
     init { migrateCatalogScopes() }
     // Collection identities remain independent; roots share their catalog type.
-    fun allowsOverride(route: BrowseRoute) = route.collection != null || route.search
+    fun allowsOverride(route: BrowseRoute) = BrowsePreferenceKeys.allowsOverride(route)
     private fun migrateCatalogScopes() {
         if (store.getBoolean("shared-catalog-scopes", false)) return
         val edit = store.edit()
@@ -72,25 +63,62 @@ class BrowsePreferences(context: Context) {
         all.keys.filter { it.startsWith("catalog.") && ".tab." in it }.forEach { edit.remove(it) }
         edit.putBoolean("shared-catalog-scopes", true).apply()
     }
-    private fun listKey(route: BrowseRoute): String = route.collection?.let { "${type(route)}.${it.kind}.${it.id.length}:${it.id}" }
-        ?: "${type(route)}.tab.${route.tab}.${route.filter?.name ?: "All"}"
-    fun overridden(route: BrowseRoute) = allowsOverride(route) && store.contains("${listKey(route)}.sort")
+    private fun listKey(route: BrowseRoute) = BrowsePreferenceKeys.list(route)
+    fun overridden(route: BrowseRoute) = sortSnapshot().overridden(route)
+    fun sortSnapshot() = BrowseSortSnapshot.fromValues(store.all, legacyStore.all)
+    fun observeSorts(onChange: (BrowseSortSnapshot) -> Unit): () -> Unit =
+        observeChanges({ it.isOrderingPreference() }) { onChange(sortSnapshot()) }
+
+    private fun String.isOrderingPreference() = this == "sort" || this == "ascending" ||
+        endsWith(".sort") || endsWith(".ascending") || endsWith(".group")
+
+    /** Both consumers observe current and legacy stores, but information-only changes never
+     * invalidate sorted artwork or a source+sort query result. */
+    private fun observeChanges(relevant: (String) -> Boolean, onChange: () -> Unit): () -> Unit {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || relevant(key)) onChange()
+        }
+        store.registerOnSharedPreferenceChangeListener(listener)
+        legacyStore.registerOnSharedPreferenceChangeListener(listener)
+        return {
+            store.unregisterOnSharedPreferenceChangeListener(listener)
+            legacyStore.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
     fun read(route: BrowseRoute): BrowseStyle {
-        val key = if (overridden(route)) listKey(route) else type(route)
-        val view = BrowseQueries.scope(route)
-        val legacyKey = if (view == SongListView.Songs) "sort" else "${view.name}.sort"
-        val compatible = !route.search && route.collection?.kind != MediaKind.Queue &&
-            (route.collection != null || route.tab == MainTab.Songs || route.filter == MediaKind.Song)
-        val default = if (compatible && legacyStore.contains(legacyKey)) legacy.read(view) else BrowseQueries.defaultQuery(route)
-        return BrowseStyle(store.enumValue<TrackSort>("$key.sort") ?: default.sort,
-            store.getBoolean("$key.ascending", default.ascending),
+        val sorts = sortSnapshot()
+        val key = if (sorts.overridden(route)) listKey(route) else type(route)
+        val order = sorts.query(route)
+        return BrowseStyle(order.sort, order.ascending,
             store.enumValue<Presentation>("$key.presentation") ?: Presentation.List,
-            store.enumValue<ExtraInfo>("$key.info") ?: ExtraInfo.Automatic,
+            (store.enumValue<ExtraInfo>("$key.info") ?: if (route.allowsInheritedInformation()) ExtraInfo.Inherited else ExtraInfo.Automatic)
+                .let { if (it == ExtraInfo.Inherited && !route.allowsInheritedInformation()) ExtraInfo.Automatic else it },
             store.getBoolean("$key.quick-search", true),
-            store.enumValue<SongGrouping>("$key.group", if (route.collection?.kind == MediaKind.Album)
-                store.getString("catalog.Album.group", null) else null) ?: SongGrouping.None,
+            sorts.grouping(route),
             store.getInt("$key.columns", 0).takeIf { it in 1..5 },
             store.enumValue<ListSize>("$key.list-size") ?: ListSize.Normal)
+    }
+    /** Reuse the artwork resolver and one immutable read for every row type. */
+    fun informationStyles(): Map<MediaKind, BrowseStyle> {
+        val values = store.all
+        val sorts = BrowseSortSnapshot.fromValues(values, legacyStore.all)
+        return MediaKind.entries.associateWith { kind ->
+            val route = if (kind == MediaKind.Queue) BrowseRoute(MainTab.Queues)
+                else BrowseRoute(MainTab.Library, filter = kind)
+            val key = BrowsePreferenceKeys.type(route)
+            val info = ExtraInfo.entries.firstOrNull { it.name == values["$key.info"] }
+                ?.takeUnless { it == ExtraInfo.Inherited } ?: ExtraInfo.Automatic
+            val order = sorts.query(route)
+            BrowseStyle(sort = order.sort, ascending = order.ascending, extraInfo = info)
+        }
+    }
+    fun observeInformation(onChange: (Map<MediaKind, BrowseStyle>) -> Unit): () -> Unit {
+        val stop = observeChanges({ it.isOrderingPreference() || (it.startsWith("catalog.") && it.endsWith(".info")) }) {
+            onChange(informationStyles())
+        }
+        // Close the gap between an initial read and listener registration.
+        onChange(informationStyles())
+        return stop
     }
     fun write(route: BrowseRoute, value: BrowseStyle, override: Boolean) {
         val key = if (override && allowsOverride(route)) listKey(route) else type(route)
@@ -118,3 +146,13 @@ class BrowsePreferences(context: Context) {
             .forEach { edit.remove("$key.$it") }
     }
 }
+
+/** Inheritance belongs only to the mixed roots, never a single-type or scoped list. */
+internal fun BrowseRoute.allowsInheritedInformation(): Boolean = collection == null && filter == null &&
+    (if (search) globalSearch else tab == MainTab.Library)
+
+internal fun BrowseRoute.informationChoices(): List<ExtraInfo> =
+    listOf(ExtraInfo.None) + (if (allowsInheritedInformation()) listOf(ExtraInfo.Inherited) else emptyList()) +
+        listOf(ExtraInfo.Automatic) + ExtraInfo.entries.filterNot {
+            it in setOf(ExtraInfo.None, ExtraInfo.Inherited, ExtraInfo.Automatic)
+        }

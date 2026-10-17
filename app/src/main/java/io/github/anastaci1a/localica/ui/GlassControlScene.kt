@@ -21,10 +21,13 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     source: FrostedBackdrop? = LocalFrostedBackdrop.current,
     geometry: DrawScope.() -> LensGeometry, body: () -> GlassShape,
     active: () -> Float = { 1f }, face: () -> Color = { Color.Transparent },
+    prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
     val currentActive by rememberUpdatedState(active)
     val optical by remember { derivedStateOf { currentActive() > 0f } }
-    if (optical) BackdropLease(source)
+    val currentPrepare by rememberUpdatedState(prepare)
+    val sampled by remember { derivedStateOf { currentActive() > 0f || currentPrepare() } }
+    if (sampled) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val renderer = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val mesh = remember { lazy { LensMeshRenderer() } }

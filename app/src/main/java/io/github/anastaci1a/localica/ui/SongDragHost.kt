@@ -9,6 +9,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
@@ -32,7 +33,9 @@ internal fun ForegroundSongDragOverlay(host: SongDragHost) {
             Box(Modifier.offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
                 .size(with(density) { state.viewportWidth.toDp() }, with(density) { state.viewportHeight.toDp() })) {
                 CompositionLocalProvider(LocalFrostedBackdrop provides host.source) {
-                    SongDragOverlay(state, host.reducedMotion)
+                    // The source inset already positions the shared bottom control row.
+                    // Extra standalone-overlay padding would lift X above collection actions.
+                    SongDragOverlay(state, host.reducedMotion, cancelBottomMargin = 0.dp)
                 }
             }
         }

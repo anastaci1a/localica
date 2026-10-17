@@ -8,18 +8,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalView
 import io.github.anastaci1a.localica.navigation.TabLensStyle
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
@@ -56,17 +52,20 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     var pressed by remember { mutableStateOf(false) }
     var raw by remember { mutableFloatStateOf(page) }
     var pressure by remember { mutableFloatStateOf(0f) }
+    var logicalWall by remember { mutableFloatStateOf(1f) }
+    val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    val direction = if (rtl) -1f else 1f
     var chosen by remember { mutableIntStateOf(tabs.indexOf(active).coerceAtLeast(0)) }
     val selected by rememberUpdatedState(onSelect)
-    val view = LocalView.current
+    val haptics by rememberUpdatedState(rememberControlHaptics())
     val appearance = LocalGlassAppearance.current
     var requested by remember { mutableStateOf<Int?>(null) }
     fun focus(index: Int, notify: Boolean = true) {
-        if (index != chosen) view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         chosen = index
         if (notify) selected(tabs[index])
     }
     fun tap(index: Int) {
+        haptics.emit(ControlHaptic.Weak)
         if (tabs[index] == active && abs(page - index) < .001f && !pageDragging) {
             onReselect(tabs[index]); return
         }
@@ -77,9 +76,9 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             else lens.animateTo(index.toFloat(), spring(1f, 650f))
         }
     }
-    LaunchedEffect(page, dragging, pageDragging) {
+    LaunchedEffect(page, dragging, pageDragging, pressed) {
         if (pageDragging) requested = null
-        if (!dragging && requested == null) {
+        if (!pressed && !dragging && requested == null) {
             lens.snapTo(magneticTabPosition(page.coerceIn(0f, tabs.lastIndex.toFloat())))
             val candidate = lens.value.roundToInt().coerceIn(tabs.indices)
             if (candidate != chosen && abs(lens.value - chosen) >= .54f) focus(candidate, false)
@@ -88,14 +87,16 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
     val refractForeground = appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
-    val decorated = rememberFrostedBackdrop(appearance, enabled = refractForeground, dark = false)
+    val legacyOverlay = android.os.Build.VERSION.SDK_INT < 33 && appearance.tabStyle == TabLensStyle.Overlay
+    val recordForeground = refractForeground && !legacyOverlay
+    val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val minimumWidth = maxOf(68.dp, with(density) {
         tabs.maxOf { textMeasurer.measure(androidx.compose.ui.text.AnnotatedString(it.label), labelStyle,
             maxLines = 1, softWrap = false).size.width }.toDp() + 32.dp
     })
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
         // Four destinations fit the normal phone shelf. Preserve larger font targets
         // by allowing the strip to overflow rather than shrinking accessible text.
         val fits = maxWidth >= minimumWidth * tabs.size ||
@@ -105,74 +106,133 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val scroll = rememberScrollState()
         val viewport = with(density) { maxWidth.toPx() }
         val shell = rememberGlassBody({ 0f }, contact = { if (dragging) 1f else 0f }, pressure = { pressure })
-        LiquidGlassSurface(Modifier.fillMaxSize().recordFrostedBackdrop(composite).graphicsLayer {
-            val stretch = if (reduced || !fits) 0f else (-shell.value.strain).coerceIn(0f, .16f) * .25f
-            scaleX = 1f + stretch
-            scaleY = 1f / (1f + stretch)
-            translationX = (if (raw < 0f) -1f else 1f) * size.width * stretch / 2f
-        }.bottomGlassShadow(opacity = shadowOpacity), source, pressFeedback = false, shadow = false,
-            body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale)
-        Box(Modifier.fillMaxSize().clip(CircleShape)) {
-        Box(Modifier.fillMaxHeight().nestedScroll(HorizontalGestureOwner).horizontalScroll(scroll, enabled = !fits && !dragging)
-            .testTag("tab-scroll").observeGlassContact { pressed = it }.pointerInput(tabs, pixels, viewport, fits) {
-                if (!fits) return@pointerInput
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    var started = false
-                    fun move(delta: Float) {
-                        raw += delta / pixels
-                        val low = scroll.value / pixels
-                        val high = ((scroll.value + viewport) / pixels - 1f).coerceAtLeast(low).coerceAtMost(tabs.lastIndex.toFloat())
-                        val bounded = raw.coerceIn(low, high)
-                        pressure = glassEdgePressure(raw - bounded)
-                        val position = magneticTabPosition(bounded).coerceIn(low, high)
-                        scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
-                        val candidate = position.roundToInt().coerceIn(tabs.indices)
-                        if (candidate != chosen && abs(position - chosen) > .52f) focus(candidate)
+        val baseHeight = with(density) { maxHeight.toPx() }
+        val stretch = (-shell.value.strain).coerceIn(0f, .16f) * .25f
+        val rawGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, stretch, logicalWall,
+            false, rtl, reduced, overflow = !fits)
+        val inset = with(density) { 4.dp.toPx() }
+        val insets = SelectorTrackInsets(0f, inset, inset)
+        val atlasGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, 0f, 1f,
+            false, rtl, reduced, overflow = !fits)
+        val inkAtlas = if (legacyOverlay && refractForeground)
+            rememberFrostedBackdrop(listOf(tabs, width, labelStyle, density.density, density.fontScale),
+                dark = false, glassBlur = 0f, whiteTint = 0f) else null
+        val rawTrack = if (fits) androidx.compose.ui.geometry.Rect(rawGeometry.travelStart, rawGeometry.crossStart,
+            rawGeometry.travelEnd, rawGeometry.crossStart + rawGeometry.crossExtent)
+            else androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
+        val selectorBody = rememberGlassBody({ lens.value }, { pressure }, { if (pressed || dragging) 1f else 0f })
+        val rawFrame = rawGeometry.lens(lens.value, tabs.size, insets, false, rtl,
+            if (appearance.tabStyle == TabLensStyle.Classic) GlassShape() else selectorBody.value, rawTrack.height / 2f)
+        val restGeometry = rawGeometry.copy(stretch = 0f)
+        val cross = rememberSelectorCrossFrame(rawFrame.crossFrame(rawGeometry),
+            SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset, (baseHeight / 2f - inset).coerceAtLeast(0f), baseHeight / 2f), pressed || dragging,
+            shell.value == GlassShape() && selectorBody.value == GlassShape(),
+            maximumCorner = rawFrame.bounds.width / 2f, maximumOuterCorner = rawGeometry.travelExtent / 2f,
+            enabled = fits && appearance.tabStyle != TabLensStyle.Classic)
+        val geometry = rawGeometry.copy(crossExtentOverride = cross.shell)
+        val track = if (fits) androidx.compose.ui.geometry.Rect(geometry.travelStart, geometry.crossStart,
+            geometry.travelEnd, geometry.crossStart + geometry.crossExtent) else rawTrack
+        val radius = cross.outerCorner
+        val selectorFrame = if (fits && appearance.tabStyle != TabLensStyle.Classic)
+            rawFrame.withCrossFrame(cross, geometry.cross, false) else rawFrame
+        // Fixed padded recording dimensions avoid size-driven legacy recapture on
+        // each deformation frame. Dynamic legacy foreground freshness is gated separately.
+        val recording = androidx.compose.ui.geometry.Rect(-viewport * .04f, 0f, viewport * 1.04f, baseHeight)
+        Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {
+            LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
+                .testTag("tab-track-shell").bottomGlassShadow(opacity = shadowOpacity), source,
+                pressFeedback = false, shadow = false, cornerRadius = with(density) { radius.toDp() },
+                body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale)
+        }
+        val contentOffset = selectorContentScrollOffset(scroll.value, scroll.maxValue, rtl)
+        val viewportBounds = androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
+        fun move(delta: Float) {
+            raw += direction * delta / pixels
+            val low = (scroll.value / pixels).coerceAtMost(tabs.lastIndex.toFloat())
+            val high = ((scroll.value + viewport) / pixels - 1f).coerceIn(low, tabs.lastIndex.toFloat())
+            val bounded = raw.coerceIn(low, high)
+            val excess = raw - bounded
+            if (excess != 0f) logicalWall = if (excess < 0f) -1f else 1f
+            pressure = glassEdgePressure(excess)
+            val position = magneticTabPosition(bounded).coerceIn(low, high)
+            scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
+            val candidate = position.roundToInt().coerceIn(tabs.indices)
+            if (candidate != chosen && abs(position - chosen) > .52f) focus(candidate)
+        }
+        // The fixed viewport owns lens gestures before its scrolling child. Its context
+        // includes ancestors, not the strip itself: only non-lens overflow origins scroll it.
+        Box(Modifier.fillMaxSize().testTag("tab-track-host")
+            .selectorTrackDrag(horizontal = true,
+                eligible = { point -> if (fits) viewportBounds.contains(point) else
+                    selectorVisibleLensContains(point, selectorFrame, contentOffset, viewportBounds) },
+                contact = { pressed = it },
+                onPreview = { point ->
+                    val content = point.copy(x = point.x + if (fits) 0f else contentOffset)
+                    raw = if (selectorFrame.bounds.contains(content)) lens.value else
+                        atlasGeometry.logicalPositionAt(content, tabs.size, 0f, vertical = false, rtl = rtl)
+                            .coerceIn(0f, tabs.lastIndex.toFloat())
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        if (!fits) scroll.stopScroll()
+                        if (reduced) lens.snapTo(magneticTabPosition(raw))
+                        else lens.animateTo(magneticTabPosition(raw), spring(1f, 650f))
                     }
-                    val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
-                        change.consume(); started = true; requested = null
-                        raw = lens.value; dragging = true
-                        scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.stop() }
-                        move(over)
-                    }
-                    try {
-                        if (drag != null) horizontalDrag(drag.id) { change -> move(change.positionChange().x); change.consume() }
-                    } finally {
-                        if (started) {
-                            pressure = 0f; requested = chosen; dragging = false
-                            scope.launch { if (reduced) lens.snapTo(chosen.toFloat()) else lens.animateTo(chosen.toFloat(), spring(1f, 650f)) }
-                        }
-                    }
-                }
-            }) {
-            @Composable fun Labels(color: Color, interactive: Boolean) {
-                Row(Modifier.width(width * tabs.size).fillMaxHeight()
+                },
+                onStart = { requested = null; dragging = true },
+                onDelta = ::move, option = { chosen },
+                onEnd = { owned, _ ->
+                    pressure = 0f; dragging = false
+                    if (owned) requested = chosen
+                    // Pending contact may interrupt an unfinished tap/page transition.
+                    // Return to its existing destination without changing domain selection.
+                    val target = requested?.toFloat() ?: magneticTabPosition(page.coerceIn(0f, tabs.lastIndex.toFloat()))
+                    scope.launch { if (reduced) lens.snapTo(target) else lens.animateTo(target, spring(1f, 650f)) }
+                }, gestureKey = listOf(tabs, pixels, viewport, fits, rtl))
+            .drawWithContent {
+                val path = Path().apply { addRoundRect(RoundRect(track, CornerRadius(radius))) }
+                clipPath(path) { this@drawWithContent.drawContent() }
+            }, contentAlignment = AbsoluteAlignment.TopLeft) {
+        // horizontalScroll installs a clipping viewport even when disabled. A fitting
+        // track must be free to draw its stretched end outside the fixed gesture host.
+        Box(Modifier.fillMaxHeight().then(if (!fits) Modifier.nestedScroll(HorizontalGestureOwner)
+            .controlHorizontalScroll(scroll, enabled = !dragging) else Modifier)
+            .testTag("tab-scroll"), contentAlignment = AbsoluteAlignment.TopLeft) {
+            @Composable fun Labels(color: Color, interactive: Boolean, atlas: Boolean = false) {
+                Box(Modifier.width(width * tabs.size).fillMaxHeight()
                     .then(if (interactive) Modifier else Modifier.clearAndSetSemantics {})
-                    .drawWithContent {
-                        val left = pixels * lens.value + 4.dp.toPx()
-                        val path = Path().apply { addRoundRect(RoundRect(left, 4.dp.toPx(),
-                            left + pixels - 8.dp.toPx(), size.height - 4.dp.toPx(), CornerRadius(size.height / 2))) }
+                    .then(if (atlas) Modifier else Modifier.drawWithContent {
+                        val path = Path().apply { addRoundRect(RoundRect(selectorFrame.bounds, CornerRadius(selectorFrame.corner))) }
                         clipPath(path, if (interactive) ClipOp.Difference else ClipOp.Intersect) { this@drawWithContent.drawContent() }
-                    }) {
-                    tabs.forEach { tab ->
-                        Column(Modifier.width(width).padding(4.dp).fillMaxHeight()
-                            .then(if (interactive) Modifier.selectable(active == tab,
-                                interactionSource = null, indication = null, role = Role.Tab, onClick = { tap(tabs.indexOf(tab)) }) else Modifier),
-                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Icon(painterResource(tab.icon()), if (interactive) tab.label else null, Modifier.size(29.dp), tint = color)
-                            Text(tab.label, color = color, maxLines = 1, style = labelStyle, overflow = TextOverflow.Ellipsis)
+                    }), contentAlignment = AbsoluteAlignment.TopLeft) {
+                    tabs.forEachIndexed { index, tab ->
+                        val cell = (if (atlas) atlasGeometry else geometry).slot(index, tabs.size, insets, false, rtl).cell
+                        Box(Modifier.selectorTrackPlacement(cell)
+                            .then(if (interactive) Modifier.testTag("tab-option-$index").selectable(active == tab,
+                                interactionSource = null, indication = null, role = Role.Tab, onClick = { tap(index) }) else Modifier),
+                            contentAlignment = Alignment.Center) {
+                            Column(Modifier.requiredSize(width, with(density) { baseHeight.toDp() })
+                                .graphicsLayer { scaleX = cell.width / pixels; scaleY = cell.height / baseHeight }
+                                .padding(4.dp).then(if (interactive) Modifier.testTag("tab-option-content-$index") else Modifier),
+                                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Icon(painterResource(tab.icon()), if (interactive) tab.label else null, Modifier.size(29.dp), tint = color)
+                                Text(tab.label, color = color, maxLines = 1, style = labelStyle, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
             }
             @Composable fun Lens() {
-                val modifier = Modifier.offset { androidx.compose.ui.unit.IntOffset(
-                    (pixels * lens.value + with(density) { 4.dp.toPx() }).roundToInt(), with(density) { 4.dp.roundToPx() }) }
-                    .width(width - 8.dp).height(NavigationPillHeight - 8.dp)
-                    .testTag("tab-selector")
+                val modifier = Modifier.testTag("tab-selector")
                 if (appearance.tabStyle == TabLensStyle.Classic) {
-                    Box(modifier.background(Color.Black.copy(alpha = appearance.classicOpacity), androidx.compose.foundation.shape.CircleShape))
+                    Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),
+                        androidx.compose.foundation.shape.RoundedCornerShape(with(density) { selectorFrame.corner.toDp() })))
+                } else if (legacyOverlay) {
+                    LegacySelectorLens(modifier, source, inkAtlas, appearance,
+                        selectorFrame, LensGeometry(track, radius), shell.value, selectorBody.value,
+                        tabs.indices.map { index -> SelectorInkSlot(
+                            atlasGeometry.slot(index, tabs.size, insets, false, rtl).cell,
+                            geometry.slot(index, tabs.size, insets, false, rtl).cell) },
+                        MaterialTheme.colorScheme.onSurfaceVariant, NavigationAccent,
+                        shellOrigin = { composite.origin - recording.topLeft })
                 } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
                     blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
@@ -181,25 +241,37 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         if (appearance.tabStyle == TabLensStyle.Overlay) { if (refractForeground) decorated else composite } else source,
                         preserveAppearance = true, depthScale = BottomPillDepthScale,
                         tint = if (appearance.tabStyle == TabLensStyle.Overlay) Color.Black.copy(alpha = appearance.overlayDarkening) else Color.Transparent,
-                        pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f }, wall = {
-                            val first = scroll.value / pixels
-                            val last = minOf(tabs.lastIndex.toFloat(), (scroll.value + viewport) / pixels - 1f)
-                            glassWallAffinity(lens.value - first, last - first)
-                        })
+                        pressure = { pressure }, contact = { if (pressed || dragging) 1f else 0f },
+                        placement = { selectorFrame }, deformation = selectorBody)
+
                 }
             }
-            Box(Modifier.width(width * tabs.size).fillMaxHeight()) {
+            Box(Modifier.width(width * tabs.size).fillMaxHeight(), contentAlignment = AbsoluteAlignment.TopLeft) {
+                if (inkAtlas != null) {
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(inkAtlas, displayCutout = {
+                        Path().apply { addRect(androidx.compose.ui.geometry.Rect(Offset.Zero, size)) }
+                    })) { Labels(Color.White, false, atlas = true) }
+                }
                 if (!refractForeground) Lens()
-                Box(Modifier.fillMaxSize().then(if (refractForeground) Modifier.recordFrostedBackdrop(decorated)
-                    .drawWithContent {
+                val foregroundRecording = androidx.compose.ui.geometry.Rect(
+                    -geometry.travel * .04f, 0f, geometry.travel * 1.04f, baseHeight)
+                val foregroundContent = androidx.compose.ui.geometry.Rect(
+                    -foregroundRecording.left, 0f, geometry.travel - foregroundRecording.left, baseHeight)
+                Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundRecording)
+                    .recordFrostedBackdrop(decorated).drawWithContent {
                         if (composite.recorded && !composite.layer.isReleased) {
                             val delta = composite.origin - decorated.origin
                             translate(delta.x, delta.y) { drawLayer(composite.layer) }
                         }
                         drawContent()
-                    } else Modifier)) {
-                    Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
-                    Labels(NavigationAccent, false)
+                    } else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
+                    // Record padded visual overflow without changing the gesture or
+                    // scrolling host. Both sample origin and label coordinates move once.
+                    Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundContent)
+                        else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
+                        Labels(MaterialTheme.colorScheme.onSurfaceVariant, true)
+                        Labels(NavigationAccent, false)
+                    }
                 }
                 if (refractForeground) Lens()
             }

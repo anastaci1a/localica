@@ -101,11 +101,11 @@ class InterfaceNavigationTest {
         InterfacePreferences(context).write(InterfaceSettings(grayTone = Float.NaN))
         assertEquals(.4f, InterfacePreferences(context).read().grayTone)
     }
-    @Test fun queueInformationNavigatesOutToAlbumAndPreservesPlayback() = queueLink("Go to album", "Seasons")
-    @Test fun queueInformationNavigatesOutToArtist() = queueLink("Go to artist", "Artist")
-    @Test fun queueInformationNavigatesOutToAlbumArtist() = queueLink("Go to Album Artist", "Album artist")
-    @Test fun queueInformationNavigatesOutToFolder() = queueLink("Go to folder", "Music")
-    @Test fun queueTabInformationNavigatesOutToAlbum() = queueLink("Go to album", "Seasons", true)
+    @Test fun queueInformationNavigatesOutToAlbumAndPreservesPlayback() = queueLink("Album", "Seasons")
+    @Test fun queueInformationNavigatesOutToArtist() = queueLink("Artist", "Artist")
+    @Test fun queueInformationNavigatesOutToAlbumArtist() = queueLink("Album Artist", "Album artist")
+    @Test fun queueInformationNavigatesOutToFolder() = queueLink("Location", "Music")
+    @Test fun queueTabInformationNavigatesOutToAlbum() = queueLink("Album", "Seasons", true)
 
     private fun queueLink(action: String, destination: String, queueTab: Boolean = false) {
         if (queueTab) InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Queues), reducedMotion = true))
@@ -122,13 +122,13 @@ class InterfaceNavigationTest {
         }
         compose.onNodeWithContentDescription("Actions for Evening").performClick()
         compose.onNodeWithText("Information").performClick()
-        compose.onNodeWithText(action).performScrollTo().performClick()
+        compose.onNodeWithTag("song-information-$action").performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Collapse player").fetchSemanticsNodes().isEmpty() }
         compose.onAllNodesWithText(destination).onFirst().assertIsDisplayed()
         // Artist headers include an album carousel above the songs. Navigation must
         // preserve that initial header rather than forcing the first song onscreen.
-        if (action != "Go to folder") {
-            val playLabel = if (action == "Go to album") "Play album" else "Play selected albums"
+        if (action != "Location") {
+            val playLabel = if (action == "Album") "Play album" else "Play selected albums"
             compose.onNode(hasTestTag("browser-list") and hasAnyDescendant(hasContentDescription(playLabel)))
                 .performScrollToIndex(1)
         }

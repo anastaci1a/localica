@@ -57,10 +57,10 @@ data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading:
 
 /** Pure queue edits keep occurrence identity separate from the song's library identity. */
 object QueueEdits {
-    fun randomize(queue: ListeningQueue, keepPlayingFirst: Boolean, random: kotlin.random.Random = kotlin.random.Random.Default): ListeningQueue {
-        val playing = queue.entries.firstOrNull { keepPlayingFirst && it.id == queue.currentEntryId }
-        val remaining = queue.entries.filterNot { it.id == playing?.id }.shuffled(random)
-        val entries = if (playing == null) remaining else listOf(playing) + remaining
+    fun randomize(queue: ListeningQueue, keepCurrentFirst: Boolean, random: kotlin.random.Random = kotlin.random.Random.Default): ListeningQueue {
+        val current = queue.entries.firstOrNull { keepCurrentFirst && it.id == queue.currentEntryId }
+        val remaining = queue.entries.filterNot { it.id == current?.id }.shuffled(random)
+        val entries = if (current == null) remaining else listOf(current) + remaining
         return queue.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
     }
 
@@ -105,10 +105,17 @@ object QueueEdits {
         else queue.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
     fun moveBefore(queue: ListeningQueue, ids: Set<String>, beforeId: String?) = reordered(queue,
         OccurrenceMoves.before(queue.entries, ids, beforeId) { it.id })
-    fun sort(queue: ListeningQueue, method: TrackSort, ascending: Boolean): ListeningQueue {
+    fun sort(queue: ListeningQueue, method: TrackSort, ascending: Boolean, snapshot: LibrarySnapshot? = null): ListeningQueue {
         val byId = queue.entries.associateBy { it.id }
-        val ids = queue.order.apply(queue.entries.map { SongRow(it.id, it.track) }, method, ascending)
+        val rows = queue.entries.map { SongRow(it.id, it.track) }
+        val ids = snapshot?.let { LiveOrder(it).target(queue.order, rows, method, ascending) }
+            ?: queue.order.apply(rows, method, ascending)
         return queue.copy(entries = ids.map { byId.getValue(it) }, order = queue.order.copy(sort = method, ascending = ascending))
+    }
+    fun revertOrder(queue: ListeningQueue, checkpoint: OrderCheckpoint): ListeningQueue {
+        val current = queue.entries.associateBy { it.id }
+        val restored = checkpoint.reconcile(queue.entries.map { it.id })
+        return queue.copy(entries = restored.physical.map(current::getValue), order = restored.saved)
     }
     fun oldestInactive(library: QueueLibrary): String? = library.queues.filterNot { it.id == library.activeId }
         .minWithOrNull(compareBy<ListeningQueue> { it.createdAt }.thenBy { it.id })?.id
