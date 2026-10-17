@@ -43,7 +43,7 @@ internal class MetadataRefreshJournal(
             val names = checkNotNull(directory.list()) { "Cannot read pending metadata records." }
             val bases = names.map { it.removeSuffix(".bak").removeSuffix(".new") }.distinct().sorted()
             for (name in bases) {
-                check(name.matches(Regex("[0-9a-f]{64}\\.json"))) { "Unrecognized pending metadata record." }
+                check(name.matches(recordName)) { "Unrecognized pending metadata record." }
                 val atomic = AtomicFile(File(directory, name))
                 // A first write interrupted before rename on newer Android never admitted the writer.
                 if (!exists(atomic)) continue
@@ -83,7 +83,12 @@ internal class MetadataRefreshJournal(
 
     private fun record(id: String): AtomicFile {
         val digest = MessageDigest.getInstance("SHA-256").digest(id.toByteArray(Charsets.UTF_8))
-        val name = digest.joinToString("") { "%02x".format(it.toInt() and 255) }
+        val name = buildString(64) {
+            digest.forEach { byte ->
+                val value = byte.toInt() and 255
+                append(hex[value ushr 4]); append(hex[value and 15])
+            }
+        }
         return AtomicFile(File(directory, "$name.json"))
     }
 
@@ -98,6 +103,11 @@ internal class MetadataRefreshJournal(
         // A failed operation may have reached disk: reload before any subsequent mutation/retry.
         entries = null
         throw failure
+    }
+
+    private companion object {
+        val recordName = Regex("[0-9a-f]{64}\\.json")
+        const val hex = "0123456789abcdef"
     }
 }
 
