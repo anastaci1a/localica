@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -70,7 +69,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artwork = visual ?: rememberPlayerVisual(state.trackUri)
     val paletteDuration = settings.motionDuration(550)
     val palette = animatedPlayerPalette(artwork.palette, paletteDuration)
-    val lyricBackdrop = rememberFrostedBackdrop(artwork to settings.artworkLayout, lyricsOpen)
+    // Header controls already sample this scene before lyrics open. Older
+    // adapters need its prepared pixels whenever that header is visible too.
+    val lyricBackdrop = rememberFrostedBackdrop(artwork to settings.artworkLayout, p > .7f)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen && expanded) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // While the finger is down expanded remains true. Progress, rather than release,
     // must restore the same artwork and metadata as the surface returns to the miniplayer.
@@ -86,9 +87,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     var scrubDragging by remember { mutableStateOf(false) }
     var scrubOverCancel by remember { mutableStateOf(false) }
     var scrubCancelBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    var sourcesRequest by remember { mutableIntStateOf(0) }
+    var sourcesVisible by remember { mutableStateOf(false) }
+    val sourcesPreparation = rememberGlassOriginPreparation()
+    val lyricsResult = if (lyricsOpen || lyricProgress > 0f) rememberLyrics(track) else null
     val sourcesAnchor = rememberGlassAnchor()
-    LaunchedEffect(lyricsOpen) { if (!lyricsOpen) sourcesRequest = 0 }
+    LaunchedEffect(lyricsOpen, expanded) { if (!lyricsOpen || !expanded) sourcesVisible = false }
     val editArtwork = LocalArtworkEdit.current
     var viewing by remember { mutableStateOf(false) }
     var artworkMenu by remember { mutableStateOf(false) }
@@ -158,10 +161,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val latestMetadataY = virtualHeight - navigationInset - 368.dp - extraActions
     val ordinarySeekY = (oldMetadataY + (lyricSeekY - oldMetadataY) * .5f)
         .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
-    val metadataY = ordinarySeekY + (maxOf(ordinarySeekY, lyricSeekY) - ordinarySeekY) * lyricProgress
+    val lyricMetadataY = maxOf(ordinarySeekY, lyricSeekY)
+    val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricProgress
     val seekY = metadataY + 64.dp
     val normalTransport = ordinarySeekY + 184.dp + extraActions
-    val lyricBarCenter = maxOf(ordinarySeekY, lyricSeekY) + 64.dp + 20.dp
+    val lyricBarCenter = lyricMetadataY + 64.dp + 20.dp
     val shelfTop = virtualHeight - navigationInset - CollapsedQueueHeight
     val lyricTransport = (lyricBarCenter + shelfTop) / 2 - 32.dp
     val transportMotion = p * p * (3f - 2f * p)
@@ -215,8 +219,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
-        Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
-        Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds()
+        Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
+        Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
             ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough) { frame ->
@@ -288,32 +292,20 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         ActionIcon(R.drawable.ic_down, "Collapse player") { settle(false) }
                     }
                     Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
-                        LiquidGlassSurface(Modifier.width(CompactControlSize * (1f + lyricProgress) + 1.dp * lyricProgress)
-                            .height(CompactControlSize).testTag("player-lyrics-pill"), pressFeedback = false, depthScale = RaisedGlassDepthScale) {
-                            Box(Modifier.align(Alignment.CenterStart).size(CompactControlSize), contentAlignment = Alignment.Center) {
-                                ActionIcon(R.drawable.ic_lyrics, if (lyricsOpen) "Lyrics sources" else "Show lyrics",
-                                    anchor = sourcesAnchor, glass = false) {
-                                    if (lyricsOpen) sourcesRequest++ else onLyrics(true)
-                                }
-                            }
-                            if (lyricProgress > 0f) {
-                                Box(Modifier.fillMaxSize()
-                                    .graphicsLayer { alpha = ((lyricProgress - .25f) / .75f).coerceIn(0f, 1f) }
-                                    .then(if (!lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
-                                    GlassPillDivider(Modifier.align(Alignment.Center).graphicsLayer { alpha = ((lyricProgress - .4f) / .6f).coerceIn(0f, 1f) })
-                                    Box(Modifier.align(Alignment.CenterEnd).size(CompactControlSize), contentAlignment = Alignment.Center) {
-                                        ActionIcon(R.drawable.ic_eye_off, "Hide lyrics", glass = false) { onLyrics(false) }
-                                    }
-                                }
-                            }
-                        }
+                        LyricsHeaderActions(lyricsOpen, lyricProgress, sourcesAnchor, sourcesPreparation,
+                            onShow = { onLyrics(true) },
+                            onSources = { if (lyricsResult?.sources?.isNotEmpty() == true) sourcesVisible = true },
+                            onHide = { sourcesVisible = false; onLyrics(false) })
                     }
                 }
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
-                    .height((metadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
-                    .graphicsLayer { alpha = lyricProgress * p }, sourcesRequest = sourcesRequest, sourcesAnchor = sourcesAnchor,
+                    .height((lyricMetadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
+                    .graphicsLayer { alpha = lyricProgress * p },
+                contentHeight = (metadataY - statusInset - 64.dp).coerceAtLeast(96.dp), sourcesAnchor = sourcesAnchor,
+                result = lyricsResult, sourcesVisible = sourcesVisible, onSourcesDismiss = { sourcesVisible = false },
+                originPreparation = sourcesPreparation,
                 sampledAtMs = state.sampledAtMs, playing = state.isPlaying, speed = state.playbackSpeed,
                 delayMs = settings.lyricDelayMs, durationMs = state.durationMs) }
             val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value

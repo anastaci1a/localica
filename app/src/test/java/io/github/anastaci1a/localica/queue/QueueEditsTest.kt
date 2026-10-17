@@ -47,7 +47,7 @@ class QueueEditsTest {
         assertEquals(queue.currentEntryId, moved.currentEntryId)
         assertEquals(500L, moved.positionMs)
     }
-    @Test fun `randomize pins only the playing occurrence and preserves duplicate songs and cursor`() {
+    @Test fun `randomize pins only the current occurrence and preserves duplicate songs and cursor`() {
         val queue = QueueEdits.create(listOf(song("a"), song("b"), song("a"), song("c")), 2, "Queue").copy(positionMs = 1234)
         val edited = QueueEdits.randomize(queue, true, kotlin.random.Random(12))
         assertEquals(queue.currentEntryId, edited.entries.first().id)
@@ -55,11 +55,16 @@ class QueueEditsTest {
         assertEquals(2, edited.entries.count { it.track.id == "a" })
         assertEquals(queue.currentEntryId, edited.currentEntryId)
         assertEquals(1234L, edited.positionMs)
+        assertEquals(io.github.anastaci1a.localica.library.SavedOrder(edited.entries.map { it.id }), edited.order)
     }
-    @Test fun `paused and inactive randomization has no pinned occurrence and handles empty and singleton`() {
+    @Test fun `inactive randomization has no pinned occurrence and handles empty and singleton`() {
         val queue = QueueEdits.create((0..8).map { song("$it") }, 4, "Queue")
         val expected = queue.entries.shuffled(kotlin.random.Random(3))
-        assertEquals(expected, QueueEdits.randomize(queue, false, kotlin.random.Random(3)).entries)
+        val edited = QueueEdits.randomize(queue, false, kotlin.random.Random(3))
+        assertEquals(expected, edited.entries)
+        assertEquals(queue.currentEntryId, edited.currentEntryId)
+        assertEquals(queue.positionMs, edited.positionMs)
+        assertEquals(io.github.anastaci1a.localica.library.SavedOrder(edited.entries.map { it.id }), edited.order)
         val only = QueueEdits.create(listOf(song("a")), 0, "Only")
         assertEquals(only, QueueEdits.randomize(only, true))
         val empty = QueueEdits.remove(only, only.entries.single().id)

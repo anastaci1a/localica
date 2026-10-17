@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.playlist
 
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.OrderCommit
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -8,8 +9,9 @@ import kotlinx.coroutines.flow.*
 /** Serial writes publish only committed state; failed restore never overwrites saved collections. */
 class PlaylistController(private val dao: PlaylistDao,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-    private val coverDirectory: java.io.File? = null) {
-    private data class Edit(val change: (List<ManualPlaylist>) -> List<ManualPlaylist>, val complete: (Boolean) -> Unit)
+    private val coverDirectory: java.io.File? = null,
+    private val sortSnapshot: (suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot)? = null) {
+    private data class Edit(val change: suspend (List<ManualPlaylist>) -> List<ManualPlaylist>, val complete: (Boolean) -> Unit)
     private val mutable = MutableStateFlow(PlaylistState())
     val state = mutable.asStateFlow()
     private val commands = Channel<Edit>(Channel.UNLIMITED)
@@ -54,7 +56,7 @@ class PlaylistController(private val dao: PlaylistDao,
             }
         }
     }
-    private fun submit(complete: (Boolean) -> Unit, change: (List<ManualPlaylist>) -> List<ManualPlaylist>) {
+    private fun submit(complete: (Boolean) -> Unit, change: suspend (List<ManualPlaylist>) -> List<ManualPlaylist>) {
         if (commands.trySend(Edit(change, complete)).isFailure) complete(false)
     }
     fun create(name: String, tracks: List<Track> = emptyList(), complete: (Boolean) -> Unit = {}) {
@@ -73,14 +75,41 @@ class PlaylistController(private val dao: PlaylistDao,
     fun addToDestinations(ids: Set<String>, name: String, tracks: List<Track>, complete: (Boolean) -> Unit = {}) =
         submit(complete) { PlaylistEdits.addToDestinations(it, ids, name, tracks) }
     fun append(id: String, tracks: List<Track>, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.append(it, tracks) }
-    fun cover(id: String, uri: String, complete: (Boolean) -> Unit = {}) = edit(id, complete) { it.copy(coverUri = uri) }
+    fun cover(id: String, uri: String?, complete: (Boolean) -> Unit = {}) = edit(id, complete) { it.copy(coverUri = uri) }
     fun removeEntries(id: String, entries: Set<String>, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.remove(it, entries) }
     fun move(id: String, entry: String, offset: Int, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.move(it, entry, offset) }
     fun moveBefore(id: String, entries: Set<String>, beforeId: String?, complete: (Boolean) -> Unit = {}) =
-        edit(id, complete) { PlaylistEdits.moveBefore(it, entries, beforeId) }
+        moveBefore(id, entries, beforeId, null, complete)
+    internal fun moveBefore(id: String, entries: Set<String>, beforeId: String?, expectedOrder: List<String>?,
+        complete: (Boolean) -> Unit) = edit(id, complete) {
+        require(expectedOrder == null || it.entries.map { entry -> entry.id } == expectedOrder) {
+            "The playlist changed. Try dragging again."
+        }
+        PlaylistEdits.moveBefore(it, entries, beforeId)
+    }
     fun applySort(id: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
-        edit(id, complete) { PlaylistEdits.sort(it, method, ascending) }
-    fun randomize(id: String, complete: (Boolean) -> Unit = {}) = edit(id, complete) { PlaylistEdits.randomize(it) }
+        edit(id, complete) {
+            val snapshot = if (method == io.github.anastaci1a.localica.library.TrackSort.Manual) null else sortSnapshot?.invoke()
+            PlaylistEdits.sort(it, method, ascending, snapshot)
+        }
+    fun randomize(id: String, complete: (Boolean) -> Unit = {}) = randomizeOrder(id) { complete(it != null) }
+    internal fun randomizeOrder(id: String, complete: (OrderCommit?) -> Unit) {
+        var before: ManualPlaylist? = null
+        edit(id, complete = { success ->
+            val after = state.value.playlists.firstOrNull { it.id == id }
+            val previous = before
+            complete(if (success && previous != null && after != null) OrderCommit(
+                revision = after.entries,
+                order = after.order,
+                changed = previous.order != after.order || previous.entries !== after.entries &&
+                    (previous.entries.size != after.entries.size || previous.entries.indices.any {
+                        previous.entries[it].id != after.entries[it].id
+                    }),
+            ) else null)
+        }) { current -> before = current; PlaylistEdits.randomize(current) }
+    }
+    fun revertOrder(id: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (Boolean) -> Unit = {}) =
+        edit(id, complete) { PlaylistEdits.revertOrder(it, checkpoint) }
     fun delete(id: String, complete: (Boolean) -> Unit = {}) { submit(complete) { playlists -> playlists.filterNot { it.id == id } } }
     fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = refreshTracks(listOf(track), complete)
     fun refreshTracks(tracks: List<Track>, complete: (Boolean) -> Unit) = submit(complete) { playlists ->
@@ -89,7 +118,7 @@ class PlaylistController(private val dao: PlaylistDao,
             byId[entry.track.id]?.let { entry.copy(track = it) } ?: entry
         }) }
     }
-    private fun edit(id: String, complete: (Boolean) -> Unit, change: (ManualPlaylist) -> ManualPlaylist) {
+    private fun edit(id: String, complete: (Boolean) -> Unit, change: suspend (ManualPlaylist) -> ManualPlaylist) {
         submit(complete) { playlists ->
             check(playlists.any { it.id == id })
             playlists.map { old -> if (old.id == id) {

@@ -19,15 +19,17 @@ import kotlinx.coroutines.*
     playlists: PlaylistState, controller: PlaylistController?, queues: QueueController?, pins: List<MediaRef>,
     onPin: (MediaRef) -> Unit, onDismiss: () -> Unit, onDeleted: () -> Unit = {}, onRenamed: (String) -> Unit = {},
     onInformation: ((io.github.anastaci1a.localica.library.Track) -> Unit)? = null,
-    selectionSource: MediaRef? = item.ref, onRemove: (() -> Unit)? = null,
+    containingSource: MediaRef? = null, onRemove: (() -> Unit)? = null,
     selection: SessionSelection? = LocalSessionSelection.current,
     extra: @Composable () -> Unit = {}) {
     val editTags = LocalTagEdit.current
+    val selectionTarget = item.selectionTarget(containingSource)
     var adding by remember { mutableStateOf(false) }
     var queuePicker by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    var image by remember { mutableStateOf(false) }
+    val artworkTarget = "${item.ref.kind}:${item.ref.id}"
+    val artwork = rememberArtworkWorkflow(artworkTarget)
     var busy by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -40,8 +42,8 @@ import kotlinx.coroutines.*
         }
         if (item.row == null && editTags != null) ActionMenuItem("Edit tags", enabled = item.songs.isNotEmpty(),
             onClick = { onDismiss(); editTags(item.songs.map { it.track }.distinctBy { it.id }) {} })
-        ActionMenuItem(if (item.row == null) "Select all songs" else "Select song", enabled = item.songs.isNotEmpty(),
-            onClick = { selection?.select(selectionSource, item.songs); onDismiss() })
+        ActionMenuItem(if (item.row == null) "Select all songs" else "Select song", enabled = selectionTarget.rows.isNotEmpty(),
+            onClick = { selection?.select(selectionTarget.source, selectionTarget.rows); onDismiss() })
         HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         if (item.row != null) {
             ActionMenuItem("New queue", enabled = queues != null, onClick = { act(SongTap.NewQueue) })
@@ -57,14 +59,26 @@ import kotlinx.coroutines.*
         }
         if (item.ref.kind == MediaKind.Playlist) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            ActionMenuItem("Set playlist image", enabled = controller != null, onClick = { onDismiss(); image = true })
+            val customCover = playlists.playlists.firstOrNull { it.id == item.ref.id }?.coverUri
+            ActionMenuItem(if (customCover != null) "Remove playlist image" else "Set playlist image",
+                enabled = controller != null && !busy, onClick = {
+                    onDismiss()
+                    if (customCover == null) artwork.choose()
+                    else {
+                        busy = true
+                        controller?.cover(item.ref.id, null) { ok ->
+                            busy = false
+                            if (!ok) failure = "Couldn’t remove the playlist image."
+                        }
+                    }
+                })
             ActionMenuItem("Rename playlist", enabled = controller != null, onClick = { onDismiss(); renaming = true })
             ActionMenuItem("Delete playlist", enabled = controller != null, onClick = { onDismiss(); deleting = true })
         }
         extra()
         if (onRemove != null) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            ActionMenuItem(if (selectionSource?.kind == MediaKind.Queue) "Remove from queue" else "Remove from playlist",
+            ActionMenuItem(if (selectionTarget.source?.kind == MediaKind.Queue) "Remove from queue" else "Remove from playlist",
                 onClick = { onDismiss(); onRemove() })
         }
     }
@@ -94,22 +108,25 @@ import kotlinx.coroutines.*
         confirmButton = { ActionTextButton(enabled = !busy, onClick = {
             busy = true; controller?.delete(item.ref.id) { ok -> busy = false; if (ok) { deleting = false; onDeleted() } }
         }) { Text("Delete") } }, dismissButton = { ActionTextButton(enabled = !busy, onClick = { deleting = false }) { Text("Cancel") } })
-    if (image) ImageChooser({ image = false }) { cropped ->
-        image = false
-        scope.launch {
-            var stored: java.io.File? = null
-            try {
-                stored = withContext(Dispatchers.IO) {
-                    val bytes = io.github.anastaci1a.localica.editing.CoverImages(context).read(cropped).bytes
-                    val directory = java.io.File(context.filesDir, "playlist-covers").apply { mkdirs() }
-                    java.io.File(directory, "${java.util.UUID.randomUUID()}.png").apply { writeBytes(bytes) }
-                }
-                val output = stored
-                controller?.cover(item.ref.id, android.net.Uri.fromFile(output).toString()) { ok ->
-                    if (!ok) { output?.delete(); failure = "Couldn’t save the playlist image." }
-                }
-            } catch (cancelled: CancellationException) { stored?.delete(); throw cancelled }
-            catch (_: Exception) { stored?.delete(); failure = "Couldn’t save the playlist image." }
+    if (artwork.choosing) key(artworkTarget) {
+        ImageChooser(artwork, artwork::cancelChooser) { cropped ->
+            artwork.clearImage()
+            val playlistId = item.ref.id
+            scope.launch {
+                var stored: java.io.File? = null
+                try {
+                    stored = withContext(Dispatchers.IO) {
+                        val bytes = io.github.anastaci1a.localica.editing.CoverImages(context).read(cropped).bytes
+                        val directory = java.io.File(context.filesDir, "playlist-covers").apply { mkdirs() }
+                        java.io.File(directory, "${java.util.UUID.randomUUID()}.png").apply { writeBytes(bytes) }
+                    }
+                    val output = stored
+                    controller?.cover(playlistId, android.net.Uri.fromFile(output).toString()) { ok ->
+                        if (!ok) { output?.delete(); failure = "Couldn’t save the playlist image." }
+                    }
+                } catch (cancelled: CancellationException) { stored?.delete(); throw cancelled }
+                catch (_: Exception) { stored?.delete(); failure = "Couldn’t save the playlist image." }
+            }
         }
     }
     failure?.let { message -> GlassAlertDialog({ failure = null }, title = { Text("Collection") }, text = { Text(message) },

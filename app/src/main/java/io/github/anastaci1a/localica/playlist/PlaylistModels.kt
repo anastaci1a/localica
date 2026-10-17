@@ -41,14 +41,20 @@ object PlaylistEdits {
         val entries = playlist.entries.shuffled()
         return playlist.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
     }
-    fun sort(playlist: ManualPlaylist, method: TrackSort, ascending: Boolean): ManualPlaylist {
+    fun sort(playlist: ManualPlaylist, method: TrackSort, ascending: Boolean, snapshot: LibrarySnapshot? = null): ManualPlaylist {
         val byId = playlist.entries.associateBy { it.id }
-        return playlist.copy(entries = playlist.order.apply(playlist.entries, method, ascending).map { byId.getValue(it) },
+        return playlist.copy(entries = (snapshot?.let { LiveOrder(it).target(playlist.order, playlist.entries, method, ascending) }
+            ?: playlist.order.apply(playlist.entries, method, ascending)).map { byId.getValue(it) },
             order = playlist.order.copy(sort = method, ascending = ascending))
     }
+    fun revertOrder(playlist: ManualPlaylist, checkpoint: OrderCheckpoint): ManualPlaylist {
+        val current = playlist.entries.associateBy { it.id }
+        val restored = checkpoint.reconcile(playlist.entries.map { it.id })
+        return playlist.copy(entries = restored.physical.map(current::getValue), order = restored.saved)
+    }
     /** A rescan updates available metadata without losing unavailable references or occurrence IDs. */
-    fun rows(playlist: ManualPlaylist, snapshot: LibrarySnapshot, query: LibraryQuery): List<SongRow> {
-        val tracks = snapshot.tracks.associateBy { it.id }
+    fun rows(playlist: ManualPlaylist, snapshot: LibrarySnapshot, query: LibraryQuery,
+        tracks: Map<String, Track> = snapshot.tracks.associateBy { it.id }): List<SongRow> {
         return LibraryQueries.rows(playlist.entries.map { it.copy(track = tracks[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), sourcePlaylistId = playlist.id) }, query)
     }
 }

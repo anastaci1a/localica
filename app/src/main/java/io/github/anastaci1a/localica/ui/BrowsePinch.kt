@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import kotlin.math.max
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -37,6 +38,8 @@ internal class BrowsePinchMotion {
     var fingerProgress = 0f
     var tracking: kotlinx.coroutines.Job? = null
     var capture: kotlinx.coroutines.Job? = null
+    var settling: kotlinx.coroutines.Job? = null
+    var disposed = false
     var capturing = false
     val frozen = mutableMapOf<Any, FrozenBrowseItem>()
     var source by mutableStateOf<BrowseStyle?>(null)
@@ -53,11 +56,38 @@ internal class BrowsePinchMotion {
     var anchorTop = 0f
     var rowHeight = 64f
     var viewportWidth = 1f
+    fun clearTransaction() {
+        held = false; fingerProgress = 0f; capturing = false
+        source = null; target = null; focusKey = null
+        focusTop = 0; focusFraction = 0f; focusEdge = 0
+        bounds = emptyMap(); frozen.clear()
+        capture = null; tracking = null; settling = null
+    }
+    fun dispose() {
+        disposed = true
+        capture?.cancel(); tracking?.cancel(); settling?.cancel()
+        clearTransaction()
+    }
+    var pixelDensity = 1f
+    fun highlightHeight(key: Any, index: Int, targetHeight: Float): Float {
+        if (source == null) return targetHeight
+        val inset = (BrowseCellGeometry(sourceColumns).cardInset * pixelDensity).roundToInt()
+        val sourceHeight = (sourceBounds(key, index).height - 2 * inset).coerceAtLeast(0f)
+        return sourceHeight + (targetHeight - sourceHeight) * progress.value.coerceIn(0f, 1f)
+    }
+    fun sourceContentWidth(key: Any): Int {
+        val geometry = BrowseCellGeometry(sourceColumns)
+        val cellWidth = bounds[key]?.width?.toInt() ?: geometry.cellWidth(viewportWidth.toInt(), pixelDensity)
+        return geometry.contentWidth(cellWidth, pixelDensity)
+    }
     fun sourceBounds(key: Any, index: Int): Rect = bounds[key] ?: run {
-        val width = viewportWidth / sourceColumns
-        Rect((index % sourceColumns) * width,
+        val geometry = BrowseCellGeometry(sourceColumns)
+        val column = index % sourceColumns
+        val left = geometry.cellLeft(viewportWidth.toInt(), pixelDensity, column).toFloat()
+        val width = geometry.cellWidth(viewportWidth.toInt(), pixelDensity, column)
+        Rect(left,
             anchorTop + ((index / sourceColumns) - (anchorIndex / sourceColumns)) * rowHeight,
-            (index % sourceColumns + 1) * width,
+            left + width,
             anchorTop + ((index / sourceColumns) - (anchorIndex / sourceColumns) + 1) * rowHeight)
     }
 }
@@ -67,17 +97,24 @@ internal fun pinchProgress(scale: Float, outward: Boolean): Float =
     ((if (outward) scale - 1f else 1f - scale) / if (outward) .8f else .45f).coerceIn(0f, 1f)
 
 @Composable
-internal fun Modifier.pinchToChangeView(enabled: Boolean, onProgress: ((Float) -> Unit)? = null,
-    onRelease: (() -> Unit)? = null, onStep: (Boolean, Offset) -> Unit): Modifier {
+internal fun Modifier.pinchToChangeView(enabled: Boolean, gestureKey: Any? = Unit,
+    onProgress: ((Float) -> Unit)? = null, onRelease: ((cancelled: Boolean) -> Unit)? = null,
+    onStep: (Boolean, Offset) -> Boolean): Modifier {
     val available by rememberUpdatedState(enabled)
     val step by rememberUpdatedState(onStep)
     val progress by rememberUpdatedState(onProgress)
     val release by rememberUpdatedState(onRelease)
-    return pointerInput(Unit) {
+    return pointerInput(gestureKey) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            // Capture callbacks only when accepting the transaction. Its owner
+            // remains fixed through preview recomposition and route cancellation.
+            var gestureProgress: ((Float) -> Unit)? = null
+            var gestureRelease: ((Boolean) -> Unit)? = null
             var owned = false
-            var committed = false
+            var recognized = false
+            var accepted = false
+            var released = false
             var outward = true
             var scale = 1f
             try {
@@ -89,22 +126,25 @@ internal fun Modifier.pinchToChangeView(enabled: Boolean, onProgress: ((Float) -
                         if (fingers >= 2) {
                             scale *= event.calculateZoom()
                             val threshold = if (progress != null) 1.04f else 1.18f
-                            if (!committed && (scale > threshold || scale < 1f / threshold)) {
-                                committed = true; outward = scale > 1f
-                                step(outward, event.calculateCentroid())
+                            if (!recognized && (scale > threshold || scale < 1f / threshold)) {
+                                recognized = true; outward = scale > 1f
+                                gestureProgress = progress
+                                gestureRelease = release
+                                accepted = step(outward, event.calculateCentroid())
                             }
-                            if (committed) {
+                            if (accepted) {
                                 // Consume recognition slop, not a visible fraction of the
                                 // layout transition. Return to the original span still cancels.
                                 val adjusted = if (outward) 1f + (scale - 1.04f).coerceAtLeast(0f)
                                     else 1f - (1f / 1.04f - scale).coerceAtLeast(0f)
-                                progress?.invoke(pinchProgress(adjusted, outward))
+                                gestureProgress?.invoke(pinchProgress(adjusted, outward))
                             }
                         }
+                        if (fingers == 0) released = event.changes.none { it.isConsumed }
                         event.changes.forEach { it.consume() }
                     }
                 } while (event.changes.any { it.pressed })
-            } finally { if (committed) release?.invoke() }
+            } finally { if (accepted) gestureRelease?.invoke(!released) }
         }
     }
 }
@@ -117,9 +157,13 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     onCommit: (BrowseStyle) -> Unit, onAnchor: (BrowseZoomAnchor) -> Unit): Modifier {
     val captureLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
-    return pinchToChangeView(enabled && (motion.source == null || motion.held),
+    DisposableEffect(motion) {
+        motion.disposed = false
+        onDispose { motion.dispose() }
+    }
+    return pinchToChangeView(enabled && motion.source == null, gestureKey = route.key,
         onProgress = { value ->
-            motion.fingerProgress = value
+            if (motion.held) motion.fingerProgress = value
             if (motion.held && !motion.capturing && !reducedMotion) {
                 motion.tracking?.cancel()
                 motion.tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
@@ -127,28 +171,31 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 }
             }
         },
-        onRelease = {
-            motion.held = false
-            motion.tracking?.cancel()
-            scope.launch {
-                motion.capture?.join()
-                val commit = motion.fingerProgress >= .35f
-                val destination = if (commit) motion.target else motion.source
-                if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
-                else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
-                if (destination != null) {
-                    onCommit(destination)
-                    motion.focusKey?.let { onAnchor(BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge)) }
+        onRelease = { cancelled ->
+            if (!motion.disposed && motion.source != null && motion.target != null) {
+                motion.held = false
+                motion.tracking?.cancel()
+                motion.settling = scope.launch {
+                    try {
+                        motion.capture?.join()
+                        if (motion.disposed) return@launch
+                        val commit = !cancelled && motion.fingerProgress >= .35f
+                        val destination = if (commit) motion.target else motion.source
+                        if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
+                        else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
+                        if (destination != null) {
+                            if (cancelled) onPreview(destination) else onCommit(destination)
+                            motion.focusKey?.let { onAnchor(BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge)) }
+                        }
+                        // Keep retained drawings through the source-layout handoff.
+                        withFrameNanos { }; withFrameNanos { }
+                    } finally { motion.clearTransaction() }
                 }
-                // Keep retained drawings through the source-layout handoff.
-                withFrameNanos { }; withFrameNanos { }
-                motion.source = null
-                motion.frozen.clear()
             }
         }) { zoomIn, midpoint ->
         val next = style.zoomStep(zoomIn, with(density) { width.toDp().value },
             albumSongs = route.collection?.kind == MediaKind.Album)
-        if (next != style) {
+        if (next != style && !motion.disposed && motion.source == null) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
             motion.source = style
             motion.target = next
@@ -156,6 +203,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             motion.held = true
             motion.fingerProgress = 0f
             motion.viewportWidth = width.toFloat()
+            motion.pixelDensity = density.density
             motion.sourceColumns = galleryColumns(style.presentation, with(density) { width.toDp().value }, style.itemsPerRow)
             motion.bounds = visible.associate { it.key to androidx.compose.ui.geometry.Rect(it.offset.x.toFloat(), it.offset.y.toFloat(),
                 (it.offset.x + it.size.width).toFloat(), (it.offset.y + it.size.height).toFloat()) }
@@ -220,7 +268,8 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                     }
                 }
             }
-        }
+            true
+        } else false
     }
 }
 
@@ -255,8 +304,10 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val image = motion.frozen[key] ?: return@forEach
             val index = keys.indexOf(key)
             if (index < 0) return@forEach
-            val width = motion.viewportWidth / motion.targetColumns
-            val x = index % motion.targetColumns * width
+            val geometry = BrowseCellGeometry(motion.targetColumns)
+            val column = index % motion.targetColumns
+            val width = geometry.cellWidth(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
+            val x = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * targetHeight
             translate(old.left + (x - old.left) * p, old.top + (y - old.top) * p) {
                 scale(1f + (width / old.width - 1f) * p, 1f + (targetHeight / old.height - 1f) * p, Offset.Zero) {

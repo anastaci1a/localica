@@ -59,6 +59,16 @@ class QueuePlaybackTest {
                 assertEquals(third.id, queues.state.value.library.activeId)
                 assertEquals("Three", playback.state.value.trackId)
                 assertTrue("Appending to an inactive destination preserves playback", playback.state.value.isPlaying)
+                val playbackVisit = queues.state.value.library.active!!.journey!!.current
+                val reordered = java.util.concurrent.atomic.AtomicBoolean(false)
+                queues.moveQueueBefore(third.id, first.id) { reordered.set(it) }
+                await { reordered.get() }
+                assertEquals(listOf(third.id, first.id, second.id), queues.state.value.library.queues.map { it.id })
+                assertEquals(first.id, queues.state.value.browsedId)
+                assertEquals(third.id, queues.state.value.library.activeId)
+                assertEquals(playbackVisit, queues.state.value.library.active!!.journey!!.current)
+                assertEquals("Three", playback.state.value.trackId)
+                assertTrue("Reordering queues preserves active native playback", playback.state.value.isPlaying)
                 queues.rename(first.id, "Renamed")
                 queues.moveQueue(first.id, 2)
                 await { queues.state.value.library.queues.last().id == first.id }
@@ -124,23 +134,25 @@ class QueuePlaybackTest {
                 assertTrue("Position before move: $beforeMove; after: ${playback.state.value.positionMs}",
                     playback.state.value.positionMs >= beforeMove - 50)
                 val editPosition = playback.state.value.positionMs
-                val editToken = java.util.concurrent.atomic.AtomicReference<QueueController.EditPlayback?>()
-                queues.beginFileEdit("Second") { editToken.set(it) }
-                await { editToken.get() != null && !playback.state.value.isPlaying }
-                val refreshed = java.util.concurrent.atomic.AtomicBoolean(false)
-                queues.refreshTrack(tracks[1].copy(title = "Updated title")) { refreshed.set(it) }
-                await { refreshed.get() }
-                queues.endFileEdit(editToken.get()) {}
+                kotlinx.coroutines.runBlocking {
+                    queues.withFileEdit("Second") {
+                        await { !playback.state.value.isPlaying }
+                        val refreshed = java.util.concurrent.atomic.AtomicBoolean(false)
+                        queues.refreshTrack(tracks[1].copy(title = "Updated title")) { refreshed.set(it) }
+                        await { refreshed.get() }
+                    }
+                }
                 await { playback.state.value.isPlaying && playback.state.value.positionMs >= editPosition - 100 }
                 assertEquals(firstQueue.currentEntryId, queues.state.value.library.active!!.currentEntryId)
                 assertEquals("Updated title", playback.state.value.title)
                 // Upcoming sources must be released too, without losing the current occurrence/cursor.
                 val beforeUpcomingEdit = playback.state.value.positionMs
-                editToken.set(null)
-                queues.beginFileEdit("Third") { editToken.set(it) }
-                await { editToken.get() != null && !playback.state.value.isPlaying }
-                assertEquals(firstQueue.currentEntryId, editToken.get()!!.entryId)
-                queues.endFileEdit(editToken.get()) {}
+                kotlinx.coroutines.runBlocking {
+                    queues.withFileEdit("Third") {
+                        await { !playback.state.value.isPlaying }
+                        assertEquals(firstQueue.currentEntryId, queues.state.value.library.active!!.currentEntryId)
+                    }
+                }
                 await { playback.state.value.isPlaying && playback.state.value.positionMs >= beforeUpcomingEdit - 100 }
                 assertEquals("Second", playback.state.value.trackId)
                 queues.settings(queues.state.value.settings.copy(preloadNext = false))

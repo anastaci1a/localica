@@ -15,11 +15,13 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 
-internal fun Modifier.currentSongHighlight(current: Boolean, color: Color) = semantics {
+internal fun Modifier.currentSongHighlight(current: Boolean, color: Color,
+    visualHeight: (Float) -> Float = { it }) = semantics {
     if (current) stateDescription = "Current song"
 }.drawWithCache {
     // The highlight is immutable between size/color/current-item changes. Retain
@@ -42,6 +44,13 @@ internal fun Modifier.currentSongHighlight(current: Boolean, color: Color) = sem
         }
     } else null
     onDrawBehind {
-        image?.let { drawImage(it) }
+        image?.let {
+            // Pinch keeps destination measurement for virtualization, while the
+            // visible slab follows the content's source-to-destination height.
+            // Scale only this cached decoration; hit bounds and selection stay put.
+            scale(1f, visualHeight(size.height) / size.height, Offset.Zero) {
+                drawImage(it)
+            }
+        }
     }
 }

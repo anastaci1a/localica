@@ -47,7 +47,7 @@ internal fun rememberCollectionVisual(uri: String?, provider: CoverProvider = Em
     val request = uri to revision
     val initial = remember(request, provider, retention) {
         retention?.visual(uri) ?: uri?.let { PlayerVisualCache.peek(it) } ?: run {
-            val thumbnail = retention?.preview()?.bitmap ?: ArtworkCache.peek(listOfNotNull(uri), 768)?.bitmap
+            val thumbnail = uri?.let { retention?.preview(it)?.bitmap ?: ArtworkCache.peek(listOf(it), 768)?.bitmap }
             if (thumbnail == null) PlayerVisual() else PlayerVisual(thumbnail.asImageBitmap(), thumbnailPalette(thumbnail))
         }
     }
