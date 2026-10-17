@@ -94,7 +94,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                                 }
                             })
                             if (checkpoint != null && onRevertOrder != null) GlassPresence(canRevert) {
-                                GlassActionButton(R.drawable.ic_seek_back, "Revert", enabled = !busy, onClick = {
+                                GlassActionButton(R.drawable.ic_revert, "Revert", enabled = !busy, onClick = {
                                     busy = true; failure = false
                                     onRevertOrder(checkpoint) { ok -> busy = false; failure = !ok
                                         if (ok) {

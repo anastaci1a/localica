@@ -28,7 +28,7 @@ class GlassPresenceTest {
             Box(Modifier.padding(40.dp).testTag("slot")) {
                 Box(Modifier.matchParentSize().background(Color.White).clickable { behindClicks++ })
                 GlassPresence(visible) {
-                    GlassActionButton(R.drawable.ic_seek_back, "Revert", onClick = { frontClicks++ })
+                    GlassActionButton(R.drawable.ic_revert, "Revert", onClick = { frontClicks++ })
                 }
             }
         } }
@@ -59,7 +59,7 @@ class GlassPresenceTest {
         var reduced by mutableStateOf(false)
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides reduced) {
             Box(Modifier.padding(40.dp).testTag("slot")) {
-                GlassPresence(visible) { GlassActionButton(R.drawable.ic_seek_back, "Revert", onClick = {}) }
+                GlassPresence(visible) { GlassActionButton(R.drawable.ic_revert, "Revert", onClick = {}) }
             }
         } } }
         compose.onNodeWithText("Revert").assertIsDisplayed()
