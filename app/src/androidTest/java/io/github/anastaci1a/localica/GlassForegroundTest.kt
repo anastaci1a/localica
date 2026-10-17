@@ -72,6 +72,7 @@ class GlassForegroundTest {
         var open by mutableStateOf(false)
         var nested by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
+        lateinit var host: GlassDialogs
         lateinit var parentView: View
         lateinit var nestedView: View
         val observations = mutableMapOf<String, Triple<Color, Color, Boolean>>()
@@ -87,6 +88,7 @@ class GlassForegroundTest {
             Text("$name foreground", Modifier.testTag("$name-ink"))
         }
         compose.setContent { LocalicaTheme {
+            host = checkNotNull(LocalGlassDialogs.current)
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = outerInk)) {
                 CompositionLocalProvider(LocalContentColor provides outerInk) {
                     val source = rememberFrostedBackdrop(Unit, dark = lightInk)
@@ -143,7 +145,7 @@ class GlassForegroundTest {
                 inkPixels > 12
             }
         }
-        repeat(2) {
+        repeat(2) { cycle ->
             compose.onNodeWithTag("artwork-trigger").performClick()
             assertPolarity("Parent") { parentView }
             compose.onNodeWithText("Open nested").performClick()
@@ -152,7 +154,21 @@ class GlassForegroundTest {
             compose.onNodeWithText("Nested sheet").assertDoesNotExist()
             assertPolarity("Parent") { parentView }
             compose.onNodeWithText("Close parent").performClick()
-            compose.waitUntil(5000) { !anchor.hidden && !anchor.modalPresent }
+            try {
+                compose.waitUntil(5000) { !anchor.hidden && !anchor.modalPresent }
+            } catch (failure: Exception) {
+                // Observe only after the original timeout; do not perturb the passing path.
+                val state = "cycle=$cycle lightInk=$lightInk contextual=$contextual open=$open nested=$nested " +
+                    "hidden=${anchor.hidden} present=${anchor.modalPresent} mounted=${anchor.triggerMounted} " +
+                    "drawn=${anchor.restoredDrawn} shadow=${anchor.shadowInModal} " +
+                    "progress=${anchor.contact.expansion.value} target=${anchor.contact.expansion.targetValue} " +
+                    "running=${anchor.contact.expansion.isRunning} velocity=${anchor.contact.expansion.velocity} " +
+                    "entries=${host.entries.map { entry -> listOf(entry.anchor === anchor, entry.mounted,
+                        entry.anchor.hidden, entry.anchor.modalPresent, entry.anchor.contact.expansion.value) }}"
+                android.util.Log.e("ForegroundReturn", state, failure)
+                failure.addSuppressed(IllegalStateException(state))
+                throw failure
+            }
             compose.onNodeWithTag("artwork-trigger").assertIsDisplayed()
             compose.runOnIdle { assertEquals("Return retains the original trigger ink", ink, anchor.ink) }
         }
