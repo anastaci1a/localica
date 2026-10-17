@@ -4,6 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateBounds
 import androidx.compose.ui.layout.LookaheadScope
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -33,6 +37,7 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.home.PinEdits
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -191,45 +196,74 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var collectionView by remember { mutableStateOf(false) }
     var collectionMenu by remember { mutableStateOf(false) }
     val collectionMenuAnchor = rememberGlassAnchor()
-    fun dismissSorting() { collectionMenu = false; onSortDismiss() }
+    val gridState = rememberLazyGridState()
+    var positionedPlaying by remember(route.key) { mutableStateOf(false) }
+    val orderScroll = remember { BrowseOrderScrollCoordinator() }
+    fun dismissSorting() {
+        // Retire pending receipts before visibility changes; disposal can happen later.
+        orderScroll.cancelPending()
+        collectionMenu = false
+        onSortDismiss()
+    }
+    val orderOwner = remember(route, selectionVisible, playerOpen) { Any() }
+    val currentOrderOwner by rememberUpdatedState(orderOwner)
+    DisposableEffect(orderOwner) { onDispose { orderScroll.cancel() } }
     val mutableQueue = queueState.library.queues.firstOrNull { route.collection?.kind == MediaKind.Queue && it.id == route.collection.id }
     val mutablePlaylist = playlists.playlists.firstOrNull { route.collection?.kind == MediaKind.Playlist && it.id == route.collection.id }
     val savedOrder = mutableQueue?.order ?: mutablePlaylist?.order
     val physicalOrder = mutableQueue?.entries?.map { it.id } ?: mutablePlaylist?.entries?.map { it.id }
     fun commitStyle(value: BrowseStyle) {
+        orderScroll.cancel()
         style = value
         if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
         dismissSorting()
     }
-    @Composable fun sortingPanel() {
+    // Each origin owns its opening tab; an inactive origin must not override it.
+    @Composable fun sortingPanel(initialView: Boolean) {
+        // Closing a pending dialog invalidates its callback, but not an already accepted follow.
+        val lifetime = remember { booleanArrayOf(true) }
+        DisposableEffect(Unit) {
+            orderScroll.cancel()
+            onDispose { lifetime[0] = false }
+        }
+        fun orderAction(followCurrent: Boolean, done: (Boolean) -> Unit,
+            action: ((OrderCommit?) -> Unit) -> Unit) {
+            val token = orderScroll.begin(orderOwner, route)
+            positionedPlaying = true
+            action { receipt ->
+                if (lifetime[0]) orderScroll.complete(token, currentOrderOwner, currentRoute,
+                    receipt?.changed == true,
+                    receipt?.let { BrowseOrderGeneration(token.route.collection!!, it.revision, it.order) },
+                    receipt?.currentEntryId.takeIf { followCurrent }, followCurrent = followCurrent)
+                done(receipt != null)
+            }
+        }
         val mutableRows = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
             mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
         }
         BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
         preferences.write(route, value, override)
         commitStyle(value)
-    }, { preferences.reset(route); commitStyle(preferences.read(route)) }, presentationOnly || collectionView,
+    }, { preferences.reset(route); commitStyle(preferences.read(route)) }, initialView,
         onRandomize = when {
-            mutableQueue != null && queues != null -> ({ done -> queues.randomize(mutableQueue.id, done) })
-            mutablePlaylist != null && playlistController != null -> ({ done -> playlistController.randomize(mutablePlaylist.id, done) })
+            mutableQueue != null && queues != null -> ({ done -> orderAction(false, done) { queues.randomizeOrder(mutableQueue.id, it) } })
+            mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, done) { playlistController.randomizeOrder(mutablePlaylist.id, it) } })
             else -> null
         }, mutableOrder = savedOrder, manualNeedsRestore = savedOrder != null && savedOrder.manual != physicalOrder,
         mutableOrderRows = mutableRows, orderSnapshot = library.snapshot,
         mutableOrderIds = physicalOrder, onRevertOrder = when {
-            mutableQueue != null && queues != null -> ({ checkpoint, done -> queues.revertOrder(mutableQueue.id, checkpoint, done) })
-            mutablePlaylist != null && playlistController != null -> ({ checkpoint, done -> playlistController.revertOrder(mutablePlaylist.id, checkpoint, done) })
+            mutableQueue != null && queues != null -> ({ checkpoint, done -> orderAction(true, done) { queues.revertOrderWithCommit(mutableQueue.id, checkpoint, it) } })
+            mutablePlaylist != null && playlistController != null -> ({ checkpoint, done -> orderScroll.cancel(); playlistController.revertOrder(mutablePlaylist.id, checkpoint, done) })
             else -> null
         },
         onApplySort = when {
-            mutableQueue != null && queues != null -> ({ method, ascending, done -> queues.applySort(mutableQueue.id, method, ascending, done) })
-            mutablePlaylist != null && playlistController != null -> ({ method, ascending, done -> playlistController.applySort(mutablePlaylist.id, method, ascending, done) })
+            mutableQueue != null && queues != null -> ({ method, ascending, done -> orderAction(true, done) { queues.applySortOrder(mutableQueue.id, method, ascending, it) } })
+            mutablePlaylist != null && playlistController != null -> ({ method, ascending, done -> orderScroll.cancel(); playlistController.applySort(mutablePlaylist.id, method, ascending, done) })
             else -> null
         }) }
 
-    val gridState = rememberLazyGridState()
-    var positionedPlaying by remember(route.key) { mutableStateOf(false) }
     SideEffect {
-        if (initialPlayingPosition && !positionedPlaying && !queryPending && loadedResult != null) {
+        if (initialPlayingPosition && !positionedPlaying && orderScroll.request == null && !queryPending && loadedResult != null) {
             val index = result.items.indexOfFirst { it.row?.id == playingEntryId }
             if (index >= 0) gridState.requestScrollToItem(index + 1, -with(density) { (if (showSearchPill) pillSlotHeight else 0.dp).roundToPx() })
             positionedPlaying = true
@@ -313,6 +347,70 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val scrollScope = rememberCoroutineScope()
     val artworkTransit = remember { ArtworkTransit() }
+    val latestBrowse by rememberUpdatedState(browse)
+    val latestReducedMotion by rememberUpdatedState(reducedMotion)
+    val latestTopInset by rememberUpdatedState(with(density) {
+        (if (showSearchPill || showFilters) pillSlotHeight else 0.dp).toPx()
+    })
+    var followingOrder by remember { mutableStateOf<BrowseOrderScrollRequest?>(null) }
+    fun sourceStillCommitted(request: BrowseOrderScrollRequest): Boolean {
+        val source = BrowseSourceRevision(library.snapshot,
+            playlistController?.state?.value?.playlists ?: playlists.playlists,
+            queues?.state?.value?.library?.queues ?: queueState.library.queues, libraryFilters)
+        return request.committed.matches(source)
+    }
+    // A post-commit prop publication may catch up while readiness waits. It must not
+    // restart/cancel the request; only a different actor-current structure does.
+    val visibleOrderSource = BrowseSourceRevision(library.snapshot, playlists.playlists, queueState.library.queues, libraryFilters)
+    LaunchedEffect(orderScroll.request, visibleOrderSource) {
+        orderScroll.request?.let { if (!sourceStillCommitted(it)) orderScroll.finish(it) }
+    }
+    // Cursor captures replace outer queue snapshots, not the committed entries generation.
+    LaunchedEffect(orderScroll.revision, orderScroll.request, orderOwner) {
+        val request = orderScroll.request ?: return@LaunchedEffect
+        if (!selectionVisible || playerOpen || !orderScroll.isCurrent(request, currentOrderOwner, currentRoute) ||
+            !sourceStillCommitted(request)) { orderScroll.finish(request); return@LaunchedEffect }
+        fun destination(): Int? {
+            if (latestBrowse.pending) return null
+            // Resolve the live active occurrence once readiness completes, not the
+            // potentially older cursor at commit. Motion itself never chases playback.
+            val target = if (request.followCurrent) queues?.state?.value?.library?.let { live ->
+                live.active?.takeIf { it.id == request.committed.collection.id }?.currentEntryId
+            } else request.targetOccurrenceId
+            return request.targetIndex(latestBrowse.current, currentOrderOwner, currentRoute, target)
+        }
+        try {
+            var target: Int
+            while (true) {
+                snapshotFlow { destination() }.first { it != null }
+                // Publication precedes lazy measurement. A cursor-only refresh may
+                // temporarily retain old rows again; wait rather than lose the request.
+                withFrameNanos { }; withFrameNanos { }
+                val resolved = destination()
+                if (resolved != null && gridState.layoutInfo.totalItemsCount ==
+                    (latestBrowse.current?.result?.items?.size ?: 0) + 1) {
+                    target = resolved
+                    break
+                }
+            }
+            if (!orderScroll.isCurrent(request, currentOrderOwner, currentRoute) || !sourceStillCommitted(request)) return@LaunchedEffect
+            followingOrder = request
+            artworkTransit.during(!latestReducedMotion &&
+                kotlin.math.abs(target - gridState.firstVisibleItemIndex) > gridState.layoutInfo.visibleItemsInfo.size * 2) {
+                if (target == 0) gridState.easeToTop(latestReducedMotion)
+                else gridState.easeToItem(target, latestReducedMotion, latestTopInset)
+            }
+        } finally {
+            if (followingOrder === request) followingOrder = null
+            orderScroll.finish(request)
+        }
+    }
+    // Accessibility/programmatic user scrolling can supersede a request still awaiting rows.
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling && followingOrder == null) orderScroll.cancel()
+        }
+    }
     val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
     val returnOwner = remember(route, style, library.snapshot, playlists.playlists, queueState.library.queues,
         libraryFilters, selectedAlbums) { Any() }
@@ -321,6 +419,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible,
         backEnabled = listBackEnabled && !route.search && !localSearchOpen && !playerOpen,
         action = listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter),
+        onSubmit = { orderScroll.cancel() },
         ready = {
             snapshotFlow { readyToScroll }.first { it }
             withFrameNanos { }; withFrameNanos { }
@@ -391,7 +490,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), fieldModifier = Modifier.focusRequester(focus))
 
         LookaheadScope {
-        if (popupDismiss == null || route.text.isNotBlank()) BoxWithConstraints(Modifier.weight(1f).onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
+        if (popupDismiss == null || route.text.isNotBlank()) BoxWithConstraints(Modifier.weight(1f).pointerInput(orderScroll) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                orderScroll.cancel()
+            }
+        }.onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
             .selectionPanelRelease(session, route.key,
                 enabled && !queryPending && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) { position ->
                 val item = reorder.hit(position)
@@ -416,6 +520,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier)
                 .pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
+                .controlScrollParent(gridState, ControlScrollAxis.Vertical)
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List, ${displayedStyle.listSize.name}"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
                 .browsePinch(enabled && !playerOpen && !queryPending && reorder.drag == null,
@@ -563,6 +668,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
                 CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
                     ReturnToPositionButton(up = returnDirection < 0, label = "Current song", visible = showCurrent && !session.active && reorder.drag == null) {
+                        orderScroll.cancel()
                         playingIndex?.let { target -> scrollScope.launch {
                             artworkTransit.during(!reducedMotion && kotlin.math.abs(target - gridState.firstVisibleItemIndex) > gridState.layoutInfo.visibleItemsInfo.size * 2) {
                                 gridState.easeToItem(target, reducedMotion, visibleTop)
@@ -596,7 +702,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
     if (artDetail) CollectionToolbar(gridState, reorder.viewportWidth, route.title.orEmpty(), collectionMenuAnchor,
         onBack, { view -> collectionView = view; collectionMenu = true }) {
-        if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel() }
+        if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel(initialView = collectionView) }
     }
     } } }
 
@@ -641,5 +747,5 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
             .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
     } }
-    if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel() }
+    if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }

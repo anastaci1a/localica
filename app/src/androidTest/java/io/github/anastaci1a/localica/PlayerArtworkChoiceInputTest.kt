@@ -99,21 +99,33 @@ class PlayerArtworkChoiceInputTest {
         compose.runOnIdle { assertEquals(1, saves) }
     }
 
-    /** Characterize the existing button contract; this is not a new drag-anywhere requirement. */
-    @Test fun unselectedOriginOverSlopCancelsActivationRatherThanChangingDraft() {
+    /** #366 replaces the unselected-button contract with shared pickup and release. */
+    @Test fun unselectedOriginPickupCancelsOrCommitsDraftOnlyOnRelease() {
         fixture()
         open()
         val first = option(ArtworkLayout.FullBackground)
         val second = option(ArtworkLayout.Floating)
-        phase("unselected-origin diagnostic drag") {
-            val bounds = second.fetchSemanticsNode().boundsInRoot
-            android.util.Log.i("ArtworkChoiceInput", "unselected target=$bounds movement=${slop * 2f}")
+        phase("unselected-origin canceled pickup") {
             second.performTouchInput {
-                down(center); moveBy(Offset(0f, -slop * 2f), delayMillis = 120); up()
+                down(center); moveBy(Offset(0f, -slop * 2f), delayMillis = 120); cancel()
             }
             first.assertIsSelected(); second.assertIsNotSelected()
             compose.runOnIdle { assertEquals(0, saves) }
         }
+        phase("unselected-origin owned pickup") {
+            val bounds = second.fetchSemanticsNode().boundsInRoot
+            android.util.Log.i("ArtworkChoiceInput", "unselected target=$bounds movement=${slop * 2f}")
+            second.performTouchInput {
+                down(center); moveBy(Offset(0f, -slop * 2f), delayMillis = 120)
+            }
+            first.assertIsSelected(); second.assertIsNotSelected()
+            compose.runOnIdle { assertEquals(0, saves) }
+            second.performTouchInput { up() }
+            second.assertIsSelected(); first.assertIsNotSelected()
+            compose.runOnIdle { assertEquals("Draft must not save before Select", 0, saves) }
+        }
+        confirm(ArtworkLayout.Floating)
+        compose.runOnIdle { assertEquals(1, saves) }
     }
 
     @Test fun selectedOriginDragCancelsWithoutChangingDraftAndCommitsOnlyOnRelease() {

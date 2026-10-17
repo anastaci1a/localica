@@ -5,23 +5,36 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 
-/** A button owns a contact through release, even after the finger leaves its bounds.
- * Leave down/up to clickable (including long press and accessibility); consuming motion
- * cancels activation after dragging and prevents a containing scroller stealing the contact.
- * Content selections/carousels and controls with their own drag recognizer do not use this. */
-internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventPass = PointerEventPass.Initial): Modifier = if (!enabled) this else pointerInput(pass) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
-        var dragged = false
-        do {
-            val event = awaitPointerEvent(pass)
-            val point = event.changes.firstOrNull { it.id == down.id } ?: break
-            if ((point.position - down.position).getDistance() > viewConfiguration.touchSlop) dragged = true
-            if (dragged) point.consume()
-        } while (event.changes.any { it.id == down.id && it.pressed })
+/** Keep standard click/long-press/accessibility handling; only arbitrate movement.
+ * A scroll winner sees movement before Final cancels the button's activation. */
+internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventPass = PointerEventPass.Initial,
+    axis: Int = ControlScrollAxis.None): Modifier = if (!enabled) this else composed {
+    val parent = rememberControlScrollContext()
+    Modifier.readControlScrollContext(parent).pointerInput(pass, axis) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, axis)
+            do {
+                val event = awaitPointerEvent(pass)
+                val point = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (point.isConsumed) break
+                if (event.changes.count { it.pressed } > 1) intent.cancel()
+                val movement = point.position - down.position
+                when (intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)) {
+                    ControlGestureOwner.Control -> point.consume()
+                    ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> {
+                        // Leave Initial/Main available to scrolling and pinch recognition.
+                        if (point.pressed) awaitPointerEvent(PointerEventPass.Final)
+                            .changes.firstOrNull { it.id == down.id }?.consume()
+                    }
+                    ControlGestureOwner.Pending -> Unit
+                }
+            } while (point.pressed)
+        }
     }
 }
 
@@ -31,7 +44,7 @@ internal fun ActionTextButton(onClick: () -> Unit, modifier: Modifier = Modifier
     val defaults = ButtonDefaults.textButtonColors()
     val foreground = controlStateColor(enabled, defaults.contentColor, defaults.disabledContentColor,
         "Action text availability")
-    androidx.compose.material3.TextButton(onClick, modifier.ownButtonDrag(enabled), enabled = enabled,
+    androidx.compose.material3.TextButton(controlActivation(enabled, onClick), modifier.ownButtonDrag(enabled), enabled = enabled,
         colors = defaults.copy(contentColor = foreground, disabledContentColor = foreground), content = content)
 }
 
@@ -41,6 +54,6 @@ internal fun ActionIconButton(onClick: () -> Unit, modifier: Modifier = Modifier
     val defaults = IconButtonDefaults.iconButtonColors()
     val foreground = controlStateColor(enabled, defaults.contentColor, defaults.disabledContentColor,
         "Action icon availability")
-    androidx.compose.material3.IconButton(onClick, modifier.ownButtonDrag(enabled), enabled = enabled,
+    androidx.compose.material3.IconButton(controlActivation(enabled, onClick), modifier.ownButtonDrag(enabled), enabled = enabled,
         colors = defaults.copy(contentColor = foreground, disabledContentColor = foreground), content = content)
 }

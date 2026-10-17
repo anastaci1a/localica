@@ -145,3 +145,19 @@ class SelectorTrackContactTest {
         }
     }
 }
+
+class SelectorViewportPickupTest {
+    @Test fun rtlOffsetAndVisibleRoundedLensAreMappedExactlyOnce() {
+        for (rtl in listOf(false, true)) {
+            val offset = selectorContentScrollOffset(50, 300, rtl)
+            assertEquals(if (rtl) 250f else 50f, offset, 0f)
+            val bounds = androidx.compose.ui.geometry.Rect(offset + 20f, 4f, offset + 100f, 60f)
+            val lens = SelectorTrackLens(bounds, 20f, 0f, 4f, 24f, 64f)
+            val viewport = androidx.compose.ui.geometry.Rect(0f, 0f, 80f, 64f)
+            org.junit.Assert.assertTrue(selectorVisibleLensContains(androidx.compose.ui.geometry.Offset(50f, 32f), lens, offset, viewport))
+            org.junit.Assert.assertFalse(selectorVisibleLensContains(androidx.compose.ui.geometry.Offset(21f, 5f), lens, offset, viewport))
+            org.junit.Assert.assertFalse(selectorVisibleLensContains(androidx.compose.ui.geometry.Offset(90f, 32f), lens, offset, viewport))
+            org.junit.Assert.assertFalse(selectorVisibleLensContains(androidx.compose.ui.geometry.Offset(10f, 32f), lens, offset, viewport))
+        }
+    }
+}

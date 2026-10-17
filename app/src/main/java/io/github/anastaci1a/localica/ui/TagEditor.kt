@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -100,7 +99,7 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                     Text(if (state.artworkOnly) "Change artwork" else "Edit ${state.tracks.size} ${if (state.tracks.size == 1) "song" else "songs"}", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     ActionTextButton(enabled = !state.busy, onClick = controller::close) { Text("Close editor") }
                 }
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f).controlVerticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!state.artworkOnly) Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     val artworkBackdrop = rememberFrostedBackdrop(cover to removeImage, dark = LocalFrostedBackdrop.current?.dark == true)
@@ -165,7 +164,7 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
     if (choosing) ImageChooser(artwork, { artwork.cancelChooser(); if (state.artworkOnly && imageUri == null) controller.close() }) { artwork.chosen(it); removeImage = false }
     if (viewing) ArtworkViewer(state.tracks.first().uri) { viewing = false }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Save changes to ${state.tracks.size} files?") },
-        text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }
+        text = { Column(Modifier.heightIn(max = 360.dp).controlVerticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }
             if (removeImage) Text("Remove artwork") else if (imageUri != null) Text("Replace artwork")
             imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text("Changes are written to the audio files. Playback pauses while editing a file in the active queue, then resumes after verification.") } },
@@ -176,7 +175,7 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
 @Composable
 private fun TagJobsDialog(state: TagEditorState, controller: TagEditingController) {
     GlassDialog(controller::hideJobs, GlassPlacement.Sheet) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().controlVerticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Tag editing jobs", style = MaterialTheme.typography.titleLarge)
             if (state.busy) {
                 Text("${state.results.size} of ${state.tracks.size} files checked")

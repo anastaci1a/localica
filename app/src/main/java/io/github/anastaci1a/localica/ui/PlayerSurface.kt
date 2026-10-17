@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -216,7 +215,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
-        Column(Modifier.fillMaxSize().verticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
+        Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
             ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration,

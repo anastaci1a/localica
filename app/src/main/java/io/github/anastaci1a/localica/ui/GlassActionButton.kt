@@ -1,6 +1,5 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -30,7 +29,7 @@ import androidx.compose.ui.unit.dp
 internal fun GlassActionButton(icon: Int, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Glass action availability")
     LiquidGlassSurface(modifier.alpha(opacity).heightIn(min = CompactControlSize).ownButtonDrag(enabled)
-        .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = onClick), pressFeedback = enabled) {
+        .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = controlActivation(enabled, onClick)), pressFeedback = enabled) {
         GlassActionButtonFace(icon, label)
     }
 }
@@ -47,7 +46,7 @@ internal fun GlassActionButtonFace(icon: Int, label: String, modifier: Modifier 
 }
 
 /** Keep each action's natural text width and logical order. Explicit overflow
- * navigation preserves button-owned drags while keeping large-font actions reachable. */
+ * navigation supplements scroll-intent drags while keeping large-font actions reachable. */
 @Composable
 internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     val scroll = rememberScrollState()
@@ -64,7 +63,7 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
     }
     Layout(modifier = modifier.fillMaxWidth(), content = {
         Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner)
-            .shadowViewportOutset(shadowInset, horizontal = true).horizontalScroll(scroll)
+            .shadowViewportOutset(shadowInset, horizontal = true).controlHorizontalScroll(scroll)
             .padding(shadowInset), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically, content = content)
         Row(Modifier.fillMaxWidth().then(if (scroll.maxValue == 0) Modifier.clearAndSetSemantics { } else Modifier),

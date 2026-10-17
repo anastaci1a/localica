@@ -44,7 +44,7 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
             override fun capturePresentation() = presentation
         }
     }
-    val handles = remember { mutableMapOf<String, LayoutCoordinates>() }
+    val actions = remember { mutableMapOf<String, LayoutCoordinates>() }
     val commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit = { ids, before, done ->
         ids.singleOrNull()?.let { move(it, before, done) } ?: done(false)
     }
@@ -61,16 +61,17 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
     Box(modifier.fillMaxWidth().testTag("queue-selector-list")
         .onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot(); reorder.viewportCoordinates = it }
         .onSizeChanged { reorder.viewportWidth = it.width; reorder.viewportHeight = it.height }
-        .keyedHandleDrag(reorder, enabled && panelReady, reducedMotion, handleAt = { point ->
-            val key = handles.entries.firstOrNull { (_, coordinates) ->
-                coordinates.isAttached && reorder.viewportCoordinates?.takeIf { it.isAttached }
-                    ?.localBoundingBoxOf(coordinates, clipBounds = false)?.contains(point) == true
-            }?.key
-            queues.firstOrNull { it.id == key }
+        .sharedKeyedDrag(reorder, enabled && panelReady, reducedMotion, itemAt = { point ->
+            val viewport = reorder.viewportCoordinates?.takeIf { it.isAttached }
+            fun LayoutCoordinates.containsPoint() = isAttached &&
+                viewport?.localBoundingBoxOf(this, clipBounds = false)?.contains(point) == true
+            val key = reorder.itemCoordinates.entries.firstOrNull { (_, row) -> row.containsPoint() }?.key
+            queues.firstOrNull { it.id == key && actions[key]?.containsPoint() != true }
         }, commit = commit)) {
         SelectionViewport { overscroll ->
             LazyVerticalGrid(columns = GridCells.Fixed(1), state = grid,
-                modifier = Modifier.testTag("queue-selector-grid").selectableGroup().padding(horizontal = 8.dp), overscrollEffect = overscroll) {
+                modifier = Modifier.testTag("queue-selector-grid").selectableGroup().padding(horizontal = 8.dp)
+                    .controlScrollParent(grid, ControlScrollAxis.Vertical), overscrollEffect = overscroll) {
                 items(reorder.rendered(queues), key = { it?.id ?: DropGapKey }) { queue ->
                     if (queue == null) {
                         Spacer(Modifier.fillMaxWidth().height(with(density) { (reorder.drag?.cardSize?.height ?: 0f).toDp() }))
@@ -83,11 +84,11 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
                             .graphicsLayer { alpha = reorder.drag?.takeIf { it.dropping && queue.id in it.keys }?.handoff?.value ?: 1f }
                             .onGloballyPositioned { reorder.itemCoordinates[queue.id] = it }) {
                             DisposableEffect(queue.id) { onDispose {
-                                reorder.itemCoordinates.remove(queue.id); handles.remove(queue.id)
+                                reorder.itemCoordinates.remove(queue.id); actions.remove(queue.id)
                             } }
                             QueueSelectorRow(displayed, presentation.numbers[queue.id] ?: 0, queue.id == browsedId,
                                 queue.id == playingId, isPlaying, reducedMotion, interactive,
-                                handleModifier = Modifier.onGloballyPositioned { handles[queue.id] = it },
+                                actionsModifier = Modifier.onGloballyPositioned { actions[queue.id] = it },
                                 onSelect = { onSelect(queue.id) }, onRename = { onRename(queue.id) }, onDelete = { onDelete(queue.id) },
                                 onOffset = { onOffset(queue.id, it) })
                         }
@@ -106,13 +107,13 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
 
 @Composable
 private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean, playing: Boolean,
-    isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, handleModifier: Modifier = Modifier,
+    isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, actionsModifier: Modifier = Modifier,
     onSelect: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit, onOffset: (Int) -> Unit) {
     Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
         modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false).testTag("queue-row-${queue.id}")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ReorderHandle("Reorder ${queue.name}", onOffset, handleModifier.testTag("queue-handle-${queue.id}"), enabled)
-            Row(Modifier.weight(1f).selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
+            ReorderHandle("Reorder ${queue.name}", onOffset, Modifier.testTag("queue-handle-${queue.id}"), enabled)
+            Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
                 .heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
                     if (chosen) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge)
@@ -120,8 +121,10 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
                     if (playing) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
                 }
             }
-            ActionIcon(R.drawable.ic_edit, "Rename ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onRename)
-            ActionIcon(R.drawable.ic_close, "Delete ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onDelete)
+            Row(actionsModifier) {
+                ActionIcon(R.drawable.ic_edit, "Rename ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onRename)
+                ActionIcon(R.drawable.ic_close, "Delete ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onDelete)
+            }
         }
     }
 }

@@ -83,9 +83,11 @@ class QueueSelectorDragTest {
     private fun list() = compose.onNodeWithTag("queue-selector-list")
     private fun localHandle(id: String): Offset = compose.onNodeWithTag("queue-handle-$id", useUnmergedTree = true)
         .fetchSemanticsNode().boundsInRoot.center - list().fetchSemanticsNode().boundsInRoot.topLeft
+    private fun localBody(id: String): Offset = compose.onNodeWithTag("queue-select-$id", useUnmergedTree = true)
+        .fetchSemanticsNode().boundsInRoot.center - list().fetchSemanticsNode().boundsInRoot.topLeft
     private fun begin(id: String = "q1"): Offset {
-        val start = localHandle(id)
-        list().performTouchInput { down(start); moveTo(start + Offset(0f, 35f), delayMillis = 80) }
+        val start = localBody(id)
+        list().performTouchInput { down(start); advanceEventTime(650); moveTo(start + Offset(0f, 35f), delayMillis = 80) }
         compose.onNodeWithTag("drag-stack").assertExists()
         return start
     }
@@ -93,7 +95,7 @@ class QueueSelectorDragTest {
     private fun order(controller: QueueController) = controller.state.value.library.queues.map { it.id }
     private fun assertNoActions() { assertEquals(0, selections); assertEquals(0, renames); assertEquals(0, deletions) }
 
-    @Test fun handleTracksContinuouslyAndCommitsOnlyOnRelease() = fixture { controller, db ->
+    @Test fun wholeRowHoldTracksContinuouslyAndCommitsOnlyOnRelease() = fixture { controller, db ->
         val before = controller.state.value
         val originalWidth = compose.onNodeWithTag("queue-row-q1").fetchSemanticsNode().boundsInRoot.width
         val start = begin()
@@ -115,6 +117,92 @@ class QueueSelectorDragTest {
         assertEquals(before.browsedId, controller.state.value.browsedId)
         assertEquals(controller.state.value.library, runBlocking { db.queues().read() })
         assertNoActions()
+    }
+
+    @Test fun ordinaryBodyTapSelectsWithoutReordering() = fixture { _, _ ->
+        val start = localBody("q1")
+        list().performTouchInput { click(start) }
+        assertEquals(1, selections); assertEquals(0, commits)
+        assertEquals(0, renames); assertEquals(0, deletions)
+        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+    }
+
+    @Test fun stationaryBodyHoldDoesNotActivateQueueAndNextTapStillWorks() = fixture { _, _ ->
+        val start = localBody("q1")
+        list().performTouchInput { down(start); advanceEventTime(650); up() }
+        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        assertEquals(0, commits); assertNoActions()
+        list().performTouchInput { click(start) }
+        assertEquals(1, selections)
+    }
+
+    @Test fun bodyHoldInterruptedBeforeAcquisitionDoesNotReorder() = fixture { _, _ ->
+        val start = localBody("q1")
+        list().performTouchInput { down(start); advanceEventTime(100); cancel() }
+        list().performTouchInput {
+            down(start); down(1, start + Offset(40f, 0f)); advanceEventTime(650)
+            moveBy(Offset(0f, 80f)); up(1); up(0)
+        }
+        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun secondFingerAfterStationaryHoldCancelsBeforeLiftAndNextHoldWorks() = fixture { controller, _ ->
+        val before = order(controller)
+        val start = localBody("q1")
+        list().performTouchInput { down(start); advanceEventTime(650); moveTo(start) }
+        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        list().performTouchInput {
+            down(1, start + Offset(40f, 0f))
+            moveTo(0, start + Offset(0f, 80f)); up(1)
+            moveTo(0, start + Offset(0f, 120f)); up(0)
+        }
+        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+        begin()
+        list().performTouchInput { cancel() }
+        awaitLanding()
+        assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+    }
+
+    @Test fun scaledRtlActionHoldsStayExcludedWhenDraggedAcrossRowBody() = fixture(
+        count = 40, rtl = true, scale = .8f) { controller, _ ->
+        val before = order(controller)
+        val root = compose.onRoot()
+        val origin = root.fetchSemanticsNode().boundsInRoot.topLeft
+        val body = compose.onNodeWithTag("queue-select-q1", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot.center - origin
+        val range = compose.onNodeWithTag("queue-selector-grid").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange]
+        val initialScroll = range.value()
+        for (label in listOf("Rename Queue 1", "Delete Queue 1")) {
+            val action = compose.onNodeWithContentDescription(label).fetchSemanticsNode().boundsInRoot.center - origin
+            assertTrue("RTL actions must be left of the row body", action.x < body.x)
+            root.performTouchInput { click(action) }
+            root.performTouchInput {
+                down(action); advanceEventTime(650); moveTo(body)
+                moveTo(body + Offset(0f, 80f)); up()
+            }
+            compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        }
+        assertEquals(1, renames); assertEquals(1, deletions)
+        assertEquals(0, selections); assertEquals(0, commits)
+        assertEquals(before, order(controller)); assertEquals(initialScroll, range.value(), .001f)
+    }
+
+    @Test fun trailingActionsKeepTapAndHoldDragOwnership() = fixture { _, _ ->
+        val rename = compose.onNodeWithContentDescription("Rename Queue 1")
+        rename.performTouchInput { click() }
+        assertEquals(1, renames)
+        val delete = compose.onNodeWithContentDescription("Delete Queue 1")
+        delete.performTouchInput { click() }
+        assertEquals(1, deletions)
+        for (action in listOf(rename, delete)) {
+            action.performTouchInput { down(center); advanceEventTime(650); moveBy(Offset(0f, 80f)); up() }
+            compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+        }
+        assertEquals(1, renames); assertEquals(1, deletions)
+        assertEquals(0, selections); assertEquals(0, commits)
     }
 
     @Test fun unchangedDropAcknowledgesWithoutWriting() = fixture { controller, db ->
@@ -254,7 +342,7 @@ class QueueSelectorDragTest {
         val start = localHandle("q0")
         compose.mainClock.autoAdvance = false
         try {
-            list().performTouchInput { down(start); moveTo(start + Offset(0f, 35f)) }
+            list().performTouchInput { down(start); advanceEventTime(650); moveTo(start + Offset(0f, 35f)) }
             compose.mainClock.advanceTimeByFrame()
             val viewport = list().fetchSemanticsNode().boundsInRoot
             val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
@@ -373,7 +461,7 @@ class QueueSelectorDragTest {
         val origin = root.fetchSemanticsNode().boundsInRoot.topLeft
         val handle = compose.onNodeWithTag("queue-handle-q1", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center - origin
         val rowWidth = compose.onNodeWithTag("queue-row-q1").fetchSemanticsNode().boundsInRoot.width
-        root.performTouchInput { down(handle); moveTo(handle + Offset(0f, 45f)) }
+        root.performTouchInput { down(handle); advanceEventTime(650); moveTo(handle + Offset(0f, 45f)) }
         val lifted = compose.onNodeWithTag("drag-stack").fetchSemanticsNode().boundsInRoot
         assertEquals(rowWidth, lifted.width, 1.5f)
         root.performTouchInput { cancel() }
