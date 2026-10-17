@@ -34,9 +34,14 @@ internal fun Modifier.controlScrollParent(state: ScrollableState, axis: Int): Mo
     controlScrollParent(axis) { state.canScrollBackward || state.canScrollForward }
 
 internal fun Modifier.controlVerticalScroll(state: ScrollState, enabled: Boolean = true,
-    reverseScrolling: Boolean = false): Modifier =
-    controlScrollParent(ControlScrollAxis.Vertical) { enabled && (state.canScrollBackward || state.canScrollForward) }
-        .verticalScroll(state, enabled, reverseScrolling = reverseScrolling)
+    reverseScrolling: Boolean = false): Modifier {
+    val alreadyFades = hasScrollEdgeFade()
+    return composed {
+        (if (LocalPopupScrollEdges.current && !alreadyFades) Modifier.scrollEdgeFade(state, reverseScrolling) else Modifier)
+            .controlScrollParent(ControlScrollAxis.Vertical) { enabled && (state.canScrollBackward || state.canScrollForward) }
+            .verticalScroll(state, enabled, reverseScrolling = reverseScrolling)
+    }
+}
 
 internal fun Modifier.controlHorizontalScroll(state: ScrollState, enabled: Boolean = true,
     reverseScrolling: Boolean = false): Modifier =

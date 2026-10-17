@@ -78,21 +78,6 @@ internal fun Modifier.listTopFade() = graphicsLayer { compositingStrategy = Comp
             size = Size(size.width, height), blendMode = BlendMode.DstIn)
     }
 
-/** Reveal a scroll affordance only as content actually leaves that viewport edge. */
-internal fun Modifier.scrollEdgeFade(scroll: androidx.compose.foundation.ScrollState) =
-    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
-        drawContent()
-        val band = 24.dp.toPx().coerceAtMost(size.height / 2)
-        if (band > 0f) {
-            val top = (scroll.value / band).coerceIn(0f, 1f)
-            val bottom = ((scroll.maxValue - scroll.value) / band).coerceIn(0f, 1f)
-            drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 1f - top), Color.Black), endY = band),
-                size = Size(size.width, band), blendMode = BlendMode.DstIn)
-            drawRect(Brush.verticalGradient(listOf(Color.Black, Color.Black.copy(alpha = 1f - bottom)), startY = size.height - band, endY = size.height),
-                topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - band), size = Size(size.width, band), blendMode = BlendMode.DstIn)
-        }
-    }
-
 @Composable
 internal fun ListSearchWindow(visible: Boolean, anchor: GlassAnchor, hasQuery: Boolean, onDismiss: () -> Unit,
     onBack: (() -> Unit)? = null, content: @Composable () -> Unit) {
