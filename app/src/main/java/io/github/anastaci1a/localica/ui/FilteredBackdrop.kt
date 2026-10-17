@@ -31,7 +31,12 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
     BackdropLease(source)
     BackdropLease(homeSource?.takeUnless { it === source })
     val currentOrigin by rememberUpdatedState(origin)
-    val layer = rememberGraphicsLayer()
+    // Android 12 may retain the filtered image of an updated source RenderNode.
+    // Replace that filter layer only when a shared legacy capture changes; ordinary
+    // frames reuse it, and modern live optics never subscribe to CPU snapshots.
+    val layer = if (android.os.Build.VERSION.SDK_INT < 33) key(source.snapshot, homeSource?.snapshot) {
+        rememberGraphicsLayer()
+    } else rememberGraphicsLayer()
     val primary = if (homeSource != null) rememberGraphicsLayer() else null
     val home = if (primary != null) rememberGraphicsLayer() else null
     val canUseAverage = average != null && (source.materialOnly || homeSource?.materialOnly == true)

@@ -8,17 +8,30 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.roundToInt
 
-/** Android 8–11 fallback: shared, bounded, off-main blur with premultiplied alpha. */
+/** Publish clear CPU-readable pixels once per capture, before any legacy consumer
+ * can reach a software Canvas. Already-compatible images retain their identity. */
+internal fun softwareGlassSnapshot(image: ImageBitmap): ImageBitmap {
+    val bitmap = image.asAndroidBitmap()
+    return if (bitmap.config == Bitmap.Config.HARDWARE)
+        requireNotNull(bitmap.copy(Bitmap.Config.ARGB_8888, false)).asImageBitmap()
+    else image
+}
+
+/** Android 8–12 fallback: shared, bounded, off-main blur with premultiplied alpha. */
 internal suspend fun blurGlassSnapshot(image: ImageBitmap, radius: Float): ImageBitmap {
     val scale = if (radius < 4f) 1 else 4
-    val original = image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
+    val input = image.asAndroidBitmap()
+    // Keep the filter's existing ARGB normalization for other formats; the
+    // shared clear capture already has this format and needs no second copy.
+    val original = if (input.config == Bitmap.Config.ARGB_8888) input
+        else requireNotNull(input.copy(Bitmap.Config.ARGB_8888, false))
     val w = (original.width / scale).coerceAtLeast(1)
     val h = (original.height / scale).coerceAtLeast(1)
     val small = Bitmap.createScaledBitmap(original, w, h, true)
-    if (original !== small) original.recycle()
     var pixels = IntArray(w * h)
     small.getPixels(pixels, 0, w, 0, 0, w, h)
-    small.recycle()
+    if (small !== original) small.recycle()
+    if (original !== input) original.recycle()
     pixels.indices.forEach { index ->
         val color = pixels[index]; val a = color ushr 24
         pixels[index] = (a shl 24) or (((color ushr 16 and 255) * a / 255) shl 16) or
