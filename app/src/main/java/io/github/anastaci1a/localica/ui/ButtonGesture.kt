@@ -31,7 +31,7 @@ internal fun ActionTextButton(onClick: () -> Unit, modifier: Modifier = Modifier
     val defaults = ButtonDefaults.textButtonColors()
     val foreground = controlStateColor(enabled, defaults.contentColor, defaults.disabledContentColor,
         "Action text availability")
-    androidx.compose.material3.TextButton(onClick, modifier.ownButtonDrag(enabled), enabled = enabled,
+    androidx.compose.material3.TextButton(controlActivation(enabled, onClick), modifier.ownButtonDrag(enabled), enabled = enabled,
         colors = defaults.copy(contentColor = foreground, disabledContentColor = foreground), content = content)
 }
 
@@ -41,6 +41,6 @@ internal fun ActionIconButton(onClick: () -> Unit, modifier: Modifier = Modifier
     val defaults = IconButtonDefaults.iconButtonColors()
     val foreground = controlStateColor(enabled, defaults.contentColor, defaults.disabledContentColor,
         "Action icon availability")
-    androidx.compose.material3.IconButton(onClick, modifier.ownButtonDrag(enabled), enabled = enabled,
+    androidx.compose.material3.IconButton(controlActivation(enabled, onClick), modifier.ownButtonDrag(enabled), enabled = enabled,
         colors = defaults.copy(contentColor = foreground, disabledContentColor = foreground), content = content)
 }

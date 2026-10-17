@@ -31,14 +31,14 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
     val scope = rememberCoroutineScope()
     var animation by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     Box(modifier.ownButtonDrag(enabled).semantics { contentDescription = label }
-        .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null) {
+        .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = controlActivation(enabled) {
             onClick()
             if (glyph != TransportGlyph.PlayPause && !reducedMotion) { animation?.cancel(); animation = scope.launch {
                 travel.snapTo(0f)
                 travel.animateTo(1f, tween(550, easing = LinearEasing))
                 travel.snapTo(0f)
             } }
-        }, contentAlignment = Alignment.Center) {
+        }), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(iconSize)) {
             val color = tint.copy(alpha = tint.alpha * opacity)
             fun roundedPolygon(points: List<Offset>, alpha: Float = 1f) {
