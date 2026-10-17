@@ -161,6 +161,11 @@ class SelectorTrackControlsTest {
             } else 4f
             assertEquals("The resting lens uses the independently rounded layout inset", expectedGap, oldGap, .1f)
             assertTrue("The contact gap must progressively close: $oldGap -> $newGap", newGap < oldGap - .1f)
+            val extension = if (vertical) stretched.height.value - shell.height.value else stretched.width.value - shell.width.value
+            assertTrue("Track extension stays inside the shared physical cap", extension <= SelectorMaximumExtension.value + 1f / compose.density.density)
+            assertEquals("The held lens preserves its resting cross dimension",
+                if (vertical) lens.width.value else lens.height.value,
+                if (vertical) pressed.width.value else pressed.height.value, .1f)
             assertTrue("The outer track stretches along travel", if (vertical) stretched.height > shell.height else stretched.width > shell.width)
             assertTrue("Option content follows the moving wall", if (vertical) movedContent.top + movedContent.bottom < content.top + content.bottom else movedContent.left + movedContent.right < content.left + content.right)
             assertTrue("Option content deforms on the travel axis", if (vertical) movedContent.height > content.height else movedContent.width > content.width)

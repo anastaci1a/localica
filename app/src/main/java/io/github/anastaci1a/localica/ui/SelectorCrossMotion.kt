@@ -22,7 +22,7 @@ internal fun rememberSelectorCrossFrame(raw: SelectorCrossFrame, rest: SelectorC
     val captured = applied.frame
     val proposed = when {
         reduced || resized -> raw
-        changedContact && (!held || interrupted) -> captured
+        changedContact && (!held || interrupted || captured != raw) -> captured
         phase?.regrab == true -> raw.toward(phase!!.release.start, phase!!.release.progress(elapsed))
         phase != null -> phase!!.release.frame(elapsed)
         else -> raw
@@ -32,7 +32,8 @@ internal fun rememberSelectorCrossFrame(raw: SelectorCrossFrame, rest: SelectorC
     SideEffect { applied.frame = output; applied.rest = rest; applied.held = held }
     LaunchedEffect(held, rest, reduced) {
         if (reduced || resized || !changedContact) { phase = null; return@LaunchedEffect }
-        if (held && !interrupted) { phase = null; return@LaunchedEffect }
+        if (held && !interrupted && captured == raw) { phase = null; return@LaunchedEffect }
+        // A new hold during ordinary travel also bridges from its displayed contour.
         // Cross velocity is dissipated at the release/re-grab boundary. Axial momentum
         // and optical depth retain their existing uninterrupted GlassBodyState clocks.
         val release = SelectorCrossReturn(captured, if (held) raw else rest)
