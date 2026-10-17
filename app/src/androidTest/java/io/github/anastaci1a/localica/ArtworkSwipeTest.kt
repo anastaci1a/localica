@@ -236,26 +236,37 @@ class ArtworkSwipeTest {
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun externalPlaybackChangesCancelAHeldGesture() {
+    @Test fun externalPlaybackChangesCancelAHeldGesture() = externalChangeCancels(-1f, false)
+    @Test fun externalPlaybackChangesCancelAHeldPreviousGesture() = externalChangeCancels(1f, false)
+    @Test fun sameArtworkExternalVisitCancelsAHeldNextGesture() = externalChangeCancels(-1f, true)
+    @Test fun sameArtworkExternalVisitCancelsAHeldPreviousGesture() = externalChangeCancels(1f, true)
+
+    private fun externalChangeCancels(direction: Float, sameArtwork: Boolean) {
         var visit by mutableStateOf("A")
         var current by mutableStateOf(red)
         var calls = 0
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             PlayerSurface(state, true, {}, InterfaceSettings(), remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
                 visual = current, artworkVisit = visit, nextArtwork = ArtworkNeighbor("B", blue),
+                previousArtwork = ArtworkNeighbor("previous", blue),
                 onArtworkVisit = { _, complete -> calls++; complete(false) })
         } } }
         val hit = compose.onNodeWithTag("artwork-gesture")
         compose.mainClock.autoAdvance = false
-        hit.performTouchInput { down(Offset(width * .8f, centerY)); moveBy(Offset(-width * .4f, 0f), delayMillis = 300) }
+        hit.performTouchInput {
+            down(Offset(width * if (direction < 0f) .8f else .2f, centerY))
+            moveBy(Offset(direction * width * .4f, 0f), delayMillis = 300)
+        }
         compose.mainClock.advanceTimeBy(32)
-        compose.runOnIdle { visit = "external"; current = green }
+        compose.onNodeWithTag("player-neighbor-artwork", true).assertExists()
+        compose.runOnIdle { visit = "external"; current = if (sameArtwork) red else green }
         compose.mainClock.advanceTimeBy(32)
         hit.performTouchInput { up() }
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
         assertEquals(0, calls)
         val image = compose.onNodeWithTag("player-artwork", true).captureToImage().toPixelMap()
-        assertTrue(image[image.width / 2, image.height / 2].green > .95f)
+        val center = image[image.width / 2, image.height / 2]
+        assertTrue(if (sameArtwork) center.red > .95f else center.green > .95f)
     }
 }

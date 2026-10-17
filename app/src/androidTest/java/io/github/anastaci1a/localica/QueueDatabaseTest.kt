@@ -60,7 +60,7 @@ class QueueDatabaseTest {
             old.version = 1
         }
         val db = Room.databaseBuilder(context, QueueDatabase::class.java, name)
-            .addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6).build()
+            .addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6, QueueDatabase.MIGRATION_6_7).build()
         try {
             val restored = db.queues().read()
             assertEquals(listOf("old", "new"), restored.queues.map { it.id })
