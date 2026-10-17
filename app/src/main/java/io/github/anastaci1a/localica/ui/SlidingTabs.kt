@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
@@ -42,7 +43,9 @@ import kotlin.math.roundToInt
 internal fun magneticTabPosition(raw: Float): Float = magneticChoicePosition(raw)
 
 @Composable
-internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, onSelect: (MainTab) -> Unit) {
+internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, onSelect: (MainTab) -> Unit) {
+    val trackActivity = activity ?: rememberSelectorTrackActivity()
+    DisposableEffect(trackActivity) { onDispose { trackActivity.clear() } }
     val page = pagePosition()
     val reduced = LocalReducedMotion.current
     val scope = rememberCoroutineScope()
@@ -127,11 +130,20 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val rawFrame = rawGeometry.lens(lens.value, tabs.size, insets, false, rtl,
             if (appearance.tabStyle == TabLensStyle.Classic) GlassShape() else selectorBody.value, rawTrack.height / 2f)
         val restGeometry = rawGeometry.copy(stretch = 0f, heldCrossInset = null)
+        val restCross = SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset,
+            (baseHeight / 2f - inset).coerceAtLeast(0f), baseHeight / 2f)
         val cross = rememberSelectorCrossFrame(rawFrame.crossFrame(rawGeometry),
-            SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset, (baseHeight / 2f - inset).coerceAtLeast(0f), baseHeight / 2f), pressed || dragging,
+            restCross, pressed || dragging,
             shell.value == GlassShape() && selectorBody.value == GlassShape(),
             maximumCorner = rawFrame.bounds.width / 2f, maximumOuterCorner = rawGeometry.travelExtent / 2f,
             enabled = fits && appearance.tabStyle != TabLensStyle.Classic)
+        // The presentation rest must include the same corner clamps as the lens,
+        // including a one-tab host narrower than its height.
+        val effectiveRestCross = restGeometry.lens(lens.value, tabs.size, insets, false, rtl,
+            GlassShape(), baseHeight / 2f).crossFrame(restGeometry)
+        val moving = pressed || dragging || pageDragging || lens.isRunning ||
+            shell.value != GlassShape() || selectorBody.value != GlassShape() || cross != effectiveRestCross
+        SideEffect { trackActivity.update(moving) }
         val geometry = rawGeometry.copy(crossExtentOverride = cross.shell)
         val track = if (fits) androidx.compose.ui.geometry.Rect(geometry.travelStart, geometry.crossStart,
             geometry.travelEnd, geometry.crossStart + geometry.crossExtent) else rawTrack
@@ -207,9 +219,13 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         clipPath(path, if (interactive) ClipOp.Difference else ClipOp.Intersect) { this@drawWithContent.drawContent() }
                     }), contentAlignment = AbsoluteAlignment.TopLeft) {
                     tabs.forEachIndexed { index, tab ->
+                        if (interactive) DisposableEffect(trackActivity, index) {
+                            onDispose { trackActivity.focus(index, false) }
+                        }
                         val cell = (if (atlas) atlasGeometry else geometry).slot(index, tabs.size, insets, false, rtl).cell
                         Box(Modifier.selectorTrackPlacement(cell)
-                            .then(if (interactive) Modifier.testTag("tab-option-$index").selectable(active == tab,
+                            .then(if (interactive) Modifier.testTag("tab-option-$index")
+                                .onFocusChanged { trackActivity.focus(index, it.isFocused) }.selectable(active == tab,
                                 interactionSource = null, indication = null, role = Role.Tab, onClick = { tap(index) }) else Modifier),
                             contentAlignment = Alignment.Center) {
                             Column(Modifier.requiredSize(width, with(density) { baseHeight.toDp() })
