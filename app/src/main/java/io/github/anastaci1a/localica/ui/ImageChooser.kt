@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import android.Manifest
-import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -21,15 +20,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import io.github.anastaci1a.localica.R
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.editing.CoverImages
 
 @Composable
 internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
+    ImageChooser(rememberArtworkWorkflow("standalone", startChoosing = true), onDismiss, onChosen)
+}
+
+@Composable
+internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     val context = LocalContext.current
     val images = remember { CoverImages(context) }
-    var cropUri by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var revision by remember { mutableIntStateOf(0) }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { revision++ }
     val hasPermission = remember(revision) {
@@ -38,27 +42,31 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
             (Build.VERSION.SDK_INT >= 34 && granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED))
         else granted(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
-    val recent by produceState(emptyList<String>(), revision, hasPermission) { value = if (hasPermission) images.recent() else emptyList() }
+    val recent by produceState(emptyList<String>(), revision, hasPermission) { value = images.recent(includeDevicePhotos = hasPermission) }
+    var unavailableRecent by remember(recent, revision) { mutableStateOf(false) }
     fun chosen(uri: Uri?) { if (uri != null) {
-        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        images.remember(uri.toString()); cropUri = uri.toString()
+        runCatching { images.selected(uri.toString()) }; revision++; workflow.crop(uri.toString())
     } }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), ::chosen)
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { revision++ }
-    if (cropUri == null) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
+    if (workflow.stage == ArtworkStage.Chooser) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
-            if (hasPermission && recent.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
+            if (recent.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
-                    val cover by produceState<android.graphics.Bitmap?>(null, uri) {
-                        value = runCatching { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
+                    val cover by produceState<android.graphics.Bitmap?>(null, uri, recent, revision) {
+                        value = try { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+                        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                        catch (_: Exception) { null }
+                        if (value == null) unavailableRecent = true
                     }
-                    cover?.let { Image(it.asImageBitmap(), "Choose recent image", Modifier.size(104.dp).clip(RoundedCornerShape(16.dp)).clickable { chosen(Uri.parse(uri)) }, contentScale = ContentScale.Crop) }
+                    cover?.let { Image(it.asImageBitmap(), "Choose recent image", Modifier.testTag("recent-artwork-$uri").size(104.dp).clip(RoundedCornerShape(16.dp)).clickable { chosen(Uri.parse(uri)) }, contentScale = ContentScale.Crop) }
                 }
             }
             if (!hasPermission) {
-            Text("Allow photo access to see recent images here.", style = MaterialTheme.typography.bodySmall)
+            Text("Allow photo access to also see recent device photos.", style = MaterialTheme.typography.bodySmall)
             GlassActionButton(R.drawable.ic_albums, "Allow recent photos", Modifier.fillMaxWidth()) { permission.launch(when {
                 Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
                 Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
@@ -72,5 +80,11 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
             GlassActionButton(R.drawable.ic_folder, "Browse files", Modifier.fillMaxWidth()) { files.launch(arrayOf("image/*")) }
         }
     }, confirmButton = {}, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
-    cropUri?.let { uri -> ArtworkCrop(uri, { cropUri = null }, onChosen) }
+    workflow.cropUri?.let { uri ->
+        DisposableEffect(uri) {
+            val lease = images.retain(uri)
+            onDispose { lease.close() }
+        }
+        ArtworkCrop(uri, workflow::cropCancelled, onChosen)
+    }
 }

@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
@@ -22,20 +23,27 @@ import kotlinx.coroutines.withContext
 internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins: List<MediaRef>,
     onSettings: () -> Unit, onBrowse: () -> Unit, onOpen: (BrowserItem, List<SongRow>) -> Unit,
     onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
-    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default,
+    queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, selectionVisible: Boolean = true,
+    listBackEnabled: Boolean = false,
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null, queues: io.github.anastaci1a.localica.queue.QueueController? = null) {
+    val sorts = rememberBrowseSortSnapshot()
     val cache = LocalBrowsePresentationCache.current
-    val cached = remember(library.snapshot, playlists.playlists, pins, cache) { cache?.home(library.snapshot, playlists.playlists, pins) }
-    val items by produceState(cached.orEmpty(), library.snapshot, playlists.playlists, pins) {
-        if (cached != null) { value = cached; return@produceState }
+    val cached = remember(library.snapshot, playlists.playlists, pins, cache, sorts) { cache?.home(library.snapshot, playlists.playlists, pins, sorts) }
+    val presented by produceState(sorts to cached.orEmpty(), library.snapshot, playlists.playlists, pins, sorts) {
+        if (cached != null) { value = sorts to cached; return@produceState }
         val result = withContext(queryDispatcher) {
             val catalog = BrowseQueries.evaluate(library.snapshot, playlists.playlists,
-                BrowseRoute(MainTab.Home, globalSearch = true)).items.associateBy { it.ref }
+                BrowseRoute(MainTab.Home, globalSearch = true), sorts = sorts).items.associateBy { it.ref }
             pins.mapNotNull { catalog[it] }
         }
-        cache?.putHome(library.snapshot, playlists.playlists, pins, result)
-        value = result
+        cache?.putHome(library.snapshot, playlists.playlists, pins, result, sorts)
+        value = sorts to result
     }
+    val items = presented.second
+    val currentOrder = presented.first.sameCollections(sorts)
+    val session = LocalSessionSelection.current ?: remember { SessionSelection() }
+    val songs = items.mapNotNull { it.row }
+    BindSelectionScope(session, null, songs, selectionVisible)
     var info by remember { mutableStateOf<io.github.anastaci1a.localica.library.Track?>(null) }
     val editTags = LocalTagEdit.current
     var menu by remember { mutableStateOf<MediaRef?>(null) }
@@ -49,17 +57,16 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             refreshBackdrop()
         }
     }
-    var consumedScrollRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(scrollToTopRequest) {
-        if (consumedScrollRequest != scrollToTopRequest) {
-            consumedScrollRequest = scrollToTopRequest
-            artworkTransit.during(!reducedMotion && scroll.firstVisibleItemIndex > scroll.layoutInfo.visibleItemsInfo.size * 2) {
+    val returnOwner = remember(library.snapshot, playlists.playlists, pins) { Any() }
+    ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible, listBackEnabled && !session.active,
+        listReturnAction(scroll.canScrollBackward, scroll.isScrollInProgress, false), ready = {}, execute = { action ->
+            if (action == ListReturnAction.ScrollTop) artworkTransit.during(!reducedMotion &&
+                scroll.firstVisibleItemIndex > scroll.layoutInfo.visibleItemsInfo.size * 2) {
                 scroll.easeToItem(0, reducedMotion, 500)
             }
-        }
-    }
+        })
     CompositionLocalProvider(LocalArtworkTransit provides artworkTransit) {
-    LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
+    LazyColumn(Modifier.fillMaxSize().controlScrollParent(scroll, ControlScrollAxis.Vertical), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
@@ -68,30 +75,39 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
-        item { LazyRow(state = carousel, modifier = Modifier.nestedScroll(HorizontalGestureOwner), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { SelectionViewport { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
+            modifier = Modifier.nestedScroll(HorizontalGestureOwner)
+                .controlScrollParent(carousel, ControlScrollAxis.Horizontal).testTag("home-pins"), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
                 val anchor = rememberGlassAnchor()
-                Column(Modifier.width(160.dp).clip(Corners.card).combinedClickable(onClick = { onOpen(item, items.mapNotNull { it.row }) },
+                val selectedCount = session.selectedCount(item)
+                Column(Modifier.width(160.dp).clip(Corners.card).testTag("pin-${item.key}")
+                    .selectionLens(selectedCount > 0, item.row == null && selectedCount > 0 && selectedCount < item.songs.size)
+                    .combinedClickable(enabled = currentOrder, onClick = {
+                        if (item.row != null && session.active) session.toggle(null, item.row)
+                        else onOpen(item, songs)
+                    },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {
                     MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f).contextMenuAnchor(anchor, item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)), shape = artworkShape(item.ref.kind))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
-                CollectionActions(menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null }, onInformation = { info = it }, extra = {
+                CollectionActions(currentOrder && menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null }, onInformation = { info = it }, extra = {
                     ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
                     ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,
                         onClick = { onMove(item.ref, 1); menu = null })
                 })
             } }
-        } }
+        } } }
     }
     }
-    info?.let { track -> SongInformation(track, { info = null }, { editTags?.invoke(listOf(track)) {} }) { action ->
+    info?.let { track -> SongInformation(track, { info = null }, { editTags?.invoke(listOf(track)) {} }, folders = library.snapshot.folders) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
-        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab)).items
-            .firstOrNull { item -> item.songs.any { it.track.id == track.id } }?.let { info = null; onOpen(it, it.songs) }
+        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
+            .firstOrNull { item -> item.songs.any { it.track.id == track.id &&
+                (action != PlayerAction.Folder || io.github.anastaci1a.localica.library.sameSongInformationLocation(it.track, track)) } }?.let { info = null; onOpen(it, it.songs) }
     } }
 
 }

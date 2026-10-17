@@ -1,6 +1,10 @@
 package io.github.anastaci1a.localica
 
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
+
 import android.app.Application
+import kotlinx.coroutines.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
 import androidx.room.Room
@@ -14,6 +18,11 @@ import io.github.anastaci1a.localica.library.TreeScanner
 class LocalicaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            // The registry starts fail-closed before any service can create/open a source.
+            // The writer publishes a useful Unknown state if inspection fails.
+            runCatching { tagWriter.initialize() }
+        }
         java.io.File(cacheDir, "tag-views").listFiles()?.forEach { it.delete() }
     }
     val statistics by lazy {
@@ -22,15 +31,26 @@ class LocalicaApplication : Application() {
     }
     val scanner by lazy { io.github.anastaci1a.localica.scanner.ScanController(this, library) }
     val lyrics by lazy { io.github.anastaci1a.localica.lyrics.LyricsRepository(this) }
-    val tagEditing by lazy { io.github.anastaci1a.localica.editing.TagEditingController(this, library, queues, playlists) }
+    val tagEditing by lazy { io.github.anastaci1a.localica.editing.TagEditingController(this, library, queues, playlists, tagWriter) }
     val playlists by lazy {
         PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").addMigrations(PlaylistDatabase.MIGRATION_1_2, PlaylistDatabase.MIGRATION_2_3, PlaylistDatabase.MIGRATION_3_4).build().playlists(),
-            coverDirectory = java.io.File(filesDir, "playlist-covers"))
+            coverDirectory = java.io.File(filesDir, "playlist-covers"),
+            sortSnapshot = ::liveSortSnapshot)
+    }
+    val nativeReaders = io.github.anastaci1a.localica.playback.NativeReaders(
+        io.github.anastaci1a.localica.playback.RecoveryAdmission.Checking)
+    val tagWriter by lazy {
+        io.github.anastaci1a.localica.editing.RecoverableTagWriter(java.io.File(filesDir, "tag-recovery"),
+            io.github.anastaci1a.localica.editing.AndroidEditableDocuments(this), nativeReaders)
     }
     val queues by lazy {
-        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6).build().queues(),
-            QueuePreferences(this), library)
+        QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6, QueueDatabase.MIGRATION_6_7).build().queues(),
+            QueuePreferences(this), library, readers = nativeReaders, sortSnapshot = ::liveSortSnapshot)
     }
+    private suspend fun liveSortSnapshot() = withContext(Dispatchers.Default) {
+        combine(library.snapshots, statistics.counts) { snapshot, counts -> counts.applyTo(snapshot) }.first()
+    }
+
     val library by lazy {
         val database = Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4, LibraryDatabase.MIGRATION_4_5, LibraryDatabase.MIGRATION_5_6).build()
         LibraryRepository(RoomLibraryStore(database.libraryDao()), TreeScanner(AndroidDocuments(this)),

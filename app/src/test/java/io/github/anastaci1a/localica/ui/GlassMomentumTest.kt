@@ -5,6 +5,140 @@ import org.junit.Test
 import kotlin.math.abs
 
 class GlassMomentumTest {
+    @Test fun normalConvergencePublishesExactTargetsInsteadOfResidualLayoutRounding() {
+        for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f)) {
+            val body = GlassMomentum(damping)
+            repeat(fps) { body.advance(3f, 1f / fps, pressure = -.15f, contact = 1f) }
+            var frames = 0
+            do { body.advance(0f, 1f / fps); frames++ } while (!body.settled && frames < fps * 20)
+            assertTrue("Normal return converges at $fps fps, damping=$damping", body.settled)
+            assertTrue("The convergence epsilon leaves a real residual", body.shape.strain != 0f || body.shape.depth != 0f)
+            assertTrue(body.finishSettlement())
+            assertEquals(GlassShape(), body.shape)
+            assertEquals(1f, body.scaleX, 0f)
+            assertEquals(1f, body.scaleY, 0f)
+        }
+    }
+
+    @Test fun unfinishedSettlementPreservesTheShapeAndVelocityForTheNextOwner() {
+        val body = GlassMomentum(); val uninterrupted = GlassMomentum()
+        repeat(5) { for (item in listOf(body, uninterrupted)) item.advance(3f, 1f / 60, contact = 1f) }
+        val shape = body.shape
+        assertFalse(body.finishSettlement())
+        assertEquals(shape, body.shape)
+        repeat(120) {
+            body.advance(-2f, 1f / 60)
+            uninterrupted.advance(-2f, 1f / 60)
+            assertEquals("Rejected completion preserves momentum as well as shape", uninterrupted.shape, body.shape)
+        }
+    }
+
+    @Test fun heldConvergenceFinishesAtItsForcedTargetInsteadOfResettingToRest() {
+        val body = GlassMomentum()
+        var frames = 0
+        do { body.advance(0f, 1f / 60, pressure = -.15f, contact = 1f); frames++ }
+        while (!body.settled && frames < 1200)
+        assertTrue(body.finishSettlement())
+        assertEquals(-.15f, body.strain, 0f)
+        assertTrue(body.shape.depth < 0f)
+    }
+
+    @Test fun axisTransferPreservesScreenShapeAndReleaseVelocity() {
+        val horizontal = GlassMomentum()
+        repeat(12) { horizontal.advance(3f, 1f / 120) }
+        val vertical = GlassMomentum().apply { blendFrom(horizontal, aAxis = -1f, bAxis = -1f) }
+        assertEquals(horizontal.shape.scaleX(), vertical.shape.scaleX(true), .000001f)
+        assertEquals(horizontal.shape.scaleY(), vertical.shape.scaleY(true), .000001f)
+        // Maintain constant travel speed so no new directional impulse is injected.
+        repeat(120) {
+            horizontal.advance(3f, 1f / 120)
+            vertical.advance(3f, 1f / 120)
+            assertEquals(horizontal.shape.scaleX(), vertical.shape.scaleX(true), .000001f)
+            assertEquals(horizontal.shape.scaleY(), vertical.shape.scaleY(true), .000001f)
+        }
+    }
+
+    @Test fun splittingRetainsReleaseEnergyAndSubsequentMotion() {
+        for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f)) {
+            val joined = GlassMomentum(damping)
+            repeat(fps / 4) { joined.advance(2f, 1f / fps, contact = 1f) }
+            repeat(3) { joined.advance(0f, 1f / fps) }
+            val split = GlassMomentum(damping).apply { blendFrom(joined) }
+            assertEquals(joined.shape, split.shape)
+            repeat(fps) {
+                val velocity = if (it < fps / 3) -1f else 0f
+                joined.advance(velocity, 1f / fps)
+                split.advance(velocity, 1f / fps)
+                assertEquals("Transfer retains velocity, not merely the current scale", joined.shape, split.shape)
+            }
+        }
+    }
+
+    @Test fun rejoiningIsIndependentOfWhichHalfOwnsTheMergedClock() {
+        val left = GlassMomentum(); val right = GlassMomentum()
+        repeat(20) { left.advance(2f, 1f / 120, contact = 1f); right.advance(-1f, 1f / 120) }
+        val joined = GlassMomentum().apply { blendFrom(left, right, .5f) }
+        val reversed = GlassMomentum().apply { blendFrom(right, left, .5f) }
+        left.blendFrom(left, right, .5f)
+        repeat(240) {
+            for (body in listOf(joined, reversed, left)) body.advance(0f, 1f / 120)
+            assertEquals(joined.shape.strain, reversed.shape.strain, .000001f)
+            assertEquals(joined.shape.depth, reversed.shape.depth, .000001f)
+            assertEquals("In-place adoption must retain the same state", joined.shape, left.shape)
+        }
+        assertTrue(joined.settled)
+    }
+
+    @Test fun heldAccelerationAndBrakingRemainVisibleWithoutRinging() {
+        for (fps in listOf(30, 60, 120)) for (damping in listOf(2f, 8f, 40f))
+            for (direction in listOf(-1f, 1f)) for (braking in listOf(false, true)) {
+                val body = GlassMomentum(damping)
+                val initialVelocity = if (braking) direction * 4f else 0f
+                repeat(fps * 3) { body.advance(initialVelocity, 1f / fps, contact = 1f) }
+                val nextVelocity = if (braking) 0f else direction * 4f
+                var peak = 0f
+                repeat(fps) {
+                    body.advance(nextVelocity, 1f / fps, contact = 1f)
+                    val axial = body.strain * if (braking) -1f else 1f
+                    assertTrue("Held impulse cannot ring across rest at $fps fps", axial >= -.000001f)
+                    peak = maxOf(peak, axial)
+                    assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
+                }
+                assertTrue("Held acceleration/braking must survive target projection", peak > .004f)
+                assertTrue("Held impulse remains bounded", peak < .02f)
+                assertEquals("Steady tracking dissipates the impulse", 0f, body.strain, .00001f)
+            }
+    }
+
+    @Test fun alternatingHeldImpulsesRetargetContinuouslyAndSettle() {
+        for (fps in listOf(30, 60, 120)) {
+            val body = GlassMomentum()
+            var minimum = 0f; var maximum = 0f
+            for (velocity in listOf(4f, 0f, 4f, 0f, 4f, 0f)) repeat(fps / 5) {
+                body.advance(velocity, 1f / fps, contact = 1f)
+                minimum = minOf(minimum, body.strain); maximum = maxOf(maximum, body.strain)
+                assertTrue("Opposing impulses remain bounded", abs(body.strain) < .12f)
+                assertEquals(1f, body.scaleX * body.scaleY * body.shape.thickness, .00001f)
+            }
+            assertTrue("Acceleration stays responsive after braking", maximum > .004f)
+            assertTrue("Braking can oppose a live acceleration response", minimum < -.004f)
+            repeat(fps * 3) { body.advance(0f, 1f / fps, contact = 1f) }
+            assertTrue("Stationary held input sleeps after forced changes", body.settled)
+        }
+    }
+
+    @Test fun heldAccelerationIsSymmetricAndDoesNotChangeStationaryContactDepth() {
+        val forward = GlassMomentum(); val backward = GlassMomentum(); val stationary = GlassMomentum()
+        repeat(180) { for (body in listOf(forward, backward, stationary)) body.advance(0f, 1f / 60, contact = 1f) }
+        repeat(60) {
+            forward.advance(4f, 1f / 60, contact = 1f)
+            backward.advance(-4f, 1f / 60, contact = 1f)
+            stationary.advance(0f, 1f / 60, contact = 1f)
+            assertEquals(forward.shape, backward.shape)
+            assertEquals("Pressure/contact depth constraints stay independent", stationary.shape.depth, forward.shape.depth, .00001f)
+        }
+    }
+
     @Test fun pressingStoresStrainWithoutAnyBounceAndReleaseOscillatesDepth() {
         val body = GlassMomentum(2f)
         var previous = 1f

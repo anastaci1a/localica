@@ -34,15 +34,34 @@ internal class LensRenderer {
         uniform float2 fieldOrigin;
         uniform float fieldScale;
         uniform float fieldRange;
+        uniform float circleMode;
+        uniform float4 circleCenters;
+        uniform float splitInnerRadius;
         uniform float foregroundOffset;
         uniform float2 outputSize;
         uniform float2 backdropSize;
         uniform float2 backdropOffset;
         $GlassColorShader
-        float3 geometry(float2 p) {
-            if (fieldMode > 0.5) {
-                float3 f = float3(field.eval((p - fieldOrigin) * fieldScale).rgb);
-                return float3(f.r * fieldRange, f.gb * 2.0 - 1.0);
+        float3 circleField(float2 p, float2 center) {
+            float2 local = p - center;
+            float radial = length(local);
+            return float3(span - radial, radial > 0.000001 ? -local / radial : float2(0));
+        }
+        float3 analyticGeometry(float2 p) {
+            if (circleMode > 0.5) {
+                float2 axis = circleCenters.zw - circleCenters.xy;
+                float separation = length(axis);
+                if (separation < 0.000001) return circleField(p, circleCenters.xy);
+                float2 direction = axis / separation;
+                float along = dot(p - (circleCenters.xy + circleCenters.zw) * 0.5, direction);
+                float width = span * fieldMode;
+                if (width < 0.000001) return circleField(p, along <= 0.0 ? circleCenters.xy : circleCenters.zw);
+                float t = clamp(0.5 + along / (2.0 * width), 0.0, 1.0);
+                float3 a = circleField(p, circleCenters.xy);
+                float3 b = circleField(p, circleCenters.zw);
+                float3 blended = mix(a, b, t * t * (3.0 - 2.0 * t));
+                blended.yz += direction * ((b.x - a.x) * 3.0 * t * (1.0 - t) / width);
+                return blended;
             }
             float2 middle = (bounds.xy + bounds.zw) * 0.5;
             float2 halfSize = (bounds.zw - bounds.xy) * 0.5;
@@ -74,6 +93,61 @@ internal class LensRenderer {
             }
             float radial = sqrt(max(1.0 - potential, 0.0000001));
             return float3(span * (1.0 - radial), gradient * (span / (2.0 * radial)));
+        }
+        float4 quarterArc(float2 p, float2 c, float r, float side) {
+            float2 q = max((p - c) * float2(side, -1), float2(0));
+            float radial = length(q);
+            float2 edge;
+            if (radial > 0.000001) edge = c + q * float2(side, -1) * (r / radial);
+            else {
+                float2 a = c + float2(side * r, 0);
+                float2 b = c + float2(0, -r);
+                edge = dot(p - a, p - a) < dot(p - b, p - b) ? a : b;
+            }
+            return float4(edge, (c - edge) / max(length(c - edge), 0.000001));
+        }
+        float3 splitBoundary(float2 point) {
+            float2 middle = (bounds.xy + bounds.zw) * 0.5;
+            float inner = clamp(splitInnerRadius, 0.0, span);
+            float fit = min(1.0, (bounds.z - bounds.x) * 0.5 / max(span + inner, 0.000001));
+            float radius = span * fit;
+            inner *= fit;
+            float2 delta = point - middle;
+            float2 p = middle - abs(delta);
+            float2 closest = float2(clamp(p.x, bounds.x + radius, max(bounds.x + radius, middle.x - inner)), bounds.y);
+            float2 normal = float2(0, 1);
+            float square = dot(p - closest, p - closest);
+            float2 side = float2(bounds.x, clamp(p.y, bounds.y + radius, middle.y));
+            float sideSquare = dot(p - side, p - side);
+            if (sideSquare < square) { closest = side; normal = float2(1, 0); square = sideSquare; }
+            float4 outer = quarterArc(p, float2(bounds.x + radius, bounds.y + radius), radius, -1);
+            float outerSquare = dot(p - outer.xy, p - outer.xy);
+            if (outerSquare < square) { closest = outer.xy; normal = outer.zw; square = outerSquare; }
+            float4 inset = quarterArc(p, float2(middle.x - inner, bounds.y + inner), inner, 1);
+            float innerSquare = dot(p - inset.xy, p - inset.xy);
+            if (innerSquare < square) { closest = inset.xy; normal = inset.zw; square = innerSquare; }
+            float2 outerLocal = p - float2(bounds.x + radius, bounds.y + radius);
+            float2 innerLocal = p - float2(middle.x - inner, bounds.y + inner);
+            bool inside = p.x >= bounds.x && p.y >= bounds.y
+                && (p.x >= bounds.x + radius || p.y >= bounds.y + radius || dot(outerLocal, outerLocal) <= radius * radius)
+                && (p.x <= middle.x - inner || p.y >= bounds.y + inner || dot(innerLocal, innerLocal) <= inner * inner);
+            float distance = sqrt(square);
+            float polarity = inside ? 1.0 : -1.0;
+            bool boundary = distance <= max(0.0001, span * 0.00001);
+            float2 gradient = boundary ? normal : (p - closest) * (polarity / distance);
+            gradient *= -sign(delta);
+            return float3(boundary ? 0.0 : distance * polarity, gradient);
+        }
+        float3 geometry(float2 p) {
+            if (fieldMode <= 0.0) return analyticGeometry(p);
+            float3 sampled;
+            if (splitInnerRadius >= 0.0) sampled = splitBoundary(p);
+            else {
+                float3 raw = float3(field.eval((p - fieldOrigin) * fieldScale).rgb);
+                sampled = float3(raw.r * fieldRange, raw.gb * 2.0 - 1.0);
+            }
+            if (fieldMode >= 1.0) return sampled;
+            return mix(analyticGeometry(p), sampled, fieldMode);
         }
         half4 main(float2 p) {
             if (foregroundOffset > 0.0 && (p.x >= outputSize.x || p.y >= outputSize.y)) return half4(0);
@@ -139,7 +213,8 @@ internal class LensRenderer {
     fun effect(geometry: LensGeometry, blur: Float, depth: Float, power: Float = 1f,
         whiteTint: Float = 0f, illumination: Float = 1f, map: LensDistanceMap? = null,
         origin: Offset = Offset.Zero, atlas: LensAtlas? = null, flattening: Float = 0f,
-        tone: GlassTone = GlassTone()): RenderEffect {
+        tone: GlassTone = GlassTone(), fieldWeight: Float = 1f,
+        circles: Pair<Offset, Offset>? = null, splitInner: Float? = null): RenderEffect {
         val r = geometry.bounds
         val state = listOf(r.left, r.top, r.right, r.bottom, geometry.corner, geometry.span, blur,
             depth.coerceIn(.05f, 4f), power, whiteTint, illumination, origin.x, origin.y,
@@ -147,7 +222,10 @@ internal class LensRenderer {
             atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f,
             atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f,
             atlas?.backdropOffset?.x ?: 0f, atlas?.backdropOffset?.y ?: 0f, flattening,
-            tone.trim, tone.weight, if (tone.lightInk) 1f else 0f)
+            tone.trim, tone.weight, if (tone.lightInk) 1f else 0f,
+            fieldWeight.coerceIn(0f, 1f), if (circles == null) 0f else 1f,
+            circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
+            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f)
         if (state == last && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
@@ -166,7 +244,11 @@ internal class LensRenderer {
         shader.setFloatUniform("outputSize", atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f)
         shader.setFloatUniform("backdropSize", atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f)
         shader.setFloatUniform("backdropOffset", atlas?.backdropOffset?.x ?: 0f, atlas?.backdropOffset?.y ?: 0f)
-        shader.setFloatUniform("fieldMode", if (map == null) 0f else 1f)
+        shader.setFloatUniform("fieldMode", if (map == null && splitInner == null) 0f else fieldWeight.coerceIn(0f, 1f))
+        shader.setFloatUniform("splitInnerRadius", splitInner ?: -1f)
+        shader.setFloatUniform("circleMode", if (circles == null) 0f else 1f)
+        shader.setFloatUniform("circleCenters", circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
+            circles?.second?.x ?: 0f, circles?.second?.y ?: 0f)
         shader.setFloatUniform("fieldOrigin", origin.x + (map?.origin?.x ?: 0f), origin.y + (map?.origin?.y ?: 0f))
         shader.setFloatUniform("fieldScale", map?.scale ?: 1f)
         shader.setFloatUniform("fieldRange", map?.range ?: 1f)

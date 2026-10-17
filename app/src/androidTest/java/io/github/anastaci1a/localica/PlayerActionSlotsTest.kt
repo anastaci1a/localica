@@ -93,7 +93,7 @@ class PlayerActionSlotsTest {
             Box(Modifier.fillMaxWidth().height(96.dp)) {
                 PlayerActionStrip(PlayerActionSettings(), { it.label }, {}, { editorOpens++ }, onRepeatOptions = { open = true })
             }
-            if (open) RepeatOptionsDialog(settings, { open = false }) { settings = it }
+            if (open) RepeatOptionsDialog(settings, { open = false }) { settings = it(settings) }
         } }
         compose.onNodeWithTag("player-slot-0:7").performTouchInput { longClick() }
         compose.onNodeWithText("Repeat modes").assertIsDisplayed()
@@ -102,6 +102,39 @@ class PlayerActionSlotsTest {
         compose.onNodeWithText("Apply").performClick()
         compose.runOnIdle {
             assertEquals(0, editorOpens)
+            assertEquals(io.github.anastaci1a.localica.queue.SongEnd.NextPaused, settings.advancedRepeat?.songEnd)
+            assertFalse(open)
+        }
+    }
+    @Test fun repeatDialogAppliesOnlyStagedFieldsAndCancelSubmitsNothing() {
+        var open by mutableStateOf(true)
+        var settings by mutableStateOf(io.github.anastaci1a.localica.queue.QueueSettings())
+        var pending: ((io.github.anastaci1a.localica.queue.QueueSettings) -> io.github.anastaci1a.localica.queue.QueueSettings)? = null
+        var submissions = 0
+        compose.setContent { LocalicaTheme {
+            if (open) RepeatOptionsDialog(settings, { open = false }) { pending = it; submissions++ }
+        } }
+        compose.onNodeWithText("Advanced").performClick()
+        compose.onNodeWithText("Load next song and pause").performClick()
+        compose.runOnIdle { settings = settings.copy(shuffle = true) }
+        compose.onNodeWithText("Apply").performClick()
+        compose.runOnIdle {
+            // A separate command can also finish after Apply but before this command runs.
+            settings = settings.copy(preloadNext = false)
+            settings = pending!!(settings)
+            assertTrue(settings.shuffle)
+            assertFalse(settings.preloadNext)
+            assertEquals(io.github.anastaci1a.localica.queue.SongEnd.NextPaused, settings.advancedRepeat?.songEnd)
+            assertEquals(1, submissions)
+            pending = null
+            open = true
+        }
+        compose.onNodeWithText("Simple").performClick()
+        compose.onNodeWithText("Repeat song").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle {
+            assertEquals(1, submissions)
+            assertNull(pending)
             assertEquals(io.github.anastaci1a.localica.queue.SongEnd.NextPaused, settings.advancedRepeat?.songEnd)
             assertFalse(open)
         }

@@ -6,6 +6,7 @@ import android.os.Build
 import android.graphics.Paint
 import android.graphics.Shader
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -29,6 +30,7 @@ internal class LensMeshRenderer {
     private var texture = FloatArray(0)
     private var highlights = IntArray(0)
     private var indices = ShortArray(0)
+    private var conditionedIndices = ShortArray(0)
     private val scenePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val lightPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -48,14 +50,19 @@ internal class LensMeshRenderer {
     fun DrawScope.draw(shape: LensGeometry, snapshot: ImageBitmap?, sourceSize: IntSize,
         sourceOffset: Offset, depth: Float, power: Float = 1f, alpha: Float = 1f,
         field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false,
-        flattening: Float = 0f, tone: GlassTone = GlassTone()) {
-        val next = listOf(shape, density, fieldKey ?: Unit)
+        flattening: Float = 0f, tone: GlassTone = GlassTone(), outlines: List<RoundRect>? = null) {
+        val next = listOf(shape, density, fieldKey ?: Unit, outlines ?: Unit)
         val geometryChanged = geometryKey != next
         if (geometryChanged) {
             geometryKey = next
-            val nextMesh = if (field == null) curvedLensMesh(shape, density) else sampledLensMesh(shape, density, field)
+            val nextMesh = when {
+                outlines != null -> outlinedLensMesh(outlines, density, field ?: shape::field)
+                field == null -> curvedLensMesh(shape, density)
+                else -> sampledLensMesh(shape, density, field)
+            }
             vertices = nextMesh.vertices; fields = nextMesh.fields; indices = nextMesh.indices
             rays = FloatArray(vertices.size); texture = FloatArray(vertices.size)
+            conditionedIndices = ShortArray(indices.size)
             // Android 8 JNI validates colors against coordinate count (2/vertex).
             highlights = IntArray(vertices.size)
         }
@@ -69,12 +76,7 @@ internal class LensMeshRenderer {
                 // a sawtooth along the curve when those triangles interpolate.
                 val ray = lensRay(f.copy(distance = f.distance.coerceAtLeast(0f)), shape.span, depth, flattening)
                 rays[2 * i] = ray.offset.x * power; rays[2 * i + 1] = ray.offset.y * power
-                val facing = (ray.normalXY.x * -.45f + ray.normalXY.y * -.75f + ray.normalZ * .6f) / 1.06066f
-                val grazing = 1f - ray.normalZ
-                val reflection = (.018f * grazing + .26f * grazing * grazing * grazing) * power
-                val opacity = reflection * if (facing >= 0f) facing else -facing * .3f
-                val light = (tone.channel(if (facing >= 0f) 1f else 0f) * 255).toInt()
-                highlights[i] = android.graphics.Color.argb((opacity * 255).toInt().coerceIn(0, 255), light, light, light)
+                highlights[i] = lensReflectionColor(ray, tone, power)
             }
         }
         scenePaint.shader = snapshot?.let { shaders.getOrPut(it) {
@@ -88,11 +90,11 @@ internal class LensMeshRenderer {
                 texture[i + 1] = (vertices[i + 1] + rays[i + 1] + sourceOffset.y) * sy
             }
         }
-        fun render(canvas: android.graphics.Canvas, opacity: Float) {
+        fun render(canvas: android.graphics.Canvas, opacity: Float, textureIndices: ShortArray = indices) {
             if (snapshot != null) {
                 scenePaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
                 canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, vertices.size,
-                    vertices, 0, texture, 0, null, 0, indices, 0, indices.size, scenePaint)
+                    vertices, 0, texture, 0, null, 0, textureIndices, 0, textureIndices.size, scenePaint)
             }
             if (lighting) {
                 lightPaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
@@ -110,9 +112,10 @@ internal class LensMeshRenderer {
                 val image = rasters.getOrPut(key) {
                     Bitmap.createBitmap(ceil(shape.bounds.width).toInt().coerceAtLeast(1),
                         ceil(shape.bounds.height).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888).also {
+                        if (snapshot != null) conditionLensTextureTriangles(vertices, texture, indices, conditionedIndices)
                         val target = android.graphics.Canvas(it)
                         target.translate(-shape.bounds.left, -shape.bounds.top)
-                        render(target, 1f)
+                        render(target, 1f, conditionedIndices)
                     }
                 }
                 bitmapPaint.alpha = (255 * alpha).toInt().coerceIn(0, 255)

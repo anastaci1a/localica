@@ -76,6 +76,9 @@ class GlobalPlaybackModesTest {
             }
             queues.seek(1234)
             await { queues.state.value.library.active?.positionMs == 1234L }
+            val beforeRandomize = queues.state.value.library.active!!
+            val checkpoint = io.github.anastaci1a.localica.library.OrderCheckpoint.capture(
+                beforeRandomize.entries.map { it.id }, beforeRandomize.order)
             val done = CompletableDeferred<Boolean>()
             queues.randomize(second.id) { done.complete(it) }
             assertTrue(runBlocking { withTimeout(10000) { done.await() } })
@@ -84,6 +87,22 @@ class GlobalPlaybackModesTest {
             assertEquals(second.currentEntryId, randomized.currentEntryId)
             assertEquals(1234L, randomized.positionMs)
             assertEquals(randomized.entries, runBlocking { db.queues().read().active!!.entries })
+            verifyTraversal(second.currentEntryId!!)
+            val beforeRevertJourney = queues.state.value.library.active!!.journey!!
+            val reverted = CompletableDeferred<Boolean>()
+            queues.revertOrder(second.id, checkpoint) { reverted.complete(it) }
+            assertTrue(runBlocking { withTimeout(10000) { reverted.await() } })
+            val restored = queues.state.value.library.active!!
+            assertEquals(beforeRandomize.entries, restored.entries)
+            assertEquals(beforeRandomize.order, restored.order)
+            assertEquals(beforeRandomize.currentEntryId, restored.currentEntryId)
+            assertEquals(1234L, restored.positionMs)
+            assertEquals(beforeRevertJourney, restored.journey)
+            instrumentation.runOnMainSync {
+                assertEquals(1234L, player.currentPosition)
+                assertFalse(player.playWhenReady)
+            }
+            assertEquals(restored, runBlocking { db.queues().read().active!! })
             verifyTraversal(second.currentEntryId!!)
         } finally {
             instrumentation.runOnMainSync { queues.detach(player); player.release(); scope.cancel() }

@@ -89,10 +89,9 @@ internal fun ArtworkActionPreference(label: String, value: ArtworkAction, onChan
 
 @Composable
 internal fun BooleanPreference(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).ownButtonDrag(pass = androidx.compose.ui.input.pointer.PointerEventPass.Main)
-        .toggleable(value, role = Role.Switch, onValueChange = onChange)
-        .padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f).padding(end = 12.dp))
+    val activate = controlActivation { onChange(!value) }
+    BooleanPreferenceFrame(label, Modifier.ownButtonDrag(pass = androidx.compose.ui.input.pointer.PointerEventPass.Main)
+        .toggleable(value, role = Role.Switch, onValueChange = { activate() })) {
         InterfaceSwitch(value, onChange)
     }
 }

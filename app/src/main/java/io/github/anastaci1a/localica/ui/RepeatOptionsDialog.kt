@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -11,14 +10,14 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.queue.*
 
 @Composable
-internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit, onApply: (QueueSettings) -> Unit) {
+internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit, onApply: ((QueueSettings) -> QueueSettings) -> Unit) {
     var advanced by remember { mutableStateOf(settings.advancedRepeat != null) }
     var simple by remember { mutableStateOf(settings.repeat) }
     var policy by remember { mutableStateOf(settings.advancedRepeat ?: AdvancedRepeat(
         songEnd = if (settings.repeat == QueueRepeat.One) SongEnd.Repeat else SongEnd.Next,
         queueEnd = if (settings.repeat == QueueRepeat.All) QueueEnd.Repeat else QueueEnd.Stop)) }
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Repeat modes") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.controlVerticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassChoices(listOf("Simple", "Advanced"), if (advanced) 1 else 0, horizontal = true) { advanced = it == 1 }
             Spacer(Modifier.height(12.dp))
             if (!advanced) RepeatChoices(QueueRepeat.entries, simple, { when (it) {
@@ -37,7 +36,9 @@ internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit,
             ActionTextButton(onClick = { simple = QueueRepeat.Off; policy = AdvancedRepeat() }) { Text("Reset") }
         }
     }, confirmButton = { ActionTextButton(onClick = {
-        onApply(settings.copy(advancedRepeat = if (advanced) policy else null, repeat = if (advanced) policy.repeat else simple)); onDismiss()
+        val appliedPolicy = if (advanced) policy else null
+        val appliedRepeat = if (advanced) policy.repeat else simple
+        onApply { it.copy(advancedRepeat = appliedPolicy, repeat = appliedRepeat) }; onDismiss()
     }) { Text("Apply") } }, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
