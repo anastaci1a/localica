@@ -25,18 +25,23 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> 
     rootNameResolver: suspend (android.content.Context, List<FolderSelection>) -> List<SongRootName> = ::resolveSongRootNames,
     onAction: (PlayerAction) -> Unit) {
     val context = LocalContext.current.applicationContext
-    val rootNames = key(folders, context) {
-        produceState(folders.map { SongRootName(it.uri, listOf(it.name)) }) {
-            if (folders.size > 1) value = withContext(Dispatchers.IO) { rootNameResolver(context, folders) }
-        }
-    }
-    val labels = remember(rootNames.value) { songRootLabels(rootNames.value) }
+    // The dialog body lives in a retained composition. Give it a stable observable input,
+    // rather than capturing a replaced producer State or a derived map from the caller.
+    val currentFolders by rememberUpdatedState(folders)
+    val currentRootNameResolver by rememberUpdatedState(rootNameResolver)
     var viewingArtwork by remember(track.uri) { mutableStateOf(false) }
     GlassAlertDialog(onDismissRequest = onDismiss, modifier = Modifier.testTag("song-information"),
         title = { Text("Song information") },
         dismissButton = { ActionTextButton(onClick = { onDismiss(); onEdit() }) { Text("Edit tags") } },
         confirmButton = { ActionTextButton(onClick = onDismiss) { Text("Done") } },
         text = {
+            val roots = currentFolders
+            val rootNames = key(roots, context) {
+                produceState(roots.map { SongRootName(it.uri, listOf(it.name)) }) {
+                    if (roots.size > 1) value = withContext(Dispatchers.IO) { currentRootNameResolver(context, roots) }
+                }
+            }
+            val labels = remember(rootNames.value) { songRootLabels(rootNames.value) }
             val scroll = rememberScrollState()
             Column(Modifier.fillMaxWidth().testTag("song-information-body")
                 .scrollEdgeFade(scroll).controlVerticalScroll(scroll)) {
@@ -46,7 +51,7 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> 
                         onClick = controlActivation { viewingArtwork = true }))
                 SongInformationRow("File name", track.fileName, R.drawable.ic_music)
                 val location = songInformationLocation(track)
-                val folderAction = PlayerAction.Folder.takeIf { location != null && folders.any { it.uri == location.folderUri } }
+                val folderAction = PlayerAction.Folder.takeIf { location != null && roots.any { it.uri == location.folderUri } }
                 SongInformationRow("Location", songLocationText(track, labels), R.drawable.ic_folder, folderAction) {
                     onDismiss(); onAction(it)
                 }
