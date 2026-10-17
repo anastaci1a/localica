@@ -102,11 +102,11 @@ class PopupEnvelopeTest {
                     Sample("face-action") { Box(Modifier.heightIn(min = CompactControlSize)) { GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize") } }
                     Sample("live-strip") { GlassActionRow {
                         GlassActionButton(R.drawable.ic_shuffle, "Randomize") {}
-                        GlassActionButton(R.drawable.ic_seek_back, "Revert") {}
+                        GlassActionButton(R.drawable.ic_revert, "Revert") {}
                     } }
                     Sample("face-strip") { GlassActionRowMeasurement {
                         GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
-                        GlassActionButtonFace(R.drawable.ic_seek_back, "Revert", Modifier.heightIn(min = CompactControlSize))
+                        GlassActionButtonFace(R.drawable.ic_revert, "Revert", Modifier.heightIn(min = CompactControlSize))
                     } }
                     val labels = listOf("Compact", "Normal", "Large")
                     Sample("live-choice") { ChoicePreference("Size", "Normal", labels, { it }) {} }

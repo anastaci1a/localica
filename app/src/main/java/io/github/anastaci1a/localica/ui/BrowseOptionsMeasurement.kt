@@ -62,7 +62,7 @@ internal fun BrowseOptionsMeasurement(route: BrowseRoute, sortFields: List<Track
             if (randomize) {
                 GlassActionRowMeasurement {
                     GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
-                    GlassActionButtonFace(R.drawable.ic_seek_back, "Revert", Modifier.heightIn(min = CompactControlSize))
+                    GlassActionButtonFace(R.drawable.ic_revert, "Revert", Modifier.heightIn(min = CompactControlSize))
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
