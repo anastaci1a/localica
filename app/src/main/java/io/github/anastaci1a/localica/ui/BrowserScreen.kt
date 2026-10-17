@@ -201,14 +201,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
         dismissSorting()
     }
-    @Composable fun sortingPanel() {
+    // Each origin owns its opening tab; an inactive origin must not override it.
+    @Composable fun sortingPanel(initialView: Boolean) {
         val mutableRows = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
             mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
         }
         BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
         preferences.write(route, value, override)
         commitStyle(value)
-    }, { preferences.reset(route); commitStyle(preferences.read(route)) }, presentationOnly || collectionView,
+    }, { preferences.reset(route); commitStyle(preferences.read(route)) }, initialView,
         onRandomize = when {
             mutableQueue != null && queues != null -> ({ done -> queues.randomize(mutableQueue.id, done) })
             mutablePlaylist != null && playlistController != null -> ({ done -> playlistController.randomize(mutablePlaylist.id, done) })
@@ -596,7 +597,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
     if (artDetail) CollectionToolbar(gridState, reorder.viewportWidth, route.title.orEmpty(), collectionMenuAnchor,
         onBack, { view -> collectionView = view; collectionMenu = true }) {
-        if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel() }
+        if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel(initialView = collectionView) }
     }
     } } }
 
@@ -641,5 +642,5 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
             .firstOrNull { item -> item.songs.any { it.track.id == song.id } }?.let { info = null; onOpen(it) }
     } }
-    if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel() }
+    if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }
