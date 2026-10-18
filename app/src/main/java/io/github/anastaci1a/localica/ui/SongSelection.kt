@@ -103,7 +103,8 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }))
             if (duplicate) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
             SelectionViewport(Modifier.fillMaxWidth().heightIn(max = 320.dp)) { overscroll ->
-            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth(), overscrollEffect = overscroll) {
+            val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().scrollEdgeFade(scroll), state = scroll, overscrollEffect = overscroll) {
                 items(sortedPlaylists.size, key = { sortedPlaylists[it].id }) { index ->
                     val playlist = sortedPlaylists[index]
                     val selected = playlist.id in chosen

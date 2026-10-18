@@ -4,6 +4,8 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -31,15 +33,25 @@ internal fun Modifier.controlScrollParent(axis: Int, available: () -> Boolean): 
 }
 
 internal fun Modifier.controlScrollParent(state: ScrollableState, axis: Int): Modifier =
-    controlScrollParent(axis) { state.canScrollBackward || state.canScrollForward }
+    (if ((axis and ControlScrollAxis.Vertical) != 0) popupScrollEdges(state) else this)
+        .controlScrollParent(axis) { state.canScrollBackward || state.canScrollForward }
 
 internal fun Modifier.controlVerticalScroll(state: ScrollState, enabled: Boolean = true,
-    reverseScrolling: Boolean = false): Modifier {
-    val alreadyFades = hasScrollEdgeFade()
+    reverseScrolling: Boolean = false): Modifier =
+    popupScrollEdges(state, reverseScrolling)
+        .controlScrollParent(ControlScrollAxis.Vertical) { enabled && (state.canScrollBackward || state.canScrollForward) }
+        .verticalScroll(state, enabled, reverseScrolling = reverseScrolling)
+
+private fun Modifier.popupScrollEdges(state: ScrollableState, reverseScrolling: Boolean = false): Modifier {
+    if (hasScrollEdgeFade()) return this
     return composed {
-        (if (LocalPopupScrollEdges.current && !alreadyFades) Modifier.scrollEdgeFade(state, reverseScrolling) else Modifier)
-            .controlScrollParent(ControlScrollAxis.Vertical) { enabled && (state.canScrollBackward || state.canScrollForward) }
-            .verticalScroll(state, enabled, reverseScrolling = reverseScrolling)
+        if (!LocalPopupScrollEdges.current) Modifier
+        else when (state) {
+            is ScrollState -> Modifier.scrollEdgeFade(state, reverseScrolling)
+            is LazyListState -> Modifier.scrollEdgeFade(state)
+            is LazyGridState -> Modifier.scrollEdgeFade(state)
+            else -> Modifier
+        }
     }
 }
 
