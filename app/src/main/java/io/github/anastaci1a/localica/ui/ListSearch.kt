@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -70,13 +71,17 @@ internal fun GlassSearchField(value: String, onValue: (String) -> Unit, label: S
 }
 
 /** Fade the scrolling pixels, not a solid panel painted across the list. */
-internal fun Modifier.listTopFade() = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
+internal fun Modifier.listTopFade() = composed {
+    // Modal grids use the shared directional viewport mask instead of a
+    // permanent top fade that would hide content even at the start of the list.
+    if (LocalPopupScrollEdges.current) Modifier
+    else Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
         drawContent()
         val height = 80.dp.toPx().coerceAtMost(size.height)
         drawRect(Brush.verticalGradient(*Array(17) { i -> val t = i / 16f; t to Color.Black.copy(alpha = t * t * (3f - 2f * t)) }, endY = height),
             size = Size(size.width, height), blendMode = BlendMode.DstIn)
     }
+}
 
 @Composable
 internal fun ListSearchWindow(visible: Boolean, anchor: GlassAnchor, hasQuery: Boolean, onDismiss: () -> Unit,
