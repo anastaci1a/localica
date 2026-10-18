@@ -14,6 +14,8 @@ internal data class SelectorTrackGeometry(
     val maximumExtension: Float = SelectorMaximumExtensionDp,
     val heldCrossInset: Float? = null,
     val heldContact: Float = 1f,
+    val travelExtentOverride: Float? = null,
+    val travelStartOverride: Float? = null,
 ) {
     init {
         require(travel.isFinite() && travel > 0f && cross.isFinite() && cross > 0f)
@@ -24,12 +26,12 @@ internal data class SelectorTrackGeometry(
     }
     val expansion = stretch.coerceIn(0f, .04f)
     val pullFraction get() = expansion / .04f
-    val travelExtent = travel + maximumExtension * pullFraction
+    val travelExtent = travelExtentOverride ?: (travel + maximumExtension * pullFraction)
     // A held lens keeps its resting cross dimension. Close its physical inset by
     // bringing the shell inward, rather than inflating the lens at the endpoint.
     val crossExtent = crossExtentOverride ?: heldCrossInset?.let { cross - 2f * it * pullFraction * heldContact }
         ?: (cross / shellTravelScale)
-    val travelStart = (travelExtent - travel) * (wall.coerceIn(-1f, 1f) - 1f) / 2f
+    val travelStart = travelStartOverride ?: ((travelExtent - travel) * (wall.coerceIn(-1f, 1f) - 1f) / 2f)
     val crossStart = (cross - crossExtent) / 2f
     val travelEnd get() = travelStart + travelExtent
 
@@ -69,7 +71,8 @@ internal data class SelectorTrackSlot(
 
 /** Circular contact corners are constructed in final layout space, never stretched after drawing. */
 internal data class SelectorTrackLens(val bounds: androidx.compose.ui.geometry.Rect, val corner: Float,
-    val wall: Float, val gap: Float, val outerCorner: Float, val crossExtent: Float) {
+    val wall: Float, val gap: Float, val outerCorner: Float, val crossExtent: Float,
+    val travelExtent: Float? = null) {
     fun contactCenters(vertical: Boolean): Pair<androidx.compose.ui.geometry.Offset, androidx.compose.ui.geometry.Offset> {
         val b = bounds
         return if (vertical) {
@@ -84,32 +87,35 @@ internal data class SelectorTrackLens(val bounds: androidx.compose.ui.geometry.R
 
 /** The selected end approaches the current outer wall; its free end absorbs axial compression. */
 internal fun SelectorTrackGeometry.lens(position: Float, count: Int, insets: SelectorTrackInsets,
-    vertical: Boolean, rtl: Boolean, shape: GlassShape, outerCorner: Float): SelectorTrackLens {
+    vertical: Boolean, rtl: Boolean, shape: GlassShape, outerCorner: Float,
+    presentation: SelectorReturnFrame? = null): SelectorTrackLens {
     val logical = position.coerceIn(0f, count - 1f)
     val physical = if (!vertical && rtl) count - 1f - logical else logical
     val affinity = if (count == 1) wall else
         selectorTrackPhysicalWall(glassWallAffinity(logical, count - 1f), vertical, rtl)
     val contact = kotlin.math.abs(affinity)
     val baseGap = insets.outerTravel + insets.slotTravel
-    val gap = baseGap * (1f - pullFraction * contact)
+    val gap = presentation?.gap ?: (baseGap * (1f - pullFraction * contact))
     val crossGap = insets.cross * (1f - pullFraction * contact)
-    val radius = outerCorner.coerceIn(0f, minOf(crossExtent, travelExtent) / 2f)
-    val corner = (radius - crossGap).coerceAtLeast(0f)
+    val radius = (presentation?.outerCorner ?: outerCorner).coerceIn(0f, minOf(crossExtent, travelExtent) / 2f)
+    val corner = presentation?.corner ?: (radius - crossGap).coerceAtLeast(0f)
     val baseMain = slotExtent(count, insets.outerTravel) - 2f * insets.slotTravel
     val baseCross = crossExtent - 2f * insets.cross
     val mainScale = if (vertical) shape.scaleY(true) else shape.scaleX()
     val crossScale = if (vertical) shape.scaleX(true) else shape.scaleY()
     val allowance = insets.cross * 1.5f
-    val main = (baseMain * mainScale).coerceIn(maxOf(1f, 2f * corner), maxOf(baseMain + allowance, 2f * corner))
+    val main = presentation?.lensTravel ?: (baseMain * mainScale).coerceIn(maxOf(1f, 2f * corner), maxOf(baseMain + allowance, 2f * corner))
+        .coerceAtMost((travelExtent - gap).coerceAtLeast(1f))
     val freeCross = (baseCross * crossScale).coerceIn(maxOf(1f, baseCross - allowance), baseCross + allowance)
-    val across = heldCrossInset?.let { cross - 2f * it }
-        ?: (freeCross * (1f - contact) + (crossExtent - 2f * crossGap) * contact)
+    val across = presentation?.lensCross ?: heldCrossInset?.let { cross - 2f * it }
+        ?: if (shape == GlassShape() && pullFraction == 0f) baseCross
+            else (freeCross * (1f - contact) + (crossExtent - 2f * crossGap) * contact)
     val baselineStart = travelStart + insets.outerTravel + physical * slotExtent(count, insets.outerTravel) + insets.slotTravel
     val start = baselineStart + (baseMain - main) * (affinity + 1f) / 2f + affinity * (baseGap - gap)
     val crossStart = this.crossStart + (crossExtent - across) / 2f
     val bounds = if (vertical) androidx.compose.ui.geometry.Rect(crossStart, start, crossStart + across, start + main)
         else androidx.compose.ui.geometry.Rect(start, crossStart, start + main, crossStart + across)
-    return SelectorTrackLens(bounds, corner.coerceAtMost(minOf(main, across) / 2f), affinity, gap, radius, across)
+    return SelectorTrackLens(bounds, corner.coerceAtMost(minOf(main, across) / 2f), affinity, gap, radius, across, main)
 }
 
 internal fun SelectorTrackGeometry.slot(index: Int, count: Int, insets: SelectorTrackInsets,
@@ -148,7 +154,27 @@ internal fun selectorTrackGeometry(travel: Float, cross: Float, stretch: Float, 
         heldCrossInset = heldCrossInset.takeUnless { reducedMotion || overflow },
         heldContact = heldContact)
 
-/** Project the captured contour as well as its extents; optical body/axial bounds stay unchanged. */
+/** Apply all released shell dimensions together, bypassing raw momentum footprint reconstruction. */
+internal fun SelectorTrackGeometry.withReturnFrame(frame: SelectorReturnFrame) =
+    copy(stretch = 0f, heldCrossInset = null, crossExtentOverride = frame.shellCross,
+        travelExtentOverride = frame.shellTravel, travelStartOverride = frame.shellStart)
+
+/** Record authoritative extents rather than subtracting rounded translated rectangle edges. */
+internal fun SelectorTrackLens.returnFrame(geometry: SelectorTrackGeometry, vertical: Boolean) =
+    SelectorReturnFrame(geometry.travelExtent, geometry.crossExtent,
+        (travelExtent ?: if (vertical) bounds.height else bounds.width), crossExtent, gap, corner, outerCorner,
+        if (geometry.travelStart == 0f) 0f else geometry.travelStart)
+
+/** Rest identity depends only on layout, never the moving lens's fractional wall affinity. */
+internal fun SelectorTrackGeometry.restFrame(count: Int, insets: SelectorTrackInsets,
+    vertical: Boolean, outerCorner: Float): SelectorReturnFrame {
+    val base = copy(stretch = 0f, heldCrossInset = null, crossExtentOverride = null,
+        travelExtentOverride = null, travelStartOverride = null)
+    return base.lens(0f, count, insets, vertical, rtl = false, GlassShape(), outerCorner)
+        .returnFrame(base, vertical).copy(shellStart = 0f)
+}
+
+/** Project the cross-axis view for geometry checks. Production returns use the full frame. */
 internal fun SelectorTrackLens.withCrossFrame(frame: SelectorCrossFrame, hostCross: Float,
     vertical: Boolean): SelectorTrackLens {
     val extent = frame.lens
@@ -174,3 +200,7 @@ internal fun selectorVisibleLensContains(point: androidx.compose.ui.geometry.Off
     val content = point.copy(x = point.x + contentOffset)
     return lens.contour().contains(content)
 }
+
+/** Fixed capture bounds include the signed return's per-side cross clearance. */
+internal fun selectorTrackRecordingBounds(travel: Float, cross: Float, clearance: Float) =
+    androidx.compose.ui.geometry.Rect(-clearance, -clearance, travel + clearance, cross + clearance)
