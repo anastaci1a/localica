@@ -5,12 +5,12 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import io.github.anastaci1a.localica.ui.GlassAnchor
 
-/** Observe a failed return without changing the original clock, budget or condition. */
+/** Bound Compose-owned return state on its animation clock, independently of host rendering speed. */
 internal fun awaitGlassReturn(rule: ComposeContentTestRule, anchor: GlassAnchor, context: () -> String) {
     val virtualStart = rule.mainClock.currentTime
     val wallStart = android.os.SystemClock.uptimeMillis()
     try {
-        rule.waitUntil(5000) { !anchor.hidden && !anchor.modalPresent }
+        rule.mainClock.advanceTimeUntil(5000) { !anchor.hidden && !anchor.modalPresent }
     } catch (failure: ComposeTimeoutException) {
         // ComposeTimeoutException derives directly from Throwable, not Exception.
         val detail = runCatching(context).getOrElse { "diagnostic-error=$it" }
