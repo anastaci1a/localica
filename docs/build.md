@@ -37,7 +37,7 @@ The [Android workflow](../.github/workflows/android.yml) builds main/PR changes 
 
 1. Update app version/name and increment `versionCode` for every distributed update. Fill the [template](../.github/RELEASE_TEMPLATE.md) into [RELEASE_NOTES](../.github/RELEASE_NOTES.md): basic APK/compatibility/signing introduction, short Changes bullets, **all** resolved issue URLs with brief description fragments, and short Install steps. Include only completed issues; say so if none. Keep previous published descriptions intact.
 2. Review [previews](#previews), current docs and resolved issues; commit and push.
-3. **Wait for successful build and both device jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks; never substitute another commit's APK. Unfilled release placeholders block publication.
+3. **Wait for successful build, both device jobs, and both compatibility jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks; never substitute another commit's APK. Unfilled release placeholders block publication.
 4. Verify published assets, close resolved issues/remove workflow labels, and replace completed roadmap outcomes with the next checkpoint.
 
 ## Previews
