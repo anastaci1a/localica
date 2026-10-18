@@ -191,7 +191,7 @@ class ShuffleModePlaybackTest {
     }
 
     @Test fun arrivalWhileCombinedSaveWaitsWinsBeforeOppositeToggle() = fixture { f ->
-        val gate = f.dao.arm()
+        val gate = f.dao.armShuffleChange()
         f.queues.shuffle()
         val first = runBlocking { withTimeout(10_000) { gate.entered.await() } }
         assertFalse(first.after.active!!.journey!!.modes.shuffle)
@@ -250,7 +250,16 @@ class ShuffleModePlaybackTest {
     @Test fun pausedDuplicateOrderReceiptWaitsForSaveBetweenOppositeShuffleToggles() = fixture { f ->
         val anchor = f.queue.journey!!.current!!
         assertEquals(1, f.queue.entries.map { it.track.id }.distinct().size)
-        val combined = f.dao.arm()
+        val combined = f.dao.armShuffleChange()
+        // A normal native cursor checkpoint may reach the actor before the
+        // requested mode change. It must not claim that operation's barrier.
+        f.main { f.player.seekTo(1234) }
+        f.check { combined.entered.isCompleted || f.dao.committed?.active?.positionMs == 1234L }
+        val intercepted = if (combined.entered.isCompleted) runBlocking { combined.entered.await() } else null
+        assertFalse("Cursor checkpoint claimed shuffle gate: before=${intercepted?.before?.active?.journey?.modes} " +
+            "after=${intercepted?.after?.active?.journey?.modes} position=${intercepted?.after?.active?.positionMs}",
+            combined.entered.isCompleted)
+        assertEquals(1234L, f.dao.committed!!.active!!.positionMs)
         f.main { f.queues.shuffle(); f.player.seekTo(2345) }
         val modeAttempt = runBlocking { withTimeout(10_000) { combined.entered.await() } }
         assertFalse(modeAttempt.after.active!!.journey!!.modes.shuffle)
@@ -317,7 +326,7 @@ class ShuffleModePlaybackTest {
         val probe = f.probe!!
         lateinit var stale: MediaItem
         f.main { stale = f.player.getMediaItemAt(f.player.currentMediaItemIndex + 1) }
-        val combined = f.dao.arm()
+        val combined = f.dao.armShuffleChange()
         f.queues.shuffle()
         val modeAttempt = runBlocking { withTimeout(10_000) { combined.entered.await() } }
         val arrived = modeAttempt.after.active!!.journey!!.next!!
@@ -478,6 +487,10 @@ private class ShuffleGateDao(private val delegate: QueueDao) : QueueDao() {
     val failed = AtomicBoolean()
     val retryUsedUnchangedBaseline = AtomicBoolean()
     fun arm(accepts: (Attempt) -> Boolean = { true }) = Gate(accepts).also { gate = it }
+    // Select the operation, not its expected direction; callers still assert the result.
+    fun armShuffleChange() = arm {
+        it.before.active?.journey?.modes?.shuffle != it.after.active?.journey?.modes?.shuffle
+    }
     fun armOrder() = arm { it.before.active?.entries != it.after.active?.entries || it.before.active?.order != it.after.active?.order }
     override suspend fun read() = delegate.read().also { committed = it }
     override suspend fun save(before: QueueLibrary, after: QueueLibrary) {
