@@ -249,3 +249,124 @@ class SelectorBoundedHeldGeometryTest {
         }
     }
 }
+
+class SelectorCoupledPlacementTest {
+    private fun near(expected: Float, actual: Float, density: Float = 1f) =
+        assertEquals(expected, actual, .001f * density)
+
+    @Test fun capturedFullFrameRoundTripsWithoutReadingIndependentBodyStrain() {
+        for (density in listOf(1f, 1.75f, 2.625f, 3f)) for (vertical in listOf(false, true))
+            for (rtl in listOf(false, true)) for (wall in listOf(-1f, 1f)) {
+                val inset = 4f * density
+                val geometry = selectorTrackGeometry(360f * density, 64f * density, .04f, wall,
+                    vertical, rtl, false, false, maximumExtension = inset, heldCrossInset = inset)
+                val insets = SelectorTrackInsets(inset, 0f, inset)
+                val position = if (wall < 0f) 0f else 3f
+                val raw = geometry.lens(position, 4, insets, vertical, rtl, GlassShape(-.16f, -.2f), 20f * density)
+                val captured = raw.returnFrame(geometry, vertical)
+                val applied = geometry.withReturnFrame(captured)
+                for (body in listOf(GlassShape(), GlassShape(.2f, .2f), GlassShape(-.2f, -.2f))) {
+                    val lens = applied.lens(position, 4, insets, vertical, rtl, body, 100f, presentation = captured)
+                    near(raw.bounds.left, lens.bounds.left, density); near(raw.bounds.top, lens.bounds.top, density)
+                    near(raw.bounds.right, lens.bounds.right, density); near(raw.bounds.bottom, lens.bounds.bottom, density)
+                    near(raw.gap, lens.gap, density); near(raw.corner, lens.corner, density)
+                    near(geometry.travelStart, applied.travelStart, density)
+                    near(geometry.travelExtent, applied.travelExtent, density)
+                }
+            }
+    }
+
+    @Test fun shellAndForegroundRecordingsHaveFixedCrossClearanceAndOneOriginTranslation() {
+        for (density in listOf(1f, 1.75f, 2.625f, 3f)) for (travel in listOf(180f, 1200f)) {
+            val limits = SelectorReturnLimits(4f * density, 4f * density, -1f)
+            val bounds = selectorTrackRecordingBounds(travel * density, 64f * density, limits.crossClearance)
+            near(-4f * density, bounds.top, density); near(68f * density, bounds.bottom, density)
+            val content = androidx.compose.ui.geometry.Rect(0f, 0f, travel * density, 64f * density)
+                .translate(-bounds.topLeft)
+            near(0f, bounds.left + content.left, density)
+            near(0f, bounds.top + content.top, density)
+            near(travel * density, bounds.left + content.right, density)
+            near(64f * density, bounds.top + content.bottom, density)
+        }
+    }
+
+    @Test fun restIdentityDoesNotDependOnLiveFractionalPositionOrSignedZeroWall() {
+        val insets = SelectorTrackInsets(0f, 4f, 4f)
+        val base = SelectorTrackGeometry(240f, 64f, 0f, 1f)
+        val expected = base.restFrame(4, insets, false, 32f)
+        for (position in listOf(0f, .1387f, .5f, 1.25f, 2.8613f, 3f)) for (wall in listOf(-1f, 1f)) {
+            val moving = base.copy(wall = wall,
+                heldContact = kotlin.math.abs(glassWallAffinity(position, 3f)))
+            assertEquals(expected, moving.restFrame(4, insets, false, 32f))
+        }
+        near(56f, expected.lensCross)
+    }
+
+    @Test fun circularAndNarrowNavigationCellsRetainBothReboundPolarities() {
+        val insets = SelectorTrackInsets(0f, 4f, 4f)
+        for (cellWidth in listOf(48f, 56f, 60f, 64f)) for (count in listOf(1, 3, 4)) {
+            val geometry = SelectorTrackGeometry(cellWidth * count, 64f, .04f, 1f,
+                maximumExtension = 4f, heldCrossInset = 4f)
+            val raw = geometry.lens(count - 1f, count, insets, false, false, GlassShape(-.16f, -.2f), 28f)
+            val rest = geometry.restFrame(count, insets, false, 32f)
+            val release = SelectorCrossReturn(raw.returnFrame(geometry, false), rest, SelectorReturnLimits(4f, 4f, 1f))
+            var contracted = false; var expandedAfterContraction = false
+            repeat(360) {
+                val frame = release.advance(1f / 120f, 8f)
+                contracted = contracted || frame.lensTravel < rest.lensTravel - .01f && frame.lensCross > rest.lensCross + .01f
+                expandedAfterContraction = expandedAfterContraction || contracted &&
+                    frame.lensTravel > rest.lensTravel + .01f && frame.lensCross < rest.lensCross - .01f
+                org.junit.Assert.assertTrue(selectorReturnRoundedContains(frame))
+            }
+            org.junit.Assert.assertTrue("$count navigation cells at $cellWidth dp must compress travel while expanding cross", contracted)
+            org.junit.Assert.assertTrue("$count navigation cells at $cellWidth dp must reverse that phase", expandedAfterContraction)
+        }
+    }
+
+    @Test fun releasedContactRemainsRoundedContainedAcrossAxesRtlAndNarrowHosts() {
+        for (density in listOf(1f, 2.625f)) for (vertical in listOf(false, true))
+            for (rtl in listOf(false, true)) for (count in listOf(1, 3, 7))
+                for (wall in listOf(-1f, 1f)) for (damping in listOf(2f, 8f, 40f)) {
+                    val inset = 4f * density
+                    val travel = (if (count == 1) 48f else count * 72f) * density
+                    val cross = (if (vertical) 300f else 64f) * density
+                    val geometry = selectorTrackGeometry(travel, cross, .04f, wall, vertical, rtl,
+                        false, false, maximumExtension = inset, heldCrossInset = inset)
+                    val insets = SelectorTrackInsets(inset, 0f, inset)
+                    val position = if (wall < 0f) 0f else count - 1f
+                    val rawRadius = (24f * density - inset).coerceAtMost(minOf(geometry.crossExtent, geometry.travelExtent) / 2f)
+                    val raw = geometry.lens(position, count, insets, vertical, rtl, GlassShape(-.16f, -.2f), rawRadius)
+                    val base = geometry.copy(stretch = 0f, heldCrossInset = null)
+                    val baseLens = base.lens(position, count, insets, vertical, rtl, GlassShape(), 24f * density)
+                    val rest = baseLens.returnFrame(base, vertical)
+                    val release = SelectorCrossReturn(raw.returnFrame(geometry, vertical), rest,
+                        SelectorReturnLimits(inset, inset, geometry.wall))
+                    repeat(240) {
+                        val frame = release.advance(1f / 120f, damping)
+                        val applied = geometry.withReturnFrame(frame)
+                        val lens = applied.lens(position, count, insets, vertical, rtl, GlassShape(), 0f, frame)
+                        org.junit.Assert.assertTrue(frame.lensCross <= frame.shellCross)
+                        org.junit.Assert.assertTrue(frame.lensTravel + frame.gap <= frame.shellTravel + .001f * density)
+                        org.junit.Assert.assertTrue(selectorReturnRoundedContains(frame))
+                        val shellBounds = if (vertical) androidx.compose.ui.geometry.Rect(applied.crossStart, applied.travelStart,
+                            applied.crossStart + applied.crossExtent, applied.travelEnd)
+                            else androidx.compose.ui.geometry.Rect(applied.travelStart, applied.crossStart,
+                                applied.travelEnd, applied.crossStart + applied.crossExtent)
+                        // Independent point oracle: sample every inner corner arc against
+                        // the actual placed outer rounded rectangle, including its far wall.
+                        val epsilon = 8f * Math.ulp(maxOf(travel, cross))
+                        for (sx in listOf(-1, 1)) for (sy in listOf(-1, 1)) for (step in 0..8) {
+                            val angle = step * Math.PI / 16.0
+                            val cx = if (sx < 0) lens.bounds.left + lens.corner else lens.bounds.right - lens.corner
+                            val cy = if (sy < 0) lens.bounds.top + lens.corner else lens.bounds.bottom - lens.corner
+                            val x = cx + sx * lens.corner * kotlin.math.cos(angle)
+                            val y = cy + sy * lens.corner * kotlin.math.sin(angle)
+                            val radius = frame.outerCorner.toDouble()
+                            val ox = x.coerceIn(shellBounds.left + radius, shellBounds.right - radius)
+                            val oy = y.coerceIn(shellBounds.top + radius, shellBounds.bottom - radius)
+                            org.junit.Assert.assertTrue((x - ox) * (x - ox) + (y - oy) * (y - oy) <= (radius + epsilon) * (radius + epsilon))
+                        }
+                    }
+                }
+    }
+}

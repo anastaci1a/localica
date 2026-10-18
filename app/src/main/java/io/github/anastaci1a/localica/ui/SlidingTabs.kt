@@ -130,30 +130,25 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val rawFrame = rawGeometry.lens(lens.value, tabs.size, insets, false, rtl,
             if (appearance.tabStyle == TabLensStyle.Classic) GlassShape() else selectorBody.value, rawTrack.height / 2f)
         val restGeometry = rawGeometry.copy(stretch = 0f, heldCrossInset = null)
-        val restCross = SelectorCrossFrame(restGeometry.cross, restGeometry.cross - 2f * inset,
-            (baseHeight / 2f - inset).coerceAtLeast(0f), baseHeight / 2f)
-        val cross = rememberSelectorCrossFrame(rawFrame.crossFrame(rawGeometry),
-            restCross, pressed || dragging,
-            shell.value == GlassShape() && selectorBody.value == GlassShape(),
-            maximumCorner = rawFrame.bounds.width / 2f, maximumOuterCorner = rawGeometry.travelExtent / 2f,
-            enabled = fits && appearance.tabStyle != TabLensStyle.Classic)
-        // The presentation rest must include the same corner clamps as the lens,
-        // including a one-tab host narrower than its height.
-        val effectiveRestCross = restGeometry.lens(lens.value, tabs.size, insets, false, rtl,
-            GlassShape(), baseHeight / 2f).crossFrame(restGeometry)
+        val restFrame = restGeometry.restFrame(tabs.size, insets, false, baseHeight / 2f)
+        val coupled = fits && appearance.tabStyle != TabLensStyle.Classic
+        val limits = SelectorReturnLimits(maximumExtension, inset, rawGeometry.wall)
+        val frame = rememberSelectorCrossFrame(rawFrame.returnFrame(rawGeometry, false), restFrame,
+            pressed || dragging, shell.value == GlassShape() && selectorBody.value == GlassShape(),
+            limits, enabled = coupled)
         val moving = pressed || dragging || pageDragging || lens.isRunning ||
-            shell.value != GlassShape() || selectorBody.value != GlassShape() || cross != effectiveRestCross
+            shell.value != GlassShape() || selectorBody.value != GlassShape() || frame != restFrame
         SideEffect { trackActivity.update(moving) }
-        val geometry = rawGeometry.copy(crossExtentOverride = cross.shell)
+        val geometry = if (coupled) rawGeometry.withReturnFrame(frame) else rawGeometry
         val track = if (fits) androidx.compose.ui.geometry.Rect(geometry.travelStart, geometry.crossStart,
             geometry.travelEnd, geometry.crossStart + geometry.crossExtent) else rawTrack
-        val radius = cross.outerCorner
-        val selectorFrame = if (fits && appearance.tabStyle != TabLensStyle.Classic)
-            rawFrame.withCrossFrame(cross, geometry.cross, false) else rawFrame
+        val radius = frame.outerCorner
+        val selectorFrame = if (coupled) geometry.lens(lens.value, tabs.size, insets,
+            false, rtl, GlassShape(), radius, presentation = frame) else rawFrame
         val selectorContour = remember(selectorFrame) { selectorFrame.contour() }
         // Fixed padded recording dimensions avoid size-driven legacy recapture on
         // each deformation frame. Dynamic legacy foreground freshness is gated separately.
-        val recording = androidx.compose.ui.geometry.Rect(-maximumExtension, 0f, viewport + maximumExtension, baseHeight)
+        val recording = selectorTrackRecordingBounds(viewport, baseHeight, limits.crossClearance)
         Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {
             LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
                 .testTag("tab-track-shell").bottomGlassShadow(opacity = shadowOpacity), source,
@@ -273,10 +268,9 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                     })) { Labels(Color.White, false, atlas = true) }
                 }
                 if (!refractForeground) Lens()
-                val foregroundRecording = androidx.compose.ui.geometry.Rect(
-                    -maximumExtension, 0f, geometry.travel + maximumExtension, baseHeight)
+                val foregroundRecording = selectorTrackRecordingBounds(geometry.travel, baseHeight, limits.crossClearance)
                 val foregroundContent = androidx.compose.ui.geometry.Rect(
-                    -foregroundRecording.left, 0f, geometry.travel - foregroundRecording.left, baseHeight)
+                    0f, 0f, geometry.travel, baseHeight).translate(-foregroundRecording.topLeft)
                 Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundRecording)
                     .recordFrostedBackdrop(decorated).drawWithContent {
                         if (composite.recorded && !composite.layer.isReleased) {
