@@ -3,8 +3,6 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
@@ -19,6 +17,7 @@ internal fun LegacySelectorLens(modifier: Modifier, source: FrostedBackdrop?, in
     val visible = LocalGlassVisible.current
     if (visible) { BackdropLease(source); BackdropLease(ink) }
     val renderer = remember { SelectorSceneMesh() }
+    val contour = remember(frame) { frame.contour() }
     val location = remember { BackdropLocation() }
     val tone = GlassTone(appearance.contrast, appearance.contrastWeight, false)
     val prepared = rememberToneSnapshot(source?.lensSnapshot ?: source?.glassFallback ?: source?.snapshot, tone)
@@ -32,7 +31,7 @@ internal fun LegacySelectorLens(modifier: Modifier, source: FrostedBackdrop?, in
             appearance.depth * BottomPillDepthScale * selectorBody.thickness,
             ((1f - shellBody.thickness) / .18f).coerceIn(0f, 1f),
             ((1f - selectorBody.thickness) / .18f).coerceIn(0f, 1f))
-        val clip = Path().apply { addRoundRect(RoundRect(frame.bounds, CornerRadius(frame.corner))) }
+        val clip = Path().apply { addRoundRect(contour.outline) }
         translate(-frame.bounds.left, -frame.bounds.top) {
             clipPath(clip) {
                 if (prepared != null && source != null) with(renderer) {

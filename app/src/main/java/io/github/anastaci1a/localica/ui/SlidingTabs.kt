@@ -150,6 +150,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val radius = cross.outerCorner
         val selectorFrame = if (fits && appearance.tabStyle != TabLensStyle.Classic)
             rawFrame.withCrossFrame(cross, geometry.cross, false) else rawFrame
+        val selectorContour = remember(selectorFrame) { selectorFrame.contour() }
         // Fixed padded recording dimensions avoid size-driven legacy recapture on
         // each deformation frame. Dynamic legacy foreground freshness is gated separately.
         val recording = androidx.compose.ui.geometry.Rect(-maximumExtension, 0f, viewport + maximumExtension, baseHeight)
@@ -215,7 +216,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 Box(Modifier.width(width * tabs.size).fillMaxHeight()
                     .then(if (interactive) Modifier else Modifier.clearAndSetSemantics {})
                     .then(if (atlas) Modifier else Modifier.drawWithContent {
-                        val path = Path().apply { addRoundRect(RoundRect(selectorFrame.bounds, CornerRadius(selectorFrame.corner))) }
+                        val path = Path().apply { addRoundRect(selectorContour.outline) }
                         clipPath(path, if (interactive) ClipOp.Difference else ClipOp.Intersect) { this@drawWithContent.drawContent() }
                     }), contentAlignment = AbsoluteAlignment.TopLeft) {
                     tabs.forEachIndexed { index, tab ->

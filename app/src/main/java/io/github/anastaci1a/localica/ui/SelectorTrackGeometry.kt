@@ -172,11 +172,5 @@ internal fun selectorVisibleLensContains(point: androidx.compose.ui.geometry.Off
     lens: SelectorTrackLens, contentOffset: Float, viewport: androidx.compose.ui.geometry.Rect): Boolean {
     if (!viewport.contains(point)) return false
     val content = point.copy(x = point.x + contentOffset)
-    val bounds = lens.bounds
-    if (!bounds.contains(content)) return false
-    val radius = lens.corner.coerceIn(0f, minOf(bounds.width, bounds.height) / 2f)
-    val x = content.x.coerceIn(bounds.left + radius, bounds.right - radius)
-    val y = content.y.coerceIn(bounds.top + radius, bounds.bottom - radius)
-    val dx = content.x - x; val dy = content.y - y
-    return dx * dx + dy * dy <= radius * radius
+    return lens.contour().contains(content)
 }
