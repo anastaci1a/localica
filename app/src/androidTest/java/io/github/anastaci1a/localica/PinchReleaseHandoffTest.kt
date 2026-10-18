@@ -87,12 +87,19 @@ class PinchReleaseHandoffTest {
             val y = expectedFinalCenter - viewport.top
             val x = originalBounds.center.x - viewport.left
             val scene = compose.onNodeWithTag("release-scene")
+            val reviewDirectory by lazy {
+                val exported = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                val root = exported?.let { java.io.File(it) } ?: requireNotNull(
+                    InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
+                java.io.File(root, "pinch-review").also {
+                    check(it.isDirectory || it.mkdirs()) { "Pinch review directory must be writable" }
+                }
+            }
             fun presentedCenter(): Float {
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
                 if (gallery && stage in setOf(0, 1, 2, 6, 12, 22) &&
                     InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
-                    val directory = java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "pinch-review")
-                    directory.mkdirs()
+                    val directory = reviewDirectory
                     val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
                     try {
                         bitmap.setPixels(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() },
