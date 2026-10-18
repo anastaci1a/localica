@@ -103,7 +103,7 @@ class GlassMenuForegroundTest {
         }
         compose.onNodeWithText("Close nested").performClick()
         compose.onNodeWithText("Close menu").performClick()
-        compose.waitUntil(5000) { !anchor.hidden && !anchor.modalPresent }
+        awaitGlassReturn(compose, anchor) { "lightInk=$lightInk anchored=$anchored open=$open nested=$nested" }
         compose.onNodeWithTag("menu-trigger").assertIsDisplayed()
         if (anchored) compose.runOnIdle { assertEquals("Returned trigger keeps its ink", ink, anchor.ink) }
     }
