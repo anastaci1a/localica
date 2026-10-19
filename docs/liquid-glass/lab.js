@@ -3,13 +3,15 @@
 (() => {
   const $ = id => document.getElementById(id), W = 960, H = 400;
   const canvas = $('scene'), fallback = $('fallback'), foreground = $('foreground');
+  const software = createSoftwareLens(fallback);
+  let rendererReason = '';
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const mix = (a, b, t) => a + (b - a) * t;
   const defaults = {depth:1, band:.55, blur:0, tint:.02, trim:.12, weight:1.6, shine:.35, shadow:.1, damping:8};
   const values = () => Object.fromEntries(Object.keys(defaults).map(k => [k, +$(k).value]));
   const textureCanvas = document.createElement('canvas');
   textureCanvas.width = W; textureCanvas.height = H;
-  const bg = textureCanvas.getContext('2d');
+  const bg = textureCanvas.getContext('2d',{willReadFrequently:true});
   const media = matchMedia('(prefers-reduced-motion: reduce)');
   $('reduce').checked = media.matches;
   let gl, program, texture, vao, contextControl, uniforms = {}, lost = false, disposed = false;
@@ -117,10 +119,10 @@
     return shader;
   }
   function initGL() {
-    if(new URLSearchParams(location.search).has('fallback'))return false;
+    if(new URLSearchParams(location.search).has('fallback')){rendererReason='Software rendering requested by the URL.';return false;}
     try {
       gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,preserveDrawingBuffer:false,powerPreference:'low-power'});
-      if(!gl)return false;
+      if(!gl){rendererReason='This browser did not provide a WebGL2 context.';return false;}
       contextControl=gl.getExtension('WEBGL_lose_context');
       const vs=compile(gl.VERTEX_SHADER,vertex), fs=compile(gl.FRAGMENT_SHADER,fragment);
       program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
@@ -135,8 +137,8 @@
       texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-      lost=false;fallback.hidden=true;$('status').textContent='WebGL2 · background refraction';return true;
-    }catch(error){console.warn('Glass lab fallback:',error.message);return false;}
+      lost=false;fallback.hidden=true;rendererReason='';$('retry').hidden=true;$('rendererNote').textContent='';$('status').textContent='WebGL2 · background refraction';return true;
+    }catch(error){rendererReason='WebGL initialization failed: '+error.message;console.warn('Glass lab software renderer:',error.message);return false;}
   }
   let gpu=initGL();
   function upload(){if(gpu&&!lost){gl.bindTexture(gl.TEXTURE_2D,texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,textureCanvas);uploads++;}}
@@ -162,7 +164,7 @@
       const g=bg.createLinearGradient(0,0,W,H);g.addColorStop(0,'#273a65');g.addColorStop(.35,'#d19b9f');g.addColorStop(.65,'#efd39c');g.addColorStop(1,'#77aeac');bg.fillStyle=g;bg.fillRect(0,0,W,H);
       bg.strokeStyle='#ffffee80';bg.lineWidth=18;for(let y=-100;y<500;y+=65){bg.beginPath();bg.moveTo(0,y);bg.bezierCurveTo(320,y+240,650,y-180,960,y+70);bg.stroke();}
     }
-    upload();wake();
+    software.setSource(textureCanvas);upload();wake();
   }
   function dimensions(){
     const shape=$('shape').value;
@@ -178,10 +180,13 @@
     const corner=mix($('shape').value==='panel'?30:h/2,32,state.m)*Math.min(sx,sy);
     return {x:cx,y:200,w:width,h:height,r:Math.min(corner,width/2,height/2),z:Math.exp(z),volume:sx*sy*Math.exp(z)};
   }
-  function drawFallback(g){
-    fallback.hidden=false;fallback.width=Math.round(viewWidth);fallback.height=H;const ctx=fallback.getContext('2d');ctx.translate(-viewLeft(),0);ctx.drawImage(textureCanvas,0,0,W,H);
-    if(!$('source').checked){ctx.save();ctx.fillStyle=$('ink').value==='light'?'#17213bc9':'#ffffffb0';ctx.strokeStyle='#ffffff';ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(g.x-g.w/2,g.y-g.h/2,g.w,g.h,g.r);ctx.fill();ctx.stroke();ctx.restore();}
-    $('status').textContent='2D fallback · motion only, no refraction';
+  function drawFallback(g,v){
+    fallback.hidden=false;
+    software.draw({g,v,viewWidth,model:+$('model').value,coordinates:$('background').value==='coordinates',
+      lightInk:$('ink').value==='light',sourceOnly:$('source').checked,held:clamp(-state.z/.3,0,1)});
+    $('status').textContent='Software · background refraction';
+    $('rendererNote').textContent=rendererReason;
+    $('retry').hidden=false;
   }
   function draw(){
     if(disposed)return;
@@ -199,7 +204,7 @@
       gl.uniform1i(uniforms.model,+$('model').value);gl.uniform1i(uniforms.coordinateMode,$('background').value==='coordinates'?1:0);
       gl.uniform1i(uniforms.lightInk,$('ink').value==='light'?1:0);gl.uniform1i(uniforms.sourceOnly,$('source').checked?1:0);
       gl.drawArrays(gl.TRIANGLES,0,3);
-    }else drawFallback(g);
+    }else drawFallback(g,v);
     const show=!$('hideLabel').checked&&!$('source').checked;
     foreground.style.visibility=show?'visible':'hidden';foreground.style.left=`${(g.x-viewLeft())/viewWidth*100}%`;foreground.style.top=`${g.y/H*100}%`;
     foreground.style.color=$('ink').value==='light'?'#fff':'#182330';
@@ -284,18 +289,23 @@
   new ResizeObserver(resize).observe(canvas);resize();
   new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)wake();else if(frame){cancelAnimationFrame(frame);frame=0;}}).observe(canvas);
   document.addEventListener('visibilitychange',()=>{if(document.hidden){if(frame)cancelAnimationFrame(frame);frame=0;release(true);}else wake();});
-  canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();lost=true;draw();});
+  canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();lost=true;rendererReason='The WebGL context was lost; software rendering is active.';draw();});
   canvas.addEventListener('webglcontextrestored',()=>{gpu=initGL();upload();wake();});
+  $('retry').onclick=()=>{
+    const url=new URL(location.href);url.searchParams.delete('fallback');history.replaceState(null,'',url);
+    if(lost){contextControl?.restoreContext();return;}
+    gpu=initGL();upload();wake();
+  };
   window.addEventListener('pagehide',()=>{if(frame)cancelAnimationFrame(frame);frame=0;});
   window.addEventListener('pageshow',wake);
   syncControls();background();draw();
   // Deterministic observability for the public browser regression runner.
   window.glassLab={
-    info:()=>({gpu:gpu&&!lost,frames,uploads,scheduled:!!frame,geometry:lastGeometry,renderSize:[canvas.width,canvas.height],viewWidth,state:{...state},drawTimes:[...drawTimes]}),
-    configure(options){for(const[k,v]of Object.entries(options)){const e=$(k);if(!e)throw Error(k);if(e.type==='checkbox')e.checked=!!v;else e.value=v;}syncControls();background();draw();},
+    info:()=>({gpu:gpu&&!lost,renderer:gpu&&!lost?'webgl':'software',reason:rendererReason,software:software.info(),frames,uploads,scheduled:!!frame,geometry:lastGeometry,renderSize:[canvas.width,canvas.height],viewWidth,state:{...state},drawTimes:[...drawTimes]}),
+    configure(options){const previousBackground=$('background').value;for(const[k,v]of Object.entries(options)){const e=$(k);if(!e)throw Error(k);if(e.type==='checkbox')e.checked=!!v;else e.value=v;}syncControls();if(previousBackground!==$('background').value)background();draw();},
     settle(){if(frame)cancelAnimationFrame(frame);frame=0;for(let n=0;n<2400&&unsettled();n++)step(1/120);draw();return this.info();},
     advance(ms){if(frame)cancelAnimationFrame(frame);frame=0;for(let t=0;t<ms;t+=1000/120)step(Math.min(1000/120,ms-t)/1000);draw();return this.info();},
-    pixels(points){if(!gpu||lost)throw Error('No WebGL');draw();const data=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,data);return points.map(([x,y])=>{const i=4*(clamp(Math.floor((H-y)/H*canvas.height),0,canvas.height-1)*canvas.width+clamp(Math.floor((x-viewLeft())/viewWidth*canvas.width),0,canvas.width-1));return [...data.slice(i,i+4)];});},
+    pixels(points){draw();if(!gpu||lost)return software.pixels(points,viewWidth);const data=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,data);return points.map(([x,y])=>{const i=4*(clamp(Math.floor((H-y)/H*canvas.height),0,canvas.height-1)*canvas.width+clamp(Math.floor((x-viewLeft())/viewWidth*canvas.width),0,canvas.width-1));return [...data.slice(i,i+4)];});},
     pixel(x,y){return this.pixels([[x,y]])[0];},
     lose:()=>contextControl?.loseContext(),
     restore:()=>contextControl?.restoreContext(),
