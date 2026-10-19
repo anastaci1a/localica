@@ -7,9 +7,9 @@
   let rendererReason = '';
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const mix = (a, b, t) => a + (b - a) * t;
-  const defaults = {depth:1, edge:.4, core:.012, band:.55, blur:0, tint:0, trim:.04, weight:1.6, shine:.35, shadow:.1, damping:8};
+  const defaults = {depth:1, edge:.4, core:.012, band:.55, blur:0, tint:0, trim:.04, weight:1.6, shine:.35, shadow:.1, damping:8, redistribution:.5};
   const presetBase={...defaults,model:'0',profile:'1',shape:'pill',ink:'light'};
-  delete presetBase.damping;
+  delete presetBase.damping;delete presetBase.redistribution;
   const presets={
     media:{name:'Clear media control',values:{...presetBase},note:'Media remains visible with a defined rim and little scattering. Inspired by Apple’s playback controls; values are qualitative, not fitted.',source:'https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4'},
     control:{name:'Transparent active control',values:{...presetBase,profile:'0',edge:.25,core:0,band:.4,trim:0,shine:.2,shadow:.05},note:'No blur, tint or brightness adjustment. Quiet core with localized shoulder bending, following the clear-slider observations. Does not reproduce a complete slider.',source:'https://developer.apple.com/videos/play/wwdc2025/284/?time=1092'},
@@ -29,7 +29,7 @@
   $('reduce').checked = media.matches;
   let gl, program, texture, vao, contextControl, uniforms = {}, lost = false, disposed = false;
   let frame = 0, last = 0, visible = true, frames = 0, uploads = 0, drawTimes = [];
-  let state = {x:480, v:0, target:480, m:0, mv:0, strain:0, sv:0, z:0, zv:0};
+  let state = {x:480, v:0, target:480, m:0, mv:0, strain:0, sv:0, z:0, zv:0, wallStrain:0, wallVelocity:0};
   let expanded = false, pointer = null, keyHeld = false, pressure = 0, previousV = 0;
   let lastGeometry, wall = 0, viewWidth = W;
   const viewLeft = () => (W-viewWidth)/2;
@@ -189,11 +189,14 @@
   function geometry(){
     const [w,h]=dimensions();
     const z=clamp(state.z,-.5,.35),q=clamp(state.strain,-.22,.18);
-    const sx=Math.exp(q-z/2),sy=Math.exp(-q-z/2),width=w*sx,height=h*sy;
+    // Boundary pressure can redistribute the compressed width into both height
+    // and depth. Tangential inertial strain remains in-plane for comparison.
+    const transferred=$('wallModel').value==='directional' ? -clamp(state.wallStrain,-.18, .18)*+$('redistribution').value : 0;
+    const sx=Math.exp(q-z/2),sy=Math.exp(-q-z/2-transferred),sz=Math.exp(z+transferred),width=w*sx,height=h*sy;
     const [lo,hi]=bounds(width);
     const cx=wall<0?lo:wall>0?hi:clamp(state.x,lo,hi);
     const corner=mix($('shape').value==='panel'?30:h/2,32,state.m)*Math.min(sx,sy);
-    return {x:cx,y:200,w:width,h:height,r:Math.min(corner,width/2,height/2),z:Math.exp(z),volume:sx*sy*Math.exp(z)};
+    return {x:cx,y:200,w:width,h:height,r:Math.min(corner,width/2,height/2),z:sz,volume:sx*sy*sz,wallDepthLog:transferred};
   }
   function drawFallback(g,v){
     fallback.hidden=false;
@@ -225,13 +228,13 @@
     foreground.style.color=$('ink').value==='light'?'#fff':'#182330';
     $('compactLabel').style.opacity=1-state.m;$('panelLabel').style.opacity=state.m;
     canvas.setAttribute('aria-valuenow',String(Math.round(clamp((g.x-viewLeft()-g.w/2-32)/(viewWidth-64-g.w)*100,0,100))));
-    $('readout').value=`depth ×${g.z.toFixed(2)} · volume ${g.volume.toFixed(3)} · ${pointer||keyHeld?'held':unsettled()?'settling':'rest'}`;
+    $('readout').value=`depth ×${g.z.toFixed(2)} · scale product ${g.volume.toFixed(3)} · ${pointer||keyHeld?'held':unsettled()?'settling':'rest'}`;
     frames++;drawTimes.push(performance.now()-start);if(drawTimes.length>240)drawTimes.shift();
   }
   function wake(){if(!frame&&visible&&!document.hidden&&!disposed){last=performance.now();frame=requestAnimationFrame(tick);}}
   function step(dt){
     const held=!!pointer||keyHeld;
-    if($('reduce').checked){state.x=state.target;state.v=state.mv=state.sv=state.zv=0;state.m=expanded?1:0;state.strain=state.z=0;return;}
+    if($('reduce').checked){state.x=state.target;state.v=state.mv=state.sv=state.zv=state.wallVelocity=0;state.m=expanded?1:0;state.strain=state.z=state.wallStrain=0;return;}
     while(dt>0){
       const d=Math.min(dt,1/240);dt-=d;
       state.mv+=(145*((expanded?1:0)-state.m)-24.1*state.mv)*d;state.m=clamp(state.m+state.mv*d,0,1);
@@ -240,10 +243,11 @@
       state.sv+=braking;
       const damping=held?2*Math.sqrt(220):+$('damping').value;
       state.sv+=(220*(pressure-state.strain)-damping*state.sv)*d;state.strain+=state.sv*d;
+      state.wallVelocity+=(220*(pressure-state.wallStrain)-damping*state.wallVelocity)*d;state.wallStrain+=state.wallVelocity*d;
       state.zv+=(220*((held?-.3:0)-state.z)-damping*state.zv)*d;state.z+=state.zv*d;
     }
   }
-  function unsettled(){return !$('reduce').checked&&(Math.abs(state.x-state.target)>.02||Math.abs(state.v)>.03||Math.abs(state.m-(expanded?1:0))>.0001||Math.abs(state.mv)>.001||Math.abs(state.strain-pressure)>.0001||Math.abs(state.sv)>.001||Math.abs(state.z-((pointer||keyHeld)?-.3:0))>.0001||Math.abs(state.zv)>.001);}
+  function unsettled(){return !$('reduce').checked&&(Math.abs(state.x-state.target)>.02||Math.abs(state.v)>.03||Math.abs(state.m-(expanded?1:0))>.0001||Math.abs(state.mv)>.001||Math.abs(state.strain-pressure)>.0001||Math.abs(state.sv)>.001||Math.abs(state.z-((pointer||keyHeld)?-.3:0))>.0001||Math.abs(state.zv)>.001||Math.abs(state.wallStrain-pressure)>.0001||Math.abs(state.wallVelocity)>.001);}
   function tick(now){frame=0;step(Math.min((now-last)/1000,.04));last=now;draw();if(unsettled())wake();}
   function point(e){const r=canvas.getBoundingClientRect();return {x:viewLeft()+(e.clientX-r.left)*viewWidth/r.width,y:(e.clientY-r.top)*H/r.height};}
   function hit(p,g){const x=Math.abs(p.x-g.x)-g.w/2+g.r,y=Math.abs(p.y-g.y)-g.h/2+g.r;return Math.hypot(Math.max(x,0),Math.max(y,0))+Math.min(Math.max(x,y),0)<=g.r+8;}
@@ -278,6 +282,7 @@
   $('menu').onclick=()=>{expanded=!expanded;$('menu').setAttribute('aria-pressed',String(expanded));$('menu').textContent=expanded?'Collapse surface':'Expand surface';wake();};
   function syncControls(){
     for(const k of Object.keys(defaults))$(k+'Value').value=Number($(k).value).toFixed(k==='damping'?1:k==='core'?3:2);
+    $('redistribution').disabled=$('wallModel').value!=='directional';
     const cap=$('model').value==='1';for(const k of ['edge','core','profile'])$(k).disabled=cap;
     $('modelNote').textContent=cap?'Cap uses height gradients and Snell refraction (index 1.33). Edge strength, center magnification and edge profile apply only to the boundary model.':'Rim-concentrated keeps bending at the outline; shoulder peak returns to zero there. Neither continuation is calibrated at Apple’s outermost rim.';
     const match=Object.entries(presets).find(([,p])=>Object.entries(p.values).every(([k,v])=>String($(k).value)===String(v)));
@@ -293,13 +298,13 @@
     tab.onkeydown=e=>{const next={ArrowRight:(i+1)%tabs.length,ArrowLeft:(i+tabs.length-1)%tabs.length,Home:0,End:tabs.length-1}[e.key];if(next!==undefined){e.preventDefault();selectTab(tabs[next],true);}};
   }
   for(const k of Object.keys(defaults))$(k).addEventListener('input',()=>{syncControls();wake();});
-  for(const k of ['shape','model','profile','ink','reduce','hideLabel','source'])$(k).addEventListener('change',()=>{syncControls();wake();});
+  for(const k of ['shape','model','profile','wallModel','ink','reduce','hideLabel','source'])$(k).addEventListener('change',()=>{syncControls();wake();});
   $('background').onchange=background;
   $('optics').onclick=()=>{for(const k of ['blur','tint','trim','shine','shadow'])$(k).value=0;syncControls();wake();};
   $('reset').onclick=()=>{
-    release(true);expanded=false;wall=0;state={x:480,v:0,target:480,m:0,mv:0,strain:0,sv:0,z:0,zv:0};previousV=0;
+    release(true);expanded=false;wall=0;state={x:480,v:0,target:480,m:0,mv:0,strain:0,sv:0,z:0,zv:0,wallStrain:0,wallVelocity:0};previousV=0;
     for(const[k,v]of Object.entries(defaults))$(k).value=v;
-    $('model').value='0';$('profile').value='1';$('shape').value='pill';$('background').value='lines';$('ink').value='light';$('reduce').checked=media.matches;$('hideLabel').checked=$('source').checked=false;
+    $('wallModel').value='planar';$('model').value='0';$('profile').value='1';$('shape').value='pill';$('background').value='lines';$('ink').value='light';$('reduce').checked=media.matches;$('hideLabel').checked=$('source').checked=false;
     $('menu').textContent='Expand surface';$('menu').setAttribute('aria-pressed','false');selectTab(tabs[0]);syncControls();background();
   };
   $('save').onclick=()=>{
