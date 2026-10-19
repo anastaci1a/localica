@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · controls</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="controls-that-stay-under-your-finger">Controls that stay under your finger</h1>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · controls</title><link rel="stylesheet" href="lab.css?v=025b13ffa262"><link rel="stylesheet" href="guide.css?v=025b13ffa262"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="controls-that-stay-under-your-finger">Controls that stay under your finger</h1>
 <p><a href="index.html">Guide home</a> · <a href="sources.html#choosing-and-arranging-controls">Apple evidence</a> · <a href="specification.html">Material and motion</a> · <a href="lab.html">Motion lab</a></p>
 <p><strong>Localica implementation rules, grounded in Apple&#39;s control guidance.</strong> Choose the interaction first, then give it glass. The shape, optical response and semantic value must describe the same state. These rules are acceptance targets; the <a href="https://github.com/anastaci1a/localica/blob/main/docs/interface.md">interface contract</a> describes the app&#39;s current behavior.</p>
 <h2 id="choose-the-control">Choose the control</h2>
@@ -103,14 +103,7 @@
 <li>Reduced Motion keeps direct tracking and state changes, but removes decorative strain and depth changes. Do not substitute a blur animation for the removed movement.</li>
 </ul>
 <p>The playback track remains a separate thumbless-at-rest control. Dragging it previews a seek; its shared X target explicitly cancels that preview without pausing playback. Do not silently apply that rollback behavior to every settings slider.</p>
-<details>
-<summary>See the controls in Localica</summary>
-
-<img src="assets/settings.png" width="300" alt="Localica glass settings with white resting thumbs and grouped labels">
-
-<p>An actual app capture on Android 16. The still image shows the resting controls and layout; use the exercises below to review interaction.</p>
-</details>
-
+<p>The <a href="index.html#motion-studies">lab contact/recovery capture</a> demonstrates the shared motion model. It is not an app screenshot or a slider/switch implementation.</p>
 <h2 id="switches-and-moving-choice-lenses">Switches and moving choice lenses</h2>
 <p>Switches use a colored capsule track and a rounded thumb. The thumb becomes clear while manipulated or travelling; its quiet white rest finish returns continuously. An interrupted move begins at the visible position. Preserve one semantic on/off value while a drag previews the potential destination; commit once on release. Keep tap and keyboard alternatives equivalent.</p>
 <p>Choice lenses use the same motion body and magnetic mapping in either orientation, including navigation following a manually swiped page. Pressing another option retargets immediately. At an endpoint, pin the touching edge and cap cross-axis expansion to the container&#39;s inset. Reversal/cancellation cannot strand the lens. For fitted navigation tabs, further overdrag also stretches the outer pill toward the pull, fixing its opposite edge and reducing height/depth.</p>
@@ -166,4 +159,4 @@
 </tbody></table>
 <p>Use actual app captures and both supported Android rendering paths. An illustrative lab demonstrates a model; it cannot establish production frame rate, accessibility correctness or optical fidelity.</p>
 <p><a href="sources.html#choosing-and-arranging-controls">Apple references</a> · <a href="specification.html#input-and-motion">Shared physics</a> · <a href="index.html">Guide home</a></p>
-</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/9133e01f19c8571d1bf611e1f79770f0606c314a/docs/liquid-glass">9133e01f</a> · Original studies; no claim of iOS parity.</footer></body></html>
+</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/025b13ffa2623d5c47b27f78d4a96f622c021683/docs/liquid-glass">025b13ff</a> · Original studies; no claim of iOS parity.</footer></body></html>

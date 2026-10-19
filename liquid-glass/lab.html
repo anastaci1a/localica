@@ -1,25 +1,25 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light"><title>Localica · Liquid Glass lab</title>
-<link rel="stylesheet" href="lab.css"><script src="lab.js" defer></script></head>
+<meta name="color-scheme" content="dark"><title>Localica · Liquid Glass lab</title>
+<link rel="stylesheet" href="lab.css?v=025b13ffa262"><script src="lab.js?v=025b13ffa262" defer></script></head>
 <body>
 <header><nav aria-label="Research"><a href="index.html">Field guide</a><a href="optics.html">Evidence &amp; model</a><a href="https://github.com/anastaci1a/localica/issues/222">Research issue ↗</a></nav>
-<p class="eyebrow">LOCALICA / OPTICAL STUDY</p><h1>A lens, under<br>your finger.</h1>
-<p class="intro">Drag it across the grid. Hold it, push against a boundary, or open it into a panel. The background actually bends; the label stays sharp.</p></header>
-<main>
+<div class="heading"><div><p class="eyebrow">LOCALICA / RESEARCH</p><h1>Liquid Glass lab</h1></div><p class="intro">Interactive demonstration of background refraction through a movable lens. Controls adjust its shape, optical properties and motion.</p></div></header>
+<main><div class="workspace">
 <section class="experiment" aria-label="Interactive optical experiment">
+<div class="preview-heading"><h2>Preview</h2><span>Drag · hold · release</span></div>
 <div class="stage" id="stage">
 <canvas id="scene" width="960" height="400" tabindex="0" role="slider" aria-label="Lens position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-describedby="instructions"></canvas>
 <canvas id="fallback" width="960" height="400" hidden aria-hidden="true"></canvas>
-<div id="foreground" aria-hidden="true"><span id="compactLabel">Drag me</span><span id="panelLabel">One continuing surface<small>Background bends. Type stays sharp.</small></span></div>
+<div id="foreground" aria-hidden="true"><span id="compactLabel">Drag lens</span><span id="panelLabel">Expanded panel<small>Text is drawn above the refracted background.</small></span></div>
 </div>
-<div class="stage-footer"><span id="status" role="status">Preparing optics…</span><output id="readout"></output></div>
-<p id="instructions">Grab the lens to drag. Arrow keys move; Home/End reach a wall. Press Space to hold, release to rebound. Escape cancels. The buttons offer the same destinations.</p>
-<div class="actions"><button id="left">← Left</button><button id="menu" aria-pressed="false">Expand surface</button><button id="right">Right →</button><button id="reset">Reset</button><button id="save">Save image</button></div>
+<div class="stage-footer"><span id="status" role="status">Preparing renderer…</span><output id="readout"></output></div>
+<p id="instructions">Drag the lens or use ← / →. Home / End move to the edges. Hold Space to compress; release to rebound. Escape cancels.</p>
+<div class="actions"><button id="left">← Left</button><button id="menu" aria-pressed="false">Expand surface</button><button id="right">Right →</button><button id="save">Save image</button></div>
 </section>
-<section aria-labelledby="controls-title"><h2 id="controls-title">Separate the ingredients.</h2><p>These are experimental Localica parameters, not recovered Apple constants. Start with optics only to see the displacement clearly.</p>
-<div class="toolbar"><label>Model<select id="model"><option value="0">Boundary-focused</option><option value="1">Physical cap comparison</option></select></label><label>Shape<select id="shape"><option value="pill">Capsule</option><option value="circle">Circle</option><option value="panel">Panel</option></select></label><label>Backdrop<select id="background"><option value="grid">Color grid</option><option value="text">Text &amp; stripes</option><option value="wash">Color wash</option><option value="coordinates">Coordinate diagnostic</option></select></label><label>Ink<select id="ink"><option value="dark">Dark</option><option value="light">Light</option></select></label></div>
+<section class="controls" aria-labelledby="controls-title"><div class="controls-heading"><h2 id="controls-title">Settings</h2><button id="reset">Reset all settings</button></div><p class="control-intro">Changes apply to this preview only.</p>
+<div class="toolbar"><label>Model<select id="model"><option value="0">Boundary field</option><option value="1">Refracting cap</option></select></label><label>Shape<select id="shape"><option value="pill">Capsule</option><option value="circle">Circle</option><option value="panel">Panel</option></select></label><label>Backdrop<select id="background"><option value="lines">Gradient lines</option><option value="grid">Color grid</option><option value="text">Text &amp; stripes</option><option value="wash">Color wash</option><option value="coordinates">Coordinates</option></select></label><label>Ink<select id="ink"><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
 <div class="parameters">
 <label>Optical depth <output id="depthValue"></output><input id="depth" type="range" min="0" max="2" step="0.01" value="1"><small><span>Identity</span><span>Deeper</span></small></label>
 <label>Shoulder width <output id="bandValue"></output><input id="band" type="range" min="0.15" max="0.8" step="0.01" value="0.55"><small><span>Localized</span><span>Broad</span></small></label>
@@ -29,10 +29,10 @@
 <label>Tone weighting <output id="weightValue"></output><input id="weight" type="range" min="1" max="2" step="0.01" value="1.6"><small><span>Even</span><span>Far end weighted</span></small></label>
 <label>Reflection / rim <output id="shineValue"></output><input id="shine" type="range" min="0" max="1" step="0.01" value="0.35"><small><span>None</span><span>Pronounced</span></small></label>
 <label>Shadow <output id="shadowValue"></output><input id="shadow" type="range" min="0" max="0.3" step="0.01" value="0.1"><small><span>None</span><span>More separation</span></small></label>
-<label>Released shape damping <output id="dampingValue"></output><input id="damping" type="range" min="1" max="35" step="0.5" value="8"><small><span>Very elastic</span><span>Quiet</span></small></label>
+<label>Released shape damping <output id="dampingValue"></output><input id="damping" type="range" min="1" max="35" step="0.5" value="8"><small><span>Less damping</span><span>More damping</span></small></label>
 </div>
-<div class="actions"><button id="optics">Optics only</button><button id="regular">Scattering study</button><label class="check"><input id="reduce" type="checkbox"> Reduce motion</label><label class="check"><input id="hideLabel" type="checkbox"> Hide label</label><label class="check"><input id="source" type="checkbox"> Unaltered backdrop</label></div></section>
-<section class="notes"><h2>What this can tell us.</h2><div><p><strong>Observation.</strong> Apple's examples support relatively quiet cores and stronger shoulders in some scenes. Regular and Clear are different materials; there is no single recovered Apple lens.</p><p><strong>Experiment.</strong> Compare a bounded inverse displacement field with a rounded height field and two refracting interfaces. Blur, synthetic reflection and contrast are independent. The lab uses a single captured texture, not live DOM capture.</p><p><strong>Limit.</strong> This is one surface and one backdrop. It does not validate Android rendering, merged selections, iOS parity or phone frame rates. Without WebGL, the disclosed fallback demonstrates motion only.</p></div><p><a href="optics.html">Read the measurements, equations and limitations →</a></p></section>
+<div class="actions"><button id="optics">Optics only</button><button id="regular">Blur + tint preset</button><label class="check"><input id="reduce" type="checkbox"> Reduce motion</label><label class="check"><input id="hideLabel" type="checkbox"> Hide label</label><label class="check"><input id="source" type="checkbox"> Unaltered backdrop</label></div></section></div>
+<section class="notes"><h2>Model and limitations</h2><div><p><strong>Observation.</strong> Apple's examples support relatively low central displacement and stronger edge displacement in some scenes. Regular and Clear are different materials; there is no single recovered Apple lens.</p><p><strong>Experiment.</strong> Compare a bounded inverse displacement field with a rounded height field and two refracting interfaces. Blur, synthetic reflection and contrast are independent. The background is generated once per selection and reused as a texture. It does not capture page content.</p><p><strong>Limit.</strong> This is one surface and one backdrop. It does not validate Android rendering, merged selections, iOS parity or phone frame rates. If WebGL is unavailable, the fallback demonstrates motion only. Use <a href="?fallback=1">motion-only mode</a> if your browser cannot run the shader.</p></div><p><a href="optics.html">Read the measurements, equations and limitations →</a></p></section>
 </main><footer>Original project artwork · no Apple imagery or fonts · no analytics or runtime dependencies · <a href="https://github.com/anastaci1a/localica">Source</a></footer>
 <noscript>This interactive study needs JavaScript. The <a href="optics.html">research notes</a> remain readable without it.</noscript>
 </body></html>

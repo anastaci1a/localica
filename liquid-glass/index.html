@@ -1,77 +1,70 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · Liquid Glass</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="the-liquid-glass-field-guide">The Liquid Glass field guide</h1>
-<p><strong>An Apple-sourced design reference for Localica.</strong> How surfaces should respond, how light establishes their shape, and how to keep the result readable and fast.</p>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · Liquid Glass</title><link rel="stylesheet" href="lab.css?v=025b13ffa262"><link rel="stylesheet" href="guide.css?v=025b13ffa262"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="the-liquid-glass-field-guide">The Liquid Glass field guide</h1>
+<p>Research notes and implementation requirements for Localica’s glass rendering and interaction system, with links to primary Apple sources.</p>
 <p><a href="sources.html">Apple evidence</a> · <a href="optics.html">Optical findings</a> · <a href="specification.html">Localica specification</a> · <a href="controls.html">Interactive controls</a> · <a href="https://anastaci1a.github.io/localica/liquid-glass/lab.html">Live lab</a> · <a href="https://github.com/anastaci1a/localica/blob/main/docs/README.md">Project docs</a></p>
-<p><img src="assets/pressure.png" alt="An original diagram of a lens meeting a boundary and compressing while its position stays constrained"></p>
-<h2 id="choose-a-path">Choose a path</h2>
+<p><img src="assets/lab-desktop.png?v=025b13ffa262" alt="The current dark lab showing a refracting lens over a gradient with vertical lines"></p>
+<h2 id="contents">Contents</h2>
 <table>
 <thead>
 <tr>
-<th>I want to…</th>
-<th>Start here</th>
+<th>Topic</th>
+<th>Reference</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>Understand the feeling we are aiming for</td>
+<td>Interaction principles</td>
 <td><a href="sources.html#interaction-foundations">Fluid interaction foundations</a></td>
 </tr>
 <tr>
-<td>Check what Apple actually says</td>
+<td>Apple guidance</td>
 <td><a href="sources.html">Evidence atlas with video timestamps</a></td>
 </tr>
 <tr>
-<td>See our implementation rules</td>
+<td>Implementation rules</td>
 <td><a href="specification.html">Localica specification</a></td>
 </tr>
 <tr>
-<td>Design settings, sliders, switches and buttons</td>
+<td>Settings, sliders, switches and buttons</td>
 <td><a href="controls.html">Control roles, states and review exercises</a></td>
 </tr>
 <tr>
-<td>Drag, reverse, refract and change material parameters</td>
+<td>Interactive rendering model</td>
 <td><a href="https://anastaci1a.github.io/localica/liquid-glass/lab.html">Live WebGL lab</a> — runs in your browser</td>
 </tr>
 <tr>
-<td>Check measured displacement and model limitations</td>
+<td>Measurements and model limitations</td>
 <td><a href="optics.html">Optical findings and reproducible experiments</a></td>
 </tr>
 <tr>
-<td>Review motion without running anything</td>
+<td>Recorded demonstrations</td>
 <td>Expand the demonstrations below</td>
 </tr>
 <tr>
-<td>Check what the app currently promises</td>
+<td>App behavior</td>
 <td><a href="https://github.com/anastaci1a/localica/blob/main/docs/interface.md">Current interface contract</a></td>
 </tr>
 </tbody></table>
 <p>The guide separates <strong>Apple evidence</strong>, <strong>Localica models</strong>, and <strong>shipped behavior</strong>. It is a research reference, not a claim of pixel-identical iOS rendering. The <a href="https://anastaci1a.github.io/localica/liquid-glass/">hosted field guide</a> has the same notes and navigable links.</p>
 <h2 id="refraction-study">Refraction study</h2>
-<p><img src="assets/lab-clear.png" alt="Actual WebGL lab capture: a capsule bends a colored coordinate grid"></p>
+<p><img src="assets/lab-clear.png?v=025b13ffa262" alt="WebGL capture of a capsule refracting a gradient with vertical lines"></p>
 <p>The lab samples an original backdrop through two selectable inverse-map models. Compare edge displacement, thickness, blur, contrast and synthetic reflection independently. Its coordinate diagnostic and reproducible browser tests check actual shader output. <a href="optics.html#run-and-verify">Run and verify</a>.</p>
 <details>
-<summary>Actual shader morph, captured at fixed simulation steps</summary>
+<summary>Panel expansion and collapse</summary>
 
-<p><img src="assets/lab-morph.gif" alt="One refracting capsule expands into a panel and returns over a color grid"></p>
+<p><img src="assets/lab-morph.gif?v=025b13ffa262" alt="A refracting capsule expands into a panel and returns over vertical lines"></p>
 <p>Original WebGL output; deterministic 30 Hz simulation captures, not a phone frame-rate measurement or an Apple reference.</p>
 </details>
 
 <h2 id="motion-studies">Motion studies</h2>
-<p>These earlier original illustrations explain the spring/strain idea with simple gradients. They predate the refracting lab above and do not show production optics. Animations remain inside opt-in sections.</p>
+<p>These captures use the same WebGL renderer as the live lab. The backdrop is static; the lens changes position, shape and refraction. Animations remain inside opt-in sections.</p>
 <details>
 <summary>Boundary pressure and recovery</summary>
 
-<p><img src="assets/pressure.gif" alt="Lens moves to the right boundary, compresses under additional pull, then recovers"></p>
-<p>The target stays bounded. Shape communicates the remaining pressure. Compare with <a href="specification.html#shape-carries-impact">shape carries impact</a>.</p>
+<p><img src="assets/lab-pressure.gif?v=025b13ffa262" alt="Lens moves to the right boundary, compresses under additional pull, then recovers"></p>
+<p>The contacted edge stays fixed while the lens compresses and recovers. Compare with <a href="specification.html#shape-carries-impact">shape carries impact</a>.</p>
 </details>
 
-<details>
-<summary>One surface changes its shape</summary>
-
-<p><img src="assets/morph.gif" alt="A compact lens grows into a larger surface and returns without disappearing"></p>
-<p>A persistent identity connects the two sizes. The production design also needs matching optics, shadow, content and focus. See <a href="specification.html#input-and-motion">input and motion</a>.</p>
-</details>
-
-<h2 id="read-this-before-using-the-rules">Read this before using the rules</h2>
+<h2 id="scope">Scope</h2>
 <p>The specification defines the shared system and its acceptance checks. Physical-device performance still needs review; optical materialization remains deferred. Current selection lenses intentionally appear immediately; their entrance motion awaits <a href="https://github.com/anastaci1a/localica/issues/107">#107</a>. Requested glass-on-content and nested controls remain explicit departures from Apple&#39;s usual layer guidance.</p>
-<p>Update evidence and specification together when guidance or owner decisions change; source review dates live in the <a href="sources.html">atlas</a>. Keep release history in Git and Releases. The lab and diagrams are original project assets; no Apple video frames or font files are included.</p>
+<p>Update evidence and specification together when guidance or owner decisions change; source review dates live in the <a href="sources.html">atlas</a>. Keep release history in Git and Releases. The lab and its captures are original project assets; no Apple video frames or font files are included.</p>
 <p><a href="https://github.com/anastaci1a/localica/blob/main/README.md">Main repository</a> · <a href="sources.html">Evidence atlas</a> · <a href="specification.html#acceptance-checks">Acceptance checks</a></p>
-</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/9133e01f19c8571d1bf611e1f79770f0606c314a/docs/liquid-glass">9133e01f</a> · Original studies; no claim of iOS parity.</footer></body></html>
+</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/025b13ffa2623d5c47b27f78d4a96f622c021683/docs/liquid-glass">025b13ff</a> · Original studies; no claim of iOS parity.</footer></body></html>
