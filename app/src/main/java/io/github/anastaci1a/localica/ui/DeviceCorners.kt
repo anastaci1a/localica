@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Window-relative device geometry, shared by the player and drawer outline. */
+/** Window-relative physical geometry for the expanded player, never an app panel radius. */
 internal data class DeviceCorners(val topLeft: Dp = 0.dp, val topRight: Dp = 0.dp, val bottomRight: Dp = 0.dp, val bottomLeft: Dp = 0.dp) {
     fun shape(from: Dp = 0.dp, progress: Float = 1f): AbsoluteRoundedCornerShape {
         fun radius(target: Dp) = from + (target - from) * progress.coerceIn(0f, 1f)
