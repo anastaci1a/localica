@@ -360,6 +360,7 @@ fun LocalicaScreen(
             onSecondaryContainer = androidx.compose.ui.graphics.Color.White, surfaceTint = androidx.compose.ui.graphics.Color.White,
             surface = playerPalette.bottom, surfaceContainer = playerPalette.middle, surfaceContainerLow = playerPalette.bottom,
             onSurface = androidx.compose.ui.graphics.Color.White, onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFDBDFE6))) {
+        PlayerClippedOverlay({ progress.value }, bottomChrome) {
         QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value }) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false }) } }
@@ -368,7 +369,7 @@ fun LocalicaScreen(
                 SessionSelectionPanel(session, queueController, playlistController, playlist)
             } }
         }
-        } }
+        } } }
         CompositionLocalProvider(LocalFrostedBackdrop provides if (queueVisible) playerBackdrop else browseBackdrop) {
             ForegroundSongDragOverlay(dragHost)
         }

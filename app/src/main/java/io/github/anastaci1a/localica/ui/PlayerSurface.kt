@@ -140,7 +140,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // color continuation too would reveal a dark average palette before light artwork.
     val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)
     val coverBlend = backgroundProgress * reveal * reveal * (3f - 2f * reveal)
-    val surfaceWidth = windowWidth - 24.dp * (1f - p)
     val extraActions = 48.dp * (actionRows - 1)
     val virtualHeight = maxHeight.coerceAtLeast(560.dp + statusInset + navigationInset + extraActions)
     val floatingArt = minOf(windowWidth - 48.dp, (virtualHeight - statusInset - navigationInset - 440.dp - extraActions).coerceAtLeast(96.dp))
@@ -178,8 +177,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val handleReveal = smoothReveal((p - .72f) / .28f)
     val glassFrost = smoothReveal((p - .08f) / .8f)
     val deviceCorners = rememberDeviceCorners()
-    val cornerProgress = smoothReveal((p - .8f) / .2f)
-    val surfaceCorner = CompactControlSize / 2 * (1f - cornerProgress) + deviceCorners.maximum * cornerProgress
+    val surfaceFrame = playerSurfaceFrame(maxWidth, maxHeight, navigationInset, bottomChrome, p, deviceCorners)
+    val surfaceWidth = surfaceFrame.width
+    val surfaceCorner = surfaceFrame.maximumCorner
     // This feather belongs to the cover, including its final full-background state.
     // Removing it during the handoff briefly reveals the square beneath the wash.
     val edgeSoftness = backgroundProgress * smoothReveal(p / .18f)
@@ -208,14 +208,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainer = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainer, palette.middle, p),
         surfaceContainerHigh = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHigh, palette.middle, p),
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
-    Surface(Modifier.offset(x = 12.dp * (1f - p), y = miniTop * (1f - p))
-        .width(surfaceWidth).height(CompactControlSize + (maxHeight - CompactControlSize) * p)
+    Surface(Modifier.offset(x = surfaceFrame.x, y = surfaceFrame.y)
+        .width(surfaceFrame.width).height(surfaceFrame.height)
         .bottomGlassShadow(surfaceCorner, opacity = { 1f - progress.value })
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
-        shape = deviceCorners.shape(CompactControlSize / 2, cornerProgress), color = Color.Transparent, contentColor = foreground) {
+        shape = surfaceFrame.shape, color = Color.Transparent, contentColor = foreground) {
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
