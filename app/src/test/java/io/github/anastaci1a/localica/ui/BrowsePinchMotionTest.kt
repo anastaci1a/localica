@@ -11,6 +11,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BrowsePinchMotionTest {
+    @Test fun sourceLayerTreeDoesNotChangeUntilReadbackFinishes() {
+        val original = BrowseStyle(listSize = ListSize.Large)
+        val motion = BrowsePinchMotion().apply {
+            capturing = true
+            source = original
+            target = BrowseStyle(listSize = ListSize.Normal)
+        }
+        assertEquals("Capture already owns the gesture", original, motion.source)
+        assertNull("Nested artwork layers must survive the asynchronous source readback", motion.visualSource)
+        val size = Size(120f, 160f)
+        assertEquals(size, motion.highlightSize("song", 0, size))
+        motion.capturing = false
+        assertEquals("Only the finished snapshot permits the live tree to reflow", original, motion.visualSource)
+        motion.clearTransaction()
+        assertNull(motion.visualSource)
+    }
+
     @Test fun handoffClearsBothDestinationsAndAnchorState() {
         val motion = BrowsePinchMotion().apply {
             source = BrowseStyle(listSize = ListSize.Compact)

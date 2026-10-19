@@ -40,7 +40,7 @@ internal class BrowsePinchMotion {
     var capture: kotlinx.coroutines.Job? = null
     var settling: kotlinx.coroutines.Job? = null
     var disposed = false
-    var capturing = false
+    var capturing by mutableStateOf(false)
     var captureProblem = false
     fun failCapture() {
         // The preview has not been published. A held gesture can retire now;
@@ -49,6 +49,9 @@ internal class BrowsePinchMotion {
     }
     val frozen = mutableMapOf<Any, FrozenBrowseItem>()
     var source by mutableStateOf<BrowseStyle?>(null)
+    // Do not replace/release nested artwork layers before the source atlas has
+    // finished reading them. Transaction ownership still begins at recognition.
+    val visualSource: BrowseStyle? get() = source.takeUnless { capturing }
     var bounds: Map<Any, Rect> = emptyMap()
     var focusKey: Any? = null
     var focusTop: Int = 0
@@ -77,7 +80,7 @@ internal class BrowsePinchMotion {
     }
     var pixelDensity = 1f
     fun highlightSize(key: Any, index: Int, target: androidx.compose.ui.geometry.Size): androidx.compose.ui.geometry.Size {
-        if (source == null) return target
+        if (visualSource == null) return target
         val inset = (BrowseCellGeometry(sourceColumns).cardInset * pixelDensity).roundToInt()
         val bounds = sourceBounds(key, index)
         val sourceWidth = (bounds.width - 2 * inset).coerceAtLeast(0f)
@@ -209,6 +212,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             albumSongs = route.collection?.kind == MediaKind.Album)
         if (next != style && !motion.disposed && motion.source == null) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
+            motion.capturing = true
             motion.source = style
             motion.target = next
             motion.targetColumns = galleryColumns(next.presentation, with(density) { width.toDp().value }, next.itemsPerRow)
@@ -248,7 +252,6 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 motion.focusTop = (nearest.offset.y + nearest.size.height * motion.focusFraction).toInt()
                 onAnchor(BrowseZoomAnchor(route, next, nearest.key, motion.focusTop, motion.focusFraction, motion.focusEdge))
             }
-            motion.capturing = true
             motion.capture = scope.launch {
                 try {
                     motion.frozen.clear()
@@ -305,16 +308,20 @@ internal fun Modifier.retainPinchItem(key: Any, motion: BrowsePinchMotion): Modi
         onDispose { if (motion.retained[key] === layer) motion.retained.remove(key) }
     }
     return drawWithContent {
-        if (motion.source == null && !motion.capturing) {
+        // Keep one drawing owner through recognition, interpolation and release.
+        // In particular, do not reparent nested artwork layers for a single frame.
+        // The source tree stays intact while its asynchronous atlas readback runs.
+        // A newly attached row was not included in the atlas and still needs its
+        // first recording (for example if an already-running scroll exposes it).
+        if (!motion.capturing || layer.size.width == 0 || layer.size.height == 0)
             layer.record { this@drawWithContent.drawContent() }
-            drawLayer(layer)
-        } else drawContent()
+        drawLayer(layer)
     }
 }
 
 internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: LazyGridState, keys: List<String>): Modifier = drawWithContent {
     drawContent()
-    if (motion.source == null) return@drawWithContent
+    if (motion.visualSource == null) return@drawWithContent
     val visible = grid.layoutInfo.visibleItemsInfo
     val liveKeys = visible.map { it.key }.toSet()
     val p = motion.progress.value.coerceIn(0f, 1f)
