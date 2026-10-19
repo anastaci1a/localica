@@ -21,13 +21,19 @@ const {execFileSync}=require('node:child_process');
     link({href,title,tokens}){return `<a href="${escape(link(href))}"${title?` title="${escape(title)}"`:''}>${this.parser.parseInline(tokens)}</a>`;}
   }});
   const manifest={source,files:{}};
-  function write(file,data){fs.mkdirSync(path.dirname(path.join(out,file)),{recursive:true});fs.writeFileSync(path.join(out,file),data);manifest.files[file]=crypto.createHash('sha256').update(data).digest('hex');}
+  function write(file,data){
+    // Keep fresh HTML and its CSS, shader and captures on the same revision.
+    if(file.endsWith('.html'))data=data.toString().replace(/(href|src)="((?!https?:|data:)[^"?]+\.(?:js|css|png|gif|svg))"/g,(_,attribute,url)=>`${attribute}="${url}?v=${source.slice(0,12)}"`);
+    fs.mkdirSync(path.dirname(path.join(out,file)),{recursive:true});fs.writeFileSync(path.join(out,file),data);manifest.files[file]=crypto.createHash('sha256').update(data).digest('hex');}
   for(const name of pages){
     const content=md.parse(fs.readFileSync(path.join(root,name),'utf8'));
     write('liquid-glass/'+(name==='README.md'?'index.html':name.replace('.md','.html')),
       `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · ${name==='README.md'?'Liquid Glass':name.replace('.md','')}</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main>${content}</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/${source}/docs/liquid-glass">${source.slice(0,8)}</a> · Original studies; no claim of iOS parity.</footer></body></html>`);
   }
   for(const name of ['lab.html','lab.js','lab.css','guide.css'])write('liquid-glass/'+name,fs.readFileSync(path.join(root,name)));
+  // Prune removed public media when rebuilding an existing Pages checkout.
+  const assetDest=path.join(dest,'assets');
+  if(fs.existsSync(assetDest))for(const name of fs.readdirSync(assetDest))if(/\.(png|gif|svg)$/.test(name)&&!fs.existsSync(path.join(root,'assets',name)))fs.unlinkSync(path.join(assetDest,name));
   for(const name of fs.readdirSync(path.join(root,'assets')))if(/\.(png|gif|svg)$/.test(name))write('liquid-glass/assets/'+name,fs.readFileSync(path.join(root,'assets',name)));
   write('liquid-glass/experiments/reference_patch.py',fs.readFileSync(path.join(root,'experiments/reference_patch.py')));
   write('.nojekyll','');

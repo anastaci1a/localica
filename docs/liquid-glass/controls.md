@@ -44,14 +44,8 @@ Apple's WWDC25 demonstration enlarges the thumb into a transparent rounded lens 
 
 The playback track remains a separate thumbless-at-rest control. Dragging it previews a seek; its shared X target explicitly cancels that preview without pausing playback. Do not silently apply that rollback behavior to every settings slider.
 
-<details>
-<summary>See the controls in Localica</summary>
+The [lab contact/recovery capture](README.md#motion-studies) demonstrates the shared motion model. It is not an app screenshot or a slider/switch implementation.
 
-<img src="assets/settings.png" width="300" alt="Localica glass settings with white resting thumbs and grouped labels">
-
-An actual app capture on Android 16. The still image shows the resting controls and layout; use the exercises below to review interaction.
-
-</details>
 
 ## Switches and moving choice lenses
 
