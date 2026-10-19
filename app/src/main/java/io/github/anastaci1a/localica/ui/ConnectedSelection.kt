@@ -43,11 +43,13 @@ internal fun SelectionViewport(modifier: Modifier = Modifier, content: @Composab
 @Composable
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val scene = remember { SelectionScene() }
-    val contentLayer = rememberGraphicsLayer()
-    val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
-    val groups = remember { mutableListOf<SelectionGroupRenderer>() }
-    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
+    val backend = glassBackend()
     val backing = LocalFrostedBackdrop.current
+    val modern = useModernGlass(backend, Build.VERSION.SDK_INT, backing == null || backing.snapshot != null)
+    val contentLayer = key(modern) { rememberGraphicsLayer() }
+    val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
+    val groups = remember(backend, modern) { mutableListOf<SelectionGroupRenderer>() }
+    DisposableEffect(graphics, groups) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
     val hasSelection by remember { derivedStateOf { scene.regions.values.any { it.selected } } }
     BackdropLease(backing.takeIf { hasSelection })
     val view = LocalView.current
@@ -79,7 +81,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             val path = geometry.path(local, 16.dp.toPx())
             val components = grouping.get(local, 16.dp.toPx())
             while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer())
-            if (Build.VERSION.SDK_INT >= 33) {
+            if (modern && Build.VERSION.SDK_INT >= 33) {
                 // This recording is read by the ordinary viewport and by every
                 // selected component's atlas. Rasterize it once: Auto would
                 // replay all visible text/artwork for each of those reads.
@@ -97,7 +99,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                 val absolute = origin + groupOrigin
                 val crop = groupPath.getBounds().translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
                 if (crop.isEmpty) return@forEachIndexed
-                if (Build.VERSION.SDK_INT >= 33) {
+                if (modern && Build.VERSION.SDK_INT >= 33) {
                     val at = Offset(floor(crop.left), floor(crop.top))
                     val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
                     val source = backing?.takeUnless { it.layer.isReleased }
@@ -139,7 +141,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                     } }
                 }
             }
-            if (Build.VERSION.SDK_INT < 33) {
+            if (!modern) {
                 drawContent()
                 components.forEachIndexed { index, component ->
                     val renderer = groups[index]
@@ -180,7 +182,7 @@ private class SelectionGroupRenderer(val output: androidx.compose.ui.graphics.la
     val path = SelectionPathCache()
     val mesh = LensMeshRenderer()
     val shape = LensSelectionShape()
-    val optics = if (Build.VERSION.SDK_INT >= 33) LensSelectionRenderer() else null
+    val optics by lazy { if (Build.VERSION.SDK_INT >= 33) LensSelectionRenderer() else null }
 }
 
 /** Optical depth belongs to each connected body, never the hull of separated selections. */
