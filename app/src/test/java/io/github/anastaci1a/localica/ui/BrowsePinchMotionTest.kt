@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.browse.ListSize
 import kotlinx.coroutines.Job
@@ -29,6 +30,7 @@ class BrowsePinchMotionTest {
         for ((sourceHeight, targetHeight) in listOf(96f to 162f, 162f to 96f)) {
             val midpoint = 441f
             val inset = 8f // 4 dp card padding at density 2, excluded from the slab.
+            val targetSize = Size(600f, targetHeight)
             val motion = BrowsePinchMotion().apply {
                 source = BrowseStyle()
                 sourceColumns = 1
@@ -38,7 +40,9 @@ class BrowsePinchMotionTest {
             }
             for (p in listOf(0f, .3f, .7f, 1f, .7f, .3f, 0f)) {
                 motion.progress.snapTo(p)
-                val height = motion.highlightHeight("song", 0, targetHeight)
+                val visual = motion.highlightSize("song", 0, targetSize)
+                val height = visual.height
+                assertEquals(284f + (targetSize.width - 284f) * p, visual.width, .001f)
                 assertEquals(sourceHeight + (targetHeight - sourceHeight) * p, height, .001f)
                 val top = (midpoint - sourceHeight / 2f) * (1f - p) +
                     (midpoint - targetHeight / 2f) * p
@@ -46,8 +50,8 @@ class BrowsePinchMotionTest {
                     midpoint, top + height / 2f, .001f)
             }
             motion.clearTransaction()
-            assertEquals("Ordinary highlights keep their measured height", targetHeight,
-                motion.highlightHeight("song", 0, targetHeight), 0f)
+            assertEquals("Ordinary highlights keep their measured size", targetSize,
+                motion.highlightSize("song", 0, targetSize))
         }
     }
 

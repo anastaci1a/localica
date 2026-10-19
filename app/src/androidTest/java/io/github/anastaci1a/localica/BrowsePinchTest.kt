@@ -24,6 +24,72 @@ import org.junit.Test
 class BrowsePinchTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun galleryToListRecognitionKeepsArtworkOriginAndSourceTitleLines() = recognition(false)
+    @Test fun rightToLeftRecognitionKeepsArtworkOriginAndSourceTitleLines() = recognition(true)
+
+    private fun recognition(rtl: Boolean) {
+        val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+        val route = BrowseRoute(MainTab.Songs)
+        val original = prefs.read(route)
+        val originalOverride = prefs.overridden(route)
+        val initial = BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5, listSize = ListSize.Large)
+        val tracks = (0..29).map { Track("onset:$it", "Song ${it.toString().padStart(2, '0')} with a long two-line title",
+            fileName = "$it.mp3", relativePath = "$it.mp3") }
+        val library = LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false)
+        val playlists = PlaylistState()
+        var pointersDown = false
+        prefs.write(route, initial, originalOverride)
+        try {
+            compose.setContent { LocalicaTheme { CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalLayoutDirection provides if (rtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
+                BrowserScreen(library, playlists, route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                    queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+            } } }
+            waitForView("Gallery, 5 columns")
+            val list = compose.onNodeWithTag("browser-list")
+            val art = compose.onNodeWithTag("browse-art-onset:0", true)
+            val title = compose.onNodeWithTag("browse-text-onset:0", true)
+            val beforeArt = art.fetchSemanticsNode().boundsInRoot
+            val beforeTitle = title.fetchSemanticsNode().boundsInRoot
+            fun titleInk(): Int {
+                val pixels = title.captureToImage().toPixelMap()
+                return (0 until pixels.height).sumOf { py ->
+                    (0 until pixels.width).count { px ->
+                        val color = pixels[px, py]
+                        color.alpha > .5f && maxOf(color.red, color.green, color.blue) < .5f
+                    }
+                }
+            }
+            val beforeInk = titleInk()
+            assertTrue("The source title must contain rendered glyphs", beforeInk > 20)
+            val viewport = list.fetchSemanticsNode().boundsInRoot
+            val x = beforeArt.center.x - viewport.left
+            val y = beforeArt.center.y - viewport.top
+            compose.mainClock.autoAdvance = false
+            pointersDown = true
+            list.performTouchInput {
+                down(0, Offset(x - 60f, y)); down(1, Offset(x + 60f, y))
+                // Just beyond recognition, almost none of the visual morph has elapsed.
+                moveTo(0, Offset(x - 57.65f, y)); moveTo(1, Offset(x + 57.65f, y))
+            }
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == "List, Large"
+            }
+            compose.mainClock.advanceTimeBy(48)
+            val afterArt = art.fetchSemanticsNode().boundsInRoot
+            val afterTitle = title.fetchSemanticsNode().boundsInRoot
+            assertEquals("Recognition must not drop the dense grid's horizontal inset", beforeArt.left, afterArt.left, 3f)
+            assertEquals("Both artwork edges retain their source alignment", beforeArt.right, afterArt.right, 3f)
+            assertEquals("Source title lines must not disappear at recognition", beforeTitle.height, afterTitle.height, 3f)
+            assertTrue("Recognition must paint the title, not only preserve its layout bounds",
+                titleInk() >= beforeInk * .5f)
+        } finally {
+            try { if (pointersDown) compose.onNodeWithTag("browser-list").performTouchInput { cancel() } }
+            finally { compose.mainClock.autoAdvance = true; prefs.write(route, original, originalOverride) }
+        }
+    }
+
     @Test fun listSizesChangeDensityWithoutLosingSavedDetailOrArtwork() {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val route = BrowseRoute(MainTab.Songs)
