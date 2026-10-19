@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.*
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -31,10 +30,52 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
             ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
             if (!loading && artwork == null && emptyText != null) Text(emptyText)
         }
-        if (artwork != null) Crossfade(artwork, Modifier.matchParentSize().graphicsLayer { alpha = reveal },
-            animationSpec = tween(if (reducedMotion) 0 else 240), label = "Artwork resolution") { image ->
-            Image(image, stringResource(R.string.album_artwork), Modifier.fillMaxSize(), contentScale = contentScale)
+        if (artwork != null) ArtworkResolutionBlend(artwork,
+            Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale, if (reducedMotion) 0 else 240)
+    }
+}
+
+private data class ArtworkResolutionFrame(val image: ImageBitmap, val weight: Float)
+
+/** Complementary source-over alphas expose the background mid-crossfade. Keep the
+ * outgoing composite opaque and reveal the new resolution over it instead. On an
+ * interruption, retain its weighted image mixture without a GPU readback. */
+@Composable
+private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
+    contentScale: ContentScale, duration: Int) {
+    var incoming by remember { mutableStateOf(artwork) }
+    var outgoing by remember { mutableStateOf(emptyList<ArtworkResolutionFrame>()) }
+    val progress = remember { Animatable(1f) }
+    LaunchedEffect(artwork) {
+        if (artwork != incoming) {
+            val phase = progress.value
+            outgoing = if (phase >= 1f) listOf(ArtworkResolutionFrame(incoming, 1f)) else {
+                // Reversing across a resolution boundary reuses the same bitmap;
+                // merge it rather than growing a layer for every interruption.
+                val weights = linkedMapOf<ImageBitmap, Float>()
+                outgoing.forEach { frame -> weights[frame.image] =
+                    (weights[frame.image] ?: 0f) + frame.weight * (1f - phase) }
+                weights[incoming] = (weights[incoming] ?: 0f) + phase
+                weights.filterValues { it > 0f }.map { ArtworkResolutionFrame(it.key, it.value) }
+            }
+            incoming = artwork
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(duration))
+            outgoing = emptyList()
         }
+    }
+    Box(modifier) {
+        var accumulated = 0f
+        outgoing.forEach { frame ->
+            accumulated += frame.weight
+            // Convert mixture weights to source-over alpha. The lowest nonzero
+            // layer is opaque; later layers preserve the exact interrupted blend.
+            val alpha = if (accumulated > 0f) frame.weight / accumulated else 0f
+            Image(frame.image, stringResource(R.string.album_artwork),
+                Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }, contentScale = contentScale)
+        }
+        Image(incoming, stringResource(R.string.album_artwork),
+            Modifier.fillMaxSize().graphicsLayer { alpha = progress.value }, contentScale = contentScale)
     }
 }
 
