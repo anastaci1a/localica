@@ -62,6 +62,50 @@ class QueueSelectorDragTest {
         CompositionLocalProvider(LocalOverscrollFactory provides observedFactory, content = content)
     }
 
+    private fun awaitNativeRelease(owner: androidx.compose.ui.semantics.SemanticsOwner, label: String) {
+        compose.runOnUiThread {
+            assertTrue("Observe the actual platform overscroll effect", observedOverscroll.isNotEmpty())
+            android.util.Log.i("QueueSecondPointer", "$label: before pump effects=${observedOverscroll.map { it.isInProgress }}")
+        }
+        // UP queues Scrollable.onDragStopped; the queued fling must run before
+        // EdgeEffect release can finish. Espresso cannot advance this clock for us
+        // while native stretch invalidations keep its UI-idle loop busy.
+        compose.waitUntil(5_000) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnUiThread {
+                observedOverscroll.none { it.isInProgress } &&
+                    owner.getAllSemanticsNodes(mergingEnabled = true).none {
+                        SemanticsProperties.TestTag in it.config && it.config[SemanticsProperties.TestTag] == "drag-stack"
+                    }
+            }
+        }
+        android.util.Log.i("QueueSecondPointer", "$label: real overscroll released")
+    }
+
+    private fun finishNativeFixture(view: android.view.View?, failure: Throwable?, cancelPointers: () -> Unit) {
+        try {
+            val cleanupFailure = runCatching {
+                try { cancelPointers() }
+                finally {
+                    // Detach before disposal: an attached ComposeView can recreate on layout.
+                    // This also bounds rule teardown when a real release assertion fails.
+                    if (view != null) compose.runOnUiThread {
+                        val host = generateSequence(view as android.view.View?) { it.parent as? android.view.View }
+                            .filterIsInstance<androidx.compose.ui.platform.AbstractComposeView>().firstOrNull()
+                        checkNotNull(host) { "Expected an activity Compose host for gesture fixture" }
+                        val parent = checkNotNull(host.parent as? android.view.ViewGroup) { "Expected an attached Compose host" }
+                        parent.removeView(host)
+                        host.disposeComposition()
+                    }
+                }
+            }.exceptionOrNull()
+            if (cleanupFailure != null) {
+                if (failure != null) failure.addSuppressed(cleanupFailure)
+                else throw cleanupFailure
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     private fun fixture(count: Int = 8, width: Int = 380, height: Int = 420, fontScale: Float = 1f,
         rtl: Boolean = false, scale: Float = 1f, densityScale: Float = 1f, reducedMotion: Boolean = false, fullPopup: Boolean = false,
         observeOverscroll: Boolean = false, test: (QueueController, QueueDatabase) -> Unit) {
@@ -252,26 +296,6 @@ class QueueSelectorDragTest {
                 })
             }
         }
-        fun settleOverscroll(label: String) {
-            phase.set(label)
-            compose.runOnUiThread {
-                assertTrue("Observe the actual platform overscroll effect", observedOverscroll.isNotEmpty())
-                android.util.Log.i("QueueSecondPointer", "$label: before pump effects=${observedOverscroll.map { it.isInProgress }}")
-            }
-            // UP queues Scrollable.onDragStopped; the queued fling must run before
-            // EdgeEffect release can finish. Espresso cannot advance this clock for us
-            // while native stretch invalidations keep its UI-idle loop busy.
-            compose.waitUntil(5_000) {
-                compose.mainClock.advanceTimeByFrame()
-                compose.runOnUiThread {
-                    observedOverscroll.none { it.isInProgress } &&
-                        root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true).none {
-                            SemanticsProperties.TestTag in it.config && it.config[SemanticsProperties.TestTag] == "drag-stack"
-                        }
-                }
-            }
-            android.util.Log.i("QueueSecondPointer", "$label: real overscroll released")
-        }
         var gestureFailure: Throwable? = null
         compose.mainClock.autoAdvance = false
         try {
@@ -289,7 +313,8 @@ class QueueSelectorDragTest {
             pointers.remove(1)
             pointers[0] = start + Offset(0f, 120f); send(android.view.MotionEvent.ACTION_MOVE)
             send(android.view.MotionEvent.ACTION_UP); pointers.clear()
-            settleOverscroll("first release settles")
+            phase.set("first release settles")
+            awaitNativeRelease(root.semanticsOwner, phase.get())
             assertDragCount(0)
             assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
             compose.mainClock.autoAdvance = false
@@ -306,7 +331,8 @@ class QueueSelectorDragTest {
             compose.mainClock.advanceTimeByFrame()
             assertDragCount(1)
             send(android.view.MotionEvent.ACTION_CANCEL); pointers.clear()
-            settleOverscroll("final release settles")
+            phase.set("final release settles")
+            awaitNativeRelease(root.semanticsOwner, phase.get())
             phase.set("landing")
             assertDragCount(0)
             assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
@@ -315,28 +341,10 @@ class QueueSelectorDragTest {
             throw failure
         } finally {
             try {
-                val cleanupFailure = runCatching {
-                    try { if (pointers.isNotEmpty()) send(android.view.MotionEvent.ACTION_CANCEL) }
-                    finally {
-                        // JUnit interrupts the method, not Compose rule teardown. Dispose
-                        // and detach synchronously before teardown can enter Espresso, even when
-                        // the bounded real-overscroll predicate failed.
-                        phase.set("dispose fixture")
-                        compose.runOnUiThread {
-                            val host = generateSequence(view as android.view.View?) { it.parent as? android.view.View }
-                                .filterIsInstance<androidx.compose.ui.platform.AbstractComposeView>().firstOrNull()
-                            checkNotNull(host) { "Expected an activity Compose host for gesture fixture" }
-                            val parent = checkNotNull(host.parent as? android.view.ViewGroup) { "Expected an attached Compose host" }
-                            parent.removeView(host)
-                            host.disposeComposition()
-                        }
-                    }
-                }.exceptionOrNull()
-                if (cleanupFailure != null) {
-                    if (gestureFailure != null) gestureFailure.addSuppressed(cleanupFailure)
-                    else throw cleanupFailure
+                finishNativeFixture(view, gestureFailure) {
+                    if (pointers.isNotEmpty()) send(android.view.MotionEvent.ACTION_CANCEL)
                 }
-            } finally { compose.mainClock.autoAdvance = true; watchdog.shutdownNow() }
+            } finally { watchdog.shutdownNow() }
         }
     }
 
@@ -550,7 +558,7 @@ class QueueSelectorDragTest {
         compose.onNodeWithText("Playback queue").assertIsDisplayed()
     }
 
-    @Test(timeout = 15000) fun openingGateRejectsHeldContactEvenWhenPanelBecomesReady() = fixture { _, _ ->
+    @Test(timeout = 15000) fun openingGateRejectsHeldContactEvenWhenPanelBecomesReady() = fixture(observeOverscroll = true) { _, _ ->
         val phase = java.util.concurrent.atomic.AtomicReference("fixture ready")
         fun mark(value: String) {
             phase.set(value)
@@ -599,11 +607,13 @@ class QueueSelectorDragTest {
             }
             if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) held = false
         }
+        var gestureFailure: Throwable? = null
         try {
             mark("before handle lookup")
             val handle = compose.onNodeWithTag("queue-handle-q1", useUnmergedTree = true).fetchSemanticsNode()
             val start = handle.boundsInRoot.center
-            view = (handle.root as androidx.compose.ui.platform.ViewRootForTest).view
+            val root = checkNotNull(handle.root)
+            view = (root as androidx.compose.ui.platform.ViewRootForTest).view
             mark("before close gate")
             compose.runOnIdle { panelReady = false }
             mark("after close gate")
@@ -623,21 +633,28 @@ class QueueSelectorDragTest {
             mark("after frame; before release injection")
             send(android.view.MotionEvent.ACTION_MOVE, start + Offset(0f, 140f))
             send(android.view.MotionEvent.ACTION_UP)
-            mark("after release injection")
+            mark("after release injection; settling real overscroll")
+            awaitNativeRelease(root.semanticsOwner, "opening gate release")
+            mark("before no-acquisition assertions")
+            compose.runOnUiThread {
+                assertEquals(0, root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true).count {
+                    SemanticsProperties.TestTag in it.config && it.config[SemanticsProperties.TestTag] == "drag-stack"
+                })
+            }
+            assertEquals(0, commits); assertNoActions()
+            mark("assertions passed")
+        } catch (failure: Throwable) {
+            gestureFailure = failure
+            throw failure
         } finally {
             try {
-                mark("before pointer cleanup")
-                if (held) send(android.view.MotionEvent.ACTION_CANCEL)
-                mark("after pointer cleanup")
-            } finally {
-                compose.mainClock.autoAdvance = true
-                watchdog.shutdownNow()
-            }
+                finishNativeFixture(view, gestureFailure) {
+                    mark("before pointer cleanup")
+                    if (held) send(android.view.MotionEvent.ACTION_CANCEL)
+                    mark("after pointer cleanup")
+                }
+            } finally { watchdog.shutdownNow() }
         }
-        mark("before no-acquisition assertions")
-        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
-        assertEquals(0, commits); assertNoActions()
-        mark("assertions passed")
     }
 
     @Test fun scaledRtlHandleUsesLocalHitBoundsAndKeepsLiftWidth() = fixture(rtl = true, scale = .8f) { _, _ ->
