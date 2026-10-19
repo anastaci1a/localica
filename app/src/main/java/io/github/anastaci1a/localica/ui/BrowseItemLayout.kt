@@ -26,7 +26,7 @@ import io.github.anastaci1a.localica.browse.*
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: BrowseCellGeometry,
     lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0) {
     val gallery = style.presentation != Presentation.List
-    val from = pinch?.source
+    val from = pinch?.visualSource
     val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
     val measureEndpoints = if (from != null) rememberBrowsePinchMeasure(item, from, style, requireNotNull(pinch), geometry,
         itemIndex, trackNumber, showInformation, inheritedInformation) else null
