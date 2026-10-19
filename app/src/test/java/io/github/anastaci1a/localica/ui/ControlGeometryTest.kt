@@ -13,11 +13,11 @@ class ControlGeometryTest {
         val end = glassWallTranslation(49f, 1.15f, glassWallAffinity(1f, 1f))
         assertEquals("No endpoint anchor jump while expanded", before, end, .001f)
     }
-    @Test fun playerHandleUsesInverseInkPolarity() {
+    @Test fun playerHandleInheritsInkPolarity() {
         val dark = playerHandleColor(androidx.compose.ui.graphics.Color.White)
         val light = playerHandleColor(androidx.compose.ui.graphics.Color.Black)
-        assertTrue(dark.red < .35f)
-        assertTrue(light.red > .8f)
+        assertTrue(dark.red > .8f)
+        assertTrue(light.red < .35f)
         assertEquals(dark.red, dark.green, 0f)
         assertEquals(light.red, light.blue, 0f)
     }

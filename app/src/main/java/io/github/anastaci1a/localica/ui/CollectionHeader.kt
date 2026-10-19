@@ -28,9 +28,7 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.library.LibraryGroup
 
-internal fun collectionIsLight(visual: PlayerVisual): Boolean = visual.palette.middle.let {
-    Color((it.red / .6f).coerceAtMost(1f), (it.green / .6f).coerceAtMost(1f), (it.blue / .6f).coerceAtMost(1f)).luminance() > .45f
-}
+internal fun collectionIsLight(visual: PlayerVisual): Boolean = visual.palette.isLight()
 
 @Composable
 internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: Modifier = Modifier) {
@@ -39,7 +37,12 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
     val pictureTop = WindowInsets.statusBars.getTop(density) + artTop * if (LocalReducedMotion.current) 1f else .65f
     BoxWithConstraints(modifier.then(Modifier.clipToBounds())) {
         val imageHeight = maxWidth
-        PlayerBackdrop(visual.palette, Modifier.fillMaxSize(), fullArtBlend = 1f,
+        // Browsing keeps its established dimmed continuation; the full player opts
+        // into configurable contrast without changing album/artist pages.
+        val palette = visual.palette
+        PlayerBackdrop(palette.copy(top = lerp(palette.top, Color.Black, .4f),
+            middle = lerp(palette.middle, Color.Black, .4f), bottom = lerp(palette.bottom, Color.Black, .4f),
+            wash = palette.collectionWash ?: palette.wash), Modifier.fillMaxSize(), fullArtBlend = 1f,
             artHeight = with(density) { imageHeight.toPx() }, artTop = pictureTop, softness = 1f)
         Box(Modifier.matchParentSize().background(if (light) Color.White.copy(alpha = .58f) else Color.Black.copy(alpha = .16f)))
         visual.artwork?.let { image ->

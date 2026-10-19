@@ -49,7 +49,7 @@ private object ToneImages {
     val cached = remember(image, tone) {
         image?.takeIf { tone.trim > 0f }?.let { ToneImages.images.get(ToneImages.Key(it, tone)) }
     }
-    var result by remember { mutableStateOf<ImageBitmap?>(null) }
+    var result by remember(image) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(image, tone) {
         result = if (image == null || tone.trim == 0f) image else withContext(Dispatchers.Default) { ToneImages.get(image, tone) }
     }
@@ -72,3 +72,23 @@ internal const val GlassColorShader = """
         return color;
     }
 """
+
+/** The same mapping for broad frosted backings; foregrounds stay outside the pass. */
+@androidx.annotation.RequiresApi(33)
+internal class GlassToneRenderer {
+    private val shader = android.graphics.RuntimeShader("""
+        uniform shader scene;
+        uniform float3 tone;
+        $GlassColorShader
+        half4 main(float2 p) {
+            half4 c = scene.eval(p);
+            return half4(half3(glassColor(float3(c.rgb) / max(float(c.a), 0.0001), 0.0, tone) * float(c.a)), c.a);
+        }
+    """)
+    fun effect(tone: GlassTone, blur: Float): RenderEffect {
+        shader.setFloatUniform("tone", tone.trim, tone.weight, if (tone.lightInk) 1f else 0f)
+        val effect = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")
+        return android.graphics.RenderEffect.createChainEffect(effect,
+            android.graphics.RenderEffect.createBlurEffect(blur.coerceAtLeast(.01f), blur.coerceAtLeast(.01f), android.graphics.Shader.TileMode.CLAMP)).asComposeRenderEffect()
+    }
+}
