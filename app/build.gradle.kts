@@ -5,6 +5,22 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Capture-only opt-in for #208. Ordinary PR/local/full-suite verification stays unchanged.
+val previewBranch = "refs/heads/test/208-native-preview-pilot"
+val previewEnvironment = System.getenv()
+val trustedPreviewDispatch = previewEnvironment["GITHUB_ACTIONS"] == "true" &&
+    previewEnvironment["RUNNER_ENVIRONMENT"] == "github-hosted" &&
+    previewEnvironment["RUNNER_OS"] == "Linux" &&
+    previewEnvironment["GITHUB_REPOSITORY"] == "anastaci1a/localica" &&
+    previewEnvironment["GITHUB_REPOSITORY_OWNER"] == "anastaci1a" &&
+    previewEnvironment["GITHUB_EVENT_NAME"] == "workflow_dispatch" &&
+    previewEnvironment["GITHUB_REF"] == previewBranch &&
+    previewEnvironment["GITHUB_WORKFLOW"] == "Android" &&
+    previewEnvironment["GITHUB_WORKFLOW_REF"] == "anastaci1a/localica/.github/workflows/android.yml@$previewBranch" &&
+    previewEnvironment["GITHUB_SHA"].orEmpty().matches(Regex("[0-9a-f]{40}")) &&
+    previewEnvironment["GITHUB_RUN_ID"].orEmpty().matches(Regex("[1-9][0-9]*")) &&
+    previewEnvironment["GITHUB_RUN_ATTEMPT"].orEmpty().matches(Regex("[1-9][0-9]*"))
+
 android {
     namespace = "io.github.anastaci1a.localica"
     compileSdk = 36
@@ -15,6 +31,14 @@ android {
         versionCode = 53
         versionName = "0.28.1-dev.20261015.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        if (trustedPreviewDispatch) {
+            // This dispatch is a transport pilot, never a replacement for the full native matrix.
+            testInstrumentationRunnerArguments["class"] = "io.github.anastaci1a.localica.NativePreviewCaptureTest"
+            testInstrumentationRunnerArguments["localicaPreviewCapture"] = "trusted-hosted-pilot-v1"
+            testInstrumentationRunnerArguments["localicaPreviewRun"] = previewEnvironment.getValue("GITHUB_RUN_ID")
+            testInstrumentationRunnerArguments["localicaPreviewAttempt"] = previewEnvironment.getValue("GITHUB_RUN_ATTEMPT")
+            testInstrumentationRunnerArguments["localicaPreviewSha"] = previewEnvironment.getValue("GITHUB_SHA")
+        }
     }
     signingConfigs {
         getByName("debug") {
