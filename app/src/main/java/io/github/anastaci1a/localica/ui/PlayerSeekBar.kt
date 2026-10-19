@@ -32,6 +32,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     onValueChangeFinished: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier,
     cancelBounds: Rect? = null, onCancel: () -> Unit = {}, onDrag: (Boolean, Boolean) -> Unit = { _, _ -> },
     liveValue: Float = value) {
+    val ink = androidx.compose.material3.LocalContentColor.current
     val sink by rememberUpdatedState(rememberControlHaptics())
     val feedback = remember { SeekControlHaptics(ControlHaptics { sink.emit(it) }) }
     val interaction = remember { SeekInteractionSource(MutableInteractionSource(), feedback) }
@@ -122,9 +123,9 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                 val h = thickness.toPx()
                 val fraction = ((preview - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
                 val top = (size.height - h) / 2
-                drawRoundRect(Color.White.copy(alpha = .2f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
-                if (fraction > 0f) drawRoundRect(Color.White.copy(alpha = .7f), Offset(0f, top), Size(size.width * fraction, h), CornerRadius(h / 2))
-                if (dragging) drawCircle(Color.White.copy(alpha = .9f), h * .7f, Offset(size.width * fraction, size.height / 2))
+                drawRoundRect(ink.copy(alpha = .2f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
+                if (fraction > 0f) drawRoundRect(ink.copy(alpha = .7f), Offset(0f, top), Size(size.width * fraction, h), CornerRadius(h / 2))
+                if (dragging) drawCircle(ink.copy(alpha = .9f), h * .7f, Offset(size.width * fraction, size.height / 2))
             }
         })
 }

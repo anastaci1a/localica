@@ -177,12 +177,12 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             currentTrace?.invoke("layout top=${it.positionInRoot().y} progress=${progress.value} distance=$distance")
         })
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
-        .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel, darkening = { .22f + .28f * progress.value }) {
+        .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") { settle(progress.value < .5f) }
                 .semantics { contentDescription = if (!shown) "Open queue" else "Close queue" }) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)
-                    .background(Color.White.copy(alpha = .38f), RoundedCornerShape(2.dp)))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .38f), RoundedCornerShape(2.dp)))
                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Spacer(Modifier.width(CompactControlSize))
                     Text("Queue", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium)

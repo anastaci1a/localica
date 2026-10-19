@@ -10,7 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 internal data class PlayerPalette(val top: Color, val middle: Color, val bottom: Color, val aspect: Float = 1f,
-    val wash: android.graphics.Bitmap? = null, val softWash: android.graphics.Bitmap? = null, val controlShade: Float = 0f)
+    val wash: android.graphics.Bitmap? = null, val softWash: android.graphics.Bitmap? = null, val collectionWash: android.graphics.Bitmap? = null)
+internal fun PlayerPalette.isLight(): Boolean = middle.luminance() > .45f
+
 internal val NeutralPalette = PlayerPalette(Color(0xFF424C56), Color(0xFF343C47), Color(0xFF242B34))
 
 /** A bounded memory-only seed: 108 pixels, no resize, decode or blur on the UI thread. */
@@ -25,7 +27,7 @@ internal fun thumbnailPalette(bitmap: android.graphics.Bitmap): PlayerPalette {
                 b += android.graphics.Color.blue(pixel); count++
             }
         }
-        return if (count == 0) Color.DarkGray else lerp(Color(r / count, g / count, b / count), Color.Black, .4f)
+        return if (count == 0) Color.DarkGray else Color(r / count, g / count, b / count)
     }
     return PlayerPalette(band(0), band(1), band(2), bitmap.width.toFloat() / bitmap.height)
 }
@@ -54,30 +56,26 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
             }
         }
         if (count == 0L) return NeutralPalette.middle
-        return lerp(Color((red / count).toInt(), (green / count).toInt(), (blue / count).toInt()), Color.Black, 0.4f)
+        return Color((red / count).toInt(), (green / count).toInt(), (blue / count).toInt())
     }
     val wash = ArtworkWash.create(sample)
-    var peak = 0f
-    for (y in wash.height / 2 until wash.height step 3) for (x in 0 until wash.width step 3) {
-        val color = wash.getPixel(x, y)
-        peak = maxOf(peak, maxOf(android.graphics.Color.red(color), android.graphics.Color.green(color), android.graphics.Color.blue(color)) / 255f)
-    }
-    val shade = if (peak > .42f) (1f - .42f / peak).coerceAtMost(.6f) else 0f
     PlayerPalette(band(0f, .3f), band(.3f, .7f), band(.7f, 1f), bitmap.width.toFloat() / bitmap.height,
-        wash, blurGlassSnapshot(wash.asImageBitmap(), ArtworkWash.WIDTH * .12f).asAndroidBitmap(), shade)
+        wash, blurGlassSnapshot(wash.asImageBitmap(), ArtworkWash.WIDTH * .12f).asAndroidBitmap(), ArtworkWash.collectionShade(wash))
 }
 
 /** Low-frequency artwork colors and fixed fine grain give a matte surface without a blur dependency. */
 @Composable
 internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifier, fullArtBlend: Float = 0f,
-    artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f) {
-    val washPaint = remember(palette.wash) {
-        palette.wash?.let { bitmap -> android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+    artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f, tone: GlassTone = GlassTone()) {
+    val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone)?.asAndroidBitmap()
+    val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone)?.asAndroidBitmap()
+    val washPaint = remember(wash) {
+        wash?.let { bitmap -> android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
             shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
         } }
     }
-    val softWashPaint = remember(palette.softWash) {
-        palette.softWash?.let { bitmap -> android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+    val softWashPaint = remember(softWash) {
+        softWash?.let { bitmap -> android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
             shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
         } }
     }
@@ -90,8 +88,8 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
     }
     val grainMatrix = remember { android.graphics.Matrix() }
     Canvas(modifier) {
-        drawRect(Brush.verticalGradient(listOf(palette.top, palette.middle, palette.bottom)))
-        drawRect(Brush.radialGradient(listOf(palette.top.copy(alpha = 0.45f), Color.Transparent),
+        drawRect(Brush.verticalGradient(listOf(tone.color(palette.top), tone.color(palette.middle), tone.color(palette.bottom))))
+        drawRect(Brush.radialGradient(listOf(tone.color(palette.top).copy(alpha = 0.45f), Color.Transparent),
             center = Offset(size.width * 0.1f, size.height * 0.4f), radius = size.width * 1.2f))
         if (washPaint != null && fullArtBlend > 0f && artHeight > 0f) {
             washMatrix.setScale((artWidth.takeIf { it > 0f } ?: size.width) / ArtworkWash.WIDTH, artHeight / ArtworkWash.WIDTH)
@@ -100,7 +98,7 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
             washPaint.alpha = (255 * fullArtBlend).toInt().coerceIn(0, 255)
             drawIntoCanvas { it.nativeCanvas.drawRect(0f, 0f, size.width, size.height, washPaint) }
             if (softWashPaint != null && softness > 0f) {
-                val soft = requireNotNull(palette.softWash)
+                val soft = requireNotNull(softWash)
                 softWashMatrix.set(washMatrix)
                 softWashMatrix.preScale(ArtworkWash.WIDTH.toFloat() / soft.width, ArtworkWash.HEIGHT.toFloat() / soft.height)
                 softWashPaint.shader.setLocalMatrix(softWashMatrix)

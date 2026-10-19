@@ -120,9 +120,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val dark = inkOverride?.let { it.luminance() > .5f } ?: (source?.dark == true)
     val frost = frostProgress.coerceIn(0f, 1f)
     val panel = panelProgress.coerceIn(0f, 1f)
-    val tone = GlassTone(appearance.contrast * (1f - panel), appearance.contrastWeight, dark)
+    val tone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
     val coatingDark = panelDark ?: dark
-    val panelBase = if (coatingDark) Color.Black else androidx.compose.material3.MaterialTheme.colorScheme.surface
     val anchor = modifier.glassSurfaceAnchor()
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
     val contactShape = contactPresentation ?: { contact.body.value }
@@ -184,9 +183,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val frosted = backing?.fallback ?: clear
             // Morphs blend fixed prepared endpoints; progress must never schedule
             // a new pixel filter on every animation frame.
-            return listOf(clear,
+            return listOf(rememberToneSnapshot(clear, endpointTone),
                 rememberToneSnapshot((backing?.lensSnapshot ?: clear).takeIf { frost < 1f && panel < 1f }, endpointTone),
-                frosted,
+                rememberToneSnapshot(frosted, endpointTone),
                 rememberToneSnapshot((backing?.lensFrostSnapshot ?: frosted).takeIf { frost > 0f && panel < 1f }, endpointTone))
         }
         val sourceImages = prepared(source)
@@ -233,7 +232,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         }
         Canvas(Modifier.matchParentSize()) {
             drawRect(tone.color(tint))
-            if (panel > 0f) drawFrostCoating(coatingDark, panelBase, Color.Transparent, .5f, panel)
+            if (panel > 0f) drawFrostCoating(coatingDark, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
             drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f,

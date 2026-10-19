@@ -333,7 +333,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val radius = if (page) 0.dp else if (detached) 28.dp else homeRadius * (1f - p) + 28.dp * p
                 SideEffect { anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
                 val dark = panelDark
-                val material = rememberFrostedBackdrop(source?.fallback to (p == 1f), dark = dark)
+                val material = rememberFrostedBackdrop(listOf(source?.fallback, p == 1f, LocalGlassAppearance.current), dark = dark)
                 SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { radius.toPx() } }
                 // This recording is sampled only by a later nested modal. Its
                 // material already has a shared raster; don't allocate and redraw

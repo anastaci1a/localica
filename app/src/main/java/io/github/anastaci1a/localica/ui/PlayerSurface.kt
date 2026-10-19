@@ -42,7 +42,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 internal fun playerHandleColor(ink: Color): Color =
-    lerp(Color(0xFFD6D6D6), Color(0xFF484848), ink.luminance()).copy(alpha = .75f)
+    ink.copy(alpha = .45f)
 
 /** The surface, gesture owner, artwork, metadata and transport retain identity at every progress value. */
 @Composable
@@ -67,11 +67,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val distance = with(density) { miniTop.toPx().coerceAtLeast(1f) }
     val p = progress.value
     val artwork = visual ?: rememberPlayerVisual(state.trackUri)
+    val lightInk = !artwork.palette.isLight()
+    val playerInk = if (lightInk) Color.White else Color.Black
+    val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, lightInk)
     val paletteDuration = settings.motionDuration(550)
     val palette = animatedPlayerPalette(artwork.palette, paletteDuration)
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
-    val lyricBackdrop = rememberFrostedBackdrop(artwork to settings.artworkLayout, p > .7f)
+    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen && expanded) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // While the finger is down expanded remains true. Progress, rather than release,
     // must restore the same artwork and metadata as the surface returns to the miniplayer.
@@ -191,7 +194,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
     val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
     val textX = 58.dp + (contentInset - 58.dp) * p
-    val foreground = androidx.compose.ui.graphics.lerp(miniForeground, Color.White, backgroundReveal)
+    val foreground = androidx.compose.ui.graphics.lerp(miniForeground, playerInk, backgroundReveal)
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val artPixels = with(density) { artWidth.toPx() }
     val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork,
@@ -202,8 +205,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground)
         smoothReveal(swipeFraction / .18f) * smoothReveal((1f - swipeFraction) / .18f) else 0f
     val baseColors = MaterialTheme.colorScheme
-    MaterialTheme(colorScheme = baseColors.copy(onSurface = foreground,
-        onSurfaceVariant = foreground.copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, Color.White, p),
+    GlassPanelTheme(lightInk) {
+    val playerColors = MaterialTheme.colorScheme
+    MaterialTheme(colorScheme = playerColors.copy(onSurface = foreground,
+        onSurfaceVariant = foreground.copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, playerInk, p),
         surface = androidx.compose.ui.graphics.lerp(baseColors.surface, palette.bottom, p),
         surfaceContainer = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainer, palette.middle, p),
         surfaceContainerHigh = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHigh, palette.middle, p),
@@ -229,11 +234,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
                     PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), backgroundProgress * (1f - lyricProgress),
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f))
+                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
                     if (destination != null) PlayerBackdrop(destination.visual.palette,
                         Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, backgroundProgress,
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                        with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f))
+                        with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
                 }
                 @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
                     Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer {
@@ -259,14 +264,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 // Soft edges reveal the two blended color continuations in the space between covers.
                 cover(frame, swipeOffset)
                 if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
-                // Contrast belongs to the artwork frame so song changes and expansion
-                // blend it with the cover, without a separate one-frame dark backing.
-                if (backgroundProgress > 0f) androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                    val shade = frame.palette.controlShade + ((destination?.visual?.palette?.controlShade ?: frame.palette.controlShade) - frame.palette.controlShade) * swipeFraction
-                    val opacity = shade * backgroundProgress * backgroundReveal * (1f - lyricProgress)
-                    drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = opacity)),
-                        startY = (metadataY - 72.dp).toPx(), endY = (metadataY - 8.dp).toPx()))
-                }
+
             }
             Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).testTag("artwork-gesture")
                 .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
@@ -369,4 +367,5 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         text = { Column { ArtworkAction.entries.forEach { value -> ActionTextButton(onClick = {
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
+}
 }

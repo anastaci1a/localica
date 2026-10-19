@@ -125,7 +125,7 @@ class PlayerTransitionTest {
         lateinit var scope: CoroutineScope
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().background(Color.White)) {
             scope = rememberCoroutineScope()
-            PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground),
+            PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground, glass = GlassAppearance(contrast = 0f)),
                 progress, {}, {}, {}, {}, {}, {}, visual = visual)
         } } }
         for (phase in listOf(.6f, .75f, .85f, .94f, 1f, .85f, .6f)) {
