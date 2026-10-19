@@ -25,7 +25,7 @@ The guide separates **Apple evidence**, **Localica models**, and **shipped behav
 
 ![WebGL capture of a capsule refracting a gradient with vertical lines](assets/lab-clear.png)
 
-The lab samples an original backdrop through two selectable inverse-map models. Compare edge displacement, thickness, blur, contrast and synthetic reflection independently. Its coordinate diagnostic and reproducible browser tests check actual shader output. [Run and verify](optics.md#run-and-verify).
+The lab samples an original backdrop through two selectable inverse-map models. WebGL and software rendering both apply refraction; the status line identifies the active renderer. Compare edge displacement, thickness, blur, contrast and synthetic reflection independently. Its coordinate diagnostic and reproducible browser tests check actual shader output. [Run and verify](optics.md#run-and-verify).
 
 <details>
 <summary>Panel expansion and collapse</summary>

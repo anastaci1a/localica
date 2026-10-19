@@ -60,7 +60,7 @@ const url=process.env.LAB_URL||pathToFileURL(path.join(root,'site/liquid-glass/l
   await configure({reduce:true});await page.click('#menu');await page.waitForTimeout(100);await settle();let idle=await page.evaluate(()=>glassLab.info());assert.equal(idle.state.m,1);await page.waitForTimeout(150);let next=await page.evaluate(()=>glassLab.info());assert.equal(next.frames,idle.frames);assert.equal(next.uploads,idle.uploads);
   check('Reduced motion snaps; idle frames and texture uploads stop',{});
   await configure({reduce:false,blur:3});await page.locator('#stage').screenshot({path:path.join(out,'panel.png')});
-  await page.evaluate(()=>glassLab.lose());await page.waitForTimeout(100);assert.equal((await page.evaluate(()=>glassLab.info())).gpu,false);assert((await page.locator('#status').textContent()).includes('fallback'));
+  await page.evaluate(()=>glassLab.lose());await page.waitForTimeout(100);assert.equal((await page.evaluate(()=>glassLab.info())).gpu,false);assert((await page.locator('#status').textContent()).includes('Software'));
   await page.evaluate(()=>glassLab.restore());await page.waitForFunction(()=>glassLab.info().gpu);assert.equal(await page.evaluate(()=>glassLab.error()),0);
   check('Context loss preserves fallback; restoration rebuilds GL resources',{});
   const fallback=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});await fallback.goto(url+'?fallback=1');assert.equal((await fallback.evaluate(()=>glassLab.info())).gpu,false);await fallback.click('#menu');await fallback.evaluate(()=>glassLab.settle());assert.equal(await fallback.locator('#menu').getAttribute('aria-pressed'),'true');await fallback.screenshot({path:path.join(out,'fallback.png'),fullPage:true});
