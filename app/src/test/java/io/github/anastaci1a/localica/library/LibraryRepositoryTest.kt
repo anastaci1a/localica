@@ -30,6 +30,9 @@ class LibraryRepositoryTest {
         val startup = async { repository.scanNewFiles("old") }
         entered.await()
         val manual = async { repository.scan("old") }
+        testScheduler.runCurrent()
+        assertFalse(manual.isCompleted)
+        assertEquals(0, files.metadataReads)
         assertEquals(previous, store.current())
         release.complete(Unit)
         startup.await()

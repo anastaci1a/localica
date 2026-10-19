@@ -121,7 +121,7 @@ private fun ScannerConfiguration(preferences: ScanPreferences, folders: () -> Un
     SettingsLink("Folders to scan", "Included folders and excluded subfolders", R.drawable.ic_folder, onClick = folders)
     BooleanPreference("Include subfolders", options.includeSubfolders) { options = options.copy(includeSubfolders = it); preferences.write(options) }
     SettingsLink("Exclude short files", if (options.minimumDurationSeconds == 0) "Off" else "Shorter than ${options.minimumDurationSeconds} seconds") { durationOpen = true }
-    Text("Files with unknown duration are kept. Changes take effect on the next scan.", style = MaterialTheme.typography.bodySmall)
+    Text("Unknown durations are kept. Use Scan music to apply changed rules to indexed songs.", style = MaterialTheme.typography.bodySmall)
     SettingsHeading("Automatic scanning")
     BooleanPreference("Scan when Localica opens", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
     Text("Off by default. Finds new files in the background without rereading indexed songs. Include subfolders and exclusions apply. Use Scan music to refresh tags and removed files.", style = MaterialTheme.typography.bodySmall)

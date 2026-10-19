@@ -25,6 +25,29 @@ import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 class IncompleteScanTest {
+    @Test fun startupControllerContinuesOtherRootsAfterOneProviderFails() = fixture {
+        repository.scan(root)
+        repository.scan(other)
+        val before = store.current()
+        mode("updated")
+        unavailableRoot = root
+        metadataReads = 0
+        val finished = CompletableDeferred<Unit>()
+        val controller = io.github.anastaci1a.localica.scanner.ScanController(
+            InstrumentationRegistry.getInstrumentation().targetContext, repository)
+        withContext(Dispatchers.Main) { controller.run(listOf(root, other), newFilesOnly = true) { finished.complete(Unit) } }
+        withTimeout(10_000) { finished.await() }
+        assertFalse(controller.state.value.running)
+        assertEquals(2, controller.state.value.completedFolders)
+        assertTrue(controller.state.value.message.orEmpty().contains("1 folder"))
+        assertEquals(1, metadataReads)
+        val after = store.current()
+        assertEquals(3, after.tracks.size)
+        before.tracks.forEach { assertEquals(it, after.tracks.single { current -> current.id == it.id }) }
+        assertEquals(listOf(other), after.tracks.single { track -> before.tracks.none { it.id == track.id } }.locations.map { it.folderUri })
+        assertCursorsClosed()
+    }
+
     @Test fun startupDiscoverySkipsKnownFileOpensAndAddsOverlapsWithoutReplacingCachedRows() = fixture {
         repository.scan(root)
         repository.scan(other)
@@ -211,9 +234,14 @@ class IncompleteScanTest {
         var metadataReads = 0
         var cancelMetadata = false
         var probeFileOpens = false
+        var unavailableRoot: String? = null
         private val documents = AndroidDocuments(context)
         // Exercise actual resolver/provider listings without requiring decoder fixtures.
         private val source = object : DocumentSource by documents {
+            override fun root(treeUri: String): ScanDocument {
+                if (treeUri == unavailableRoot) throw IOException("Fixture root unavailable")
+                return documents.root(treeUri)
+            }
             override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
                 metadataReads++
                 if (cancelMetadata) throw CancellationException("Fixture cancellation")

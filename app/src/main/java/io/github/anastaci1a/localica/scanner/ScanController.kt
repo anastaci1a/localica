@@ -19,17 +19,13 @@ class ScanController(private val context: Context, private val library: LibraryR
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val requests = ScanRequests()
     private var job: Job? = null
-    private var startupRequested = false
     private var interruption: String? = null
     private var canceledBeforeStart = false
     init { marker.edit().putBoolean("running", false).apply() }
 
     fun start(roots: List<String>) { start(roots, ScanMode.Full) }
 
-    fun startNewFiles(roots: List<String>) {
-        if (startupRequested || roots.isEmpty()) return
-        if (start(roots, ScanMode.NewFiles)) startupRequested = true
-    }
+    fun startNewFiles(roots: List<String>): Boolean = start(roots, ScanMode.NewFiles)
 
     private fun start(roots: List<String>, mode: ScanMode): Boolean {
         if (roots.isEmpty()) return false
