@@ -518,7 +518,9 @@ class GlassMorphTest {
                 CompositionLocalProvider(LocalFrostedBackdrop provides list, LocalModalBackdrop provides source) {
                     SideEffect { anchor.source = list }
                     Box(Modifier.align(Alignment.BottomEnd).size(CompactControlSize).glassAnchor(anchor))
-                    GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Search) {
+                    // This fixture verifies dark-material coordinates/scatter,
+                    // independently of the trigger's ambient foreground policy.
+                    GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Search, darkOverride = true) {
                         material = LocalFrostedBackdrop.current!!
                         Box(Modifier.fillMaxWidth().height(200.dp)) {
                             LiquidGlassSurface(Modifier.align(Alignment.Center).size(CompactControlSize).testTag("nested-lens")) { }

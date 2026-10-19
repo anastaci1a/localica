@@ -8,9 +8,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
@@ -35,13 +37,20 @@ class PinchReleaseHandoffTest {
     @Test fun longHeldCancelledPinchRestoresOriginalAnchor() = release(outward = true, cancelled = true)
     @Test fun longHeldCancelledInwardPinchRestoresOriginalAnchor() = release(outward = false, cancelled = true)
 
-    private fun release(outward: Boolean, cancelled: Boolean = false) {
+    @Test fun galleryFiveToLargeKeepsItsPresentedAnchorThroughRelease() = release(outward = false, gallery = true)
+    @Test fun galleryFiveToFourKeepsItsPresentedAnchorThroughRelease() = release(outward = true, gallery = true)
+    @Test fun cancelledGalleryToListRestoresItsArtworkWithoutReplay() = release(outward = false, cancelled = true, gallery = true)
+    @Test fun cancelledGalleryDensityRestoresItsArtworkWithoutReplay() = release(outward = true, cancelled = true, gallery = true)
+
+    private fun release(outward: Boolean, cancelled: Boolean = false, gallery: Boolean = false) {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "release-queue"))
         val original = prefs.read(route)
         val overridden = prefs.overridden(route)
-        val initial = BrowseStyle(listSize = if (outward) ListSize.Compact else ListSize.Normal)
-        val target = if (outward) "List, Normal" else "List, Compact"
+        val initial = if (gallery) BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5, listSize = ListSize.Large)
+            else BrowseStyle(listSize = if (outward) ListSize.Compact else ListSize.Normal)
+        val target = if (gallery) { if (outward) "Gallery, 4 columns" else "List, Large" }
+            else if (outward) "List, Normal" else "List, Compact"
         val tracks = (0..159).map { index -> Track("release:$index", "Song ${index.toString().padStart(3, '0')}",
             fileName = "$index.mp3", relativePath = "$index.mp3") }
         // Keep query identity stable when the presentation marker invalidates drawing.
@@ -76,27 +85,72 @@ class PinchReleaseHandoffTest {
             val originalBounds = anchor.fetchSemanticsNode().boundsInRoot
             val expectedFinalCenter = originalBounds.center.y
             val y = expectedFinalCenter - viewport.top
+            val x = originalBounds.center.x - viewport.left
             val scene = compose.onNodeWithTag("release-scene")
-            fun presentedCenter(): Float = highlightCenter(
-                capturePresentedPopupPixels(compose, scene, stage) { view },
-                expectedFinalCenter, originalBounds.height * 2f)
+            val reviewDirectory by lazy {
+                val exported = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                val root = exported?.let { java.io.File(it) } ?: requireNotNull(
+                    InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
+                java.io.File(root, "pinch-review").also {
+                    check(it.isDirectory || it.mkdirs()) { "Pinch review directory must be writable" }
+                }
+            }
+            fun presentedCenter(): Float {
+                val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
+                if (gallery && stage in setOf(0, 1, 2, 6, 12, 22) &&
+                    InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
+                    val directory = reviewDirectory
+                    val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
+                    try {
+                        bitmap.setPixels(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() },
+                            0, pixels.width, 0, 0, pixels.width, pixels.height)
+                        java.io.File(directory, "$outward-$cancelled-${compose.mainClock.currentTime}-$stage.png").outputStream().use {
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                    } finally { bitmap.recycle() }
+                }
+                return highlightCenter(pixels, expectedFinalCenter, originalBounds.height * 2f, gallery)
+            }
             assertEquals("Initial rendered landmark", expectedFinalCenter, presentedCenter(), 4f)
             compose.mainClock.autoAdvance = false
             pointersDown = true
             list.performTouchInput {
-                down(0, Offset(centerX - 60f, y)); down(1, Offset(centerX + 60f, y))
-                val halfSpan = if (outward) 96f else 39f
-                moveTo(0, Offset(centerX - halfSpan, y)); moveTo(1, Offset(centerX + halfSpan, y))
+                down(0, Offset(x - 60f, y)); down(1, Offset(x + 60f, y))
+                val halfSpan = if (gallery) { if (outward) 62.45f else 57.65f }
+                    else if (outward) 96f else 39f
+                moveTo(0, Offset(x - halfSpan, y)); moveTo(1, Offset(x + halfSpan, y))
             }
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
                 list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == target
+            }
+            if (gallery) {
+                compose.mainClock.advanceTimeBy(48)
+                compose.runOnIdle { stage = 1 }
+                val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
+                val columns = (0 until pixels.width).filter { px ->
+                    (originalBounds.top.toInt().coerceAtLeast(0) until originalBounds.bottom.toInt().coerceAtMost(pixels.height)).count { py ->
+                        val c = pixels[px, py]
+                        c.red - c.green > .07f && c.blue - c.green > .07f
+                    } >= 3
+                }
+                assertTrue("The source highlight remains visible at recognition", columns.isNotEmpty())
+                // The decorative inset is 4dp per side; allow edge antialiasing.
+                val inset = 8f * InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+                assertEquals("Recognition must retain the gallery highlight width",
+                    originalBounds.width - inset, (columns.last() - columns.first() + 1).toFloat(), 5f)
+                list.performTouchInput {
+                    val halfSpan = if (outward) 96f else 39f
+                    moveTo(0, Offset(x - halfSpan, y)); moveTo(1, Offset(x + halfSpan, y))
+                }
             }
             // Keep both fingers down beyond the old 450 ms anchor lifetime, with a
             // partial committed preview so release has a real 220 ms settle phase.
             compose.mainClock.advanceTimeBy(1200)
             compose.runOnIdle { stage = 1 }
             val before = presentedCenter()
+            val artwork = compose.onNodeWithTag("browse-art-release:73", true)
+            val heldArtwork = artwork.fetchSemanticsNode().boundsInRoot
             list.performTouchInput {
                 if (cancelled) cancel() else { up(0); up(1) }
             }
@@ -106,6 +160,7 @@ class PinchReleaseHandoffTest {
             val low = minOf(before, expectedFinalCenter) - 4f
             val high = maxOf(before, expectedFinalCenter) + 4f
             val samples = mutableListOf<Float>()
+            val artworkFrames = mutableListOf(heldArtwork)
             repeat(60) { frame ->
                 // Marker waits only for this exact presented frame, with the test
                 // clock paused; it cannot advance past a bad release frame.
@@ -113,6 +168,7 @@ class PinchReleaseHandoffTest {
                 compose.mainClock.advanceTimeByFrame()
                 val center = presentedCenter()
                 samples += center
+                artworkFrames += artwork.fetchSemanticsNode().boundsInRoot
                 android.util.Log.i("PinchReleaseHandoff",
                     "outward=$outward cancelled=$cancelled frame=$frame t=${compose.mainClock.currentTime} center=$center expected=$expectedFinalCenter")
             }
@@ -122,8 +178,24 @@ class PinchReleaseHandoffTest {
                 expectedFinalCenter, samples.last(), 4f)
             assertEquals("Final layout anchor must return to the original midpoint",
                 expectedFinalCenter, anchor.fetchSemanticsNode().boundsInRoot.center.y, 4f)
-            assertEquals(if (cancelled) initial.listSize else if (outward) ListSize.Normal else ListSize.Compact,
+            // A correct decoration center alone can conceal artwork replay or a
+            // one-frame layout handoff. Check every edge through 960ms of release.
+            val edges: List<(Rect) -> Float> = listOf({ it.left }, { it.top }, { it.right }, { it.bottom })
+            edges.forEachIndexed { edge, coordinate ->
+                val values = artworkFrames.map(coordinate)
+                val range = kotlin.math.abs(values.last() - values.first())
+                val lowEdge = minOf(values.first(), values.last()) - 3f
+                val highEdge = maxOf(values.first(), values.last()) + 3f
+                assertTrue("Artwork edge $edge stays inside its endpoint path: $values", values.all { it in lowEdge..highEdge })
+                assertTrue("Artwork edge $edge cannot jump at handoff: $values",
+                    values.zipWithNext().all { (a, b) -> kotlin.math.abs(b - a) <= range * .25f + 3f })
+            }
+            assertEquals(if (cancelled || gallery) initial.listSize else if (outward) ListSize.Normal else ListSize.Compact,
                 prefs.read(route).listSize)
+            if (gallery && !cancelled) {
+                assertEquals(if (outward) Presentation.Standard else Presentation.List, prefs.read(route).presentation)
+                if (outward) assertEquals(4, prefs.read(route).itemsPerRow)
+            }
             // A completed/cancelled transaction must release its scroll mutation.
             // Ordinary touch scrolling must work immediately after the handoff.
             list.performTouchInput { swipeUp(durationMillis = 200) }
@@ -141,7 +213,7 @@ class PinchReleaseHandoffTest {
         }
     }
 
-    private fun highlightCenter(pixels: PixelMap, expected: Float, radius: Float): Float {
+    private fun highlightCenter(pixels: PixelMap, expected: Float, radius: Float, fullWidth: Boolean = false): Float {
         // Sample away from the title, cover and action icon. Only the target row
         // has a magenta tint; neutral text and the green frame marker cannot match.
         // Keep unrelated queue toolbar accents out of the search, while retaining
@@ -149,7 +221,7 @@ class PinchReleaseHandoffTest {
         val top = (expected - radius).toInt().coerceAtLeast(0)
         val bottom = (expected + radius).toInt().coerceAtMost(pixels.height)
         val rows = (top until bottom).filter { y ->
-            (pixels.width * 2 / 3 until pixels.width * 3 / 4).count { x ->
+            (if (fullWidth) 0 until pixels.width else pixels.width * 2 / 3 until pixels.width * 3 / 4).count { x ->
                 val color = pixels[x, y]
                 color.red - color.green > .07f && color.blue - color.green > .07f
             } >= 3
