@@ -2,7 +2,7 @@
 
 [Guide home](README.md) · [Apple evidence](sources.md) · [Motion lab](lab.html)
 
-**Status: implementation specification.** The [interface contract](../interface.md) owns released behavior; the checks below remain verification criteria, not a claim that every device meets them. Selection entrance motion remains deferred in [#107](https://github.com/anastaci1a/localica/issues/107).
+**Status: implementation requirements, with experimental optical models.** The [interface contract](../interface.md) owns branch behavior; releases and PR evidence establish what shipped and what was tested. These checks are not a claim that every device meets them. Selection entrance motion remains deferred in [#107](https://github.com/anastaci1a/localica/issues/107).
 
 This is our translation of the [Apple evidence](sources.md) into testable Android behavior. The equations below are Localica engineering models, not Apple's private formulas. They need device profiling and perceptual tuning.
 
@@ -92,7 +92,7 @@ content/backdrop → padded sample → distortion/scattering → contrast suppor
 outline + elevation → one shadow field behind the surface group
 ```
 
-- Derive normals from a rounded height field, refract through entry/exit interfaces using Snell’s law, and offset sampling by the ray’s travel. Concentrate power in the curved shoulder with gentle central curvature; depth must change normals and displacement, not just zoom. Localica’s water-like index near 1.33 follows [PBRT’s optics derivation](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission) as an artistic starting point, not an Apple parameter.
+- The current Android model derives normals from a rounded height field and traces entry/exit refraction with a water-inspired index of 1.33. This is an engineering approximation, not a requirement to retain that model if evidence favors another. Preserve quiet-core registration, continuous shoulder bending and depth-dependent deformation; compare the [physical and boundary-focused hypotheses](optics.md) before changing defaults.
 - Keep rectangular crowns smooth, without directional wedges, medial-axis ridges, flat masks or inset highlights. Inspect changing curvature as well as normal continuity. Circles retain a radial profile; illumination follows the crown.
 - Define the silhouette with an inset rim: broader white highlights toward top-left/bottom-right, tapering into faint dark shading on the opposite corners. Follow deformation and joins without outlining a flat face. This interprets Apple’s [geometry-responsive highlights](https://developer.apple.com/videos/play/wwdc2025/219/?time=630); it does not reproduce its shader.
 
@@ -125,7 +125,7 @@ Capture reproducible interaction traces on representative physical devices, sepa
 | Re-grab an opening/closing menu | One continuous surface, no missing frame or label jump |
 | Pull a selector beyond either end | Stable edge, bounded strain, recovery without position overshoot |
 | Scroll a selected list, reverse, fling | Lens and content share the same frame and coordinates |
-| Overflowing tabs | Every drag scrolls the strip; the selector cannot be dragged. When tabs fit, dragging anywhere moves the selector. No clipping outside the capsule. |
+| Overflowing tabs | Lens-origin drags adjust selection; other origins scroll the strip. When tabs fit, any option can acquire the selector, subject to shared scroll-intent arbitration. Preserve clipping and accessible alternatives; [#366](https://github.com/anastaci1a/localica/issues/366) supersedes the old overflow rule. |
 | Expand/collapse mini-player slowly | Matched corners/shadow; artwork and material blend reversibly |
 | Swipe artwork diagonally, then reverse | Same gesture owner; no queue opening or player dismissal |
 | Change text size or use long labels | Wrapping/ellipsis by role, preserved target size and spacing |
@@ -134,7 +134,7 @@ Capture reproducible interaction traces on representative physical devices, sepa
 | Bright/dark/striped moving backdrops | Stable readable controls, no polarity chatter or tinted flash |
 | Repeated selection/menu cycles | Bounded allocations, no accumulation of layers or idle clocks |
 
-The [motion lab](lab.html) is an explanatory prototype for input and shape response. It does not demonstrate production refraction, Android performance, or completion of this specification.
+The [live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) demonstrates real background refraction and input/shape response in WebGL. Its [models and tests](optics.md) do not establish Android performance, iOS parity or completion of this specification.
 
 ---
 

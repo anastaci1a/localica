@@ -2,7 +2,7 @@
 
 [Guide home](README.md) · [Localica specification](specification.md) · [Motion lab](lab.html)
 
-Reviewed 13 October 2026. These are concise notes from Apple's transcripts and documentation, not a reproduction of the talks. Time links open the relevant discussion. The **Localica implications** are our interpretations; they are not claims about Apple's private renderer. Versioned WWDC sessions describe their year's system; living HIG pages may evolve.
+Compiled 13 October 2026; material, custom-view and spring sources rechecked 19 October 2026. These are concise notes, not reproductions of the talks. Time links open the relevant discussion. **Localica implications** are interpretations, not Apple's private renderer. Versioned sessions describe their year's system; living HIG pages may evolve. [Optical evidence and reproducible experiments](optics.md) distinguish measured observations from model assumptions.
 
 ## Interaction foundations
 
@@ -71,7 +71,7 @@ The HIG guidance below describes control roles and usability. It is not a specif
 | [Steppers](https://developer.apple.com/design/human-interface-guidelines/steppers) | Show the affected value beside the control; pair with direct entry when users need large changes. |
 | [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility) | Offer gesture alternatives, scalable content, adequate contrast and non-color state cues. Reduced Motion should remove decorative depth, bounce and transitions into/out of blur while preserving understandable state. |
 
-**Localica interpretation:** keep Android's native editing/adjustment semantics under our visual layer. A switch, slider, radio choice and navigation tab must not become indistinguishable generic clickable glass. Our 48 dp target, adjustable damping and clear-at-rest slider are product choices, not Apple-supplied dimensions or physics.
+**Localica interpretation:** keep Android's native editing/adjustment semantics under our visual layer. A switch, slider, radio choice and navigation tab must not become indistinguishable generic clickable glass. Our target sizes, adjustable damping and expansion are product choices, not Apple-supplied dimensions or physics; [controls](controls.md) owns the current rest/contact rules.
 
 ## Implementation evidence
 
@@ -91,7 +91,7 @@ Apple explicitly describes control thumbs temporarily becoming Liquid Glass duri
 
 **Visual observation of Apple's demonstration:** slider thumbs are wider than tall, with strongly rounded ends. The quiet white thumb becomes a larger transparent lens while held; the colored track ends visibly beneath its center. A switch likewise exposes its colored track through the moving lens, then returns to a quieter solid thumb. These observations describe the WWDC25 demonstration, not every iOS version or an exact radius/duration specification.
 
-**Localica adaptation:** retain clear settings slider thumbs at rest as requested; switches use the demonstrated quiet-rest/clear-interaction distinction. Preserve accessible values, on/off semantics, tap alternatives and reduced motion. Playback keeps its separate scrubber design. See [settings controls](controls.md#sliders-keep-the-value-visible).
+**Localica adaptation:** both settings sliders and switches now use quiet opaque white rest and clear interaction, superseding the earlier always-clear slider request. Preserve accessible values, on/off semantics, tap alternatives and reduced motion. Playback keeps its separate scrubber design. See [settings controls](controls.md#sliders-keep-the-value-visible).
 
 ### Render-loop performance · Apple Tech Talks
 

@@ -1,0 +1,12 @@
+{
+  "name": "localica-glass-lab",
+  "private": true,
+  "scripts": {
+    "build": "node site.cjs",
+    "test": "node experiments/check-links.cjs && node experiments/browser.cjs"
+  },
+  "devDependencies": {
+    "marked": "17.0.4",
+    "playwright": "1.61.1"
+  }
+}
