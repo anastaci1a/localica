@@ -41,6 +41,12 @@ internal class BrowsePinchMotion {
     var settling: kotlinx.coroutines.Job? = null
     var disposed = false
     var capturing = false
+    var captureProblem = false
+    fun failCapture() {
+        // The preview has not been published. A held gesture can retire now;
+        // a release already joining the readback owns the final cleanup.
+        if (held) clearTransaction() else captureProblem = true
+    }
     val frozen = mutableMapOf<Any, FrozenBrowseItem>()
     var source by mutableStateOf<BrowseStyle?>(null)
     var bounds: Map<Any, Rect> = emptyMap()
@@ -58,7 +64,7 @@ internal class BrowsePinchMotion {
     var viewportWidth = 1f
     var rightToLeft = false
     fun clearTransaction() {
-        held = false; fingerProgress = 0f; capturing = false
+        held = false; fingerProgress = 0f; capturing = false; captureProblem = false
         source = null; target = null; focusKey = null
         focusTop = 0; focusFraction = 0f; focusEdge = 0
         bounds = emptyMap(); frozen.clear()
@@ -160,7 +166,7 @@ internal fun Modifier.pinchToChangeView(enabled: Boolean, gestureKey: Any? = Uni
 internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, style: BrowseStyle,
     route: BrowseRoute, gridState: LazyGridState, width: Int, density: Density,
     scope: CoroutineScope, reducedMotion: Boolean, onPreview: (BrowseStyle) -> Unit,
-    onCommit: (BrowseStyle) -> Unit, onAnchor: (BrowseZoomAnchor) -> Unit): Modifier {
+    onCommit: (BrowseStyle) -> Unit, onAnchor: (BrowseZoomAnchor?) -> Unit): Modifier {
     val captureLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     DisposableEffect(motion) {
@@ -184,7 +190,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 motion.settling = scope.launch {
                     try {
                         motion.capture?.join()
-                        if (motion.disposed) return@launch
+                        if (motion.disposed || motion.captureProblem) return@launch
                         val commit = !cancelled && motion.fingerProgress >= .35f
                         val destination = if (commit) motion.target else motion.source
                         if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
@@ -267,10 +273,17 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                                 translate(origins[i].x.toFloat(), origins[i].y.toFloat()) { drawLayer(layer) }
                             }
                         }
-                        val image = captureLayer.toImageBitmap()
+                        val image = captureLayer.pinchSnapshot(density, layoutDirection)
                         drawings.forEachIndexed { i, (key, layer) -> motion.frozen[key] = FrozenBrowseItem(image, origins[i], layer.size) }
                     }
                     onPreview(next)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    if (!motion.disposed) { onAnchor(null); motion.failCapture() }
+                    throw cancelled
+                } catch (failure: Exception) {
+                    android.util.Log.w("BrowsePinch", "Source capture failed; retaining the original view", failure)
+                    onAnchor(null)
+                    motion.failCapture()
                 } finally { motion.capturing = false }
                 if (motion.held && !reducedMotion) {
                     motion.tracking = scope.launch {
