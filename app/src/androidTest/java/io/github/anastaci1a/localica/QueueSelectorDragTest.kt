@@ -24,8 +24,11 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class QueueSelectorDragTest {
-    @get:Rule val compose = createComposeRule()
+    // Match production's queued UI effects: an unconfined test dispatcher can resume
+    // a completed Default-dispatcher preparation inline on that worker.
+    @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
     private var enabled by mutableStateOf(true)
     private var present by mutableStateOf(true)
     private var panelReady by mutableStateOf(true)
@@ -72,7 +75,30 @@ class QueueSelectorDragTest {
                 }
             } }
             compose.waitForIdle()
-            test(controller, db)
+            try {
+                test(controller, db)
+            } catch (failure: Throwable) {
+                // Preserve the failure and identify the actual concurrent observer if it
+                // recurs; Java thread IDs in SnapshotStateObserver are not logcat TIDs.
+                runCatching {
+                    val main = android.os.Looper.getMainLooper().thread
+                    val caller = Thread.currentThread()
+                    val observerIds = generateSequence(failure) { it.cause }
+                        .flatMap { Regex("previousThreadId=(\\d+)").findAll(it.message.orEmpty()) }
+                        .map { it.groupValues[1].toLong() }.toSet()
+                    val threads = Thread.getAllStackTraces()
+                    android.util.Log.e("QueueSelectorThreads",
+                        "main=${main.id} caller=${caller.id} observerIds=$observerIds")
+                    threads.entries.sortedBy { it.key.id }.forEach { (thread, stack) ->
+                        android.util.Log.e("QueueSelectorThreads",
+                            "id=${thread.id} name=${thread.name} state=${thread.state}")
+                        if (thread === main || thread === caller || thread.id in observerIds) {
+                            stack.take(80).forEach { android.util.Log.e("QueueSelectorThreads", "  at $it") }
+                        }
+                    }
+                }.exceptionOrNull()?.let(failure::addSuppressed)
+                throw failure
+            }
         } finally {
             runBlocking { scope.coroutineContext[Job]!!.cancelAndJoin() }
             preferences.write(original)
