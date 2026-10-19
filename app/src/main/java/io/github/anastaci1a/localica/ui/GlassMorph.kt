@@ -388,8 +388,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     homeSource = anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
                                     homeBounds = { if (visible) origin else anchor.bounds },
                                     cornerRadius = radius, frostProgress = p, panelProgress = p, panelDark = dark,
-                                    inkOverride = anchor.ink.takeIf { it != Color.Unspecified }
-                                        ?: if (dark) Color.White else Color(0xFF202124),
+                                    // Material and popup foreground share the resolved page polarity,
+                                    // including explicit overrides and detached dialogs. The trigger's
+                                    // original foreground is rendered separately during its return.
+                                    inkOverride = if (dark) Color.White else Color(0xFF202124),
                                     pressFeedback = false, shadow = false,
                                     body = { body.value },
                                     depthScale = anchor.depthScale,
