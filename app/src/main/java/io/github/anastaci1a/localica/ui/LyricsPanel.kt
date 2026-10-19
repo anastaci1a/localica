@@ -120,6 +120,7 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
         document.warning?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("lyric-lines")
+                .controlScrollParent(list, ControlScrollAxis.Vertical)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawWithContent {
                     drawContent()
