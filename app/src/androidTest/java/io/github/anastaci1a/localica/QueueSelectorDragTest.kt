@@ -307,6 +307,10 @@ class QueueSelectorDragTest {
         begin()
         controller.removeQueues(setOf("q3"))
         compose.waitUntil(5000) { "q3" !in order(controller) }
+        // The controller receipt precedes queued composition/effect delivery. Prove
+        // the held drag has actually cancelled before releasing the pointer.
+        awaitLanding()
+        assertEquals(0, commits)
         list().performTouchInput { up() }
         awaitLanding()
         assertFalse("q3" in order(controller)); assertEquals(0, commits); assertNoActions()
@@ -316,6 +320,11 @@ class QueueSelectorDragTest {
         val start = begin()
         controller.rename("q1", "Updated queue")
         compose.waitUntil(5000) { controller.state.value.library.queues.first { it.id == "q1" }.name == "Updated queue" }
+        // Await the overlay's consumption of the external metadata change, not
+        // only the controller value that schedules that composition.
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithText("2. Updated queue").fetchSemanticsNodes().size == 1
+        }
         compose.onNodeWithText("2. Updated queue").assertExists()
         list().performTouchInput { moveTo(start + Offset(0f, 150f)); up() }
         awaitLanding()
