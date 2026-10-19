@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
@@ -81,6 +82,7 @@ class QueueSelectorDragTest {
                 // Preserve the failure and identify the actual concurrent observer if it
                 // recurs; Java thread IDs in SnapshotStateObserver are not logcat TIDs.
                 runCatching {
+                    android.util.Log.e("QueueSelectorThreads", "Fixture failure", failure)
                     val main = android.os.Looper.getMainLooper().thread
                     val caller = Thread.currentThread()
                     val observerIds = generateSequence(failure) { it.cause }
@@ -173,22 +175,101 @@ class QueueSelectorDragTest {
         assertEquals(0, commits); assertNoActions()
     }
 
-    @Test fun secondFingerAfterStationaryHoldCancelsBeforeLiftAndNextHoldWorks() = fixture { controller, _ ->
+    @Test(timeout = 15000) fun secondFingerAfterStationaryHoldCancelsBeforeLiftAndNextHoldWorks() = fixture { controller, _ ->
         val before = order(controller)
-        val start = localBody("q1")
-        list().performTouchInput { down(start); advanceEventTime(650); moveTo(start) }
-        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
-        list().performTouchInput {
-            down(1, start + Offset(40f, 0f))
-            moveTo(0, start + Offset(0f, 80f)); up(1)
-            moveTo(0, start + Offset(0f, 120f)); up(0)
+        val root = checkNotNull(list().fetchSemanticsNode().root)
+        val view = (root as androidx.compose.ui.platform.ViewRootForTest).view
+        val body = compose.onNodeWithTag("queue-select-q1", useUnmergedTree = true).fetchSemanticsNode()
+        val start = compose.runOnUiThread { body.boundsInRoot.center }
+        val phase = java.util.concurrent.atomic.AtomicReference("ready")
+        val testThread = Thread.currentThread()
+        val watchdog = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { task ->
+            Thread(task, "queue-second-pointer-watchdog").apply { isDaemon = true }
         }
-        compose.onNodeWithTag("drag-stack").assertDoesNotExist()
-        assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
-        begin()
-        list().performTouchInput { cancel() }
-        awaitLanding()
-        assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+        watchdog.schedule({
+            android.util.Log.e("QueueSecondPointer", "phase=${phase.get()}")
+            for (thread in listOf(android.os.Looper.getMainLooper().thread, testThread)) {
+                android.util.Log.e("QueueSecondPointer", "id=${thread.id} name=${thread.name} state=${thread.state}")
+                thread.stackTrace.take(80).forEach { android.util.Log.e("QueueSecondPointer", "  at $it") }
+            }
+        }, 5, java.util.concurrent.TimeUnit.SECONDS)
+        val pointers = linkedMapOf<Int, Offset>()
+        var time = android.os.SystemClock.uptimeMillis()
+        var downTime = time
+        fun send(action: Int, delay: Long = 16) {
+            compose.mainClock.advanceTimeBy(delay, ignoreFrameDuration = true)
+            time += delay
+            compose.runOnUiThread {
+                val location = IntArray(2).also(view::getLocationOnScreen)
+                val properties = pointers.keys.map { id -> android.view.MotionEvent.PointerProperties().apply {
+                    this.id = id; toolType = android.view.MotionEvent.TOOL_TYPE_FINGER
+                } }.toTypedArray()
+                val coordinates = pointers.values.map { point -> android.view.MotionEvent.PointerCoords().apply {
+                    x = point.x + location[0]; y = point.y + location[1]; pressure = 1f; size = 1f
+                } }.toTypedArray()
+                val event = android.view.MotionEvent.obtain(downTime, time, action, pointers.size,
+                    properties, coordinates, 0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
+                event.offsetLocation(-location[0].toFloat(), -location[1].toFloat())
+                try {
+                    val delivered = view.dispatchTouchEvent(event)
+                    if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN ||
+                        event.actionMasked == android.view.MotionEvent.ACTION_POINTER_DOWN)
+                        assertTrue("The captured root must receive both contacts", delivered)
+                } finally { event.recycle() }
+            }
+        }
+        fun assertDragCount(expected: Int) {
+            // Read the captured owner on UI without Espresso idleness while a finger
+            // is held: API36 stretch rendering can keep that idle wait open forever.
+            compose.runOnUiThread {
+                val nodes = root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true)
+                assertEquals(expected, nodes.count {
+                    SemanticsProperties.TestTag in it.config && it.config[SemanticsProperties.TestTag] == "drag-stack"
+                })
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        try {
+            phase.set("stationary hold")
+            pointers[0] = start; downTime = time + 16
+            send(android.view.MotionEvent.ACTION_DOWN)
+            send(android.view.MotionEvent.ACTION_MOVE, 650)
+            compose.mainClock.advanceTimeByFrame()
+            assertDragCount(0)
+            phase.set("second finger cancellation")
+            pointers[1] = start + Offset(40f, 0f)
+            send(android.view.MotionEvent.ACTION_POINTER_DOWN or (1 shl android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT))
+            pointers[0] = start + Offset(0f, 80f); send(android.view.MotionEvent.ACTION_MOVE)
+            send(android.view.MotionEvent.ACTION_POINTER_UP or (1 shl android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT))
+            pointers.remove(1)
+            pointers[0] = start + Offset(0f, 120f); send(android.view.MotionEvent.ACTION_MOVE)
+            send(android.view.MotionEvent.ACTION_UP); pointers.clear()
+            compose.mainClock.autoAdvance = true
+            phase.set("first release settles")
+            compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+            assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+            compose.mainClock.autoAdvance = false
+            phase.set("next hold acquires")
+            val nextStart = compose.runOnUiThread {
+                root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false).single {
+                    SemanticsProperties.TestTag in it.config && it.config[SemanticsProperties.TestTag] == "queue-select-q1"
+                }.boundsInRoot.center
+            }
+            pointers[0] = nextStart; downTime = time + 16
+            send(android.view.MotionEvent.ACTION_DOWN)
+            send(android.view.MotionEvent.ACTION_MOVE, 650)
+            pointers[0] = nextStart + Offset(0f, 35f); send(android.view.MotionEvent.ACTION_MOVE, 80)
+            compose.mainClock.advanceTimeByFrame()
+            assertDragCount(1)
+            send(android.view.MotionEvent.ACTION_CANCEL); pointers.clear()
+            phase.set("landing")
+            compose.mainClock.autoAdvance = true
+            awaitLanding()
+            assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+        } finally {
+            try { if (pointers.isNotEmpty()) send(android.view.MotionEvent.ACTION_CANCEL) }
+            finally { compose.mainClock.autoAdvance = true; watchdog.shutdownNow() }
+        }
     }
 
     @Test fun scaledRtlActionHoldsStayExcludedWhenDraggedAcrossRowBody() = fixture(
