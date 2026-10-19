@@ -21,7 +21,10 @@ const {execFileSync}=require('node:child_process');
     link({href,title,tokens}){return `<a href="${escape(link(href))}"${title?` title="${escape(title)}"`:''}>${this.parser.parseInline(tokens)}</a>`;}
   }});
   const manifest={source,files:{}};
-  function write(file,data){fs.mkdirSync(path.dirname(path.join(out,file)),{recursive:true});fs.writeFileSync(path.join(out,file),data);manifest.files[file]=crypto.createHash('sha256').update(data).digest('hex');}
+  function write(file,data){
+    // Keep fresh HTML and its CSS, shader and captures on the same revision.
+    if(file.endsWith('.html'))data=data.replace(/(href|src)="((?!https?:|data:)[^"?]+\.(?:js|css|png|gif|svg))"/g,(_,attribute,url)=>`${attribute}="${url}?v=${source.slice(0,12)}"`);
+    fs.mkdirSync(path.dirname(path.join(out,file)),{recursive:true});fs.writeFileSync(path.join(out,file),data);manifest.files[file]=crypto.createHash('sha256').update(data).digest('hex');}
   for(const name of pages){
     const content=md.parse(fs.readFileSync(path.join(root,name),'utf8'));
     write('liquid-glass/'+(name==='README.md'?'index.html':name.replace('.md','.html')),
