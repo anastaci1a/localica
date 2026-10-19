@@ -44,12 +44,25 @@ internal object ArtworkWash {
             val high = min(4, low + 1)
             val t = depth - low
             val c1 = levels[low][i]; val c2 = levels[high][i]
-            val shade = 1f - 0.48f * smooth((y - 0.65f) / 1.25f)
-            fun channel(a: Int, b: Int) = ((a + (b - a) * t) * shade).roundToInt().coerceIn(0, 255)
+            fun channel(a: Int, b: Int) = (a + (b - a) * t).roundToInt().coerceIn(0, 255)
             Color.rgb(channel(Color.red(c1), Color.red(c2)), channel(Color.green(c1), Color.green(c2)),
                 channel(Color.blue(c1), Color.blue(c2)))
         }
         return Bitmap.createBitmap(output, WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
+    }
+
+    /** Preserve browsing collection treatment; player contrast is applied at display time. */
+    fun collectionShade(wash: Bitmap): Bitmap {
+        val pixels = IntArray(wash.width * wash.height)
+        wash.getPixels(pixels, 0, wash.width, 0, 0, wash.width, wash.height)
+        for (i in pixels.indices) {
+            val y = (i / wash.width + .5f) / WIDTH + TOP
+            val shade = 1f - .48f * smooth((y - .65f) / 1.25f)
+            val c = pixels[i]
+            pixels[i] = Color.rgb((Color.red(c) * shade).roundToInt(), (Color.green(c) * shade).roundToInt(),
+                (Color.blue(c) * shade).roundToInt())
+        }
+        return Bitmap.createBitmap(pixels, wash.width, wash.height, Bitmap.Config.ARGB_8888)
     }
 
     private fun smooth(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }

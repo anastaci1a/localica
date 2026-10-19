@@ -203,15 +203,19 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
 @Composable
 internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corners.panel,
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
-    tint: Color = Color.Transparent, darkening: () -> Float = { .5f }, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
-    if (Build.VERSION.SDK_INT < 31) BackdropLease(source)
+    tint: Color = Color.Transparent, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
+    if (Build.VERSION.SDK_INT < 33) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val dark = source?.dark == true
-    val base = if (dark) Color.Black else MaterialTheme.colorScheme.surface
+    val appearance = LocalGlassAppearance.current.normalized()
+    val tone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
+    val toneRenderer = remember { if (Build.VERSION.SDK_INT >= 33) GlassToneRenderer() else null }
+    val tonedFallback = rememberToneSnapshot(source?.fallback ?: source?.snapshot, tone)
+    val fallbackColor = tone.color(MaterialTheme.colorScheme.surface)
     val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
-    val material = rememberFrostedBackdrop(source?.fallback, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
+    val material = rememberFrostedBackdrop(source?.fallback to tone, enabled = LocalGlassAppearance.current.blur > 0f, dark = dark)
     val density = LocalDensity.current
     SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { 28.dp.toPx() } }
     Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)
@@ -220,18 +224,19 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
         if (source != null) {
-            if (Build.VERSION.SDK_INT >= 31) {
+            if (Build.VERSION.SDK_INT >= 33) {
                 val blur = with(LocalDensity.current) { 22.dp.toPx() }
                 FilteredBackdrop(Modifier.matchParentSize(), source, location::position, .5f, blur * 1.5f) { _, resolution, _ ->
-                    BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp)
+                    toneRenderer?.effect(tone, blur * resolution)
                 }
             } else Canvas(Modifier.matchParentSize()) {
                 val offset = source.origin - location.position()
-                translate(offset.x, offset.y) { source.fallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) } }
+                translate(offset.x, offset.y) { tonedFallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) } }
             }
         }
         Canvas(Modifier.matchParentSize()) {
-            drawFrostCoating(dark, base, tint, darkening(), 1f, compact)
+            if (source == null) drawRect(fallbackColor)
+            drawFrostCoating(dark, tone.color(tint), 1f, compact)
         }
         }
         CompositionLocalProvider(LocalContentColor provides foreground, LocalFrostedBackdrop provides material) { content() }
@@ -239,9 +244,8 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
 }
 
 /** Identical panel finish for static frost and the continuous end of a glass morph. */
-internal fun DrawScope.drawFrostCoating(dark: Boolean, base: Color, tint: Color, darkening: Float,
+internal fun DrawScope.drawFrostCoating(dark: Boolean, tint: Color,
     amount: Float, compact: Boolean = false) {
-    drawRect(base.copy(alpha = amount * if (dark) { if (compact) .22f else darkening } else { if (compact) .18f else .42f }))
     drawRect(tint.copy(alpha = tint.alpha * amount))
     drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .075f * amount), Color.Transparent),
         center = Offset(size.width * .12f, 0f), radius = maxOf(size.width, size.height) * .9f))
