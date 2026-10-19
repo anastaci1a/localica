@@ -5,6 +5,7 @@ import androidx.compose.animation.animateBounds
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -31,6 +32,9 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         itemIndex, trackNumber, showInformation, inheritedInformation) else null
     val titleParagraph = remember { BrowsePinchParagraph() }
     val informationParagraph = remember { BrowsePinchParagraph() }
+    // Read by the graphics layer: measuring an endpoint updates its
+    // radius in the same layout pass without recomposing or changing artwork identity.
+    val artCorner = remember { mutableFloatStateOf(0f) }
     val duration = if (reducedMotion || from != null) 0 else 350
     fun trailing(value: BrowseStyle) = value.presentation == Presentation.List && value.listSize.trailingInformation
     val titleSize by animateFloatAsState(style.browseTitleSize(geometry.columns).toFloat(), tween(duration), label = "Browse title size")
@@ -45,7 +49,11 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             if (numberAlpha > 0f) Text(requireNotNull(trackNumber), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (numberAlpha < 1f)
-                MediaArtwork(item.coverUris, Modifier.fillMaxSize().graphicsLayer { alpha = 1f - numberAlpha }, shape = artworkShape(item.ref.kind))
+                MediaArtwork(item.coverUris, Modifier.fillMaxSize().graphicsLayer {
+                    alpha = 1f - numberAlpha
+                    shape = artworkShape(item.ref.kind, RoundedCornerShape(artCorner.floatValue))
+                    clip = true
+                }, shape = artworkShape(item.ref.kind, androidx.compose.ui.graphics.RectangleShape))
         }
         Box(Modifier.morph().testTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, progress)
@@ -69,6 +77,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             titleParagraph.layouts = source.title to target.title
             informationParagraph.layouts = source.information to target.information
             fun mix(a: Int, b: Int) = (a + (b - a) * progress.coerceIn(0f, 1f)).toInt()
+            artCorner.floatValue = source.artCorner + (target.artCorner - source.artCorner) * progress.coerceIn(0f, 1f)
             val artSize = mix(source.art, target.art).coerceAtLeast(0)
             val art = children[0].measure(Constraints.fixed(artSize, artSize))
             val text = children[1].measure(Constraints.fixed(
@@ -88,6 +97,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         }
         val width = (constraints.maxWidth - geometry.contentInset.dp.roundToPx() * 2).coerceAtLeast(0)
         val metrics = BrowseItemMetrics(style, geometry.columns, width, density, numbered(style))
+        artCorner.floatValue = metrics.artCorner
         val information = children[2].measure(Constraints(maxWidth = metrics.informationLimit))
         val textWidth = metrics.titleWidth(information.width)
         val text = children[1].measure(Constraints.fixedWidth(textWidth))

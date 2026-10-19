@@ -12,7 +12,11 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
     val gallery = style.presentation != Presentation.List
     val trailing = !gallery && style.listSize.trailingInformation
     val inset = px(BrowseCellGeometry(columns).contentInset)
-    val verticalInset = if (trailing) 0 else px(8)
+    val verticalInset = when { gallery -> px(8); trailing -> 0; else -> px(2) }
+    private val listGeometry = BrowseCellGeometry(1)
+    private val viewport = width + 2 * (px(listGeometry.cardInset) + px(listGeometry.contentInset))
+    private val normalArt = BrowseCellGeometry(5).artworkWidth(viewport, density)
+    private val normalGap = maxOf(normalArt, px(48)) - normalArt + 2 * (px(listGeometry.cardInset) + px(2))
     val titleSize = style.browseTitleSize(columns)
     val titleLine = style.browseTitleLine(columns)
     val lines = if (gallery) 2 else 1
@@ -20,14 +24,20 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
         gallery -> width
         numbered -> px(28).coerceAtMost(width)
         style.listSize in setOf(ListSize.Small, ListSize.Smallest) -> 0
-        style.listSize == ListSize.Compact -> px(32).coerceAtMost(width)
+        style.listSize == ListSize.Compact -> {
+            // Preserve the 56 dp inner row and 64 dp pitch. Match Normal's gap/art
+            // ratio until the unchanged outer card padding becomes the limit.
+            val pitch = px(56) + 2 * px(listGeometry.cardInset)
+            (pitch * normalArt.toFloat() / (normalArt + normalGap).coerceAtLeast(1))
+                .roundToInt().coerceAtMost(px(56)).coerceAtMost(width)
+        }
         else -> {
-            val list = BrowseCellGeometry(1)
-            val viewport = width + 2 * (px(list.cardInset) + px(list.contentInset))
             BrowseCellGeometry(if (style.listSize == ListSize.Normal) 5 else 3)
                 .artworkWidth(viewport, density).coerceAtMost(width)
         }
     }
+    val artCorner = if (!gallery && !numbered && style.listSize == ListSize.Compact)
+        8 * density * art / normalArt.coerceAtLeast(1) else 8 * density
     val menu = if (gallery) 0 else px(48)
     val gap = if (gallery || art == 0) 0 else px(12)
     private val available = (if (gallery) width else width - art - gap - menu).coerceAtLeast(0)
