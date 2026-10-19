@@ -583,7 +583,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val current = route.collection?.kind == MediaKind.Queue && item.row != null && item.row.id == playingEntryId
                     val selectedCount = session.selectedCount(item, route.collection)
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
-                    Column(Modifier.then(if (editableOrder) Modifier.animateItem(placementSpec = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
+                    Column(Modifier.then(if (editableOrder && pinchMotion.source == null) Modifier.animateItem(placementSpec = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer {
                             val sweep = if (!artDetail && !route.search) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
                                 .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
@@ -610,14 +610,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             modifier = Modifier.fillMaxWidth().padding(cellGeometry.cardInset.dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder) 0 else 350) })
                             else Modifier.fillMaxWidth().padding(cellGeometry.cardInset.dp).graphicsLayer {
-                                val position = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.key }?.offset
-                                if (position != null) {
+                                val placed = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.key }
+                                if (placed != null) {
+                                    val position = placed.offset
                                     val old = pinchMotion.sourceBounds(item.key, itemIndex)
-                                    translationX = (old.left - position.x) * (1f - pinchMotion.progress.value)
+                                    val alignment = if (pinchMotion.rightToLeft) old.width - placed.size.width else 0f
+                                    translationX = (old.left - position.x - cellGeometry.gridInset.dp.roundToPx() + alignment) * (1f - pinchMotion.progress.value)
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
-                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }.currentSongHighlight(current, MaterialTheme.colorScheme.primary) { height ->
-                                pinchMotion.highlightHeight(item.key, itemIndex, height)
+                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }.currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->
+                                pinchMotion.highlightSize(item.key, itemIndex, size)
                             }.selectionLens(selectedCount > 0, partiallySelected)
                             .retainPinchItem(item.key, pinchMotion).testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
@@ -634,7 +636,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             }
                         )) {
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
-                                showInformation = popupDismiss == null, inheritedInformation = inheritedInformation,
+                                showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
                         }
 

@@ -18,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
@@ -67,6 +68,7 @@ internal fun rememberGlassAnchor(): GlassAnchor {
 
 /** Context menus return to the actual artwork shape, never an invented menu button. */
 @Composable internal fun Modifier.contextMenuAnchor(anchor: GlassAnchor, circular: Boolean = false): Modifier {
+    anchor.captureInk()
     val view = LocalView.current
     val source = LocalFrostedBackdrop.current
     val density = LocalDensity.current
@@ -221,6 +223,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     }
     DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false } }
     if (!present) return
+    // The full-scene recording can span pages with different ink. Its material
+    // metadata must not override an explicit trigger. Detached menus instead
+    // follow current ambient ink, rather than their anchor's remembered seed.
+    val panelInk = anchor.ink.takeIf { anchor.bounds != Rect.Zero && it != Color.Unspecified }
+        ?: LocalContentColor.current
+    val panelDark = darkOverride ?: if (panelInk != Color.Unspecified) panelInk.luminance() > .5f else source?.dark == true
     val parentPanels = LocalChildPanels.current
     val childPanels = remember { mutableIntStateOf(0) }
     DisposableEffect(parentPanels) {
@@ -248,7 +256,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             onDispose { }
         }
         @Suppress("DEPRECATION")
-        val windowDark = darkOverride ?: (source?.dark == true)
+        val windowDark = panelDark
         LaunchedEffect(window, windowDark) {
             window?.let {
                 // A dismissed panel may finish drawing, but no longer owns input.
@@ -324,7 +332,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val homeRadius = anchor.cornerRadius ?: with(density) { (startHeight / 2).toDp() }
                 val radius = if (page) 0.dp else if (detached) 28.dp else homeRadius * (1f - p) + 28.dp * p
                 SideEffect { anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
-                val dark = darkOverride ?: (source?.dark == true)
+                val dark = panelDark
                 val material = rememberFrostedBackdrop(source?.fallback to (p == 1f), dark = dark)
                 SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { radius.toPx() } }
                 // This recording is sampled only by a later nested modal. Its
@@ -395,6 +403,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
                                 LocalModalBackdrop provides completePanel,
                                 LocalChildPanels provides childPanels,
+                                LocalPopupScrollEdges provides !page,
                                 LocalSurfaceShadows provides null, LocalBottomShadows provides null,
                                 LocalGlassOrigin provides null,
                                 LocalGlassPanelReady provides (visible && (placement == GlassPlacement.Search || p >= .9f))) {

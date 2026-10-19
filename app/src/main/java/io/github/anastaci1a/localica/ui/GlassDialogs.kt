@@ -1,12 +1,14 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.unit.dp
 
 /** Retain closing dialogs even when their conditional caller has left composition. */
@@ -59,12 +61,17 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         return
     }
     val host = checkNotNull(LocalGlassDialogs.current) { "Glass dialogs require LocalicaTheme" }
-    val origin = LocalGlassOrigin.current?.takeUnless { placement == GlassPlacement.Page } ?: rememberGlassAnchor()
+    val trigger = LocalGlassOrigin.current?.takeUnless { placement == GlassPlacement.Page }
+    val origin = trigger ?: rememberGlassAnchor()
     val source = LocalModalBackdrop.current ?: LocalFrostedBackdrop.current ?: host.backdrop
     val locals = currentCompositionLocalContext
-    val dark = MaterialTheme.colorScheme.onSurface.luminance() > .5f
+    // Dialog declarations may live outside the artwork theme containing their trigger.
+    // An unanchored window instead follows its current ambient ink, not a remembered seed.
+    val ink = trigger?.ink?.takeIf { it.isSpecified } ?: LocalContentColor.current
+    val dark = ink.luminance() > .5f
     val entry = remember { GlassDialogEntry(origin, locals, onDismiss, dark, placement, content) }
     SideEffect {
+        if (trigger == null) origin.ink = ink
         if (origin.source == null) origin.source = source
         entry.locals = locals; entry.dismiss = onDismiss; entry.dark = dark; entry.content = content
         entry.fitContent = fitContent
