@@ -70,7 +70,7 @@ class PinchArtworkContinuityTest {
         try { cover.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
         finally { bitmap.recycle() }
         val uri = Uri.fromFile(cover).toString()
-        // Eliminate I/O timing and bucket changes as explanations for a missing frame.
+        // Eliminate I/O timing while still exercising resolution swaps at bucket boundaries.
         runBlocking { for (edge in listOf(128, 384, 768)) assertNotNull(ArtworkCache.read(context, uri, edge)) }
         val prefs = BrowsePreferences(context)
         val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "artwork-continuity"))
