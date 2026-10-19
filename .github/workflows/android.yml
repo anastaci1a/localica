@@ -48,7 +48,7 @@ jobs:
           chmod 600 "$KEYSTORE_PATH"
           echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
       - name: Build and check
-        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=2
       - name: Verify development signing certificate
         if: github.event_name != 'pull_request'
         run: |
