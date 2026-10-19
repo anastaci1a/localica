@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Size
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.browse.ListSize
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -67,4 +68,57 @@ class BrowsePinchMotionTest {
         assertNull(motion.source); assertNull(motion.target)
         assertNull(motion.capture); assertNull(motion.tracking); assertNull(motion.settling)
     }
+
+    @Test fun failedReadbackRetiresHeldGestureWithoutPublishingItsTarget() {
+        val motion = BrowsePinchMotion().apply {
+            source = BrowseStyle(listSize = ListSize.Compact)
+            target = BrowseStyle(listSize = ListSize.Normal)
+            held = true; capturing = true
+        }
+        motion.failCapture()
+        assertNull(motion.source); assertNull(motion.target)
+        assertFalse(motion.held); assertFalse(motion.capturing)
+        assertFalse(motion.captureProblem)
+    }
+
+    @Test fun failedReadbackDuringReleaseBlocksCommitUntilReleaseCleanup() {
+        val original = BrowseStyle(listSize = ListSize.Compact)
+        val motion = BrowsePinchMotion().apply {
+            source = original
+            target = BrowseStyle(listSize = ListSize.Normal)
+            held = false; capturing = true
+        }
+        motion.failCapture()
+        assertTrue("The waiting release must abort rather than commit its target", motion.captureProblem)
+        assertEquals("Release retains ownership until its finally block", original, motion.source)
+        motion.clearTransaction()
+        assertNull(motion.source); assertNull(motion.target)
+        assertFalse(motion.captureProblem)
+    }
+
+    @Test fun missingSnapshotTimesOutAndClosesTheCapture() = runBlocking {
+        var closed = false
+        val result = awaitPinchSnapshot<Unit>(20) {
+            try { kotlinx.coroutines.awaitCancellation() } finally { closed = true }
+        }
+        assertNull(result)
+        assertTrue(closed)
+    }
+
+    @Test fun cancellingSnapshotPropagatesAndClosesTheCapture() = runBlocking {
+        var closed = false
+        val entered = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val pending = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            awaitPinchSnapshot<Unit> {
+                try { entered.complete(Unit); kotlinx.coroutines.awaitCancellation() }
+                finally { closed = true }
+            }
+        }
+        entered.await()
+        pending.cancel()
+        pending.join()
+        assertTrue(pending.isCancelled)
+        assertTrue(closed)
+    }
+
 }

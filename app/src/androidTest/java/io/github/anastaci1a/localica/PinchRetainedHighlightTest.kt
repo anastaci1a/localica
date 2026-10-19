@@ -9,6 +9,10 @@ import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PixelMap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -16,6 +20,8 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -34,6 +40,35 @@ class PinchRetainedHighlightTest {
 
     @Test fun virtualizedCurrentRowRetainsItsHighlightThroughRecognitionAndReversal() = retained(false)
     @Test fun rightToLeftVirtualizedCurrentRowRetainsItsHighlightThroughRecognitionAndReversal() = retained(true)
+
+    @Test fun snapshotPreservesTranslucentInkAndPaddedRows() {
+        var captured: PixelMap? = null
+        compose.setContent {
+            val layer = rememberGraphicsLayer()
+            LaunchedEffect(layer) {
+                val density = Density(1f)
+                // An odd width exercises ImageReader row-stride padding on API 26.
+                layer.record(density, LayoutDirection.Ltr, IntSize(13, 7)) {
+                    repeat(7) { row ->
+                        drawRect(Color(1f, row / 8f, .25f, .13f),
+                            topLeft = Offset(0f, row.toFloat()), size = androidx.compose.ui.geometry.Size(13f, 1f))
+                    }
+                }
+                captured = layer.pinchSnapshot(density, LayoutDirection.Ltr).toPixelMap()
+            }
+        }
+        compose.waitUntil(5000) { captured != null }
+        val pixels = requireNotNull(captured)
+        assertEquals(13, pixels.width)
+        assertEquals(7, pixels.height)
+        for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+            val color = pixels[x, y]
+            assertEquals("Snapshot alpha at $x,$y", .13f, color.alpha, .01f)
+            assertEquals("Snapshot red must not be premultiplied twice at $x,$y", 1f, color.red, .04f)
+            assertEquals("Snapshot blue/channel order at $x,$y", .25f, color.blue, .04f)
+            assertEquals("Snapshot row order at $x,$y", y / 8f, color.green, .04f)
+        }
+    }
 
     private fun retained(rtl: Boolean) {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
@@ -83,19 +118,33 @@ class PinchRetainedHighlightTest {
             val firstArt = compose.onNodeWithTag("browse-art-retained:0", true).fetchSemanticsNode().boundsInRoot
             val x = viewport.width / 2f
             val y = firstArt.center.y - viewport.top
-            fun highlightPixels(): Int {
+            fun highlightPixels(label: String): Int {
                 compose.runOnIdle { stage++ }
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
                 val left = (sourceBounds.left - sceneBounds.left).toInt().coerceAtLeast(0)
                 val right = (sourceBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
                 val top = (sourceBounds.top - sceneBounds.top).toInt().coerceAtLeast(0)
                 val bottom = (sourceBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
-                return (top until bottom).sumOf { py -> (left until right).count { px ->
+                val count = (top until bottom).sumOf { py -> (left until right).count { px ->
                     val c = pixels[px, py]
                     c.red - c.green > .07f && c.blue - c.green > .07f
                 } }
+                android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")
+                val exported = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                val root = exported?.let { java.io.File(it) } ?: requireNotNull(
+                    InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
+                val directory = java.io.File(root, "pinch-retained-highlight").also { check(it.isDirectory || it.mkdirs()) }
+                val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
+                try {
+                    bitmap.setPixels(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() },
+                        0, pixels.width, 0, 0, pixels.width, pixels.height)
+                    java.io.File(directory, "rtl-$rtl-$label.png").outputStream().use {
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                } finally { bitmap.recycle() }
+                return count
             }
-            val originalInk = highlightPixels()
+            val originalInk = highlightPixels("source")
             assertTrue("The source current row must have a visible highlight", originalInk > 100)
             compose.mainClock.autoAdvance = false
             pointersDown = true
@@ -111,8 +160,9 @@ class PinchRetainedHighlightTest {
             }
             compose.mainClock.advanceTimeBy(300)
             current.assertDoesNotExist()
-            assertTrue("Virtualization must retain the current-song slab with the source card",
-                highlightPixels() >= originalInk * .7f)
+            val recognizedInk = highlightPixels("recognized")
+            assertTrue("Virtualization must retain the current-song slab: source=$originalInk recognized=$recognizedInk",
+                recognizedInk >= originalInk * .7f)
             // Hold a partial transition, then reverse without lifting either finger.
             list.performTouchInput {
                 moveTo(0, Offset(x - 48f, y)); moveTo(1, Offset(x + 48f, y))
@@ -123,16 +173,18 @@ class PinchRetainedHighlightTest {
             }
             compose.mainClock.advanceTimeBy(400)
             current.assertDoesNotExist()
-            assertTrue("Reversal must restore the retained highlight before the source layout returns",
-                highlightPixels() >= originalInk * .9f)
+            val reversedInk = highlightPixels("reversed")
+            assertTrue("Reversal must restore the retained highlight: source=$originalInk reversed=$reversedInk",
+                reversedInk >= originalInk * .9f)
             list.performTouchInput { cancel() }
             pointersDown = false
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
             current.assertIsDisplayed()
             assertEquals(persistedInitial, prefs.read(route))
-            assertTrue("Cancellation must hand the highlight back to the ordinary row",
-                highlightPixels() >= originalInk * .9f)
+            val returnedInk = highlightPixels("returned")
+            assertTrue("Cancellation must return the ordinary highlight: source=$originalInk returned=$returnedInk",
+                returnedInk >= originalInk * .9f)
         } finally {
             try { if (pointersDown) compose.onNodeWithTag("browser-list").performTouchInput { cancel() } }
             finally {
