@@ -2,6 +2,8 @@
 
 Read the relevant page in the [documentation map](../docs/README.md) before editing. Product contracts belong in `docs/`; this file owns working practices.
 
+Use the [collaboration contract](collaboration.md) for ownership, current-history integration and handoffs. Session-specific owner instructions take precedence.
+
 ## Passive documentation maintenance
 
 **Consolidate as part of every relevant change. Do not wait for a separate cleanup task.**
@@ -35,6 +37,7 @@ Use one type and usually one or two areas. Add workflow labels only while applic
 | Type | `bug` (broken behavior), `enhancement` (capability/improvement), `documentation`, `maintenance` (internal/tooling). |
 | Area | `area: library` (index/metadata/queries), `area: playback` (audio/queues/statistics), `area: interface`, `area: storage` (access/persistence/recovery), `area: build` (CI/releases). |
 | Workflow | `in progress`, `blocked` (state/link dependency), `question` (state missing decision). |
+| Owner | `owner:dot`, `owner:codex`; one implementation owner per assigned issue, independent of Git authorship. |
 | Accessibility | `accessibility`, plus type/area. |
 | Contributions | `help wanted`; `good first issue` for bounded, approachable work. |
 | Closure reason | `duplicate`, `invalid`, `wontfix`, with a short reason or link. |
