@@ -22,6 +22,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class ListDensityGeometryTest {
     @get:Rule val compose = createComposeRule()
@@ -67,7 +68,42 @@ class ListDensityGeometryTest {
                 val beforeClick = clicks
                 compose.onNodeWithContentDescription("Density actions").performClick()
                 compose.runOnIdle { assertEquals(beforeClick + 1, clicks) }
-                assertEquals(if (mode == ListSize.Compact) 32 * density else 0f, bounds("art").width, 1f)
+                val metrics = BrowseItemMetrics(BrowseStyle(listSize = mode), 1,
+                    (available * density).roundToInt() - 2 * (12 * density).roundToInt(), density, false)
+                assertEquals(metrics.art.toFloat(), bounds("art").width, 1f)
+                if (mode == ListSize.Compact) {
+                    assertTrue("Compact artwork grows without changing row pitch", bounds("art").width > 32 * density)
+                    if (scale == 1f) assertEquals(56 * density, card.height, 1f)
+                }
+            }
+        }
+    }
+
+    @Test fun consecutiveCoversUseHalfNormalGapAndFixedCompactPitch() {
+        var size by mutableStateOf(ListSize.Normal)
+        var density = 1f
+        val second = item.copy(row = row.copy(id = "density-second"))
+        compose.setContent { LocalicaTheme {
+            density = LocalDensity.current.density
+            LookaheadScope {
+                Column(Modifier.width(360.dp)) {
+                    for (entry in listOf(item, second)) Box(Modifier.fillMaxWidth().padding(4.dp)) {
+                        BrowseItemLayout(entry, BrowseStyle(listSize = size, extraInfo = ExtraInfo.Artist),
+                            BrowseCellGeometry(1), this@LookaheadScope, true, menu = {})
+                    }
+                }
+            }
+        } }
+        for (mode in listOf(ListSize.Normal, ListSize.Large, ListSize.Compact)) {
+            compose.runOnIdle { size = mode }
+            compose.waitForIdle()
+            val firstArt = bounds("art")
+            val secondArt = compose.onNodeWithTag("browse-art-${second.key}", true).fetchSemanticsNode().boundsInRoot
+            if (mode == ListSize.Compact) {
+                assertEquals("Compact row pitch is unchanged", 64 * density, secondArt.top - firstArt.top, 2f)
+                assertTrue(firstArt.width > 32 * density)
+            } else {
+                assertEquals("Normal/Large inter-cover gap is halved", 12 * density, secondArt.top - firstArt.bottom, 2f)
             }
         }
     }
