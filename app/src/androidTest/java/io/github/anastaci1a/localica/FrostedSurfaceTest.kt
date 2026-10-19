@@ -27,19 +27,51 @@ import java.io.File
 
 class FrostedSurfaceTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun darkFrostAddsNoBlueTintToANeutralBackdrop() {
+    @Test fun neutralFrostFollowsConfiguredContrastInBothInkPolarities() {
         lateinit var source: FrostedBackdrop
-        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
-            source = rememberFrostedBackdrop(Unit)
-            Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Gray) }
-            FrostedSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(200.dp).testTag("neutral-frost"), source = source) { }
-        } } }
-        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
-        val image = compose.onNodeWithTag("neutral-frost").captureToImage().toPixelMap()
-        val center = image[image.width / 2, image.height / 2]
-        assertEquals("Neutral red/green", center.red, center.green, .015f)
-        assertEquals("No added blue", center.red, center.blue, .015f)
-        assertTrue("Darken the backdrop without hiding it", center.red in .15f.. .45f)
+        var lightInk by mutableStateOf(true)
+        var appearance by mutableStateOf(io.github.anastaci1a.localica.navigation.GlassAppearance(contrast = 0f))
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides appearance) {
+                GlassPanelTheme(lightInk) { Box(Modifier.fillMaxSize()) {
+                    source = rememberFrostedBackdrop(Unit, dark = lightInk)
+                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Gray) }
+                    FrostedSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(200.dp)
+                        .testTag("neutral-frost"), source = source) { }
+                } }
+            }
+        } }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback != null }
+        fun center(): Color = compose.onNodeWithTag("neutral-frost").captureToImage().toPixelMap().let {
+            it[it.width / 2, it.height / 2]
+        }
+        fun assertNeutral(color: Color) {
+            assertEquals("Neutral red/green: $color", color.red, color.green, .015f)
+            assertEquals("No added blue: $color", color.red, color.blue, .015f)
+            assertTrue("Keep the backdrop visible: $color", color.red in .2f.. .85f)
+        }
+        for (dark in listOf(true, false)) {
+            compose.runOnIdle { lightInk = dark; appearance = appearance.copy(contrast = 0f) }
+            compose.waitForIdle()
+            val baseline = center()
+            assertNeutral(baseline)
+            assertEquals("Zero trim preserves gray apart from the neutral frost finish",
+                Color.Gray.red, baseline.red, .04f)
+            for ((trim, weight) in listOf(.25f to 2f, .5f to 2f, .5f to 1f)) {
+                compose.runOnIdle { appearance = appearance.copy(contrast = trim, contrastWeight = weight) }
+                // The unchanged translucent finish slightly attenuates the curve's delta.
+                // Bound that small effect instead of retaining the obsolete fixed-dark-tint range.
+                val expectedDelta = GlassTone(trim, weight, dark).channel(Color.Gray.red) - Color.Gray.red
+                val expected = baseline.red + expectedDelta
+                compose.waitUntil(10000) { kotlin.math.abs(center().red - expected) < .025f }
+                val actual = center()
+                assertNeutral(actual)
+                assertEquals("Configured curve: lightInk=$dark trim=$trim weight=$weight",
+                    expected, actual.red, .025f)
+                assertTrue("Contrast follows foreground polarity: $actual vs $baseline",
+                    if (dark) actual.red < baseline.red - .03f else actual.red > baseline.red + .03f)
+            }
+        }
     }
     @Test fun listBackdropCannotPaintOverSiblingHeaderControls() {
         compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
