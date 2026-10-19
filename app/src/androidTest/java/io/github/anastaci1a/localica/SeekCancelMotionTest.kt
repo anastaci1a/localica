@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -102,11 +103,14 @@ class SeekCancelMotionTest {
     @Test fun freshScrubImmediatelyTracksFingerAfterCancelReleaseOrPointerCancellation() {
         var finger by mutableFloatStateOf(20f)
         compose.setContent {
-            Box(Modifier.fillMaxSize().background(Color.Black)) {
-                PlayerSeekBar(finger, { finger = it }, 0f..100f, {}, true,
-                    Modifier.width(300.dp).height(40.dp).testTag("seek"),
-                    cancelBounds = Rect(0f, 100f, 1000f, 1000f),
-                    onCancel = { finger = 20f }, liveValue = 20f)
+            // Match the explicit dark background: the seek track inherits its caller's ink.
+            CompositionLocalProvider(LocalContentColor provides Color.White) {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    PlayerSeekBar(finger, { finger = it }, 0f..100f, {}, true,
+                        Modifier.width(300.dp).height(40.dp).testTag("seek"),
+                        cancelBounds = Rect(0f, 100f, 1000f, 1000f),
+                        onCancel = { finger = 20f }, liveValue = 20f)
+                }
             }
         }
         val seek = compose.onNodeWithTag("seek")
@@ -116,6 +120,7 @@ class SeekCancelMotionTest {
         }
         for (pointerCancel in listOf(false, true)) {
             seek.performTouchInput { down(center); moveTo(Offset(width * .8f, centerY)) }
+            assertTrue("Ordinary scrub supplies a visible foreground signal", brightAtSixtyPercent())
             seek.performTouchInput { moveTo(Offset(width * .8f, 200f)) }
             assertFalse("Settled hover displays live playback", brightAtSixtyPercent())
             seek.performTouchInput { if (pointerCancel) cancel() else up() }
