@@ -2,7 +2,7 @@
 
 [Guide home](README.md) · [Localica specification](specification.md) · [Motion lab](lab.html)
 
-Reviewed 13 October 2026. These are concise notes from Apple's transcripts and documentation, not a reproduction of the talks. Time links open the relevant discussion. The **Localica implications** are our interpretations; they are not claims about Apple's private renderer. Versioned WWDC sessions describe their year's system; living HIG pages may evolve.
+Compiled 13 October 2026; material, custom-view and spring sources rechecked 19 October 2026. These are concise notes, not reproductions of the talks. Time links open the relevant discussion. **Localica implications** are interpretations, not Apple's private renderer. Versioned sessions describe their year's system; living HIG pages may evolve. [Optical evidence and reproducible experiments](optics.md) distinguish measured observations from model assumptions.
 
 ## Interaction foundations
 

@@ -92,7 +92,7 @@ content/backdrop → padded sample → distortion/scattering → contrast suppor
 outline + elevation → one shadow field behind the surface group
 ```
 
-- Derive normals from a rounded height field, refract through entry/exit interfaces using Snell’s law, and offset sampling by the ray’s travel. Concentrate power in the curved shoulder with gentle central curvature; depth must change normals and displacement, not just zoom. Localica’s water-like index near 1.33 follows [PBRT’s optics derivation](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission) as an artistic starting point, not an Apple parameter.
+- The current Android model derives normals from a rounded height field and traces entry/exit refraction with a water-inspired index of 1.33. This is an engineering approximation, not a requirement to retain that model if evidence favors another. Preserve quiet-core registration, continuous shoulder bending and depth-dependent deformation; compare the [physical and boundary-focused hypotheses](optics.md) before changing defaults.
 - Keep rectangular crowns smooth, without directional wedges, medial-axis ridges, flat masks or inset highlights. Inspect changing curvature as well as normal continuity. Circles retain a radial profile; illumination follows the crown.
 - Define the silhouette with an inset rim: broader white highlights toward top-left/bottom-right, tapering into faint dark shading on the opposite corners. Follow deformation and joins without outlining a flat face. This interprets Apple’s [geometry-responsive highlights](https://developer.apple.com/videos/play/wwdc2025/219/?time=630); it does not reproduce its shader.
 
