@@ -7,12 +7,12 @@
   let rendererReason = '';
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const mix = (a, b, t) => a + (b - a) * t;
-  const defaults = {depth:1, edge:.4, core:.012, band:.55, blur:0, tint:0, trim:.04, weight:1.6, shine:.35, shadow:.1, damping:8, redistribution:.5};
-  const presetBase={...defaults,model:'0',profile:'1',shape:'pill',ink:'light'};
+  const defaults = {depth:1, edge:.4, core:.012, band:.55, rim:.35, thickness:.3, gap:.11, ior:1.33, blur:0, tint:0, trim:.04, weight:1.6, shine:.35, shadow:.1, damping:8, redistribution:.5};
+  const presetBase={...defaults,model:'0',profile:'2',shape:'pill',ink:'light'};
   delete presetBase.damping;delete presetBase.redistribution;
   const presets={
     media:{name:'Clear media control',values:{...presetBase},note:'Media remains visible with a defined rim and little scattering. Inspired by Apple’s playback controls; values are qualitative, not fitted.',source:'https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4'},
-    control:{name:'Transparent active control',values:{...presetBase,profile:'0',edge:.25,core:0,band:.4,trim:0,shine:.2,shadow:.05},note:'No blur, tint or brightness adjustment. Quiet core with localized shoulder bending, following the clear-slider observations. Does not reproduce a complete slider.',source:'https://developer.apple.com/videos/play/wwdc2025/284/?time=1092'},
+    control:{name:'Transparent active control',values:{...presetBase,profile:'2',edge:.25,core:0,band:.4,trim:0,shine:.2,shadow:.05},note:'No blur, tint or brightness adjustment. Quiet core with localized peripheral bending, following the clear-slider observations. Does not reproduce a complete slider.',source:'https://developer.apple.com/videos/play/wwdc2025/284/?time=1092'},
     regularLight:{name:'Regular · light foreground',values:{...presetBase,blur:3,trim:.28,tint:.02,band:.6},note:'Softens underlying detail and compresses highlights for light text. Apple’s Regular material motivates this treatment; the tone curve is Localica’s approximation.',source:'https://developer.apple.com/videos/play/wwdc2025/219/?time=360'},
     regularDark:{name:'Regular · dark foreground',values:{...presetBase,blur:3,trim:.28,tint:.02,band:.6,ink:'dark'},note:'Softens underlying detail and lifts shadows for dark text. Text polarity is fixed by this preset, not automatically selected from the background.',source:'https://developer.apple.com/videos/play/wwdc2025/219/?time=360'},
     menu:{name:'Expanded menu',values:{...presetBase,shape:'panel',depth:1.2,edge:.5,band:.7,blur:5,trim:.3,tint:.03,shadow:.16},note:'Stronger lensing, scattering and shadow for a larger surface. Apple documents this size-dependent change; these numeric settings remain an approximation.',source:'https://developer.apple.com/videos/play/wwdc2025/219/?time=360'},
@@ -42,7 +42,7 @@
   uniform sampler2D backdrop;
   uniform vec2 resolution, center, halfSize;
   uniform float viewWidth;
-  uniform float radius, depth, edge, core, band, blur, tint, trim, weight, shine, shadow, held;
+  uniform float radius, depth, edge, core, band, rim, thickness, gap, ior, referenceLength, blur, tint, trim, weight, shine, shadow, held;
   uniform int model, profile, coordinateMode, lightInk, sourceOnly;
   out vec4 frag;
   const vec2 extent=vec2(960.,400.);
@@ -51,34 +51,38 @@
     return length(max(q,0.))+min(max(q.x,q.y),0.)-radius;
   }
   float ramp(float t){t=clamp(t,0.,1.);return t*t*t*(t*(t*6.-15.)+10.);}
-  float width(){return max(2., min(radius,min(halfSize.x,halfSize.y)*band)*(1.-.25*held));}
+  float width(){return min(radius,min(halfSize.x,halfSize.y)*band)*(1.-.25*held);}
+  vec2 boundaryNormal(vec2 p){
+    vec2 q=abs(p)-halfSize+radius,a=max(q,0.);
+    return length(a)>0. ? normalize(a)*sign(p) :
+      (q.x>q.y ? vec2(sign(p.x),0) : vec2(0,sign(p.y)));
+  }
   float heightAt(vec2 p){
-    float s=ramp(-sd(p)/width());
+    float v=1.-clamp(-sd(p)/width(),0.,1.);
     vec2 q=p/halfSize;
-    return 14.*depth*s*(.92+.08*(1.-.45*dot(q,q)));
+    return referenceLength*thickness*depth*sqrt(1.-v*v*v)*(1.-.036*dot(q,q));
   }
   vec3 normalAt(vec2 p){
-    float e=.25;
-    vec2 grad=vec2(heightAt(p+vec2(e,0))-heightAt(p-vec2(e,0)),
-                   heightAt(p+vec2(0,e))-heightAt(p-vec2(0,e)))/(2.*e);
-    return normalize(vec3(-grad,1.));
+    float H=referenceLength*(model==1?thickness:.3)*depth;
+    if(H==0.)return vec3(0,0,1);
+    float v=1.-clamp(-sd(p)/width(),0.,1.),f2=1.-v*v*v;
+    vec2 q=p/halfSize,gradC=-.072*p/(halfSize*halfSize);
+    // Multiply (-gradient(height),1) by sqrt(f2): finite vertical rim.
+    return normalize(vec3(H*(1.5*v*v/width()*(1.-.036*dot(q,q))*boundaryNormal(p)-f2*gradC),sqrt(f2)));
   }
   vec2 displacement(vec2 p,vec3 n){
     if(depth==0.)return vec2(0.);
     if(model==1){
-      vec3 ray=refract(vec3(0,0,-1),n,1./1.33);
-      vec3 outRay=refract(ray,vec3(0,0,1),1.33);
-      return ray.xy*heightAt(p)/max(.08,-ray.z)+outRay.xy*(5.*depth)/max(.08,-outRay.z);
+      if(thickness==0.||ior==1.)return vec2(0.);
+      // 1 <= ior <= 1.4 < sqrt(2): no TIR in this orthographic comparator.
+      vec3 ray=refract(vec3(0,0,-1),n,1./ior);
+      vec3 outRay=refract(ray,vec3(0,0,1),ior);
+      return ray.xy*heightAt(p)/(-ray.z)+outRay.xy*(gap*referenceLength)/(-outRay.z);
     }
-    float d=max(0.,-sd(p)),b=width(),u=clamp(d/b,0.,1.);
-    vec2 q=abs(p)-halfSize+radius;
-    // Exact boundary normal is used only in a band before the SDF medial axis.
-    vec2 outside=max(q,0.);
-    vec2 normal=length(outside)>.0001 ? normalize(outside)*sign(p) :
-      (q.x>q.y ? vec2(sign(p.x),0) : vec2(0,sign(p.y)));
-    // Alternative continuations at the unmeasured outer rim, not fitted Apple geometry.
-    float shoulder=profile==0 ? 16.*u*u*(1.-u)*(1.-u) : pow(1.-u,3.)*(1.+3.*u);
-    return -normal*(b*edge*depth*shoulder)-p*(core*depth*ramp(d/b));
+    float d=max(0.,-sd(p)),b=width(),u=clamp(d/b,0.,1.),v=1.-u;
+    float R=v*v*v*(1.+3.*u),H=(256./27.)*u*v*v*v;
+    float shoulder=profile==0 ? 16.*u*u*v*v : profile==1 ? R : mix(H,R,rim);
+    return -boundaryNormal(p)*(b*edge*depth*shoulder)-p*(core*depth*ramp(u));
   }
   vec3 source(vec2 p){
     if(coordinateMode==1)return vec3(clamp(p/extent,0.,1.),.2);
@@ -147,7 +151,7 @@
       // One oversized triangle: no interpolated per-triangle optical fields/seams.
       gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
       const a=gl.getAttribLocation(program,'position');gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
-      for(const name of ['backdrop','resolution','viewWidth','center','halfSize','radius','depth','edge','core','band','blur','tint','trim','weight','shine','shadow','held','model','profile','coordinateMode','lightInk','sourceOnly'])uniforms[name]=gl.getUniformLocation(program,name);
+      for(const name of ['backdrop','resolution','viewWidth','center','halfSize','radius','depth','edge','core','band','rim','thickness','gap','ior','referenceLength','blur','tint','trim','weight','shine','shadow','held','model','profile','coordinateMode','lightInk','sourceOnly'])uniforms[name]=gl.getUniformLocation(program,name);
       texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
@@ -196,7 +200,7 @@
     const [lo,hi]=bounds(width);
     const cx=wall<0?lo:wall>0?hi:clamp(state.x,lo,hi);
     const corner=mix($('shape').value==='panel'?30:h/2,32,state.m)*Math.min(sx,sy);
-    return {x:cx,y:200,w:width,h:height,r:Math.min(corner,width/2,height/2),z:sz,volume:sx*sy*sz,wallDepthLog:transferred};
+    return {x:cx,y:200,w:width,h:height,r:Math.min(corner,width/2,height/2),z:sz,volume:sx*sy*sz,wallDepthLog:transferred,referenceLength:Math.min(w,h)/2};
   }
   function drawFallback(g,v){
     fallback.hidden=false;
@@ -217,8 +221,8 @@
       gl.uniform1f(uniforms.viewWidth,viewWidth);gl.uniform1i(uniforms.backdrop,0);gl.uniform2f(uniforms.resolution,canvas.width,canvas.height);
       gl.uniform2f(uniforms.center,g.x,g.y);gl.uniform2f(uniforms.halfSize,g.w/2,g.h/2);
       gl.uniform1f(uniforms.radius,g.r);
-      for(const k of ['edge','core','band','blur','tint','trim','weight','shine','shadow'])gl.uniform1f(uniforms[k],v[k]);
-      gl.uniform1f(uniforms.depth,v.depth*g.z);gl.uniform1f(uniforms.held,clamp(-state.z/.3,0,1));
+      for(const k of ['edge','core','band','rim','thickness','gap','ior','blur','tint','trim','weight','shine','shadow'])gl.uniform1f(uniforms[k],v[k]);
+      gl.uniform1f(uniforms.referenceLength,g.referenceLength);gl.uniform1f(uniforms.depth,v.depth*g.z);gl.uniform1f(uniforms.held,clamp(-state.z/.3,0,1));
       gl.uniform1i(uniforms.model,+$('model').value);gl.uniform1i(uniforms.profile,+$('profile').value);gl.uniform1i(uniforms.coordinateMode,$('background').value==='coordinates'?1:0);
       gl.uniform1i(uniforms.lightInk,$('ink').value==='light'?1:0);gl.uniform1i(uniforms.sourceOnly,$('source').checked?1:0);
       gl.drawArrays(gl.TRIANGLES,0,3);
@@ -237,14 +241,14 @@
     if($('reduce').checked){state.x=state.target;state.v=state.mv=state.sv=state.zv=state.wallVelocity=0;state.m=expanded?1:0;state.strain=state.z=state.wallStrain=0;return;}
     while(dt>0){
       const d=Math.min(dt,1/240);dt-=d;
-      state.mv+=(145*((expanded?1:0)-state.m)-24.1*state.mv)*d;state.m=clamp(state.m+state.mv*d,0,1);
-      if(!pointer){state.v+=(260*(state.target-state.x)-32.3*state.v)*d;state.x+=state.v*d;}
+      [state.m,state.mv]=GlassEquations.spring(state.m,state.mv,expanded?1:0,145,24.1,1,d);state.m=clamp(state.m,0,1);
+      if(!pointer){[state.x,state.v]=GlassEquations.spring(state.x,state.v,state.target,260,32.3,1,d);}
       const braking=clamp((Math.abs(state.v)-Math.abs(previousV))*.0004,-.12,.12);previousV=state.v;
       state.sv+=braking;
       const damping=held?2*Math.sqrt(220):+$('damping').value;
-      state.sv+=(220*(pressure-state.strain)-damping*state.sv)*d;state.strain+=state.sv*d;
-      state.wallVelocity+=(220*(pressure-state.wallStrain)-damping*state.wallVelocity)*d;state.wallStrain+=state.wallVelocity*d;
-      state.zv+=(220*((held?-.3:0)-state.z)-damping*state.zv)*d;state.z+=state.zv*d;
+      [state.strain,state.sv]=GlassEquations.spring(state.strain,state.sv,pressure,220,damping,1,d);
+      [state.wallStrain,state.wallVelocity]=GlassEquations.spring(state.wallStrain,state.wallVelocity,pressure,220,damping,1,d);
+      [state.z,state.zv]=GlassEquations.spring(state.z,state.zv,held?-.3:0,220,damping,1,d);
     }
   }
   function unsettled(){return !$('reduce').checked&&(Math.abs(state.x-state.target)>.02||Math.abs(state.v)>.03||Math.abs(state.m-(expanded?1:0))>.0001||Math.abs(state.mv)>.001||Math.abs(state.strain-pressure)>.0001||Math.abs(state.sv)>.001||Math.abs(state.z-((pointer||keyHeld)?-.3:0))>.0001||Math.abs(state.zv)>.001||Math.abs(state.wallStrain-pressure)>.0001||Math.abs(state.wallVelocity)>.001);}
@@ -284,7 +288,13 @@
     for(const k of Object.keys(defaults))$(k+'Value').value=Number($(k).value).toFixed(k==='damping'?1:k==='core'?3:2);
     $('redistribution').disabled=$('wallModel').value!=='directional';
     const cap=$('model').value==='1';for(const k of ['edge','core','profile'])$(k).disabled=cap;
-    $('modelNote').textContent=cap?'Cap uses height gradients and Snell refraction (index 1.33). Edge strength, center magnification and edge profile apply only to the boundary model.':'Rim-concentrated keeps bending at the outline; shoulder peak returns to zero there. Neither continuation is calibrated at Apple’s outermost rim.';
+    $('rim').disabled=cap||$('profile').value!=='2';for(const k of ['thickness','gap','ior'])$(k).disabled=!cap;
+    $('modelNote').textContent=cap?'Analytic cap normal with Snell entry and planar exit. The rim normal is vertical; a nonzero backdrop gap produces outline displacement. Geometric hypothesis, not an Apple surface.':'Finite rim + compression preserves outline displacement and adds a rising inner band. The older profiles remain comparisons; their magnification and compression differ.';
+    const v=values(),kind=+$('profile').value,rho=v.rim;
+    const D=kind===0?16*Math.sqrt(3)/9:kind===1?16/9:rho*16/9+(1-rho)*64/27;
+    const T=kind===0?64/27:kind===1?256/243:rho*256/243+(1-rho)*1024/729;
+    const certified=v.depth*Math.exp(.35+($('wallModel').value==='directional'?.18*v.redistribution:0))*(v.core+v.edge*Math.max(D,T))<1;
+    $('opticalWarning').textContent=cap?'Cap settings are not certified against image folds. Zero height is explicitly treated as no lens.':certified?'Within the sufficient local nonfolding bound, including the lab’s maximum depth rebound.':'Outside the sufficient nonfolding bound. Image folds are possible; this does not prove a fold at every point.';
     const match=Object.entries(presets).find(([,p])=>Object.entries(p.values).every(([k,v])=>String($(k).value)===String(v)));
     $('preset').value=match?match[0]:'custom';
     $('presetNote').textContent=match?match[1].note:'Custom parameter combination. The context presets are starting approximations; numeric changes are not Apple calibration.';
@@ -304,7 +314,7 @@
   $('reset').onclick=()=>{
     release(true);expanded=false;wall=0;state={x:480,v:0,target:480,m:0,mv:0,strain:0,sv:0,z:0,zv:0,wallStrain:0,wallVelocity:0};previousV=0;
     for(const[k,v]of Object.entries(defaults))$(k).value=v;
-    $('wallModel').value='planar';$('model').value='0';$('profile').value='1';$('shape').value='pill';$('background').value='lines';$('ink').value='light';$('reduce').checked=media.matches;$('hideLabel').checked=$('source').checked=false;
+    $('wallModel').value='planar';$('model').value='0';$('profile').value='2';$('shape').value='pill';$('background').value='lines';$('ink').value='light';$('reduce').checked=media.matches;$('hideLabel').checked=$('source').checked=false;
     $('menu').textContent='Expand surface';$('menu').setAttribute('aria-pressed','false');selectTab(tabs[0]);syncControls();background();
   };
   $('save').onclick=()=>{

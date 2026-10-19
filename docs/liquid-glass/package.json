@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "node site.cjs",
-    "test": "node experiments/check-links.cjs && node experiments/browser.cjs && node experiments/software.cjs && node experiments/presets.cjs && node experiments/pressure.cjs"
+    "test": "node experiments/equations-test.cjs && node experiments/check-links.cjs && node experiments/browser.cjs && node experiments/software.cjs && node experiments/presets.cjs && node experiments/pressure.cjs && node experiments/oracle.cjs"
   },
   "devDependencies": {
     "marked": "17.0.4",

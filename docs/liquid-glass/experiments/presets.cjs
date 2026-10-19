@@ -34,6 +34,8 @@ const{chromium}=require('playwright'),assert=require('node:assert/strict'),fs=re
     await configure({core:.15});const core=await page.evaluate(()=>glassLab.pixel(510,200));
     await configure({core:0});const registered=await page.evaluate(()=>glassLab.pixel(510,200));assert(core[0]<registered[0]);
     results.push({renderer:software?'software':'webgl',nearTop:{identity:identity[1],previous:old[1],rim:rim[1]},centerUnchanged:true});
+    await configure({model:'0',profile:'2',shape:'pill',background:'crossed',shine:.35,thickness:.3,gap:.11,ior:1.33});
+    const before=await pixels();await configure({thickness:0,gap:1,ior:1});assert.deepEqual(await pixels(),before,'Disabled cap controls cannot alter the boundary model lighting');
     // Native tab semantics; hidden panels stay out of keyboard traversal.
     await page.click('#tab-lens');assert.equal(await page.locator('#config-scene').isVisible(),false);
     await page.locator('#tab-lens').focus();await page.keyboard.press('ArrowRight');assert.equal(await page.locator('#tab-material').getAttribute('aria-selected'),'true');

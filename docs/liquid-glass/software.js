@@ -43,9 +43,9 @@ window.createSoftwareLens = function(canvas) {
     const identity=!v.depth&&!v.blur&&!v.tint&&!v.trim&&!v.shine&&!v.shadow;
     if(!sourceOnly&&!identity){
       const hw=g.w/2,hh=g.h/2,r=g.r,aa=Math.max(dx,dy),depth=v.depth*g.z;
-      const band=Math.max(2,Math.min(r,Math.min(hw,hh)*v.band)*(1-.25*held));
+      const band=Math.min(r,Math.min(hw,hh)*v.band)*(1-.25*held);
       function sd(x,y){x=Math.abs(x)-hw+r;y=Math.abs(y)-hh+r;return Math.hypot(Math.max(x,0),Math.max(y,0))+Math.min(Math.max(x,y),0)-r;}
-      function heightAt(x,y){return 14*depth*ramp(-sd(x,y)/band)*(.92+.08*(1-.45*(x*x/(hw*hw)+y*y/(hh*hh))));}
+      const capHeight=g.referenceLength*(model===1?v.thickness:.3)*depth,capGap=g.referenceLength*v.gap;
       // The static exterior is copied; expensive optical work is limited to the lens.
       // Shadow tails below half an 8-bit level need no per-frame evaluation.
       const pad=45,x0=clamp(Math.floor((g.x-hw-pad-left)/dx),0,width),x1=clamp(Math.ceil((g.x+hw+pad-left)/dx),0,width);
@@ -55,27 +55,30 @@ window.createSoftwareLens = function(canvas) {
         const t=clamp((d+aa*.5)/aa,0,1),cover=1-t*t*(3-2*t);
         const sh=Math.exp(-Math.pow(Math.max(sd(lx,ly-7),0)/13,2))*v.shadow*(1-cover),i=(y*width+x)*4;
         if(cover<=0){for(let k=0;k<3;k++)image.data[i+k]=base[i+k]*(1-sh);continue;}
-        let nx=0,ny=0,nz=1;
-        if(depth&&(model===1||v.shine)){
-          nx=-(heightAt(lx+.25,ly)-heightAt(lx-.25,ly))/.5;
-          ny=-(heightAt(lx,ly+.25)-heightAt(lx,ly-.25))/.5;
-          const n=Math.hypot(nx,ny,1);nx/=n;ny/=n;nz=1/n;
+        const u=clamp(-d/band,0,1),vv=1-u,qx=Math.abs(lx)-hw+r,qy=Math.abs(ly)-hh+r;
+        const ax=Math.max(qx,0),ay=Math.max(qy,0),len=Math.hypot(ax,ay);
+        const ex=len>0?ax/len*Math.sign(lx):qx>qy?Math.sign(lx):0;
+        const ey=len>0?ay/len*Math.sign(ly):qx>qy?0:Math.sign(ly);
+        let nx=0,ny=0,nz=1,z=0;
+        if(capHeight&&(model===1||v.shine)){
+          const f2=1-vv*vv*vv,F=Math.sqrt(f2),C=1-.036*(lx*lx/(hw*hw)+ly*ly/(hh*hh));
+          nx=capHeight*(1.5*vv*vv/band*C*ex+f2*.072*lx/(hw*hw));
+          ny=capHeight*(1.5*vv*vv/band*C*ey+f2*.072*ly/(hh*hh));
+          const n=Math.hypot(nx,ny,F);nx/=n;ny/=n;nz=F/n;z=capHeight*F*C;
         }
         let ox=0,oy=0;
         if(depth){
           if(model===1){
-            const eta=1/1.33,k=1-eta*eta*(1-nz*nz),c=-eta*nz+Math.sqrt(Math.max(0,k));
-            const rx=-c*nx,ry=-c*ny,rz=-eta-c*nz,exitK=1-1.33*1.33*(1-rz*rz);
-            const exitZ=-Math.sqrt(Math.max(0,exitK)),travel=heightAt(lx,ly)/Math.max(.08,-rz);
-            const gap=exitK<0?0:5*depth/Math.max(.08,-exitZ);
-            ox=rx*travel+1.33*rx*gap;oy=ry*travel+1.33*ry*gap;
+            if(capHeight&&v.ior!==1){
+              const eta=1/v.ior,k=1-eta*eta*(1-nz*nz),c=-eta*nz+Math.sqrt(k);
+              const rx=-c*nx,ry=-c*ny,rz=-eta-c*nz,exitK=1-v.ior*v.ior*(1-rz*rz);
+              const exitZ=-Math.sqrt(exitK),travel=z/-rz,travelGap=capGap/-exitZ;
+              ox=rx*travel+v.ior*rx*travelGap;oy=ry*travel+v.ior*ry*travelGap;
+            }
           }else{
-            const u=clamp(-d/band,0,1),qx=Math.abs(lx)-hw+r,qy=Math.abs(ly)-hh+r;
-            const ax=Math.max(qx,0),ay=Math.max(qy,0),len=Math.hypot(ax,ay);
-            const ex=len>.0001?ax/len*Math.sign(lx):qx>qy?Math.sign(lx):0;
-            const ey=len>.0001?ay/len*Math.sign(ly):qx>qy?0:Math.sign(ly);
-            const shape=profile===0?16*u*u*(1-u)*(1-u):Math.pow(1-u,3)*(1+3*u);
-            const shoulder=band*v.edge*depth*shape,core=v.core*depth*ramp(-d/band);
+            const R=vv*vv*vv*(1+3*u),H=256/27*u*vv*vv*vv;
+            const shape=profile===0?16*u*u*vv*vv:profile===1?R:v.rim*R+(1-v.rim)*H;
+            const shoulder=band*v.edge*depth*shape,core=v.core*depth*ramp(u);
             ox=-ex*shoulder-lx*core;oy=-ey*shoulder-ly*core;
           }
         }

@@ -2,7 +2,7 @@
 
 [Guide home](README.md) · [Localica specification](specification.md) · [Motion lab](lab.html)
 
-Compiled 13 October 2026; material, custom-view and spring sources rechecked 19 October 2026. These are concise notes, not reproductions of the talks. Time links open the relevant discussion. **Localica implications** are interpretations, not Apple's private renderer. Versioned sessions describe their year's system; living HIG pages may evolve. [Optical evidence and reproducible experiments](optics.md) distinguish measured observations from model assumptions.
+Compiled 13 October 2026; material, custom-view and spring sources rechecked 19 October 2026. These are concise notes, not reproductions of the talks. Time links open the relevant discussion. **Localica implications** are interpretations, not Apple's private renderer. Versioned sessions describe their year's system; living HIG pages may evolve. [Optical evidence](optics.md) distinguishes observations from assumptions; the [portable equations](model.md) separately state mathematical guarantees. Generic Snell optics follow [PBRT](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission); [W3C color conversions](https://www.w3.org/TR/css-color-4/#color-conversion-code) define encoded versus linear-light channels. Neither source describes Apple's shader.
 
 ## Interaction foundations
 

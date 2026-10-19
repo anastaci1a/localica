@@ -4,7 +4,7 @@
 
 **Status: implementation requirements, with experimental optical models.** The [interface contract](../interface.md) owns branch behavior; releases and PR evidence establish what shipped and what was tested. These checks are not a claim that every device meets them. Selection entrance motion remains deferred in [#107](https://github.com/anastaci1a/localica/issues/107).
 
-This is our translation of the [Apple evidence](sources.md) into testable Android behavior. The [context audit](optics.md#context-audit--19-october-2026) distinguishes evidence-backed properties from uncalibrated optics. The equations below are Localica engineering models, not Apple's private formulas. They need device profiling and perceptual tuning.
+This is our translation of the [Apple evidence](sources.md) into testable Android behavior. The [context audit](optics.md#context-audit--19-october-2026) distinguishes evidence-backed properties from uncalibrated optics. The equations below are Localica engineering models, not Apple's private formulas. The [portable optical/motion specification](model.md) owns their domains, derivations and mathematical verification; device profiling and Apple calibration remain separate gates.
 
 ## Surface roles
 
@@ -67,7 +67,7 @@ scaleAcross     = exp(-strain - depthStrain / 2)
 scaleDepth      = exp(depthStrain)
 ```
 
-The three scales multiply to one: **approximate volume is preserved** while the footprint and thickness change together. Held contact approaches a shallower, wider cap monotonically, with critical damping; externally driven travel impulses remain responsive under that damping rather than being projected to zero: central refraction weakens and the remaining curvature concentrates at the rim. Only release permits the user's low-damping rebound; depth, footprint and refraction oscillate together. This is not a fluid simulation or a reconstruction of Apple’s private renderer. Shape damping is independent of constrained travel; [Glass settings](../interface.md#appearance-and-settings) own its defaults/range and resting optical depth. Motion clocks sleep after settling.
+The three scales multiply to one: an **affine volume invariant**, used as a proxy when rebuilding rounded geometry. It does not prove conservation of the integrated cap volume. Held contact should approach a shallower, wider cap without a new oscillation; critical damping suppresses oscillatory modes but does not ensure monotonicity with arbitrary inherited velocity (see the [contact caveat](model.md#pressure-and-dynamics)); externally driven travel impulses remain responsive under that damping rather than being projected to zero: central refraction weakens and the remaining curvature concentrates at the rim. Only release permits the user's low-damping rebound; depth, footprint and refraction oscillate together. This is not a fluid simulation or a reconstruction of Apple’s private renderer. Shape damping is independent of constrained travel; [Glass settings](../interface.md#appearance-and-settings) own its defaults/range and resting optical depth. Motion clocks sleep after settling.
 
 Map strain to the motion axis. A horizontal stop compresses width and expands height; a vertical one does the reverse. Keep the contacting edge pinned (not the center) while deforming inward so the apparent contact does not slide through the wall. Additional pull produces diminishing compression. Release removes pressure and lets the same body settle. Reversal during settling changes its response immediately. A sampled velocity sign flip adds bounded directional braking to the motion and depth impulse inputs; the correction vanishes as the crossing speed approaches zero, while ordinary magnitude-based acceleration and braking stay unchanged.
 
@@ -92,7 +92,7 @@ content/backdrop → padded sample → distortion/scattering → rim + illuminat
 outline + elevation → one shadow field behind the surface group
 ```
 
-- The current Android model derives normals from a rounded height field and traces entry/exit refraction with a water-inspired index of 1.33. This is an engineering approximation, not a requirement to retain that model if evidence favors another. Preserve quiet-core registration, continuous shoulder bending and depth-dependent deformation; compare the [physical and boundary-focused hypotheses](optics.md) before changing defaults.
+- A rounded height field with entry/exit refraction is one engineering approximation; an index of 1.33 is water-inspired, not an Apple finding. The lab's corrected equations are candidates for a later native port, not evidence that Android already implements them. Preserve quiet-core registration, continuous shoulder bending and depth-dependent deformation; avoid an unintended identity strip inside the outline, and keep optical mapping independent of coverage; compare the [physical and boundary-focused hypotheses](optics.md) before changing defaults.
 - Keep rectangular crowns smooth, without directional wedges, medial-axis ridges, flat masks or inset highlights. Inspect changing curvature as well as normal continuity. Circles retain a radial profile; illumination follows the crown.
 - Define the silhouette with an inset rim: broader white highlights toward top-left/bottom-right, tapering into faint dark shading on the opposite corners. Follow deformation and joins without outlining a flat face. This interprets Apple’s [geometry-responsive highlights](https://developer.apple.com/videos/play/wwdc2025/219/?time=630); it does not reproduce its shader.
 
@@ -100,7 +100,7 @@ Neighboring glass shares a coherent source without recursively sampling its own 
 
 Contrast is a page-level decision, inherited by its controls and menus. Keep foreground pixels sharp and unfiltered; test them over moving black/white text, checkerboards and bright artwork.
 
-- For white icons, map normalized background channels through `f(x) = x − t·x^p`; for dark icons use `1 − f(1 − x)`. Trim `t ∈ [0, 0.5]` bounds the problematic end; weighting `p ∈ [1, 2]` preserves the safe end more strongly. These bounds guarantee monotonic ordering, including at maximum settings.
+- For white icons, map normalized background channels through `f(x) = x − t·x^p`; for dark icons use `1 − f(1 − x)`. Trim `t ∈ [0, 0.5]` bounds the problematic end; weighting `p ∈ [1, 2]` preserves the safe end more strongly. These bounds guarantee channel ordering, including at maximum settings; the [color-space contract](model.md#sampling-coverage-and-color) distinguishes encoded channels, luminance and contrast guarantees.
 - Map glass after white tint and keep optical illumination within the mapped brightness endpoints; never add a uniform white/black overlay or filter the icons. Page polarity stays stable while content scrolls beneath individual buttons. Media selection lenses remain clear.
 - This is Localica’s user-directed adaptation model, not Apple’s private algorithm. Customization does not replace accessible semantics or guarantee legibility for every possible setting; [Apple’s material guidance](sources.md#hig--materials-and-color) still informs the defaults and review.
 

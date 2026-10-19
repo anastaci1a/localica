@@ -1,6 +1,6 @@
 # What can we establish about the lens?
 
-[Guide](README.md) · [Apple sources](sources.md) · [Interactive lab](lab.html) · [Implementation requirements](specification.md#geometry-and-readability)
+[Guide](README.md) · [Apple sources](sources.md) · [Interactive lab](lab.html) · [Portable equations](model.md) · [Implementation requirements](specification.md#geometry-and-readability)
 
 ## Evidence, not a recovered shader
 
@@ -70,48 +70,37 @@ Apple explicitly describes stronger refraction, scattering and shadows when cont
 4. Freeze parameters and evaluate independent backgrounds, both axes, rounded ends and long edges. A new frame of the same background is a repeat, not a new scene.
 5. Only then promote a candidate to a fidelity claim. Until then, presets are context-based approximations, and extreme optical settings are diagnostics rather than evidence.
 
-## Two deliberately different lab models
+## Portable models and audit findings
 
-Both use one analytic rounded-rectangle silhouette (circle/capsule are special cases), one background texture, and an **inverse** mapping: each output pixel looks up its displaced source coordinate. Labels remain outside that map. No triangle-specific optical interpolation or DOM screenshot illusion is involved.
+The [portable equation specification](model.md) owns coordinates, formulas, supported domains, Jacobians, sampling and motion. [model.js](model.js) is its framework-independent numerical reference; it is not the native renderer.
 
-| Model | Construction | Purpose / limitation |
+| Model | Construction | Current purpose / limitation |
 | --- | --- | --- |
-| Boundary field (default) | Independent core lookup, edge amplitude and band width; two alternative rim profiles, inward along the boundary normal | Tests quiet-core registration against stronger edge bending; outer-rim continuation remains **uncalibrated** |
-| Physical cap comparison | Smooth shoulder height plus a weak curved crown; normal from height gradient; Snell entry, planar exit and backdrop gap | Makes thickness/normal/ray relationships inspectable; assumes a plano-convex body and orthographic viewing, neither established for iOS |
+| Boundary field (default) | Independent core lookup, edge amplitude, band width and finite-rim mixing | Tunable image warp; spatial derivatives distinguish compression from magnification. Not an identified optical solid. |
+| Refracting cap | Analytic rounded height and normal, Snell entry, planar exit and independent backdrop gap | Geometric comparator with restricted index/pose. Synthetic lighting is not energy-conserving ray transport. |
 
-For the boundary model, let inward distance be `d`, band width `b`, and `u=clamp(d/b,0,1)`. Edge displacement is `−normal × b × edgeStrength × opticalPower × profile(u)`. Two profiles expose the unresolved rim assumption:
+### Mathematical corrections
 
-- **Shoulder peak:** `16u²(1−u)²`; zero value/slope at both ends. Retains the previous lab as a baseline, but its zero displacement at the silhouette is not an Apple finding.
-- **Rim-concentrated:** `(1−u)³(1+3u)`; nonzero displacement at the silhouette, zero slope there, and a smooth zero join to the core. This deliberately permits source-coordinate discontinuity across the physical silhouette; it must not introduce an internal join/seam.
+- **Inactive outer band:** the old shoulder field explicitly tends to zero at the outline, quadratically. On the 196×92 reference capsule its edge-only displacement is 0.058 logical px one unit inside, compared with 5.695 for the new finite-rim/compression profile; these are model outputs, not Apple measurements. The old cap height also forced a flat normal at its rim. The new cap has an analytic vertical limiting rim normal; no finite-difference normal stencil is needed.
+- **Compression versus displacement:** a nonzero rim offset alone does not establish compression. The reference differentiates the inverse map and supplies conservative local nonfolding bounds. The lab warns about uncertified parameter combinations instead of presenting all extreme settings as physically valid.
+- **Scale and ray validity:** the optical band has no fixed-pixel floor; cap height and backdrop gap have explicit normalized dimensions. Index range and camera assumptions exclude TIR for this comparator. The general reference reports TIR instead of inventing a transmitted vector.
+- **Volume and color:** determinant-one strain is only an affine volume invariant; reconstructing rounded geometry does not guarantee exact volume. Encoded-sRGB channel filtering is not linear-light scattering. Neither should be labeled a physical proof.
+- **Dynamics:** spring updates now use the closed-form solution. Fixed-target evolution composes across frame subdivisions; sampled contact impulses and clamps remain interaction approximations. Critical damping alone cannot guarantee monotonic contact with arbitrary inherited velocity.
 
-The core term is `−position × centerMagnification × opticalPower × quinticRamp(u)`. Its strength is independent of the edge, so stronger peripheral refraction need not mean more central zoom. Overall power is phenomenological, not measured thickness. Extreme settings can produce image folding; the diagnostic preset exposes this rather than presenting it as an Apple match.
+### Pressure direction
 
-For the cap comparison, height is a quintic shoulder ramp plus a gentle elliptical crown, with derivatives zero at the shoulder's inner join. Backward rays enter from the viewer, travel through the cap, exit a plane and travel to the backdrop. [Snell/Fresnel](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission) supplies generic optics, not Apple's model. The index 1.33 is water-inspired and fixed for this experiment. The reflected environment is a synthetic light rig, not a reconstructed room. No caustics, dispersion, multiple scattering or full fluid simulation.
-
-### Pressure direction: a separate hypothesis
-
-Pressing into the screen lowers depth and expands the footprint; pushing into a side wall compresses width. How the latter displacement is redistributed is not identified by the reviewed Apple footage. The lab offers two selectable constraints under **Motion → Boundary compression**:
-
-- **In-plane baseline:** the compressed width is redistributed entirely into height. Depth does not change from wall pressure alone.
-- **Redistribute into depth:** a configurable fraction of the compensation goes into depth instead. At 0.5, height and depth share it equally; at 1, all compensation goes into depth. Normal finger pressure continues to act simultaneously.
-
-For in-plane strain `q`, normal depth strain `z`, wall-compression magnitude `p` (a signed spring state during recovery), and redistribution fraction `f`, the logarithmic scales are:
-
-`x = q − z/2; y = −q − z/2 − f·p; depth = z + f·p`
-
-Their sum is zero, so the three scale factors multiply to one. This preserves a **volume proxy**, not an exact volume integral of the changing rounded height field. Wall compression has its own spring state so inertial width/height strain is not accidentally converted into depth. The contacted edge remains fixed through release; both left and right walls use the same compression axis. Held response is critically damped; released shape/depth can oscillate. The default stays in-plane for comparison; this experiment is not a new native-app rule or a recovered Apple pressure law. See the [shared motion requirements](specification.md#shape-carries-impact).
-
+Normal contact lowers depth and expands the footprint. Wall contact compresses the travel axis. **Motion → Boundary compression** compares an in-plane baseline with configurable redistribution into depth. That additional depth can partially offset normal finger compression; it need not exceed the resting depth. The equation, volume limitation and pinned-edge rule live in [Pressure and dynamics](model.md#pressure-and-dynamics). Apple footage does not establish this redistribution law.
 
 ### Fixed-field check against the registered circle patch
 
-The reproduction script also compares the old lab field and the new rim candidate on the same approximate circle (center 429,114; radius 83). Geometry, core amount 0.012 and band fraction 0.55 stay fixed. Only blur and positive per-channel photometry are fitted on frame 65, then frozen for the five repeated observations.
+The earlier reproduction script compares the old lab field and the rim-only candidate (profile 1) on the same approximate circle (center 429,114; radius 83). Geometry, core amount 0.012 and band fraction 0.55 stay fixed. Only blur and positive per-channel photometry are fitted on frame 65, then frozen for the five repeated observations.
 
 | Fixed field | Inverse Y lookup at patch center | Training blur sigma | Repeated-frame mean RMSE, frozen tone |
 | --- | ---: | ---: | ---: |
 | Previous shoulder profile, edge strength 0.10 | +4.435 px | 3.00 | 2.589 |
 | Rim-concentrated candidate, edge strength 0.40 | +3.167 px | 2.75 | 2.565 |
 
-The 0.024/255 error difference is too small and scene-dependent to establish superiority. The useful result is narrower: stronger bending at the outer rim can coexist with *less* lookup displacement at this interior shoulder patch. Neither this patch nor the comparison tests the outermost rim. Remapped fields use OpenCV bilinear interpolation; do not rank their tiny error differences against the earlier translation fit as if resampling and geometry were identical. The source hash, timestamps, positive synthetic control and numerical outputs are emitted by [reference_patch.py](experiments/reference_patch.py).
+This comparison predates the finite-rim/compression profile (profile 2) and does not validate it. The 0.024/255 error difference is too small and scene-dependent to establish superiority. The useful result is narrower: stronger bending at the outer rim can coexist with *less* lookup displacement at this interior shoulder patch. Neither this patch nor the comparison tests the outermost rim. Remapped fields use OpenCV bilinear interpolation; do not rank their tiny error differences against the earlier translation fit as if resampling and geometry were identical. The source hash, timestamps, positive synthetic control and numerical outputs are emitted by [reference_patch.py](experiments/reference_patch.py).
 
 ## Context presets and controls
 
@@ -126,7 +115,7 @@ The presets are the current **qualitative starting hypotheses** for observed cir
 | Strong edge · diagnostic | Large edge displacement with a registered center | Extreme range, possible folds; not an Apple preset |
 | Previous lab · baseline | Reproduces the earlier conservative field | Comparison only; not an endorsed calibration |
 
-Sidebar categories: **Scene** selects outline/backdrop and comparison visibility; **Lens** controls the optical model, profile, power, edge/core and band; **Material** controls scattering, tint, readability, rim and shadow; **Motion** controls release damping, pressure redistribution and Reduced Motion. Model-inapplicable controls are disabled. Every control states its function; reset restores all settings, position, collapsed state and Scene tab. Vertical lines remain the default artwork; crossed lines make both displacement axes visible.
+Sidebar categories: **Scene** selects outline/backdrop and comparison visibility; **Lens** controls model, profile, power, edge/core, band and outline offset, or cap thickness/gap/index; **Material** controls scattering, tint, readability, rim and shadow; **Motion** controls release damping, pressure redistribution and Reduced Motion. Model-inapplicable controls are disabled. Every control states its function; reset restores all settings, position, collapsed state and Scene tab. Vertical lines remain the default artwork; crossed lines make both displacement axes visible.
 
 ## Reading the lab honestly
 
@@ -140,8 +129,8 @@ Sidebar categories: **Scene** selects outline/backdrop and comparison visibility
 
 - Open the [live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html). `?fallback=1` selects software refraction. The status line identifies the renderer and explains why software mode is active. **Retry WebGL** removes the forced-software URL option and tries GPU rendering again; a failed attempt leaves software refraction running. No account, uploaded image or runtime network dependency is needed after the site loads.
 - From `docs/liquid-glass`: `npm ci`, `npm run build`, then serve `site/` with any static server. The generated site contains only allowlisted public guide files and original assets; `build.json` records source SHA and file checksums.
-- `npx playwright install chromium`, then `npm test`. An existing browser can be supplied through `CHROMIUM_PATH`; `LAB_EVIDENCE` selects the output directory and `LAB_URL` can point tests at the deployment. Keep raw test output untracked.
-- Browser checks exercise both models/three outlines, zero-power texture identity, actual shoulder displacement, center/exterior registration, tone ordering/endpoints, diagonal continuity, contact/release/wall recovery, interrupted morphs, idle sleep, Reduced Motion, context loss/restoration, mobile sizing, full reset, repeated morph/model changes and context recovery. Software checks add sampled GPU agreement for both models, zero-power identity, blur/contrast behavior, an unavailable WebGL context and retry. Preset checks exercise every context, independent core/edge controls, stronger near-rim output, both renderers, extreme ranges, model-specific disabling, keyboard tabs and phone layout. Directional-pressure checks additionally cover both walls/renderers, depth transfer versus the baseline, the fixed contacting edge, the volume proxy, rebound and idle sleep. These are targeted probes, not proof of every pixel/state.
+- `node experiments/equations-test.cjs` runs the portable math checks without browser dependencies. For renderer tests, `npx playwright install chromium`, then `npm test`. An existing browser can be supplied through `CHROMIUM_PATH`; `LAB_EVIDENCE` selects the output directory and `LAB_URL` can point tests at the deployment. Keep raw test output untracked.
+- Browser checks exercise both models/three outlines, zero-power texture identity, actual shoulder displacement, center/exterior registration, tone ordering/endpoints, diagonal continuity, contact/release/wall recovery, interrupted morphs, idle sleep, Reduced Motion, context loss/restoration, mobile sizing, full reset, repeated morph/model changes and context recovery. Software checks add sampled GPU agreement for both models, zero-power identity, blur/contrast behavior, an unavailable WebGL context and retry. Preset checks exercise every context, independent core/edge controls, stronger near-rim output, both renderers, extreme ranges, model-specific disabling, keyboard tabs and phone layout. Directional-pressure checks additionally cover both walls/renderers, depth transfer versus the baseline, the fixed contacting edge, the volume proxy, rebound and idle sleep. The independent reference suite also probes actual framebuffer coordinates over all outlines, three boundary profiles and the cap, at rest and held, including the first fully covered rim pixels. These are targeted probes, not proof of every pixel/state.
 - Performance design: one static texture upload per backdrop change, one analytic shader pass, bounded nine-tap scattering, early exit outside the lens, render density capped at 1.5× and a maximum 960×400 framebuffer, and sleeping clocks after settlement or while offscreen. Software mode uses a 480-pixel-wide framebuffer, caches the unmodified backdrop and evaluates optical math only within the lens/shadow bounds. Its source pixels are read once per backdrop change. Test-only GPU readback is never used during interaction. Shader submission timing is not GPU duration; SwiftShader captures are not physical-device performance evidence.
 - Defaults: gradient with vertical lines, light foreground ink, boundary-field model and capsule shape. **Reset all settings** restores every input, lens position and collapsed state; Reduced Motion returns to the operating-system preference. The mobile preview shows a narrower region of the same texture, preserving the lens proportions.
 - Publish the generated `site/` contents to the dedicated `gh-pages` branch. GitHub Pages uses that branch's root with `.nojekyll`; Android source/main and APK workflows are independent. Rebuild from the merged docs commit and verify `build.json` plus the live demo after deployment. Never include private feedback or Apple reference frames.
