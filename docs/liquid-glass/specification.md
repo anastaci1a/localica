@@ -4,7 +4,7 @@
 
 **Status: implementation requirements, with experimental optical models.** The [interface contract](../interface.md) owns branch behavior; releases and PR evidence establish what shipped and what was tested. These checks are not a claim that every device meets them. Selection entrance motion remains deferred in [#107](https://github.com/anastaci1a/localica/issues/107).
 
-This is our translation of the [Apple evidence](sources.md) into testable Android behavior. The equations below are Localica engineering models, not Apple's private formulas. They need device profiling and perceptual tuning.
+This is our translation of the [Apple evidence](sources.md) into testable Android behavior. The [context audit](optics.md#context-audit--19-october-2026) distinguishes evidence-backed properties from uncalibrated optics. The equations below are Localica engineering models, not Apple's private formulas. They need device profiling and perceptual tuning.
 
 ## Surface roles
 
@@ -86,8 +86,8 @@ Nested curves should share a deliberate inset relationship. Begin with `innerRad
 Suggested optical pipeline:
 
 ```text
-content/backdrop → padded sample → distortion/scattering → contrast support
-                                                       → rim + illumination
+content/backdrop → padded sample → distortion/scattering → rim + illumination
+                                                       → contrast support
                                                        → crisp labels/icons
 outline + elevation → one shadow field behind the surface group
 ```

@@ -35,6 +35,39 @@ The joint model retains its advantage when tone is frozen. This is evidence for 
 
 Other #222 observations constrain different properties: Apple's clear slider retains sharp track edges in the core and widens them nearer the rim; a regular text panel supports much stronger effective blur. Those are different materials/scenes. Do not average their fitted constants into a universal preset. Touch-light propagation has no synchronized contact signal in these assets; no defensible latency or pressure equation was recovered.
 
+## Context audit · 19 October 2026
+
+This review separates three questions: whether pixels are refracted, whether an image resembles a particular Apple context, and whether a physical surface has been identified. Passing the first does not establish the other two. Material names are API roles; a screenshot's apparent transparency alone does not identify its API variant.
+
+| Observation / provenance | What it supports | Limits / decision |
+| --- | --- | --- |
+| **Clear slider**, [UIKit session, 18:12](https://developer.apple.com/videos/play/wwdc2025/284/?time=1092); earlier #222 joint track-edge fits | Track core stays sharp and registered (within ~0.18 displayed-HD px at 36–51 px inward). At 11 px inward, top edges move −2.20…−2.66 px; bottom edges +3.41…+5.88 px. | Supports peripheral widening, not a uniformly weak lens. Final 8 px were excluded because highlights obscure correspondence. One horizontal bar does not constrain tangential refraction. Earlier results retained, not newly remeasured here. |
+| **Regular circle**, registered morph asset and frozen comparison above | Modest displacement plus blur explains one shoulder patch better than either alone. | Same-scene repeats, not independent scenes. No global rim/depth calibration. |
+| **Regular text panel**, [material session, 11:51](https://developer.apple.com/videos/play/wwdc2025/219/?time=711); earlier #222 reconstruction | Strong scattering can preserve foreground legibility while obscuring underlying text; effective sigma ~12 displayed-HD px in that scene. | Not the lab's blur-radius unit, not a universal Apple blur. Alignment and photometry were refitted per frame. |
+| **Music mini player / navigation**, [Apple's June 2025 interface clip](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4), 0–7 s, newly inspected | Album cards and text pass beneath the mini player. Color survives; lettering softens and curved boundaries distort differently from the center. Navigation and mini player have different apparent treatments. | Announcement footage, exact build/settings unknown. Scrolling, morphing and concealed source prevent an absolute displacement fit. Some third-party videos reuse this same clip: do not count them as independent evidence. |
+| **Media controls / sliders / segments**, [Apple's interface-details clip](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4), 6–16 s, newly inspected | Media shows through round playback controls. Active slider preserves a visible track; moving segmented selection bends underlying letters. This is more informative than a lens over an unstructured color field. | Multiple component roles, not one parameter set. Stylized transitions and foreground occlusion preclude fitting a universal cap. |
+| **On-device Lock/Home Screen, Photos, notifications and Control Center**, [MacRumors hands-on](https://www.youtube.com/watch?v=gCov2x7oo6Y), 0:47–1:07, 3:56–4:10, 5:37–5:53, newly inspected | Real-use context supplement: dense controls and already softened backgrounds make scattering/tint and foreground contrast as important as visible bending. | June 2025 early-beta report; filming angle, reflections, focus and compression confound optics. Use its original phone footage, not the reused Apple Music insert. No current-iOS default or quantitative shader claim follows. |
+| **Owner's Music / Control Center screenshots**, private reference folder | Qualitative target for edge definition, relative material appearance and legibility. | OS build/settings and uncovered source unknown; cannot recover z-depth or absolute refraction. Private files stay outside the repository. |
+
+Apple explicitly describes stronger refraction, scattering and shadows when controls grow into menus ([adaptivity](https://developer.apple.com/videos/play/wwdc2025/219/?time=360)). Larger size is not a reason to apply a globally weaker transparent overlay. Conversely, uniformly strong refraction is not supported for every resting control. Clear and Regular API variants must also not be conflated with system appearance/accessibility preferences.
+
+### Conclusions retained, corrected and unresolved
+
+- **Retain:** independent refraction, scattering, reflection and contrast; foreground drawn separately; stronger peripheral variation with a comparatively registered interior in several examples.
+- **Correct:** the old default lab's 0.10 shoulder gain and zero displacement at the silhouette were engineering choices, not Apple measurements. On its 196×92 capsule, maximum top-axis displacement was only 2.73 logical pixels by default (~1.37 pixels in the 480-wide software raster); even its maximum depth/width settings reached only 7.69 logical pixels. This unnecessarily restricted exploration.
+- **Correct:** vertical lines reveal horizontal displacement but conceal much of the vertical displacement along a horizontal pill's top/bottom. Use crossed lines, text and two-axis coordinate probes as well. Low-resolution rendering further attenuates small differences.
+- **Correct:** an image feature moving outward is not the sign of the inverse lookup. Compare source coordinates and their spatial derivatives: a lookup jump, translation, magnification and local compression are different phenomena. More global zoom does not establish stronger edge compression.
+- **Unresolved:** outermost-rim correspondence, a global height field, exact tone/blur rules, optical changes during real contact, and version-specific appearance. A shape's 2D capsule outline does not prove a cylindrical 3D body; a bright rim does not prove a flattened face.
+- **Validation boundary:** GPU/software agreement and nonzero displacement are implementation evidence only. Neither the existing lab nor context-based presets constitute a calibrated recreation of Apple's proprietary renderer.
+
+### Evidence needed before claiming a closer match
+
+1. Select a known OS/build and material role; preserve appearance/accessibility settings. Keep official presentations, original phone footage and owner screenshots distinguishable.
+2. Obtain exposed source pixels and matched shape/pose. Exclude foreground glyphs and ambiguous highlights. Reject unregistered handheld footage for subpixel fitting.
+3. Fit core registration, peripheral displacement and blur separately. Report normalized distances and spatial derivatives as well as pixel offsets; record excluded regions.
+4. Freeze parameters and evaluate independent backgrounds, both axes, rounded ends and long edges. A new frame of the same background is a repeat, not a new scene.
+5. Only then promote a candidate to a fidelity claim. Until then, presets are context-based approximations, and extreme optical settings are diagnostics rather than evidence.
+
 ## Two deliberately different lab models
 
 Both use one analytic rounded-rectangle silhouette (circle/capsule are special cases), one background texture, and an **inverse** mapping: each output pixel looks up its displaced source coordinate. Labels remain outside that map. No triangle-specific optical interpolation or DOM screenshot illusion is involved.

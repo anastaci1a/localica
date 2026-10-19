@@ -56,6 +56,10 @@ Watch: [geometry, 3:00](https://developer.apple.com/videos/play/wwdc2025/356/?ti
 
 **Localica implication:** one surface geometry should drive clipping, rims and shadows. Fix crowded layout at its source; adding a glass wrapper is insufficient. See [geometry and readability](specification.md#geometry-and-readability).
 
+## Interface footage and optical audit
+
+The [context audit](optics.md#context-audit--19-october-2026) records newly inspected Music, media-control, slider/segment, Home/Lock Screen, Photos and Control Center footage alongside earlier quantitative measurements. It distinguishes original device footage from reused Apple inserts, announcement/beta imagery from known production behavior, and observations from shader assumptions. Preset values are hypotheses, not recovered Apple constants.
+
 ## Choosing and arranging controls
 
 The HIG guidance below describes control roles and usability. It is not a specification of private Liquid Glass rendering constants. [Localica's control rules](controls.md) translate it into our Android components.
