@@ -148,6 +148,10 @@ class BrowseArtworkTest {
             }
         } }
         compose.waitForIdle()
+        val initial = capturePresentedPopupPixels(compose, compose.onNodeWithTag("opaque-resolution"), stage) { view }
+        val initialColor = initial[initial.width / 2, initial.height / 2]
+        assertEquals("Initial decoded cover must already be opaque", 16f / 255f, initialColor.red, .02f)
+        assertEquals("Initial decoded cover must already be visible", 240f / 255f, initialColor.green, .02f)
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { image = cover(96) }

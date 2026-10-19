@@ -36,6 +36,9 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
 }
 
 private data class ArtworkResolutionFrame(val image: ImageBitmap, val weight: Float)
+private data class ArtworkResolutionBlendState(val incoming: ImageBitmap,
+    val outgoing: List<ArtworkResolutionFrame> = emptyList(),
+    val progress: Animatable<Float, AnimationVector1D> = Animatable(1f))
 
 /** Complementary source-over alphas expose the background mid-crossfade. Keep the
  * outgoing composite opaque and reveal the new resolution over it instead. On an
@@ -43,30 +46,33 @@ private data class ArtworkResolutionFrame(val image: ImageBitmap, val weight: Fl
 @Composable
 private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
     contentScale: ContentScale, duration: Int) {
-    var incoming by remember { mutableStateOf(artwork) }
-    var outgoing by remember { mutableStateOf(emptyList<ArtworkResolutionFrame>()) }
-    val progress = remember { Animatable(1f) }
+    var blend by remember { mutableStateOf(ArtworkResolutionBlendState(artwork)) }
     LaunchedEffect(artwork) {
-        if (artwork != incoming) {
-            val phase = progress.value
-            outgoing = if (phase >= 1f) listOf(ArtworkResolutionFrame(incoming, 1f)) else {
+        val previous = blend
+        if (artwork != previous.incoming) {
+            val phase = previous.progress.value
+            val outgoing = if (phase >= 1f) listOf(ArtworkResolutionFrame(previous.incoming, 1f)) else {
                 // Reversing across a resolution boundary reuses the same bitmap;
                 // merge it rather than growing a layer for every interruption.
                 val weights = linkedMapOf<ImageBitmap, Float>()
-                outgoing.forEach { frame -> weights[frame.image] =
+                previous.outgoing.forEach { frame -> weights[frame.image] =
                     (weights[frame.image] ?: 0f) + frame.weight * (1f - phase) }
-                weights[incoming] = (weights[incoming] ?: 0f) + phase
+                weights[previous.incoming] = (weights[previous.incoming] ?: 0f) + phase
                 weights.filterValues { it > 0f }.map { ArtworkResolutionFrame(it.key, it.value) }
             }
-            incoming = artwork
-            progress.snapTo(0f)
-            progress.animateTo(1f, tween(duration))
-            outgoing = emptyList()
+            // Publish the new image tree and its animation as one state. The old
+            // composed layer keeps its old alpha until outgoing content is mounted;
+            // resetting a shared Animatable first would expose a blank frame.
+            val next = ArtworkResolutionBlendState(artwork, outgoing, Animatable(0f))
+            blend = next
+            next.progress.animateTo(1f, tween(duration))
+            blend = next.copy(outgoing = emptyList())
         }
     }
+    val composed = blend
     Box(modifier) {
         var accumulated = 0f
-        outgoing.forEach { frame ->
+        composed.outgoing.forEach { frame ->
             accumulated += frame.weight
             // Convert mixture weights to source-over alpha. The lowest nonzero
             // layer is opaque; later layers preserve the exact interrupted blend.
@@ -74,8 +80,8 @@ private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
             Image(frame.image, stringResource(R.string.album_artwork),
                 Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }, contentScale = contentScale)
         }
-        Image(incoming, stringResource(R.string.album_artwork),
-            Modifier.fillMaxSize().graphicsLayer { alpha = progress.value }, contentScale = contentScale)
+        Image(composed.incoming, stringResource(R.string.album_artwork),
+            Modifier.fillMaxSize().graphicsLayer { alpha = composed.progress.value }, contentScale = contentScale)
     }
 }
 
