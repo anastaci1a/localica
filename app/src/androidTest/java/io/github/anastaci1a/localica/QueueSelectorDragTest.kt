@@ -1,6 +1,9 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.LocalOverscrollFactory
+import androidx.compose.foundation.OverscrollEffect
+import androidx.compose.foundation.OverscrollFactory
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +33,7 @@ class QueueSelectorDragTest {
     // Match production's queued UI effects: an unconfined test dispatcher can resume
     // a completed Default-dispatcher preparation inline on that worker.
     @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
+    private val observedOverscroll = mutableListOf<OverscrollEffect>()
     private var enabled by mutableStateOf(true)
     private var present by mutableStateOf(true)
     private var panelReady by mutableStateOf(true)
@@ -40,9 +44,27 @@ class QueueSelectorDragTest {
     private val results = mutableListOf<Boolean>()
     private val moves = mutableListOf<Pair<String, String?>>()
 
+    @Composable
+    private fun ObserveOverscroll(observe: Boolean, content: @Composable () -> Unit) {
+        if (!observe) {
+            content()
+            return
+        }
+        // Resolve the real factory inside the fixture's density/direction providers.
+        val factory = LocalOverscrollFactory.current
+        val observedFactory = remember(factory) {
+            factory?.let { upstream -> object : OverscrollFactory {
+                override fun createOverscrollEffect() = upstream.createOverscrollEffect().also(observedOverscroll::add)
+                override fun equals(other: Any?) = this === other
+                override fun hashCode() = System.identityHashCode(this)
+            } }
+        }
+        CompositionLocalProvider(LocalOverscrollFactory provides observedFactory, content = content)
+    }
+
     private fun fixture(count: Int = 8, width: Int = 380, height: Int = 420, fontScale: Float = 1f,
         rtl: Boolean = false, scale: Float = 1f, densityScale: Float = 1f, reducedMotion: Boolean = false, fullPopup: Boolean = false,
-        test: (QueueController, QueueDatabase) -> Unit) {
+        observeOverscroll: Boolean = false, test: (QueueController, QueueDatabase) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         val preferences = QueuePreferences(context)
@@ -61,17 +83,19 @@ class QueueSelectorDragTest {
                 val density = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(density.density * densityScale, fontScale),
                     LocalGlassPanelReady provides panelReady, LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
-                    if (fullPopup) QueueScreen(state, controller, reducedMotion = reducedMotion)
-                    else Box(Modifier.width(width.dp).height(height.dp).graphicsLayer { scaleX = scale; scaleY = scale }) {
-                        if (present) QueueSelectorList(state.library.queues, "q2", state.library.activeId, false,
-                            reducedMotion, enabled, Modifier.fillMaxSize(),
-                            onSelect = { selections++; controller.switchTo(it) }, onRename = { renames++ }, onDelete = { deletions++ },
-                            onOffset = { id, offset -> controller.moveQueue(id, offset) },
-                            onMove = { id, before, complete ->
-                                commits++
-                                moves.add(id to before)
-                                controller.moveQueueBefore(id, before) { result -> results.add(result); complete(result) }
-                            })
+                    ObserveOverscroll(observeOverscroll) {
+                        if (fullPopup) QueueScreen(state, controller, reducedMotion = reducedMotion)
+                        else Box(Modifier.width(width.dp).height(height.dp).graphicsLayer { scaleX = scale; scaleY = scale }) {
+                            if (present) QueueSelectorList(state.library.queues, "q2", state.library.activeId, false,
+                                reducedMotion, enabled, Modifier.fillMaxSize(),
+                                onSelect = { selections++; controller.switchTo(it) }, onRename = { renames++ }, onDelete = { deletions++ },
+                                onOffset = { id, offset -> controller.moveQueue(id, offset) },
+                                onMove = { id, before, complete ->
+                                    commits++
+                                    moves.add(id to before)
+                                    controller.moveQueueBefore(id, before) { result -> results.add(result); complete(result) }
+                                })
+                        }
                     }
                 }
             } }
@@ -175,7 +199,7 @@ class QueueSelectorDragTest {
         assertEquals(0, commits); assertNoActions()
     }
 
-    @Test(timeout = 15000) fun secondFingerAfterStationaryHoldCancelsBeforeLiftAndNextHoldWorks() = fixture { controller, _ ->
+    @Test(timeout = 15000) fun secondFingerAfterStationaryHoldCancelsBeforeLiftAndNextHoldWorks() = fixture(observeOverscroll = true) { controller, _ ->
         val before = order(controller)
         val root = checkNotNull(list().fetchSemanticsNode().root)
         val view = (root as androidx.compose.ui.platform.ViewRootForTest).view
@@ -228,6 +252,27 @@ class QueueSelectorDragTest {
                 })
             }
         }
+        fun settleOverscroll(label: String) {
+            phase.set(label)
+            compose.runOnUiThread {
+                assertTrue("Observe the actual platform overscroll effect", observedOverscroll.isNotEmpty())
+                android.util.Log.i("QueueSecondPointer", "$label: before pump effects=${observedOverscroll.map { it.isInProgress }}")
+            }
+            // UP queues Scrollable.onDragStopped; the queued fling must run before
+            // EdgeEffect release can finish. Espresso cannot advance this clock for us
+            // while native stretch invalidations keep its UI-idle loop busy.
+            compose.waitUntil(5_000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnUiThread {
+                    observedOverscroll.none { it.isInProgress } &&
+                        root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true).none {
+                            SemanticsProperties.TestTag in it.config && it.config[SemanticsProperties.TestTag] == "drag-stack"
+                        }
+                }
+            }
+            android.util.Log.i("QueueSecondPointer", "$label: real overscroll released")
+        }
+        var gestureFailure: Throwable? = null
         compose.mainClock.autoAdvance = false
         try {
             phase.set("stationary hold")
@@ -244,9 +289,8 @@ class QueueSelectorDragTest {
             pointers.remove(1)
             pointers[0] = start + Offset(0f, 120f); send(android.view.MotionEvent.ACTION_MOVE)
             send(android.view.MotionEvent.ACTION_UP); pointers.clear()
-            compose.mainClock.autoAdvance = true
-            phase.set("first release settles")
-            compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+            settleOverscroll("first release settles")
+            assertDragCount(0)
             assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
             compose.mainClock.autoAdvance = false
             phase.set("next hold acquires")
@@ -262,13 +306,37 @@ class QueueSelectorDragTest {
             compose.mainClock.advanceTimeByFrame()
             assertDragCount(1)
             send(android.view.MotionEvent.ACTION_CANCEL); pointers.clear()
+            settleOverscroll("final release settles")
             phase.set("landing")
-            compose.mainClock.autoAdvance = true
-            awaitLanding()
+            assertDragCount(0)
             assertEquals(before, order(controller)); assertEquals(0, commits); assertNoActions()
+        } catch (failure: Throwable) {
+            gestureFailure = failure
+            throw failure
         } finally {
-            try { if (pointers.isNotEmpty()) send(android.view.MotionEvent.ACTION_CANCEL) }
-            finally { compose.mainClock.autoAdvance = true; watchdog.shutdownNow() }
+            try {
+                val cleanupFailure = runCatching {
+                    try { if (pointers.isNotEmpty()) send(android.view.MotionEvent.ACTION_CANCEL) }
+                    finally {
+                        // JUnit interrupts the method, not Compose rule teardown. Dispose
+                        // and detach synchronously before teardown can enter Espresso, even when
+                        // the bounded real-overscroll predicate failed.
+                        phase.set("dispose fixture")
+                        compose.runOnUiThread {
+                            val host = generateSequence(view as android.view.View?) { it.parent as? android.view.View }
+                                .filterIsInstance<androidx.compose.ui.platform.AbstractComposeView>().firstOrNull()
+                            checkNotNull(host) { "Expected an activity Compose host for gesture fixture" }
+                            val parent = checkNotNull(host.parent as? android.view.ViewGroup) { "Expected an attached Compose host" }
+                            parent.removeView(host)
+                            host.disposeComposition()
+                        }
+                    }
+                }.exceptionOrNull()
+                if (cleanupFailure != null) {
+                    if (gestureFailure != null) gestureFailure.addSuppressed(cleanupFailure)
+                    else throw cleanupFailure
+                }
+            } finally { compose.mainClock.autoAdvance = true; watchdog.shutdownNow() }
         }
     }
 
