@@ -104,7 +104,12 @@ class QueueRecoveryTest {
         val before = queues.state.value.library.active!!
         val opensAfterFailure = opened.size
         withContext(Dispatchers.Main) {
-            assertEquals(1, player.mediaItemCount)
+            // Canonical Previous may wrap through safe occurrences; the damaged next occurrence
+            // must still terminate the native timeline at the unchanged current visit.
+            assertEquals(listOf(before.entries[2].id, before.entries[3].id, before.entries[0].id),
+                (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId })
+            assertEquals(before.journey!!.current!!.token, player.currentMediaItem!!.queueVisit)
+            assertEquals(player.mediaItemCount - 1, player.currentMediaItemIndex)
             assertEquals(Player.REPEAT_MODE_OFF, player.repeatMode)
             player.seekTo(player.duration - 150)
         }
