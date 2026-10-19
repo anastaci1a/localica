@@ -618,10 +618,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     translationX = (old.left - position.x - cellGeometry.gridInset.dp.roundToPx() + alignment) * (1f - pinchMotion.progress.value)
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
-                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }.currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->
+                            }).then(if (pinchMotion.source == null) Modifier.clip(Corners.card) else Modifier).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }
+                            // Retain the current-song slab with its content when the
+                            // destination virtualizes this source row out of the grid.
+                            .retainPinchItem(item.key, pinchMotion)
+                            .currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }.selectionLens(selectedCount > 0, partiallySelected)
-                            .retainPinchItem(item.key, pinchMotion).testTag("media-${item.key}").combinedClickable(
+                            .testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
