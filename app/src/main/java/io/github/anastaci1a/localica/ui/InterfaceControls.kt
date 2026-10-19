@@ -70,6 +70,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onValueChange)
+    val haptics by rememberUpdatedState(rememberControlHaptics())
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
     var finger by remember { mutableStateOf<Float?>(null) }
     var contact by remember { mutableStateOf(false) }
@@ -81,46 +82,73 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val shown by animateFloatAsState(finger ?: ((value - valueRange.start) / span).coerceIn(0f, 1f),
         if (finger != null || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
     val body = rememberGlassBody({ shown }, { pressure }, { if (contact) 1f else 0f })
-    val touch = if (!enabled) Modifier else Modifier.pointerInput(valueRange, actualSteps, rtl) {
+    val parent = rememberControlScrollContext()
+    val touch = if (!enabled) Modifier else Modifier.readControlScrollContext(parent).pointerInput(valueRange, actualSteps, rtl) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, ControlScrollAxis.Horizontal)
             val inset = 14.dp.toPx()
             val extent = (size.width - inset * 2f).coerceAtLeast(1f)
             fun fraction(x: Float): Float { val at = (x - inset) / extent; return if (rtl) 1f - at else at }
             val initial = ((current - valueRange.start) / span).coerceIn(0f, 1f)
             val grabbed = kotlin.math.abs(fraction(down.position.x) - initial) * extent <= 24.dp.toPx()
             val offset = if (grabbed) initial - fraction(down.position.x) else 0f
-            var owned = grabbed
-            if (owned) { down.consume(); contact = true; finger = initial }
+            var owned = false
+            var released = false
+            val feedback = ControlDragHaptics(haptics)
+            var feedbackEngaged = false
+            contact = true; finger = initial
             try {
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val point = event.changes.firstOrNull { it.id == down.id } ?: break
                     // Compose marks every change consumed for a system cancellation.
-                    if (point.isConsumed) break
+                    if (point.isConsumed || event.changes.count { it.pressed } > 1) break
                     val delta = point.position - down.position
                     if (!owned) {
-                        if (point.isConsumed || kotlin.math.abs(delta.y) > viewConfiguration.touchSlop && kotlin.math.abs(delta.y) > kotlin.math.abs(delta.x)) break
-                        if (kotlin.math.abs(delta.x) > viewConfiguration.touchSlop || !point.pressed) owned = true
+                        when (intent.move(delta.x, delta.y, point.uptimeMillis - down.uptimeMillis)) {
+                            ControlGestureOwner.Control -> owned = true
+                            ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
+                            ControlGestureOwner.Pending -> if (!point.pressed) owned = true
+                        }
                     }
                     if (owned) {
                         contact = point.pressed
                         val raw = fraction(point.position.x) + offset
                         pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
                         finger = if (actualSteps > 0) magneticChoicePosition(raw.coerceIn(0f, 1f) * (actualSteps + 1)) / (actualSteps + 1) else raw.coerceIn(0f, 1f)
-                        change(controlValue(raw, valueRange, actualSteps))
+                        val next = controlValue(raw, valueRange, actualSteps)
+                        val step = if (actualSteps > 0)
+                            (((next - valueRange.start) / span) * (actualSteps + 1)).roundToInt() else 0
+                        if (point.pressed) {
+                            feedback.engage(step)
+                            feedbackEngaged = true
+                            feedback.move(step)
+                        } else {
+                            // A tap never entered the owned-drag feedback lifecycle.
+                            if (!feedbackEngaged) haptics.emit(ControlHaptic.Weak)
+                            else feedback.move(step)
+                            released = true
+                        }
+                        change(next)
                         point.consume()
                     }
                     if (!point.pressed) { break }
                 }
-            } finally { contact = false; pressure = 0f; finger = null }
+            } finally {
+                feedback.finish(released)
+                contact = false; pressure = 0f; finger = null
+            }
         }
     }
     val semantics = Modifier.semantics {
         progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(value.coerceIn(valueRange), valueRange, actualSteps)
         if (!enabled) disabled()
         setProgress { requested ->
-            if (enabled) change(controlValue((requested - valueRange.start) / span, valueRange, actualSteps))
+            if (enabled) {
+                haptics.emit(ControlHaptic.Weak)
+                change(controlValue((requested - valueRange.start) / span, valueRange, actualSteps))
+            }
             enabled
         }
     }
@@ -135,7 +163,10 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
                     androidx.compose.ui.input.key.Key.DirectionDown -> -1
                     else -> 0
                 }
-                if (direction != 0) change(controlValue((current - valueRange.start) / span + direction.toFloat() / if (actualSteps > 0) actualSteps + 1 else 100, valueRange, actualSteps))
+                if (direction != 0) {
+                    haptics.emit(ControlHaptic.Weak)
+                    change(controlValue((current - valueRange.start) / span + direction.toFloat() / if (actualSteps > 0) actualSteps + 1 else 100, valueRange, actualSteps))
+                }
                 direction != 0
             }
         }.focusable(enabled)) {
@@ -226,27 +257,54 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
-    Box(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.pointerInput(rtl) {
+    val haptics by rememberUpdatedState(rememberControlHaptics())
+    val parent = rememberControlScrollContext()
+    Box(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.readControlScrollContext(parent).pointerInput(rtl) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            down.consume(); pressed = true; dragging = true
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.stop() }
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, ControlScrollAxis.Horizontal)
+            pressed = true
             val initial = position.value
             var moved = false
             var released = false
+            val feedback = ControlDragHaptics(haptics)
+            var feedbackEngaged = false
             try {
                 while (true) {
-                    val point = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val point = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (point.isConsumed) break
+                    if (event.changes.count { it.pressed } > 1) {
+                        event.changes.forEach { it.consume() }
+                        break
+                    }
+                    val movement = point.position - down.position
+                    if (!dragging) {
+                        when (intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)) {
+                            ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
+                            ControlGestureOwner.Pending -> if (point.pressed) continue
+                            ControlGestureOwner.Control -> Unit
+                        }
+                        dragging = true
+                        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.stop() }
+                    }
                     val dx = point.position.x - down.position.x
                     moved = moved || kotlin.math.abs(dx) > viewConfiguration.touchSlop
                     raw = initial + direction * dx / 28.dp.toPx()
                     pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
                     scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { position.snapTo(magneticChoicePosition(raw.coerceIn(0f, 1f))) }
+                    val option = if (position.value >= .5f) 1 else 0
+                    if (point.pressed) {
+                        feedback.engage(option)
+                        feedbackEngaged = true
+                        feedback.move(option)
+                    } else if (!feedbackEngaged) haptics.emit(ControlHaptic.Weak)
+                    else feedback.move(option)
                     point.consume()
                     if (!point.pressed) { released = true; break }
                 }
             } finally {
+                feedback.finish(released)
                 pressure = 0f; pressed = false; dragging = false; settleRequest++
                 if (released) change?.invoke(if (moved) position.value >= .5f else initial < .5f)
             }

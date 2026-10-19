@@ -31,6 +31,7 @@ import java.io.File
 /** Saved-composition restoration of the production playlist action, not Activity recreation. */
 class PlaylistArtworkRestorationTest {
     @get:Rule val compose = createComposeRule()
+    private val loadEvents = java.util.concurrent.CopyOnWriteArrayList<CropLoadEvent>()
 
     @Test fun savedChooserAndAdjustedCropRestoreAndCancellationNeverAppliesCover() = withPlaylistActions { restore, controller, _ ->
         openChooser()
@@ -116,6 +117,15 @@ class PlaylistArtworkRestorationTest {
             // Inspect only after the original timeout. Never retry input, extend it, or replace it.
             fun capture(block: () -> Unit) {
                 runCatching(block).exceptionOrNull()?.let(failure::addSuppressed)
+            }
+            capture {
+                val file = File(requireNotNull(Uri.parse(fixtureUri).path))
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(file.path, bounds)
+                android.util.Log.e("ArtworkRestoration", "fixture exists=${file.exists()} bytes=${file.length()} " +
+                    "bounds=${bounds.outWidth}x${bounds.outHeight}; loads=" + loadEvents.joinToString {
+                        "${System.identityHashCode(it.generation)}:${it.phase}:active=${it.active}:errorType=${it.errorType}"
+                    })
             }
             capture { compose.runOnUiThread {
                 val saved = diagnosticRegistry?.performSave()
@@ -212,18 +222,20 @@ class PlaylistArtworkRestorationTest {
             val target = mutableStateOf(controller.state.value.playlists.first().id)
             val restore = StateRestorationTester(compose)
             restore.setContent { LocalicaTheme {
-                // Retain references only. No save/read/log work is performed on the passing path.
-                val registry = LocalSaveableStateRegistry.current
-                val view = LocalView.current
-                val lifecycle = LocalLifecycleOwner.current.lifecycle
-                SideEffect { diagnosticRegistry = registry; diagnosticView = view; diagnosticLifecycle = lifecycle }
-                val state by controller.state.collectAsState()
-                val playlist = state.playlists.first { it.id == target.value }
-                var open by remember { mutableStateOf(false) }
-                val anchor = rememberGlassAnchor()
-                ActionTextButton({ open = true }, modifier = Modifier.glassAnchor(anchor)) { Text("Open collection") }
-                CollectionActions(open, anchor, BrowserItem(MediaRef(MediaKind.Playlist, playlist.id), playlist.name,
-                    null, emptyList()), state, controller, null, emptyList(), {}, { open = false })
+                CompositionLocalProvider(LocalCropLoadObserver provides { loadEvents += it }) {
+                    // Retain references only. No save/read/log work is performed on the passing path.
+                    val registry = LocalSaveableStateRegistry.current
+                    val view = LocalView.current
+                    val lifecycle = LocalLifecycleOwner.current.lifecycle
+                    SideEffect { diagnosticRegistry = registry; diagnosticView = view; diagnosticLifecycle = lifecycle }
+                    val state by controller.state.collectAsState()
+                    val playlist = state.playlists.first { it.id == target.value }
+                    var open by remember { mutableStateOf(false) }
+                    val anchor = rememberGlassAnchor()
+                    ActionTextButton({ open = true }, modifier = Modifier.glassAnchor(anchor)) { Text("Open collection") }
+                    CollectionActions(open, anchor, BrowserItem(MediaRef(MediaKind.Playlist, playlist.id), playlist.name,
+                        null, emptyList()), state, controller, null, emptyList(), {}, { open = false })
+                }
             } }
             block(restore, controller, target)
             // Inspect committed storage too, rather than trusting only the visible state.

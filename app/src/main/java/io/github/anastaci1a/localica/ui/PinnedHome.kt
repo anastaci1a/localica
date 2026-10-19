@@ -66,7 +66,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             }
         })
     CompositionLocalProvider(LocalArtworkTransit provides artworkTransit) {
-    LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
+    LazyColumn(Modifier.fillMaxSize().controlScrollParent(scroll, ControlScrollAxis.Vertical), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
@@ -76,7 +76,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
         item { SelectionViewport { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
-            modifier = Modifier.nestedScroll(HorizontalGestureOwner).testTag("home-pins"), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            modifier = Modifier.nestedScroll(HorizontalGestureOwner)
+                .controlScrollParent(carousel, ControlScrollAxis.Horizontal).testTag("home-pins"), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
                 val anchor = rememberGlassAnchor()
                 val selectedCount = session.selectedCount(item)

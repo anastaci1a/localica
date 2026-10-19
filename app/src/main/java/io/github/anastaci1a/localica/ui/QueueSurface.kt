@@ -67,10 +67,17 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
     // A stationary pointer observer would itself change Compose's hit-path dispatch.
     val currentTrace by rememberUpdatedState(onDragTrace)
     val scrollOwnership = remember { ScrollGestureOwnership() }
-    val listPull = remember(progress, distance, density.density) {
+    val currentDistance by rememberUpdatedState(distance)
+    val currentDensity by rememberUpdatedState(density.density)
+    // Geometry changes must not replace the connection midway through its contact.
+    // Keep that contact's pixel-to-progress scale until release; the next pull
+    // acquires the latest viewport and density.
+    val listPull = remember(progress) {
         object : NestedScrollConnection {
-            var pulling = false
+            var pulling by mutableStateOf(false)
             var pulled = 0f
+            var pullDistance = currentDistance
+            var pullDensity = currentDensity
             fun cancelPull() {
                 currentTrace?.invoke("nested-cancel pulling=$pulling pulled=$pulled progress=${progress.value}")
                 if (!pulling) return
@@ -80,19 +87,20 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             }
             fun move(dy: Float): Offset {
                 currentTrace?.invoke("nested-move dy=$dy pulled=$pulled progress=${progress.value}")
-                val before = pulled
-                pulled = (pulled + dy).coerceIn(0f, distance)
-                val consumed = pulled - before
-                if (pulled == 0f) pulling = false
+                // Keep raw travel and ownership through both clamped endpoints. A
+                // reversal must retrace excess travel, never leak into the child list.
+                pulled += dy
+                val consumed = dy
                 scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                    progress.snapTo(1f - pulled / distance)
+                    progress.snapTo((1f - pulled / pullDistance).coerceIn(0f, 1f))
                     currentTrace?.invoke("nested-applied pulled=$pulled consumed=$consumed progress=${progress.value}")
                 }
                 return Offset(0f, consumed)
             }
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 currentTrace?.invoke("nested-pre source=$source available=$available pulling=$pulling pulled=$pulled progress=${progress.value}")
-                return if (pulling && source == NestedScrollSource.UserInput) move(available.y) else Offset.Zero
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                return if (pulling) move(available.y) else Offset(0f, scrollOwnership.consumeRetrace(available.y))
             }
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
@@ -101,9 +109,17 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                 // downward pull already at the top still starts the documented drawer drag.
                 scrollOwnership.recordScroll(consumed.y)
                 currentTrace?.invoke("nested-post consumed=$consumed available=$available pulling=$pulling contentOwned=${scrollOwnership.contentOwned} mayHandoff=${scrollOwnership.mayHandoff} progress=${progress.value}")
-                if (scrollOwnership.contentOwned) return Offset(0f, available.y)
+                if (scrollOwnership.contentOwned) {
+                    scrollOwnership.recordBoundary(available.y)
+                    return Offset(0f, available.y)
+                }
                 if (!scrollOwnership.mayHandoff || available.y <= 0f) return Offset.Zero
-                if (!pulling) pulled = (1f - progress.value) * distance
+                if (!pulling) {
+                    pullDistance = currentDistance
+                    pullDensity = currentDensity
+                    pulled = (1f - progress.value) * pullDistance
+                }
+                scrollOwnership.claimDrawer()
                 pulling = true
                 return move(available.y)
             }
@@ -117,7 +133,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                     return Velocity(0f, available.y)
                 }
                 pulling = false
-                currentSettle(settleOpen(-pulled / density.density, -available.y / density.density,
+                currentSettle(settleOpen(-pulled / pullDensity, -available.y / pullDensity,
                     progress.value, opening = false))
                 pulled = 0f
                 return Velocity(0f, available.y)
@@ -171,7 +187,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                     Spacer(Modifier.width(CompactControlSize))
                 }
             }
-            if (shown) {
+            // Keep the child recognizer alive at the closed endpoint until release.
+            if (shown || listPull.pulling) {
                 content()
             }
         }

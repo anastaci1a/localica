@@ -14,7 +14,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -92,7 +91,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
             Column(Modifier.fillMaxWidth().then(if (page != tab) Modifier.clearAndSetSemantics { }
                 .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } } }
                 else Modifier)
-                .scrollEdgeFade(scroll).verticalScroll(scroll).padding(horizontal = shadowInset, vertical = shadowInset),
+                .scrollEdgeFade(scroll).controlVerticalScroll(scroll).padding(horizontal = shadowInset, vertical = shadowInset),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (page == 1) {
                     ListViewFields(route, edited) { edited = it }

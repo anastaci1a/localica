@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -30,6 +31,13 @@ class QueueDragAnchorTest {
     @Test fun freshTopListPullRetainsItsAnchorAcrossFramesPauseAndReversal() = heldPull(fromHandle = false)
     @Test fun freshTopGalleryPullRetainsItsAnchorAcrossFramesPauseAndReversal() =
         heldPull(fromHandle = false, gallery = true)
+
+    @Test fun topListDrawerKeepsOwnershipThroughOpenEndpoint() = heldPull(false, endpoints = true)
+    @Test fun topGalleryDrawerKeepsOwnershipThroughOpenEndpoint() = heldPull(false, gallery = true, endpoints = true)
+    @Test fun topListDrawerKeepsOwnershipThroughClosedEndpoint() = heldPull(false, endpoints = true, closedEndpoint = true)
+    @Test fun topGalleryDrawerKeepsOwnershipThroughClosedEndpoint() = heldPull(false, gallery = true, endpoints = true, closedEndpoint = true)
+    @Test fun listBoundaryTravelMustBeRetraced() = heldPull(false, boundaryDebt = true)
+    @Test fun galleryBoundaryTravelMustBeRetraced() = heldPull(false, gallery = true, boundaryDebt = true)
 
     @Test fun collapsedDrawerLeavesBackgroundAboveShelfHittable() {
         val progress = Animatable(0f)
@@ -56,7 +64,7 @@ class QueueDragAnchorTest {
         }
     }
 
-    private fun heldPull(fromHandle: Boolean, gallery: Boolean = false) {
+    private fun heldPull(fromHandle: Boolean, gallery: Boolean = false, endpoints: Boolean = false, boundaryDebt: Boolean = false, closedEndpoint: Boolean = false) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = BrowsePreferences(context)
         val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "drawer-anchor"))
@@ -107,15 +115,33 @@ class QueueDragAnchorTest {
             compose.waitForIdle()
             val initialRange = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
             assertEquals("The fresh contact must start at the measured list top", 0f, initialRange.value(), .001f)
-            val header = compose.onNodeWithContentDescription("Close queue")
+            if (boundaryDebt) {
+                // Row indexes imply different travel in list/gallery and at each density.
+                // Start a known short pixel distance from the edge before holding contact.
+                list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, step * 3f) }
+                compose.waitForIdle()
+                assertTrue("Boundary fixture must start away from the top",
+                    list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value() > 0f)
+            }
+            val header = compose.onNode(hasContentDescription("Close queue") or hasContentDescription("Open queue"))
             val root = compose.onRoot()
             val rootOrigin = root.fetchSemanticsNode().boundsInRoot.topLeft
             val headerBefore = header.fetchSemanticsNode().boundsInRoot
-            val firstSong = compose.onNodeWithTag("media-anchor:0").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val firstSong = if (boundaryDebt) list.fetchSemanticsNode().boundsInRoot
+                else compose.onNodeWithTag("media-anchor:0").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             val search = compose.onNodeWithTag("list-search-pill").fetchSemanticsNode().boundsInRoot
             assertTrue("Start on song content below the floating search control", firstSong.center.y > search.bottom)
             // Root-local coordinates stay fixed while every child moves with the drawer.
-            var finger = (if (fromHandle) headerBefore.center else firstSong.center) - rootOrigin
+            var finger = (if (fromHandle) headerBefore.center else if (boundaryDebt)
+                Offset(firstSong.center.x, maxOf(firstSong.top + step, search.bottom + step))
+                else firstSong.center) - rootOrigin
+            if (boundaryDebt) {
+                // Acquisition + at most four approach steps + four edge steps must all
+                // remain inside the viewport. Reversals then retrace that same path.
+                val bottom = minOf(firstSong.bottom, root.fetchSemanticsNode().boundsInRoot.bottom) - rootOrigin.y
+                assertTrue("Boundary fixture must keep its entire held trajectory on screen",
+                    finger.y + slop + step * 9f < bottom)
+            }
             val originalFinger = finger
             fun observe(phase: String) {
                 val range = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
@@ -137,6 +163,25 @@ class QueueDragAnchorTest {
                 compose.waitForIdle()
                 observe("after-frame")
             }
+            fun scrollPosition() = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+            if (boundaryDebt) {
+                move(slop + step)
+                var moves = 0
+                while (scrollPosition() > .001f && moves++ < 4) move(step)
+                assertEquals("Reach top within the same list-owned contact", 0f, scrollPosition(), .001f)
+                repeat(4) { move(step) }
+                repeat(3) {
+                    move(-step)
+                    assertEquals("Reverse must repay boundary travel before scrolling", 0f, scrollPosition(), .001f)
+                    assertEquals("List owner cannot move drawer", 1f, progress.value, .001f)
+                }
+                repeat(4) { move(-step) }
+                assertTrue("After retracing excess, list scrolling resumes", scrollPosition() > 0f)
+                assertEquals(1f, progress.value, .001f)
+                root.performTouchInput { advanceEventTime(200); up() }
+                pointersDown = false
+                return
+            }
             // Account for touch slop exactly once. The initial acquisition is not the
             // invariant: all subsequent travel must retain this single fixed baseline.
             move(slop + step)
@@ -145,6 +190,30 @@ class QueueDragAnchorTest {
             assertTrue("A fresh pull must acquire the drawer; trace=$trace", acquiredTop > headerBefore.top + 1f)
             assertTrue("Acquisition cannot move farther than the finger", acquiredTop - headerBefore.top <=
                 finger.y - originalFinger.y + 2f)
+            if (endpoints) {
+                // Cross fully open in one delta. Neither that delta's remainder nor
+                // subsequent motion may switch this drawer contact to list scrolling.
+                val endpoint = if (closedEndpoint) 0f else 1f
+                val reverse = if (closedEndpoint) -1f else 1f
+                val acquiredTravel = acquiredTop - headerBefore.top
+                val drawerDistance = acquiredTravel / (1f - progress.value)
+                move(if (closedEndpoint) drawerDistance - acquiredTravel + 2f * step
+                    else -acquiredTravel - 2f * step)
+                assertEquals(endpoint, progress.value, .001f)
+                assertEquals(0f, scrollPosition(), .001f)
+                move(reverse * step)
+                assertEquals("Drawer retains excess travel at its endpoint", endpoint, progress.value, .001f)
+                assertEquals(0f, scrollPosition(), .001f)
+                move(reverse * 3f * step)
+                assertTrue("Same owner responds after reversal", if (closedEndpoint) progress.value > 0f else progress.value < 1f)
+                assertEquals(0f, scrollPosition(), .001f)
+                root.performTouchInput { advanceEventTime(200); up() }
+                pointersDown = false
+                compose.mainClock.autoAdvance = true
+                compose.waitForIdle()
+                assertEquals(1, settlements.size)
+                return
+            }
             val samples = mutableListOf<String>()
             fun assertAnchor(phase: String) {
                 val top = header.fetchSemanticsNode().boundsInRoot.top

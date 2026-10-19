@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -67,15 +68,17 @@ class GlassActionRowTest {
         }
     }
 
-    @Test fun narrowLargeFontActionsRemainReachableWithoutDraggingButtonsInShortWindow() {
+    @Test fun narrowLargeFontActionsArbitrateDragsAndRemainReachableInShortWindow() {
         var visible by mutableStateOf(false)
         var direction by mutableStateOf(LayoutDirection.Ltr)
         var randomizations = 0
         var reversions = 0
+        val pulses = mutableListOf<ControlHaptic>()
         compose.setContent { LocalicaTheme {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, 2f),
-                LocalLayoutDirection provides direction, LocalReducedMotion provides true) {
+                LocalLayoutDirection provides direction, LocalReducedMotion provides true,
+                LocalControlHaptics provides ControlHaptics { pulses += it }) {
                 // A 360dp window minus 24dp outer margins, 48dp dialog padding
                 // and default 45.6dp body shadow clearance leaves about 242dp.
                 Box(Modifier.width(240.dp).height(112.dp).testTag("viewport")) {
@@ -101,12 +104,42 @@ class GlassActionRowTest {
             randomize.performScrollTo().assertIsDisplayed()
             val beforeDrag = randomize.getUnclippedBoundsInRoot()
             val clicksBeforeDrag = randomizations
+            val pulsesBeforeDrag = pulses.size
+            val travel = if (layoutDirection == LayoutDirection.Ltr) -160f else 160f
+            // A deliberate held drag keeps button ownership without activation.
             randomize.performTouchInput {
-                if (layoutDirection == LayoutDirection.Ltr) swipeLeft() else swipeRight()
+                down(center); advanceEventTime(200)
+                moveBy(Offset(travel, 0f), delayMillis = 100); up()
             }
             assertEquals(beforeDrag, randomize.getUnclippedBoundsInRoot())
-            compose.runOnIdle { assertEquals(clicksBeforeDrag, randomizations) }
+            compose.runOnIdle {
+                assertEquals(clicksBeforeDrag, randomizations); assertEquals(pulsesBeforeDrag, pulses.size)
+            }
+            // Slow movement must also retain ownership without a stationary hold.
+            randomize.performTouchInput {
+                down(center)
+                repeat(10) { moveBy(Offset(travel / 10f, 0f), delayMillis = 100) }
+                up()
+            }
+            assertEquals(beforeDrag, randomize.getUnclippedBoundsInRoot())
+            compose.runOnIdle {
+                assertEquals(clicksBeforeDrag, randomizations); assertEquals(pulsesBeforeDrag, pulses.size)
+            }
+            // Fast intent scrolls this overflowing row and never activates its origin.
+            randomize.performTouchInput { swipe(center, center + Offset(travel, 0f), 120) }
+            val afterScroll = randomize.getUnclippedBoundsInRoot()
+            if (layoutDirection == LayoutDirection.Ltr) assertTrue(afterScroll.left < beforeDrag.left)
+            else assertTrue(afterScroll.left > beforeDrag.left)
+            compose.runOnIdle {
+                assertEquals(clicksBeforeDrag, randomizations); assertEquals(pulsesBeforeDrag, pulses.size)
+            }
+            randomize.performScrollTo().assertIsDisplayed()
             randomize.performClick()
+            compose.runOnIdle {
+                assertEquals(clicksBeforeDrag + 1, randomizations)
+                assertEquals(pulsesBeforeDrag + 1, pulses.size)
+                assertEquals(ControlHaptic.Weak, pulses.last())
+            }
             assertWholeLabel("Randomize"); assertWholeLabel("Revert")
             // Compare the native layout footprint, not two separately converted Dp
             // edges: scrolling changes their subtraction's floating-point rounding.

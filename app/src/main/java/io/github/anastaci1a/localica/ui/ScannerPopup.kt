@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,7 +52,7 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
             ActionIcon(R.drawable.ic_settings, "Scanner configuration") { onSettings("Scanner configuration") }
         }
     }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = {
                 if (!state.scanning) onStart()
                 else if (!notifications || restricted) backgroundHelp = true else onDismiss()
@@ -74,7 +73,7 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
         }
     }, confirmButton = { ActionTextButton(onClick = onDismiss) { Text("Close") } })
     if (backgroundHelp) GlassAlertDialog(onDismissRequest = { backgroundHelp = false }, title = { Text("Background scanning") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!notifications) {
                 Text("Notifications are off. Scanning can continue, but its progress and Cancel button won’t appear in the notification drawer.")
                 if (Build.VERSION.SDK_INT >= 33 && !asked) ActionTextButton(onClick = { permission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }) { Text("Enable notifications") }

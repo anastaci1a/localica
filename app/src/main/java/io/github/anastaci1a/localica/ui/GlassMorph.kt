@@ -7,7 +7,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -35,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
@@ -130,7 +131,7 @@ private fun android.view.Window.glassInput(enabled: Boolean) {
 @Composable
 internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     GlassMorphPopup(visible, anchor, onDismiss, if (anchor.bounds == Rect.Zero) GlassPlacement.Center else GlassPlacement.Menu) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).verticalScroll(rememberScrollState()), content = content)
+        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).controlVerticalScroll(rememberScrollState()), content = content)
     }
 }
 
@@ -146,7 +147,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         contact = { if (anchor.contact.pressed) 1f else 0f }, state = anchor.contact.state,
         active = { anchor.contact.modal })
     var present by remember { mutableStateOf(false) }
-    var surfaceReady by remember { mutableStateOf(false) }
+    var readyWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var origin by remember { mutableStateOf(Rect.Zero) }
     var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
     var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
@@ -163,13 +164,30 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     LaunchedEffect(visible, reduced, speed) {
         if (!visible && !present) { anchor.hidden = false; return@LaunchedEffect }
         if (visible) {
-            if (!present && anchor.bounds == Rect.Zero) withFrameNanos { }
-            if (!present) { origin = anchor.bounds; source = ambientSource ?: anchor.source }
-            source?.refresh()
-            present = true; anchor.modalPresent = true; anchor.contact.modal = true
-            // Keep the origin visible until the modal has a measured surface.
-            withFrameNanos { }; withFrameNanos { }
-            anchor.hidden = true; surfaceReady = true; anchor.shadowInModal = true
+            val retainedWindow = modalWindow?.takeIf { it === readyWindow }
+            if (retainedWindow != null) {
+                // Logical return can finish before Compose disposes this window.
+                // Reclaim its prepared surface before suspending or exposing the trigger.
+                present = true; anchor.modalPresent = true; anchor.contact.modal = true
+                anchor.hidden = true; anchor.shadowInModal = true
+                source?.refresh()
+            } else {
+                if (!present && anchor.bounds == Rect.Zero) withFrameNanos { }
+                if (!present) { origin = anchor.bounds; source = ambientSource ?: anchor.source }
+                source?.refresh()
+                present = true; anchor.modalPresent = true; anchor.contact.modal = true
+                // A new or interrupted unready window still needs measured frames.
+                // Never lend its readiness to a replacement native window.
+                while (true) {
+                    val preparingWindow = snapshotFlow { modalWindow }.filterNotNull().first()
+                    withFrameNanos { }; withFrameNanos { }
+                    if (modalWindow === preparingWindow) {
+                        readyWindow = preparingWindow
+                        anchor.hidden = true; anchor.shadowInModal = true
+                        break
+                    }
+                }
+            }
         }
         if (reduced) progress.snapTo(if (visible) 1f else 0f)
         else progress.animateTo(if (visible) 1f else 0f,
@@ -183,7 +201,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             // drawing acknowledgement, keeping the modal material visible meanwhile.
             var frames = 0
             while (anchor.triggerMounted && !anchor.restoredDrawn && frames++ < 6) withFrameNanos { }
-            present = false; surfaceReady = false; anchor.modalPresent = false; anchor.shadowInModal = false
+            present = false; anchor.modalPresent = false; anchor.shadowInModal = false
             anchor.contact.modal = false
         }
     }
@@ -204,7 +222,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             // blocks touches as an untrusted occluder during return on Android 16.
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             window?.setWindowAnimations(0)
-            onDispose { if (modalWindow === window) modalWindow = null }
+            onDispose {
+                if (readyWindow === window) readyWindow = null
+                if (modalWindow === window) modalWindow = null
+            }
         }
         DisposableEffect(window, visible, dismissalAttempt) {
             // A busy editor may refuse dismissal; Settings Back may only change
@@ -320,7 +341,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         else androidx.compose.ui.unit.IntOffset(mix(if (detached) x else start.left, x).roundToInt(),
                             mix(if (detached) y + margin * 2 else start.top, y).roundToInt())
                     }.graphicsLayer {
-                        alpha = if (detached) p else if (surfaceReady) 1f else 0f
+                        // Native readiness survives logical close; this popup must still own drawing.
+                        alpha = if (detached) p else if (present && window != null && readyWindow === window) 1f else 0f
                     }.drawWithContent {
                         // Match the trigger's draw-space deformation. A layout-layer
                         // scale changes global sampling coordinates, causing a small

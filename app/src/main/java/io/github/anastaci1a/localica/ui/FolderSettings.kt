@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,7 +56,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
         if (page == null) GlassSearchField(search, { search = it }, "Search settings",
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
-            Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(24.dp),
+            Column(Modifier.fillMaxWidth().weight(1f).controlVerticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (page == null) {
                     val shown = settingsDestinations.filter {
