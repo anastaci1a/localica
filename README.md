@@ -8,7 +8,7 @@ Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus
 
 [Download development APKs](https://github.com/anastaci1a/localica/releases) · [Build and test](docs/build.md) · [Project plan](docs/README.md) · [Report an issue](https://github.com/anastaci1a/localica/issues)
 
-[Liquid Glass field guide](docs/liquid-glass/README.md): Apple research, Localica’s material and motion specification, and interactive studies.
+[Liquid Glass field guide](docs/liquid-glass/README.md): Apple research, Localica’s material and motion specification, and a [live refracting lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html).
 
 <p>
   <img src="docs/images/library.png" width="240" alt="Library showing In Rainbows and Kid A with floating navigation and mini-player">

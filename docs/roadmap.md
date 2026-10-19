@@ -2,9 +2,10 @@
 
 ## Current checkpoint
 
-- Review the [Liquid Glass specification](liquid-glass/specification.md) on the user’s phone: depth response, interrupted gestures, large collections and material handoffs.
-- Validate [rendering performance](https://github.com/anastaci1a/localica/issues/167), especially queue scrolling and player expansion; emulator measurements do not establish physical-device frame rates. Reproduce [intermittent manual-scroll jitter](https://github.com/anastaci1a/localica/issues/150).
-- Revisit [selection entrance motion](https://github.com/anastaci1a/localica/issues/107) separately. Preserve accessibility, playback continuity and older-Android support throughout.
+- Stabilize current development candidates against [release gates](build.md#release-preparation); a passing component or local test is not confirmation of a cumulative APK. Preserve unreleased experiments separately.
+- Improve startup/dense-library responsiveness and modal gesture ownership ([#406](https://github.com/anastaci1a/localica/issues/406), [#407](https://github.com/anastaci1a/localica/issues/407)); optional new-file-only launch scanning remains a separate [pending change](https://github.com/anastaci1a/localica/pull/408), not current full-scan behavior.
+- Calibrate [glass optics](https://github.com/anastaci1a/localica/issues/222) with reproducible source/displacement comparisons and a working lab before changing production defaults. Preserve immediate selection appearance; [entrance motion](https://github.com/anastaci1a/localica/issues/107) still requires a separate design decision.
+- Validate [frame performance](https://github.com/anastaci1a/localica/issues/167) and [manual-scroll jitter](https://github.com/anastaci1a/localica/issues/150) on the owner's phone, especially queues, tab travel and player expansion. Emulator tests do not establish physical-device frame rates.
 
 ## Deferred capabilities
 
