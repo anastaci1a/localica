@@ -2,7 +2,7 @@
 
 [Guide home](README.md) · [Apple evidence](sources.md) · [Motion lab](lab.html)
 
-**Status: implementation specification.** The [interface contract](../interface.md) owns released behavior; the checks below remain verification criteria, not a claim that every device meets them. Selection entrance motion remains deferred in [#107](https://github.com/anastaci1a/localica/issues/107).
+**Status: implementation requirements, with experimental optical models.** The [interface contract](../interface.md) owns branch behavior; releases and PR evidence establish what shipped and what was tested. These checks are not a claim that every device meets them. Selection entrance motion remains deferred in [#107](https://github.com/anastaci1a/localica/issues/107).
 
 This is our translation of the [Apple evidence](sources.md) into testable Android behavior. The equations below are Localica engineering models, not Apple's private formulas. They need device profiling and perceptual tuning.
 
@@ -125,7 +125,7 @@ Capture reproducible interaction traces on representative physical devices, sepa
 | Re-grab an opening/closing menu | One continuous surface, no missing frame or label jump |
 | Pull a selector beyond either end | Stable edge, bounded strain, recovery without position overshoot |
 | Scroll a selected list, reverse, fling | Lens and content share the same frame and coordinates |
-| Overflowing tabs | Every drag scrolls the strip; the selector cannot be dragged. When tabs fit, dragging anywhere moves the selector. No clipping outside the capsule. |
+| Overflowing tabs | Lens-origin drags adjust selection; other origins scroll the strip. When tabs fit, any option can acquire the selector, subject to shared scroll-intent arbitration. Preserve clipping and accessible alternatives; [#366](https://github.com/anastaci1a/localica/issues/366) supersedes the old overflow rule. |
 | Expand/collapse mini-player slowly | Matched corners/shadow; artwork and material blend reversibly |
 | Swipe artwork diagonally, then reverse | Same gesture owner; no queue opening or player dismissal |
 | Change text size or use long labels | Wrapping/ellipsis by role, preserved target size and spacing |
