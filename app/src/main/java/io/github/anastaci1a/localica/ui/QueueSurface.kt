@@ -154,6 +154,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
     }
     Layout(modifier = Modifier.offset { IntOffset(0, shelfY()) }
         .width(maxWidth).height(CollapsedQueueHeight).then(QueuePointerFrame), content = {
+    // The drawer is an app panel, not a replica of the display. Its one intrinsic
+    // contour clips content/material and draws the rim; the window clips hardware edges.
     FrostedSurface(Modifier.width(maxWidth).height(maxHeight - status)
         .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
         .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
@@ -175,7 +177,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             currentTrace?.invoke("layout top=${it.positionInRoot().y} progress=${progress.value} distance=$distance")
         })
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
-        .nestedScroll(listPull).testTag("queue-surface"), shape = rememberDeviceCorners().shape(), darkening = { .22f + .28f * progress.value }) {
+        .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel, darkening = { .22f + .28f * progress.value }) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") { settle(progress.value < .5f) }
                 .semantics { contentDescription = if (!shown) "Open queue" else "Close queue" }) {
