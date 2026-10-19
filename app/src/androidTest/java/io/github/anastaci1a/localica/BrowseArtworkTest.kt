@@ -1,6 +1,10 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.view.View
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -127,6 +131,39 @@ class BrowseArtworkTest {
         ready.complete(null)
         compose.waitForIdle()
         compose.runOnIdle { assertNull("Missing artwork remains missing rather than borrowing the seed", visual?.artwork) }
+    }
+
+    @Test fun resolutionReplacementsNeverExposeBackgroundEvenWhenInterrupted() {
+        fun cover(edge: Int) = Bitmap.createBitmap(edge, edge, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.rgb(16, 240, 48))
+        }.asImageBitmap()
+        var image by mutableStateOf(cover(32))
+        var stage by mutableIntStateOf(0)
+        lateinit var view: View
+        compose.setContent { LocalicaTheme {
+            view = LocalView.current
+            Box(Modifier.size(120.dp).background(Color.White).testTag("opaque-resolution")) {
+                ArtworkImage(image, false, Modifier.fillMaxSize())
+                PresentationMarker { stage }
+            }
+        } }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { image = cover(96) }
+            repeat(40) { frame ->
+                // Interrupt an in-progress resolution blend, then allow its full
+                // replacement to settle. Every image has the same opaque pixels.
+                if (frame == 5) compose.runOnIdle { image = cover(192) }
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnIdle { stage = (stage + 1) % 24 }
+                val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("opaque-resolution"), stage) { view }
+                val color = pixels[pixels.width / 2, pixels.height / 2]
+                assertEquals("Red must not brighten toward the background at frame $frame: $color", 16f / 255f, color.red, .02f)
+                assertEquals("Green at frame $frame: $color", 240f / 255f, color.green, .02f)
+                assertEquals("Blue must not brighten toward the background at frame $frame: $color", 48f / 255f, color.blue, .02f)
+            }
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     @Test fun decodedResolutionUpgradeFadesInsteadOfSwitchingInOneFrame() {
