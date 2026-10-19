@@ -9,7 +9,7 @@ const {execFileSync}=require('node:child_process');
   const repo='https://github.com/anastaci1a/localica/blob/main/';
   const escape=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   const slug=s=>s.replace(/<[^>]*>/g,'').toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu,'').replace(/\s/g,'-');
-  const pages=['README.md','sources.md','specification.md','controls.md','optics.md','model.md'];
+  const pages=['README.md','sources.md','specification.md','controls.md','optics.md','model.md','reconstruction.md'];
   function link(href){
     if(!href||/^(https?:|#|mailto:)/.test(href))return href;
     const [file,hash]=href.split('#');
@@ -38,6 +38,10 @@ const {execFileSync}=require('node:child_process');
   write('liquid-glass/experiments/reference_patch.py',fs.readFileSync(path.join(root,'experiments/reference_patch.py')));
   write('liquid-glass/experiments/context-sources.json',fs.readFileSync(path.join(root,'experiments/context-sources.json')));
   write('liquid-glass/experiments/model-fixtures.json',fs.readFileSync(path.join(root,'experiments/model-fixtures.json')));
+  for(const name of ['render.py','reproduce.py','verify.py','publish.py','sensitivity.py','sources.json','results.json','sensitivity.json']){
+    const file='experiments/reconstruction/'+name;
+    write('liquid-glass/'+file,fs.readFileSync(path.join(root,file)));
+  }
   write('.nojekyll','');
   write('index.html','<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="0;url=liquid-glass/lab.html"><title>Localica Liquid Glass lab</title><a href="liquid-glass/lab.html">Open the Liquid Glass lab</a></html>');
   fs.writeFileSync(path.join(out,'build.json'),JSON.stringify(manifest,null,2)+'\n');

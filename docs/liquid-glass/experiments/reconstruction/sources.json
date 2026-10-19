@@ -1,0 +1,19 @@
+{
+  "scope": "Three attributed HD excerpts for material reconstruction. Source videos are downloaded separately and are not redistributed. Apple screenshots remain Apple material, not original Localica assets.",
+  "219": {
+    "title": "Meet Liquid Glass",
+    "page": "https://developer.apple.com/videos/play/wwdc2025/219/",
+    "download": "https://devstreaming-cdn.apple.com/videos/wwdc/2025/219/4/476dabc8-f3bb-4190-8929-4ba7131c939d/downloads/wwdc2025-219_hd.mp4?dl=1",
+    "sha256": "3d58f9e843f0b8c22e99d76de6b5201ef5b17de5bb4bf5732862ba7dbf9be60e",
+    "size": [1920, 1080],
+    "rate": "30000/1001"
+  },
+  "284": {
+    "title": "Build a UIKit app with the new design",
+    "page": "https://developer.apple.com/videos/play/wwdc2025/284/",
+    "download": "https://devstreaming-cdn.apple.com/videos/wwdc/2025/284/4/afb20876-65b2-4aeb-bd50-66e4df1b2281/downloads/wwdc2025-284_hd.mp4?dl=1",
+    "sha256": "c18ea041ef1fb588761d9de540a224c4c8b1e32171e17daebfdd5dcceecca75c",
+    "size": [1920, 1080],
+    "rate": "30000/1001"
+  }
+}
