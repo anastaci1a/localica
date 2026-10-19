@@ -27,7 +27,8 @@ import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 
 internal data class FrozenBrowseItem(val image: androidx.compose.ui.graphics.ImageBitmap,
-    val origin: androidx.compose.ui.unit.IntOffset, val size: androidx.compose.ui.unit.IntSize)
+    val origin: androidx.compose.ui.unit.IntOffset, val size: androidx.compose.ui.unit.IntSize,
+    val highlight: RetainedCurrentSongHighlight? = null)
 
 internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0)
 
@@ -61,6 +62,7 @@ internal class BrowsePinchMotion {
     var targetColumns = 1
     var sourceColumns = 1
     val retained = mutableMapOf<Any, androidx.compose.ui.graphics.layer.GraphicsLayer>()
+    val currentHighlights = mutableMapOf<Any, androidx.compose.ui.graphics.Color>()
     var anchorIndex = 0
     var anchorTop = 0f
     var rowHeight = 64f
@@ -276,8 +278,12 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                                 translate(origins[i].x.toFloat(), origins[i].y.toFloat()) { drawLayer(layer) }
                             }
                         }
+                        // Keep the tint with the same source snapshot even if playback or
+                        // virtualization changes the live rows during readback.
+                        val highlights = motion.currentHighlights.toMap()
                         val image = captureLayer.pinchSnapshot(density, layoutDirection)
-                        drawings.forEachIndexed { i, (key, layer) -> motion.frozen[key] = FrozenBrowseItem(image, origins[i], layer.size) }
+                        drawings.forEachIndexed { i, (key, layer) -> motion.frozen[key] = FrozenBrowseItem(image, origins[i], layer.size,
+                            highlights[key]?.let(::RetainedCurrentSongHighlight)) }
                     }
                     onPreview(next)
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -301,11 +307,21 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
 
 /** Keep a bounded set of source drawings alive even when the destination virtualizes them out. */
 @Composable
-internal fun Modifier.retainPinchItem(key: Any, motion: BrowsePinchMotion): Modifier {
+internal fun Modifier.retainPinchItem(key: Any, motion: BrowsePinchMotion,
+    highlight: androidx.compose.ui.graphics.Color? = null): Modifier {
     val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    SideEffect {
+        if (highlight == null) motion.currentHighlights.remove(key)
+        else motion.currentHighlights[key] = highlight
+    }
     DisposableEffect(motion, key, layer) {
         motion.retained[key] = layer
-        onDispose { if (motion.retained[key] === layer) motion.retained.remove(key) }
+        onDispose {
+            if (motion.retained[key] === layer) {
+                motion.retained.remove(key)
+                motion.currentHighlights.remove(key)
+            }
+        }
     }
     return drawWithContent {
         // Keep one drawing owner through recognition, interpolation and release.
@@ -348,6 +364,12 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val factor = 1f + (fit - 1f) * p
             val alpha = 1f - p * p * (3f - 2f * p)
             translate(old.left + (x - old.left) * p + inset, old.top + (y - old.top) * p + inset) {
+                image.highlight?.let { highlight ->
+                    val originalSize = androidx.compose.ui.geometry.Size(image.size.width.toFloat(), image.size.height.toFloat())
+                    with(highlight.renderer) {
+                        draw(Rect(Offset.Zero, originalSize * factor), highlight.color, originalSize, alpha)
+                    }
+                }
                 scale(factor, factor, Offset.Zero) {
                     drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = alpha)
                 }

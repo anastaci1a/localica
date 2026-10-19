@@ -2,61 +2,76 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Canvas
-import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+
+/** The live row and virtualized pinch copy share their frost without scaling its contour. */
+internal class CurrentSongHighlightRenderer {
+    private var texture: ImageBitmap? = null
+    private var textureSize = Size.Zero
+    private var textureDensity = 0f
+    private val outline = Path()
+
+    fun DrawScope.draw(bounds: Rect, color: Color, sourceSize: Size = bounds.size, alpha: Float = 1f) {
+        if (sourceSize.width <= 0f || sourceSize.height <= 0f || bounds.isEmpty || alpha <= 0f) return
+        if (texture == null || textureSize != sourceSize || textureDensity != density) {
+            textureSize = sourceSize
+            textureDensity = density
+            texture = ImageBitmap(kotlin.math.ceil(sourceSize.width).toInt(), kotlin.math.ceil(sourceSize.height).toInt()).also { image ->
+                CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(image), sourceSize) {
+                    val random = kotlin.random.Random(47)
+                    repeat((sourceSize.width * sourceSize.height / 180f).toInt().coerceAtMost(1600)) {
+                        drawCircle(Color.White.copy(alpha = .065f), .4.dp.toPx(),
+                            Offset(random.nextFloat() * sourceSize.width, random.nextFloat() * sourceSize.height))
+                    }
+                }
+            }
+        }
+        val contour = mediaItemContour(bounds, MediaSelectionGap.toPx())
+        val corner = contour.topLeftCornerRadius
+        drawRoundRect(color.copy(alpha = .13f * alpha), bounds.topLeft, bounds.size, corner)
+        outline.reset()
+        outline.addRoundRect(contour)
+        clipPath(outline) {
+            translate(bounds.left, bounds.top) {
+                scale(bounds.width / sourceSize.width, bounds.height / sourceSize.height, Offset.Zero) {
+                    drawImage(requireNotNull(texture), alpha = alpha)
+                }
+            }
+            // Keep the faint centered stroke inside the shared silhouette.
+            drawRoundRect(Color.White.copy(alpha = .12f * alpha), bounds.topLeft, bounds.size, corner,
+                style = Stroke(.7.dp.toPx()))
+        }
+    }
+}
+
+internal class RetainedCurrentSongHighlight(val color: Color) {
+    val renderer = CurrentSongHighlightRenderer()
+}
 
 internal fun Modifier.currentSongHighlight(current: Boolean, color: Color,
     visualSize: (Size) -> Size = { it }) = semantics {
     if (current) stateDescription = "Current song"
 }.drawWithCache {
-    // Retain the expensive noise texture. The cheap rounded slab is drawn at its
-    // visual bounds so pinch never scales its inset, corner radius or outline.
-    val image = if (current && size.width > 0 && size.height > 0) {
-        ImageBitmap(kotlin.math.ceil(size.width).toInt(), kotlin.math.ceil(size.height).toInt()).also { image ->
-        CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(image), size) {
-            val random = kotlin.random.Random(47)
-            repeat((size.width * size.height / 180f).toInt().coerceAtMost(1600)) {
-                drawCircle(Color.White.copy(alpha = .065f), .4.dp.toPx(), Offset(random.nextFloat() * size.width, random.nextFloat() * size.height))
-            }
-        }
-        }
-    } else null
-    val outline = Path()
+    val renderer = CurrentSongHighlightRenderer()
     onDrawBehind {
-        image?.let {
-            // Pinch keeps destination measurement for virtualization, while the
-            // visible slab follows both source-to-destination dimensions.
-            // Scale only this cached decoration; hit bounds and selection stay put.
-            val visual = visualSize(size)
-            val inset = 4.dp.toPx()
-            val bounds = Size((visual.width - 2 * inset).coerceAtLeast(0f), (visual.height - 2 * inset).coerceAtLeast(0f))
-            val origin = Offset(inset + if (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl) size.width - visual.width else 0f, inset)
-            val corner = CornerRadius(14.dp.toPx())
-            drawRoundRect(color.copy(alpha = .13f), origin, bounds, corner)
-            outline.reset()
-            outline.addRoundRect(RoundRect(Rect(origin, bounds), corner))
-            clipPath(outline) {
-                translate(origin.x - inset, 0f) {
-                    scale(visual.width / size.width, visual.height / size.height, Offset.Zero) { drawImage(it) }
-                }
-            }
-            drawRoundRect(Color.White.copy(alpha = .12f), origin, bounds, corner, style = Stroke(.7.dp.toPx()))
+        if (current) with(renderer) {
+            draw(mediaItemBounds(size, visualSize(size), layoutDirection), color, sourceSize = size)
         }
     }
 }

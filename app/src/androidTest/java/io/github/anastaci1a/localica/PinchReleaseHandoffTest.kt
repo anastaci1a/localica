@@ -135,10 +135,9 @@ class PinchReleaseHandoffTest {
                     } >= 3
                 }
                 assertTrue("The source highlight remains visible at recognition", columns.isNotEmpty())
-                // The decorative inset is 4dp per side; allow edge antialiasing.
-                val inset = 8f * InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+                // Playback frost shares the full selection footprint; allow edge antialiasing.
                 assertEquals("Recognition must retain the gallery highlight width",
-                    originalBounds.width - inset, (columns.last() - columns.first() + 1).toFloat(), 5f)
+                    originalBounds.width, (columns.last() - columns.first() + 1).toFloat(), 5f)
                 list.performTouchInput {
                     val halfSpan = if (outward) 96f else 39f
                     moveTo(0, Offset(x - halfSpan, y)); moveTo(1, Offset(x + halfSpan, y))
