@@ -1,0 +1,114 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · optics</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="what-can-we-establish-about-the-lens">What can we establish about the lens?</h1>
+<p><a href="index.html">Guide</a> · <a href="sources.html">Apple sources</a> · <a href="lab.html">Interactive lab</a> · <a href="specification.html#geometry-and-readability">Implementation requirements</a></p>
+<h2 id="evidence-not-a-recovered-shader">Evidence, not a recovered shader</h2>
+<p>The strongest defensible description is <strong>a designed rounded optical surface with independently adaptive transmission, scattering and illumination</strong>. A shallow cushion with a quiet interior and stronger curved shoulders is a useful model for some observed controls. Neither a sphere, a constant-thickness extrusion nor a literal water droplet is established as Apple&#39;s universal geometry.</p>
+<table>
+<thead>
+<tr>
+<th>Evidence class</th>
+<th>Supports</th>
+<th>Does not establish</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=89">Apple&#39;s material overview</a></td>
+<td>Lensing, interaction-driven shape/light, and size-dependent material changes</td>
+<td>Height field, refractive index, light rig, exact timing or shader equations</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/materials">Materials HIG</a></td>
+<td>Regular material scatters/adjusts luminosity; Clear prioritizes media; controls can become glass temporarily</td>
+<td>One blur amount or tone curve across variants/settings</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views">Custom-view API</a></td>
+<td>Capsule default, configurable outline, shared containers and stable morph identities</td>
+<td>That a capsule outline implies a cylindrical three-dimensional lens</td>
+</tr>
+<tr>
+<td><a href="https://github.com/anastaci1a/localica/issues/222">Measurements in #222</a></td>
+<td>In selected scenes, registered interior landmarks and localized peripheral displacement; blur and illumination matter independently</td>
+<td>Unique surface normals/thickness, tangential displacement from a single bar, or cross-scene visual parity</td>
+</tr>
+</tbody></table>
+<p>An apparently flat optical core need not look like a sanded face. Continuous curvature and soft directional reflection can suggest a rounded body while preserving central registration. Conversely, a large central zoom is not evidence of correct depth. Test image displacement separately from highlights and perceived shape.</p>
+<h2 id="reproducible-reference-comparison">Reproducible reference comparison</h2>
+<p>The <a href="https://developer.apple.com/tutorials/videos/com.apple.SwiftUI/liquid-glass-morph-views.mp4">Apple morph asset</a> exposes the later circle&#39;s backdrop before it splits. Prior #222 work selected a label-free 21×21 patch centered at (423,60), approximate circle center (429,114), radius 83. It lies on a shoulder, <strong>not at the center</strong>. Its geometry, source registration and chosen patch remain assumptions of this experiment.</p>
+<p>Run <a href="experiments/reference_patch.py">reference_patch.py</a> against a privately downloaded asset. It verifies SHA256 <code>4feea1c34a97ae1a4853c8f38831b9c7579c739db2c1060b1f4b84d3082d3992</code>, decodes native frames, reads actual presentation timestamps, and checks identity/known-shift synthetic controls. Requirements: Python 3, NumPy, OpenCV and ffprobe. No Apple pixels are stored in this repository.</p>
+<ul>
+<li>Training parameters are frozen from the earlier experiment at 1.133333 s; repeated observations are 1.400000, 1.666667, 4.066667, 4.350000 and 4.616667 s. Variable frame intervals prohibit assuming frame index / 60.</li>
+<li>The new reproduction also freezes photometry from the training frame, instead of only refitting positive RGB gain/offset on every observation. Results below use OpenCV 5.0.0 / NumPy 2.4.6; values are RGB RMSE on a 0–255 scale.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Frozen geometric model (sigma, inverse dx/dy in decoded px)</th>
+<th align="right">Held-out mean, tone refitted</th>
+<th align="right">Held-out mean, tone frozen</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Identity (0, 0, 0)</td>
+<td align="right">3.260</td>
+<td align="right">3.334</td>
+</tr>
+<tr>
+<td>Blur only (3.25, 0, 0)</td>
+<td align="right">2.883</td>
+<td align="right">2.964</td>
+</tr>
+<tr>
+<td>Translation only (0, 0.25, 2.5)</td>
+<td align="right">2.794</td>
+<td align="right">2.875</td>
+</tr>
+<tr>
+<td>Blur + translation (3, 0, 2.5)</td>
+<td align="right"><strong>2.517</strong></td>
+<td align="right"><strong>2.609</strong></td>
+</tr>
+</tbody></table>
+<p>The joint model retains its advantage when tone is frozen. This is evidence for a modest displaced, softened lookup in this patch, not an independently validated global lens. Earlier sensitivity analysis admitted sigma 1.5–4.5 and vertical lookup 1–3.75 px within +0.15 training RMSE; it is not a statistical confidence interval. Background reconstruction, encoding, unknown light/tone and the aperture problem remain confounded.</p>
+<p>Other #222 observations constrain different properties: Apple&#39;s clear slider retains sharp track edges in the core and widens them nearer the rim; a regular text panel supports much stronger effective blur. Those are different materials/scenes. Do not average their fitted constants into a universal preset. Touch-light propagation has no synchronized contact signal in these assets; no defensible latency or pressure equation was recovered.</p>
+<h2 id="two-deliberately-different-lab-models">Two deliberately different lab models</h2>
+<p>Both use one analytic rounded-rectangle silhouette (circle/capsule are special cases), one background texture, and an <strong>inverse</strong> mapping: each output pixel looks up its displaced source coordinate. Labels remain outside that map. No triangle-specific optical interpolation or DOM screenshot illusion is involved.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Construction</th>
+<th>Purpose / limitation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Boundary-focused (default)</td>
+<td>Small interior lookup plus a smooth compact shoulder displacement, inward along the boundary normal</td>
+<td>Separates quiet-core registration from edge bending; inspired by observations, <strong>not fitted to all Apple scenes</strong></td>
+</tr>
+<tr>
+<td>Physical cap comparison</td>
+<td>Smooth shoulder height plus a weak curved crown; normal from height gradient; Snell entry, planar exit and backdrop gap</td>
+<td>Makes thickness/normal/ray relationships inspectable; assumes a plano-convex body and orthographic viewing, neither established for iOS</td>
+</tr>
+</tbody></table>
+<p>For the boundary model, with inward distance <code>d</code>, shoulder width <code>b</code>, <code>u=clamp(d/b,0,1)</code>, use <code>16u²(1−u)²</code> inside the band and zero beyond it. Value and first derivative vanish at both ends, avoiding a sharp optical boundary. A small smooth interior term retains gentle magnification. Height scales its strength; it is a phenomenological parameter, not a measured physical thickness.</p>
+<p>For the cap comparison, height is a quintic shoulder ramp plus a gentle elliptical crown, with derivatives zero at the shoulder&#39;s inner join. Backward rays enter from the viewer, travel through the cap, exit a plane and travel to the backdrop. <a href="https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission">Snell/Fresnel</a> supplies generic optics, not Apple&#39;s model. The index 1.33 is water-inspired and fixed for this experiment. The reflected environment is a synthetic light rig, not a reconstructed room. No caustics, dispersion, multiple scattering or full fluid simulation.</p>
+<p>Pressing reduces height and narrows the shoulder while expanding the footprint. Held shape approaches critically; released strain/depth can rebound with adjustable damping. These are Localica choices. A requested geometric response must be tested independently from Apple&#39;s interaction-light behavior.</p>
+<h2 id="reading-the-lab-honestly">Reading the lab honestly</h2>
+<ul>
+<li>Zero optical power, blur, tint, trim, reflection and shadow must reproduce the backdrop, including the shoulder. Coordinate mode encodes X/Y in R/G so tests can decode the actual GPU lookup; exterior and center registration can be checked directly.</li>
+<li>Compare circle, capsule and panel over grid/text/color. Watch the center, shoulder join, corners and diagonal axes through a morph, reversal and held press. Blur must not conceal broken registration or seams.</li>
+<li>The contrast mapping is Localica&#39;s monotonic endpoint compression from the <a href="specification.html#geometry-and-readability">specification</a>, not Apple&#39;s tone algorithm. Foreground ink stays crisp. Simulated reflection is separate from sampled transmission.</li>
+<li>This small WebGL experiment does not validate Android adapters, modal hierarchy, merged selections, production accessibility or physical-phone frame rates. A disclosed 2D fallback preserves controls but cannot establish refractive parity.</li>
+<li>Before production changes: freeze model parameters on one suitable reference, evaluate independent scenes with exposed backgrounds, then compare native coordinate-coded renders on both Android adapters. Retain alternative hypotheses when the source cannot distinguish them.</li>
+</ul>
+<h2 id="run-and-verify">Run and verify</h2>
+<ul>
+<li>Open the <a href="https://anastaci1a.github.io/localica/liquid-glass/lab.html">live lab</a>. <code>?fallback=1</code> explicitly demonstrates the non-refracting fallback. No account, uploaded image or runtime network dependency is needed after the site loads.</li>
+<li>From <code>docs/liquid-glass</code>: <code>npm ci</code>, <code>npm run build</code>, then serve <code>site/</code> with any static server. The generated site contains only allowlisted public guide files and original assets; <code>build.json</code> records source SHA and file checksums.</li>
+<li><code>npx playwright install chromium</code>, then <code>npm test</code>. An existing browser can be supplied through <code>CHROMIUM_PATH</code>; <code>LAB_EVIDENCE</code> selects the output directory and <code>LAB_URL</code> can point tests at the deployment. Keep raw test output untracked.</li>
+<li>Browser checks exercise both models/three outlines, zero-power texture identity, actual shoulder displacement, center/exterior registration, tone ordering/endpoints, diagonal continuity, contact/release/wall recovery, interrupted morphs, idle sleep, Reduced Motion, context loss/restoration, mobile sizing and fallback controls. These are targeted probes, not proof of every pixel/state.</li>
+<li>Performance design: one static texture upload per backdrop change, one analytic shader pass, bounded nine-tap scattering, early exit outside the lens, capped 2× render density, and sleeping clocks after settlement or while offscreen. Test-only readback is never used during interaction. Shader submission timing is not GPU duration; SwiftShader captures are not physical-device performance evidence.</li>
+<li>Publish the generated <code>site/</code> contents to the dedicated <code>gh-pages</code> branch. GitHub Pages uses that branch&#39;s root with <code>.nojekyll</code>; Android source/main and APK workflows are independent. Rebuild from the merged docs commit and verify <code>build.json</code> plus the live demo after deployment. Never include private feedback or Apple reference frames.</li>
+</ul>
+</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/9133e01f19c8571d1bf611e1f79770f0606c314a/docs/liquid-glass">9133e01f</a> · Original studies; no claim of iOS parity.</footer></body></html>

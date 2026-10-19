@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · sources</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="apple-evidence-atlas">Apple evidence atlas</h1>
+<p><a href="index.html">Guide home</a> · <a href="specification.html">Localica specification</a> · <a href="lab.html">Motion lab</a></p>
+<p>Compiled 13 October 2026; material, custom-view and spring sources rechecked 19 October 2026. These are concise notes, not reproductions of the talks. Time links open the relevant discussion. <strong>Localica implications</strong> are interpretations, not Apple&#39;s private renderer. Versioned sessions describe their year&#39;s system; living HIG pages may evolve. <a href="optics.html">Optical evidence and reproducible experiments</a> distinguish measured observations from model assumptions.</p>
+<h2 id="interaction-foundations">Interaction foundations</h2>
+<h3 id="designing-fluid-interfaces--wwdc18">Designing Fluid Interfaces · WWDC18</h3>
+<p>Apple makes responsiveness and interruption central to fluidity. Feedback starts at contact; activation waits for release and can be cancelled. During a drag, preserve the finger&#39;s attachment point. At release, velocity helps choose the intended destination. Soft boundaries communicate that input is still being received. Springs can be non-bouncy; bounce should serve momentum or a useful hint. The Music example distinguishes tapping to open Now Playing from swiping to dismiss it. Motion should preserve a consistent spatial relationship between states. Interactive prototypes expose problems that still images miss.</p>
+<p>Watch: <a href="https://developer.apple.com/videos/play/wwdc2018/803/?time=360">response and redirection, 6:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2018/803/?time=1021">boundaries, 17:01</a> · <a href="https://developer.apple.com/videos/play/wwdc2018/803/?time=2040">spring character and Music, 34:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2018/803/?time=2460">projected intent, 41:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2018/803/?time=3000">gesture design, 50:00</a>.</p>
+<p><strong>Localica implication:</strong> test interruptions and reversals as first-class paths. A release flourish cannot compensate for delayed tracking. See <a href="specification.html#input-and-motion">input and motion</a>.</p>
+<h3 id="animate-with-springs--wwdc23">Animate with springs · WWDC23</h3>
+<p>Position continuity alone is insufficient: velocity must remain continuous when a gesture ends or a moving object receives a new target. Springs accept an initial velocity and can preserve it during retargeting. A spring need not overshoot. Apple presents duration and bounce as designer-facing parameters, distinguishing perceptual duration from the later point when residual movement becomes negligible. Do not delay useful actions until the entire settling tail finishes. Tune pacing first, then character, and keep related interactions consistent.</p>
+<p>Watch: <a href="https://developer.apple.com/videos/play/wwdc2023/10158/?time=120">continuity, 2:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2023/10158/?time=270">gesture handoff, 4:30</a> · <a href="https://developer.apple.com/videos/play/wwdc2023/10158/?time=540">parameters, 9:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2023/10158/?time=870">retargeting, 14:30</a> · <a href="https://developer.apple.com/videos/play/wwdc2023/10158/?time=960">settling, 16:00</a>.</p>
+<p>The 2018 talk&#39;s response/damping vocabulary and the 2023 duration/bounce API are different parameterizations, not a mandate to replay fixed-duration animations. <strong>Localica implication:</strong> retain motion state across target changes; keep semantic completion separate from visual settling.</p>
+<h3 id="hig--motion-and-accessibility">HIG · Motion and accessibility</h3>
+<p>Motion should explain state, remain brief, allow cancellation, and have alternatives. Input method can affect its emphasis. <a href="https://developer.apple.com/design/human-interface-guidelines/motion">Motion</a>.</p>
+<p>Accessibility guidance calls for scalable readable text, sufficient contrast, non-color state cues, simple gestures and alternative ways to operate controls. Reduced Motion must change custom effects too. <a href="https://developer.apple.com/design/human-interface-guidelines/accessibility">Accessibility</a>.</p>
+<p><strong>Localica implication:</strong> the material is optional feedback; action names, selection semantics, keyboard focus and tap alternatives remain functional without it. See <a href="specification.html#acceptance-checks">acceptance checks</a>.</p>
+<h2 id="material-and-hierarchy">Material and hierarchy</h2>
+<h3 id="meet-liquid-glass--wwdc25">Meet Liquid Glass · WWDC25</h3>
+<p>Apple describes a designed digital material, not a literal physical simulation. Lensing defines its form; appearance transitions can vary refraction rather than simply fading opacity. Touch changes both illumination and shape. Size and environment affect scattering, tint, contrast and shadows. A button expanding into a menu retains its relationship to the origin. Small surfaces may change light/dark treatment; large ones avoid distracting wholesale flips. Regular and Clear serve different contexts. Apple cautions against glass throughout the content layer or stacked glass surfaces. Accessibility settings modify the material.</p>
+<p>Watch: <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=89">dynamics, 1:29</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=360">adaptivity, 6:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=631">layers, 10:31</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=780">placement and variants, 13:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=1080">accessibility, 18:00</a>.</p>
+<p><strong>Localica implication:</strong> optics, geometry and interaction need a shared model. A translucent outline plus an unrelated scale animation cannot express all of these behaviors. See <a href="specification.html#surface-roles">surface roles</a>.</p>
+<h3 id="hig--materials-and-color">HIG · Materials and color</h3>
+<p>Regular Liquid Glass blurs and adjusts background luminosity for readability. Clear emphasizes rich media and may need local dimming; it is not the universal default. Standard materials still organize the content layer. Custom glass should be selective. Semantic roles matter more than an apparent color in one screenshot. <a href="https://developer.apple.com/design/human-interface-guidelines/materials">Materials</a>.</p>
+<p>Color distinguishes meaning and hierarchy; materials pick up surrounding content, so a chosen tint needs testing in context rather than treatment as a fixed swatch. <a href="https://developer.apple.com/design/human-interface-guidelines/color">Color</a>.</p>
+<p><strong>Localica implication:</strong> clear-to-frosted customization is useful, but zero blur does not guarantee readable controls. User-chosen glass on selected media is an explicit Localica departure from Apple&#39;s usual layering guidance, not an Apple rule.</p>
+<h3 id="get-to-know-the-new-design-system--wwdc25">Get to know the new design system · WWDC25</h3>
+<p>Concentric geometry aligns nested curves and padding; fixed-radius shapes, capsules and container-relative shapes have distinct roles. Optical balance can require more than mathematical centering. Layout and functional grouping establish hierarchy. Related actions can share a surface, while important actions remain distinct. Presentations identify their source. Persistent navigation accessories differ from contextual actions. Scroll-edge treatments separate overlapping controls and content; they should not be added as arbitrary decoration or stacked repeatedly.</p>
+<p>Watch: <a href="https://developer.apple.com/videos/play/wwdc2025/356/?time=180">geometry, 3:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/356/?time=376">structure, 6:16</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/356/?time=540">grouping, 9:00</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/356/?time=660">scroll edges, 11:00</a>.</p>
+<p><strong>Localica implication:</strong> one surface geometry should drive clipping, rims and shadows. Fix crowded layout at its source; adding a glass wrapper is insufficient. See <a href="specification.html#geometry-and-readability">geometry and readability</a>.</p>
+<h2 id="choosing-and-arranging-controls">Choosing and arranging controls</h2>
+<p>The HIG guidance below describes control roles and usability. It is not a specification of private Liquid Glass rendering constants. <a href="controls.html">Localica&#39;s control rules</a> translate it into our Android components.</p>
+<table>
+<thead>
+<tr>
+<th>Apple source</th>
+<th>Design guidance used here</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/buttons">Buttons</a></td>
+<td>Give custom buttons a press state and sufficient spacing/targets. Use concise action labels and familiar symbols. Related buttons have consistent sizing; reserve prominent treatment for the main actions. Distinguish destructive roles.</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/toggles">Toggles</a></td>
+<td>Use toggles for two-state properties. On iOS, the row describes a trailing switch. State needs a cue beyond color; an app accent can replace the usual green if contrast remains clear.</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/segmented-controls">Segmented controls</a></td>
+<td>Group a small set of related choices or subviews with consistent segment sizing/content. Keep selection and command roles distinct; avoid overfilling a narrow control. Top-level app navigation is a different role.</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/sliders">Sliders</a></td>
+<td>Keep range direction predictable, communicate endpoints and consider exact-value entry for wide ranges. The page&#39;s live-feedback and some tick/shape advice is platform-specific; WWDC25 supplies the newer iOS tick/interaction evidence below.</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/pickers">Pickers</a></td>
+<td>Use contextual pickers for longer choices with predictable ordering; very large sets benefit from lists. Do not force a new page for every small selection.</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/text-fields">Text fields</a></td>
+<td>Retain meaningful labels, align and space fields, match the keyboard to input, validate in context and preserve sensible focus order.</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/steppers">Steppers</a></td>
+<td>Show the affected value beside the control; pair with direct entry when users need large changes.</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/design/human-interface-guidelines/accessibility">Accessibility</a></td>
+<td>Offer gesture alternatives, scalable content, adequate contrast and non-color state cues. Reduced Motion should remove decorative depth, bounce and transitions into/out of blur while preserving understandable state.</td>
+</tr>
+</tbody></table>
+<p><strong>Localica interpretation:</strong> keep Android&#39;s native editing/adjustment semantics under our visual layer. A switch, slider, radio choice and navigation tab must not become indistinguishable generic clickable glass. Our target sizes, adjustable damping and expansion are product choices, not Apple-supplied dimensions or physics; <a href="controls.html">controls</a> owns the current rest/contact rules.</p>
+<h2 id="implementation-evidence">Implementation evidence</h2>
+<h3 id="swiftui-and-uikit-adoption--wwdc25">SwiftUI and UIKit adoption · WWDC25</h3>
+<p>SwiftUI&#39;s custom glass examples use a shared container so neighboring effects sample a consistent region; glass does not sample other glass. Stable effect identities connect morphing states. The sampling region extends beyond an element&#39;s bounds. <a href="https://developer.apple.com/videos/play/wwdc2025/323/?time=1077">Build a SwiftUI app, 17:57</a>.</p>
+<p>UIKit demonstrates adapting corners, size-dependent appearance, coordinated foreground changes, effect-based materialization and container-controlled merging. It recommends removing overlapping floating controls when another glass surface expands over them. <a href="https://developer.apple.com/videos/play/wwdc2025/284/?time=1155">Build a UIKit app, 19:15</a>.</p>
+<p>The custom-view documentation also warns that excessive separate containers/effects degrade performance. Container spacing controls when nearby shapes interact. <a href="https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views">Applying Liquid Glass to custom views</a>.</p>
+<p><strong>Localica implication:</strong> translate these responsibilities into Compose abstractions; SwiftUI/UIKit APIs do not run on Android. Sharing a backdrop does not require joining unrelated controls, and joining selections does not require rectangularly filling their entire bounding box. See <a href="specification.html#rendering-and-measurement">rendering</a>.</p>
+<h3 id="sliders-and-switches--wwdc25">Sliders and switches · WWDC25</h3>
+<p>Apple explicitly describes control thumbs temporarily becoming Liquid Glass during interaction. The transparent lens keeps the value beneath visible. Sliders preserve momentum and stretch during travel; UIKit also supports discrete ticks and a neutral fill origin. <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=89">Meet Liquid Glass, dynamics</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/284/?time=1044">UIKit controls, 17:24–18:38</a> · <a href="https://developer.apple.com/videos/play/wwdc2025/323/?time=55">SwiftUI controls</a>.</p>
+<p><strong>Visual observation of Apple&#39;s demonstration:</strong> slider thumbs are wider than tall, with strongly rounded ends. The quiet white thumb becomes a larger transparent lens while held; the colored track ends visibly beneath its center. A switch likewise exposes its colored track through the moving lens, then returns to a quieter solid thumb. These observations describe the WWDC25 demonstration, not every iOS version or an exact radius/duration specification.</p>
+<p><strong>Localica adaptation:</strong> both settings sliders and switches now use quiet opaque white rest and clear interaction, superseding the earlier always-clear slider request. Preserve accessible values, on/off semantics, tap alternatives and reduced motion. Playback keeps its separate scrubber design. See <a href="controls.html#sliders-keep-the-value-visible">settings controls</a>.</p>
+<h3 id="render-loop-performance--apple-tech-talks">Render-loop performance · Apple Tech Talks</h3>
+<p>A hitch means a frame misses its display deadline. Both application updates and later rendering can cause it. Apple measures the time lost across an interaction, not merely a best-case or average frame rate. <a href="https://developer.apple.com/videos/play/tech-talks/10855/?time=180">Explore UI animation hitches and the render loop, 3:00</a>.</p>
+<p>Shadows, masks, rounded clipping and visual effects can incur offscreen work. Explicit shadow geometry and removing redundant masks can reduce it. Apple&#39;s concrete APIs concern Core Animation; the broader lesson is to inspect the actual rendering cost, rather than assume that GPU effects are free. <a href="https://developer.apple.com/videos/play/tech-talks/10857/?time=180">Demystify and eliminate hitches in the render phase, 3:00</a>.</p>
+<p><strong>Localica implication:</strong> capture frame timelines, allocation and rendered-area evidence for our Android implementation. Cache by geometric identity, keep foregrounds sharp, and measure representative devices. See <a href="specification.html#rendering-and-measurement">rendering and measurement</a>.</p>
+<h2 id="music-controls-and-typography">Music controls and typography</h2>
+<p>Apple&#39;s symbol guide identifies the meanings of Music&#39;s playback, shuffle, repeat, list and sorting controls. It is a semantic reference, not a guarantee that a macOS screenshot matches every iPhone release. <a href="https://support.apple.com/es-us/guide/music/mus131245dbe/mac">Music symbol guide</a>.</p>
+<p>The HIG describes San Francisco&#39;s variable optical sizing, weights and widths; text styles express hierarchy and scale with accessibility settings. It recommends avoiding very light weights for small text. <a href="https://developer.apple.com/design/human-interface-guidelines/typography">Typography</a>.</p>
+<p>SF Symbols coordinates symbol weight/scale with typography and offers purposeful state-change animations. A symbol&#39;s visual footprint need not match its layout box. <a href="https://developer.apple.com/design/human-interface-guidelines/sf-symbols">SF Symbols</a>.</p>
+<p>Tabs navigate top-level areas and preserve state. Toolbars provide contextual actions. Segmented controls group related choices and should retain a consistent type of operation. <a href="https://developer.apple.com/design/human-interface-guidelines/tab-bars">Tab bars</a> · <a href="https://developer.apple.com/design/human-interface-guidelines/toolbars">Toolbars</a> · <a href="https://developer.apple.com/design/human-interface-guidelines/segmented-controls">Segmented controls</a>.</p>
+<p><strong>Localica implication:</strong> retain licensed Inter and our attributed icon sources; match optical weight, spacing and meaning deliberately. This guide does not authorize copying Apple font or symbol files into an Android distribution. Configurable overflow tabs and hidden tabs on detail pages remain our product choices.</p>
+<hr>
+<p>Next: <a href="specification.html">turn the evidence into testable Localica rules</a>. Return to <a href="index.html">guide home</a> or <a href="https://github.com/anastaci1a/localica/blob/main/docs/README.md">project docs</a>.</p>
+</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/9133e01f19c8571d1bf611e1f79770f0606c314a/docs/liquid-glass">9133e01f</a> · Original studies; no claim of iOS parity.</footer></body></html>
