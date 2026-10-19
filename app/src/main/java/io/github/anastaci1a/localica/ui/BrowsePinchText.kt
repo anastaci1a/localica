@@ -31,7 +31,7 @@ internal data class BrowsePinchEndpoint(
     val title: TextLayoutResult, val titleX: Int, val titleY: Int,
     val information: TextLayoutResult?, val infoX: Int, val infoY: Int,
     val menuWidth: Int, val menuHeight: Int, val menuX: Int, val menuY: Int,
-    val height: Int,
+    val height: Int, val artCorner: Float,
 )
 
 /** Measure the target from its actual row constraints, never reconstructed dp padding. */
@@ -58,7 +58,7 @@ internal fun rememberBrowsePinchMeasure(item: BrowserItem, source: BrowseStyle, 
         val placement = metrics.place(title.size.height, info?.size?.width ?: 0, info?.size?.height ?: 0)
         return with(placement) {
             BrowsePinchEndpoint(metrics.art, artX, artY, title, titleX, titleY, info, infoX, infoY,
-                metrics.menu, menuHeight, menuX, menuY, height)
+                metrics.menu, menuHeight, menuX, menuY, height, metrics.artCorner)
         }
     }
     val sourceWidth = motion.sourceContentWidth(item.key, index)

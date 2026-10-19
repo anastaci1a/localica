@@ -49,9 +49,10 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     ArtworkImage(artwork, loading, measured, shape, contentScale)
 }
 
-internal fun artworkShape(kind: io.github.anastaci1a.localica.navigation.MediaKind): androidx.compose.ui.graphics.Shape =
+internal fun artworkShape(kind: io.github.anastaci1a.localica.navigation.MediaKind,
+    rounded: androidx.compose.ui.graphics.Shape = Corners.artwork): androidx.compose.ui.graphics.Shape =
     when (kind) {
         io.github.anastaci1a.localica.navigation.MediaKind.Artist,
         io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist -> CircleShape
-        else -> Corners.artwork
+        else -> rounded
     }
