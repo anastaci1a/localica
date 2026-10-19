@@ -193,7 +193,7 @@ internal fun simpleLensGeometry(regions: List<SelectionRegion>, gap: Float): Len
     if (regions.isEmpty()) return null
     val sorted = regions.sortedBy { it.bounds.top }
     val first = sorted.first().bounds
-    val radius = min(gap * 1.5f, min(first.width, first.height) / 2f)
+    val radius = mediaItemCornerRadius(first, gap)
     if (sorted.any { it.bounds.left != first.left || it.bounds.right != first.right || it.bounds.height < 2 * radius }) return null
     if (sorted.zipWithNext().any { (a, b) -> b.bounds.top - a.bounds.bottom !in 0f..gap }) return null
     return LensGeometry(Rect(first.left, first.top, first.right, sorted.last().bounds.bottom), radius)

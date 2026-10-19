@@ -17,12 +17,18 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.*
 
 internal data class SelectionRegion(val bounds: Rect)
-internal class SelectionEntry { var coordinates: LayoutCoordinates? = null; var selected by mutableStateOf(false) }
+internal class SelectionEntry {
+    var coordinates: LayoutCoordinates? = null
+    var selected by mutableStateOf(false)
+    var visualSize by mutableStateOf<(Size) -> Size>({ it })
+    var direction by mutableStateOf(LayoutDirection.Ltr)
+}
 @Stable internal class SelectionScene {
     val regions = mutableStateMapOf<Any, SelectionEntry>()
     var placement by mutableIntStateOf(0)
@@ -68,7 +74,8 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                 val item = entry.coordinates
                 if (!entry.selected || item == null || !item.isAttached) null else {
                     val at = host.localPositionOf(item, Offset.Zero)
-                    SelectionRegion(Rect(at, Size(item.size.width.toFloat(), item.size.height.toFloat())))
+                    val measured = Size(item.size.width.toFloat(), item.size.height.toFloat())
+                    SelectionRegion(mediaItemBounds(measured, entry.visualSize(measured), entry.direction).translate(at))
                 }
             }
             if (regions.isEmpty()) { drawContent(); return@drawWithContent }
@@ -76,8 +83,8 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             // rasterizing a distance field and uploading another texture every frame.
             val origin = regions.first().bounds.topLeft
             val local = localLensRegions(regions, origin)
-            val path = geometry.path(local, 16.dp.toPx())
-            val components = grouping.get(local, 16.dp.toPx())
+            val path = geometry.path(local, MediaSelectionGap.toPx())
+            val components = grouping.get(local, MediaSelectionGap.toPx())
             while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer())
             if (Build.VERSION.SDK_INT >= 33) {
                 // This recording is read by the ordinary viewport and by every
@@ -93,7 +100,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                 val renderer = groups[index]
                 val groupOrigin = component.first().bounds.topLeft
                 val groupRegions = localLensRegions(component, groupOrigin)
-                val groupPath = renderer.path.path(groupRegions, 16.dp.toPx())
+                val groupPath = renderer.path.path(groupRegions, MediaSelectionGap.toPx())
                 val absolute = origin + groupOrigin
                 val crop = groupPath.getBounds().translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
                 if (crop.isEmpty) return@forEachIndexed
@@ -117,7 +124,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                     val extent = androidx.compose.ui.unit.IntSize(max(visible.width.toInt(), backdropSize.width + 2),
                         foregroundY.toInt() + visible.height.toInt())
                     val output = renderer.output
-                    output.renderEffect = requireNotNull(renderer.optics).effect(groupRegions, groupPath, 16.dp.toPx(), absolute - at, depth, atlas)
+                    output.renderEffect = requireNotNull(renderer.optics).effect(groupRegions, groupPath, MediaSelectionGap.toPx(), absolute - at, depth, atlas)
                     output.clip = true
                     output.record(size = glassLayerExtent(extent)) {
                         clipRect(left = 1f, top = 1f, right = backdropSize.width + 1f, bottom = backdropSize.height + 1f) {
@@ -129,7 +136,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                         translate(at.x - absolute.x, at.y - absolute.y) { drawLayer(output) }
                     } }
                 } else {
-                    renderer.shape.update(groupRegions, groupPath, 16.dp.toPx())
+                    renderer.shape.update(groupRegions, groupPath, MediaSelectionGap.toPx())
                     val shape = renderer.shape.geometry ?: return@forEachIndexed
                     val source = backing
                     val image = source?.snapshot
@@ -145,7 +152,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                     val renderer = groups[index]
                     val shape = renderer.shape.geometry ?: return@forEachIndexed
                     val absolute = origin + component.first().bounds.topLeft
-                    val groupPath = renderer.path.path(localLensRegions(component, component.first().bounds.topLeft), 16.dp.toPx())
+                    val groupPath = renderer.path.path(localLensRegions(component, component.first().bounds.topLeft), MediaSelectionGap.toPx())
                     translate(absolute.x, absolute.y) { clipPath(groupPath) {
                         with(renderer.mesh) { draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth,
                             field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map) }
@@ -154,8 +161,8 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             }
             components.forEachIndexed { index, component ->
                 val offset = origin + component.first().bounds.topLeft
-                val groupPath = groups[index].path.path(localLensRegions(component, component.first().bounds.topLeft), 16.dp.toPx())
-                translate(offset.x, offset.y) { drawGlassRim(groupPath.getBounds(), 24.dp.toPx(), groupPath) }
+                val groupPath = groups[index].path.path(localLensRegions(component, component.first().bounds.topLeft), MediaSelectionGap.toPx())
+                translate(offset.x, offset.y) { drawGlassRim(groupPath.getBounds(), (MediaSelectionGap * 1.5f).toPx(), groupPath) }
             }
 
         }) { content() }
@@ -224,8 +231,7 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float):
     fun add(part: Path) { path.op(path, part, PathOperation.Union) }
     regions.forEach { region ->
         val r = region.bounds
-        val radius = min(gap * 1.5f, min(r.width, r.height) / 2f)
-        add(Path().apply { addRoundRect(RoundRect(r, CornerRadius(radius))) })
+        add(Path().apply { addRoundRect(mediaItemContour(r, gap)) })
     }
     regions.forEachIndexed { i, a -> regions.drop(i + 1).forEach { b ->
         val xGap = max(a.bounds.left - b.bounds.right, b.bounds.left - a.bounds.right)
@@ -249,11 +255,15 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float):
 }
 
 @Composable
-internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean): Modifier {
+internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
+    visualSize: (Size) -> Size = { it }): Modifier {
     val scene = LocalSelectionScene.current
+    val direction = LocalLayoutDirection.current
     val token = remember { Any() }
     val entry = remember { SelectionEntry() }
     SideEffect {
+        entry.visualSize = visualSize
+        entry.direction = direction
         val selected = isSelected && !partial
         if (entry.selected != selected) { entry.selected = selected; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 } }
         scene?.regions?.set(token, entry)

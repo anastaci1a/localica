@@ -125,10 +125,18 @@ class PinchRetainedHighlightTest {
                 val right = (sourceBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
                 val top = (sourceBounds.top - sceneBounds.top).toInt().coerceAtLeast(0)
                 val bottom = (sourceBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
-                val count = (top until bottom).sumOf { py -> (left until right).count { px ->
+                val highlighted = (top until bottom).flatMap { py -> (left until right).mapNotNull { px ->
                     val c = pixels[px, py]
-                    c.red - c.green > .07f && c.blue - c.green > .07f
+                    if (c.red - c.green > .07f && c.blue - c.green > .07f) px to py else null
                 } }
+                val count = highlighted.size
+                if (label == "source" || label == "reversed" || label == "returned") {
+                    assertTrue("The current-song contour stays visible at $label", highlighted.isNotEmpty())
+                    assertEquals("Full selection width at $label", (right - left).toFloat(),
+                        (highlighted.maxOf { it.first } - highlighted.minOf { it.first } + 1).toFloat(), 3f)
+                    assertEquals("Full selection height at $label", (bottom - top).toFloat(),
+                        (highlighted.maxOf { it.second } - highlighted.minOf { it.second } + 1).toFloat(), 3f)
+                }
                 android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")
                 val exported = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
                 val root = exported?.let { java.io.File(it) } ?: requireNotNull(

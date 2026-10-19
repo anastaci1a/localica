@@ -618,13 +618,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     translationX = (old.left - position.x - cellGeometry.gridInset.dp.roundToPx() + alignment) * (1f - pinchMotion.progress.value)
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
-                            }).then(if (pinchMotion.visualSource == null) Modifier.clip(Corners.card) else Modifier).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }
-                            // Retain the current-song slab with its content when the
-                            // destination virtualizes this source row out of the grid.
-                            .retainPinchItem(item.key, pinchMotion)
+                            }).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }
+                            // Frost is redrawn separately from frozen content so its
+                            // corners stay identical to selection during pinch.
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
-                            }.selectionLens(selectedCount > 0, partiallySelected)
+                            }.retainPinchItem(item.key, pinchMotion, MaterialTheme.colorScheme.primary.takeIf { current })
+                            .selectionLens(selectedCount > 0, partiallySelected) { size ->
+                                pinchMotion.highlightSize(item.key, itemIndex, size)
+                            }
+                            .then(if (pinchMotion.visualSource == null) Modifier.clip(Corners.card) else Modifier)
                             .testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
                             onClick = {
