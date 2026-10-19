@@ -46,8 +46,8 @@ class GlassPressureTest {
         repeat(12) {
             compose.mainClock.advanceTimeBy(32)
             val recovering = displayedLensBounds()
-            assertTrue("Vertical release must not turn into a wide horizontal squeeze: $recovering",
-                kotlin.math.abs(recovering.width - initial.width) < initial.width * .04f)
+            assertTrue("Coupled release stays within the physical cross budget: $recovering",
+                kotlin.math.abs(recovering.width - initial.width) <= with(compose.density) { 6.dp.toPx() } + 1f)
         }
         compose.mainClock.advanceTimeBy(1200)
         assertEquals(initial.height, displayedLensBounds().height, 1f)
@@ -66,10 +66,10 @@ class GlassPressureTest {
         assertEquals(initial.height, displayedLensBounds().height, 1f)
         compose.mainClock.autoAdvance = true
     }
-    @Test fun verticalReleaseKeepsTheRenderedReboundOnTravelAtDefaultDamping() = axisRelease(false, 8f)
-    @Test fun verticalReleaseKeepsTheRenderedReboundOnTravelAtHigherDamping() = axisRelease(false, 20f)
-    @Test fun horizontalReleaseUsesTheSameRenderedCrossReturnAtDefaultDamping() = axisRelease(true, 8f)
-    @Test fun horizontalReleaseUsesTheSameRenderedCrossReturnAtHigherDamping() = axisRelease(true, 20f)
+    @Test fun verticalReleaseCouplesRenderedAxesAtDefaultDamping() = axisRelease(false, 8f)
+    @Test fun verticalReleaseCouplesRenderedAxesAtHigherDamping() = axisRelease(false, 20f)
+    @Test fun horizontalReleaseCouplesRenderedAxesAtDefaultDamping() = axisRelease(true, 8f)
+    @Test fun horizontalReleaseCouplesRenderedAxesAtHigherDamping() = axisRelease(true, 20f)
 
     @Test fun retouchAndCancelKeepThePresentedCrossContourContinuous() {
         checkRoundedContainment = true
@@ -127,22 +127,32 @@ class GlassPressureTest {
             assertTrue("Held warp remains axial: $rest -> $held", axial(held) < axial(rest) - 1f)
             compose.onNodeWithText("First").performTouchInput { up(); heldPointer = false }
             val frames = mutableListOf(held)
-            var previousDistance = kotlin.math.abs(cross(held) - cross(rest))
+            val crossBudget = with(compose.density) { 6.dp.toPx() }
+            // #209/#218: the revised release contract requires opposite-phase axes,
+            // replacing the earlier monotone/no-cross-excursion expectation.
+            var phaseSamples = 0
             repeat(30) {
                 compose.mainClock.advanceTimeBy(32)
                 val frame = displayedLensBounds()
                 frames += frame
-                val distance = kotlin.math.abs(cross(frame) - cross(rest))
-                assertTrue("Cross return must not grow a new lateral excursion: $held -> $frames", distance <= previousDistance + 1f)
-                assertTrue("Cross return stays between held and rest, with raster tolerance: $frame",
-                    cross(frame) >= minOf(cross(held), cross(rest)) - 1f &&
-                        cross(frame) <= maxOf(cross(held), cross(rest)) + 1f)
-                previousDistance = distance
+                val crossDelta = cross(frame) - cross(rest)
+                val axialDelta = axial(frame) - axial(rest)
+                assertTrue("Cross rebound stays within its physical budget: $frame",
+                    kotlin.math.abs(crossDelta) <= crossBudget + 1f)
+                // Include the first negative mode lobe: captured axial compression
+                // reinforces its opposite signs even while the residual remains.
+                // Starting at 96 ms also resolves the shorter high-damping excursion.
+                if (it >= 2 && kotlin.math.abs(crossDelta) > 1f && kotlin.math.abs(axialDelta) > 1f) {
+                    assertTrue("Rendered axes must rebound in opposite phase: $frame", crossDelta * axialDelta < 0f)
+                    phaseSamples++
+                }
             }
             val travelSpan = frames.maxOf(::axial) - frames.minOf(::axial)
             val crossSpan = frames.maxOf(::cross) - frames.minOf(::cross)
             android.util.Log.i("GlassAxisReturn", "horizontal=$horizontal damping=$damping rest=$rest held=$held travelSpan=$travelSpan crossSpan=$crossSpan frames=$frames")
-            assertTrue("The actual rendered release must be travel-axis dominant", travelSpan > crossSpan + 1f)
+            assertTrue("The rendered release must retain travel motion", travelSpan > 1f)
+            assertTrue("The rendered release must include bounded cross motion", crossSpan > 1f)
+            assertTrue("Observe a resolved opposite-phase pair", phaseSamples > 0)
             compose.mainClock.advanceTimeBy(1600)
             val final = displayedLensBounds()
             assertEquals(rest.width, final.width, 1f)
