@@ -49,6 +49,8 @@ This review separates three questions: whether pixels are refracted, whether an 
 | **On-device Lock/Home Screen, Photos, notifications and Control Center**, [MacRumors hands-on](https://www.youtube.com/watch?v=gCov2x7oo6Y), 0:47–1:07, 3:56–4:10, 5:37–5:53, newly inspected | Real-use context supplement: dense controls and already softened backgrounds make scattering/tint and foreground contrast as important as visible bending. | June 2025 early-beta report; filming angle, reflections, focus and compression confound optics. Use its original phone footage, not the reused Apple Music insert. No current-iOS default or quantitative shader claim follows. |
 | **Owner's Music / Control Center screenshots**, private reference folder | Qualitative target for edge definition, relative material appearance and legibility. | OS build/settings and uncovered source unknown; cannot recover z-depth or absolute refraction. Private files stay outside the repository. |
 
+The [source manifest](experiments/context-sources.json) records acquisition hashes, reviewed intervals and sampling density. Contact sheets and full source videos remain private. These new observations are visual checks, not new displacement fits.
+
 Apple explicitly describes stronger refraction, scattering and shadows when controls grow into menus ([adaptivity](https://developer.apple.com/videos/play/wwdc2025/219/?time=360)). Larger size is not a reason to apply a globally weaker transparent overlay. Conversely, uniformly strong refraction is not supported for every resting control. Clear and Regular API variants must also not be conflated with system appearance/accessibility preferences.
 
 ### Conclusions retained, corrected and unresolved
@@ -74,14 +76,45 @@ Both use one analytic rounded-rectangle silhouette (circle/capsule are special c
 
 | Model | Construction | Purpose / limitation |
 | --- | --- | --- |
-| Boundary-focused (default) | Small interior lookup plus a smooth compact shoulder displacement, inward along the boundary normal | Separates quiet-core registration from edge bending; inspired by observations, **not fitted to all Apple scenes** |
+| Boundary field (default) | Independent core lookup, edge amplitude and band width; two alternative rim profiles, inward along the boundary normal | Tests quiet-core registration against stronger edge bending; outer-rim continuation remains **uncalibrated** |
 | Physical cap comparison | Smooth shoulder height plus a weak curved crown; normal from height gradient; Snell entry, planar exit and backdrop gap | Makes thickness/normal/ray relationships inspectable; assumes a plano-convex body and orthographic viewing, neither established for iOS |
 
-For the boundary model, with inward distance `d`, shoulder width `b`, `u=clamp(d/b,0,1)`, use `16u²(1−u)²` inside the band and zero beyond it. Value and first derivative vanish at both ends, avoiding a sharp optical boundary. A small smooth interior term retains gentle magnification. Height scales its strength; it is a phenomenological parameter, not a measured physical thickness.
+For the boundary model, let inward distance be `d`, band width `b`, and `u=clamp(d/b,0,1)`. Edge displacement is `−normal × b × edgeStrength × opticalPower × profile(u)`. Two profiles expose the unresolved rim assumption:
+
+- **Shoulder peak:** `16u²(1−u)²`; zero value/slope at both ends. Retains the previous lab as a baseline, but its zero displacement at the silhouette is not an Apple finding.
+- **Rim-concentrated:** `(1−u)³(1+3u)`; nonzero displacement at the silhouette, zero slope there, and a smooth zero join to the core. This deliberately permits source-coordinate discontinuity across the physical silhouette; it must not introduce an internal join/seam.
+
+The core term is `−position × centerMagnification × opticalPower × quinticRamp(u)`. Its strength is independent of the edge, so stronger peripheral refraction need not mean more central zoom. Overall power is phenomenological, not measured thickness. Extreme settings can produce image folding; the diagnostic preset exposes this rather than presenting it as an Apple match.
 
 For the cap comparison, height is a quintic shoulder ramp plus a gentle elliptical crown, with derivatives zero at the shoulder's inner join. Backward rays enter from the viewer, travel through the cap, exit a plane and travel to the backdrop. [Snell/Fresnel](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission) supplies generic optics, not Apple's model. The index 1.33 is water-inspired and fixed for this experiment. The reflected environment is a synthetic light rig, not a reconstructed room. No caustics, dispersion, multiple scattering or full fluid simulation.
 
-Pressing reduces height and narrows the shoulder while expanding the footprint. Held shape approaches critically; released strain/depth can rebound with adjustable damping. These are Localica choices. A requested geometric response must be tested independently from Apple's interaction-light behavior.
+Pressing into the screen reduces height and narrows the shoulder while expanding the footprint. Held shape approaches critically; released strain/depth can rebound with adjustable damping. Boundary pressure is different: the present lab applies reciprocal in-plane scale factors, so footprint area and depth remain unchanged by that strain alone. Under a constant-volume model, lateral compression would increase depth only to the extent that footprint area decreases; the current redistribution into the other in-plane axis is a chosen constraint, not an established Apple response. No pressure-to-depth behavior is inferred from the footage. See the [motion equations](specification.md#shape-carries-impact).
+
+### Fixed-field check against the registered circle patch
+
+The reproduction script also compares the old lab field and the new rim candidate on the same approximate circle (center 429,114; radius 83). Geometry, core amount 0.012 and band fraction 0.55 stay fixed. Only blur and positive per-channel photometry are fitted on frame 65, then frozen for the five repeated observations.
+
+| Fixed field | Inverse Y lookup at patch center | Training blur sigma | Repeated-frame mean RMSE, frozen tone |
+| --- | ---: | ---: | ---: |
+| Previous shoulder profile, edge strength 0.10 | +4.435 px | 3.00 | 2.589 |
+| Rim-concentrated candidate, edge strength 0.40 | +3.167 px | 2.75 | 2.565 |
+
+The 0.024/255 error difference is too small and scene-dependent to establish superiority. The useful result is narrower: stronger bending at the outer rim can coexist with *less* lookup displacement at this interior shoulder patch. Neither this patch nor the comparison tests the outermost rim. Remapped fields use OpenCV bilinear interpolation; do not rank their tiny error differences against the earlier translation fit as if resampling and geometry were identical. The source hash, timestamps, positive synthetic control and numerical outputs are emitted by [reference_patch.py](experiments/reference_patch.py).
+
+## Context presets and controls
+
+The presets are the current **qualitative starting hypotheses** for observed circumstances, not a ranking established by independent image-error measurements. Exact numeric values live in `lab.js`. Selecting a preset resets optical/material settings and outline while preserving the backdrop, motion preference and lens position for comparison; custom edits are marked as custom.
+
+| Preset | Observed property being approximated | Important limit |
+| --- | --- | --- |
+| Transparent active control | Sharp, registered core; localized peripheral bending; no blur/tint/brightness trim | Isolates optics; not a complete slider, switch or their press illumination |
+| Clear media control | Media remains visible; stronger rim definition, little scattering | Default study, not a calibrated Apple Music mini player |
+| Regular · light / dark foreground | Scattering and brightness adjustment support legible text | Two polarity variants of Localica’s monotonic curve; no automatic Apple contrast algorithm claimed |
+| Expanded menu | Greater optical power, scattering and shadow on a larger outline | A fixed context snapshot; merely pressing Expand does not automatically reproduce Apple’s evolving blur/tone |
+| Strong edge · diagnostic | Large edge displacement with a registered center | Extreme range, possible folds; not an Apple preset |
+| Previous lab · baseline | Reproduces the earlier conservative field | Comparison only; not an endorsed calibration |
+
+Sidebar categories: **Scene** selects outline/backdrop and comparison visibility; **Lens** controls the optical model, profile, power, edge/core and band; **Material** controls scattering, tint, readability, rim and shadow; **Motion** controls release damping and Reduced Motion. Model-inapplicable controls are disabled. Every control states its function; reset restores all settings, position, collapsed state and Scene tab. Vertical lines remain the default artwork; crossed lines make both displacement axes visible.
 
 ## Reading the lab honestly
 
@@ -96,7 +129,7 @@ Pressing reduces height and narrows the shoulder while expanding the footprint. 
 - Open the [live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html). `?fallback=1` selects software refraction. The status line identifies the renderer and explains why software mode is active. **Retry WebGL** removes the forced-software URL option and tries GPU rendering again; a failed attempt leaves software refraction running. No account, uploaded image or runtime network dependency is needed after the site loads.
 - From `docs/liquid-glass`: `npm ci`, `npm run build`, then serve `site/` with any static server. The generated site contains only allowlisted public guide files and original assets; `build.json` records source SHA and file checksums.
 - `npx playwright install chromium`, then `npm test`. An existing browser can be supplied through `CHROMIUM_PATH`; `LAB_EVIDENCE` selects the output directory and `LAB_URL` can point tests at the deployment. Keep raw test output untracked.
-- Browser checks exercise both models/three outlines, zero-power texture identity, actual shoulder displacement, center/exterior registration, tone ordering/endpoints, diagonal continuity, contact/release/wall recovery, interrupted morphs, idle sleep, Reduced Motion, context loss/restoration, mobile sizing, full reset, repeated morph/model changes and context recovery. Software checks add sampled GPU agreement for both models, zero-power identity, blur/contrast behavior, an unavailable WebGL context and retry. These are targeted probes, not proof of every pixel/state.
+- Browser checks exercise both models/three outlines, zero-power texture identity, actual shoulder displacement, center/exterior registration, tone ordering/endpoints, diagonal continuity, contact/release/wall recovery, interrupted morphs, idle sleep, Reduced Motion, context loss/restoration, mobile sizing, full reset, repeated morph/model changes and context recovery. Software checks add sampled GPU agreement for both models, zero-power identity, blur/contrast behavior, an unavailable WebGL context and retry. Preset checks exercise every context, independent core/edge controls, stronger near-rim output, both renderers, extreme ranges, model-specific disabling, keyboard tabs and phone layout. These are targeted probes, not proof of every pixel/state.
 - Performance design: one static texture upload per backdrop change, one analytic shader pass, bounded nine-tap scattering, early exit outside the lens, render density capped at 1.5× and a maximum 960×400 framebuffer, and sleeping clocks after settlement or while offscreen. Software mode uses a 480-pixel-wide framebuffer, caches the unmodified backdrop and evaluates optical math only within the lens/shadow bounds. Its source pixels are read once per backdrop change. Test-only GPU readback is never used during interaction. Shader submission timing is not GPU duration; SwiftShader captures are not physical-device performance evidence.
 - Defaults: gradient with vertical lines, light foreground ink, boundary-field model and capsule shape. **Reset all settings** restores every input, lens position and collapsed state; Reduced Motion returns to the operating-system preference. The mobile preview shows a narrower region of the same texture, preserving the lens proportions.
 - Publish the generated `site/` contents to the dedicated `gh-pages` branch. GitHub Pages uses that branch's root with `.nojekyll`; Android source/main and APK workflows are independent. Rebuild from the merged docs commit and verify `build.json` plus the live demo after deployment. Never include private feedback or Apple reference frames.

@@ -7,7 +7,20 @@
   let rendererReason = '';
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const mix = (a, b, t) => a + (b - a) * t;
-  const defaults = {depth:1, band:.55, blur:0, tint:.02, trim:.12, weight:1.6, shine:.35, shadow:.1, damping:8};
+  const defaults = {depth:1, edge:.4, core:.012, band:.55, blur:0, tint:0, trim:.04, weight:1.6, shine:.35, shadow:.1, damping:8};
+  const presetBase={...defaults,model:'0',profile:'1',shape:'pill',ink:'light'};
+  delete presetBase.damping;
+  const presets={
+    media:{name:'Clear media control',values:{...presetBase},note:'Media remains visible with a defined rim and little scattering. Inspired by Apple’s playback controls; values are qualitative, not fitted.',source:'https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4'},
+    control:{name:'Transparent active control',values:{...presetBase,profile:'0',edge:.25,core:0,band:.4,trim:0,shine:.2,shadow:.05},note:'No blur, tint or brightness adjustment. Quiet core with localized shoulder bending, following the clear-slider observations. Does not reproduce a complete slider.',source:'https://developer.apple.com/videos/play/wwdc2025/284/?time=1092'},
+    regularLight:{name:'Regular · light foreground',values:{...presetBase,blur:3,trim:.28,tint:.02,band:.6},note:'Softens underlying detail and compresses highlights for light text. Apple’s Regular material motivates this treatment; the tone curve is Localica’s approximation.',source:'https://developer.apple.com/videos/play/wwdc2025/219/?time=360'},
+    regularDark:{name:'Regular · dark foreground',values:{...presetBase,blur:3,trim:.28,tint:.02,band:.6,ink:'dark'},note:'Softens underlying detail and lifts shadows for dark text. Text polarity is fixed by this preset, not automatically selected from the background.',source:'https://developer.apple.com/videos/play/wwdc2025/219/?time=360'},
+    menu:{name:'Expanded menu',values:{...presetBase,shape:'panel',depth:1.2,edge:.5,band:.7,blur:5,trim:.3,tint:.03,shadow:.16},note:'Stronger lensing, scattering and shadow for a larger surface. Apple documents this size-dependent change; these numeric settings remain an approximation.',source:'https://developer.apple.com/videos/play/wwdc2025/219/?time=360'},
+    extreme:{name:'Strong edge · diagnostic',values:{...presetBase,edge:1.2,core:0,trim:0,shine:0,shadow:0},note:'Exaggerated rim displacement with a registered center. Image folding is possible. This is a diagnostic range, not an Apple material.',source:'optics.html#evidence-needed-before-claiming-a-closer-match'},
+    previous:{name:'Previous lab · baseline',values:{...presetBase,profile:'0',edge:.1,core:.012,tint:.02,trim:.12},note:'The former conservative field, retained for comparison. Its small displacement and zero-power silhouette were not derived from Apple’s outer rim.',source:'optics.html#conclusions-retained-corrected-and-unresolved'}
+  };
+  for(const[id,preset]of Object.entries(presets))$('preset').add(new Option(preset.name,id));
+  const custom=new Option('Custom settings','custom');custom.disabled=true;$('preset').add(custom);
   const values = () => Object.fromEntries(Object.keys(defaults).map(k => [k, +$(k).value]));
   const textureCanvas = document.createElement('canvas');
   textureCanvas.width = W; textureCanvas.height = H;
@@ -29,8 +42,8 @@
   uniform sampler2D backdrop;
   uniform vec2 resolution, center, halfSize;
   uniform float viewWidth;
-  uniform float radius, depth, band, blur, tint, trim, weight, shine, shadow, held;
-  uniform int model, coordinateMode, lightInk, sourceOnly;
+  uniform float radius, depth, edge, core, band, blur, tint, trim, weight, shine, shadow, held;
+  uniform int model, profile, coordinateMode, lightInk, sourceOnly;
   out vec4 frag;
   const vec2 extent=vec2(960.,400.);
   float sd(vec2 p){
@@ -63,8 +76,9 @@
     vec2 outside=max(q,0.);
     vec2 normal=length(outside)>.0001 ? normalize(outside)*sign(p) :
       (q.x>q.y ? vec2(sign(p.x),0) : vec2(0,sign(p.y)));
-    float shoulder=16.*u*u*(1.-u)*(1.-u);
-    return -normal*(b*.10*depth*shoulder)-p*(.012*depth*ramp(d/b));
+    // Alternative continuations at the unmeasured outer rim, not fitted Apple geometry.
+    float shoulder=profile==0 ? 16.*u*u*(1.-u)*(1.-u) : pow(1.-u,3.)*(1.+3.*u);
+    return -normal*(b*edge*depth*shoulder)-p*(core*depth*ramp(d/b));
   }
   vec3 source(vec2 p){
     if(coordinateMode==1)return vec3(clamp(p/extent,0.,1.),.2);
@@ -133,7 +147,7 @@
       // One oversized triangle: no interpolated per-triangle optical fields/seams.
       gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
       const a=gl.getAttribLocation(program,'position');gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
-      for(const name of ['backdrop','resolution','viewWidth','center','halfSize','radius','depth','band','blur','tint','trim','weight','shine','shadow','held','model','coordinateMode','lightInk','sourceOnly'])uniforms[name]=gl.getUniformLocation(program,name);
+      for(const name of ['backdrop','resolution','viewWidth','center','halfSize','radius','depth','edge','core','band','blur','tint','trim','weight','shine','shadow','held','model','profile','coordinateMode','lightInk','sourceOnly'])uniforms[name]=gl.getUniformLocation(program,name);
       texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
@@ -144,7 +158,7 @@
   function upload(){if(gpu&&!lost){gl.bindTexture(gl.TEXTURE_2D,texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,textureCanvas);uploads++;}}
   function background(){
     bg.clearRect(0,0,W,H);const mode=$('background').value;
-    if(mode==='lines'){
+    if(mode==='lines'||mode==='crossed'){
       // Original static artwork; generated only when the backdrop is selected.
       const g=bg.createLinearGradient(0,0,W,H*.3);
       [[0,'#172a48'],[.22,'#22676f'],[.45,'#62679e'],[.67,'#ac777d'],[.85,'#bd936b'],[1,'#4d567e']].forEach(([p,c])=>g.addColorStop(p,c));
@@ -152,6 +166,7 @@
       const shade=bg.createLinearGradient(0,0,0,H);shade.addColorStop(0,'#080e2600');shade.addColorStop(1,'#080e2670');bg.fillStyle=shade;bg.fillRect(0,0,W,H);
       // Fine vertical lines expose horizontal refraction without an animated scene.
       for(let x=12;x<W;x+=18){bg.fillStyle='#f2e5ff38';bg.fillRect(x,0,1.5,H);bg.fillStyle='#08142a28';bg.fillRect(x+2,0,1,H);}
+      if(mode==='crossed'){for(let y=12;y<H;y+=18){bg.fillStyle='#f2e5ff38';bg.fillRect(0,y,W,1.5);bg.fillStyle='#08142a28';bg.fillRect(0,y+2,W,1);}}
     }else if(mode==='grid'||mode==='coordinates'){
       const colors=['#ee9a8b','#eacb79','#9acbbb','#89a7cd','#c4a4cf','#f1c9b2'];
       for(let y=0;y<H;y+=40)for(let x=0;x<W;x+=40){bg.fillStyle=colors[((x/40)+(y/40)*3)%colors.length];bg.fillRect(x,y,40,40);}
@@ -182,7 +197,7 @@
   }
   function drawFallback(g,v){
     fallback.hidden=false;
-    software.draw({g,v,viewWidth,model:+$('model').value,coordinates:$('background').value==='coordinates',
+    software.draw({g,v,viewWidth,model:+$('model').value,profile:+$('profile').value,coordinates:$('background').value==='coordinates',
       lightInk:$('ink').value==='light',sourceOnly:$('source').checked,held:clamp(-state.z/.3,0,1)});
     $('status').textContent='Software · background refraction';
     $('rendererNote').textContent=rendererReason;
@@ -199,9 +214,9 @@
       gl.uniform1f(uniforms.viewWidth,viewWidth);gl.uniform1i(uniforms.backdrop,0);gl.uniform2f(uniforms.resolution,canvas.width,canvas.height);
       gl.uniform2f(uniforms.center,g.x,g.y);gl.uniform2f(uniforms.halfSize,g.w/2,g.h/2);
       gl.uniform1f(uniforms.radius,g.r);
-      for(const k of ['band','blur','tint','trim','weight','shine','shadow'])gl.uniform1f(uniforms[k],v[k]);
+      for(const k of ['edge','core','band','blur','tint','trim','weight','shine','shadow'])gl.uniform1f(uniforms[k],v[k]);
       gl.uniform1f(uniforms.depth,v.depth*g.z);gl.uniform1f(uniforms.held,clamp(-state.z/.3,0,1));
-      gl.uniform1i(uniforms.model,+$('model').value);gl.uniform1i(uniforms.coordinateMode,$('background').value==='coordinates'?1:0);
+      gl.uniform1i(uniforms.model,+$('model').value);gl.uniform1i(uniforms.profile,+$('profile').value);gl.uniform1i(uniforms.coordinateMode,$('background').value==='coordinates'?1:0);
       gl.uniform1i(uniforms.lightInk,$('ink').value==='light'?1:0);gl.uniform1i(uniforms.sourceOnly,$('source').checked?1:0);
       gl.drawArrays(gl.TRIANGLES,0,3);
     }else drawFallback(g,v);
@@ -261,17 +276,31 @@
   function move(side){const [w]=dimensions();state.x=geometry().x;wall=0;state.target=side==='left'?bounds(w)[0]:bounds(w)[1];wake();}
   $('left').onclick=()=>move('left');$('right').onclick=()=>move('right');
   $('menu').onclick=()=>{expanded=!expanded;$('menu').setAttribute('aria-pressed',String(expanded));$('menu').textContent=expanded?'Collapse surface':'Expand surface';wake();};
-  function syncControls(){for(const k of Object.keys(defaults))$(k+'Value').value=Number($(k).value).toFixed(k==='damping'?1:2);}
+  function syncControls(){
+    for(const k of Object.keys(defaults))$(k+'Value').value=Number($(k).value).toFixed(k==='damping'?1:k==='core'?3:2);
+    const cap=$('model').value==='1';for(const k of ['edge','core','profile'])$(k).disabled=cap;
+    $('modelNote').textContent=cap?'Cap uses height gradients and Snell refraction (index 1.33). Edge strength, center magnification and edge profile apply only to the boundary model.':'Rim-concentrated keeps bending at the outline; shoulder peak returns to zero there. Neither continuation is calibrated at Apple’s outermost rim.';
+    const match=Object.entries(presets).find(([,p])=>Object.entries(p.values).every(([k,v])=>String($(k).value)===String(v)));
+    $('preset').value=match?match[0]:'custom';
+    $('presetNote').textContent=match?match[1].note:'Custom parameter combination. The context presets are starting approximations; numeric changes are not Apple calibration.';
+    $('presetEvidence').href=match?match[1].source:'optics.html#context-audit--19-october-2026';
+  }
+  $('preset').onchange=()=>{const preset=presets[$('preset').value];if(!preset)return;for(const[k,v]of Object.entries(preset.values))$(k).value=v;syncControls();wake();};
+  const tabs=[...document.querySelectorAll('[role=tab]')];
+  function selectTab(tab,focus=false){for(const t of tabs){const active=t===tab;t.setAttribute('aria-selected',String(active));t.tabIndex=active?0:-1;$(t.getAttribute('aria-controls')).hidden=!active;}if(focus)tab.focus();}
+  for(const[ i,tab]of tabs.entries()){
+    tab.onclick=()=>selectTab(tab);
+    tab.onkeydown=e=>{const next={ArrowRight:(i+1)%tabs.length,ArrowLeft:(i+tabs.length-1)%tabs.length,Home:0,End:tabs.length-1}[e.key];if(next!==undefined){e.preventDefault();selectTab(tabs[next],true);}};
+  }
   for(const k of Object.keys(defaults))$(k).addEventListener('input',()=>{syncControls();wake();});
-  for(const k of ['shape','model','ink','reduce','hideLabel','source'])$(k).addEventListener('change',()=>wake());
+  for(const k of ['shape','model','profile','ink','reduce','hideLabel','source'])$(k).addEventListener('change',()=>{syncControls();wake();});
   $('background').onchange=background;
   $('optics').onclick=()=>{for(const k of ['blur','tint','trim','shine','shadow'])$(k).value=0;syncControls();wake();};
-  $('regular').onclick=()=>{$('blur').value=3;$('tint').value=.08;$('trim').value=.2;syncControls();wake();};
   $('reset').onclick=()=>{
     release(true);expanded=false;wall=0;state={x:480,v:0,target:480,m:0,mv:0,strain:0,sv:0,z:0,zv:0};previousV=0;
     for(const[k,v]of Object.entries(defaults))$(k).value=v;
-    $('model').value='0';$('shape').value='pill';$('background').value='lines';$('ink').value='light';$('reduce').checked=media.matches;$('hideLabel').checked=$('source').checked=false;
-    $('menu').textContent='Expand surface';$('menu').setAttribute('aria-pressed','false');syncControls();background();
+    $('model').value='0';$('profile').value='1';$('shape').value='pill';$('background').value='lines';$('ink').value='light';$('reduce').checked=media.matches;$('hideLabel').checked=$('source').checked=false;
+    $('menu').textContent='Expand surface';$('menu').setAttribute('aria-pressed','false');selectTab(tabs[0]);syncControls();background();
   };
   $('save').onclick=()=>{
     draw();const image=document.createElement('canvas');image.width=Math.round(viewWidth);image.height=400;const c=image.getContext('2d');

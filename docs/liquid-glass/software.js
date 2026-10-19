@@ -26,7 +26,7 @@ window.createSoftwareLens = function(canvas) {
       for(let k=0;k<3;k++)color[k]+=tap[k]*weight;
     }
   }
-  function draw({g,v,viewWidth,model,coordinates,lightInk,sourceOnly,held}) {
+  function draw({g,v,viewWidth,model,profile,coordinates,lightInk,sourceOnly,held}) {
     const width=Math.min(480,Math.max(1,Math.round(canvas.clientWidth))),height=Math.round(width*H/viewWidth);
     if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;image=ctx.createImageData(width,height);baseKey='';}
     if(!image)image=ctx.createImageData(width,height);
@@ -74,7 +74,8 @@ window.createSoftwareLens = function(canvas) {
             const ax=Math.max(qx,0),ay=Math.max(qy,0),len=Math.hypot(ax,ay);
             const ex=len>.0001?ax/len*Math.sign(lx):qx>qy?Math.sign(lx):0;
             const ey=len>.0001?ay/len*Math.sign(ly):qx>qy?0:Math.sign(ly);
-            const shoulder=band*.10*depth*16*u*u*(1-u)*(1-u),core=.012*depth*ramp(-d/band);
+            const shape=profile===0?16*u*u*(1-u)*(1-u):Math.pow(1-u,3)*(1+3*u);
+            const shoulder=band*v.edge*depth*shape,core=v.core*depth*ramp(-d/band);
             ox=-ex*shoulder-lx*core;oy=-ey*shoulder-ly*core;
           }
         }

@@ -79,6 +79,38 @@ for name, parameters in models.items():
         "held_out_mean_frozen": float(np.mean(frozen[1:])),
     }
 
+# Fixed boundary fields from the lab, scaled to the approximate Apple circle.
+# Only blur/tone are fitted on training frame 65. This tests the patch, not the
+# excluded outer rim. Freeze geometry before inspecting repeated observations.
+y, x = np.mgrid[50:71, 413:434].astype(np.float32)
+vx, vy = x - 429, y - 114
+radial = np.sqrt(vx * vx + vy * vy)
+band = 83 * .55
+u = np.clip((83 - radial) / band, 0, 1)
+ramp = u**3 * (u * (u * 6 - 15) + 10)
+field_results = {}
+for name, strength, rim in [("previous_lab", .1, False), ("rim_candidate", .4, True)]:
+    profile = (1-u)**3 * (1+3*u) if rim else 16*u*u*(1-u)*(1-u)
+    amount = band * strength * profile
+    dx = -vx / radial * amount - vx * .012 * ramp
+    dy = -vy / radial * amount - vy * .012 * ramp
+    best_field = None
+    for sigma in np.arange(0, 8.01, .25):
+        blurred = cv2.GaussianBlur(source, (0, 0), float(sigma)) if sigma else source
+        patch = cv2.remap(blurred, x+dx, y+dy, cv2.INTER_LINEAR)
+        gain, bias = tone(patch, targets[0])
+        error = rmse(patch * gain + bias, targets[0])
+        if best_field is None or error < best_field[0]:
+            best_field = error, float(sigma), patch, gain, bias
+    error, sigma, patch, gain, bias = best_field
+    frozen = [rmse(patch * gain + bias, target) for target in targets]
+    field_results[name] = {
+        "center_inverse_offset": [float(dx[10, 10]), float(dy[10, 10])],
+        "fixed_edge_strength": strength, "fitted_training_sigma": sigma,
+        "frozen_tone_rmse": frozen, "held_out_mean_frozen": float(np.mean(frozen[1:])),
+        "hypothesis": "Approximate outline; unchanged model across repeated frames. Not cross-scene validation."
+    }
+
 # Known-shift synthetic sign/interpolation control; this validates the estimator,
 # not the Apple scene or a physical model. Recover a known grid translation.
 known = sample(2, -1, 2.5) * np.array([.8, 1.1, .9]) + np.array([10, 5, 20])
@@ -98,6 +130,6 @@ print(json.dumps({
     "frame_count": index, "patch_center": [423, 60], "patch_size": 21,
     "frame_indices": indices,
     "presentation_seconds": [float(pts[i]["best_effort_timestamp_time"]) for i in indices],
-    "models": results, "synthetic_known_shift": best, "identity_error": identity_error,
+    "models": results, "fixed_lab_fields": field_results, "synthetic_known_shift": best, "identity_error": identity_error,
     "limits": "Same-scene repeats; no unique normal, depth, IOR, blur kernel or Apple shader recovery."
 }, indent=2))

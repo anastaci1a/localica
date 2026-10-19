@@ -20,13 +20,13 @@ const{chromium}=require('playwright'),assert=require('node:assert/strict'),fs=re
   const positions=await page.evaluate(()=>{const i=glassLab.info(),w=i.software.width,h=i.software.height;return [[480,166],[480,234],[403,195],[557,205],[480,200],[200,100]].map(([x,y])=>[(Math.floor(x/960*w)+.5)*960/w,(Math.floor(y/400*h)+.5)*400/h]);});
   const gpu=await browser.newPage({viewport:{width:1100,height:820}});await gpu.goto(url);await gpu.waitForFunction(()=>window.glassLab);
   const agreement=[];
-  for(const model of ['0','1']){
-    const settings={...zero,depth:1,shape:'pill',model,background:'coordinates',source:false};await config(settings);
+  for(const [model,profile] of [['0','0'],['0','1'],['1','1']]){
+    const settings={...zero,depth:1,shape:'pill',profile,model,background:'coordinates',source:false};await config(settings);
     const refracted=await page.evaluate(p=>glassLab.pixels(p),positions);
     await config({source:true});const original=await page.evaluate(p=>glassLab.pixels(p),positions);
     assert(refracted[0][1]>original[0][1]);assert(refracted[1][1]<original[1][1]);assert.deepEqual(refracted[5],original[5]);
     await gpu.evaluate(o=>{glassLab.configure(o);glassLab.settle();},settings);const other=await gpu.evaluate(p=>glassLab.pixels(p),positions);
-    const delta=Math.max(...other.flatMap((p,i)=>p.slice(0,3).map((v,c)=>Math.abs(v-refracted[i][c]))));assert(delta<=2,`GPU/CPU mismatch ${model}: ${delta}`);agreement.push({model,maxChannelDifference:delta});
+    const delta=Math.max(...other.flatMap((p,i)=>p.slice(0,3).map((v,c)=>Math.abs(v-refracted[i][c]))));assert(delta<=2,`GPU/CPU mismatch ${model}: ${delta}`);agreement.push({model,profile,maxChannelDifference:delta});
   }
   results.push('Both software models displace background pixels and agree with GPU coordinate probes');
   const texturePoints=Array.from({length:360},(_,i)=>[390+i%30*6,160+Math.floor(i/30)*7]);

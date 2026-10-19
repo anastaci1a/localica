@@ -36,6 +36,7 @@ const {execFileSync}=require('node:child_process');
   if(fs.existsSync(assetDest))for(const name of fs.readdirSync(assetDest))if(/\.(png|gif|svg)$/.test(name)&&!fs.existsSync(path.join(root,'assets',name)))fs.unlinkSync(path.join(assetDest,name));
   for(const name of fs.readdirSync(path.join(root,'assets')))if(/\.(png|gif|svg)$/.test(name))write('liquid-glass/assets/'+name,fs.readFileSync(path.join(root,'assets',name)));
   write('liquid-glass/experiments/reference_patch.py',fs.readFileSync(path.join(root,'experiments/reference_patch.py')));
+  write('liquid-glass/experiments/context-sources.json',fs.readFileSync(path.join(root,'experiments/context-sources.json')));
   write('.nojekyll','');
   write('index.html','<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="0;url=liquid-glass/lab.html"><title>Localica Liquid Glass lab</title><a href="liquid-glass/lab.html">Open the Liquid Glass lab</a></html>');
   fs.writeFileSync(path.join(out,'build.json'),JSON.stringify(manifest,null,2)+'\n');
