@@ -134,7 +134,7 @@ Capture reproducible interaction traces on representative physical devices, sepa
 | Bright/dark/striped moving backdrops | Stable readable controls, no polarity chatter or tinted flash |
 | Repeated selection/menu cycles | Bounded allocations, no accumulation of layers or idle clocks |
 
-The [motion lab](lab.html) is an explanatory prototype for input and shape response. It does not demonstrate production refraction, Android performance, or completion of this specification.
+The [live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) demonstrates real background refraction and input/shape response in WebGL. Its [models and tests](optics.md) do not establish Android performance, iOS parity or completion of this specification.
 
 ---
 
