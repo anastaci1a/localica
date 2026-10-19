@@ -71,7 +71,7 @@ class LibraryRepository(
             var committed = false
             try {
                 permissions.acquire(uri)
-                val result = scanner.scan(uri, options, onProgress)
+                val result = scanner.scan(uri, options, onProgress = onProgress)
                 currentCoroutineContext().ensureActive()
                 withContext(NonCancellable) {
                     store.replaceRoot(result)
@@ -81,6 +81,22 @@ class LibraryRepository(
             } finally {
                 if (!committed && !alreadyGranted) permissions.release(uri)
             }
+        }
+    }
+
+    /** Additive startup discovery shares the full-scan/file-edit lock, but never replaces a root. */
+    suspend fun scanNewFiles(uri: String, options: ScanOptions = ScanOptions(), onProgress: (Int) -> Unit = {}): ScanResult = withContext(io) {
+        scanLock.withLock {
+            val before = store.current()
+            require(before.folders.any { it.uri == uri }) { "The folder is no longer configured." }
+            check(permissions.hasReadAccess(uri)) { "Folder access was revoked." }
+            val result = scanner.scan(uri, options, before.tracks.associateBy { it.id }, onProgress)
+            val members = before.tracks.filter { track -> track.locations.any { it.folderUri == uri } }.mapTo(hashSetOf()) { it.id }
+            val additions = result.copy(tracks = result.tracks.filterNot { it.id in members },
+                failedMetadataIds = result.failedMetadataIds + before.metadataFailures.map { it.trackId })
+            currentCoroutineContext().ensureActive()
+            if (additions.tracks.isNotEmpty()) withContext(NonCancellable) { store.mergeRoot(additions) }
+            result
         }
     }
 

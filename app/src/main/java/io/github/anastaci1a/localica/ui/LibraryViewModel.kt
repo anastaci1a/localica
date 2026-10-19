@@ -57,6 +57,7 @@ class LibraryViewModel(
 
     fun scan(uri: String) { scanner.start(listOf(uri)) }
     fun scanAll() { scanner.start(library.value.snapshot.folders.map { it.uri }) }
+    fun scanNewFiles() { scanner.startNewFiles(library.value.snapshot.folders.map { it.uri }) }
     fun cancelScan() { scanner.cancel() }
     fun addFolder(uri: String) = changeFolder(LibraryProblem.AddFailed) { repository.addFolder(uri) }
     fun removeFolder(uri: String) = changeFolder(LibraryProblem.RemoveFailed) { repository.removeFolder(uri) }

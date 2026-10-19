@@ -17,50 +17,66 @@ class ScanController(private val context: Context, private val library: LibraryR
         "The previous scan was interrupted. Scan again to finish updating your library." else null))
     val state = mutable.asStateFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val pending = linkedSetOf<String>()
+    private val requests = ScanRequests()
     private var job: Job? = null
-    private var current: String? = null
+    private var startupRequested = false
     private var interruption: String? = null
     private var canceledBeforeStart = false
     init { marker.edit().putBoolean("running", false).apply() }
 
-    fun start(roots: List<String>) {
-        if (roots.isEmpty()) return
+    fun start(roots: List<String>) { start(roots, ScanMode.Full) }
+
+    fun startNewFiles(roots: List<String>) {
+        if (startupRequested || roots.isEmpty()) return
+        if (start(roots, ScanMode.NewFiles)) startupRequested = true
+    }
+
+    private fun start(roots: List<String>, mode: ScanMode): Boolean {
+        if (roots.isEmpty()) return false
         try {
             if (!state.value.running) canceledBeforeStart = false
             mutable.update { it.copy(running = true, message = null) }
             ContextCompat.startForegroundService(context, Intent(context, ScanService::class.java)
-                .putStringArrayListExtra("roots", ArrayList(roots.distinct())))
+                .putStringArrayListExtra("roots", ArrayList(roots.distinct()))
+                .putExtra("new-files-only", mode == ScanMode.NewFiles))
+            return true
         } catch (_: Exception) {
             mutable.update { it.copy(running = false, message = "Android couldn’t start background scanning. Keep Localica open and check its app settings.") }
+            return false
         }
     }
 
-    internal fun run(roots: List<String>, finished: () -> Unit) {
+    internal fun run(roots: List<String>, newFilesOnly: Boolean = false, finished: () -> Unit) {
         if (canceledBeforeStart) {
             mutable.update { it.copy(running = false, message = "Scan canceled.") }; finished(); return
         }
-        pending.addAll(roots.filter { it != current })
+        requests.add(roots, if (newFilesOnly) ScanMode.NewFiles else ScanMode.Full)
         if (job?.isActive == true) {
-            mutable.update { it.copy(totalFolders = it.completedFolders + pending.size + if (current != null) 1 else 0) }
+            mutable.update { it.copy(totalFolders = it.completedFolders + requests.size) }
             return
         }
         interruption = null
-        mutable.value = ScanState(running = true, totalFolders = pending.size)
+        mutable.value = ScanState(running = true, totalFolders = requests.size)
         marker.edit().putBoolean("running", true).apply()
         job = scope.launch {
             var count = 0
             val failures = mutableListOf<String>()
             try {
                 withTimeout(6 * 60 * 60 * 1000L - 60_000L) {
-                    while (pending.isNotEmpty()) {
-                        val root = pending.first().also { pending.remove(it); current = it }
+                    while (true) {
+                        val request = requests.take() ?: break
+                        val root = request.root
                         mutable.update { it.copy(folder = root) }
                         try {
-                            library.scan(root, ScanPreferences(context).read(root)) { scanned ->
+                            val progress: (Int) -> Unit = { scanned ->
                                 mutable.update { it.copy(count = count + scanned) }
                             }
-                            ArtworkCache.invalidate()
+                            val options = ScanPreferences(context).read(root)
+                            if (request.mode == ScanMode.NewFiles) library.scanNewFiles(root, options, progress)
+                            else {
+                                library.scan(root, options, progress)
+                                ArtworkCache.invalidate()
+                            }
                             mutable.update { it.copy(completedFolders = it.completedFolders + 1) }
                         } catch (cancelled: CancellationException) { throw cancelled }
                         catch (_: Exception) {
@@ -68,7 +84,7 @@ class ScanController(private val context: Context, private val library: LibraryR
                             mutable.update { it.copy(completedFolders = it.completedFolders + 1) }
                         }
                         count = state.value.count
-                        current = null
+                        requests.complete()
                     }
                 }
                 mutable.update { it.copy(message = if (failures.isEmpty()) "Scan complete." else
@@ -79,7 +95,7 @@ class ScanController(private val context: Context, private val library: LibraryR
                 mutable.update { it.copy(message = interruption ?: "Scan canceled. Completed folders were saved; the current folder was kept unchanged.") }
                 throw cancelled
             } finally {
-                current = null; pending.clear()
+                requests.clear()
                 mutable.update { it.copy(running = false, folder = null) }
                 marker.edit().putBoolean("running", false).apply()
                 finished()
@@ -88,7 +104,7 @@ class ScanController(private val context: Context, private val library: LibraryR
     }
     fun cancel(message: String? = null) {
         if (message != null) interruption = message
-        canceledBeforeStart = true; pending.clear(); job?.cancel()
+        canceledBeforeStart = true; requests.clear(); job?.cancel()
         if (job == null) mutable.update { it.copy(running = false, message = message ?: "Scan canceled.") }
     }
     internal fun failedToStart() {

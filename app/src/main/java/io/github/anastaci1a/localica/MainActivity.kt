@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null && scannerRequest == 0 && io.github.anastaci1a.localica.scanner.ScanPreferences(this).scanOnLaunch) {
             lifecycleScope.launch {
                 val state = model.library.first { !it.loading }
-                if (!state.scanning) model.scanAll()
+                if (!state.scanning) model.scanNewFiles()
             }
         }
         setContent {
