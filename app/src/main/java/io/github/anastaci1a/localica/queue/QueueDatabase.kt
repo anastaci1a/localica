@@ -124,10 +124,16 @@ abstract class QueueDao {
 }
 
 @Database(entities = [QueueRecord::class, EntryRecord::class, ActiveQueueRecord::class, JourneyRecord::class,
-    VisitRecord::class, CycleMemberRecord::class], version = 6, exportSchema = true)
+    VisitRecord::class, CycleMemberRecord::class], version = 7, exportSchema = true)
 abstract class QueueDatabase : RoomDatabase() {
     abstract fun queues(): QueueDao
     companion object {
+        val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE queue_journeys ADD COLUMN orderedTraversalId TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE queue_journeys ADD COLUMN orderedAnchorToken TEXT DEFAULT NULL")
+            }
+        }
         val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE queues ADD COLUMN orderState TEXT NOT NULL DEFAULT ''")
