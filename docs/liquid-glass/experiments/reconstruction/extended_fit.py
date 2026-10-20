@@ -277,8 +277,11 @@ class Study:
         # Input coordinates and source scattering remain in reference units;
         # only the output kernel scales with the presentation resolution.
         offset=.5-.25/scale
-        for row in range(0,H,24*scale):
-            bottom=min(row+24*scale,H)
+        # Bound spline/lighting temporaries for wide high-resolution exports.
+        # A strip still contains exactly the same four samples per output pixel.
+        rows=min(24*scale,max(1,131072//(4*W)))
+        for row in range(0,H,rows):
+            bottom=min(row+rows,H)
             yy,xx=np.mgrid[y0+row/scale:y0+bottom/scale:.5/scale,x0:x1:.5/scale]
             x=(xx-offset-self.case['center'][0])/self.L;y=(yy-offset-self.case['center'][1])/self.L
             yield row,bottom,W,x,y

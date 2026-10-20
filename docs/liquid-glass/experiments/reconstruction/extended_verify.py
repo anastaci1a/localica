@@ -46,6 +46,18 @@ def main():
     assert light.shape==(3,15) and np.isfinite(light).all()
     print('PASS zero-optics registration despite shape corrections; finite normalized lighting')
 
+    wide=Study.__new__(Study);wide.crop=[0,0,1400,12];wide.L=32.;wide.case=dict(center=[700.,6.])
+    next_row=0;sample_count=0
+    for row,bottom,width,x,y in wide.raster_tiles(4):
+        assert row==next_row and x.size<=131072
+        expected_x=(np.arange(width*2)/8-.4375-700)/32
+        expected_y=(row/4+np.arange((bottom-row)*2)/8-.4375-6)/32
+        assert np.array_equal(x,np.broadcast_to(expected_x,x.shape))
+        assert np.array_equal(y,np.broadcast_to(expected_y[:,None],y.shape))
+        next_row=bottom;sample_count+=x.size
+    assert next_row==48 and sample_count==1400*12*4**2*4
+    print('PASS wide export strips bound working samples without gaps or coordinate changes')
+
     # Radial lookup must commute with a quarter-turn. Material lighting is
     # deliberately excluded: an environment may have a preferred direction.
     obj.half=np.ones(2);obj.radius=1.;obj.case['radial']=True
