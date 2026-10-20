@@ -1,0 +1,92 @@
+{
+  "id": "music-home-vector-b",
+  "category": "Detached selected navigation control with tinted foreground",
+  "radial": true,
+  "center": [
+    408,
+    673
+  ],
+  "half": [
+    89,
+    89
+  ],
+  "radius": 89,
+  "crop": [
+    290,
+    555,
+    525,
+    795
+  ],
+  "foreground": [
+    [
+      362,
+      625,
+      455,
+      720
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "transmission",
+      "box": [
+        362,
+        625,
+        455,
+        720
+      ],
+      "vector_asset": "home.svg",
+      "vector_box": [
+        364.696765408755,
+        627.071705103172,
+        451.76616106500825,
+        716.7602002958461
+      ],
+      "vector_sha256": "59ae42b6317ff70d4e459b5ba183c50795ccdd130f41ab1f8d21fe8657838e40"
+    }
+  ],
+  "reference": {
+    "video": "music",
+    "seconds": 2,
+    "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+  },
+  "foreground_method": "Solid clean-traced SVG coverage, independently rasterized at each output resolution. Color/transmission applied separately. Fixed original glass mask is unchanged.",
+  "background": "Masked temporal translation mosaic with frozen observed-pixel confidence.",
+  "input_names": {
+    "source.png": "source-2.0.png",
+    "target.png": "target-2.0.png",
+    "known.png": "known-2.0.png"
+  },
+  "source_sha256": {
+    "source.png": "9789b4af085d505a23bdfac7615b0688125b0ea81587d1d58e23b68c6608268f",
+    "target.png": "bf0e997fb546edd1c89ade9b227de2b0b13387cb70d249054bf3f8ff7430123d",
+    "known.png": "9d009193ae95ac9818a906fde1995dba531387f15926a5dd32e64ba34d3ff575"
+  },
+  "foreground_provenance": {
+    "kind": "clean symmetric vector trace",
+    "source": "Official Apple WWDC25 Music video",
+    "original_vector": false,
+    "collection": "Private localica-feedback/liquid-glass-icons/clean/home.svg"
+  },
+  "foreground_response": [
+    [
+      0.974821604561304,
+      0.5617311071148481,
+      1.1362271666507753
+    ],
+    [
+      0.18500633964496568,
+      0.9999999999999997,
+      0.9377397485122311
+    ],
+    [
+      0.4114653017944472,
+      0.9720137663439677,
+      1.0243595204181686
+    ]
+  ],
+  "continuation": {
+    "baseline": "music-home",
+    "additional_single_pass_minimum": 10,
+    "paired_pass_minimum": 20
+  }
+}

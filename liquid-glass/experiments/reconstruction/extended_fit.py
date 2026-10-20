@@ -308,9 +308,9 @@ class Study:
             yield row,bottom,W,x,y
 
     def render(self,p,co,scale=1):
-        if 'material_chroma_sensitivity' in p:
-            from material_context import matrix
-            co=matrix(self,p)@co
+        if 'material_chroma_sensitivity' in p or 'ambient_rim_response' in p:
+            from material_context import effective
+            co=effective(self,p,co)
         x0,y0,x1,y1=self.crop
         result=np.empty(((y1-y0)*scale,(x1-x0)*scale,3),np.float32)
         for row,bottom,W,x,y in self.raster_tiles(scale):
