@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -36,7 +37,8 @@ class ThemeTest {
                     foreground = LocalContentColor.current
                     background = MaterialTheme.colorScheme.background
                     LocalicaScreen(LibraryUiState(LibrarySnapshot(), loading = false), PlaybackState(connected = true),
-                        {}, {}, {}, {}, {}, {})
+                        {}, {}, {}, {}, {}, {},
+                        playlist = PlaylistState(loading = false))
                 }
             }
         }

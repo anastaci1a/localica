@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -24,7 +25,8 @@ class NavigationSettingsTest {
             preferences.write(InterfaceSettings(reducedMotion = true))
             compose.setContent { LocalicaTheme {
                 LocalicaScreen(LibraryUiState(LibrarySnapshot(), loading = false),
-                    PlaybackState(connected = true), {}, {}, {}, {}, {}, {})
+                    PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
+                    playlist = PlaylistState(loading = false))
             } }
             fun awaitDestination(label: String, matcher: SemanticsMatcher) {
                 // Dialog mounting and native-window handoff can outlive Compose idleness.

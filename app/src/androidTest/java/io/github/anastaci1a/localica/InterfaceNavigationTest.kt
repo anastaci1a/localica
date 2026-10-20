@@ -8,6 +8,7 @@ import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -27,7 +28,8 @@ class InterfaceNavigationTest {
     @After fun cleanup() { reset() }
 
     @Test fun tabFeedbackAndHeadingArriveBeforeThePagerSettles() {
-        compose.setContent { LocalicaTheme { LocalicaScreen(library, PlaybackState(connected = true), {}, {}, {}, {}, {}, {}) } }
+        compose.setContent { LocalicaTheme { LocalicaScreen(library, PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
+            playlist = PlaylistState(loading = false)) } }
         compose.mainClock.autoAdvance = false
         try {
             compose.onNodeWithContentDescription("Library").performClick()
@@ -48,7 +50,8 @@ class InterfaceNavigationTest {
         val queue = QueueEdits.create(listOf(track), 0, "Evening")
         restore.setContent { LocalicaTheme {
             LocalicaScreen(library, PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title),
-                {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false), onNext = { next++ })
+                {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false), onNext = { next++ },
+                playlist = PlaylistState(loading = false))
         } }
         compose.onNodeWithContentDescription("Next").performClick()
         compose.runOnIdle { assertEquals(1, next) }
@@ -75,7 +78,8 @@ class InterfaceNavigationTest {
 
     @Test fun detailBackWorksWithoutTabHistoryAndSettingsPersist() {
         InterfacePreferences(context).write(InterfaceSettings(tabHistory = false, confirmExit = true, reducedMotion = true))
-        compose.setContent { LocalicaTheme { LocalicaScreen(library, PlaybackState(connected = true), {}, {}, {}, {}, {}, {}) } }
+        compose.setContent { LocalicaTheme { LocalicaScreen(library, PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
+            playlist = PlaylistState(loading = false)) } }
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Seasons").performClick()
         compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Evening").assertIsDisplayed() }.isSuccess }

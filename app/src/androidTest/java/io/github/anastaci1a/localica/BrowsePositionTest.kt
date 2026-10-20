@@ -24,7 +24,7 @@ class BrowsePositionTest {
         var request by mutableIntStateOf(0)
         compose.setContent { LocalicaTheme {
             BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
-                PlaylistState(), route, { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false,
+                PlaylistState(loading = false), route, { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false,
                 scrollToTopRequest = request, reducedMotion = true, queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
         } }
         val list = compose.onNodeWithTag("browser-list")
