@@ -16,11 +16,15 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.ResolvedTextDirection
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+
+internal fun marqueeTextStyle(style: TextStyle): TextStyle =
+    if (style.textDirection == TextDirection.Unspecified) style.copy(textDirection = TextDirection.Content) else style
 
 @Composable
 internal fun MarqueeTitle(title: String, reducedMotion: Boolean, modifier: Modifier = Modifier,
@@ -32,8 +36,11 @@ internal fun MarqueeTitle(title: String, reducedMotion: Boolean, modifier: Modif
 internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.titleSmall, motionPaused: Boolean = false,
     visiblePrefixLength: Int = title.length, suffixVisibility: Float = 1f) {
+    // Unspecified forces the UI direction in Compose, even for an opposite-script
+    // title. Measurement and drawing must share content direction (or the caller's override).
+    val textStyle = marqueeTextStyle(style)
     if (reducedMotion || LocalReducedMotion.current) {
-        Text(title, modifier, maxLines = 1, style = style, overflow = TextOverflow.Ellipsis)
+        Text(title, modifier, maxLines = 1, style = textStyle, overflow = TextOverflow.Ellipsis)
         return
     }
     val measurer = rememberTextMeasurer()
@@ -44,12 +51,12 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
     val motion = remember(title.text) { MarqueeMotion() }
     var frame by remember(motion) { mutableStateOf(motion.frame) }
     BoxWithConstraints(modifier) {
-        val measured = measurer.measure(title, style, maxLines = 1, softWrap = false)
+        val measured = measurer.measure(title, textStyle, maxLines = 1, softWrap = false)
         val rtl = if (title.isNotEmpty()) measured.getParagraphDirection(0) == ResolvedTextDirection.Rtl else layoutRtl
         val fullTextWidth = measured.size.width.toFloat()
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else fullTextWidth
         val prefixWidth = if (visiblePrefixLength >= title.length) fullTextWidth else
-            measurer.measure(title.subSequence(0, visiblePrefixLength.coerceAtLeast(0)), style,
+            measurer.measure(title.subSequence(0, visiblePrefixLength.coerceAtLeast(0)), textStyle,
                 maxLines = 1, softWrap = false).size.width.toFloat()
         val textWidth = prefixWidth + (fullTextWidth - prefixWidth) * suffixVisibility.coerceIn(0f, 1f)
         val allowed = !motionPaused && textWidth > width
@@ -69,7 +76,7 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
         }
         val fadeWidth = minOf(width * .12f, with(density) { 24.dp.toPx() })
         Layout(content = {
-            Text(title, maxLines = 1, softWrap = false, style = style, overflow = TextOverflow.Clip)
+            Text(title, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
         }, modifier = Modifier
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
