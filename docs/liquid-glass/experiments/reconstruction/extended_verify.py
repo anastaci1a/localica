@@ -3,7 +3,7 @@ from pathlib import Path
 from collections import OrderedDict
 import argparse,json
 import numpy as np
-from extended_fit import Study,initial
+from extended_fit import Study,initial,STAGES,RADIAL_STAGES,RADIAL_FOLLOWUP_STAGES
 
 
 def main():
@@ -56,6 +56,10 @@ def main():
     a=coordinates(a);b=coordinates(b)
     assert np.max(abs(b-np.stack([-a[:,1],a[:,0]],-1)))<.0011
     print('PASS circular optical field has no preferred x/y axis')
+    forbidden={'tangent','coupling','core_y','half_y_delta','cap_normal_gain','cap_tangent_fade','cap_join_width'}
+    for schedule in [{**STAGES,**RADIAL_STAGES},RADIAL_FOLLOWUP_STAGES]:
+        assert not any(forbidden.intersection(keys) for _,keys in schedule.values()), 'Radial experiment introduces a preferred axis'
+    print('PASS radial initial/follow-up schedules preserve rotational symmetry')
 
     from foreground_response import response,calibrate
     Y,X=np.mgrid[:40,:40]/39

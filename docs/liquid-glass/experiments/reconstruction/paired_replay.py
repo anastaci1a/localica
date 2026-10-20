@@ -12,12 +12,12 @@ from paired_fit import Cached
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('study');ap.add_argument('inputs',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--motion',action='store_true');args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('study');ap.add_argument('inputs',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--motion',action='store_true');ap.add_argument('--icons',type=Path);ap.add_argument('--minimum',type=int,default=20);args=ap.parse_args()
     root=Path(__file__).parent/'studies'/args.study/'paired'
     rows=[json.loads(line) for line in (root/'passes.jsonl').read_text().splitlines() if line]
-    assert len(rows)>=5 and [r['pass_number'] for r in rows]==list(range(1,len(rows)+1))
+    assert len(rows)>=args.minimum and [r['pass_number'] for r in rows]==list(range(1,len(rows)+1))
     valid_count=sum(r.get('valid_experiment',True) for r in rows)
-    assert valid_count>=5,'Invalid experiments do not count toward the minimum'
+    assert valid_count>=args.minimum,'Invalid experiments do not count toward the minimum'
     previous=None
     for row in rows:
         old=row['previous'];new=row['current']
@@ -33,6 +33,11 @@ def main():
     for index,(name,case) in enumerate(zip(['a','b'],cases)):
         folder=args.out/name;folder.mkdir(exist_ok=True)
         for dest,input_name in case['input_names'].items():shutil.copyfile(args.inputs/input_name,folder/dest)
+        for layer in case.get('foreground_layers',[]):
+            if 'vector_asset' in layer:
+                source=(args.icons or args.inputs)/layer['vector_asset']
+                assert source.is_file(),f'Missing private solid-vector input: {source}'
+                shutil.copyfile(source,folder/layer['vector_asset'])
         if 'foreground_response' in state:case['foreground_response']=state['foreground_response']
         (folder/'case.json').write_text(json.dumps(case,indent=2)+'\n')
         p=state['parameters'].copy();p['sigma']*=min(case['half']);p['post_sigma']*=min(case['half'])
@@ -49,7 +54,7 @@ def main():
         diagnostic=json.loads((folder/'diagnostics.json').read_text())
         assert diagnostic['source_observed_fraction']>=.999,'Unobserved source under a scored lookup'
         assert diagnostic['gaussian_3sigma_observed_fraction']>=.999,'Source-scattering footprint crosses a recovery gap'
-        if args.motion:subprocess.run([sys.executable,str(Path(__file__).with_name('extended_media.py')),str(folder),'--frames','90','--travel','45'],check=True)
+        if args.motion:subprocess.run([sys.executable,str(Path(__file__).with_name('extended_media.py')),str(folder),'--frames','180','--travel','45'],check=True)
     if 'foreground_response' in state:
         assert abs(studies[0].L-studies[1].L)<1e-12
         errors=foreground_errors(studies,p,state['material'],state['foreground_response'])

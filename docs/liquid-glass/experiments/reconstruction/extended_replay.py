@@ -9,11 +9,16 @@ from extended_fit import Study
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('inputs',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--study',required=True);args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('inputs',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--study',required=True);ap.add_argument('--icons',type=Path);args=ap.parse_args()
     saved=Path(__file__).parent/'studies'/args.study
     case=json.loads((saved/'case.json').read_text());recipe=json.loads((saved/'accepted.json').read_text())
     args.out.mkdir(parents=True,exist_ok=True)
     for dest,name in case['input_names'].items():shutil.copyfile(args.inputs/name,args.out/dest)
+    for layer in case.get('foreground_layers',[]):
+        if 'vector_asset' in layer:
+            source=(args.icons or args.inputs)/layer['vector_asset']
+            assert source.is_file(),f'Missing private solid-vector input: {source}'
+            shutil.copyfile(source,args.out/layer['vector_asset'])
     (args.out/'case.json').write_text(json.dumps(case,indent=2)+'\n')
     L=min(case['half']);p=recipe['parameters'].copy();p['sigma']*=L;p['post_sigma']*=L
     accepted=dict(parameters=p,material=recipe['material'],scores=recipe['scores'])
