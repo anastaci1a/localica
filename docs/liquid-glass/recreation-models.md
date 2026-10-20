@@ -113,6 +113,32 @@ F(x,y) = ((1−core S)x, (1−core S)y) − a n
 
 The `regular-light` and `regular-dark` recipes independently specify field parameters and material coefficients. Neither uses Gaussian blur. Their nearly uniform backdrops cannot identify an optical model; high scores here validate tone/rim approximation, **not refraction**.
 
+## Music and switch profile family
+
+The newer [paired studies](reconstruction.md#apple-music-studies) use one normalized image-map family. Each `studies/<id>/paired/accepted.json` supplies the shared coefficients; `a.json` and `b.json` supply measured poses and frozen input hashes. Home is still provisional because its first paired baseline regressed the retained single result.
+
+Subtract the recipe's shape offset from `v`, then apply its half-extent/radius corrections. Obtain boundary coordinate `s`, outward unit normal `n`, and `d=max(−s,0)`. The usual outline is a rounded rectangle/capsule. For a circle, keep equal half-extents and use `core_y=core_x` with no directional optical parameters.
+
+For `spline=true`, evaluate a cubic B-spline at `clamp(d/R,0,1)`, with knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]` and coefficients `[c0,…,c6,0,0,0]`. Otherwise use `a=amplitude×max(1−d/band,0)^power`. Signed spline coefficients permit folds and reduced center images; they are not lens heights.
+
+```text
+q = n_x² (horizontal major axis), or n_y² (vertical major axis)
+a ← a (1 + cap_normal_gain q)
+u = clamp(d/tangent_band,0,1)
+W = (1−u)^m (1+mu) (1−cap_tangent_fade q)
+W_d = −m(m+1)u(1−u)^(m−1) / tangent_band
+τ = −n_y x + n_x y
+K = ½ coupling × tangent × W_d × x²
+F_x = (1−core_x)x − a n_x + tangent W τ n_y − K n_x
+F_y = (1−core_y)y − a n_y − tangent W τ n_x − K n_y
+```
+
+Here `m=tangent_exponent` (default 4). Restore the shape offset to `F` before backdrop lookup. Missing cap gains/fades are zero. `W_d` is deliberately the base falloff derivative **without** the orientation weight; with these empirical tensor terms, the field is not asserted to be a gradient potential or ray trace through an identified solid.
+
+The compact mini-player additionally smooths the capsule's cap/body join. Along its major axis let `a=max(h)−R`, `z=|x|−a`, and `w=cap_join_width`. Replace `max(z,0)` by `q=w(2t³−t⁴)` for `|z|<w`, where `t=(z/w+1)/2`; use 0 below and `z` above that interval. The boundary coordinate is `sqrt(q²+y²)−R`; normalize its analytic gradient for `n`. This is a C2 implicit join, **not exact Euclidean distance** in the join band. Rotate axes for a vertical capsule.
+
+Sample the source-blurred backdrop through `F`. When `blur_transition>0`, blend clear and source-blurred samples with quintic smoothstep of `d/blur_transition`, then apply `sample^gamma`. Apply the common material, average subpixels, then apply output Gaussian blur. Coverage, exterior shadows and solid-vector foreground layers remain separate. Exact normalized coefficients, foreground styles and any context option are part of each recipe, not inferred from its preview image.
+
 ## Common material function
 
 All five frozen recipes have 23 coefficients. Define `X=x/h_x`, `Y=y/h_y`, `thin=exp[−(d/thin_rim)²]`, `e=exp[−(d/rim_width)²]`, `f=exp[−(d/(4 rim_width))²]`. Let `z=clamp(d/.30,0,1)` and `c=6z⁵−15z⁴+10z³`. The 14 lighting basis values, in order, are:
@@ -140,7 +166,7 @@ effective_triplet = A × shared_triplet
 
 Apply `A` to the rim gain, offset and core gain triplets before the common material calculation. Leave the 14 scalar lighting coefficients and sampled RGB ray colors unchanged. Thus `wᵀA=wᵀ`: contraction preserves each coefficient triplet's encoded-luma response, while reducing its color bias. This is not desaturation of the final image or a radiometric conservation law.
 
-- Use the same `k,f` and23 base coefficients on both backgrounds; recompute `μ` when the backdrop or footprint moves. The reference implementation uses native-center area quadrature, independent of target/foreground/scoring masks.
+- Use the same `k,f` and 23 base coefficients on both backgrounds; recompute `μ` when the backdrop or footprint moves. The reference implementation uses native-center area quadrature, independent of target/foreground/scoring masks.
 - An absent context option means `A=I`, preserving earlier recipes. The current switch selects `k=10,f=0`; it still misses colored rim detail. This empirical adaptation is not an identified Apple formula.
 
 ## Solid-vector foreground responses
