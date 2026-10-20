@@ -104,8 +104,11 @@ def material_trial(caches,old,keys):
     # native outputs and backtrack toward the incumbent if necessary.
     best=co.copy();best_scores=baseline
     for t in [1,.5,.25,.125,.0625,.03125,.015625]:
-        q=co.copy();q[keys]=co[keys]+t*(result.x-co[keys]);trial=scores(caches,q)
-        if permitted(trial,baseline) and sum(s['loss'] for s in trial)<sum(s['loss'] for s in best_scores):best=q;best_scores=trial
+        q=co.copy();q[keys]=co[keys]+t*(result.x-co[keys]);trial=evaluate(q[keys])
+        allowed=permitted(trial,baseline)
+        if 'foreground_response' in old:
+            allowed=allowed and all(a<=b+1e-8 for a,b in zip(foreground_memo,old['foreground_scores']['after_mse']))
+        if allowed and sum(s['loss'] for s in trial)<sum(s['loss'] for s in best_scores):best=q;best_scores=trial
     return best,best_scores,calls
 
 
