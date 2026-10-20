@@ -1,0 +1,24 @@
+{
+  "size": [
+    2720,
+    500
+  ],
+  "frames": 90,
+  "duration_ms": 5990,
+  "minimum_duration_ms": 60,
+  "maximum_duration_ms": 70,
+  "first_gif_frame_rgb_rmse_to_video_frames_0_1_2": [
+    2.631932497024536,
+    8.6812105178833,
+    14.116990089416504
+  ],
+  "nearest_video_frame": 0,
+  "limits": "Palette/encode diagnostic, separate from native glass score. Nearest early video frame accounts for GIF frame-rate resampling phase.",
+  "visual_review": {
+    "accepted": true,
+    "observation": "Continuous glass/shadow, sharp vectors, no visible seams or recovery holes.",
+    "numeric_inspection_trigger": 4,
+    "exceeds_trigger": false,
+    "scope": "Exploratory palette diagnostic, not the frozen native glass acceptance gate; full-color4x PNG and30fps MP4 are the masters."
+  }
+}

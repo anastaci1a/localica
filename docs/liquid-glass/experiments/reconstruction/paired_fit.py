@@ -69,7 +69,15 @@ def foreground_errors(studies,p,co,params):
     return errors
 
 
+def local_material_allowed(caches,old):
+    # Nonlinear foreground constraints stay on the direct search path.
+    return 'foreground_response' not in old and 'foreground_styles' not in old and max(c.study.valid.sum() for c in caches)>60000
+
+
 def material_trial(caches,old,keys):
+    if local_material_allowed(caches,old):
+        from material_local import trial
+        return trial(caches,old,keys,progress=lambda row:print(json.dumps(dict(material_local=row)),flush=True))
     co=np.array(old['material']);baseline=old['scores'];scale=max(1,np.mean([s['loss'] for s in baseline]))
     if not keys:return co,baseline,0
     memo={};calls=0;foreground_memo=[]
@@ -142,7 +150,8 @@ def main():
     if args.number in [1,2,5,6,19]:
         co,metric,evaluations=material_trial(caches,old,keys)
         current.update(material=co.tolist(),scores=metric)
-        trials.append(dict(kind='Constrained shared material',scores=metric,evaluations=evaluations))
+        accelerated=local_material_allowed(caches,old)
+        trials.append(dict(kind='Local clipped-affine proposals with full native gates' if accelerated else 'Constrained shared material',scores=metric,evaluations=evaluations))
     elif args.number==3:
         # Coordinate probes test genuinely shared optics, without giving each
         # sample its own displacement profile or material coefficients.
@@ -160,14 +169,24 @@ def main():
         vector_followup=bool(studies[0].vector_layers)
         subset=range(3) if args.number==7 else range(3,7)
         optical_keys=[f'c{i}' for i in (subset if vector_followup else range(7))];x=np.array([p[k] for k in optical_keys]);scale=max(1,np.mean([s['loss'] for s in old['scores']]))
-        if vector_followup:name='Shared native '+('outer' if args.number==7 else 'inner')+' radial spline settlement'
+        if vector_followup:name='Shared native '+('outer' if args.number==7 else 'inner')+(' radial' if studies[0].case.get('radial') else ' normal')+' spline settlement'
+        profiles=None
+        if local_material_allowed(caches,old):
+            from profile_cache import ProfileCache
+            profiles=[ProfileCache(s,p,old['material']) for s in studies]
+            coefficients=np.array([p[f'c{i}'] for i in range(7)])
+            for s,fast in zip(studies,profiles):
+                assert np.max(abs(fast.render(coefficients)-s.render(p,np.array(old['material']))))<2e-6,'Profile cache changes native rendering'
         memo={};calls=0
         def evaluate(v):
             nonlocal calls
             key=np.asarray(v).tobytes()
             if key not in memo:
                 q=copy.deepcopy(p);q.update(dict(zip(optical_keys,map(float,v))))
-                metric=scores([Cached(s,q) for s in studies],old['material'])
+                if profiles:
+                    cs=np.array([q[f'c{i}'] for i in range(7)])
+                    metric=[s.scores(fast.render(cs),include_ssim=False) for s,fast in zip(studies,profiles)]
+                else:metric=scores([Cached(s,q) for s in studies],old['material'])
                 fg=foreground_errors(studies,q,old['material'],old['foreground_response']) if 'foreground_response' in old else []
                 memo.clear();memo[key]=(q,metric,fg);calls+=1
             return memo[key]
@@ -185,7 +204,7 @@ def main():
             q,metric,fg=evaluate(x+t*(result.x-x))
             allowed=permitted(metric,old['scores']) and (not fg or all(a<=b+1e-8 for a,b in zip(fg,old['foreground_scores']['after_mse'])))
             if allowed and sum(s['loss'] for s in metric)<best:current.update(parameters=q,scores=metric);best=sum(s['loss'] for s in metric)
-        trials.append(dict(kind='Constrained native spline',scores=current['scores'],evaluations=calls));evaluations=calls
+        trials.append(dict(kind='Constrained native spline',prepared_fields=profiles is not None,scores=current['scores'],evaluations=calls));evaluations=calls
     elif args.number in [9,10,11,12,13,14,15,16,17,20]:
         # Each pass explores a different live parameter family at two scales.
         # These are native-rendered optical trials, not verification reruns.

@@ -1,0 +1,81 @@
+{
+  "paired_passes": 21,
+  "record_count": 21,
+  "excluded_passes": [],
+  "scores": [
+    {
+      "glass": {
+        "pixels": 155428,
+        "rmse": 4.365655422210693
+      },
+      "rim": {
+        "pixels": 45766,
+        "rmse": 7.231840133666992
+      },
+      "held": {
+        "pixels": 38118,
+        "rmse": 4.463541507720947
+      },
+      "interior": {
+        "pixels": 109662,
+        "rmse": 2.2773754596710205
+      },
+      "ssim": 0.988243818283081,
+      "loss": 29.031116601509325
+    },
+    {
+      "glass": {
+        "pixels": 155428,
+        "rmse": 2.5714235305786133
+      },
+      "rim": {
+        "pixels": 45766,
+        "rmse": 4.120835304260254
+      },
+      "held": {
+        "pixels": 38118,
+        "rmse": 2.6285436153411865
+      },
+      "interior": {
+        "pixels": 109662,
+        "rmse": 1.511564016342163
+      },
+      "ssim": 0.9875646829605103,
+      "loss": 9.722938362980676
+    }
+  ],
+  "foreground_mse": null,
+  "foreground_style_scores": {
+    "before_mse": [
+      244.4994336929042,
+      16.064358652717335,
+      97.28164499119642,
+      140.6320619730278,
+      580.9656722534911,
+      171.14740814690524,
+      119.06827094223391,
+      176.2055441384997
+    ],
+    "after_mse": [
+      243.9134941563185,
+      12.981498118650556,
+      97.28164499126864,
+      140.63206197302915,
+      568.7895892972822,
+      51.63024303771633,
+      119.04831064496858,
+      176.19560956707446
+    ],
+    "asset_order": [
+      "title.svg",
+      "artist.svg",
+      "play.svg",
+      "forward.svg"
+    ],
+    "score_order": "Scene-major, then asset_order",
+    "optimizer_evaluations": 223,
+    "formula": "P=(1-a)B+a(t*B+q); t=1-opacity, q=opacity*color; shared color/opacity per role"
+  },
+  "gate": "Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.",
+  "scope": "Same video, different observed backdrops. Does not establish generality across devices, apps or lighting."
+}

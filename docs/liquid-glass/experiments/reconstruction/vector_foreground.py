@@ -8,6 +8,7 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 import hashlib
+import shutil
 import xml.etree.ElementTree as ET
 import cv2
 import numpy as np
@@ -40,3 +41,13 @@ def coverage(folder,layer,scale=1):
     path=Path(folder)/layer['vector_asset'];raw=path.read_bytes()
     assert hashlib.sha256(raw).hexdigest()==layer['vector_sha256'], 'Changed frozen vector asset'
     return _coverage(raw,tuple(layer['box']),tuple(layer['vector_box']),scale).copy()
+
+
+def copy_assets(case,source,destination):
+    """Copy declared foreground inputs; constructors verify their frozen hashes."""
+    for layer in case.get('foreground_layers',[]):
+        for key in ['vector_asset','artwork_asset']:
+            if key in layer:
+                path=Path(source)/layer[key]
+                assert path.is_file(),f'Missing private foreground input: {path}'
+                shutil.copyfile(path,Path(destination)/layer[key])

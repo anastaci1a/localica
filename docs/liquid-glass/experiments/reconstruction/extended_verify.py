@@ -46,6 +46,18 @@ def main():
     assert light.shape==(3,15) and np.isfinite(light).all()
     print('PASS zero-optics registration despite shape corrections; finite normalized lighting')
 
+    wide=Study.__new__(Study);wide.crop=[0,0,1400,12];wide.L=32.;wide.case=dict(center=[700.,6.])
+    next_row=0;sample_count=0
+    for row,bottom,width,x,y in wide.raster_tiles(4):
+        assert row==next_row and x.size<=131072
+        expected_x=(np.arange(width*2)/8-.4375-700)/32
+        expected_y=(row/4+np.arange((bottom-row)*2)/8-.4375-6)/32
+        assert np.array_equal(x,np.broadcast_to(expected_x,x.shape))
+        assert np.array_equal(y,np.broadcast_to(expected_y[:,None],y.shape))
+        next_row=bottom;sample_count+=x.size
+    assert next_row==48 and sample_count==1400*12*4**2*4
+    print('PASS wide export strips bound working samples without gaps or coordinate changes')
+
     # Radial lookup must commute with a quarter-turn. Material lighting is
     # deliberately excluded: an environment may have a preferred direction.
     obj.half=np.ones(2);obj.radius=1.;obj.case['radial']=True
@@ -84,6 +96,46 @@ def main():
     assert not permitted([score(8,2.9),score(19,4.1)],baseline)
     assert permitted([score(9,2.9),score(20,4)],baseline)
     print('PASS joint-average gains cannot hide either sample loss/glass regression')
+
+    # An independent affine/clip/filter fixture checks the sufficient-statistic
+    # proposal model. Clipping is fixed within these small perturbations; the
+    # full native renderer still owns acceptance when a proposal crosses it.
+    from types import SimpleNamespace
+    from paired_fit import Cached
+    from material_local import statistics
+    rng=np.random.default_rng(222);H,W=24,32
+    cache=Cached.__new__(Cached);cache.H=H;cache.W=W
+    cache.C=rng.choice([.1,.4,.6,.9],(H*2,W*2,3)).astype(np.float32)
+    cache.J=rng.uniform(-.01,.01,(H*2,W*2,15));cache.J[...,-1]=rng.uniform(0,1,(H*2,W*2))
+    yy,xx=np.mgrid[:H,:W];valid=np.ones((H,W),bool);rim=(xx<5)|(xx>=W-5)|(yy<5)|(yy>=H-5)
+    cache.study=SimpleNamespace(target_crop=rng.uniform(.1,.9,(H,W,3)).astype(np.float32),valid=valid,rim=rim)
+    maximum=0
+    for clipping in [False,True]:
+        co=np.zeros(23);co[:3]=co[-3:]=1.4 if clipping else .4;co[3:6]=-.2 if clipping else .3
+        for sigma in [0.,.75]:
+            cache.p=dict(post_sigma=sigma);base=cache.render(co);forms=statistics(cache,co)
+            delta=rng.normal(0,.0001,23);actual=cache.render(co+delta)
+            for name,mask in [('glass',valid),('rim',rim)]:
+                Q,g=forms[name];target=cache.study.target_crop[mask]
+                before=float(np.mean((base[mask].astype(float)-target)**2))*255**2
+                after=float(np.mean((actual[mask].astype(float)-target)**2))*255**2
+                difference=abs(after-(before+2*g@delta+delta@Q@delta));maximum=max(maximum,difference)
+                assert difference<.005,(clipping,sigma,name,difference)
+    print('PASS clipped/unclipped subpixel/filter quadratic proposals; max MSE difference',maximum)
+
+    from profile_cache import ProfileCache
+    fixture=Study.__new__(Study);fixture.L=16.;fixture.half=np.array([2.,1.]);fixture.radius=1.
+    fixture.case=dict(center=[48.,24.],radial=False);fixture.crop=[12,4,84,44]
+    y,x=np.mgrid[:48,:96];fixture.source=np.stack([x/96,y/48,(x/96+y/48)/2],-1).astype(np.float32)
+    fixture.cache=OrderedDict();fixture.backdrop_shift=[0.,0.]
+    p=initial();p.update(spline=True,sigma=1.5,post_sigma=.4,tangent=.05,coupling=.2,cap_normal_gain=.2,cap_tangent_fade=.1,cap_join_width=.1,shape_dx=.01,half_x_delta=.02)
+    coefficients=np.array([.6,.4,.3,.2,.1,.02,0.]);p.update({f'c{i}':float(v) for i,v in enumerate(coefficients)})
+    co=np.zeros(23);co[:3]=co[-3:]=.6;co[3:6]=.1
+    fast=ProfileCache(fixture,p,co)
+    for delta in [np.zeros(7),rng.normal(0,.02,7)]:
+        q={**p,**{f'c{i}':float(v) for i,v in enumerate(coefficients+delta)}}
+        assert np.max(abs(fast.render(coefficients+delta)-fixture.render(q,co)))<2e-6
+    print('PASS prepared profile lookup with coupling, orientation gain, shape correction, smooth caps and output blur')
 
 
 if __name__=='__main__':main()

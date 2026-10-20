@@ -9,10 +9,11 @@ import numpy as np
 from extended_fit import Study
 from paired_fit import permitted,foreground_errors
 from paired_fit import Cached
+from vector_foreground import copy_assets
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('study');ap.add_argument('inputs',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--motion',action='store_true');ap.add_argument('--icons',type=Path);ap.add_argument('--minimum',type=int,default=20);args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('study');ap.add_argument('inputs',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--motion',action='store_true');ap.add_argument('--icons','--assets',dest='icons',type=Path);ap.add_argument('--minimum',type=int,default=20);args=ap.parse_args()
     root=Path(__file__).parent/'studies'/args.study/'paired'
     rows=[json.loads(line) for line in (root/'passes.jsonl').read_text().splitlines() if line]
     assert len(rows)>=args.minimum and [r['pass_number'] for r in rows]==list(range(1,len(rows)+1))
@@ -33,11 +34,7 @@ def main():
     for index,(name,case) in enumerate(zip(['a','b'],cases)):
         folder=args.out/name;folder.mkdir(exist_ok=True)
         for dest,input_name in case['input_names'].items():shutil.copyfile(args.inputs/input_name,folder/dest)
-        for layer in case.get('foreground_layers',[]):
-            if 'vector_asset' in layer:
-                source=(args.icons or args.inputs)/layer['vector_asset']
-                assert source.is_file(),f'Missing private solid-vector input: {source}'
-                shutil.copyfile(source,folder/layer['vector_asset'])
+        copy_assets(case,args.icons or args.inputs,folder)
         if 'foreground_response' in state:case['foreground_response']=state['foreground_response']
         if 'foreground_styles' in state:case['foreground_styles']=state['foreground_styles']
         (folder/'case.json').write_text(json.dumps(case,indent=2)+'\n')
