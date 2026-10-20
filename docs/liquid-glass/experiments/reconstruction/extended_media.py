@@ -46,6 +46,7 @@ def main():
     completion_delta=dict(max_abs_rgb=float(np.max(abs(delta))),rmse=float(np.sqrt(np.mean(delta**2))))
     motion_support['completion']='Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.'
     high=study.render(p,co,scale);study.comparison(high,out/'comparison.png',p,scale)
+    del high
     prepared=Prepared(study,p,co,scale)
     # Check the prepared renderer on the actual motion input, independently of
     # the frozen native scoring pass; cache speed cannot change the material.
@@ -54,7 +55,7 @@ def main():
     video=out/'motion.mp4';log=(out/'encode.log').open('w')
     # yuv420 requires even dimensions; padding preserves all rendered pixels.
     W=width+width%2;H=height+height%2
-    proc=subprocess.Popen(['ffmpeg','-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate',str(args.fps),'-i','pipe:0','-an','-c:v','libx264','-preset','fast','-crf','17','-pix_fmt','yuv420p','-movflags','+faststart',str(video)],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=log)
+    proc=subprocess.Popen(['ffmpeg','-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate',str(args.fps),'-i','pipe:0','-an','-c:v','libx264','-threads','2','-preset','fast','-crf','17','-x264-params','rc-lookahead=4:sync-lookahead=1','-pix_fmt','yuv420p','-movflags','+faststart',str(video)],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=log)
     try:
         for i in range(args.frames):
             shift=np.float32(travel*np.sin(2*np.pi*i/args.frames))
@@ -73,6 +74,8 @@ def main():
             if i in [0,args.frames//4,args.frames//2,3*args.frames//4]:Image.fromarray(frame).save(out/f'frame-{i:03}.png')
     finally:
         proc.stdin.close();assert proc.wait()==0;log.close()
+    # Encoding does not need the large optical maps or the last RGB frame.
+    del prepared,cov,xx,yy,opacity,context,base,material,frame,valid
     gif=out/'motion.gif'
     for fps,colors in [(15,128),(12,96),(10,64),(6,48)]:
         palette=out/'palette.png'
