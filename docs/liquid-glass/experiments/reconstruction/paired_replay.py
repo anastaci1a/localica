@@ -8,6 +8,7 @@ import argparse,json,shutil,subprocess,sys
 import numpy as np
 from extended_fit import Study
 from paired_fit import permitted,foreground_errors
+from paired_fit import Cached
 
 
 def main():
@@ -38,8 +39,14 @@ def main():
         s=Study(folder);pred=s.render(p,np.array(state['material']));score=s.scores(pred)
         assert abs(score['loss']-state['scores'][index]['loss'])<1e-6,'Native paired replay mismatch'
         assert abs(score['glass']['rmse']-state['scores'][index]['glass']['rmse'])<1e-6
+        cache=Cached(s,p)
+        for co in [np.array(state['material']),np.array(state['material'])+.08]:
+            assert np.max(abs(cache.render(co)-s.render(p,co)))<2e-6,'Cache changes native integration/clipping'
         s.comparison(pred,folder/'comparison.png',p);metrics.append(score);studies.append(s)
         subprocess.run([sys.executable,str(Path(__file__).with_name('extended_diagnostics.py')),str(folder)],check=True)
+        diagnostic=json.loads((folder/'diagnostics.json').read_text())
+        assert diagnostic['source_observed_fraction']>=.999,'Unobserved source under a scored lookup'
+        assert diagnostic['gaussian_3sigma_observed_fraction']>=.999,'Source-scattering footprint crosses a recovery gap'
         if args.motion:subprocess.run([sys.executable,str(Path(__file__).with_name('extended_media.py')),str(folder),'--frames','90','--travel','45'],check=True)
     if 'foreground_response' in state:
         assert abs(studies[0].L-studies[1].L)<1e-12

@@ -33,7 +33,7 @@ def main():
         source_gaussian_radius_native_px=radius,
         source_coordinate_range=[[float(X[mask].min()),float(Y[mask].min())],[float(X[mask].max()),float(Y[mask].max())]],
         inverted_local_mapping_fraction=float((determinant[mask]<0).mean()),
-        limits='Native-grid diagnostics. A fold is a negative2D lookup Jacobian, not proof of a physical caustic. Source-known pixels may retain video/recovery error;3sigma omits a Gaussian tail and output scattering is not propagated.')
+        limits='Native-grid finite-difference diagnostics. A negative lookup Jacobian indicates local orientation reversal; a fold is a singular locus. Neither establishes a physical caustic. Source-known pixels may retain video/recovery error;3sigma omits a Gaussian tail and output scattering is not propagated.')
     (args.folder/'diagnostics.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report))
 

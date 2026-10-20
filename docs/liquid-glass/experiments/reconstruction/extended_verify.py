@@ -73,5 +73,13 @@ def main():
     assert np.all(alpha[8:32,8:32]==1)
     print('PASS foreground-response recovery, held-range monotonicity, gamut and opaque interior')
 
+    from paired_fit import permitted
+    def score(loss,rmse):return dict(loss=loss,glass=dict(rmse=rmse))
+    baseline=[score(10,3),score(20,4)]
+    assert not permitted([score(8,2.9),score(21,4)],baseline)
+    assert not permitted([score(8,2.9),score(19,4.1)],baseline)
+    assert permitted([score(9,2.9),score(20,4)],baseline)
+    print('PASS joint-average gains cannot hide either sample loss/glass regression')
+
 
 if __name__=='__main__':main()

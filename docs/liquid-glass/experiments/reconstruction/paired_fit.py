@@ -18,6 +18,7 @@ STAGES={
  4:('Shared foreground color response',[]),
  5:('Joint shared-material settlement',list(range(23))),
  6:('Foreground-aware shared-material settlement',list(range(23))),
+ 7:('Shared native radial-profile settlement',[]),
 }
 
 
@@ -105,6 +106,34 @@ def main():
     assert abs(studies[0].L-studies[1].L)<1e-12,'Normalize kernels before comparing different reference scales'
     saved=folder/'accepted.json'
     if saved.exists():old=json.loads(saved.read_text())
+    elif args.number==7:
+        assert p['spline'],'Spline comparator required'
+        optical_keys=[f'c{i}' for i in range(7)];x=np.array([p[k] for k in optical_keys]);scale=max(1,np.mean([s['loss'] for s in old['scores']]))
+        memo={};calls=0
+        def evaluate(v):
+            nonlocal calls
+            key=np.asarray(v).tobytes()
+            if key not in memo:
+                q=copy.deepcopy(p);q.update(dict(zip(optical_keys,map(float,v))))
+                metric=scores([Cached(s,q) for s in studies],old['material'])
+                fg=foreground_errors(studies,q,old['material'],old['foreground_response']) if 'foreground_response' in old else []
+                memo.clear();memo[key]=(q,metric,fg);calls+=1
+            return memo[key]
+        def objective(v):return np.mean([s['loss'] for s in evaluate(v)[1]])/scale
+        def constraints(v):
+            _,metric,fg=evaluate(v);out=[]
+            for a,b in zip(metric,old['scores']):out.extend([(b['loss']-a['loss'])/scale,(b['glass']['rmse']**2-a['glass']['rmse']**2)/scale])
+            if fg:out.extend((b-a)/scale for a,b in zip(fg,old['foreground_scores']['after_mse']))
+            return np.array(out)
+        lower=-2.5 if studies[0].case.get('radial') else 0
+        result=minimize(objective,x,method='SLSQP',bounds=[(max(lower,v-.25),min(2.5,v+.25)) for v in x],
+            constraints=[dict(type='ineq',fun=constraints)],options=dict(maxiter=45,ftol=1e-9,eps=.002))
+        best=sum(s['loss'] for s in old['scores'])
+        for t in [1,.5,.25,.125,.0625,.03125,.015625]:
+            q,metric,fg=evaluate(x+t*(result.x-x))
+            allowed=permitted(metric,old['scores']) and (not fg or all(a<=b+1e-8 for a,b in zip(fg,old['foreground_scores']['after_mse'])))
+            if allowed and sum(s['loss'] for s in metric)<best:current.update(parameters=q,scores=metric);best=sum(s['loss'] for s in metric)
+        trials.append(dict(kind='Constrained native spline',scores=current['scores'],evaluations=calls));evaluations=calls
     else:
         initial=json.loads((folder/'initial.json').read_text());p=initial['parameters'];co=initial['material']
         caches=[Cached(s,p) for s in studies]
