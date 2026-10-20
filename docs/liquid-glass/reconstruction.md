@@ -153,7 +153,7 @@ Frames A/B: 2.5/2.0 seconds. The foreground has been replaced with a clean symme
 
 ## Active switch — in progress
 
-Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× snapshots** show 24 initial experiments and paired pass 21, not a completed study. Both use one signed image map and material, with the measured pose/size of each thumb.
+Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× snapshots** show 24 initial experiments and paired pass 22, not a completed study. Both use one signed image map and material, with the measured pose/size of each thumb.
 
 [![Switch progress, green track: Apple left, reconstruction right](assets/study-active-switch-progress-a.png)](assets/study-active-switch-progress-a.png)
 
@@ -165,11 +165,11 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 ### Colored switch rim
 
-Each crop below places Apple on the left and snapshot 6 on the right. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
+Each crop below places Apple on the left and snapshot 22 on the right. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
 
 [![Switch rim details: Apple and reconstruction across six cropped regions](assets/switch-rim-detail.png)](assets/switch-rim-detail.png)
 
-- [Measurements and frozen exploratory trials](experiments/reconstruction/switch-rim-analysis.json) include native color samples, nearby resting-edge controls, source assumptions and a first RGB-ray-offset comparison. A small offset improved both older samples slightly; larger offsets regressed. Nothing from that probe has been adopted.
+- [Rim measurements](experiments/reconstruction/switch-rim-analysis.json) include native RGB samples, resting controls and source assumptions. [Competing color models](experiments/reconstruction/switch-color-hypotheses.json) test channel-separated rays and directional chromatic lighting. Some improve native scores slightly; none reproduces the broad colored bands, and none is adopted. Their frozen baselines differ and are recorded separately.
 - Apple describes separate [geometry-dependent highlights and ambient color spill](https://developer.apple.com/videos/play/wwdc2025/219/?time=631). Colored transmission, lighting/tint, video processing and source-estimation error remain possible contributors; these pixels do not identify physical dispersion or an exact Apple shader.
 
 ## Scores
@@ -183,7 +183,7 @@ Each crop below places Apple on the left and snapshot 6 on the right. The gray-t
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
 | Home | 55.738 / 114.298 | 6.956 / 9.731 | 22 / 20 | Boundary correction required |
-| Active switch, pass 21 | 254.741 / 329.425 | 12.615 / 15.767 | 24 / 21 | In progress |
+| Active switch, pass 22 | 254.741 / 294.978 | 12.615 / 15.075 | 24 / 22 | In progress |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Home's missing single-to-paired boundary check is explicitly flagged above.
 - These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.
