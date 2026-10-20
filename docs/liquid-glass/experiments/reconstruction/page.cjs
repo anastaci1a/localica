@@ -3,6 +3,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),{pathToFileURL}=require('node:url');
 const root=path.resolve(__dirname,'../..');
 const out=process.env.LAB_EVIDENCE||path.join(root,'test-output/reconstruction');
+const markdown=fs.readFileSync(path.join(root,'reconstruction.md'),'utf8');
+const expectedImages=[...markdown.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map(m=>m[1]);
+assert(expectedImages.length>=24,'Missing paired/progress comparisons');
 fs.mkdirSync(out,{recursive:true});
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||undefined,args:['--no-sandbox']});
@@ -12,8 +15,10 @@ fs.mkdirSync(out,{recursive:true});
   await page.setViewportSize({width,height:950});
   await page.goto(pathToFileURL(path.join(root,'site/liquid-glass/reconstruction.html')).href);
   await page.evaluate(async()=>{await Promise.all([...document.images].map(i=>i.decode()));});
-  assert.equal(await page.locator('details').count(),6);
-  assert.equal(await page.locator('img').count(),12);
+  assert.equal(await page.locator('img').count(),expectedImages.length);
+  const images=await page.locator('img').evaluateAll(list=>list.map(i=>({src:new URL(i.src).pathname.split('/').pop(),width:i.naturalWidth,height:i.naturalHeight})));
+  assert.deepEqual(images.map(i=>i.src),expectedImages.map(s=>s.split('/').pop()));
+  for(const item of images.filter(i=>i.src.startsWith('study-')))assert(item.width>=1800&&item.height>=900,'New comparisons must retain HQ reconstruction panels');
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Page overflows');
   await page.screenshot({path:path.join(out,`page-${width}.png`)});
   for(const details of await page.locator('details').all()){
@@ -24,6 +29,10 @@ fs.mkdirSync(out,{recursive:true});
   for(const img of await page.locator('img[src*="-full.png"]').all())assert.equal(await img.evaluate(i=>i.naturalWidth),3842);
   await page.locator('#scores').scrollIntoViewIfNeeded();
   await page.screenshot({path:path.join(out,`measurements-${width}.png`)});
+  for(const section of ['apple-music-studies','active-switch--in-progress']){
+   await page.locator('#'+section).scrollIntoViewIfNeeded();
+   await page.screenshot({path:path.join(out,`${section}-${width}.png`)});
+  }
  }
  for(const width of [1280,390]){
   await page.setViewportSize({width,height:950});
@@ -32,5 +41,5 @@ fs.mkdirSync(out,{recursive:true});
   await page.screenshot({path:path.join(out,`models-${width}.png`)});
  }
  assert.deepEqual(errors,[]);await browser.close();
- console.log('PASS desktop/phone layout, 12 decoded figures, 6 expandable sections, 5 native-HD pairs, no page errors');
+ console.log(`PASS desktop/phone layout, ${expectedImages.length} decoded comparisons/previews, expanded figures and specification, no page errors`);
 })().catch(e=>{console.error(e);process.exit(1)});
