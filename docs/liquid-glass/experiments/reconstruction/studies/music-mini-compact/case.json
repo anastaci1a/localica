@@ -1,0 +1,149 @@
+{
+  "id": "music-mini-compact",
+  "category": "Compact persistent playback control",
+  "center": [
+    961,
+    672.5
+  ],
+  "half": [
+    434,
+    88.5
+  ],
+  "radius": 88.5,
+  "crop": [
+    500,
+    550,
+    1420,
+    790
+  ],
+  "foreground": [
+    [
+      580,
+      614,
+      702,
+      734
+    ],
+    [
+      720,
+      618,
+      1004,
+      726
+    ],
+    [
+      1064,
+      632,
+      1138,
+      714
+    ],
+    [
+      1204,
+      631,
+      1326,
+      715
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "artwork",
+      "box": [
+        585,
+        617,
+        700,
+        734
+      ],
+      "radius": 17
+    },
+    {
+      "mode": "mask",
+      "box": [
+        721,
+        620,
+        1004,
+        671
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.13
+    },
+    {
+      "mode": "mask",
+      "box": [
+        720,
+        679,
+        873,
+        726
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.58,
+      "local_contrast": 0.03
+    },
+    {
+      "mode": "mask",
+      "box": [
+        1064,
+        632,
+        1138,
+        714
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.15
+    },
+    {
+      "mode": "mask",
+      "box": [
+        1204,
+        631,
+        1326,
+        715
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.15
+    }
+  ],
+  "reference": {
+    "video": "music",
+    "seconds": 2.5,
+    "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+  },
+  "foreground_method": "Reference-derived coverage, black fills including partial-opacity artist label; reference artwork is content. Foreground excluded from glass scoring.",
+  "background": "Masked temporal translation mosaic with fixed observed-pixel confidence; top and lower disjoint strips.",
+  "input_names": {
+    "source.png": "source-2.5.png",
+    "target.png": "target-2.5.png",
+    "known.png": "known-2.5.png"
+  },
+  "exterior_exclusions": [
+    [
+      0,
+      0,
+      510,
+      1080
+    ],
+    [
+      1410,
+      0,
+      1920,
+      1080
+    ]
+  ],
+  "source_sha256": {
+    "source.png": "84da0d24f30dc1f4080b568756d79044a9ac6568ecbff9595d02a38cd3239fb1",
+    "target.png": "efffc64b8a6ee5b84f0bfc295369aad38db8531e4686674861074592fbee54de",
+    "known.png": "03433579b8ddf8771df2bacf7aa1566e84b71bc81df71da1cd64069c00ff2413"
+  }
+}
