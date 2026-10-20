@@ -47,6 +47,9 @@ class Study:
     def __init__(self, folder):
         self.folder=Path(folder)
         self.case=json.loads((self.folder/'case.json').read_text())
+        for name,digest in self.case.get('source_sha256',{}).items():
+            with (self.folder/name).open('rb') as f:
+                assert hashlib.file_digest(f,'sha256').hexdigest()==digest, f'Changed frozen input: {name}'
         self.source=cv2.imread(str(self.folder/'source.png'))[:,:,::-1].astype(np.float32)/255
         self.target=cv2.imread(str(self.folder/'target.png'))[:,:,::-1].astype(np.float32)/255
         known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)>0
@@ -68,6 +71,7 @@ class Study:
         self.indices=train[:5000]
         self.weights=np.where(-sd.ravel()[self.indices]<.05,2.,np.where(-sd.ravel()[self.indices]<.2,1.3,1.))
         self.cache=OrderedDict()
+        self.backdrop_shift=[0.,0.]
         self.target_crop=self.target[y0:y1,x0:x1]
         self.expected=self.target_crop.reshape(-1,3)[self.indices]
         self.foreground_layers=[]
@@ -134,8 +138,8 @@ class Study:
         xx=x/half[0];yy=y/half[1];z=np.clip(d/.3,0,1);core=z**3*(z*(6*z-15)+10)
         light=np.stack([thin,thin*nx,thin*ny,e,e*nx,e*ny,f,f*nx,f*ny,xx,yy,xx*xx,yy*yy,xx*yy,core],axis=-1)
         texture=self.blur(p['sigma'])
-        sample=cv2.remap(texture,(X*self.L+self.case['center'][0]).astype(np.float32),
-            (Y*self.L+self.case['center'][1]).astype(np.float32),cv2.INTER_LINEAR)
+        sample=cv2.remap(texture,(X*self.L+self.case['center'][0]+self.backdrop_shift[0]).astype(np.float32),
+            (Y*self.L+self.case['center'][1]+self.backdrop_shift[1]).astype(np.float32),cv2.INTER_LINEAR)
         sample=sample.reshape((*x.shape,3))
         return np.maximum(sample,0)**p['gamma'],light
 
@@ -200,6 +204,7 @@ class Study:
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--pass',dest='number',type=int,required=True);ap.add_argument('--budget',type=int,default=900);args=ap.parse_args()
+    assert not (args.folder/f'pass-{args.number:02}'/'record.json').exists(), 'Keep completed passes immutable'
     t0=time.time();study=Study(args.folder);stage,keys=STAGES[args.number]
     accepted_path=args.folder/'accepted.json'
     if accepted_path.exists():old=json.loads(accepted_path.read_text());p=old['parameters']
