@@ -53,6 +53,7 @@ class SearchImeMotionTest {
     private var motionSpeed = 1f
     private val samples = mutableListOf<SearchMorphSample>()
     private val keyboardSetup = mutableListOf<String>()
+    private val motionTimeline = mutableListOf<String>()
 
     @Before fun prepareWindow() {
         compose.activityRule.scenario.onActivity {
@@ -67,6 +68,8 @@ class SearchImeMotionTest {
         val directory = java.io.File(root, "search-ime-motion").apply { mkdirs() }
         java.io.File(directory, "${name.methodName}.txt").writeText(compose.runOnUiThread { samples.toList() }.joinToString("\n"))
         java.io.File(directory, "${name.methodName}-keyboard-setup.txt").writeText(keyboardSetup.joinToString("\n"))
+        java.io.File(directory, "${name.methodName}-timeline.txt").writeText(
+            compose.runOnUiThread { motionTimeline.toList() }.joinToString("\n"))
     }
 
     private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false) {
@@ -76,7 +79,10 @@ class SearchImeMotionTest {
             val speed = LocalMotionSpeed.current
             SideEffect { motionSpeed = speed }
             CompositionLocalProvider(LocalReducedMotion provides reduced,
-                LocalSearchMorphObserver provides { samples += it }) {
+                LocalSearchMorphObserver provides {
+                    samples += it
+                    motionTimeline += "${SystemClock.uptimeMillis()} $it"
+                }) {
                 anchor = rememberGlassAnchor()
                 Box(Modifier.fillMaxSize()) {
                     ListSearchPill("Search fixture", { visible = true }, Modifier.align(Alignment.TopCenter)
@@ -212,12 +218,22 @@ class SearchImeMotionTest {
     }
 
     private fun verifyReturn(from: Rect, home: Rect, reduced: Boolean) {
-        val returning = compose.runOnUiThread { samples.filter { !it.opening } }
+        val all = compose.runOnUiThread { samples.toList() }
+        val returning = all.filter { !it.opening }
         assertTrue("Observe actual placed return frames", returning.isNotEmpty())
+        val positiveImeCapture = requireNotNull(all.lastOrNull { it.opening && it.ime > 0 })
+        assertRect("Return captures the keyboard-visible placement", positiveImeCapture.bounds, from)
         if (!reduced) {
             assertTrue("Return has intermediate frames", returning.any { it.progress in .01f.. .99f })
-            assertTrue("Return starts while the keyboard is still hiding",
-                returning.any { it.progress < .99f && it.ime > 0 })
+            // Compose 1.8.2 preserves the source during the native animation and
+            // resets source/target onEnd. Current insets may already be zero when
+            // a closing window loses IME control, before that animation finishes.
+            val overlap = returning.indexOfFirst {
+                it.progress < .99f && (it.ime > 0 || it.imeSource > it.imeTarget)
+            }
+            assertTrue("Return moves before the native keyboard hide settles", overlap >= 0)
+            assertTrue("The observed native hide reaches its end after moving overlap",
+                returning.drop(overlap + 1).any { it.ime == 0 && it.imeSource == 0 && it.imeTarget == 0 })
         }
         compose.runOnUiThread { samples.filter { it.opening && it.imeTarget == 0 && it.progress == 1f } }.forEach {
             assertRect("No keyboard-following frame before return ownership", from, it.bounds)
@@ -239,11 +255,13 @@ class SearchImeMotionTest {
             verifyOpening(home, reduced)
             compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
             val raised = compose.runOnUiThread { samples.last().bounds }
+            android.util.Log.i("SearchImeMotionTest", "Native dismissal requested outside=$outside uptime=${SystemClock.uptimeMillis()}")
             if (outside) {
                 val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
                 assertTrue(raised.left > 2f)
                 assertTrue(device.click(2, raised.center.y.toInt()))
             } else pressSystemBack()
+            android.util.Log.i("SearchImeMotionTest", "Native dismissal input returned uptime=${SystemClock.uptimeMillis()}")
             closed()
             verifyReturn(raised, home, reduced)
         } finally {
@@ -388,7 +406,7 @@ class SearchImeMotionTest {
                         val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
                         val navigation = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
                         if (shown) insets.isVisible(WindowInsetsCompat.Type.ime()) && ime > navigation
-                        else !insets.isVisible(WindowInsetsCompat.Type.ime()) && ime == 0
+                        else !editor.isFocused && !insets.isVisible(WindowInsetsCompat.Type.ime()) && ime == 0
                     }
                     if (shown && !placed && SystemClock.uptimeMillis() >= nextShowRequest) {
                         // A request rejected under the old policy need not replay
@@ -397,8 +415,11 @@ class SearchImeMotionTest {
                         record("native-show-request=$requested")
                         nextShowRequest = SystemClock.uptimeMillis() + 1000L
                     }
-                    placed && Regex("\\bmIsInputViewShown=(true|false)\\b")
-                        .find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1) == shown.toString()
+                    // InputMethodService retains mIsInputViewShown after hiding
+                    // its native window. It proves input content only when shown;
+                    // hidden readiness belongs to actual insets and editor focus.
+                    placed && (!shown || Regex("\\bmIsInputViewShown=(true|false)\\b")
+                        .find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1) == "true")
                 }
             } catch (timeout: ComposeTimeoutException) {
                 record("native-input-view-$shown-timeout")
