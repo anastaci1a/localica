@@ -1,0 +1,89 @@
+{
+  "glass_pixels": 240456,
+  "source_defined_fraction": 1.0,
+  "gaussian_3sigma_defined_fraction": 1.0,
+  "source_observed_fraction": 0.0,
+  "gaussian_3sigma_observed_fraction": 0.0,
+  "source_gaussian_radius_native_px": 13,
+  "source_coordinate_range": [
+    [
+      578.0621948242188,
+      210.3090362548828
+    ],
+    [
+      1501.8817138671875,
+      864.6392211914062
+    ]
+  ],
+  "inverted_local_mapping_fraction": 0.19284609242439366,
+  "background_estimate": {
+    "method": "Symmetric vector capsule fitted from resting-track outer contours; active-frame color measured from exposed track. Distant unoccluded RGB is copied; hidden/halo-adjacent input is modeled.",
+    "limits": "Track symmetry, hidden color uniformity and separation from the thumb shadow are assumptions. Conditional rendering scores are not proof of complete photographic background recovery or proprietary Apple optics.",
+    "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+    "resting_track_fits": [
+      {
+        "parameters": [
+          965.213279678726,
+          541.3490350099561,
+          349.4216127615785,
+          155.03863989516324
+        ],
+        "contour_pixels": 1842,
+        "contour_rmse": 1.091545056774528,
+        "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+      },
+      {
+        "parameters": [
+          964.414372256658,
+          541.3525153680196,
+          338.98417484505813,
+          150.02600432441
+        ],
+        "contour_pixels": 1606,
+        "contour_rmse": 0.8637752919035037,
+        "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+      }
+    ],
+    "track_center_over_L": [
+      -0.3454351977887942,
+      0.022114126991076496
+    ],
+    "track_half_over_L": [
+      1.5966264521853915,
+      0.6976502849792373
+    ],
+    "track_color": [
+      0.4745098039215686,
+      0.7529411764705882,
+      0.5176470588235295
+    ],
+    "track_color_5_95": [
+      [
+        0.47058823529411764,
+        0.7450980392156863,
+        0.5176470588235295
+      ],
+      [
+        0.47843137254901963,
+        0.7568627450980392,
+        0.5215686274509804
+      ]
+    ],
+    "background_color": [
+      0.9294117647058824,
+      0.9294117647058824,
+      0.9294117647058824
+    ],
+    "exposed_track_fit": {
+      "circle": [
+        770.5849394785937,
+        541.2877084935681,
+        151.04128669800488
+      ],
+      "visible_contour_pixels": 480,
+      "contour_rmse": 0.6725363469285401,
+      "method": "Active-frame exposed end-cap circle; hidden end mirrored about the measured resting track center."
+    }
+  },
+  "limits": "Native-grid finite differences. Defined source may include explicitly declared estimates; observed support excludes those pixels. Negative Jacobian does not establish a physical caustic.3sigma omits Gaussian tails; output scattering is not propagated."
+}

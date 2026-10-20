@@ -184,6 +184,8 @@ def main():
     adaptive={**p,'material_chroma_sensitivity':.7}
     co[:3]=[.3,.5,.7];co[-3:]=[.7,.6,.5]
     prepared=Prepared(fixture,adaptive,co,1);transforms=[]
+    assert all(tile[-1].flags.owndata for tile in prepared.tiles),'Motion cache retains unused lighting planes'
+    assert all(tile[5] is None for tile in prepared.tiles),'Adaptive motion retains unused static RGB gains'
     for shift in [[0.,0.],[8.,-2.]]:
         fixture.backdrop_shift=shift;T=matrix(fixture,adaptive);transforms.append(T)
         assert np.max(abs(LUMA@T[:3,:3]-LUMA))<1e-15
