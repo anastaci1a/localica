@@ -56,6 +56,9 @@ RADIAL_STAGES = {
  13: STAGES[20],
  14: ('Signed radial spline and source-scattering refinement', [*[f'c{i}' for i in range(7)],'sigma','core_x']),
  15: ('Radial output-scattering and brightness refinement', ['sigma','post_sigma','gamma','rim_width','thin_width']),
+ 16: ('Seeded radial-spline neighborhood search', [*[f'c{i}' for i in range(7)],'sigma']),
+ 17: ('Radial rim-scattering transition', ['sigma','blur_transition']),
+ 18: ('Radial spline and rim-scattering settlement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition']),
 }
 
 
@@ -306,7 +309,11 @@ def main():
         bounds=[(-2.5,2.5) if k.startswith('c') and k[1:].isdigit() else b for k,b in zip(keys,bounds)]
     # Powell handles the explicit finite bilinear-sampling resolution without
     # claiming infinitesimal derivatives through a quantized texture lookup.
-    if global_radial:
+    if study.case.get('radial') and args.number==16:
+        bounds=[(max(b[0],v-.2),min(b[1],v+.2)) if k!='sigma' else (max(0,v-2),min(32,v+2)) for k,v,b in zip(keys,x,bounds)]
+        result=differential_evolution(objective,bounds,x0=x,seed=222,popsize=8,
+            maxiter=max(1,args.budget//(8*len(keys))-1),tol=1e-8,polish=False)
+    elif global_radial:
         # Test both signed displacement families rather than remaining in the
         # high-blur local minimum produced by an identity-map initialization.
         bounds=[(-2,2),(.03,1.5),(1.2,5),(0,16),(0,.15)]

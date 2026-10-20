@@ -46,5 +46,16 @@ def main():
     assert light.shape==(3,15) and np.isfinite(light).all()
     print('PASS zero-optics registration despite shape corrections; finite normalized lighting')
 
+    # Radial lookup must commute with a quarter-turn. Material lighting is
+    # deliberately excluded: an environment may have a preferred direction.
+    obj.half=np.ones(2);obj.radius=1.;obj.case['radial']=True
+    p=initial();p.update(amplitude=.42,core_x=.012)
+    x=np.array([-.7,.3,.5]);y=np.array([.2,.4,-.6])
+    a,_=obj.field(x,y,p);b,_=obj.field(-y,x,p)
+    def coordinates(c):return np.stack([(c[:,0]*384-192)/64,(c[:,1]*192-96)/64],-1)
+    a=coordinates(a);b=coordinates(b)
+    assert np.max(abs(b-np.stack([-a[:,1],a[:,0]],-1)))<.0011
+    print('PASS circular optical field has no preferred x/y axis')
+
 
 if __name__=='__main__':main()
