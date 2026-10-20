@@ -12,11 +12,7 @@ from extended_shadow import shadow
 
 
 def foreground(study,out):
-    x0,y0,_,_=study.crop
-    for box,alpha,color in study.foreground_layers:
-        a,b,c,d=box;region=out[b-y0:d-y0,a-x0:c-x0]
-        out[b-y0:d-y0,a-x0:c-x0]=region*(1-alpha[...,None])+color*alpha[...,None]
-    return out
+    return study.apply_foreground(out)
 
 
 def main():
@@ -35,13 +31,16 @@ def main():
     yy,xx=np.mgrid[y0:y1,x0:x1].astype(np.float32)
     opacity=shadow(study,p,study.x,study.y)
     known=cv2.imread(str(args.folder/'known.png'),cv2.IMREAD_GRAYSCALE).astype(np.float32)/255
+    from motion_support import prepare
+    motion_source,travel,motion_support=prepare(study,p,known,cov,args.travel)
+    study.source=motion_source;study.cache.clear()
     video=out/'motion.mp4';log=(out/'encode.log').open('w')
     # yuv420 requires even dimensions; padding preserves all native pixels.
     W=width+width%2;H=height+height%2
     proc=subprocess.Popen(['ffmpeg','-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate','15','-i','pipe:0','-an','-c:v','libx264','-preset','fast','-crf','17','-pix_fmt','yuv420p','-movflags','+faststart',str(video)],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=log)
     try:
         for i in range(args.frames):
-            shift=np.float32(args.travel*np.sin(2*np.pi*i/args.frames))
+            shift=np.float32(travel*np.sin(2*np.pi*i/args.frames))
             study.backdrop_shift=[0.,float(shift)]
             material=study.render(p,co)
             base=cv2.remap(study.source,xx,yy+shift,cv2.INTER_LINEAR)
@@ -69,9 +68,10 @@ def main():
         if file.suffix in ['.mp4','.gif']:
             subprocess.run(['ffmpeg','-v','error','-i',str(file),'-f','null','-'],check=True)
         files[file.name]=dict(bytes=file.stat().st_size,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
-    report=dict(files=files,native_size=[W,H],frames=args.frames,fps=15,travel_over_L=args.travel/study.L,scores=current,
+    report=dict(files=files,native_size=[W,H],frames=args.frames,fps=15,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,
         motion='Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.',
         limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Foreground coverage is reference-derived.')
+    if study.transmission_layers:report['foreground_response']=[layer['fit'][2] for layer in study.transmission_layers]
     (out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report),flush=True)
 

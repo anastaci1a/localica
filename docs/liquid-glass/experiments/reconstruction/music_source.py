@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 parser=argparse.ArgumentParser()
 parser.add_argument('video',type=Path)
 parser.add_argument('out',type=Path)
+parser.add_argument('--seconds',nargs='+',type=float,default=[0.,2.5,4.5,6.])
 args=parser.parse_args()
 out=args.out
 out.mkdir(parents=True,exist_ok=True)
@@ -75,7 +76,7 @@ report = dict(method='Masked SIFT translation pose graph; feature tracks use top
     video_sha256=hashlib.sha256((args.video).read_bytes()).hexdigest(),
     timestamps=times,poses=pose.tolist(),edges=edges,median_edge_residual_px=float(np.median(diagnostic)),max_edge_residual_px=float(max(diagnostic)))
 
-for seconds in [0.,2.5,4.5,6.]:
+for seconds in args.seconds:
     ti=int(np.argmin(np.abs(np.array(times)-seconds)))
     target=frames[ti]
     ys,xs=np.mgrid[:1080,:1920].astype(np.float32)
