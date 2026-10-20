@@ -28,6 +28,8 @@ STAGES = {
  13: ('Distance-dependent source scattering', ['sigma','blur_transition']),
  14: ('Rim-profile and scattering co-refinement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition']),
  15: ('Continuous tangential-falloff curvature', ['tangent_exponent','tangent','tangent_band']),
+ 16: ('Outline-orientation normal and tangential power', ['cap_normal_gain','cap_tangent_fade','sigma']),
+ 17: ('Coupled cap and normal-profile refinement', [*[f'c{i}' for i in range(7)],'cap_normal_gain','cap_tangent_fade']),
 }
 BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               tangent=(0,.45), tangent_band=(.03,1), core_x=(0,.025),core_y=(0,.18),
@@ -35,6 +37,7 @@ BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               rim_width=(.008,.30), thin_width=(.003,.05),
               shape_dx=(-.05,.05),shape_dy=(-.05,.05),half_x_delta=(-.05,.05),half_y_delta=(-.05,.05),radius_delta=(-.05,.05),
               blur_transition=(0,1),tangent_exponent=(2,8),
+              cap_normal_gain=(-.8,1.8),cap_tangent_fade=(0,1),
               **{f'c{i}':(0,2.5) for i in range(7)})
 
 
@@ -127,9 +130,15 @@ class Study:
             a=basis@np.array([p[f'c{i}'] for i in range(7)])
         else:
             a=p['amplitude']*np.maximum(1-d/p['band'],0)**p['power']
+        # A shape-relative cap weight distinguishes normal orientation along
+        # the long axis. It is continuous at the straight/cap join; no image
+        # feature coordinates or painted spatial corrections enter the map.
+        cap_weight=nx*nx if half[0]>=half[1] else ny*ny
+        a*=1+p.get('cap_normal_gain',0)*cap_weight
         u=np.clip(d/p['tangent_band'],0,1);v=1-u
         exponent=p.get('tangent_exponent',4)
         W=v**exponent*(1+exponent*u);Wd=-exponent*(exponent+1)*u*v**(exponent-1)/p['tangent_band']
+        W*=1-p.get('cap_tangent_fade',0)*cap_weight
         tangent_pos=-ny*x+nx*y
         X=(1-p['core_x'])*x-a*nx+p['tangent']*W*tangent_pos*ny
         Y=(1-p['core_y'])*y-a*ny-p['tangent']*W*tangent_pos*nx
