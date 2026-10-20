@@ -9,7 +9,7 @@ from pathlib import Path
 import argparse,json
 import cv2,numpy as np
 from scipy.optimize import differential_evolution,minimize,OptimizeResult
-from reproduce import CASES,points,masks,render,scores,sample_backdrop,model_light,prepare,training_samples
+from reproduce import CASES,CURVATURE_MODELS,points,masks,render,scores,optical_inputs,prepare,training_samples
 from render import case_geometry,fit_material,shade,spline_basis
 
 
@@ -29,6 +29,9 @@ def fit(source,target,case,model,seed,initial=None,iterations=80,subpixels=1):
             p=dict(coefficients=list(v[:7]),core_x=v[7],core_y=v[8],tangent=v[9],tangent_band=v[10],tensor=model in ('tensor','chromatic'))
             if model=='chromatic':p['dispersion']=v[11]
             return p
+    elif model=='solid':
+        bounds=[(.8,1.8),(0,2),(.5,1.5),(0,.45),(0,1),(1.05,1.4)]
+        def params(v):return dict(height=v[0],gap=v[1],rear=v[2],crown_x=v[3],crown_y=0,cross_curvature=v[4],ior=v[5],beta=.5,shoulder=2)
     else:
         # beta<1 retains a vertical limiting rim; beta=.5 gives an ellipsoidal
         # meridian for n=2,crown=0. IOR bounds include the RGB dispersion proxy.
@@ -36,25 +39,26 @@ def fit(source,target,case,model,seed,initial=None,iterations=80,subpixels=1):
         if model=='spectral':bounds.append((0,.025))
         def params(v):
             p=dict(height=v[0],gap=v[1],beta=v[2],crown=v[3],shoulder=v[4],ior=1.33)
+            if model=='exponential':p['profile']='exponential'
             if model=='spectral':p['dispersion']=v[5]
             return p
     optical=len(bounds);bounds += [(0,max(case.get('sigma_max',35),1e-6)),(1,12)]
     if case.get('blur_transition'):bounds.append((2,30))
     blurs={}
     def decode(v):
-        return dict(model=model,parameters=params(v),sigma=round(v[optical]*4)/4,rim_width=v[optical+1],blur_transition=v[-1] if case.get('blur_transition') else None)
+        return dict(model=model,parameters=params(v),sigma=round(v[optical]*4)/4,rim_width=v[optical+1],blur_transition=v[-1] if case.get('blur_transition') else None,**({'ray_bounces':16,'intersection_steps':28} if model=='solid' else {}))
     def evaluate(v):
         f=decode(v);p=f['parameters']
         if basis is not None:p['_basis']=basis
         key=f['sigma']
         if key not in blurs:blurs[key]=cv2.GaussianBlur(source,(0,0),key) if key else source
-        sample=sample_backdrop(source,blurs[key],case,f,px,py,boundary)
+        sample,light,diagnostics=optical_inputs(source,blurs[key],case,f,px,py,boundary)
         sample=sample.reshape((len(indices),subpixels**2,3)) if subpixels>1 else sample.reshape(-1,3)
-        light=model_light(px,py,case,f,boundary)
         co,_=fit_material(sample,light,expected,weights)
         pred=shade(sample,light,co)
         if subpixels>1:pred=pred.mean(1)
         loss=float(np.mean(((pred-expected)*weights[:,None])**2))
+        if model=='solid':loss+=(diagnostics['unknown_background_energy_mean']+diagnostics['untraced_energy_mean'])*.1
         return loss,co
     start=None
     if initial:
@@ -62,6 +66,8 @@ def fit(source,target,case,model,seed,initial=None,iterations=80,subpixels=1):
         if model in ('potential','tensor','chromatic'):
             start=p['coefficients']+[p['core_x'],p['core_y'],p.get('tangent',0),p.get('tangent_band',.5)]
             if model=='chromatic':start.append(p.get('dispersion',0))
+        elif model=='solid':
+            start=[p.get('height',1.2),p.get('gap',.3),p.get('rear',1),p.get('crown_x',.3),p.get('cross_curvature',1),p.get('ior',1.33)] if initial.get('model')=='solid' else [1.2,.3,1,.3,1,1.33]
         else:
             start=[p.get('height',.5),p.get('gap',.4),p.get('beta',.5),p.get('crown',.05),p.get('shoulder',8)]
             if model=='spectral':start.append(p.get('dispersion',0))
@@ -82,11 +88,13 @@ def fit(source,target,case,model,seed,initial=None,iterations=80,subpixels=1):
     loss,co=evaluate(best.x);f=decode(best.x)
     f.update(material=co.tolist(),fit_loss=loss,seed=seed,search_iterations=iterations,fit_subpixels_per_axis=subpixels,refinement_losses=rounds)
     f['sampling']='native-grid, deterministic 6500 subset; outer 4px weight 2.5, other rim 1.3'
+    f['geometry']={k:case[k] for k in ['center','half','radius','oval','exponent'] if k in case}
+    if model=='solid':f['ray_diagnostics']=optical_inputs(source,blurs[f['sigma']],case,f,px,py,boundary)[2]
     return f
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('out',type=Path);ap.add_argument('--case',choices=['media','regular','slider'],required=True);ap.add_argument('--model',choices=['potential','tensor','chromatic','surface','reflection','spectral','colored'],required=True);ap.add_argument('--seed',type=int,default=1401);ap.add_argument('--restarts',type=int,default=2);ap.add_argument('--iterations',type=int,default=80);ap.add_argument('--subpixels',type=int,choices=[1,2,4],default=1);args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('out',type=Path);ap.add_argument('--case',choices=['media','regular','slider'],required=True);ap.add_argument('--model',choices=CURVATURE_MODELS,required=True);ap.add_argument('--seed',type=int,default=1401);ap.add_argument('--restarts',type=int,default=2);ap.add_argument('--iterations',type=int,default=80);ap.add_argument('--subpixels',type=int,choices=[1,2,4],default=1);args=ap.parse_args()
     name=args.case;case=CASES[name];folder=args.out
     source,target,_,_=prepare(folder.parent,name,case)
     report=json.loads((folder/f'{name}-report.json').read_text());models=report['models']

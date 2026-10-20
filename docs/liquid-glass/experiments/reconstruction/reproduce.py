@@ -14,11 +14,12 @@ from render import case_geometry,lookup,illumination,fit_material,shade,spline_b
 from background import page_source,slider_source,paper
 
 ROOT=Path(__file__).resolve().parent
-CURVATURE_MODELS=['potential','tensor','chromatic','surface','reflection','spectral','colored']
+SLIDER_OUTLINE=json.loads((ROOT/'contour.json').read_text())['geometry']
+CURVATURE_MODELS=['potential','tensor','chromatic','surface','exponential','reflection','spectral','colored','environment','solid']
 CASES={
  'media':dict(video='219',time=190,source_time=180,center=[960,542],half=[245,245],radius=245,crop=[620,220,1300,875],foreground=[[870,425,1088,666]],sigma_max=.5),
  'regular':dict(video='219',time=710,source_time=720,center=[960,542],half=[392,170],radius=170,crop=[475,285,1445,845],foreground=[[695,462,872,628],[1068,470,1215,618]],sigma_max=8,blur_transition=30),
- 'slider':dict(video='284',time=1092,source_time=None,center=[763.5,548.5],half=[118.5,56.5],radius=35.65,exponent=2.5,crop=[540,440,985,690],foreground=[],sigma_max=0),
+ 'slider':dict(video='284',time=1092,source_time=None,**SLIDER_OUTLINE,crop=[540,440,985,690],foreground=[],sigma_max=0),
  'regular-light':dict(video='219',time=915,source_time=None,center=[960,541],half=[245,106.5],radius=106.5,crop=[610,350,1310,730],foreground=[],sigma_max=0,models=['identity','default']),
  'regular-dark':dict(video='219',time=920,source_time=None,center=[960,541],half=[245,106.5],radius=106.5,crop=[610,350,1310,730],foreground=[],sigma_max=0,models=['identity','default']),
 }
@@ -126,7 +127,7 @@ def fit(source,target,case,model,seed,initial=None):
         if model=='spline':p['_basis']=basis
         key=round(sigma*4)/4
         if key not in blurs:blurs[key]=cv2.GaussianBlur(source,(0,0),key) if key else source
-        lx,ly=lookup(px,py,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model,boundary,case.get('exponent',0))
+        lx,ly=lookup(px,py,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model,boundary,case.get('exponent',0),case.get('oval'))
         a=cv2.remap(blurs[key],(lx+case['center'][0]).astype(np.float32),(ly+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR).reshape(-1,3)
         if case.get('blur_transition'):
             clear=cv2.remap(source,(lx+case['center'][0]).astype(np.float32),(ly+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR).reshape(-1,3)
@@ -162,17 +163,28 @@ def fit(source,target,case,model,seed,initial=None):
 def render_grid(source,blur,case,fit,x,y):
     p=fit['parameters'];model=fit['model']
     boundary=case_geometry(case,x,y)
-    lx,ly=lookup(x,y,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model,boundary,case.get('exponent',0))
+    if model=='solid':
+        from solid_material import inputs
+        sample,light,_=inputs(source,blur,case,fit,x,y,boundary)
+        return shade(sample,light,np.array(fit['material'])),boundary[0]<=0
+    lx,ly=lookup(x,y,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model,boundary,case.get('exponent',0),case.get('oval'))
     sample=sample_backdrop(source,blur,case,fit,x,y,boundary,lx,ly)
     light=model_light(x,y,case,fit,boundary)
     output=shade(sample,light,np.array(fit['material']))
     return output,boundary[0]<=0
 
 
+def optical_inputs(source,blur,case,fit,x,y,boundary):
+    if fit['model']=='solid':
+        from solid_material import inputs
+        return inputs(source,blur,case,fit,x,y,boundary)
+    return sample_backdrop(source,blur,case,fit,x,y,boundary),model_light(x,y,case,fit,boundary),{}
+
+
 def sample_backdrop(source,blur,case,fit,x,y,boundary,lx=None,ly=None):
     p=fit['parameters'];model=fit['model']
     if lx is None:
-        lx,ly=lookup(x,y,case['half'],case['radius'],p,model,boundary,case.get('exponent',0))
+        lx,ly=lookup(x,y,case['half'],case['radius'],p,model,boundary,case.get('exponent',0),case.get('oval'))
     def at(image,X,Y):
         return cv2.remap(image,(X+case['center'][0]).astype(np.float32),(Y+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR)
     if model=='chromatic':
@@ -182,8 +194,8 @@ def sample_backdrop(source,blur,case,fit,x,y,boundary,lx=None,ly=None):
             samples.append(at(blur,x+(lx-x)*factor,y+(ly-y)*factor)[...,channel])
         sample=np.stack(samples,axis=-1)
     elif model=='spectral':
-        from curvature import surface,snell_map
-        z,Nx,Ny,Nz=surface(x,y,case['half'],case['radius'],p,case.get('exponent',0))
+        from curvature import surface,snell_map,transmission_slope
+        z,Nx,Ny,Nz=surface(x,y,case['half'],case['radius'],p,case.get('exponent',0),case.get('oval'))
         # Three representative wavelengths, first-order Cauchy-law RGB proxy.
         # Not a spectral/colorimetric renderer. B=0 recovers monochromatic rays.
         samples=[]
@@ -191,7 +203,10 @@ def sample_backdrop(source,blur,case,fit,x,y,boundary,lx=None,ly=None):
             ior=p.get('ior',1.33)+p['dispersion']*(wavelength**-2-.550**-2)
             X,Y=snell_map(x,y,z,Nx,Ny,Nz,ior,min(case['half'])*p['gap'])
             X=np.where(boundary[0]<=0,X,x);Y=np.where(boundary[0]<=0,Y,y)
-            samples.append(at(blur,X,Y)[...,channel])
+            # Relative entry-transmission factor. The common-wavelength loss
+            # remains in the fitted base material; B=0 recovers it exactly.
+            transmission=transmission_slope(Nz,ior)/transmission_slope(Nz,p.get('ior',1.33))
+            samples.append(at(blur,X,Y)[...,channel]*transmission)
         sample=np.stack(samples,axis=-1)
     else:sample=at(blur,lx,ly)
     if case.get('blur_transition'):
@@ -202,9 +217,17 @@ def sample_backdrop(source,blur,case,fit,x,y,boundary,lx=None,ly=None):
 
 
 def model_light(x,y,case,fit,boundary):
-    if fit['model'] in ('reflection','spectral','colored'):
+    if fit['model'] in ('reflection','spectral','colored','environment'):
         from curvature import surface,reflection_basis,colored_reflection_basis
-        _,nx,ny,nz=surface(x,y,case['half'],case['radius'],fit['parameters'],case.get('exponent',0))
+        _,nx,ny,nz=surface(x,y,case['half'],case['radius'],fit['parameters'],case.get('exponent',0),case.get('oval'))
+        if fit['model']=='spectral':
+            lights=[]
+            for wavelength in [.650,.550,.450]:
+                p=fit['parameters'].copy();p['ior']+=p['dispersion']*(wavelength**-2-.550**-2)
+                lights.append(reflection_basis(x,y,case['half'],p,(nx,ny,nz),boundary))
+            return np.stack(lights,axis=-2)
+        if fit['model']=='environment':
+            return colored_reflection_basis(x,y,case['half'],fit['parameters'],(nx,ny,nz),boundary,degree=2)
         basis=colored_reflection_basis if fit['model']=='colored' else reflection_basis
         return basis(x,y,case['half'],fit['parameters'],(nx,ny,nz),boundary)
     return illumination(x,y,case['half'],case['radius'],fit['rim_width'],boundary)
@@ -234,9 +257,10 @@ def render(source,case,fit,samples=4):
 def scores(pred,target,case):
     xs,ys,x,y=points(case);sd,train,held,valid=masks(case,xs,ys,x,y);result={}
     edge=-sd<min(case['half'])*.2
-    for label,mask in [('train',train),('held_blocks',held),('all_glass',valid),('rim',valid&edge),('interior',valid&~edge)]:
+    for label,mask in [('train',train),('held_blocks',held),('all_glass',valid),('rim',valid&edge),('outer_rim',valid&(-sd<4)),('interior',valid&~edge)]:
         diff=(pred-target)[mask]*255
-        result[label]={'pixels':int(mask.sum()),'rmse':float(np.sqrt(np.mean(diff**2))),'mae':float(np.mean(np.abs(diff)))}
+        chroma=diff[:,[0,2]]-diff[:,[1]]
+        result[label]={'pixels':int(mask.sum()),'rmse':float(np.sqrt(np.mean(diff**2))),'mae':float(np.mean(np.abs(diff))),'opponent_chroma_rmse':float(np.sqrt(np.mean(chroma**2)))}
     # Structural comparison of RGB luminance-like mean; erode masks to exclude
     # foreground/boundary neighborhoods from the 11px SSIM window.
     A=pred.mean(2)*255;B=target.mean(2)*255
