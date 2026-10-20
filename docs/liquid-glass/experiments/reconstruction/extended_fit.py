@@ -165,7 +165,7 @@ class Study:
             return x,y,half,R,(r-R,nx,ny)
         return x,y,half,radius,geometry(x,y,half,radius)
 
-    def field(self,x,y,p):
+    def geometry_field(self,x,y,p):
         x,y,half,radius,(sd,nx,ny)=self.shape(x,y,p);d=np.maximum(-sd,0)
         if p['spline']:
             basis=BSpline.design_matrix(np.clip(d/radius,0,1).ravel(),KNOTS,3).toarray()[:,:7].reshape((*x.shape,7))
@@ -196,6 +196,10 @@ class Study:
         e=np.exp(-(d/p['rim_width'])**2);f=np.exp(-(d/(4*p['rim_width']))**2)
         xx=x/half[0];yy=y/half[1];z=np.clip(d/.3,0,1);core=z**3*(z*(6*z-15)+10)
         light=np.stack([thin,thin*nx,thin*ny,e,e*nx,e*ny,f,f*nx,f*ny,xx,yy,xx*xx,yy*yy,xx*yy,core],axis=-1)
+        return X,Y,d,light
+
+    def field(self,x,y,p):
+        X,Y,d,light=self.geometry_field(x,y,p)
         texture=self.blur(p['sigma'])
         sample=cv2.remap(texture,(X*self.L+self.case['center'][0]+self.backdrop_shift[0]).astype(np.float32),
             (Y*self.L+self.case['center'][1]+self.backdrop_shift[1]).astype(np.float32),cv2.INTER_LINEAR)
@@ -224,17 +228,27 @@ class Study:
         loss=float(np.mean(((pred-self.expected)*self.weights[:,None])**2))
         return loss,co
 
-    def render(self,p,co):
+    def raster_tiles(self,scale=1):
+        assert isinstance(scale,int) and scale>=1
         x0,y0,x1,y1=self.crop
-        result=np.empty((y1-y0,x1-x0,3),np.float32)
-        # Two-axis native subpixel integration for bounded fitting studies.
-        for row in range(0,y1-y0,24):
-            bottom=min(row+24,y1-y0)
-            yy,xx=np.mgrid[y0+row:y0+bottom:.5,x0:x1:.5]
-            x=(xx-.25-self.case['center'][0])/self.L;y=(yy-.25-self.case['center'][1])/self.L
+        H,W=(y1-y0)*scale,(x1-x0)*scale
+        # Re-evaluate the normalized field at two subpixels per OUTPUT axis.
+        # Input coordinates and source scattering remain in reference units;
+        # only the output kernel scales with the presentation resolution.
+        offset=.5-.25/scale
+        for row in range(0,H,24*scale):
+            bottom=min(row+24*scale,H)
+            yy,xx=np.mgrid[y0+row/scale:y0+bottom/scale:.5/scale,x0:x1:.5/scale]
+            x=(xx-offset-self.case['center'][0])/self.L;y=(yy-offset-self.case['center'][1])/self.L
+            yield row,bottom,W,x,y
+
+    def render(self,p,co,scale=1):
+        x0,y0,x1,y1=self.crop
+        result=np.empty(((y1-y0)*scale,(x1-x0)*scale,3),np.float32)
+        for row,bottom,W,x,y in self.raster_tiles(scale):
             C,J=self.field(x,y,p);C=shade(C,J,co)
-            result[row:bottom]=C.reshape(bottom-row,2,x1-x0,2,3).mean((1,3))
-        if p['post_sigma']>.001:result=cv2.GaussianBlur(result,(0,0),p['post_sigma'])
+            result[row:bottom]=C.reshape(bottom-row,2,W,2,3).mean((1,3))
+        if p['post_sigma']>.001:result=cv2.GaussianBlur(result,(0,0),p['post_sigma']*scale)
         return result
 
     def scores(self,pred):
@@ -252,38 +266,51 @@ class Study:
         result['loss']=.7*result['glass']['rmse']**2+.3*result['rim']['rmse']**2
         return result
 
-    def comparison(self,pred,dest,p):
+    def comparison(self,pred,dest,p,scale=1):
         x0,y0,x1,y1=self.crop
+        H,W=(y1-y0)*scale,(x1-x0)*scale;offset=.5-.25/scale
         original=np.uint8(np.rint(self.target_crop*255))
-        yy,xx=np.mgrid[y0:y1:.5,x0:x1:.5]
-        *_,(sd,_,_)=self.shape((xx-.25-self.case['center'][0])/self.L,(yy-.25-self.case['center'][1])/self.L,p)
-        cov=(sd<=0).reshape(y1-y0,2,x1-x0,2).mean((1,3))
-        context=self.target_crop.copy()
+        if scale>1:original=cv2.resize(original,(W,H),interpolation=cv2.INTER_LANCZOS4)
+        yy,xx=np.mgrid[y0:y1:.5/scale,x0:x1:.5/scale]
+        *_,(sd,_,_)=self.shape((xx-offset-self.case['center'][0])/self.L,(yy-offset-self.case['center'][1])/self.L,p)
+        cov=(sd<=0).reshape(H,2,W,2).mean((1,3))
+        context=self.target_crop.copy() if scale==1 else original.astype(np.float32)/255
+        yy,xx=np.mgrid[:H,:W].astype(np.float32)
+        px=x0-.5+(xx+.5)/scale;py=y0-.5+(yy+.5)/scale
+        x=(px-self.case['center'][0])/self.L;y=(py-self.case['center'][1])/self.L
         if 'shadow' in p:
-            q=p['shadow'];*_,(shadow_sd,_,_)=self.shape(self.x-q['offset'][0],self.y-q['offset'][1],p)
+            q=p['shadow'];*_,(shadow_sd,_,_)=self.shape(x-q['offset'][0],y-q['offset'][1],p)
             opacity=q['opacity']*np.exp(-.5*(np.maximum(shadow_sd,0)/q['sigma'])**2)
-            source=self.source[y0:y1,x0:x1]*(1-opacity[...,None])
-            *_,(native_sd,_,_)=self.shape(self.x,self.y,p)
+            source=cv2.remap(self.source,px,py,cv2.INTER_LINEAR)*(1-opacity[...,None])
+            *_,(native_sd,_,_)=self.shape(x,y,p)
             u=np.clip((native_sd-.20)/.15,0,1);blend=u**3*(u*(6*u-15)+10)
-            known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)[y0:y1,x0:x1]>0
+            known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)
+            known=cv2.remap(known,px,py,cv2.INTER_NEAREST)>0
             context=np.where(known[...,None],source*(1-blend[...,None])+context*blend[...,None],context)
         out=pred*cov[...,None]+context*(1-cov[...,None])
-        out=self.apply_foreground(out)
-        pair(original,np.uint8(np.rint(np.clip(out,0,1)*255)),('Apple','Reconstruction'),font_size=16).save(dest)
+        out=self.apply_foreground(out,scale)
+        labels=('Apple source','Reconstruction (4x)') if scale==4 else ('Apple','Reconstruction')
+        pair(original,np.uint8(np.rint(np.clip(out,0,1)*255)),labels,font_size=16*scale).save(dest)
 
-    def apply_foreground(self,out):
+    def apply_foreground(self,out,scale=1):
         x0,y0,_,_=self.crop
         for box,alpha,color in self.foreground_layers:
             a,b,c,d=box
-            region=out[b-y0:d-y0,a-x0:c-x0]
-            out[b-y0:d-y0,a-x0:c-x0]=region*(1-alpha[...,None])+color*alpha[...,None]
+            region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
+            if scale>1:
+                size=((c-a)*scale,(d-b)*scale)
+                alpha=np.clip(cv2.resize(alpha,size,interpolation=cv2.INTER_CUBIC),0,1)
+                color=np.clip(cv2.resize(np.asarray(color,dtype=np.float32),size,interpolation=cv2.INTER_CUBIC),0,1)
+            region[:]=region*(1-alpha[...,None])+color*alpha[...,None]
         for layer in self.transmission_layers:
             from foreground_response import calibrate,response
-            a,b,c,d=layer['box'];region=out[b-y0:d-y0,a-x0:c-x0]
+            a,b,c,d=layer['box'];region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
             if layer['fit'] is None:
-                layer['fit']=calibrate(region,layer['target'],layer['seed'],self.case.get('foreground_response'))
+                background=region if scale==1 else cv2.resize(region,(c-a,d-b),interpolation=cv2.INTER_AREA)
+                layer['fit']=calibrate(background,layer['target'],layer['seed'],self.case.get('foreground_response'))
             params,alpha,_=layer['fit']
-            out[b-y0:d-y0,a-x0:c-x0]=region*(1-alpha[...,None])+response(region,params)*alpha[...,None]
+            if scale>1:alpha=np.clip(cv2.resize(alpha,((c-a)*scale,(d-b)*scale),interpolation=cv2.INTER_CUBIC),0,1)
+            region[:]=region*(1-alpha[...,None])+response(region,params)*alpha[...,None]
         return out
 
 
