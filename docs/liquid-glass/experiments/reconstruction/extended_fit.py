@@ -25,12 +25,16 @@ STAGES = {
  9: ('Directional thin-rim and broad lighting', ['rim_width','thin_width']),
  10: ('Joint optical and scattering settlement', ['sigma','post_sigma','tangent','tangent_band','core_x','core_y','gamma']),
  11: ('Measured silhouette and optical-boundary alignment', ['shape_dx','shape_dy','half_x_delta','half_y_delta','radius_delta']),
+ 13: ('Distance-dependent source scattering', ['sigma','blur_transition']),
+ 14: ('Rim-profile and scattering co-refinement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition']),
+ 15: ('Continuous tangential-falloff curvature', ['tangent_exponent','tangent','tangent_band']),
 }
 BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               tangent=(0,.45), tangent_band=(.03,1), core_x=(0,.025),core_y=(0,.18),
               post_sigma=(0,3), coupling=(0,1),gamma=(.65,1.55),
               rim_width=(.008,.30), thin_width=(.003,.05),
               shape_dx=(-.05,.05),shape_dy=(-.05,.05),half_x_delta=(-.05,.05),half_y_delta=(-.05,.05),radius_delta=(-.05,.05),
+              blur_transition=(0,1),tangent_exponent=(2,8),
               **{f'c{i}':(0,2.5) for i in range(7)})
 
 
@@ -124,7 +128,8 @@ class Study:
         else:
             a=p['amplitude']*np.maximum(1-d/p['band'],0)**p['power']
         u=np.clip(d/p['tangent_band'],0,1);v=1-u
-        W=v**4*(1+4*u);Wd=-20*u*v**3/p['tangent_band']
+        exponent=p.get('tangent_exponent',4)
+        W=v**exponent*(1+exponent*u);Wd=-exponent*(exponent+1)*u*v**(exponent-1)/p['tangent_band']
         tangent_pos=-ny*x+nx*y
         X=(1-p['core_x'])*x-a*nx+p['tangent']*W*tangent_pos*ny
         Y=(1-p['core_y'])*y-a*ny-p['tangent']*W*tangent_pos*nx
@@ -141,6 +146,11 @@ class Study:
         sample=cv2.remap(texture,(X*self.L+self.case['center'][0]+self.backdrop_shift[0]).astype(np.float32),
             (Y*self.L+self.case['center'][1]+self.backdrop_shift[1]).astype(np.float32),cv2.INTER_LINEAR)
         sample=sample.reshape((*x.shape,3))
+        if p.get('blur_transition',0)>1e-8:
+            clear=cv2.remap(self.source,(X*self.L+self.case['center'][0]+self.backdrop_shift[0]).astype(np.float32),
+                (Y*self.L+self.case['center'][1]+self.backdrop_shift[1]).astype(np.float32),cv2.INTER_LINEAR).reshape((*x.shape,3))
+            u=np.clip(d/p['blur_transition'],0,1);blend=u**3*(u*(6*u-15)+10)
+            sample=clear+(sample-clear)*blend[...,None]
         return np.maximum(sample,0)**p['gamma'],light
 
     def fit(self,p):
@@ -234,13 +244,15 @@ def main():
         loss,co=study.fit(candidate);evaluations+=1
         if loss<best[0]:best[:]=[loss,candidate,co]
         return loss
-    x=np.array([start.get(k,0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
+    x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
     # Powell handles the explicit finite bilinear-sampling resolution without
     # claiming infinitesimal derivatives through a quantized texture lookup.
     result=minimize(objective,x,method='Powell',bounds=bounds,
         options=dict(maxfev=args.budget,maxiter=15,xtol=.0005,ftol=1e-7))
     candidate,co=best[1:]
     pred=study.render(candidate,co);candidate_scores=study.scores(pred)
+    if 'exterior' in old['scores'] and args.number!=11:
+        candidate_scores['exterior']=old['scores']['exterior']
     advance=(candidate_scores['loss']<=old['scores']['loss']+1e-9 and
              candidate_scores['glass']['rmse']<=old['scores']['glass']['rmse']+1e-9)
     current=dict(parameters=candidate,material=co.tolist(),scores=candidate_scores) if advance else old
