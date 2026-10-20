@@ -83,6 +83,9 @@ def main():
     for schedule in [{**STAGES,**RADIAL_STAGES},RADIAL_FOLLOWUP_STAGES]:
         assert not any(forbidden.intersection(keys) for _,keys in schedule.values()), 'Radial experiment introduces a preferred axis'
     print('PASS radial initial/follow-up schedules preserve rotational symmetry')
+    assert not {'amplitude','band','power'}.intersection(STAGES[20][1])
+    assert set(RADIAL_STAGES[13][1])=={'amplitude','band','power','sigma','core_x'}
+    print('PASS late nonradial refinement uses live spline parameters; radial restart stays independent')
 
     from foreground_response import response,calibrate
     Y,X=np.mgrid[:40,:40]/39
