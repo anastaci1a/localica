@@ -19,10 +19,10 @@ class Prepared:
                 u=np.clip(d/p['blur_transition'],0,1);blend=u**3*(u*(6*u-15)+10)
             self.tiles.append((row,bottom,W,X*study.L+study.case['center'][0],Y*study.L+study.case['center'][1],gain,illumination,blend))
 
-    def render(self):
+    def render(self,tiles=None):
         s=self.study;p=self.p;x0,y0,x1,y1=s.crop
         out=np.empty(((y1-y0)*self.scale,(x1-x0)*self.scale,3),np.float32)
-        for row,bottom,W,X,Y,gain,light,blend in self.tiles:
+        for row,bottom,W,X,Y,gain,light,blend in self.tiles if tiles is None else tiles:
             x=(X+s.backdrop_shift[0]).astype(np.float32);y=(Y+s.backdrop_shift[1]).astype(np.float32)
             C=cv2.remap(s.blur(p['sigma']),x,y,cv2.INTER_LINEAR)
             if blend is not None:
