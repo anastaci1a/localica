@@ -1,6 +1,6 @@
 # Apple reference recreations
 
-**Apple is on the left; our rendering is on the right.** The comparisons below include the earlier HD studies and newer paired-background studies. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
+Primary comparisons open with a centered **Wipe** divider: Apple on the left, reconstruction on the right. Drag the divider or use its arrow keys; **Side by side** shows the original pair. Full-size figures and motion remain in the dropdowns. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
 
 [Mathematical specification](recreation-models.md) · [Parameters](experiments/reconstruction/recipes.json) · [Scores](#scores) · [Reproduce](#reproduce) · [Material roles](#material-roles) · [Guide](README.md)
 
