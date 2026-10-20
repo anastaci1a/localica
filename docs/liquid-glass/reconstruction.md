@@ -262,8 +262,8 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 [![Switch progress, gray track: Apple left, reconstruction right](assets/study-active-switch-progress-b.png)](assets/study-active-switch-progress-b.png)
 
 - The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
-- A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Colored reflection and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 23 paired passes. Both motion captures below show pass22; regeneration for the current stills is pending.
+- A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Directional channel separation reproduces part of the inner fringe; upper-rim color and edge shape remain incomplete; there is no claim of a recovered Apple solid.
+- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 24 paired passes. Green-track motion shows pass24; gray-track motion still shows pass22 while its updated capture renders.
 
 <details>
 <summary>Motion — green track</summary>
