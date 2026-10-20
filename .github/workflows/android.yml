@@ -145,6 +145,8 @@ jobs:
             app/build/outputs/connected_android_test_additional_output/**/popup-shadow-continuity/**
             app/build/outputs/connected_android_test_additional_output/**/search-ime-motion/**
             app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
+            app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
+            app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
