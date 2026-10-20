@@ -8,7 +8,7 @@ from collections import OrderedDict
 import argparse, copy, hashlib, json, time
 import cv2, numpy as np
 from scipy.interpolate import BSpline
-from scipy.optimize import minimize, lsq_linear
+from scipy.optimize import minimize, lsq_linear, differential_evolution
 from render import geometry, fit_material, shade
 from publish import pair
 
@@ -32,6 +32,7 @@ STAGES = {
  17: ('Coupled cap and normal-profile refinement', [*[f'c{i}' for i in range(7)],'cap_normal_gain','cap_tangent_fade']),
  18: ('C2 cap-to-body curvature join', ['cap_join_width']),
  19: ('Smooth-cap optical settlement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition','cap_normal_gain']),
+ 20: ('Global signed radial-profile restart', ['amplitude','band','power','sigma','core_x']),
 }
 BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               tangent=(0,.45), tangent_band=(.03,1), core_x=(0,.025),core_y=(0,.18),
@@ -42,6 +43,23 @@ BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               cap_normal_gain=(-.8,1.8),cap_tangent_fade=(0,1),
               cap_join_width=(0,.35),
               **{f'c{i}':(0,2.5) for i in range(7)})
+
+# Circular controls have no preferred optical axis. Lighting may still be
+# directional, but a radial field cannot gain an arbitrary axis to fit noise.
+RADIAL_STAGES = {
+ 4: ('Radial source versus output-space scattering', ['sigma','post_sigma']),
+ 5: ('Isotropic central registration', ['core_x']),
+ 6: ('Circular thin-rim and broad lighting', ['rim_width','thin_width']),
+ 7: ('Radial-profile and central-power refinement', [*[f'c{i}' for i in range(7)],'core_x']),
+ 10: ('Joint radial optical and scattering settlement', ['sigma','post_sigma','core_x','gamma','rim_width','thin_width']),
+ 11: ('Circular silhouette and optical-boundary alignment', ['shape_dx','shape_dy','half_x_delta']),
+ 13: STAGES[20],
+ 14: ('Signed radial spline and source-scattering refinement', [*[f'c{i}' for i in range(7)],'sigma','core_x']),
+ 15: ('Radial output-scattering and brightness refinement', ['sigma','post_sigma','gamma','rim_width','thin_width']),
+ 16: ('Seeded radial-spline neighborhood search', [*[f'c{i}' for i in range(7)],'sigma']),
+ 17: ('Radial rim-scattering transition', ['sigma','blur_transition']),
+ 18: ('Radial spline and rim-scattering settlement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition']),
+}
 
 
 def initial():
@@ -122,8 +140,11 @@ class Study:
 
     def shape(self,x,y,p):
         x=x-p.get('shape_dx',0);y=y-p.get('shape_dy',0)
-        half=self.half+[p.get('half_x_delta',0),p.get('half_y_delta',0)]
+        radial=self.case.get('radial',False)
+        dy=p.get('half_x_delta',0) if radial else p.get('half_y_delta',0)
+        half=self.half+[p.get('half_x_delta',0),dy]
         radius=min(self.radius+p.get('radius_delta',0),min(half))
+        if radial:radius=min(half)
         join=p.get('cap_join_width',0)
         if join>1e-8 and abs(half[0]-half[1])>join:
             from curvature import capsule_offset
@@ -157,8 +178,10 @@ class Study:
         W=v**exponent*(1+exponent*u);Wd=-exponent*(exponent+1)*u*v**(exponent-1)/p['tangent_band']
         W*=1-p.get('cap_tangent_fade',0)*cap_weight
         tangent_pos=-ny*x+nx*y
+        radial=self.case.get('radial',False)
+        core_y=p['core_x'] if radial else p['core_y']
         X=(1-p['core_x'])*x-a*nx+p['tangent']*W*tangent_pos*ny
-        Y=(1-p['core_y'])*y-a*ny-p['tangent']*W*tangent_pos*nx
+        Y=(1-core_y)*y-a*ny-p['tangent']*W*tangent_pos*nx
         # A normal-coupling comparator inspired by a gradient potential. The
         # full tensor field (especially with orientation weights) is empirical;
         # adding this term does not prove integrability or a physical solid.
@@ -251,18 +274,24 @@ class Study:
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--pass',dest='number',type=int,required=True);ap.add_argument('--budget',type=int,default=900);args=ap.parse_args()
     assert not (args.folder/f'pass-{args.number:02}'/'record.json').exists(), 'Keep completed passes immutable'
-    t0=time.time();study=Study(args.folder);stage,keys=STAGES[args.number]
+    t0=time.time();study=Study(args.folder)
+    stages={**STAGES,**RADIAL_STAGES} if study.case.get('radial') else STAGES
+    stage,keys=stages[args.number]
     accepted_path=args.folder/'accepted.json'
     if accepted_path.exists():old=json.loads(accepted_path.read_text());p=old['parameters']
     else:
         p=initial();_,co=study.fit(p);pred=study.render(p,co)
         old=dict(parameters=p,material=co.tolist(),scores=study.scores(pred));accepted_path.write_text(json.dumps(old,indent=2)+'\n')
     start=copy.deepcopy(p)
-    if args.number==3 and not start['spline']:
+    global_radial=study.case.get('radial') and args.number in (13,20)
+    if global_radial:
+        assert study.case.get('radial'), 'Radial comparator only'
+        start.update(spline=False,post_sigma=0.,amplitude=.5,band=.6,power=2.2,sigma=2.)
+    if args.number in (3,14) and not start['spline']:
         d=np.linspace(0,1,501)
         basis=BSpline.design_matrix(d,KNOTS,3).toarray()[:,:7]
         a=start['amplitude']*np.maximum(1-d/start['band'],0)**start['power']
-        c=lsq_linear(basis,a,bounds=(0,2.5)).x
+        c=lsq_linear(basis,a,bounds=(-2.5,2.5) if study.case.get('radial') else (0,2.5)).x
         start.update({f'c{i}':float(c[i]) for i in range(7)});start['spline']=True
     evaluations=0;best=[float('inf'),None,None]
     def objective(v):
@@ -276,10 +305,23 @@ def main():
             print(json.dumps({k:partial[k] for k in ['pass_number','evaluations','training_loss','seconds']}),flush=True)
         return loss
     x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
+    if study.case.get('radial'):
+        bounds=[(-2.5,2.5) if k.startswith('c') and k[1:].isdigit() else b for k,b in zip(keys,bounds)]
     # Powell handles the explicit finite bilinear-sampling resolution without
     # claiming infinitesimal derivatives through a quantized texture lookup.
-    result=minimize(objective,x,method='Powell',bounds=bounds,
-        options=dict(maxfev=args.budget,maxiter=15,xtol=.0005,ftol=1e-7))
+    if study.case.get('radial') and args.number==16:
+        bounds=[(max(b[0],v-.2),min(b[1],v+.2)) if k!='sigma' else (max(0,v-2),min(32,v+2)) for k,v,b in zip(keys,x,bounds)]
+        result=differential_evolution(objective,bounds,x0=x,seed=222,popsize=8,
+            maxiter=max(1,args.budget//(8*len(keys))-1),tol=1e-8,polish=False)
+    elif global_radial:
+        # Test both signed displacement families rather than remaining in the
+        # high-blur local minimum produced by an identity-map initialization.
+        bounds=[(-2,2),(.03,1.5),(1.2,5),(0,16),(0,.15)]
+        result=differential_evolution(objective,bounds,seed=222,popsize=8,
+            maxiter=max(1,args.budget//40-1),tol=1e-8,polish=False)
+    else:
+        result=minimize(objective,x,method='Powell',bounds=bounds,
+            options=dict(maxfev=args.budget,maxiter=15,xtol=.0005,ftol=1e-7))
     candidate,co=best[1:]
     pred=study.render(candidate,co);candidate_scores=study.scores(pred)
     if 'exterior' in old['scores'] and args.number!=11:

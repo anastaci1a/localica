@@ -1,0 +1,45 @@
+{
+  "files": {
+    "motion.mp4": {
+      "bytes": 136502,
+      "sha256": "e9b03368d8565d773f59f6409f33802f87ef503ff9559405be1ae31abdb4d22e"
+    },
+    "motion.gif": {
+      "bytes": 1725177,
+      "sha256": "b8b679c0585637f8eaf505325d3f240eff8c950cdbae16603765728e825b0c7c"
+    },
+    "comparison.png": {
+      "bytes": 92104,
+      "sha256": "4a4eca51aa8852b6b2b03994e52469a63abc1d6e060cfc6afd4aeb91303ab217"
+    }
+  },
+  "native_size": [
+    240,
+    236
+  ],
+  "frames": 90,
+  "fps": 15,
+  "travel_over_L": 0.5056179775280899,
+  "scores": {
+    "glass": {
+      "pixels": 14904,
+      "rmse": 8.070003509521484
+    },
+    "rim": {
+      "pixels": 8364,
+      "rmse": 9.688697814941406
+    },
+    "held": {
+      "pixels": 4763,
+      "rmse": 9.650671005249023
+    },
+    "interior": {
+      "pixels": 6540,
+      "rmse": 5.325582027435303
+    },
+    "ssim": 0.9428349733352661,
+    "loss": 73.74872925535746
+  },
+  "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+  "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Foreground coverage is reference-derived."
+}
