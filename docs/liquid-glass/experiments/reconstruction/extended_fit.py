@@ -257,16 +257,20 @@ class Study:
 
     def field(self,x,y,p):
         X,Y,d,light=self.geometry_field(x,y,p)
+        from chromatic_transmission import apply
+        return apply(self,p,x,y,self.sample_field(X,Y,d,p)),light
+
+    def sample_field(self,X,Y,d,p):
         texture=self.blur(self.kernel_sigma(p))
         sample=cv2.remap(texture,(X*self.L+self.case['center'][0]+self.backdrop_shift[0]).astype(np.float32),
             (Y*self.L+self.case['center'][1]+self.backdrop_shift[1]).astype(np.float32),cv2.INTER_LINEAR)
-        sample=sample.reshape((*x.shape,3))
+        sample=sample.reshape((*X.shape,3))
         if p.get('blur_transition',0)>1e-8:
             clear=cv2.remap(self.source,(X*self.L+self.case['center'][0]+self.backdrop_shift[0]).astype(np.float32),
-                (Y*self.L+self.case['center'][1]+self.backdrop_shift[1]).astype(np.float32),cv2.INTER_LINEAR).reshape((*x.shape,3))
+                (Y*self.L+self.case['center'][1]+self.backdrop_shift[1]).astype(np.float32),cv2.INTER_LINEAR).reshape((*X.shape,3))
             u=np.clip(d/p['blur_transition'],0,1);blend=u**3*(u*(6*u-15)+10)
             sample=clear+(sample-clear)*blend[...,None]
-        return np.maximum(sample,0)**p['gamma'],light
+        return np.maximum(sample,0)**p['gamma']
 
     def fit(self,p):
         assert 'material_chroma_sensitivity' not in p,'Use the context-aware paired material fitter'

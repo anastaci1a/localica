@@ -185,6 +185,24 @@ C_final = (1−F) C_transmission_after_output_blur + F E
 - This bounded mixture approximates the incident field from the available backdrop. It is not a recovered environment, a Fresnel law, or Apple's shader; the directional lobe does not explain the observed rainbow. No target RGB is used as its input.
 - An absent option preserves the earlier calculation exactly. Source coverage includes the environment kernel separately. Frozen native gates remain unchanged; the excluded outer-contour band needs an additional visual/error check.
 
+### Directional chromatic transmission
+
+The switch's lateral color-fringe hypothesis separates background channels **before** common lighting. For the existing map `F(x)`, source `B`, gamma `γ`, fixed direction `u=(cos θ,sin θ)` and signed separation `δ`:
+
+```text
+s_R=1, s_G=0, s_B=−1
+q_c = x + s_c δ u
+F_out(q) = F(q) inside the footprint, q outside
+D_c(x) = max(B_c(F_out(q_c)),0)^γ
+z = (x_x−shape_dx)/half_width
+w(x) = a [1−S(clamp((z−fade_center)/fade_width+1/2,0,1))]
+T_c(x) = (1−w) max(B_c(F(x)),0)^γ + w D_c(x)
+```
+
+- `B` uses the existing source-filter rule. Apply material gain and lighting at **x**, then subpixel integration, output filtering and the preceding reflection mixture. Do not shift the finished highlights/shadow or multiply gamma twice.
+- `δ` uses the pose's `L`; the fade center/width use horizontal half-width. The separation remains constant across the fade: its contribution decreases, not its length. Check each displaced ray and source kernel separately, including during backdrop movement.
+- Symmetric RGB offsets are a controllable approximation to lateral chromatic aberration, not measured wavelengths, a dispersion law or Apple's implementation. Direction and left-side fade remain hypotheses calibrated across the two references. An absent option, zero strength or zero separation preserves the prior model.
+
 ## Solid-vector foreground responses
 
 Foreground coverage `α` comes from solid geometry, independently of material color. Its input `B` includes preceding layers, such as a fixed selection backing. Affine styles use `F(B)=(1−o)B+oC`; response styles use the shared per-channel function:
