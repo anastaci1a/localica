@@ -174,6 +174,35 @@ def main():
         assert np.max(abs(fast.render(coefficients)-full))<2e-6
     print('PASS explicit common length basis scales both kernels at unequal observation sizes')
 
+    from material_context import matrix,contraction,LUMA
+    from prepared import Prepared
+    A,t=contraction([.4,.4,.4],10)
+    assert t==0 and np.max(abs(A@np.array([.2,.6,.9])-(LUMA@np.array([.2,.6,.9]))))<1e-15
+    A,t=contraction([0,1,0],10)
+    assert t==1 and np.array_equal(A,np.eye(3))
+    assert np.array_equal(matrix(fixture,p),np.eye(23))
+    adaptive={**p,'material_chroma_sensitivity':.7}
+    co[:3]=[.3,.5,.7];co[-3:]=[.7,.6,.5]
+    prepared=Prepared(fixture,adaptive,co,1);transforms=[]
+    for shift in [[0.,0.],[8.,-2.]]:
+        fixture.backdrop_shift=shift;T=matrix(fixture,adaptive);transforms.append(T)
+        assert np.max(abs(LUMA@T[:3,:3]-LUMA))<1e-15
+        assert np.array_equal(T[6:20,6:20],np.eye(14))
+        full=fixture.render(adaptive,co)
+        assert np.max(abs(Cached(fixture,adaptive).render(co)-full))<2e-6
+        assert np.max(abs(prepared.render()-full))<2e-6
+    assert np.max(abs(transforms[0]-transforms[1]))>.001,'Motion freezes material context'
+    fixture.backdrop_shift=[0.,0.]
+    cache=Cached(fixture,adaptive);fixture.valid=np.ones(full.shape[:2],bool)
+    fixture.rim=np.indices(full.shape[:2])[0]<8;fixture.target_crop=full*.9
+    forms=statistics(cache,co);delta=rng.normal(0,1e-4,23)
+    base=cache.render(co);actual=cache.render(co+delta)
+    for name,mask in [('glass',fixture.valid),('rim',fixture.rim)]:
+        Q,g=forms[name];before=float(np.mean((base[mask].astype(float)-fixture.target_crop[mask])**2))*255**2
+        after=float(np.mean((actual[mask].astype(float)-fixture.target_crop[mask])**2))*255**2
+        assert abs(after-(before+2*g@delta+delta@Q@delta))<.005
+    print('PASS optional context preserves encoded luma, leaves sampled colors/lighting separate, follows motion and transforms material derivatives')
+
     import cv2,tempfile,hashlib
     from source_support import masks,kernel_safe,fraction,supported
     source=SimpleNamespace(case={})

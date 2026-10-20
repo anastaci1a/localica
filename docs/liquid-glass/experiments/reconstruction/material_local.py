@@ -11,9 +11,10 @@ from scipy.optimize import minimize
 
 def statistics(cache,co):
     s=cache.study;H,W=cache.H,cache.W;C,J=cache.C,cache.J
+    transform=getattr(cache,'material_transform',np.eye(23));effective=transform@co
     core=J[...,-1]
-    gain=(1-core[...,None])*co[:3]+core[...,None]*co[-3:]
-    z=C*gain+co[3:6]+(J[...,:-1]@co[6:-3])[...,None]
+    gain=(1-core[...,None])*effective[:3]+core[...,None]*effective[-3:]
+    z=C*gain+effective[3:6]+(J[...,:-1]@effective[6:-3])[...,None]
     pred=cache.render(co);residual=pred.astype(np.float64)-s.target_crop
     forms={name:[np.zeros((23,23)),np.zeros(23)] for name in ['glass','rim']}
     for channel in range(3):
@@ -24,6 +25,7 @@ def statistics(cache,co):
         F[...,channel+3]=average(active)
         F[...,6:20]=average(active[...,None]*J[...,:-1])
         F[...,channel+20]=average(active*C[...,channel]*core)
+        F=F@transform
         sigma=s.kernel_sigma(cache.p,'post_sigma')
         if sigma>.001:F=cv2.GaussianBlur(F,(0,0),sigma)
         for name,mask in [('glass',s.valid),('rim',s.rim)]:

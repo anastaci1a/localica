@@ -25,7 +25,7 @@ class ProfileCache:
     def render(self,coefficients):
         def tiles():
             for tile,(basis,base,weight,nx,ny) in zip(self.prepared.tiles,self.parts):
-                row,bottom,W,X,Y,gain,light,blend=tile
+                row,bottom,W,X,Y,gain,light,blend,core=tile
                 delta=(basis@np.asarray(coefficients))*weight-base
-                yield row,bottom,W,X-delta*nx,Y-delta*ny,gain,light,blend
+                yield row,bottom,W,X-delta*nx,Y-delta*ny,gain,light,blend,core
         return self.prepared.render(tiles())
