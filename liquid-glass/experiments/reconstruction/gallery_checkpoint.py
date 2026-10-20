@@ -26,13 +26,24 @@ def main():
     raw=(args.folder/f'pass-{args.number:02}.json').read_bytes()
     state=json.loads(raw)['current'];p=state['parameters'];co=np.array(state['material'])
     singles=[json.loads(r) for r in (guide/'experiments/reconstruction/studies'/args.id/'passes.jsonl').read_text().splitlines() if r]
-    samples=[]
+    samples=[];details=[]
     for index,name in enumerate(['a','b']):
         study=Study(args.folder/name);prediction=study.render(p,co);score=study.scores(prediction)
         assert abs(score['loss']-state['scores'][index]['loss'])<1e-6,'Snapshot changes frozen native loss'
         assert abs(score['glass']['rmse']-state['scores'][index]['glass']['rmse'])<1e-6
         footprint=coverage_report(study,p);assert supported(study,footprint)
-        study.comparison(study.render(p,co,4),guide/'assets'/f'study-{args.id}-progress-{name}.png',p,4)
+        image=guide/'assets'/f'study-{args.id}-progress-{name}.png'
+        study.comparison(study.render(p,co,4),image,p,4)
+        if args.id=='active-switch':
+            from PIL import Image
+            comparison=Image.open(image);width=(comparison.width-2)//2
+            bar=comparison.height-(study.crop[3]-study.crop[1])*4
+            measured=json.loads((guide/'experiments/reconstruction/switch-rim-analysis.json').read_text())['samples'][index]
+            for patch in measured['samples']:
+                X,Y=patch['position'];left=(X-48-study.crop[0])*4;top=(Y-36-study.crop[1])*4+bar
+                a=comparison.crop((left,top,left+384,top+288))
+                b=comparison.crop((left+width+2,top,left+width+386,top+288))
+                details.append((f"{name.upper()} · {patch['region'].replace('_',' ')}",a,b))
         samples.append(dict(reference=study.case['reference'],native=score,source_support=footprint,
                             background_estimate=study.case.get('background_estimate')))
     case=json.loads((args.folder/'a/case.json').read_text())
@@ -53,6 +64,16 @@ def main():
     assert n==1,'Keep one current pass label beside the figures'
     section=re.sub(r'\[Frozen pass/model evidence at [^]]+\]\([^\n]+?\)',
                    f'[Current recipe and pass records](experiments/reconstruction/studies/{args.id}/paired/accepted.json)',section)
+    if details:
+        from PIL import Image,ImageDraw,ImageFont
+        canvas=Image.new('RGB',(770,len(details)*324),'#14171e');draw=ImageDraw.Draw(canvas)
+        font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',18)
+        for row,(label,a,b) in enumerate(details):
+            y=row*324;draw.text((8,y+6),label+' · Apple',font=font,fill='#f0f2f7')
+            draw.text((394,y+6),f'Reconstruction · pass {args.number}',font=font,fill='#f0f2f7')
+            canvas.paste(a,(0,y+36));canvas.paste(b,(386,y+36))
+        canvas.save(guide/'assets/switch-rim-detail.png')
+        section=re.sub(r'snapshot \d+ on the right',f'snapshot {args.number} on the right',section)
     text=text[:start]+section+text[end:]
     a,b=[s['native'] for s in samples]
     row=f"| {args.score_label}, pass {args.number} | {a['loss']:.3f} / {b['loss']:.3f} | {a['glass']['rmse']:.3f} / {b['glass']['rmse']:.3f} | {len(singles)} / {args.number} | In progress |"
