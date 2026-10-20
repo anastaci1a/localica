@@ -130,6 +130,8 @@ def main():
     execution_hash=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     record_path=folder/f'pass-{args.number:02}.json';assert not record_path.exists(),'Keep paired trials immutable'
     studies=[Study(folder/'a'),Study(folder/'b')]
+    if args.number in (7,8) and not studies[0].case.get('radial'):
+        name='Shared native normal-profile settlement'+(' follow-up' if args.number==8 else '')
     # Differently sized poses must explicitly declare one shared length basis.
     assert abs(studies[0].case.get('parameter_length_reference',studies[0].L)-studies[1].case.get('parameter_length_reference',studies[1].L))<1e-12,'Declare one common parameter-length reference for unequal poses'
     saved=folder/'accepted.json'

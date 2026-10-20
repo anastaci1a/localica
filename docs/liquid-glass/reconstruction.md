@@ -163,6 +163,15 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 - The gray-track rendering retains excess green in its rim. Colored reflection and edge shape remain incomplete; there is no claim of a recovered Apple solid.
 - [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). Final paired verification and motion captures are pending.
 
+### Colored switch rim
+
+Each crop below places Apple on the left and snapshot 6 on the right. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
+
+[![Switch rim details: Apple and reconstruction across six cropped regions](assets/switch-rim-detail.png)](assets/switch-rim-detail.png)
+
+- [Measurements and frozen exploratory trials](experiments/reconstruction/switch-rim-analysis.json) include native color samples, nearby resting-edge controls, source assumptions and a first RGB-ray-offset comparison. A small offset improved both older samples slightly; larger offsets regressed. Nothing from that probe has been adopted.
+- Apple describes separate [geometry-dependent highlights and ambient color spill](https://developer.apple.com/videos/play/wwdc2025/219/?time=631). Colored transmission, lighting/tint, video processing and source-estimation error remain possible contributors; these pixels do not identify physical dispersion or an exact Apple shader.
+
 ## Scores
 
 ### Music and switch studies
