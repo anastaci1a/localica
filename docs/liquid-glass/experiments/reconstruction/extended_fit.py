@@ -8,7 +8,7 @@ from collections import OrderedDict
 import argparse, copy, hashlib, json, time
 import cv2, numpy as np
 from scipy.interpolate import BSpline
-from scipy.optimize import minimize, lsq_linear
+from scipy.optimize import minimize, lsq_linear, differential_evolution
 from render import geometry, fit_material, shade
 from publish import pair
 
@@ -32,6 +32,7 @@ STAGES = {
  17: ('Coupled cap and normal-profile refinement', [*[f'c{i}' for i in range(7)],'cap_normal_gain','cap_tangent_fade']),
  18: ('C2 cap-to-body curvature join', ['cap_join_width']),
  19: ('Smooth-cap optical settlement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition','cap_normal_gain']),
+ 20: ('Global signed radial-profile restart', ['amplitude','band','power','sigma','core_x']),
 }
 BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               tangent=(0,.45), tangent_band=(.03,1), core_x=(0,.025),core_y=(0,.18),
@@ -276,6 +277,9 @@ def main():
         p=initial();_,co=study.fit(p);pred=study.render(p,co)
         old=dict(parameters=p,material=co.tolist(),scores=study.scores(pred));accepted_path.write_text(json.dumps(old,indent=2)+'\n')
     start=copy.deepcopy(p)
+    if args.number==20:
+        assert study.case.get('radial'), 'Radial comparator only'
+        start.update(spline=False,post_sigma=0.,amplitude=.5,band=.6,power=2.2,sigma=2.)
     if args.number==3 and not start['spline']:
         d=np.linspace(0,1,501)
         basis=BSpline.design_matrix(d,KNOTS,3).toarray()[:,:7]
@@ -296,8 +300,15 @@ def main():
     x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
     # Powell handles the explicit finite bilinear-sampling resolution without
     # claiming infinitesimal derivatives through a quantized texture lookup.
-    result=minimize(objective,x,method='Powell',bounds=bounds,
-        options=dict(maxfev=args.budget,maxiter=15,xtol=.0005,ftol=1e-7))
+    if args.number==20:
+        # Test both signed displacement families rather than remaining in the
+        # high-blur local minimum produced by an identity-map initialization.
+        bounds=[(-2,2),(.03,1.5),(1.2,5),(0,16),(0,.15)]
+        result=differential_evolution(objective,bounds,seed=222,popsize=8,
+            maxiter=max(1,args.budget//40-1),tol=1e-8,polish=False)
+    else:
+        result=minimize(objective,x,method='Powell',bounds=bounds,
+            options=dict(maxfev=args.budget,maxiter=15,xtol=.0005,ftol=1e-7))
     candidate,co=best[1:]
     pred=study.render(candidate,co);candidate_scores=study.scores(pred)
     if 'exterior' in old['scores'] and args.number!=11:
