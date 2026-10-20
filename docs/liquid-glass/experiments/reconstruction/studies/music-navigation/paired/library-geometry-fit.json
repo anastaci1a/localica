@@ -59,5 +59,10 @@
       0,
       1
     ]
+  },
+  "guard_replay": {
+    "scope": "Verification-only replay of the original proposal after delayed case writes; not an additional calibration pass.",
+    "maximum_foreground_mse_difference": 0,
+    "native_scores_unchanged": true
   }
 }

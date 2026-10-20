@@ -1,0 +1,101 @@
+{
+  "paired_passes": 24,
+  "record_count": 24,
+  "excluded_passes": [],
+  "scores": [
+    {
+      "glass": {
+        "pixels": 113250,
+        "rmse": 1.6107325553894043
+      },
+      "rim": {
+        "pixels": 35386,
+        "rmse": 2.6459853649139404
+      },
+      "held": {
+        "pixels": 27873,
+        "rmse": 1.3603713512420654
+      },
+      "interior": {
+        "pixels": 77864,
+        "rmse": 0.7692588567733765
+      },
+      "ssim": 0.9967935681343079,
+      "loss": 3.9164931208955234
+    },
+    {
+      "glass": {
+        "pixels": 113250,
+        "rmse": 6.044371128082275
+      },
+      "rim": {
+        "pixels": 35386,
+        "rmse": 9.949139595031738
+      },
+      "held": {
+        "pixels": 27873,
+        "rmse": 6.041400909423828
+      },
+      "interior": {
+        "pixels": 77864,
+        "rmse": 2.8553483486175537
+      },
+      "ssim": 0.9892379641532898,
+      "loss": 55.269709238224706
+    }
+  ],
+  "foreground_mse": null,
+  "foreground_style_scores": {
+    "before_mse": [
+      126.83411316247657,
+      299.9234120710753,
+      81.76136949041393,
+      304.83955146046355,
+      16.298723623913247,
+      634.0891439002007,
+      306.6913927788846,
+      598.3985496684909,
+      141.01503059500828,
+      306.10066757071763,
+      82.63407370832283,
+      306.9031684775837,
+      25.79649959807284,
+      630.4189505288377,
+      306.9900407223031,
+      581.4375387271866
+    ],
+    "after_mse": [
+      126.83411316247657,
+      187.04389128251933,
+      81.76136949041393,
+      96.88008476514369,
+      16.298723623913247,
+      207.70146914874204,
+      306.6913927788846,
+      145.70484492578544,
+      141.01503059500828,
+      195.5448506399989,
+      82.63407370832283,
+      111.52923118206672,
+      25.79649959807284,
+      217.38618017407134,
+      306.9900407223031,
+      149.4179748056922
+    ],
+    "asset_order": [
+      "home.svg",
+      "home-label.svg",
+      "new.svg",
+      "new-label.svg",
+      "radio.svg",
+      "radio-label.svg",
+      "library.svg",
+      "library-label.svg"
+    ],
+    "score_order": "Scene-major, then asset_order",
+    "optimizer_evaluations": 6447,
+    "formula": "Whole original font outlines with shared color and uniform pose; fixed glass and masks."
+  },
+  "gate": "Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.",
+  "scope": "Same video, different observed backdrops. Does not establish generality across devices, apps or lighting."
+}

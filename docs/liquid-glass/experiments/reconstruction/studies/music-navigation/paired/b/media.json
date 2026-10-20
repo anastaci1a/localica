@@ -1,0 +1,94 @@
+{
+  "state_sha256": "f2c342c32aaf37d64873d7fac97d5201676c11182a3bf7089eb3ded0f16dc075",
+  "render_files": {
+    "motion.mp4": "26b5bbaf2804a309eb6532ae50d7d799ad1e05f3fa051272a0487dd660607974",
+    "comparison.png": "e81adfa03b80ac03710a40628f25cc8c7d26b48e87b6a2801d0014d7c226eccf"
+  },
+  "native_size": [
+    1080,
+    335
+  ],
+  "output_size": [
+    4320,
+    1340
+  ],
+  "output_scale": 4,
+  "frames": 180,
+  "fps": 30,
+  "travel_over_L": 0.3964757709251101,
+  "scores": {
+    "glass": {
+      "pixels": 113250,
+      "rmse": 6.044371128082275
+    },
+    "rim": {
+      "pixels": 35386,
+      "rmse": 9.949139595031738
+    },
+    "held": {
+      "pixels": 27873,
+      "rmse": 6.041400909423828
+    },
+    "interior": {
+      "pixels": 77864,
+      "rmse": 2.8553483486175537
+    },
+    "ssim": 0.9892379641532898,
+    "loss": 55.269709238224706
+  },
+  "motion_support": {
+    "requested_native_px": 45,
+    "actual_native_px": 45,
+    "minimum_scored_lookup_3sigma_observed_fraction": 1,
+    "minimum_whole_shape_lookup_observed_fraction": 1,
+    "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
+  },
+  "presentation_completion_native_delta": {
+    "max_abs_rgb": 0,
+    "rmse": 0
+  },
+  "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+  "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.",
+  "files": {
+    "motion.mp4": {
+      "bytes": 3048624,
+      "sha256": "26b5bbaf2804a309eb6532ae50d7d799ad1e05f3fa051272a0487dd660607974"
+    },
+    "motion.gif": {
+      "bytes": 26774448,
+      "sha256": "d6ccc77fe8d22e7261adbabad23e9ecefb95ba99c1b53a5d4d9ed3405ecc5512"
+    },
+    "comparison.png": {
+      "bytes": 3059774,
+      "sha256": "e81adfa03b80ac03710a40628f25cc8c7d26b48e87b6a2801d0014d7c226eccf"
+    }
+  },
+  "gif": {
+    "fps": 15,
+    "output_size": [
+      2160,
+      670
+    ],
+    "master_relative_scale": 0.5,
+    "palette_colors": 256,
+    "palette_sampling": "All frame pixels",
+    "dither": "sierra2_4a",
+    "maximum_megabytes": 90,
+    "spatial_downsampling": true
+  },
+  "video_color": {
+    "matrix": "BT.601 / SMPTE170M",
+    "range": "Limited",
+    "method": "H.264 VUI/MP4 metadata-only stream copy",
+    "original_sha256": "67ccaa95d5ff86150057ab15a6b989c728ef2ef5833ce010e899648c8251d46d",
+    "corrected_sha256": "26b5bbaf2804a309eb6532ae50d7d799ad1e05f3fa051272a0487dd660607974",
+    "decoded_rgb_sha256": "SHA256=301f4911b77c95c639a3f7f6dcdf9014054b241ed823a56748ce9e7f0e967132",
+    "equal_decoded_rgb": true,
+    "limits": "Declares the existing conversion matrix. No new primaries/transfer calibration, color conversion, optical fit or image sample is introduced."
+  },
+  "visual_review": {
+    "inspected": "4x comparison and GIF peak frame; clean vector foregrounds on both backgrounds.",
+    "remaining": "Background B upper-rim reflectance/profile mismatch remains. Mostly-white A weakly identifies optics; this is not Apple rendering parity."
+  }
+}
