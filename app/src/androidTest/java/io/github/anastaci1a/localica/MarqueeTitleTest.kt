@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -19,6 +21,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -160,27 +163,46 @@ class MarqueeTitleTest {
     }
 
     @Test fun pausedRtlTextKeepsItsRightLeadingEdgeUnfaded() {
-        val title = "فنان طويل الاسم فنان طويل الاسم فنان طويل الاسم"
+        val title = "فنان البداية ثم كلمات طويلة تنتهي بموسيقى"
         val style = TextStyle(fontSize = 24.sp, fontFamily = FontFamily.Monospace, color = Color.Black)
         compose.mainClock.autoAdvance = false
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Column(Modifier.background(Color.White)) {
                     MarqueeTitle(title, false, Modifier.width(120.dp).testTag("title"), style, motionPaused = true)
-                    Text(title, Modifier.width(120.dp).testTag("reference"), maxLines = 1, softWrap = false,
-                        overflow = TextOverflow.Clip, style = style)
+                    // Clip a right-aligned, intrinsically measured paragraph. A constrained
+                    // Text(softWrap = false, overflow = Clip) instead clips its left end.
+                    Box(Modifier.width(120.dp).clipToBounds().testTag("reference")) {
+                        Text(title, Modifier.fillMaxWidth()
+                            .wrapContentWidth(AbsoluteAlignment.Right, unbounded = true)
+                            .testTag("reference-text"), maxLines = 1, softWrap = false, style = style)
+                    }
                 }
             }
         } }
         compose.mainClock.advanceTimeBy(64)
         val actual = compose.onNodeWithTag("title").captureToImage().toPixelMap()
         val reference = compose.onNodeWithTag("reference").captureToImage().toPixelMap()
+        val results = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithTag("reference-text", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+        val referenceLayout = results.single()
+        assertTrue("Reference measures the entire overflowing paragraph", referenceLayout.size.width > reference.width)
+        val firstGlyph = referenceLayout.getBoundingBox(0)
+        assertTrue("Reference's first glyph lies in the right-leading viewport",
+            firstGlyph.left >= referenceLayout.size.width - reference.width &&
+                firstGlyph.right <= referenceLayout.size.width)
+        assertEquals(reference.width, actual.width)
+        assertEquals(reference.height, actual.height)
         var difference = 0f
+        var darkPixels = 0
         for (x in actual.width - minOf(16, actual.width) until actual.width) {
             for (y in 0 until minOf(actual.height, reference.height)) {
                 difference += kotlin.math.abs(actual[x, y].red - reference[x, y].red)
+                if (reference[x, y].red < .5f) darkPixels++
             }
         }
+        assertTrue("RTL comparison includes leading glyph ink", darkPixels > 10)
         assertTrue("RTL pause leaves its leading edge unmasked: $difference", difference < 2f)
         compose.mainClock.autoAdvance = true
     }
@@ -199,7 +221,9 @@ class MarqueeTitleTest {
                         }
                         MarqueeTitle(text, false, Modifier.width(120.dp).testTag("artist-$index"), style,
                             visiblePrefixLength = artist.length, suffixVisibility = 0f)
-                        Text(artist, Modifier.width(120.dp).testTag("reference-$index"), maxLines = 1, style = style)
+                        // Paragraph-leading alignment is independent of the UI direction.
+                        Text(artist, Modifier.width(120.dp).testTag("reference-$index"), maxLines = 1,
+                            textAlign = if (index == 0) TextAlign.Left else TextAlign.Right, style = style)
                     }
                 }
             }
@@ -208,6 +232,8 @@ class MarqueeTitleTest {
         artists.indices.forEach { index ->
             val actual = compose.onNodeWithTag("artist-$index").captureToImage().toPixelMap()
             val reference = compose.onNodeWithTag("reference-$index").captureToImage().toPixelMap()
+            assertEquals(reference.width, actual.width)
+            assertEquals(reference.height, actual.height)
             assertTrue("The visible prefix keeps its paragraph's leading edge: $index",
                 difference(actual, reference) < 2f)
         }

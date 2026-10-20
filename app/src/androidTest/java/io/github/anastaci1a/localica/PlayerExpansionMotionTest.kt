@@ -88,7 +88,7 @@ class PlayerExpansionMotionTest {
                     brightest = maxOf(brightest, content[x, y].red)
                 assertTrue("Lyrics/empty ink is physically visible before release: $brightest", brightest > .28f)
                 val player = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
-                val title = compose.onNodeWithTag("player-title").fetchSemanticsNode().boundsInRoot
+                val title = compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
                 val seek = compose.onNodeWithTag("player-seek-row").fetchSemanticsNode().boundsInRoot
                 val transport = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
                 val panel = compose.onNodeWithTag("lyrics-panel").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
@@ -117,7 +117,7 @@ class PlayerExpansionMotionTest {
                 compose.waitForIdle()
                 assertTrue(expanded)
                 assertEquals("Release cannot change lyrics geometry", panel, compose.onNodeWithTag("lyrics-panel").fetchSemanticsNode().boundsInRoot)
-                assertEquals(title, compose.onNodeWithTag("player-title").fetchSemanticsNode().boundsInRoot)
+                assertEquals(title, compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
                 assertEquals(seek, compose.onNodeWithTag("player-seek-row").fetchSemanticsNode().boundsInRoot)
                 assertEquals(transport, compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot)
                 assertEquals(player, compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot)
@@ -147,7 +147,7 @@ class PlayerExpansionMotionTest {
             }
         } } }
         val tags = listOf("player-title", "player-seek-row", "player-actions-row")
-        fun tops() = tags.map { compose.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot.top } +
+        fun tops() = tags.map { compose.onNodeWithTag(it, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top } +
             compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot.top
         compose.runOnIdle { scope.launch { progress.snapTo(1f) } }
         val full = tops()
