@@ -32,7 +32,7 @@ class ListBackTest {
         var ordinaryBack by mutableIntStateOf(0)
         compose.setContent { LocalicaTheme {
             BackHandler { ordinaryBack++ }
-            BrowserScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaylistState(), route,
+            BrowserScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaylistState(loading = false), route,
                 { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false,
                 listBackEnabled = true, reducedMotion = true)
         } }
@@ -104,7 +104,7 @@ class ListBackTest {
         var ordinaryBack by mutableIntStateOf(0)
         compose.setContent { LocalicaTheme {
             BackHandler { ordinaryBack++ }
-            BrowserScreen(LibraryUiState(LibrarySnapshot(), loading = false), PlaylistState(), route,
+            BrowserScreen(LibraryUiState(LibrarySnapshot(), loading = false), PlaylistState(loading = false), route,
                 { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false,
                 listBackEnabled = true, reducedMotion = true)
         } }

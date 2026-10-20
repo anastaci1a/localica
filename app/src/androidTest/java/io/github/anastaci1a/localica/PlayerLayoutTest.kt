@@ -11,6 +11,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -27,7 +28,8 @@ class PlayerLayoutTest {
         val queue = QueueEdits.create(listOf(track), 0, "Morning")
         val songs = (0..99).map { Track("song:$it", "Library song " + it.toString().padStart(3, '0'), fileName = "$it.mp3", relativePath = "$it.mp3") }
         compose.setContent { LocalicaTheme { LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = songs), loading = false), playback,
-            {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) } }
+            {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false),
+            playlist = PlaylistState(loading = false)) } }
         val mini = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
         val tabs = compose.onNodeWithTag("tab-pill").fetchSemanticsNode().boundsInRoot
         val utility = compose.onNodeWithTag("utility-pill").fetchSemanticsNode().boundsInRoot
