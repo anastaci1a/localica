@@ -106,6 +106,15 @@ class Study:
             with (self.folder/name).open('rb') as f:
                 assert hashlib.file_digest(f,'sha256').hexdigest()==digest, f'Changed frozen input: {name}'
         self.source=cv2.imread(str(self.folder/'source.png'))[:,:,::-1].astype(np.float32)/255
+        # Some selection states recolor the content seen through the lens.
+        # Keep their explicitly modeled incident layer separate from the
+        # ordinary, unrecolored exterior; no difference for existing studies.
+        self.exterior_source=None
+        if 'exterior_source' in self.case:
+            name=self.case['exterior_source']
+            assert Path(name).name==name and name in self.case['source_sha256']
+            self.exterior_source=cv2.imread(str(self.folder/name))[:,:,::-1].astype(np.float32)/255
+            assert self.exterior_source.shape==self.source.shape
         self.target=cv2.imread(str(self.folder/'target.png'))[:,:,::-1].astype(np.float32)/255
         known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)>0
         self.L=min(self.case['half'])
@@ -357,7 +366,8 @@ class Study:
         if 'shadow' in p:
             q=p['shadow'];*_,(shadow_sd,_,_)=self.shape(x-q['offset'][0],y-q['offset'][1],p)
             opacity=q['opacity']*np.exp(-.5*(np.maximum(shadow_sd,0)/q['sigma'])**2)
-            source=cv2.remap(self.source,px,py,cv2.INTER_LINEAR)*(1-opacity[...,None])
+            exterior=self.source if self.exterior_source is None else self.exterior_source
+            source=cv2.remap(exterior,px,py,cv2.INTER_LINEAR)*(1-opacity[...,None])
             *_,(native_sd,_,_)=self.shape(x,y,p)
             u=np.clip((native_sd-.20)/.15,0,1);blend=u**3*(u*(6*u-15)+10)
             known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)
