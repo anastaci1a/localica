@@ -1,0 +1,426 @@
+{
+  "id": "music-navigation-a",
+  "category": "Regular navigation container with separate fixed selection backing",
+  "center": [
+    831.5,
+    647.5
+  ],
+  "half": [
+    511.5,
+    113.5
+  ],
+  "radius": 113.5,
+  "crop": [
+    285,
+    495,
+    1365,
+    830
+  ],
+  "foreground": [
+    [
+      328,
+      540,
+      620,
+      751
+    ],
+    [
+      665,
+      578,
+      752,
+      672
+    ],
+    [
+      663,
+      683,
+      757,
+      727
+    ],
+    [
+      882,
+      582,
+      1006,
+      669
+    ],
+    [
+      883,
+      683,
+      1009,
+      727
+    ],
+    [
+      1149,
+      570,
+      1239,
+      679
+    ],
+    [
+      1124,
+      683,
+      1269,
+      727
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "solid",
+      "box": [
+        332,
+        544,
+        618,
+        748
+      ],
+      "vector_asset": "selection.svg",
+      "vector_sha256": "06079ce940ebca64f6127819fdc362a58800939a1f2b4a4d2770a57a0a601ac4",
+      "vector_box": [
+        334,
+        546,
+        615,
+        746
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "opacity": 0.14,
+      "fit_style": false,
+      "vector_provenance": {
+        "method": "Computed rounded selection backing with fixed neutral14% opacity. This reference does not establish independent secondary refraction."
+      }
+    },
+    {
+      "mode": "solid",
+      "box": [
+        420,
+        573,
+        526,
+        675
+      ],
+      "vector_asset": "home.svg",
+      "vector_sha256": "59ae42b6317ff70d4e459b5ba183c50795ccdd130f41ab1f8d21fe8657838e40",
+      "vector_provenance": {
+        "method": "Existing clean symmetric Home trace, reused without geometry changes."
+      },
+      "opacity": 1,
+      "vector_box": [
+        428.0730128842447,
+        579.7607116885195,
+        516.270864827494,
+        667.9585636317688
+      ],
+      "color": [
+        0.9718188643455505,
+        0.21847064793109894,
+        0.3670624792575836
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        416,
+        683,
+        537,
+        727
+      ],
+      "vector_asset": "home-label.svg",
+      "vector_sha256": "3c32ce62abbcc88a93f80c290c162548a8fc2bc5b6943d9411fc3e12fb5ac8d5",
+      "vector_provenance": {
+        "font_file": "SF-Pro-Text-Regular.otf",
+        "font_sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+        "glyph": null,
+        "text": "Home",
+        "glyphs": [
+          "H",
+          "o",
+          "m",
+          "e"
+        ],
+        "bounds": [
+          184,
+          -19,
+          5538,
+          1443
+        ],
+        "advance": 5634,
+        "size_pt": 13,
+        "tracking_font_units": -12,
+        "units_per_em": 2048,
+        "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
+        "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
+        "method": "Original font outlines and normal AAT tracking at13pt; intended app typeface/point size inferred, not read from Apple source."
+      },
+      "opacity": 1,
+      "vector_box": [
+        424.6441437080965,
+        690.0607181090483,
+        525.4625049395539,
+        717.5908720351578
+      ],
+      "color": [
+        0.8685996532440186,
+        0.22421835362911224,
+        0.357686847448349
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        665,
+        578,
+        752,
+        672
+      ],
+      "vector_asset": "new.svg",
+      "vector_sha256": "9dd4b22eed41529a9891629fe86d56a3900e7784d61ac6eb8fdc52194b8b104f",
+      "vector_provenance": {
+        "method": "Clean symmetric four-rounded-square trace; no screenshot alpha."
+      },
+      "opacity": 1,
+      "vector_box": [
+        669.4781560053071,
+        584.6056029701557,
+        747.2194527770322,
+        662.3468997418807
+      ],
+      "color": [
+        0.4469260275363922,
+        0.44692713022232056,
+        0.44692593812942505
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        663,
+        683,
+        757,
+        727
+      ],
+      "vector_asset": "new-label.svg",
+      "vector_sha256": "e2b133359ff77f6ce82a7f85f1f1605ad0c698ae7f47cf3c8db76f1aa393448f",
+      "vector_provenance": {
+        "font_file": "SF-Pro-Text-Regular.otf",
+        "font_sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+        "glyph": null,
+        "text": "New",
+        "glyphs": [
+          "N",
+          "e",
+          "w"
+        ],
+        "bounds": [
+          184,
+          -19,
+          4184,
+          1443
+        ],
+        "advance": 4240,
+        "size_pt": 13,
+        "tracking_font_units": -12,
+        "units_per_em": 2048,
+        "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
+        "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
+        "method": "Original font outlines and normal AAT tracking at13pt; intended app typeface/point size inferred, not read from Apple source."
+      },
+      "opacity": 1,
+      "vector_box": [
+        668.9589194154887,
+        689.9299423166617,
+        744.1876155259308,
+        717.4260307450284
+      ],
+      "color": [
+        0.26387307047843933,
+        0.2638751268386841,
+        0.26387208700180054
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        882,
+        582,
+        1006,
+        669
+      ],
+      "vector_asset": "radio.svg",
+      "vector_sha256": "1e2f1fc474567282ef87c433da34fb7fe7af6a777aa5af9f6b38bfcc80c287b6",
+      "vector_provenance": {
+        "method": "Solid-vector public SF-style export; compare against observed contours, do not infer original Apple app implementation.",
+        "source_url": "https://raw.githubusercontent.com/alexzhirkevich/compose-cupertino/f66875aa6f3848b30c38e42a89fc99c9ac24a585/cupertino-icons-extended/svg/outlined/dot.radiowaves.left.and.right.svg",
+        "source_sha256": "e46e1204efacbe3d1be2af40e06c98bf53203e790d636d6813adc8afc41d1e56",
+        "license": "Apache-2.0; Compose Cupertino project,2023"
+      },
+      "opacity": 1,
+      "vector_box": [
+        889.42555871379,
+        586.9247781570002,
+        998.081097846316,
+        661.816172562709
+      ],
+      "color": [
+        0.44810301065444946,
+        0.44810235500335693,
+        0.44810357689857483
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        883,
+        683,
+        1009,
+        727
+      ],
+      "vector_asset": "radio-label.svg",
+      "vector_sha256": "8a839f74861f4588f63e8ef250e3105e0f8552707686ebaf153c2862c576ee6e",
+      "vector_provenance": {
+        "font_file": "SF-Pro-Text-Regular.otf",
+        "font_sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+        "glyph": null,
+        "text": "Radio",
+        "glyphs": [
+          "R",
+          "a",
+          "d",
+          "i",
+          "o"
+        ],
+        "bounds": [
+          184,
+          -19,
+          5286,
+          1526
+        ],
+        "advance": 5382,
+        "size_pt": 13,
+        "tracking_font_units": -12,
+        "units_per_em": 2048,
+        "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
+        "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
+        "method": "Original font outlines and normal AAT tracking at13pt; intended app typeface/point size inferred, not read from Apple source."
+      },
+      "opacity": 1,
+      "vector_box": [
+        896.132712108992,
+        688.319332503194,
+        992.9135779680563,
+        717.626748761966
+      ],
+      "color": [
+        0.2949811518192291,
+        0.2949797809123993,
+        0.29498234391212463
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        1149,
+        570,
+        1239,
+        679
+      ],
+      "vector_asset": "library.svg",
+      "vector_sha256": "7b4e58c61d097e1d2d21b8492f28c6b14e1225f7d76453f7f87777fe3ddb8dc8",
+      "vector_provenance": {
+        "method": "Clean symmetric stacked-frame trace with a smooth beamed-note cutout; no screenshot alpha. Not claimed to be Apple original geometry."
+      },
+      "opacity": 1,
+      "vector_box": [
+        1155.317669278217,
+        575.1318520490993,
+        1229.277190556809,
+        672.7584201368411
+      ],
+      "color": [
+        0.468471884727478,
+        0.46847182512283325,
+        0.4684719443321228
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        1124,
+        683,
+        1269,
+        727
+      ],
+      "vector_asset": "library-label.svg",
+      "vector_sha256": "690ae95e41d4e660786f32e5186e8ef012d0dc6d7995df115daa864bc1e1e993",
+      "vector_provenance": {
+        "font_file": "SF-Pro-Text-Regular.otf",
+        "font_sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+        "glyph": null,
+        "text": "Library",
+        "glyphs": [
+          "L",
+          "i",
+          "b",
+          "r",
+          "a",
+          "r",
+          "y"
+        ],
+        "bounds": [
+          184,
+          -378,
+          6589,
+          1526
+        ],
+        "advance": 6645,
+        "size_pt": 13,
+        "tracking_font_units": -12,
+        "units_per_em": 2048,
+        "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
+        "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
+        "method": "Original font outlines and normal AAT tracking at13pt; intended app typeface/point size inferred, not read from Apple source."
+      },
+      "opacity": 1,
+      "vector_box": [
+        1133.965482423829,
+        687.8872583106768,
+        1257.2183420827598,
+        724.5263597612004
+      ],
+      "color": [
+        0.29780787229537964,
+        0.29780447483062744,
+        0.2978072464466095
+      ]
+    }
+  ],
+  "reference": {
+    "video": "music",
+    "seconds": 0,
+    "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+  },
+  "input_names": {
+    "source.png": "source-0.0.png",
+    "target.png": "target-0.0.png",
+    "known.png": "known-0.0.png"
+  },
+  "source_sha256": {
+    "source.png": "38dd774b3b87ab4acaa9bb9588b63995df18d7da7ac89fb77697da6e1a1d3830",
+    "target.png": "f1eae5af7870bdc4088000595045187b31d26f4401a79fd61d0a2634e7529d0d",
+    "known.png": "89104ca1981763478097dd344e6a433002e8a14445226f238a07433301fd4412"
+  },
+  "background": "Masked temporal translation mosaic; fixed observed-pixel confidence, not a reconstructed photograph inferred from glass pixels.",
+  "exterior_exclusions": [
+    [
+      0,
+      0,
+      1920,
+      512
+    ],
+    [
+      1345,
+      0,
+      1920,
+      1080
+    ]
+  ],
+  "foreground_method": "Solid icon/font outlines plus a computed fixed selection backing. Main glass scoring excludes foreground; symbols are calibrated against their actual backing.",
+  "identifiability": "The mostly-white backing weakly constrains optics away from recovered text. Fitted image map/material, not recovered proprietary geometry; fixed selected backing is not an independently calibrated second lens."
+}
