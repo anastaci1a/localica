@@ -302,7 +302,7 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 
 ## Active segmented selector
 
-Single-reference pass 19. Weighted loss 308.506; glass RMSE 19.935 The source is Apple's Details video at 16.4 seconds. The earlier13 source-biased passes are [archived and excluded](experiments/reconstruction/studies/active-segmented-selector/invalid-track-registration/status.json); the corrected source is constrained by both distant track ends. An [intermediate caption proxy](experiments/reconstruction/studies/active-segmented-selector/invalid-lensed-caption-proxy/status.json) is also excluded; current caption geometry uses only independently unoccluded labels. A second observed position at 16.5 seconds is reserved for paired calibration; no paired acceptance is claimed yet.
+Single-reference pass 20. Weighted loss 308.506; glass RMSE 19.935 The source is Apple's Details video at 16.4 seconds. The earlier13 source-biased passes are [archived and excluded](experiments/reconstruction/studies/active-segmented-selector/invalid-track-registration/status.json); the corrected source is constrained by both distant track ends. An [intermediate caption proxy](experiments/reconstruction/studies/active-segmented-selector/invalid-lensed-caption-proxy/status.json) is also excluded; current caption geometry uses only independently unoccluded labels. A second observed position at 16.5 seconds is reserved for paired calibration; no paired acceptance is claimed yet.
 
 [![Active segmented selector: Apple left, reconstruction right](assets/study-active-segmented-selector-progress-a.png)](assets/study-active-segmented-selector-progress-a.png)
 
