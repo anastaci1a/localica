@@ -7,6 +7,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import android.graphics.Bitmap
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -16,6 +20,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -33,6 +38,7 @@ import org.junit.Test
 
 class MarqueeTitleTest {
     @get:Rule val compose = createComposeRule()
+    private val measuredLayouts = linkedMapOf<String, TextLayoutResult>()
     @Test fun pausedTitleKeepsItsLeadingGlyphsUnfaded() {
         val title = "MMMMMMMMMMMMMMMMMMMMMMMM"
         val style = TextStyle(fontSize = 24.sp, fontFamily = FontFamily.Monospace, color = Color.Black)
@@ -169,6 +175,7 @@ class MarqueeTitleTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Column(Modifier.background(Color.White)) {
+                    RecordMeasuredLayout("paused-title", AnnotatedString(title), style)
                     MarqueeTitle(title, false, Modifier.width(120.dp).testTag("title"), style, motionPaused = true)
                     // Clip a right-aligned, intrinsically measured paragraph. A constrained
                     // Text(softWrap = false, overflow = Clip) instead clips its left end.
@@ -181,6 +188,7 @@ class MarqueeTitleTest {
             }
         } }
         compose.mainClock.advanceTimeBy(64)
+        recordRtlEvidence("paused-rtl", listOf("title", "reference"))
         val actual = compose.onNodeWithTag("title").captureToImage().toPixelMap()
         val reference = compose.onNodeWithTag("reference").captureToImage().toPixelMap()
         val results = mutableListOf<TextLayoutResult>()
@@ -219,6 +227,8 @@ class MarqueeTitleTest {
                             append(artist)
                             withStyle(SpanStyle(color = Color.Transparent)) { append(" · A very long hidden album name") }
                         }
+                        RecordMeasuredLayout("artist-$index-full", text, style)
+                        RecordMeasuredLayout("artist-$index-prefix", AnnotatedString(artist), style)
                         MarqueeTitle(text, false, Modifier.width(120.dp).testTag("artist-$index"), style,
                             visiblePrefixLength = artist.length, suffixVisibility = 0f)
                         // Paragraph-leading alignment is independent of the UI direction.
@@ -229,6 +239,7 @@ class MarqueeTitleTest {
             }
         } }
         compose.mainClock.advanceTimeBy(4000)
+        recordRtlEvidence("hidden-prefixes", listOf("artist-0", "reference-0", "artist-1", "reference-1"))
         artists.indices.forEach { index ->
             val actual = compose.onNodeWithTag("artist-$index").captureToImage().toPixelMap()
             val reference = compose.onNodeWithTag("reference-$index").captureToImage().toPixelMap()
@@ -238,6 +249,55 @@ class MarqueeTitleTest {
                 difference(actual, reference) < 2f)
         }
         compose.mainClock.autoAdvance = true
+    }
+
+    @Composable private fun RecordMeasuredLayout(label: String, text: AnnotatedString, style: TextStyle) {
+        val layout = rememberTextMeasurer().measure(text, style, maxLines = 1, softWrap = false)
+        SideEffect { measuredLayouts[label] = layout }
+    }
+
+    private fun recordRtlEvidence(scene: String, tags: List<String>) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+            ?.takeIf { it.isNotBlank() }?.let(::File)
+            ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+        val directory = File(root, "marquee-title/$scene-api${android.os.Build.VERSION.SDK_INT}")
+        check(directory.isDirectory || directory.mkdirs())
+        File(directory, "semantics.txt").writeText(compose.onRoot(useUnmergedTree = true).printToString())
+        tags.forEach { tag ->
+            val node = compose.onNodeWithTag(tag, useUnmergedTree = true)
+            File(directory, "$tag.png").outputStream().use {
+                check(node.captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        }
+        val nodes = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult),
+            useUnmergedTree = true)
+        val layouts = buildString {
+            tags.forEach { tag ->
+                appendLine("$tag bounds=${compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot}")
+            }
+            fun appendLayout(label: String, result: TextLayoutResult) {
+                appendLine("node=$label text=${result.layoutInput.text} size=${result.size} " +
+                    "constraints=${result.layoutInput.constraints} direction=${result.layoutInput.layoutDirection} " +
+                    "style=${result.layoutInput.style} paragraphWidth=${result.multiParagraph.width}")
+                repeat(result.lineCount) { line ->
+                    appendLine("line=$line left=${result.getLineLeft(line)} right=${result.getLineRight(line)} " +
+                        "top=${result.getLineTop(line)} bottom=${result.getLineBottom(line)}")
+                }
+                result.layoutInput.text.indices.forEach { offset ->
+                    appendLine("char=$offset glyph=${result.getBoundingBox(offset)} paragraph=${result.getParagraphDirection(offset)}")
+                }
+            }
+            compose.runOnUiThread { measuredLayouts.toMap() }.forEach { (label, layout) ->
+                appendLayout("measured-$label", layout)
+            }
+            repeat(nodes.fetchSemanticsNodes().size) { index ->
+                val results = mutableListOf<TextLayoutResult>()
+                nodes[index].performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+                results.forEach { appendLayout("rendered-$index", it) }
+            }
+        }
+        File(directory, "layouts.txt").writeText(layouts)
     }
 
     private fun difference(first: androidx.compose.ui.graphics.PixelMap,
