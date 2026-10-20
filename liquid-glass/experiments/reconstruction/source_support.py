@@ -9,7 +9,9 @@ def coordinates(study,p):
     try:
         study.source=np.stack([(X+1)/(W+2),(Y+1)/(H+2),np.ones_like(X)],-1).astype(np.float32)
         study.cache=OrderedDict();study.backdrop_shift=[0.,0.]
-        C,_=study.field(study.x,study.y,{**p,'sigma':0.,'gamma':1.})
+        # Color-separated channels are different rays, not an XY encoding.
+        optical={k:v for k,v in p.items() if k!='directional_transmission'}
+        C,_=study.field(study.x,study.y,{**optical,'sigma':0.,'gamma':1.})
         return (C[...,0]*(W+2)-1).astype(np.float32),(C[...,1]*(H+2)-1).astype(np.float32)
     finally:study.source=original;study.cache=cache;study.backdrop_shift=shift
 
@@ -49,6 +51,9 @@ def coverage_report(study,p,X=None,Y=None):
     if 'grazing_reflection' in p:
         from grazing_reflection import support
         report.update(support(study,p,defined,observed))
+    if 'directional_transmission' in p:
+        from chromatic_transmission import support
+        report.update(support(study,p,defined,observed))
     return report
 
 
@@ -60,4 +65,8 @@ def supported(study,report):
         keys+=['reflection_source_defined_fraction','reflection_gaussian_3sigma_defined_fraction']
         if not study.case.get('allow_estimated_background'):
             keys+=['reflection_source_observed_fraction','reflection_gaussian_3sigma_observed_fraction']
+    if 'chromatic_source_defined_fraction' in report:
+        keys+=['chromatic_source_defined_fraction','chromatic_gaussian_3sigma_defined_fraction']
+        if not study.case.get('allow_estimated_background'):
+            keys+=['chromatic_source_observed_fraction','chromatic_gaussian_3sigma_observed_fraction']
     return all(report[k]>=.999 for k in keys)
