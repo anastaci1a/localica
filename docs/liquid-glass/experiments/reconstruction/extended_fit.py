@@ -59,6 +59,8 @@ RADIAL_STAGES = {
  16: ('Seeded radial-spline neighborhood search', [*[f'c{i}' for i in range(7)],'sigma']),
  17: ('Radial rim-scattering transition', ['sigma','blur_transition']),
  18: ('Radial spline and rim-scattering settlement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition']),
+ 19: ('Radial shoulder and output-scattering refinement', ['c2','c3','c4','sigma','post_sigma']),
+ 20: ('Joint radial spline, scattering and source response', [*[f'c{i}' for i in range(7)],'sigma','post_sigma','core_x','gamma']),
 }
 
 # Follow-ups start from a fitted spline: amplitude/band/power are inactive in
@@ -363,7 +365,7 @@ def main():
         p=initial();_,co=study.fit(p);pred=study.render(p,co)
         old=dict(parameters=p,material=co.tolist(),scores=study.scores(pred));accepted_path.write_text(json.dumps(old,indent=2)+'\n')
     start=copy.deepcopy(p)
-    global_radial=study.case.get('radial') and args.number in (13,20)
+    global_radial=study.case.get('radial') and args.number==13
     if global_radial:
         assert study.case.get('radial'), 'Radial comparator only'
         start.update(spline=False,post_sigma=0.,amplitude=.5,band=.6,power=2.2,sigma=2.)
