@@ -51,6 +51,9 @@ for i,name in enumerate(['a','b']):
  known=cv2.imread(str(s.folder/'known.png'),cv2.IMREAD_GRAYSCALE).astype(np.float32)/255
  _,_,motion=prepare(s,p,known,s.shape_coverage(p),45.)
  assert motion['context_mean_source_defined_min']>=.999
+ _,horizontal,sideways=prepare(s,p,known,s.shape_coverage(p),45.,axis='x')
+ assert horizontal>0 and sideways['axis']=='x','Recovered horizontal context must permit actual movement'
+ assert sideways['context_mean_minimum_defined_confidence']>=1-1e-7
  if i==0:
   forms=statistics(cache,co);step=np.zeros(23);step[6]=1e-5;actual=s.scores(cache.render(co+step))
   H,g=forms['glass'];estimate=score['glass']['rmse']**2+2*g@step+step@H@step

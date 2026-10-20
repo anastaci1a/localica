@@ -70,7 +70,9 @@ def footprint(study,p):
 
 
 def support(study,p,defined,observed):
-    from source_support import fraction
+    from source_support import fraction,minimum_confidence
     X,Y,inside=footprint(study,p)
     return dict(context_mean_source_defined_fraction=fraction(defined,X,Y,inside),
-                context_mean_source_observed_fraction=fraction(observed,X,Y,inside))
+                context_mean_source_observed_fraction=fraction(observed,X,Y,inside),
+                context_mean_minimum_defined_confidence=minimum_confidence(defined,X,Y,inside),
+                context_mean_minimum_observed_confidence=minimum_confidence(observed,X,Y,inside))
