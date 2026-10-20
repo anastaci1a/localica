@@ -321,23 +321,43 @@
         1239,
         679
       ],
-      "vector_asset": "library.svg",
-      "vector_sha256": "7b4e58c61d097e1d2d21b8492f28c6b14e1225f7d76453f7f87777fe3ddb8dc8",
+      "vector_asset": "library-refined.svg",
+      "vector_sha256": "021953d912adeac947458ba2192a97498460d42ade1872773ce4ffeed6de4c24",
       "vector_provenance": {
-        "method": "Clean symmetric stacked-frame trace with a smooth beamed-note cutout; no screenshot alpha. Not claimed to be Apple original geometry."
+        "method": "Clean symmetric frame trace; translate/uniformly scale the whole smooth note cutout, not individual screenshot pixels.",
+        "generator": "vector_shapes.library_variant",
+        "svg_viewbox": [
+          100,
+          132
+        ],
+        "note_transform": {
+          "dx": 1.0391225959605521,
+          "dy": -4.446708565673393,
+          "scale": 0.9214211061547904,
+          "center": [
+            46.45,
+            86.35
+          ]
+        },
+        "pose_delta_over_L": [
+          0.0006447119176773314,
+          0.0018621000482196524
+        ],
+        "pose_scale": 1.005907525139521
       },
       "opacity": 1,
       "vector_box": [
-        1155.317669278217,
-        575.1318520490993,
-        1229.277190556809,
-        672.7584201368411
+        1155.1723852152434,
+        575.0548347019405,
+        1229.5688242250956,
+        673.2581341949458
       ],
       "color": [
         0.468471884727478,
         0.46847182512283325,
         0.4684719443321228
-      ]
+      ],
+      "style_key": "library.svg"
     },
     {
       "mode": "solid",
@@ -422,5 +442,82 @@
     ]
   ],
   "foreground_method": "Solid icon/font outlines plus a computed fixed selection backing. Main glass scoring excludes foreground; symbols are calibrated against their actual backing.",
-  "identifiability": "The mostly-white backing weakly constrains optics away from recovered text. Fitted image map/material, not recovered proprietary geometry; fixed selected backing is not an independently calibrated second lens."
+  "identifiability": "The mostly-white backing weakly constrains optics away from recovered text. Fitted image map/material, not recovered proprietary geometry; fixed selected backing is not an independently calibrated second lens.",
+  "foreground_styles": {
+    "home.svg": {
+      "response": [
+        [
+          0.9760069185387239,
+          0.21853905574915747,
+          2.9195007439596097
+        ],
+        [
+          0.3051738712897309,
+          1.0,
+          0.8371703382619936
+        ],
+        [
+          0.48429478545715116,
+          1.0,
+          0.9480232900240574
+        ]
+      ]
+    },
+    "home-label.svg": {
+      "color": [
+        0.8681833079427883,
+        0.22555720595041487,
+        0.35901995960661093
+      ],
+      "opacity": 1.0
+    },
+    "new.svg": {
+      "color": [
+        0.15038989326300986,
+        0.15049930534132772,
+        0.15040444199331804
+      ],
+      "opacity": 0.6052833624635047
+    },
+    "new-label.svg": {
+      "color": [
+        0.2655010058635698,
+        0.2655121903042854,
+        0.2655054367108918
+      ],
+      "opacity": 1.0
+    },
+    "radio.svg": {
+      "color": [
+        0.0020667060344446556,
+        0.0014597223160083329,
+        0.0
+      ],
+      "opacity": 0.5024645841764394
+    },
+    "radio-label.svg": {
+      "color": [
+        0.2955513326936115,
+        0.2950738162264669,
+        0.29491423944306067
+      ],
+      "opacity": 1.0
+    },
+    "library.svg": {
+      "color": [
+        0.0009001977895817941,
+        5.270403857745461e-05,
+        0.0
+      ],
+      "opacity": 0.4771090031521733
+    },
+    "library-label.svg": {
+      "color": [
+        0.2980710169647918,
+        0.29725831751322235,
+        0.29716483941099797
+      ],
+      "opacity": 1.0
+    }
+  }
 }

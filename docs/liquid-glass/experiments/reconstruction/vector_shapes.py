@@ -23,6 +23,21 @@ def svg(name):
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="'+VIEWBOX.get(name,'0 0 100 100')+'">'+SHAPES[name]+'</svg>\n'
 
 
+def library_variant(dx=0.,dy=0.,scale=1.):
+    """Move/scale the clean note as one unit; leave symmetric frames intact."""
+    import xml.etree.ElementTree as ET
+    from fontTools.svgLib.path import parse_path
+    from fontTools.pens.svgPathPen import SVGPathPen
+    from fontTools.pens.transformPen import TransformPen
+    root=ET.fromstring(svg('library-stack'))
+    node=next(n for n in root.iter() if n.get('fill-rule')=='evenodd')
+    outer,note=node.get('d').split(' M69.5',1)
+    pen=SVGPathPen(None)
+    parse_path('M69.5'+note,TransformPen(pen,(scale,0,0,scale,dx+46.45*(1-scale),dy+86.35*(1-scale))))
+    node.set('d',outer+' '+pen.getCommands())
+    return ET.tostring(root)
+
+
 if __name__=='__main__':
     ap=argparse.ArgumentParser();ap.add_argument('out',type=Path);args=ap.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
