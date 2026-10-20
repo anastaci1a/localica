@@ -395,6 +395,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             CompositionLocalProvider(LocalFrostedBackdrop provides material, LocalContentColor provides if (dark) Color.White else Color(0xFF202124),
                                 LocalModalBackdrop provides completePanel,
                                 LocalChildPanels provides childPanels,
+                                LocalPopupScrollEdges provides !page,
                                 LocalSurfaceShadows provides null, LocalBottomShadows provides null,
                                 LocalGlassOrigin provides null,
                                 LocalGlassPanelReady provides (visible && (placement == GlassPlacement.Search || p >= .9f))) {

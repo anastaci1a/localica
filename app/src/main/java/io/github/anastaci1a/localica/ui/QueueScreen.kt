@@ -142,11 +142,14 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     deleting?.let { ids -> CompositionLocalProvider(LocalGlassOrigin provides deletionOrigin) {
         fun dismissDeletion() { deleting = null; deletionOrigin = null }
         GlassAlertDialog(onDismissRequest = ::dismissDeletion, title = { Text("Delete queues?") },
-            text = { LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                itemsIndexed(state.library.queues.filter { it.id in ids }, key = { _, queue -> queue.id }) { _, queue ->
-                    Text(queue.name, Modifier.fillMaxWidth(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            text = {
+                val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+                LazyColumn(Modifier.scrollEdgeFade(scroll), state = scroll, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    itemsIndexed(state.library.queues.filter { it.id in ids }, key = { _, queue -> queue.id }) { _, queue ->
+                        Text(queue.name, Modifier.fillMaxWidth(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-            } },
+            },
             confirmButton = { ActionTextButton(onClick = { controller?.removeQueues(ids); dismissDeletion() }) { Text("Delete") } },
             dismissButton = { ActionTextButton(onClick = ::dismissDeletion) { Text("Cancel") } })
     } }
