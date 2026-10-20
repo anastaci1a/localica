@@ -29,7 +29,9 @@ Each half retains 1920 × 1080 pixels.
 <details>
 <summary>Motion preview — full-size GIF and video</summary>
 
-![Settled playback model translated over the recovered photograph](assets/playback-settled.gif)
+<video controls preload="none" playsinline width="1920" height="1080" aria-label="Settled playback control motion"><source src="assets/playback-settled.mp4" type="video/mp4"><a href="assets/playback-settled.mp4">Open video</a></video>
+
+<img src="assets/playback-settled.gif" alt="Settled playback model translated over the recovered photograph" width="1920" height="1080" loading="lazy" decoding="async">
 
 [Full-HD video](assets/playback-settled.mp4). GIF: 7,960,291 bytes, 1920 × 1080, six seconds, 15 fps; video: 30 fps. Translation uses the same recipe without exterior shadow. These are offline renders, not device-performance measurements or a matched Apple motion clip.
 
@@ -105,7 +107,27 @@ Frame A: 0 seconds. Frame B: 6.033 seconds. Cover art is a separate high-resolut
 [![Expanded mini-player, background B: Apple left, reconstruction right](assets/study-music-mini-expanded-vector-paired-b.png)](assets/study-music-mini-expanded-vector-paired-b.png)
 
 - [Shared recipe](experiments/reconstruction/studies/music-mini-expanded-vector/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-mini-expanded-vector/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-mini-expanded-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-mini-expanded-vector/paired/b/diagnostics.json).
-- Motion: [A GIF](assets/study-music-mini-expanded-vector-paired-a.gif) / [A video](assets/study-music-mini-expanded-vector-paired-a.mp4) · [B GIF](assets/study-music-mini-expanded-vector-paired-b.gif) / [B video](assets/study-music-mini-expanded-vector-paired-b.mp4).
+<details>
+<summary>Motion — background A</summary>
+
+<video controls preload="none" playsinline width="5440" height="1000" aria-label="Expanded mini-player, background A motion"><source src="assets/study-music-mini-expanded-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-mini-expanded-vector-paired-a.mp4">Open video</a></video>
+
+<img src="assets/study-music-mini-expanded-vector-paired-a.gif" alt="Expanded mini-player motion on background A" width="2720" height="500" loading="lazy" decoding="async">
+
+[Video](assets/study-music-mini-expanded-vector-paired-a.mp4) · [GIF](assets/study-music-mini-expanded-vector-paired-a.gif)
+
+</details>
+
+<details>
+<summary>Motion — background B</summary>
+
+<video controls preload="none" playsinline width="5440" height="1000" aria-label="Expanded mini-player, background B motion"><source src="assets/study-music-mini-expanded-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-mini-expanded-vector-paired-b.mp4">Open video</a></video>
+
+<img src="assets/study-music-mini-expanded-vector-paired-b.gif" alt="Expanded mini-player motion on background B" width="2720" height="500" loading="lazy" decoding="async">
+
+[Video](assets/study-music-mini-expanded-vector-paired-b.mp4) · [GIF](assets/study-music-mini-expanded-vector-paired-b.gif)
+
+</details>
 
 ### Compact mini-player
 
@@ -116,7 +138,27 @@ Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback c
 [![Compact mini-player, background B: Apple left, reconstruction right](assets/study-music-mini-compact-vector-paired-b.png)](assets/study-music-mini-compact-vector-paired-b.png)
 
 - [Shared recipe](experiments/reconstruction/studies/music-mini-compact-vector/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-mini-compact-vector/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-mini-compact-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-mini-compact-vector/paired/b/diagnostics.json).
-- Motion: [A GIF](assets/study-music-mini-compact-vector-paired-a.gif) / [A video](assets/study-music-mini-compact-vector-paired-a.mp4) · [B GIF](assets/study-music-mini-compact-vector-paired-b.gif) / [B video](assets/study-music-mini-compact-vector-paired-b.mp4).
+<details>
+<summary>Motion — background A</summary>
+
+<video controls preload="none" playsinline width="3680" height="960" aria-label="Compact mini-player, background A motion"><source src="assets/study-music-mini-compact-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-mini-compact-vector-paired-a.mp4">Open video</a></video>
+
+<img src="assets/study-music-mini-compact-vector-paired-a.gif" alt="Compact mini-player motion on background A" width="1840" height="480" loading="lazy" decoding="async">
+
+[Video](assets/study-music-mini-compact-vector-paired-a.mp4) · [GIF](assets/study-music-mini-compact-vector-paired-a.gif)
+
+</details>
+
+<details>
+<summary>Motion — background B</summary>
+
+<video controls preload="none" playsinline width="3680" height="960" aria-label="Compact mini-player, background B motion"><source src="assets/study-music-mini-compact-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-mini-compact-vector-paired-b.mp4">Open video</a></video>
+
+<img src="assets/study-music-mini-compact-vector-paired-b.gif" alt="Compact mini-player motion on background B" width="1840" height="480" loading="lazy" decoding="async">
+
+[Video](assets/study-music-mini-compact-vector-paired-b.mp4) · [GIF](assets/study-music-mini-compact-vector-paired-b.gif)
+
+</details>
 
 ### Detached Search control
 
@@ -127,7 +169,27 @@ Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; co
 [![Search control, background B: Apple left, reconstruction right](assets/study-music-search-vector-paired-b.png)](assets/study-music-search-vector-paired-b.png)
 
 - [Shared recipe](experiments/reconstruction/studies/music-search-vector/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-search-vector/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-search-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-search-vector/paired/b/diagnostics.json).
-- Motion: [A GIF](assets/study-music-search-vector-paired-a.gif) / [A video](assets/study-music-search-vector-paired-a.mp4) · [B GIF](assets/study-music-search-vector-paired-b.gif) / [B video](assets/study-music-search-vector-paired-b.mp4).
+<details>
+<summary>Motion — background A</summary>
+
+<video controls preload="none" playsinline width="960" height="940" aria-label="Search control, background A motion"><source src="assets/study-music-search-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-search-vector-paired-a.mp4">Open video</a></video>
+
+<img src="assets/study-music-search-vector-paired-a.gif" alt="Search control motion on background A" width="960" height="940" loading="lazy" decoding="async">
+
+[Video](assets/study-music-search-vector-paired-a.mp4) · [GIF](assets/study-music-search-vector-paired-a.gif)
+
+</details>
+
+<details>
+<summary>Motion — background B</summary>
+
+<video controls preload="none" playsinline width="960" height="940" aria-label="Search control, background B motion"><source src="assets/study-music-search-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-search-vector-paired-b.mp4">Open video</a></video>
+
+<img src="assets/study-music-search-vector-paired-b.gif" alt="Search control motion on background B" width="960" height="940" loading="lazy" decoding="async">
+
+[Video](assets/study-music-search-vector-paired-b.mp4) · [GIF](assets/study-music-search-vector-paired-b.gif)
+
+</details>
 
 ### Navigation control
 
@@ -138,7 +200,27 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 [![Navigation control, background B: Apple left, reconstruction right](assets/study-music-navigation-paired-b.png)](assets/study-music-navigation-paired-b.png)
 
 - [Shared recipe](experiments/reconstruction/studies/music-navigation/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-navigation/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-navigation/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-navigation/paired/b/diagnostics.json).
-- Motion: [A GIF](assets/study-music-navigation-paired-a.gif) / [A video](assets/study-music-navigation-paired-a.mp4) · [B GIF](assets/study-music-navigation-paired-b.gif) / [B video](assets/study-music-navigation-paired-b.mp4).
+<details>
+<summary>Motion — background A</summary>
+
+<video controls preload="none" playsinline width="4320" height="1340" aria-label="Navigation control, background A motion"><source src="assets/study-music-navigation-paired-a.mp4" type="video/mp4"><a href="assets/study-music-navigation-paired-a.mp4">Open video</a></video>
+
+<img src="assets/study-music-navigation-paired-a.gif" alt="Navigation control motion on background A" width="2160" height="670" loading="lazy" decoding="async">
+
+[Video](assets/study-music-navigation-paired-a.mp4) · [GIF](assets/study-music-navigation-paired-a.gif)
+
+</details>
+
+<details>
+<summary>Motion — background B</summary>
+
+<video controls preload="none" playsinline width="4320" height="1340" aria-label="Navigation control, background B motion"><source src="assets/study-music-navigation-paired-b.mp4" type="video/mp4"><a href="assets/study-music-navigation-paired-b.mp4">Open video</a></video>
+
+<img src="assets/study-music-navigation-paired-b.gif" alt="Navigation control motion on background B" width="2160" height="670" loading="lazy" decoding="async">
+
+[Video](assets/study-music-navigation-paired-b.mp4) · [GIF](assets/study-music-navigation-paired-b.gif)
+
+</details>
 
 ### Home control — under correction
 
@@ -149,7 +231,27 @@ Frames A/B: 2.5/2.0 seconds. The foreground has been replaced with a clean symme
 [![Provisional Home control, background B: Apple left, reconstruction right](assets/study-music-home-vector-paired-b.png)](assets/study-music-home-vector-paired-b.png)
 
 - [Provisional shared recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Retained single recipe](experiments/reconstruction/studies/music-home-vector/accepted.json) · [A diagnostics](experiments/reconstruction/studies/music-home-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-home-vector/paired/b/diagnostics.json).
-- Provisional motion: [A GIF](assets/study-music-home-vector-paired-a.gif) / [A video](assets/study-music-home-vector-paired-a.mp4) · [B GIF](assets/study-music-home-vector-paired-b.gif) / [B video](assets/study-music-home-vector-paired-b.mp4).
+<details>
+<summary>Provisional motion — background A</summary>
+
+<video controls preload="none" playsinline width="940" height="960" aria-label="Provisional Home control, background A motion"><source src="assets/study-music-home-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-a.mp4">Open video</a></video>
+
+<img src="assets/study-music-home-vector-paired-a.gif" alt="Provisional Home control motion on background A" width="940" height="960" loading="lazy" decoding="async">
+
+[Video](assets/study-music-home-vector-paired-a.mp4) · [GIF](assets/study-music-home-vector-paired-a.gif)
+
+</details>
+
+<details>
+<summary>Provisional motion — background B</summary>
+
+<video controls preload="none" playsinline width="940" height="960" aria-label="Provisional Home control, background B motion"><source src="assets/study-music-home-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-b.mp4">Open video</a></video>
+
+<img src="assets/study-music-home-vector-paired-b.gif" alt="Provisional Home control motion on background B" width="940" height="960" loading="lazy" decoding="async">
+
+[Video](assets/study-music-home-vector-paired-b.mp4) · [GIF](assets/study-music-home-vector-paired-b.gif)
+
+</details>
 
 ## Active switch — in progress
 
@@ -161,7 +263,18 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 - The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
 - A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Colored reflection and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). Final paired verification and motion captures are pending.
+- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 22 paired passes. The green-track capture below is verified; the gray-track capture is rendering.
+
+<details>
+<summary>Motion — green track</summary>
+
+<video controls preload="none" playsinline width="3300" height="2360" aria-label="Active switch on green track motion"><source src="assets/study-active-switch-paired-a.mp4" type="video/mp4"><a href="assets/study-active-switch-paired-a.mp4">Open video</a></video>
+
+<img src="assets/study-active-switch-paired-a.gif" alt="Active switch over a moving green track" width="1650" height="1180" loading="lazy" decoding="async">
+
+[Video](assets/study-active-switch-paired-a.mp4) · [GIF](assets/study-active-switch-paired-a.gif) · [Encoding checks](experiments/reconstruction/studies/active-switch/paired/a/media.json) · [GIF checks](experiments/reconstruction/studies/active-switch/paired/a/gif-qa.json). Video is evaluated at 4×; the GIF uses half-size frames. This illustrates backdrop movement, not measured Apple interaction timing.
+
+</details>
 
 ### Colored switch rim
 

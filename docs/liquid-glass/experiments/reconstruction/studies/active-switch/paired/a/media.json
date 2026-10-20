@@ -1,0 +1,90 @@
+{
+  "state_sha256": "d276283d00dcd9f47a459966d74d6d81aa154035cacdfa59014f832464e13d21",
+  "render_files": {
+    "motion.mp4": "ec06b4320b586dd07fd91020c5b4c2a6c3c3370f853c2c45c598ba80b157d54f",
+    "comparison.png": "a2b7588a5156b5ba64627d17fbbe56cc6c7d75d474413ff693861c0bb1d9fe52"
+  },
+  "native_size": [
+    825,
+    590
+  ],
+  "output_size": [
+    3300,
+    2360
+  ],
+  "output_scale": 4,
+  "frames": 180,
+  "fps": 30,
+  "travel_over_L": 0.20785219399538107,
+  "scores": {
+    "glass": {
+      "pixels": 240456,
+      "rmse": 12.614958763122559
+    },
+    "rim": {
+      "pixels": 70466,
+      "rmse": 21.859037399291992
+    },
+    "held": {
+      "pixels": 61420,
+      "rmse": 13.881340026855469
+    },
+    "interior": {
+      "pixels": 169990,
+      "rmse": 5.199476718902588
+    },
+    "ssim": 0.9590278267860413,
+    "loss": 254.74128402379165
+  },
+  "motion_support": {
+    "requested_native_px": 45,
+    "actual_native_px": 45.0,
+    "minimum_scored_lookup_3sigma_defined_fraction": 1.0,
+    "minimum_whole_shape_lookup_defined_fraction": 1.0,
+    "minimum_scored_lookup_3sigma_observed_fraction": 0.0,
+    "minimum_whole_shape_lookup_observed_fraction": 0.0,
+    "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
+  },
+  "presentation_completion_native_delta": {
+    "max_abs_rgb": 0.0,
+    "rmse": 0.0
+  },
+  "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+  "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.",
+  "files": {
+    "motion.mp4": {
+      "bytes": 1038553,
+      "sha256": "ec06b4320b586dd07fd91020c5b4c2a6c3c3370f853c2c45c598ba80b157d54f"
+    },
+    "motion.gif": {
+      "bytes": 9182104,
+      "sha256": "b113a679bc7a760d292ca65b44054587657832d4178ad4b03b85c658d1b29f3e"
+    },
+    "comparison.png": {
+      "bytes": 1909437,
+      "sha256": "a2b7588a5156b5ba64627d17fbbe56cc6c7d75d474413ff693861c0bb1d9fe52"
+    }
+  },
+  "gif": {
+    "fps": 15,
+    "output_size": [
+      1650,
+      1180
+    ],
+    "master_relative_scale": 0.5,
+    "palette_colors": 256,
+    "palette_sampling": "All frame pixels",
+    "dither": "sierra2_4a",
+    "maximum_megabytes": 90,
+    "spatial_downsampling": true
+  },
+  "video_color": {
+    "metadata": {
+      "codec_name": "h264",
+      "color_range": "tv",
+      "color_space": "smpte170m"
+    },
+    "limits": "Encoded RGB export metadata; no measured display/transfer-function calibration."
+  }
+}
