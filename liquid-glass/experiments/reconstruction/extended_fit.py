@@ -269,6 +269,7 @@ class Study:
         return np.maximum(sample,0)**p['gamma'],light
 
     def fit(self,p):
+        assert 'material_chroma_sensitivity' not in p,'Use the context-aware paired material fitter'
         x=self.x.ravel()[self.indices];y=self.y.ravel()[self.indices]
         if self.kernel_sigma(p,'post_sigma')>.001:
             # Four equally weighted offsets per axis realize weights1:2:1.
@@ -303,6 +304,9 @@ class Study:
             yield row,bottom,W,x,y
 
     def render(self,p,co,scale=1):
+        if 'material_chroma_sensitivity' in p:
+            from material_context import matrix
+            co=matrix(self,p)@co
         x0,y0,x1,y1=self.crop
         result=np.empty(((y1-y0)*scale,(x1-x0)*scale,3),np.float32)
         for row,bottom,W,x,y in self.raster_tiles(scale):
