@@ -221,6 +221,8 @@ T_c(x) = (1−w) max(B_c(F(x)),0)^γ + w D_c(x)
 
 ## Solid-vector foreground responses
 
+Selection studies may declare separate incident and exterior content layers. The optical map samples the incident layer; uncovered pixels sample the exterior layer in the same coordinate system. This permits testing selected-text recoloring independently of optical displacement. Both inputs require frozen hashes and explicit estimation provenance. With no separate exterior declared, both use the same source, preserving existing studies. Recoloring is a content-state assumption, not an optical property or evidence of Apple's pipeline.
+
 Foreground coverage `α` comes from solid geometry, independently of material color. Its input `B` includes preceding layers, such as a fixed selection backing. Affine styles use `F(B)=(1−o)B+oC`; response styles use the shared per-channel function:
 
 ```text
