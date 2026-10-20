@@ -1,8 +1,8 @@
 {
   "status": "Single-reference progress; paired verification and final motion pending",
   "study": "active-segmented-selector",
-  "pass_number": 2,
-  "rendering_code_commit": "e7dcf9712fe00c7c58c363655df783bc297dea58",
+  "pass_number": 3,
+  "rendering_code_commit": "563c6a8c26c6b346d0143f2d0abb4732d96939a1",
   "script_sha256": "31b6253899ac78f5f7c4037ec0e51ff485b2ad0b70f823aea6ea74e5624af247",
   "output_scale": 4,
   "native": {
