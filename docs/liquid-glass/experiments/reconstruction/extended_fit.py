@@ -77,6 +77,16 @@ RADIAL_FOLLOWUP_STAGES = {
  9: ('Follow-up circular silhouette registration', ['shape_dx','shape_dy','half_x_delta']),
  10: ('Follow-up joint spline and scattering', [*[f'c{i}' for i in range(7)],'sigma','post_sigma','core_x']),
 }
+FOLLOWUP_STAGES = {
+ **RADIAL_FOLLOWUP_STAGES,
+ 2: ('Follow-up outer normal spline', ['c0','c1','c2']),
+ 3: ('Follow-up inner normal spline', ['c3','c4','c5','c6']),
+ 4: ('Follow-up tangential curvature', ['tangent','tangent_band']),
+ 5: ('Follow-up central x/y magnification', ['core_x','core_y']),
+ 7: ('Follow-up coupled normal/tangential response', ['coupling','tangent','tangent_band']),
+ 9: ('Follow-up outline registration with fixed exterior mask', ['shape_dx','shape_dy','half_x_delta','half_y_delta','radius_delta']),
+ 10: ('Follow-up joint optical and scattering settlement', ['sigma','post_sigma','tangent','tangent_band','core_x','core_y','gamma']),
+}
 
 
 def initial():
@@ -119,7 +129,7 @@ class Study:
         self.backdrop_shift=[0.,0.]
         self.target_crop=self.target[y0:y1,x0:x1]
         self.expected=self.target_crop.reshape(-1,3)[self.indices]
-        self.foreground_layers=[];self.transmission_layers=[];self.vector_layers={}
+        self.foreground_layers=[];self.transmission_layers=[];self.vector_layers={};self.artwork_layers={}
         for layer in self.case.get('foreground_layers',[]):
             a,b,c,d=layer['box'];T=self.target[b:d,a:c].copy()
             vector=None
@@ -139,6 +149,12 @@ class Study:
                 yy,xx=np.mgrid[:d-b,:c-a]
                 sd,*_=geometry(xx-(c-a-1)/2,yy-(d-b-1)/2,[(c-a)/2,(d-b)/2],layer.get('radius',16))
                 alpha=np.clip(.5-sd,0,1);color=T
+                if 'artwork_asset' in layer:
+                    asset=self.folder/layer['artwork_asset']
+                    assert hashlib.sha256(asset.read_bytes()).hexdigest()==layer['artwork_sha256'],'Changed frozen artwork input'
+                    original=cv2.imread(str(asset))[:,:,::-1].astype(np.float32)/255
+                    self.artwork_layers[tuple(layer['box'])]=(original,layer.get('radius',16))
+                    color=cv2.resize(original,(c-a,d-b),interpolation=cv2.INTER_AREA)
             else:
                 fill=np.asarray(layer['color'])
                 seed=(T.max(2)<layer['threshold'])
@@ -330,12 +346,18 @@ class Study:
             a,b,c,d=box
             region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
             vector=self.vector_layers.get(tuple(box))
-            style=self.case.get('foreground_styles',{}).get(vector['vector_asset'],{}) if vector else {}
+            style=self.case.get('foreground_styles',{}).get(vector.get('style_key',vector['vector_asset']),{}) if vector else {}
             if 'color' in style:color=np.broadcast_to(np.asarray(style['color'],np.float32),(*alpha.shape,3))
             if scale>1:
                 size=((c-a)*scale,(d-b)*scale)
-                if tuple(box) not in self.vector_layers:alpha=np.clip(cv2.resize(alpha,size,interpolation=cv2.INTER_CUBIC),0,1)
-                color=np.clip(cv2.resize(np.asarray(color,dtype=np.float32),size,interpolation=cv2.INTER_CUBIC),0,1)
+                artwork=self.artwork_layers.get(tuple(box))
+                if artwork is not None:
+                    yy,xx=np.mgrid[:size[1],:size[0]]
+                    sd,*_=geometry((xx+.5)/scale-(c-a)/2,(yy+.5)/scale-(d-b)/2,[(c-a)/2,(d-b)/2],artwork[1])
+                    alpha=np.clip(.5-sd*scale,0,1)
+                elif tuple(box) not in self.vector_layers:alpha=np.clip(cv2.resize(alpha,size,interpolation=cv2.INTER_CUBIC),0,1)
+                source=artwork[0] if artwork is not None else np.asarray(color,dtype=np.float32)
+                color=np.clip(cv2.resize(source,size,interpolation=cv2.INTER_AREA if artwork is not None else cv2.INTER_CUBIC),0,1)
             if tuple(box) in self.vector_layers:
                 from vector_foreground import coverage
                 vector=self.vector_layers[tuple(box)]
@@ -361,7 +383,7 @@ def main():
     assert not (args.folder/f'pass-{args.number:02}'/'record.json').exists(), 'Keep completed passes immutable'
     t0=time.time();study=Study(args.folder)
     stages={**STAGES,**RADIAL_STAGES} if study.case.get('radial') else STAGES
-    if study.case.get('radial') and study.case.get('continuation'):stages.update(RADIAL_FOLLOWUP_STAGES)
+    if study.case.get('continuation'):stages.update(RADIAL_FOLLOWUP_STAGES if study.case.get('radial') else FOLLOWUP_STAGES)
     stage,keys=stages[args.number]
     accepted_path=args.folder/'accepted.json'
     if accepted_path.exists():old=json.loads(accepted_path.read_text());p=old['parameters']
