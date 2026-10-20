@@ -36,6 +36,29 @@ class TextEditingImeSessionTest {
         assertTrue(session.frame(0, 0, 0, visible = false, empty = false))
     }
 
+    @Test fun emptySearchIgnoresTransientInvisibilityWhileTheTargetStillShows() {
+        val session = TextEditingImeSession()
+        assertFalse(session.frame(600, 600, 600))
+        // API36 may momentarily lose current visibility during input handoff,
+        // even after publishing equal shown current/source/target insets.
+        assertFalse(session.frame(0, 600, 600, visible = false))
+        assertFalse(session.frame(0, 600, 600, visible = false))
+        // Do not discard the armed session: a real hide still ends it without
+        // needing a second settled shown frame after the visibility gap.
+        assertTrue(session.frame(580, 600, 0))
+        assertFalse(session.frame(0, 0, 0, visible = false))
+    }
+
+    @Test fun nonemptySearchKeepsEditingAcrossAShownTargetVisibilityGap() {
+        val session = TextEditingImeSession()
+        assertFalse(session.frame(600, 600, 600, empty = false))
+        assertFalse(session.frame(0, 600, 600, visible = false, empty = false))
+        assertFalse(session.frame(0, 600, 400, visible = false, empty = false))
+        assertFalse(session.frame(580, 600, 0, empty = false))
+        assertTrue(session.frame(0, 600, 0, visible = false, empty = false))
+        assertFalse(session.frame(0, 0, 0, visible = false, empty = false))
+    }
+
     @Test fun floatingKeyboardEndsOnItsVisibilityEdgeRatherThanItsAlwaysZeroTarget() {
         val session = TextEditingImeSession()
         assertFalse(session.frame(0, 0, 0, visible = false))

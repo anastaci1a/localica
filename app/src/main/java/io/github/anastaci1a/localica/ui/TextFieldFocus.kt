@@ -47,7 +47,9 @@ internal class TextEditingImeSession {
     fun shouldEnd(focused: Boolean, windowFocused: Boolean, visible: Boolean,
         current: Int, source: Int, target: Int, endAtHideStart: Boolean): Boolean {
         if (!focused || !windowFocused) shown = false
-        else if (shown && (!visible || (endAtHideStart && docked && target == 0))) {
+        // Native window/input handoff can briefly clear visibility/current
+        // while the animation target still requests the shown keyboard.
+        else if (shown && target == 0 && (!visible || (endAtHideStart && docked))) {
             shown = false
             return true
         } else if (visible && current == target && source == target) {
