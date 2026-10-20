@@ -109,6 +109,7 @@ class Study:
         self.target=cv2.imread(str(self.folder/'target.png'))[:,:,::-1].astype(np.float32)/255
         known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)>0
         self.L=min(self.case['half'])
+        assert self.case.get('parameter_length_reference',self.L)>0
         self.half=np.array(self.case['half'])/self.L
         self.radius=self.case['radius']/self.L
         self.crop=self.case['crop'];x0,y0,x1,y1=self.crop
@@ -239,9 +240,24 @@ class Study:
         light=np.stack([thin,thin*nx,thin*ny,e,e*nx,e*ny,f,f*nx,f*ny,xx,yy,xx*xx,yy*yy,xx*yy,core],axis=-1)
         return X,Y,d,light
 
+    def kernel_sigma(self,p,key='sigma'):
+        """Physical pixels at this pose from one declared parameter-length basis.
+
+        Absent an explicit shared reference, existing native-pixel recipes are
+        unchanged. Geometry parameters already use this pose's own L.
+        """
+        return p[key]*(self.L/self.case.get('parameter_length_reference',self.L))
+
+    def parameter_bounds(self,key):
+        if key.startswith('c') and key[1:].isdigit() and (self.case.get('radial') or self.case.get('signed_normal_profile')):
+            return (-2.5,2.5)
+        if key in ('core_x','core_y') and self.case.get('allow_center_reduction'):
+            return (-.8,.18)
+        return BOUNDS[key]
+
     def field(self,x,y,p):
         X,Y,d,light=self.geometry_field(x,y,p)
-        texture=self.blur(p['sigma'])
+        texture=self.blur(self.kernel_sigma(p))
         sample=cv2.remap(texture,(X*self.L+self.case['center'][0]+self.backdrop_shift[0]).astype(np.float32),
             (Y*self.L+self.case['center'][1]+self.backdrop_shift[1]).astype(np.float32),cv2.INTER_LINEAR)
         sample=sample.reshape((*x.shape,3))
@@ -254,11 +270,11 @@ class Study:
 
     def fit(self,p):
         x=self.x.ravel()[self.indices];y=self.y.ravel()[self.indices]
-        if p['post_sigma']>.001:
+        if self.kernel_sigma(p,'post_sigma')>.001:
             # Four equally weighted offsets per axis realize weights1:2:1.
             # Average linear design products before fitting, not RGB/light
             # separately. Final scoring uses a native Gaussian, not this probe.
-            h=np.sqrt(2)*p['post_sigma']/self.L
+            h=np.sqrt(2)*self.kernel_sigma(p,'post_sigma')/self.L
             dx,dy=np.meshgrid([-h,0,0,h],[-h,0,0,h])
             sample,light=self.field(x[:,None]+dx.ravel(),y[:,None]+dy.ravel(),p)
         else:
@@ -292,7 +308,7 @@ class Study:
         for row,bottom,W,x,y in self.raster_tiles(scale):
             C,J=self.field(x,y,p);C=shade(C,J,co)
             result[row:bottom]=C.reshape(bottom-row,2,W,2,3).mean((1,3))
-        if p['post_sigma']>.001:result=cv2.GaussianBlur(result,(0,0),p['post_sigma']*scale)
+        if self.kernel_sigma(p,'post_sigma')>.001:result=cv2.GaussianBlur(result,(0,0),self.kernel_sigma(p,'post_sigma')*scale)
         return result
 
     def shape_coverage(self,p,scale=1):
@@ -420,9 +436,7 @@ def main():
             (args.folder/f'running-{args.number:02}.json').write_text(json.dumps(partial,indent=2)+'\n')
             print(json.dumps({k:partial[k] for k in ['pass_number','evaluations','training_loss','seconds']}),flush=True)
         return loss
-    x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
-    if study.case.get('radial'):
-        bounds=[(-2.5,2.5) if k.startswith('c') and k[1:].isdigit() else b for k,b in zip(keys,bounds)]
+    x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[study.parameter_bounds(k) for k in keys]
     # Powell handles the explicit finite bilinear-sampling resolution without
     # claiming infinitesimal derivatives through a quantized texture lookup.
     if study.case.get('radial') and args.number==16:

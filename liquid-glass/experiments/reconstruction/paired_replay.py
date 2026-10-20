@@ -12,10 +12,21 @@ from paired_fit import Cached
 from vector_foreground import copy_assets
 
 
+def verify_boundary(root,first):
+    single=json.loads((root.parent/'accepted.json').read_text())
+    first_case=json.loads((root.parent/'case.json').read_text());paired_case=json.loads((root/'a.json').read_text())
+    for key in ['center','half','radius','crop','foreground','source_sha256']:
+        assert first_case[key]==paired_case[key],f'First-reference protocol changed at paired boundary: {key}'
+    score=first['previous']['scores'][0]
+    assert permitted([score],[single['scores']]),'Paired baseline regresses the retained single-background result'
+    return dict(single_loss=single['scores']['loss'],paired_initial_loss=score['loss'],same_reference_protocol=True)
+
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('study');ap.add_argument('inputs',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--motion',action='store_true');ap.add_argument('--icons','--assets',dest='icons',type=Path);ap.add_argument('--minimum',type=int,default=20);args=ap.parse_args()
     root=Path(__file__).parent/'studies'/args.study/'paired'
     rows=[json.loads(line) for line in (root/'passes.jsonl').read_text().splitlines() if line]
+    boundary=verify_boundary(root,rows[0])
     assert len(rows)>=args.minimum and [r['pass_number'] for r in rows]==list(range(1,len(rows)+1))
     valid_count=sum(r.get('valid_experiment',True) for r in rows)
     assert valid_count>=args.minimum,'Invalid experiments do not count toward the minimum'
@@ -45,7 +56,8 @@ def main():
         if 'foreground_response' in state:case['foreground_response']=state['foreground_response']
         if 'foreground_styles' in state:case['foreground_styles']=state['foreground_styles']
         (folder/'case.json').write_text(json.dumps(case,indent=2)+'\n')
-        p=state['parameters'].copy();p['sigma']*=min(case['half']);p['post_sigma']*=min(case['half'])
+        length=case.get('parameter_length_reference',min(case['half']))
+        p=state['parameters'].copy();p['sigma']*=length;p['post_sigma']*=length
         accepted=dict(parameters=p,material=state['material'],scores=state['scores'][index])
         (folder/'accepted.json').write_text(json.dumps(accepted,indent=2)+'\n')
         s=Study(folder);pred=s.render(p,np.array(state['material']));score=s.scores(pred)
@@ -57,11 +69,15 @@ def main():
         s.comparison(pred,folder/'comparison.png',p);metrics.append(score);studies.append(s)
         subprocess.run([sys.executable,str(Path(__file__).with_name('extended_diagnostics.py')),str(folder)],check=True)
         diagnostic=json.loads((folder/'diagnostics.json').read_text())
-        assert diagnostic['source_observed_fraction']>=.999,'Unobserved source under a scored lookup'
-        assert diagnostic['gaussian_3sigma_observed_fraction']>=.999,'Source-scattering footprint crosses a recovery gap'
+        assert diagnostic['source_defined_fraction']>=.999,'Undefined source under a scored lookup'
+        assert diagnostic['gaussian_3sigma_defined_fraction']>=.999,'Source-scattering footprint crosses an undefined gap'
+        if not case.get('allow_estimated_background'):
+            assert diagnostic['source_observed_fraction']>=.999,'Unobserved source under a scored lookup'
+            assert diagnostic['gaussian_3sigma_observed_fraction']>=.999,'Source-scattering footprint crosses a recovery gap'
+        else:
+            assert case.get('source_observation_mask') and diagnostic['background_estimate'],'Explicit estimation provenance is required'
         if args.motion:subprocess.run([sys.executable,str(Path(__file__).with_name('extended_media.py')),str(folder),'--frames','180','--travel','45'],check=True)
     if 'foreground_response' in state:
-        assert abs(studies[0].L-studies[1].L)<1e-12
         errors=foreground_errors(studies,p,state['material'],state['foreground_response'])
         stored=state['foreground_scores']['after_mse'];assert np.max(abs(np.array(errors)-stored))<1e-5
     else:errors=None
@@ -74,9 +90,10 @@ def main():
                 if 'vector_asset' in layer and layer['mode']!='transmission' and layer.get('fit_style',True):
                     a,b,c,d=layer['box'];actual.append(float(np.mean((composite[b-y0:d-y0,a-x0:c-x0]-s.target[b:d,a:c])**2))*255**2)
         assert np.max(abs(np.array(actual)-state['foreground_style_scores']['after_mse']))<1e-3,'Static foreground replay mismatch'
-    report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,foreground_style_scores=state.get('foreground_style_scores'),
+    report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,foreground_style_scores=state.get('foreground_style_scores'),initial_boundary=boundary,
         gate='Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.',
-        scope='Same video, different observed backdrops. Does not establish generality across devices, apps or lighting.')
+        background_estimates=[case.get('background_estimate') for case in cases],
+        scope='Two observed instances; diagnostics distinguish direct source evidence from any explicit source estimate. Does not establish generality across devices, apps or lighting.')
     (args.out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
     print('PASS paired replay',args.study,json.dumps(report))
 

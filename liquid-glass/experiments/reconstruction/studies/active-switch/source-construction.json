@@ -1,0 +1,155 @@
+{
+  "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+  "track_pose": [
+    964.8138259676921,
+    541.3507751889879,
+    344.2028938033183,
+    152.5323221097866
+  ],
+  "resting_track_fits": [
+    {
+      "parameters": [
+        965.213279678726,
+        541.3490350099561,
+        349.4216127615785,
+        155.03863989516324
+      ],
+      "contour_pixels": 1842,
+      "contour_rmse": 1.091545056774528,
+      "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+    },
+    {
+      "parameters": [
+        964.414372256658,
+        541.3525153680196,
+        338.98417484505813,
+        150.02600432441
+      ],
+      "contour_pixels": 1606,
+      "contour_rmse": 0.8637752919035037,
+      "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+    }
+  ],
+  "references": [
+    {
+      "requested_seconds": 9.4,
+      "frame_index": 564,
+      "decoded_seconds": 9.4,
+      "pose": {
+        "center": [
+          1040.0,
+          536.5
+        ],
+        "half": [
+          326.0,
+          216.5
+        ]
+      },
+      "track_pose": [
+        965.213279678726,
+        541.2877084935681,
+        345.66962689813727,
+        151.04128669800488
+      ],
+      "exposed_track_fit": {
+        "circle": [
+          770.5849394785937,
+          541.2877084935681,
+          151.04128669800488
+        ],
+        "visible_contour_pixels": 480,
+        "contour_rmse": 0.6725363469285401,
+        "method": "Active-frame exposed end-cap circle; hidden end mirrored about the measured resting track center."
+      },
+      "track_color": [
+        0.4745098039215686,
+        0.7529411764705882,
+        0.5176470588235295
+      ],
+      "track_color_5_95": [
+        [
+          0.47058823529411764,
+          0.7450980392156863,
+          0.5176470588235295
+        ],
+        [
+          0.47843137254901963,
+          0.7568627450980392,
+          0.5215686274509804
+        ]
+      ],
+      "background_color": [
+        0.9294117647058824,
+        0.9294117647058824,
+        0.9294117647058824
+      ],
+      "files": {
+        "source-9.400.png": "bbd52a46c6c0e5008d4d9e746c9ea5c17acad781e1c2391607b8b7b5f6c64002",
+        "target-9.400.png": "76a17ebdea7a2cc8f6187faa461bfecc164e78e371cf8b234d47cd0b1cc1c780",
+        "known-9.400.png": "a2f32becc8c9f3b819da2f3a7c67eff1606bdce63ed1f5704a4883ad08dfd8e3",
+        "observed-9.400.png": "43ef8e3a5ca09a655bfcf1f86d56ff7c6c933bedf693ab63d8ba137b38264c50"
+      }
+    },
+    {
+      "requested_seconds": 10.5,
+      "frame_index": 630,
+      "decoded_seconds": 10.5,
+      "pose": {
+        "center": [
+          864.0,
+          536.0
+        ],
+        "half": [
+          306.0,
+          200.0
+        ]
+      },
+      "track_pose": [
+        964.414372256658,
+        541.3372327349567,
+        333.8507477739704,
+        146.38145141267958
+      ],
+      "exposed_track_fit": {
+        "circle": [
+          1151.8836686179488,
+          541.3372327349567,
+          146.38145141267958
+        ],
+        "visible_contour_pixels": 466,
+        "contour_rmse": 0.7597337191579999,
+        "method": "Active-frame exposed end-cap circle; hidden end mirrored about the measured resting track center."
+      },
+      "track_color": [
+        0.7450980392156863,
+        0.7647058823529411,
+        0.7411764705882353
+      ],
+      "track_color_5_95": [
+        [
+          0.7372549019607844,
+          0.7568627450980392,
+          0.7333333333333333
+        ],
+        [
+          0.7490196078431373,
+          0.7686274509803922,
+          0.7450980392156863
+        ]
+      ],
+      "background_color": [
+        0.9294117647058824,
+        0.9294117647058824,
+        0.9294117647058824
+      ],
+      "files": {
+        "source-10.500.png": "8d4176c394424213d60d7fdbc9d3236c03a726407731f93e87bd0cfccb1e892b",
+        "target-10.500.png": "3fa84e404edc62aeadd9934619252b337a7767bccf5ffc211f251f1454200599",
+        "known-10.500.png": "a2f32becc8c9f3b819da2f3a7c67eff1606bdce63ed1f5704a4883ad08dfd8e3",
+        "observed-10.500.png": "17ee433888006f32b7b9cd1a1fb9bf1c70a8b5f4f225a85b9802652fe32ed363"
+      }
+    }
+  ],
+  "method": "Symmetric vector capsule fitted from resting-track outer contours; active-frame color measured from exposed track. Distant unoccluded RGB is copied; hidden/halo-adjacent input is modeled.",
+  "limits": "Track symmetry, hidden color uniformity and separation from the thumb shadow are assumptions. Conditional rendering scores are not proof of complete photographic background recovery or proprietary Apple optics."
+}

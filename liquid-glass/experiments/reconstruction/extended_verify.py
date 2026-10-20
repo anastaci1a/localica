@@ -83,6 +83,12 @@ def main():
     for schedule in [{**STAGES,**RADIAL_STAGES},RADIAL_FOLLOWUP_STAGES]:
         assert not any(forbidden.intersection(keys) for _,keys in schedule.values()), 'Radial experiment introduces a preferred axis'
     print('PASS radial initial/follow-up schedules preserve rotational symmetry')
+    assert obj.parameter_bounds('c2')==(-2.5,2.5)
+    obj.case['radial']=False
+    assert obj.parameter_bounds('c2')==(0,2.5) and obj.parameter_bounds('core_x')==(0,.025)
+    obj.case.update(signed_normal_profile=True,allow_center_reduction=True)
+    assert obj.parameter_bounds('c2')==(-2.5,2.5) and obj.parameter_bounds('core_y')==(-.8,.18)
+    print('PASS signed normal profiles and reduced center scales require explicit case declarations')
     assert not {'amplitude','band','power'}.intersection(STAGES[20][1])
     assert set(RADIAL_STAGES[13][1])=={'amplitude','band','power','sigma','core_x'}
     print('PASS late nonradial refinement uses live spline parameters; radial restart stays independent')
@@ -127,7 +133,7 @@ def main():
     cache.C=rng.choice([.1,.4,.6,.9],(H*2,W*2,3)).astype(np.float32)
     cache.J=rng.uniform(-.01,.01,(H*2,W*2,15));cache.J[...,-1]=rng.uniform(0,1,(H*2,W*2))
     yy,xx=np.mgrid[:H,:W];valid=np.ones((H,W),bool);rim=(xx<5)|(xx>=W-5)|(yy<5)|(yy>=H-5)
-    cache.study=SimpleNamespace(target_crop=rng.uniform(.1,.9,(H,W,3)).astype(np.float32),valid=valid,rim=rim)
+    cache.study=SimpleNamespace(target_crop=rng.uniform(.1,.9,(H,W,3)).astype(np.float32),valid=valid,rim=rim,kernel_sigma=lambda p,key:p[key])
     maximum=0
     for clipping in [False,True]:
         co=np.zeros(23);co[:3]=co[-3:]=1.4 if clipping else .4;co[3:6]=-.2 if clipping else .3
@@ -155,6 +161,61 @@ def main():
         q={**p,**{f'c{i}':float(v) for i,v in enumerate(coefficients+delta)}}
         assert np.max(abs(fast.render(coefficients+delta)-fixture.render(q,co)))<2e-6
     print('PASS prepared profile lookup with coupling, orientation gain, shape correction, smooth caps and output blur')
+
+    # Different observation sizes share normalized source/output lengths.
+    # Check both the unit conversion and independent cached/full raster paths.
+    for reference in [8.,32.]:
+        fixture.case['parameter_length_reference']=reference
+        assert fixture.kernel_sigma(p)/fixture.L==p['sigma']/reference
+        assert fixture.kernel_sigma(p,'post_sigma')/fixture.L==p['post_sigma']/reference
+        full=fixture.render(p,co);cache=Cached(fixture,p)
+        assert np.max(abs(cache.render(co)-full))<2e-6
+        fast=ProfileCache(fixture,p,co)
+        assert np.max(abs(fast.render(coefficients)-full))<2e-6
+    print('PASS explicit common length basis scales both kernels at unequal observation sizes')
+
+    import cv2,tempfile,hashlib
+    from source_support import masks,kernel_safe,fraction,supported
+    source=SimpleNamespace(case={})
+    report=dict(source_defined_fraction=1.,gaussian_3sigma_defined_fraction=1.,source_observed_fraction=.5,gaussian_3sigma_observed_fraction=.4)
+    assert not supported(source,report),'Direct recovery cannot accept modeled pixels'
+    source.case['allow_estimated_background']=True
+    assert supported(source,report)
+    for key in ['source_defined_fraction','gaussian_3sigma_defined_fraction']:
+        assert not supported(source,{**report,key:.998}),'Estimated source cannot waive undefined source coverage'
+    with tempfile.TemporaryDirectory() as directory:
+        folder=Path(directory);observed=np.full((24,32),255,np.uint8);observed[:,12:20]=0
+        cv2.imwrite(str(folder/'observed.png'),observed)
+        case=dict(source_observation_mask='observed.png',source_sha256={'observed.png':hashlib.sha256((folder/'observed.png').read_bytes()).hexdigest()},allow_estimated_background=True,background_estimate={'method':'Fixture only'})
+        source=SimpleNamespace(folder=folder,case=case,kernel_sigma=lambda p:1.)
+        defined,direct=masks(source,np.ones((24,32),np.float32));y,x=np.mgrid[:24,:32].astype(np.float32);valid=defined>0
+        assert fraction(defined,x,y,valid)==1. and fraction(direct,x,y,valid)==.75
+        safe,_=kernel_safe(direct,source,{})
+        assert fraction(safe,x,y,valid)<.75
+        safe,_=kernel_safe(defined,source,{})
+        assert fraction(safe,x,y,valid)<1.,'A Gaussian footprint outside the input image is unsupported'
+        case['allow_estimated_background']=False
+        try:masks(source,defined)
+        except AssertionError:pass
+        else:raise AssertionError('Undeclared background estimate accepted')
+    print('PASS defined input cannot be reported as direct observation; Gaussian footprint and explicit-estimate guards')
+
+    from paired_replay import verify_boundary
+    with tempfile.TemporaryDirectory() as directory:
+        root=Path(directory);paired=root/'paired';paired.mkdir()
+        case=dict(center=[0,0],half=[1,1],radius=1,crop=[0,0,2,2],foreground=[],source_sha256={'source.png':'frozen'})
+        (root/'case.json').write_text(json.dumps(case));(paired/'a.json').write_text(json.dumps(case))
+        score=dict(loss=1.,glass=dict(rmse=1.));(root/'accepted.json').write_text(json.dumps(dict(scores=score)))
+        assert verify_boundary(paired,dict(previous=dict(scores=[score])))['same_reference_protocol']
+        for bad in [dict(loss=1.1,glass=dict(rmse=1.)),dict(loss=1.,glass=dict(rmse=1.1))]:
+            try:verify_boundary(paired,dict(previous=dict(scores=[bad])))
+            except AssertionError:pass
+            else:raise AssertionError('Regressing single-to-paired boundary accepted')
+        case['foreground']=[[0,0,1,1]];(paired/'a.json').write_text(json.dumps(case))
+        try:verify_boundary(paired,dict(previous=dict(scores=[score])))
+        except AssertionError:pass
+        else:raise AssertionError('Changed reference protocol accepted')
+    print('PASS single-to-paired boundary protects native loss, glass RMSE and the frozen reference protocol')
 
 
 if __name__=='__main__':main()
