@@ -140,6 +140,15 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             } else settle(settleOpen(travelDp, velocityDp, progress.value, !startExpanded,
                 velocityThreshold = if (startExpanded) VerticalReleaseVelocity else 240f,
                 distanceThreshold = if (startExpanded) VerticalReleaseDistance else CompactControlSize.value * .42f))
+        }, onCancel = {
+            dragging = false
+            // Cancellation restores the previous logical surface, not a zero-velocity
+            // distance-based release that could still open the player or Queue.
+            kotlinx.coroutines.coroutineScope {
+                launch { progress.animateTo(if (startExpanded) 1f else 0f,
+                    tween(settings.motionDuration(400), easing = PlayerSettleEasing)) }
+                launch { queueProgress?.animateTo(startQueueProgress, tween(settings.motionDuration(400))) }
+            }
         })
     // Finish the cover mask late, independently of the backing's color. Delaying the
     // color continuation too would reveal a dark average palette before light artwork.

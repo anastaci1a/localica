@@ -16,6 +16,37 @@ import org.junit.Test
 
 class PlayerGestureTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun cancelledPlayerAndQueueDragsRestoreThePreviousSurface() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.getSharedPreferences("interface", 0).edit().clear().commit()
+        val track = Track("cancel-player", "Evening", fileName = "song.mp3", relativePath = "song.mp3")
+        val queue = QueueEdits.create(listOf(track), 0, "Evening queue")
+        compose.setContent { LocalicaTheme { LocalicaScreen(
+            LibraryUiState(LibrarySnapshot(tracks = listOf(track)), loading = false),
+            PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title),
+            {}, {}, {}, {}, {}, {}, queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) } }
+        val art = compose.onNodeWithTag("player-artwork", useUnmergedTree = true)
+        val mini = art.fetchSemanticsNode().boundsInRoot
+        compose.onRoot().performTouchInput {
+            down(mini.center)
+            repeat(24) { moveBy(Offset(0f, -10f), delayMillis = 40) }
+            cancel()
+        }
+        assertEquals("Cancellation must not use expansion distance as a release", mini, art.fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithTag("player-surface").performClick()
+        val full = art.fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("player-surface").performTouchInput {
+            down(Offset(8f, centerY)); moveBy(Offset(0f, -240f), delayMillis = 800); cancel()
+        }
+        compose.onNodeWithContentDescription("Queue actions").assertDoesNotExist()
+        assertEquals(full, art.fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithTag("player-surface").performTouchInput {
+            down(Offset(8f, centerY)); moveBy(Offset(0f, 240f), delayMillis = 800); cancel()
+        }
+        compose.onNodeWithContentDescription("Collapse player").assertIsDisplayed()
+        assertEquals("Cancellation must not collapse a previously open player", full, art.fetchSemanticsNode().boundsInRoot)
+    }
+
     @Test fun matchingShortFlickClosesQueueAndPlayerAndCanInterruptExpansion() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()

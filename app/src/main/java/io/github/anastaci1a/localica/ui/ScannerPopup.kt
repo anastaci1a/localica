@@ -89,7 +89,9 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
     if (failuresOpen) SettingsPage("Metadata read failures", { failuresOpen = false }, { failuresOpen = false }) {
         Text("These files remain in the library using available metadata or their filenames. A successful rescan clears their errors.", Modifier.padding(16.dp))
         if (state.snapshot.metadataFailures.isEmpty()) Text("No metadata read failures.", Modifier.padding(16.dp))
-        LazyColumn(Modifier.fillMaxWidth().weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val failuresScroll = androidx.compose.foundation.lazy.rememberLazyListState()
+        LazyColumn(Modifier.fillMaxWidth().weight(1f).modalScroll(failuresScroll), state = failuresScroll,
+            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.snapshot.metadataFailures, key = { it.folderUri + "\n" + it.trackId }) { failure ->
                 Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {

@@ -148,6 +148,9 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
                                 while (true) {
                                     val event = awaitPointerEvent(PointerEventPass.Initial)
                                     val point = event.changes.firstOrNull { it.id == held.id } ?: break
+                                    // Native modal takeover dispatches a consumed synthetic up.
+                                    // It must not turn a hovered slot into a committed assignment.
+                                    if (point.isConsumed) break
                                     point.consume()
                                     drag?.let { it.point = rootOrigin + point.position; hover(it) }
                                     if (!point.pressed) { completed = true; break }

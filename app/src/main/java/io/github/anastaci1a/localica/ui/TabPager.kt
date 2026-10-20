@@ -29,7 +29,7 @@ internal fun TabPager(state: PagerState, tabs: () -> List<MainTab>, modifier: Mo
     CompositionLocalProvider(LocalViewConfiguration provides deliberate) {
         // Observe after children: consume only navigation's horizontal movement,
         // never preempt a list or a shelf that has already claimed the gesture.
-        HorizontalPager(state, modifier.pointerInput(userScrollEnabled) {
+        HorizontalPager(state, modifier.modalScroll(state).pointerInput(userScrollEnabled) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
                 var rejected = false
