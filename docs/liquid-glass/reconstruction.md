@@ -263,7 +263,7 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 - The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
 - A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Colored reflection and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 22 paired passes. The green-track capture below is verified; the gray-track capture is rendering.
+- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 22 paired passes. Both motion captures below are verified exports of pass22; the inner rim remains under investigation.
 
 <details>
 <summary>Motion — green track</summary>
@@ -276,12 +276,24 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 </details>
 
+<details>
+<summary>Motion — gray track</summary>
+
+<video controls preload="none" playsinline width="3140" height="2280" aria-label="Active switch on gray track motion"><source src="assets/study-active-switch-paired-b.mp4" type="video/mp4"><a href="assets/study-active-switch-paired-b.mp4">Open video</a></video>
+
+<img src="assets/study-active-switch-paired-b.gif" alt="Active switch over a moving gray track" width="1570" height="1140" loading="lazy" decoding="async">
+
+[Video](assets/study-active-switch-paired-b.mp4) · [GIF](assets/study-active-switch-paired-b.gif) · [Encoding checks](experiments/reconstruction/studies/active-switch/paired/b/media.json) · [GIF checks](experiments/reconstruction/studies/active-switch/paired/b/gif-qa.json). Same shared model and normalized travel as the green-track capture.
+
+</details>
+
 ### Colored switch rim
 
 Each crop below places Apple on the left and snapshot 22 on the right. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
 
 [![Switch rim details: Apple and reconstruction across six cropped regions](assets/switch-rim-detail.png)](assets/switch-rim-detail.png)
 
+- The reconstruction has an unsupported heavy dark inner contour at A/B lower left. Apple shows the separate exterior shadow and thin inner colored bands at A lower left and B right. These remain calibration targets.
 - [Rim measurements](experiments/reconstruction/switch-rim-analysis.json) include native RGB samples, resting controls and source assumptions. [Competing color models](experiments/reconstruction/switch-color-hypotheses.json) test channel-separated rays and directional chromatic lighting. Some improve native scores slightly; none reproduces the broad colored bands, and none is adopted. Their frozen baselines differ and are recorded separately.
 - Apple describes separate [geometry-dependent highlights and ambient color spill](https://developer.apple.com/videos/play/wwdc2025/219/?time=631). Colored transmission, lighting/tint, video processing and source-estimation error remain possible contributors; these pixels do not identify physical dispersion or an exact Apple shader.
 
