@@ -248,6 +248,13 @@ class Study:
         """
         return p[key]*(self.L/self.case.get('parameter_length_reference',self.L))
 
+    def parameter_bounds(self,key):
+        if key.startswith('c') and key[1:].isdigit() and (self.case.get('radial') or self.case.get('signed_normal_profile')):
+            return (-2.5,2.5)
+        if key in ('core_x','core_y') and self.case.get('allow_center_reduction'):
+            return (-.8,.18)
+        return BOUNDS[key]
+
     def field(self,x,y,p):
         X,Y,d,light=self.geometry_field(x,y,p)
         texture=self.blur(self.kernel_sigma(p))
@@ -429,9 +436,7 @@ def main():
             (args.folder/f'running-{args.number:02}.json').write_text(json.dumps(partial,indent=2)+'\n')
             print(json.dumps({k:partial[k] for k in ['pass_number','evaluations','training_loss','seconds']}),flush=True)
         return loss
-    x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
-    if study.case.get('radial'):
-        bounds=[(-2.5,2.5) if k.startswith('c') and k[1:].isdigit() else b for k,b in zip(keys,bounds)]
+    x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[study.parameter_bounds(k) for k in keys]
     # Powell handles the explicit finite bilinear-sampling resolution without
     # claiming infinitesimal derivatives through a quantized texture lookup.
     if study.case.get('radial') and args.number==16:

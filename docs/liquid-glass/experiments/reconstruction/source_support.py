@@ -35,3 +35,21 @@ def kernel_safe(mask,study,p):
 def fraction(confidence,X,Y,mask,shift=0.):
     support=cv2.remap(confidence,X,Y+np.float32(shift),cv2.INTER_LINEAR)
     return float((support[mask]>.999).mean())
+
+
+def coverage_report(study,p,X=None,Y=None):
+    if X is None or Y is None:X,Y=coordinates(study,p)
+    defined,observed=masks(study)
+    safe,radius=kernel_safe(defined,study,p);direct_safe,_=kernel_safe(observed,study,p)
+    return dict(source_defined_fraction=fraction(defined,X,Y,study.valid),
+                gaussian_3sigma_defined_fraction=fraction(safe,X,Y,study.valid),
+                source_observed_fraction=fraction(observed,X,Y,study.valid),
+                gaussian_3sigma_observed_fraction=fraction(direct_safe,X,Y,study.valid),
+                source_gaussian_radius_native_px=radius)
+
+
+def supported(study,report):
+    keys=['source_defined_fraction','gaussian_3sigma_defined_fraction']
+    if not study.case.get('allow_estimated_background'):
+        keys+=['source_observed_fraction','gaussian_3sigma_observed_fraction']
+    return all(report[k]>=.999 for k in keys)

@@ -8,8 +8,9 @@ from pathlib import Path
 import argparse,copy,hashlib,json,time
 import cv2,numpy as np
 from scipy.optimize import minimize
-from extended_fit import Study,BOUNDS
+from extended_fit import Study
 from render import shade
+from source_support import coverage_report,supported
 
 STAGES={
  1:('Shared native tone and transmission',list(range(6))+[20,21,22]),
@@ -135,6 +136,7 @@ def main():
     if saved.exists():old=json.loads(saved.read_text())
     else:
         initial=json.loads((folder/'initial.json').read_text());p=initial['parameters'];co=initial['material']
+        assert all(supported(s,coverage_report(s,p)) for s in studies),'Unsupported initial shared source footprint'
         caches=[Cached(s,p) for s in studies]
         for c in caches:
             reference=c.study.render(p,np.array(co));prediction=c.render(co)
@@ -197,8 +199,7 @@ def main():
             for a,b in zip(metric,old['scores']):out.extend([(b['loss']-a['loss'])/scale,(b['glass']['rmse']**2-a['glass']['rmse']**2)/scale])
             if fg:out.extend((b-a)/scale for a,b in zip(fg,old['foreground_scores']['after_mse']))
             return np.array(out)
-        lower=-2.5 if studies[0].case.get('radial') else 0
-        result=minimize(objective,x,method='SLSQP',bounds=[(max(lower,v-.25),min(2.5,v+.25)) for v in x],
+        result=minimize(objective,x,method='SLSQP',bounds=[(max(studies[0].parameter_bounds(k)[0],v-.25),min(studies[0].parameter_bounds(k)[1],v+.25)) for k,v in zip(optical_keys,x)],
             constraints=[dict(type='ineq',fun=constraints)],options=dict(maxiter=45,ftol=1e-9,eps=.002))
         best=sum(s['loss'] for s in old['scores'])
         for t in [1,.5,.25,.125,.0625,.03125,.015625]:
@@ -221,8 +222,7 @@ def main():
             for key,step in families[args.number]:
                 for sign in [-1,1]:
                     q=copy.deepcopy(current['parameters']);q[key]=q.get(key,0.)+sign*step*size
-                    low,high=BOUNDS[key]
-                    if key.startswith('c') and key[1:].isdigit() and studies[0].case.get('radial'):low=-2.5
+                    low,high=studies[0].parameter_bounds(key)
                     if not low<=q[key]<=high:continue
                     metric=scores([Cached(s,q) for s in studies],current['material']);evaluations+=1
                     allow=permitted(metric,current['scores'])
@@ -301,13 +301,15 @@ def main():
     # owns acceptance. Cached optimization never overrides its score.
     metric=[s.scores(s.render(current['parameters'],np.array(current['material']))) for s in studies]
     advance=permitted(metric,old['scores']);current['scores']=metric
+    footprints=[coverage_report(s,current['parameters']) for s in studies]
+    advance=advance and all(supported(s,r) for s,r in zip(studies,footprints))
     if 'foreground_response' in old:
         before=foreground_errors(studies,old['parameters'],old['material'],old['foreground_response'])
         after=foreground_errors(studies,current['parameters'],current['material'],current['foreground_response'])
         advance=advance and all(a<=b+1e-8 for a,b in zip(after,before))
         current['foreground_scores']=dict(before_mse=before,after_mse=after)
     if not advance:current=old
-    record=dict(pass_number=args.number,experiment=name,execution_code_sha256=execution_hash,accepted=advance,previous=old,current=current,trials=trials,evaluations=evaluations,seconds=time.time()-t0,
+    record=dict(pass_number=args.number,experiment=name,execution_code_sha256=execution_hash,accepted=advance,previous=old,current=current,trials=trials,evaluations=evaluations,seconds=time.time()-t0,proposed_source_support=footprints,
         gate='Neither sample loss nor whole-glass RMSE may increase. One shared optical profile and23-coefficient material. Foreground follow-up also checks both interior errors.',
         limits='Two observations from the same Apple video, not independent device validation or proof of cross-scene universality.')
     record_path.write_text(json.dumps(record,indent=2)+'\n');saved.write_text(json.dumps(current,indent=2)+'\n')

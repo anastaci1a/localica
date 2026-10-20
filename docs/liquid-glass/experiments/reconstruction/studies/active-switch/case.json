@@ -109,5 +109,7 @@
     }
   },
   "background": "Direct distant source pixels plus explicit symmetric-capsule track estimate from exposed geometry/color. No complete photographic recovery claim.",
-  "identifiability": "Two actual on/off transition frames; observed size/pose differs. Shared normalized optics/material are tested after single-frame fitting. Hidden track symmetry, color uniformity and dynamic contact-state equivalence remain assumptions."
+  "identifiability": "Two actual on/off transition frames; observed size/pose differs. Shared normalized optics/material are tested after single-frame fitting. Hidden track symmetry, color uniformity and dynamic contact-state equivalence remain assumptions.",
+  "signed_normal_profile": true,
+  "allow_center_reduction": true
 }

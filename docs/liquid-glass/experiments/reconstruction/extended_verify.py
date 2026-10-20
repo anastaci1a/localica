@@ -83,6 +83,12 @@ def main():
     for schedule in [{**STAGES,**RADIAL_STAGES},RADIAL_FOLLOWUP_STAGES]:
         assert not any(forbidden.intersection(keys) for _,keys in schedule.values()), 'Radial experiment introduces a preferred axis'
     print('PASS radial initial/follow-up schedules preserve rotational symmetry')
+    assert obj.parameter_bounds('c2')==(-2.5,2.5)
+    obj.case['radial']=False
+    assert obj.parameter_bounds('c2')==(0,2.5) and obj.parameter_bounds('core_x')==(0,.025)
+    obj.case.update(signed_normal_profile=True,allow_center_reduction=True)
+    assert obj.parameter_bounds('c2')==(-2.5,2.5) and obj.parameter_bounds('core_y')==(-.8,.18)
+    print('PASS signed normal profiles and reduced center scales require explicit case declarations')
     assert not {'amplitude','band','power'}.intersection(STAGES[20][1])
     assert set(RADIAL_STAGES[13][1])=={'amplitude','band','power','sigma','core_x'}
     print('PASS late nonradial refinement uses live spline parameters; radial restart stays independent')
@@ -169,7 +175,14 @@ def main():
     print('PASS explicit common length basis scales both kernels at unequal observation sizes')
 
     import cv2,tempfile,hashlib
-    from source_support import masks,kernel_safe,fraction
+    from source_support import masks,kernel_safe,fraction,supported
+    source=SimpleNamespace(case={})
+    report=dict(source_defined_fraction=1.,gaussian_3sigma_defined_fraction=1.,source_observed_fraction=.5,gaussian_3sigma_observed_fraction=.4)
+    assert not supported(source,report),'Direct recovery cannot accept modeled pixels'
+    source.case['allow_estimated_background']=True
+    assert supported(source,report)
+    for key in ['source_defined_fraction','gaussian_3sigma_defined_fraction']:
+        assert not supported(source,{**report,key:.998}),'Estimated source cannot waive undefined source coverage'
     with tempfile.TemporaryDirectory() as directory:
         folder=Path(directory);observed=np.full((24,32),255,np.uint8);observed[:,12:20]=0
         cv2.imwrite(str(folder/'observed.png'),observed)
