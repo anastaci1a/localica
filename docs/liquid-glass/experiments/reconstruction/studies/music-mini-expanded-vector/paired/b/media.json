@@ -1,0 +1,80 @@
+{
+  "state_sha256": "58dff3f483b8d78adc0c79cf2164a7d94f793c48d4dbe0e36bef304f5e4b1c71",
+  "render_files": {
+    "motion.mp4": "0ffb56326d8df28bdb390b8fb63e0a779af7a56d20681c749b5e49155e102ddf",
+    "comparison.png": "531f1be7b9b72c02521e3933c03485531eccc352696723937aa448834f9e6c71"
+  },
+  "native_size": [
+    1360,
+    250
+  ],
+  "output_size": [
+    5440,
+    1000
+  ],
+  "output_scale": 4,
+  "frames": 180,
+  "fps": 30,
+  "travel_over_L": 0.5084745762711864,
+  "scores": {
+    "glass": {
+      "pixels": 155428,
+      "rmse": 2.5714235305786133
+    },
+    "rim": {
+      "pixels": 45766,
+      "rmse": 4.120835304260254
+    },
+    "held": {
+      "pixels": 38118,
+      "rmse": 2.6285436153411865
+    },
+    "interior": {
+      "pixels": 109662,
+      "rmse": 1.511564016342163
+    },
+    "ssim": 0.9875646829605103,
+    "loss": 9.722938362980676
+  },
+  "motion_support": {
+    "requested_native_px": 45,
+    "actual_native_px": 45.0,
+    "minimum_scored_lookup_3sigma_observed_fraction": 1.0,
+    "minimum_whole_shape_lookup_observed_fraction": 1.0,
+    "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
+  },
+  "presentation_completion_native_delta": {
+    "max_abs_rgb": 0.0,
+    "rmse": 0.0
+  },
+  "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+  "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source artwork/text retain their original information quality; declared SVG icons are rerasterized, other coverage remains reference-derived.",
+  "files": {
+    "motion.mp4": {
+      "bytes": 2626846,
+      "sha256": "0ffb56326d8df28bdb390b8fb63e0a779af7a56d20681c749b5e49155e102ddf"
+    },
+    "motion.gif": {
+      "bytes": 17989989,
+      "sha256": "2a7a00d446ec67e19c38c7515726a87a5da076b0b9d60917ab83eb805732ccd4"
+    },
+    "comparison.png": {
+      "bytes": 2607467,
+      "sha256": "531f1be7b9b72c02521e3933c03485531eccc352696723937aa448834f9e6c71"
+    }
+  },
+  "gif": {
+    "fps": 15,
+    "output_size": [
+      2720,
+      500
+    ],
+    "master_relative_scale": 0.5,
+    "palette_colors": 256,
+    "palette_sampling": "All frame pixels",
+    "dither": "sierra2_4a",
+    "maximum_megabytes": 90,
+    "spatial_downsampling": true
+  }
+}
