@@ -65,7 +65,8 @@ class NavigationTest {
             LocalicaTheme {
                 LocalicaScreen(LibraryUiState(LibrarySnapshot(listOf(FolderSelection("tree", "Music")), tracks), loading = false),
                     PlaybackState(connected = true), onPlay = { selected = it }, onToggle = {}, onSeek = {},
-                    onChooseFolder = { requestedFolder = true }, onRescan = {}, onCancelScan = {})
+                    onChooseFolder = { requestedFolder = true }, onRescan = {}, onCancelScan = {},
+                    playlist = PlaylistState(loading = false))
             }
         }
         compose.onNodeWithText("Your music").assertIsDisplayed()

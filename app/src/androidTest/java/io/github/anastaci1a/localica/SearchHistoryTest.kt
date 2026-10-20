@@ -7,6 +7,7 @@ import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -22,7 +23,8 @@ class SearchHistoryTest {
             artist = if (n % 2 == 0) "Even" else "Odd", fileName = "$n.mp3", relativePath = "$n.mp3") }
         try {
             compose.setContent { LocalicaTheme { LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false),
-                PlaybackState(connected = true), {}, {}, {}, {}, {}, {}) } }
+                PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
+                playlist = PlaylistState(loading = false)) } }
             compose.onNodeWithContentDescription("Search library").performClick()
             compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput("Even")
             compose.onNode(hasSetTextAction()).performImeAction()

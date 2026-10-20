@@ -7,6 +7,7 @@ import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -26,7 +27,8 @@ class LibraryFilterTest {
             val snapshot = LibrarySnapshot(tracks = listOf(Track("missing", "Song", artist = "Singer", albumArtist = "Band", album = "Album",
                 fileName = "song.mp3", relativePath = "song.mp3")))
             compose.setContent { LocalicaTheme {
-                LocalicaScreen(LibraryUiState(snapshot, loading = false), PlaybackState(connected = true), {}, {}, {}, {}, {}, {})
+                LocalicaScreen(LibraryUiState(snapshot, loading = false), PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
+                    playlist = PlaylistState(loading = false))
             } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Band").fetchSemanticsNodes().size == 2 }
             compose.onNodeWithText("Songs").performTouchInput { longClick() }
