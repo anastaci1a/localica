@@ -101,14 +101,41 @@ class SearchImeMotionTest {
         compose.mainClock.autoAdvance = false
     }
 
-    private fun advanceUntil(predicate: () -> Boolean) = compose.waitUntil(5000) {
-        compose.mainClock.advanceTimeBy(32)
-        compose.runOnUiThread(predicate)
+    private fun advanceUntil(predicate: () -> Boolean) {
+        val start = compose.mainClock.currentTime
+        try {
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeBy(32)
+                compose.runOnUiThread(predicate)
+            }
+        } catch (timeout: ComposeTimeoutException) {
+            val state = compose.runOnUiThread {
+                "visible=$visible modal=${anchor.modalPresent} progress=${anchor.contact.expansion.value} " +
+                    "running=${anchor.contact.expansion.isRunning} keyboardSettled=$keyboardSettled " +
+                    "placedFrames=${samples.size} last=${samples.lastOrNull()}"
+            }
+            throw AssertionError("Search readiness timed out after ${compose.mainClock.currentTime - start}ms " +
+                "of virtual frames: $state", timeout)
+        }
     }
 
-    private fun opened() = advanceUntil {
-        anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning &&
-            samples.lastOrNull()?.let { it.opening && it.progress == 1f } == true
+    private fun opened() {
+        advanceUntil {
+            // Position callbacks need not repeat when the final spring tick only
+            // changes metadata: observe the actual clock and last placed geometry.
+            anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning &&
+                samples.lastOrNull()?.let { sample ->
+                    sample.opening && listOf(
+                        sample.bounds.left - sample.destination.left,
+                        sample.bounds.top - sample.destination.top,
+                        sample.bounds.right - sample.destination.right,
+                        sample.bounds.bottom - sample.destination.bottom,
+                    ).all { kotlin.math.abs(it) <= 2f }
+                } == true
+        }
+        compose.runOnUiThread { samples.last() }.let {
+            assertRect("Opening reaches its placed endpoint", it.destination, it.bounds)
+        }
     }
 
     private fun closed() = advanceUntil { !anchor.modalPresent }
