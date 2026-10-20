@@ -17,7 +17,9 @@ class Prepared:
             blend=None
             if p.get('blur_transition',0)>1e-8:
                 u=np.clip(d/p['blur_transition'],0,1);blend=u**3*(u*(6*u-15)+10)
-            self.tiles.append((row,bottom,W,X*study.L+study.case['center'][0],Y*study.L+study.case['center'][1],gain,illumination,blend,core if 'material_chroma_sensitivity' in p else None))
+            # Copy the scalar core: a view would retain all15 lighting planes
+            # for every export tile, although they are no longer needed.
+            self.tiles.append((row,bottom,W,X*study.L+study.case['center'][0],Y*study.L+study.case['center'][1],gain,illumination,blend,core.copy() if 'material_chroma_sensitivity' in p else None))
 
     def render(self,tiles=None):
         s=self.study;p=self.p;x0,y0,x1,y1=s.crop
