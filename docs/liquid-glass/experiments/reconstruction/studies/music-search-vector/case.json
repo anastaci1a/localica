@@ -78,5 +78,13 @@
     "baseline": "music-search",
     "additional_single_pass_minimum": 10,
     "paired_pass_minimum": 20
+  },
+  "exterior_reference_shape": {
+    "shape_dx": -0.01094003499211507,
+    "shape_dy": -0.001400833306792197,
+    "half_x_delta": -0.002787508241754526,
+    "half_y_delta": 0,
+    "radius_delta": 0,
+    "cap_join_width": 0
   }
 }

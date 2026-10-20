@@ -409,14 +409,17 @@ def main():
     pred=study.render(candidate,co);candidate_scores=study.scores(pred)
     if 'exterior' in old['scores'] and args.number!=11:
         candidate_scores['exterior']=old['scores']['exterior']
-    if 'shadow' in candidate and args.number==18:
+    changes_outline=bool(set(keys)&{'shape_dx','shape_dy','half_x_delta','half_y_delta','radius_delta','cap_join_width'})
+    exterior_check='shadow' in candidate and (args.number==18 or changes_outline)
+    if exterior_check and 'exterior' in old['scores']:
         from extended_shadow import refit_fixed_region
-        reference=json.loads((args.folder/'pass-12'/'record.json').read_text())['current']['parameters']
+        reference=study.case.get('exterior_reference_shape')
+        if reference is None:reference=json.loads((args.folder/'pass-12'/'record.json').read_text())['current']['parameters']
         candidate,exterior=refit_fixed_region(study,candidate,reference)
         candidate_scores['exterior']=exterior
     advance=(candidate_scores['loss']<=old['scores']['loss']+1e-9 and
              candidate_scores['glass']['rmse']<=old['scores']['glass']['rmse']+1e-9)
-    if args.number==18 and 'exterior' in old['scores']:
+    if exterior_check and 'exterior' in old['scores']:
         advance=advance and candidate_scores['exterior']['rmse']<=old['scores']['exterior']['rmse']+1e-8
     current=dict(parameters=candidate,material=co.tolist(),scores=candidate_scores) if advance else old
     record=dict(pass_number=args.number,experiment=stage,keys=keys,evaluations=evaluations,
