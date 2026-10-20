@@ -1,6 +1,8 @@
 """Final comparison and scrolling-backdrop GIF for a frozen element.
 
 python extended_media.py /private/study [--frames 90] [--travel 45]
+Use --finish-existing to retry GIF encoding from the hash-checked render manifest.
+GIFs retain full resolution/palette; --gif-max-mb sets an explicit size budget.
 No reference material rectangle is composited into the computed glass.
 """
 from pathlib import Path
@@ -16,9 +18,37 @@ def foreground(study,out,scale=1):
     return study.apply_foreground(out,scale)
 
 
+def state_digest(folder):
+    return hashlib.sha256((folder/'case.json').read_bytes()+(folder/'accepted.json').read_bytes()).hexdigest()
+
+
+def finish(folder,report,budget):
+    out=folder/'final';video=out/'motion.mp4';gif=out/'motion.gif'
+    assert report['state_sha256']==state_digest(folder),'Render state changed'
+    for name,digest in report['render_files'].items():
+        assert hashlib.sha256((out/name).read_bytes()).hexdigest()==digest,'Rendered artifact changed'
+    for fps in [15,12,10,6]:
+        palette=out/'palette.png'
+        subprocess.run(['ffmpeg','-v','error','-threads','2','-filter_threads','1','-y','-i',str(video),'-vf',f'fps={fps},palettegen=max_colors=256:stats_mode=diff','-frames:v','1',str(palette)],check=True)
+        subprocess.run(['ffmpeg','-v','error','-threads','2','-filter_complex_threads','1','-y','-i',str(video),'-i',str(palette),'-lavfi',f'fps={fps}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle','-loop','0','-gifflags','+transdiff',str(gif)],check=True)
+        if gif.stat().st_size<budget*1_000_000:break
+    assert gif.stat().st_size<budget*1_000_000,'GIF exceeds its explicit size budget'
+    files={}
+    for file in [video,gif,out/'comparison.png']:
+        if file.suffix in ['.mp4','.gif']:
+            subprocess.run(['ffmpeg','-v','error','-threads','2','-i',str(file),'-f','null','-'],check=True)
+        files[file.name]=dict(bytes=file.stat().st_size,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
+    report.update(files=files,gif=dict(fps=fps,palette_colors=256,maximum_megabytes=budget,spatial_downsampling=False))
+    (out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report),flush=True)
+
+
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--frames',type=int,default=180);ap.add_argument('--travel',type=float,default=45);ap.add_argument('--scale',type=int,default=4);ap.add_argument('--fps',type=int,default=30);args=ap.parse_args()
-    assert args.scale>=1 and args.frames>0 and args.fps>0
+    ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--frames',type=int,default=180);ap.add_argument('--travel',type=float,default=45);ap.add_argument('--scale',type=int,default=4);ap.add_argument('--fps',type=int,default=30);ap.add_argument('--gif-max-mb',type=float,default=90);ap.add_argument('--finish-existing',action='store_true');args=ap.parse_args()
+    assert args.scale>=1 and args.frames>0 and args.fps>0 and args.gif_max_mb>0
+    if args.finish_existing:
+        finish(args.folder,json.loads((args.folder/'final/render.json').read_text()),args.gif_max_mb)
+        return
     study=Study(args.folder);accepted=json.loads((args.folder/'accepted.json').read_text());p=accepted['parameters'];co=np.array(accepted['material'])
     out=args.folder/'final';out.mkdir(exist_ok=True)
     still=study.render(p,co)
@@ -76,24 +106,12 @@ def main():
         proc.stdin.close();assert proc.wait()==0;log.close()
     # Encoding does not need the large optical maps or the last RGB frame.
     del prepared,cov,xx,yy,opacity,context,base,material,frame,valid
-    gif=out/'motion.gif'
-    for fps,colors in [(15,128),(12,96),(10,64),(6,48)]:
-        palette=out/'palette.png'
-        subprocess.run(['ffmpeg','-v','error','-y','-i',str(video),'-vf',f'fps={fps},palettegen=max_colors={colors}:stats_mode=diff','-frames:v','1',str(palette)],check=True)
-        subprocess.run(['ffmpeg','-v','error','-y','-i',str(video),'-i',str(palette),'-lavfi',f'fps={fps}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle','-loop','0','-gifflags','+transdiff',str(gif)],check=True)
-        if gif.stat().st_size<10_000_000:break
-    assert gif.stat().st_size<10_000_000
-    files={}
-    for file in [video,gif,out/'comparison.png']:
-        if file.suffix in ['.mp4','.gif']:
-            subprocess.run(['ffmpeg','-v','error','-i',str(file),'-f','null','-'],check=True)
-        files[file.name]=dict(bytes=file.stat().st_size,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
-    report=dict(files=files,native_size=[x1-x0,y1-y0],output_size=[W,H],output_scale=scale,frames=args.frames,fps=args.fps,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,presentation_completion_native_delta=completion_delta,
+    report=dict(state_sha256=state_digest(args.folder),render_files={name:hashlib.sha256((out/name).read_bytes()).hexdigest() for name in ['motion.mp4','comparison.png']},native_size=[x1-x0,y1-y0],output_size=[W,H],output_scale=scale,frames=args.frames,fps=args.fps,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,presentation_completion_native_delta=completion_delta,
         motion='Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.',
-        limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source artwork/text retain their original information quality; declared SVG icons are rerasterized, other coverage remains reference-derived.')
+        limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.')
     if study.transmission_layers:report['foreground_response']=[layer['fit'][2] for layer in study.transmission_layers]
-    (out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
-    print(json.dumps(report),flush=True)
+    (out/'render.json').write_text(json.dumps(report,indent=2)+'\n')
+    finish(args.folder,report,args.gif_max_mb)
 
 
 if __name__=='__main__':main()
