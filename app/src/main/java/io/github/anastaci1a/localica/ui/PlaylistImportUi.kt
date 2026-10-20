@@ -126,7 +126,9 @@ internal fun PlaylistImportDialog(preview: PlaylistImportPreview, controller: Pl
             Text("${found.size} matched · $missing unresolved. Song order and repeated entries are preserved.")
             if (missing > 0) Text("Unresolved entries will be skipped. Scan missing folders first if you want to include them.")
             if (preview.entries.any { it.nameOnly }) Text("Some songs matched by unique filename. Review them below.")
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).scrollEdgeFade(scroll), state = scroll,
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(preview.entries) { index, entry ->
                     Column {
                         Text("${index + 1}. ${entry.track?.title ?: entry.path}", style = MaterialTheme.typography.titleSmall)
