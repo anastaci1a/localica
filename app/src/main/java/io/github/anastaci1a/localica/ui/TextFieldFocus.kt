@@ -5,6 +5,7 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationSource
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.Box
@@ -38,16 +39,35 @@ private val LocalRestingTextFocus = staticCompositionLocalOf<FocusRequester> { e
     }
 }
 
+/** Distinguish a settled editing IME from animated insets inherited from another window. */
+internal class TextEditingImeSession {
+    private var shown = false
+    private var docked = false
+
+    fun shouldEnd(focused: Boolean, windowFocused: Boolean, visible: Boolean,
+        current: Int, source: Int, target: Int, endAtHideStart: Boolean): Boolean {
+        if (!focused || !windowFocused) shown = false
+        else if (shown && (!visible || (endAtHideStart && docked && target == 0))) {
+            shown = false
+            return true
+        } else if (visible && current == target && source == target) {
+            shown = true
+            docked = target > 0
+        }
+        return false
+    }
+}
+
 /** Back dismisses editing before dismissing its page/dialog, including IME-owned Back. */
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable internal fun Modifier.clearTextFocusOnBack(): Modifier {
     var focused by remember { mutableStateOf(false) }
-    var sawKeyboard by remember { mutableStateOf(false) }
+    val imeSession = remember { TextEditingImeSession() }
     val keyboardVisible = WindowInsets.isImeVisible
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val keyboardHeight = WindowInsets.ime.getBottom(density)
     val keyboardSource = WindowInsets.imeAnimationSource.getBottom(density)
     val keyboardTarget = WindowInsets.imeAnimationTarget.getBottom(density)
-    val keyboardSettled = keyboardSource == keyboardTarget
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     // Keep native window focus, but move Compose focus out of the editor. Clearing
     // the window owner can immediately focus its first editor again in key mode.
@@ -60,15 +80,12 @@ private val LocalRestingTextFocus = staticCompositionLocalOf<FocusRequester> { e
         restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
     }
     BackHandler(focused) { endEditing() }
-    LaunchedEffect(focused, keyboardVisible, keyboardSettled, keyboardTarget, windowFocused) {
-        if (!focused || !windowFocused) sawKeyboard = false
-        // A newly focused popup may inherit the previous window's closing IME.
-        // Only a settled keyboard belongs to this editing session.
-        else if (keyboardVisible && keyboardSettled) sawKeyboard = true
-        else if (sawKeyboard && (!keyboardVisible || (emptySearchBack != null && keyboardTarget == 0))) {
+    LaunchedEffect(focused, windowFocused, keyboardVisible, keyboardHeight, keyboardSource, keyboardTarget) {
+        if (imeSession.shouldEnd(focused, windowFocused, keyboardVisible, keyboardHeight,
+                keyboardSource, keyboardTarget, endAtHideStart = emptySearchBack != null)) {
             // IME-owned Back announces its zero target before its last visible
             // frame. Empty search returns home immediately, independently of it.
-            sawKeyboard = false; endEditing()
+            endEditing()
         }
     }
     return onFocusChanged { focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->

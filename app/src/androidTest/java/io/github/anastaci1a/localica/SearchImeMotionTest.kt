@@ -24,15 +24,20 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import kotlinx.coroutines.flow.first
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestName
 
 @OptIn(ExperimentalLayoutApi::class)
 class SearchImeMotionTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val name = TestName()
     private var visible by mutableStateOf(false)
     private var mounted by mutableStateOf(true)
+    private var keyboardAllowed by mutableStateOf(true)
     private var text by mutableStateOf("")
     private lateinit var anchor: GlassAnchor
     private var popupView: android.view.View? = null
@@ -46,8 +51,16 @@ class SearchImeMotionTest {
         }
     }
 
-    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", keyboardDelayMillis: Long = 0) {
+    @After fun recordPlacedFrames() {
+        val additional = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.takeIf { it.isNotBlank() }
+        val root = additional?.let { java.io.File(it) } ?: requireNotNull(compose.activity.getExternalFilesDir(null))
+        val directory = java.io.File(root, "search-ime-motion").apply { mkdirs() }
+        java.io.File(directory, "${name.methodName}.txt").writeText(compose.runOnUiThread { samples.toList() }.joinToString("\n"))
+    }
+
+    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false) {
         text = initialQuery
+        keyboardAllowed = !deferKeyboard
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides { samples += it }) {
@@ -72,10 +85,9 @@ class SearchImeMotionTest {
                             withFrameNanos { }
                             ready?.invoke(true)
                             if (showKeyboard) {
-                                // Model an IME response later than the bounded fallback.
-                                // Use native elapsed time, independently of the test clock.
-                                val deadline = android.os.SystemClock.uptimeMillis() + keyboardDelayMillis
-                                while (android.os.SystemClock.uptimeMillis() < deadline) withFrameNanos { }
+                                // The delayed fixture releases input only after observing
+                                // the fallback endpoint, independent of CI wall-clock load.
+                                snapshotFlow { keyboardAllowed }.first { it }
                                 focus.requestFocus(); keyboard?.show()
                             } else keyboard?.hide()
                         }
@@ -224,16 +236,13 @@ class SearchImeMotionTest {
     }
 
     @Test fun lateNativeImeCannotSnapAtTheOpeningToPlacementHandoff() = withDockedKeyboard {
-        fixture(true, keyboardDelayMillis = 1400)
+        fixture(true, deferKeyboard = true)
         try {
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
             opened()
-            advanceUntil {
-                val insets = popupView?.let(ViewCompat::getRootWindowInsets)
-                keyboardSettled && insets != null && insets.isVisible(WindowInsetsCompat.Type.ime()) &&
-                    insets.getInsets(WindowInsetsCompat.Type.ime()).bottom >
-                    insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-            }
+            assertEquals("Fallback finishes before any native keyboard request", 0, compose.runOnUiThread { samples.last().ime })
+            compose.runOnUiThread { keyboardAllowed = true }
+            awaitDockedKeyboard()
             repeat(40) { compose.mainClock.advanceTimeBy(32); compose.waitForIdle() }
             val all = compose.runOnUiThread { samples.toList() }
             val lastFlight = all.indexOfLast { it.flight != null && it.progress > 0f }
@@ -253,6 +262,7 @@ class SearchImeMotionTest {
         try {
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
             opened()
+            awaitDockedKeyboard()
             compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
             compose.runOnUiThread { samples.clear() }
             pressSystemBack()
@@ -277,13 +287,15 @@ class SearchImeMotionTest {
         InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
     ).bufferedReader().use { it.readText().trim() }
 
-    private fun awaitKeyboardPolicy(expected: Int) {
-        compose.waitUntil(5000) {
-            val dump = shell("dumpsys -t 2 input_method")
-            val policy = Regex("mShowImeWithHardKeyboard=(\\d+)").find(dump)?.groupValues?.get(1)?.toInt()
-            // UNKNOWN is lazily initialized from settings by the next input view.
-            policy == expected || policy == 0 || dump.lineSequence().any { it.trim() == "No input method service." }
+    private fun awaitDockedKeyboard() {
+        advanceUntil {
+            val insets = popupView?.let(ViewCompat::getRootWindowInsets)
+            keyboardSettled && insets != null && insets.isVisible(WindowInsetsCompat.Type.ime()) &&
+                insets.getInsets(WindowInsetsCompat.Type.ime()).bottom >
+                insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
         }
+        assertEquals("Native input view must be shown", "true",
+            Regex("\\bmIsInputViewShown=(true|false)\\b").find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1))
     }
 
     private fun withDockedKeyboard(block: () -> Unit) = withNativeAnimations {
@@ -293,12 +305,13 @@ class SearchImeMotionTest {
         try {
             shell("settings put secure $key 1")
             assertEquals("1", shell("settings get secure $key"))
-            awaitKeyboardPolicy(2)
+            // The IME's private cached policy need not refresh before an editor
+            // binds. Assert the setting here and its real input view/occlusion in
+            // each fixture after focus, rather than polling that inactive cache.
             block()
         } finally {
             if (original == "null") shell("settings delete secure $key") else shell("settings put secure $key $original")
             assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
-            awaitKeyboardPolicy(if (original == "null" || original.toIntOrNull() == 0) 1 else 2)
         }
     }
 
