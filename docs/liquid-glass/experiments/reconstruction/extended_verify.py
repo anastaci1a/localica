@@ -57,5 +57,21 @@ def main():
     assert np.max(abs(b-np.stack([-a[:,1],a[:,0]],-1)))<.0011
     print('PASS circular optical field has no preferred x/y axis')
 
+    from foreground_response import response,calibrate
+    Y,X=np.mgrid[:40,:40]/39
+    B=np.stack([X,Y,(X+Y)/2],-1)
+    params=np.array([[1.,.9,1.6],[.2,.7,4.],[.5,.4,2.5]])
+    seed=np.zeros((40,40),bool);seed[5:35,5:35]=True
+    T=np.where(seed[...,None],response(B,params),B)
+    fit,alpha,report=calibrate(B,T,seed)
+    probe=np.repeat(np.linspace(0,1,101)[:,None],3,axis=1)
+    actual=response(probe,fit)
+    assert report['rmse']<.001
+    assert np.max(abs(actual-response(probe,params)))<.001
+    assert np.all(np.diff(actual,axis=0)>=-1e-8)
+    assert actual.min()>=0 and actual.max()<=1
+    assert np.all(alpha[8:32,8:32]==1)
+    print('PASS foreground-response recovery, held-range monotonicity, gamut and opaque interior')
+
 
 if __name__=='__main__':main()

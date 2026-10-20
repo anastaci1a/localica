@@ -281,7 +281,7 @@ class Study:
             from foreground_response import calibrate,response
             a,b,c,d=layer['box'];region=out[b-y0:d-y0,a-x0:c-x0]
             if layer['fit'] is None:
-                layer['fit']=calibrate(region,layer['target'],layer['seed'])
+                layer['fit']=calibrate(region,layer['target'],layer['seed'],self.case.get('foreground_response'))
             params,alpha,_=layer['fit']
             out[b-y0:d-y0,a-x0:c-x0]=region*(1-alpha[...,None])+response(region,params)*alpha[...,None]
         return out
