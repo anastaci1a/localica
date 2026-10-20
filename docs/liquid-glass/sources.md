@@ -44,7 +44,7 @@ Watch: [dynamics, 1:29](https://developer.apple.com/videos/play/wwdc2025/219/?ti
 
 ### HIG · Materials and color
 
-Regular Liquid Glass blurs and adjusts background luminosity for readability. Clear emphasizes rich media and may need local dimming; it is not the universal default. Standard materials still organize the content layer. Custom glass should be selective. Semantic roles matter more than an apparent color in one screenshot. [Materials](https://developer.apple.com/design/human-interface-guidelines/materials).
+Regular Liquid Glass blurs and adjusts background luminosity for readability. Clear emphasizes rich media with prominent bright foreground content and compatible dimming; it is not the universal default. The HIG suggests 35% dark dimming for bright media when needed, not a universal glass opacity. Standard materials organize the content layer; transient active controls are an exception. System appearance/accessibility settings can modify material output. [Materials](https://developer.apple.com/design/human-interface-guidelines/materials). See the [role-specific comparisons](reconstruction.md#when-to-use-each-material).
 
 Color distinguishes meaning and hierarchy; materials pick up surrounding content, so a chosen tint needs testing in context rather than treatment as a fixed swatch. [Color](https://developer.apple.com/design/human-interface-guidelines/color).
 

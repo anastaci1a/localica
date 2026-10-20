@@ -20,6 +20,16 @@ Apple's preference against layered glass conflicts with some requested Localica 
 
 Treat blur, refraction, illumination, contrast support and shadow as separate parameters. An element may be clear yet need strong edge curvature; a text-heavy panel may need scattering without a heavy border. The current glass sliders remain user controls, not claims that every combination is equally legible.
 
+### Material selection
+
+- Use Regular as the navigation/text default. Its scattering and brightness support respond to content and size; do not implement it as a uniform white wash or a fixed blur everywhere.
+- Use Clear over rich media when the foreground is prominent and bright and suitable dimming preserves the content. Begin with negligible scattering; retain detailed texture and independently strong rim refraction.
+- Active slider/switch lenses are a contact-state treatment: sharp, transparent and independent of ordinary appearance customization. Their quiet resting finish is a separate state.
+- Keep scroll-edge filtering and media dimming separate from lens scattering. Larger presentations can change their material continuously, rather than inheriting a small trigger's optical settings unchanged.
+- Apple accessibility/appearance preferences can alter these treatments. Record known state when calibrating; transparency alone cannot identify an API variant.
+
+Primary evidence and comparison images live in [material-role observations](reconstruction.md#when-to-use-each-material). These guide calibration; the existing native renderer and lab are not certified matches.
+
 ## Input and motion
 
 Model a surface using a persistent identity, current geometry, velocity, strain and interaction owner. Events change that state; they do not enqueue a press animation followed by an opening animation.

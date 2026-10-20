@@ -1,211 +1,234 @@
 # Apple reference reconstructions
 
-Three image comparisons using Apple's original 1920 × 1080 session downloads. **Apple is on the left; our reconstruction is on the right.** The experiment fits the [portable optical models](model.md) to the recorded pixels, instead of judging them only against a synthetic grid.
+Native-HD Apple references compared with numerical reconstructions. **Apple is on the left; our rendering is on the right.** Three scenes test optical detail; two additional scenes test light/dark material treatment.
 
-[Clear control](#clear-playback-control) · [Blurred toolbar](#blurred-toolbar) · [Slider](#active-slider) · [Measurements](#measurements) · [Method](#method) · [Reproduce](#reproduce) · [Field guide](README.md)
+[Playback](#clear-playback-control) · [Toolbar](#archive-and-plus-toolbar) · [Slider](#active-slider) · [Light/dark](#light-and-dark-surfaces) · [Material roles](#when-to-use-each-material) · [Measurements](#measurements) · [Method](#method) · [Reproduce](#reproduce) · [Guide](README.md)
 
-## What is being compared
-
-- The right-hand glass material is rendered numerically from a reconstructed **uncovered background**. It is not a painted imitation or an image-generation result. Symbols are approximate vector redraws.
-- The exterior—including Apple's shadow outside the silhouette—is retained as context. It is **not** a reconstructed shadow. No exterior pixels or foreground-symbol regions contribute to the scores. The fractional one-pixel silhouette coverage is also excluded.
-- These are offline material fits. Optical equations match the lab's numerical reference; Gaussian blur and fitted lighting/color are an experimental material, **not the live lab's current shader**. The comparison does not claim that the hosted lab or Android app now produces these images.
-- The closest fits contain local reversals of the background mapping near the rim. [Constrained comparisons](#local-folds-and-the-constrained-alternative) show the cost of preventing those folds. The fitted values are not proposed production defaults.
-- The first two references are Apple-produced design demonstrations; their underlying rendering pipeline is not established. The slider is from Apple's UIKit application demonstration. None establishes one universal material for every iOS control.
+The glass on the right is computed from an uncovered-background reconstruction. Reference symbols are held identical on both sides. The exterior is retained beyond a 10-pixel contact band, where recovered background and an estimated exterior-shadow residual replace the original rim. **Foreground and exterior pixels do not contribute to the scores.** These offline fits use an experimental material; they are not captures of the current lab or Android renderer.
 
 ## Clear playback control
 
-Source: Apple, [Meet Liquid Glass, 3:10](https://developer.apple.com/videos/play/wwdc2025/219/?time=190). The glass circle is approximately 490 pixels across. Its uncovered photograph appears at 3:00, allowing background recovery without inventing the dunes underneath it.
+Apple, [Meet Liquid Glass, 3:10](https://developer.apple.com/videos/play/wwdc2025/219/?time=190). The circle is approximately 490 pixels across; its uncovered photograph appears at 3:00.
 
-![Apple clear playback control on the left and fitted cap reconstruction on the right](assets/match-media.png)
+![Apple playback control and reconstructed glass, with the same reference play symbol](assets/match-media.png)
 
-- **Improved:** the inward displacement near the rim, comparatively quiet center, dark upper edge and bright lower edge.
-- **Still different:** the reconstruction softens sand texture too much; the sharp dune/rim intersections and narrow reflections remain misplaced. The redrawn play symbol has a flat fill, unlike Apple's graded fill; symbols are excluded from the material score.
-- Glass-only RGB RMSE falls from **17.70 to 10.17/255** versus the starting field optics with separately fitted material. A no-refraction material scores **13.86**, so simply adjusting color and blur is insufficient here.
-- Fitted cap: height/half-height **0.396**, backdrop gap/half-height **0.255**, rim-band/half-height **0.079**, index **1.33**. Blur σ **3.5 native pixels**. These are fit parameters, not measured Apple dimensions or refractive index.
+- The sand texture stays visible. Extra Gaussian blur is limited to **0–0.5 native pixel σ**, independently of optical strength. Bilinear texture sampling still filters subpixel coordinates.
+- The strong rim and comparatively quiet center need separate parameters. Increasing central magnification cannot substitute for the sharply bent dune boundaries.
+- Residual differences remain at the ridge/rim intersections and in texture registration. The reference photograph's exposed features register well, but that does not establish exact grain correspondence behind the lens.
 
 <details>
 <summary>Full-resolution screenshots, side by side</summary>
 
-[![Full HD Apple playback scene and reconstructed material in the same context](assets/match-media-full.png)](assets/match-media-full.png)
+[![Full HD Apple playback scene and material reconstruction](assets/match-media-full.png)](assets/match-media-full.png)
 
-Each half retains 1920 × 1080 source pixels; open the image for native resolution. Outside-glass context is shared, not independently rendered.
+Each half retains 1920 × 1080 pixels. Distant exterior and the foreground symbol are shared; the contact band is estimated.
 
 </details>
 
 <details>
-<summary>Starting model, recovered background and error map</summary>
+<summary>Starting optics, recovered background and error map</summary>
 
 ![Apple playback control compared with the starting field optics](assets/match-media-starting.png)
 
-![Apple playback control compared with the registered uncovered photograph](assets/match-media-input.png)
+![Apple playback control and registered uncovered photograph](assets/match-media-input.png)
 
-![Glass-only error and spatial scoring mask for the playback control](assets/match-media-error.png)
+![Playback material error and scoring mask](assets/match-media-error.png)
 
-Error image: mean absolute RGB difference, fixed scale 0–48/255, dark to bright. Mask: blue fitting region, gold withheld blocks; dark regions are excluded. Only a deterministic subset of the blue region is used during fitting.
+Error: mean absolute RGB difference, fixed 0–48/255 scale, dark to bright. Mask: blue training region, gold withheld blocks; dark regions are excluded. Fitting uses a deterministic subset of the blue pixels.
 
 </details>
 
-## Blurred toolbar
+## Archive and plus toolbar
 
-Source: Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710). The capsule is approximately 784 × 340 pixels. Text later exposed at 12:00 provides its reconstructed background.
+Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710). The outline is approximately 784 × 340 pixels. Text exposed at 12:00 supplies the background.
 
-![Apple blurred toolbar on the left and fitted cap reconstruction on the right](assets/match-regular.png)
+![Apple archive and plus toolbar compared with reconstructed glass](assets/match-regular.png)
 
-- **Improved:** the curved text displacement and broad scattering, without assuming the clear control's settings also describe a blurred surface.
-- **Still different:** Apple's rim is broader and more irregular; the top reflected text detail is missing. Our left glyph is an approximation and is unscored. Source registration is less reliable than in the dune scene, so some residual error belongs to the input reconstruction.
-- Glass-only RGB RMSE falls from **10.72 to 7.24/255**. The no-refraction baseline scores **10.09**. The remaining rim RMSE is **11.11**, substantially worse than the interior's **4.29**.
-- Fitted cap: height/half-height **0.678**, gap/half-height **0.807**, band/half-height **0.472**, index **1.33**. Blur σ **17.5 pixels**. The fit requires a much broader band and stronger blur than the clear circle.
+- The test uses the **same archive and plus symbols**, including their native outlines and antialiasing. Substituting similar icons obscured material differences in the previous comparison.
+- A sharp rim and a softer interior are fitted separately. Uniform blur concealed compressed, inverted text at the boundary. The source-blur blend now approaches zero at the silhouette and rises smoothly inward.
+- Matching that inverted detail remains an explicit criterion. A low overall RGB error can favor a washed-out surface that fails this part of the reference; the enlarged rim comparison below exposes it.
+- Background recovery uses a smooth page-color field rather than a constant-gray rectangular replacement. Where the later source's own glass hides the page, a blank field is assumed; missing text cannot be recovered there.
+
+![Native-resolution upper-rim crop, Apple on the left and reconstruction on the right](assets/match-regular-rim.png)
 
 <details>
 <summary>Full-resolution screenshots, side by side</summary>
 
-[![Full HD Apple toolbar scene and reconstructed material in the same context](assets/match-regular-full.png)](assets/match-regular-full.png)
+[![Full HD Apple toolbar scene and reconstructed material](assets/match-regular-full.png)](assets/match-regular-full.png)
 
-Each half retains 1920 × 1080 source pixels. The exterior shadow is Apple's retained context; it is not evidence of a successful shadow model.
+The distant exterior shadow is shared reference context; the contact-band estimate is not a validated shadow reconstruction.
 
 </details>
 
 <details>
-<summary>Starting model, estimated background and error map</summary>
+<summary>Starting optics, background and error map</summary>
 
-![Apple toolbar compared with the starting field optics](assets/match-regular-starting.png)
+![Apple toolbar compared with starting field optics](assets/match-regular-starting.png)
 
-![Apple toolbar compared with the reconstructed uncovered text](assets/match-regular-input.png)
+![Apple toolbar and reconstructed uncovered text on a continuous page field](assets/match-regular-input.png)
 
-![Glass-only error and spatial scoring mask for the toolbar](assets/match-regular-error.png)
-
-The later frame's own glass contaminates part of the warped source. That area is replaced by the surrounding neutral field, RGB 219/255. It is an explicit flat-background assumption, not a recovered measurement.
+![Toolbar material error and scoring mask](assets/match-regular-error.png)
 
 </details>
 
 ## Active slider
 
-Source: Apple, [Build a UIKit app with the new design, 18:12](https://developer.apple.com/videos/play/wwdc2025/284/?time=1092). The thumb is approximately 237 × 113 native pixels; the enlarged presentation below does not add source detail.
+Apple, [Build a UIKit app with the new design, 18:12](https://developer.apple.com/videos/play/wwdc2025/284/?time=1092). The expanded thumb is approximately 237 × 113 native pixels.
 
-![Apple active slider on the left and fitted boundary-field reconstruction on the right](assets/match-slider.png)
+![Apple active slider and reconstructed continuous-oval lens](assets/match-slider.png)
 
-- **Improved:** the track bending into the left cap and the clear center. The fitted boundary field has a slightly lower training loss than the cap model for this case.
-- **Still different:** Apple's upper rim has a darker colored reflection and a more defined blue fold. The reconstruction's rim remains too pale. The blue exterior halo is retained context, not a newly rendered effect.
-- Glass-only RGB RMSE falls from **13.44 to 12.01/255**; withheld-block error remains **13.85**. This is the weakest improvement of the three, not a completed match.
-- Fitted field: edge gain **1.573**, band/half-height **0.329**, center scale adjustment **0.00037**, rim coefficient **0.942**. Blur σ **1 pixel**. The hidden blue endpoint is estimated at x=719; geometry and endpoint uncertainty limit what this fit can establish.
+- **No Gaussian blur is applied.** The blue/gray track remains sharp; curvature changes its apparent width near the boundary.
+- The outline is a continuous oval, `|x/hx|^n + |y/hy|^n = 1`, with `n=2.5`. It is an outline hypothesis selected by visual inspection, not a claim that Apple uses this equation. A capsule's straight sides and circular caps were visibly different.
+- The page field comes from the resting-control frame at 18:10.5, before this transparent lens appears. Track colors/thickness come from uncovered portions; the hidden blue endpoint remains an estimate.
+- Rim reflection color and fine boundary sampling still differ. The surrounding contact glow is retained reference context and is not counted as reconstructed background or scored glass.
 
 <details>
 <summary>Full-resolution screenshots, side by side</summary>
 
-[![Full HD Apple UIKit slider demonstration and reconstructed material](assets/match-slider-full.png)](assets/match-slider-full.png)
+[![Full HD UIKit slider demonstration and reconstructed material](assets/match-slider-full.png)](assets/match-slider-full.png)
 
-Each half retains 1920 × 1080 source pixels. The surrounding UI and exterior halo are shared context.
+Each half retains native 1920 × 1080 pixels; the small thumb has not gained detail through enlargement.
 
 </details>
 
 <details>
-<summary>Starting model, estimated track and error map</summary>
+<summary>Starting optics, uncovered page/track and error map</summary>
 
-![Apple slider compared with the starting field optics](assets/match-slider-starting.png)
+![Apple slider compared with starting field optics](assets/match-slider-starting.png)
 
-![Apple slider compared with the estimated uncovered track](assets/match-slider-input.png)
+![Apple slider and reconstructed uncovered track without a rectangular color patch](assets/match-slider-input.png)
 
-![Glass-only error and spatial scoring mask for the slider](assets/match-slider-error.png)
+![Slider material error and scoring mask](assets/match-slider-error.png)
 
-Track thickness and colors come from uncovered sections. The covered endpoint is inferred from the near-identity center; it is not independently observed.
+</details>
+
+## Light and dark surfaces
+
+Apple's [legibility demonstration, 15:15–15:20](https://developer.apple.com/videos/play/wwdc2025/219/?time=915) shows the same-sized surface adapting to light and dark surroundings. These additional references test brightness, broad lighting and the rim—not optical displacement, because their backdrops contain little or no detail.
+
+![Apple light surface and fitted material over the recovered light field](assets/match-regular-light.png)
+
+![Apple dark surface and fitted material over a black field](assets/match-regular-dark.png)
+
+The optical profile is fixed to the starting field rather than being inferred from these nearly uniform inputs. The identity baseline is included in the results: a high similarity score here cannot validate refraction.
+
+<details>
+<summary>Light surface: full resolution, input and error</summary>
+
+[![Full HD light adaptation reference and reconstruction](assets/match-regular-light-full.png)](assets/match-regular-light-full.png)
+
+![Light reference and uncovered gradient estimate](assets/match-regular-light-input.png)
+
+![Light material error and scoring mask](assets/match-regular-light-error.png)
+
+</details>
+
+<details>
+<summary>Dark surface: full resolution, input and error</summary>
+
+[![Full HD dark adaptation reference and reconstruction](assets/match-regular-dark-full.png)](assets/match-regular-dark-full.png)
+
+![Dark reference and observed black background](assets/match-regular-dark-input.png)
+
+![Dark material error and scoring mask](assets/match-regular-dark-error.png)
+
+</details>
+
+## When to use each material
+
+The [specification's material-role rule](specification.md#material-selection) owns the implementation decision. This comparison supplies evidence and exceptions:
+
+| Context | Apple guidance / observation | Consequence for calibration |
+| --- | --- | --- |
+| Media playback over photos/video | Clear preserves media detail; bright, prominent foreground content and compatible dimming support legibility. | Start with negligible added blur. Fit curvature without washing away texture. |
+| Navigation, toolbars and text-bearing surfaces | Regular adapts blur and brightness for legibility. | Fit optical detail separately from scattering and tone; do not assume one uniform blur radius. |
+| Larger menus and sidebars | Appearance changes with size and context. | A small button's parameters need not remain fixed as it becomes a panel. |
+| Active slider/switch thumb | Standard controls temporarily become transparent lenses during manipulation. | Treat contact state separately from a page's Regular/Clear choice. Preserve the track/value underneath. |
+| Scroll-edge separation | The content receives an additional edge treatment beneath floating controls. | Do not attribute every blurred pixel to the lens material. |
+| Accessibility/appearance preferences | These can alter the material. | Record them when known; an unlabeled screenshot cannot establish universal defaults. |
+
+Primary sources: [Materials HIG](https://developer.apple.com/design/human-interface-guidelines/materials), [variants and legibility](https://developer.apple.com/videos/play/wwdc2025/219/?time=828), [active controls](https://developer.apple.com/videos/play/wwdc2025/219/?time=250), and [size adaptation](https://developer.apple.com/videos/play/wwdc2025/219/?time=360). A control's apparent transparency alone does not establish which API variant produced it.
+
+<details>
+<summary>Additional native-HD references: media and ordinary UI</summary>
+
+![Apple Clear media-control demonstration over video](assets/reference-clear-media.png)
+
+Apple, [14:25](https://developer.apple.com/videos/play/wwdc2025/219/?time=865). This is additional role evidence, not a scored reconstruction: the moving, covered video background has not been recovered independently. Defocus already present in the media must not be counted as glass blur.
+
+![Apple Regular-material examples: waveform controls, alert, text menu and toolbar](assets/reference-regular-contexts.png)
+
+Apple, [14:10](https://developer.apple.com/videos/play/wwdc2025/219/?time=850). These examples show why a universal clear-or-frosted setting is insufficient. Their covered backgrounds and system settings are not all known, so they are not assigned numerical refraction scores.
 
 </details>
 
 ## Measurements
 
-RGB errors below use encoded 0–255 channels, **only inside the scored glass mask**. Lower RMSE is better; higher SSIM is better. These are not percentages of fidelity. The exterior photograph, captions and symbols cannot inflate the scores.
+<!-- SCORE_TABLE -->
 
-| Scene | No refraction RMSE | Starting optics RMSE | Fitted RMSE | Withheld blocks RMSE | Fitted rim / interior RMSE | Fitted SSIM |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Clear playback control | 13.86 | 17.70 | **10.17** | 10.62 | 11.96 / 8.03 | 0.9580 |
-| Blurred toolbar | 10.09 | 10.72 | **7.24** | 7.05 | 11.11 / 4.29 | 0.9736 |
-| Active slider | 14.02 | 13.44 | **12.01** | 13.85 | 18.95 / 8.36 | 0.9488 |
+| Scene | No refraction RMSE | Starting optics RMSE | Fitted RMSE | Rim RMSE | Withheld RMSE | SSIM | Source σ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Playback | 10.98 | 18.99 | 8.60 | 11.68 | 9.20 | 0.9438 | 0.5 |
+| Archive / plus | 9.67 | 9.28 | 7.93 | 10.95 | 8.35 | 0.9630 | 8 |
+| Active slider | 11.70 | 10.21 | 5.92 | 7.73 | 6.81 | 0.9811 | 0 |
+| Regular light | 1.53 | 1.53 | 1.53 | 2.90 | 1.54 | 0.9991 | 0 |
+| Regular dark | 0.87 | 0.87 | 0.87 | 1.66 | 0.89 | 0.9997 | 0 |
 
-- Every baseline gets the **same material-fitting freedom**. “Starting optics” fixes the lab's field defaults—edge 0.4, band 0.55, core 0.012, rim 0.35—but refits blur, lighting and color. It is not a screenshot of the unmodified lab.
-- “Rim” means inward distance less than 20% of the shorter half-extent. It is a common measurement region, not each model's fitted band. The first 0.75 pixel inside the silhouette is excluded to avoid coverage ambiguity.
-- The models are selected by weighted training loss. The gold 32-pixel blocks are omitted from parameter fitting, but are **not an independent test scene**. They share the same video frame, source reconstruction and manually chosen geometry. Model development also inspected these results.
-- SSIM uses the mean of encoded RGB channels, an 11 × 11 Gaussian window and a mask eroded by that window. It is an implementation-specific structural diagnostic, not a perceptual guarantee. Full RGB MAE, gradient error, counts and all competing fits are in [results.json](experiments/reconstruction/results.json).
-- [Sensitivity probes](experiments/reconstruction/sensitivity.json) shift the reconstructed source by ±1 pixel and inspect sampled map derivatives. They expose registration sensitivity; they are not confidence intervals or global invertibility proofs.
+<!-- /SCORE_TABLE -->
+Errors use encoded RGB channels on a 0–255 scale, only within the glass mask. Lower RMSE is better; higher SSIM is better. These values are not percentages of fidelity. All optical hypotheses receive the same material-fitting freedom and role-specific blur limits.
 
-### Local folds and the constrained alternative
-
-A low image error alone permits extreme optical parameters. Numerical Jacobians reveal negative determinants in **18.9%**, **54.4%** and **28.0%** of the sampled scored pixels for the clear circle, toolbar and slider respectively. Those regions reverse local orientation. Refraction can produce such folds, but matching a still does not establish that Apple's control uses the same mechanism or that our result will remain stable in motion.
-
-An additional field fit enforces both [sufficient local nonfolding bounds](model.md#jacobian-and-folds), with a 0.02 margin at unit optical power. It keeps the same source, scoring masks and material freedom:
-
-| Scene | Unrestricted fit RMSE | Constrained field RMSE | Constrained withheld RMSE |
-| --- | ---: | ---: | ---: |
-| Clear playback control | 10.17 | 13.02 | 12.20 |
-| Blurred toolbar | 7.24 | 9.63 | 9.71 |
-| Active slider | 12.01 | 12.70 | 14.72 |
-
-The constrained fit is closer than the starting optics in all three full-mask scores, but cannot reproduce the same boundary details as the unrestricted fits. It is certified only for the stated local orientation bounds at unit power, not globally one-to-one or safe under arbitrary pressure/depth multipliers.
+- The first 0.75 pixel inward from the silhouette and all foreground-symbol boxes are excluded. The rim region is the first 20% of the shorter half-extent, independent of a fitted profile's band.
+- Gold 32-pixel blocks are omitted from fitting. They share the same frame, source estimate and manually chosen outline, and have been inspected during development; they are **not independent-scene validation**.
+- Model selection uses weighted training loss. Whole-mask error, rim error and visible structure must all be reviewed; smoothing a mismatch can lower a score while worsening the reconstruction.
+- SSIM uses mean encoded RGB, an 11 × 11 Gaussian window and an eroded mask. Full MAE, gradient error, counts, parameters and source metadata are in [results.json](experiments/reconstruction/results.json).
+- [Sensitivity records](experiments/reconstruction/sensitivity.json) include ±1-pixel source shifts and sampled Jacobians. Strong fits can reverse local source orientation near the rim. Such folds can resemble inverted detail, but are not validated for stable animation.
 
 <details>
-<summary>Apple versus the constrained field, all three scenes</summary>
+<summary>Constrained field comparisons</summary>
 
-![Apple playback control and locally nonfolding field reconstruction](assets/match-media-bounded.png)
+![Apple playback control and constrained boundary field](assets/match-media-bounded.png)
 
-![Apple toolbar and locally nonfolding field reconstruction](assets/match-regular-bounded.png)
+![Apple toolbar and constrained boundary field](assets/match-regular-bounded.png)
 
-![Apple slider and locally nonfolding field reconstruction](assets/match-slider-bounded.png)
+![Apple slider and constrained boundary field](assets/match-slider-bounded.png)
+
+The field uses the [sufficient local orientation bounds](model.md#jacobian-and-folds) at unit power. The slider additionally depends on the assumed oval and numerical minimum-curvature estimate. These constraints do not establish global one-to-one mapping, arbitrary-motion safety or Apple fidelity.
 
 </details>
 
 ## Method
 
-### Reference quality and background recovery
-
-| Case | Target presentation time | Uncovered-source time | Recovery evidence |
-| --- | --- | --- | --- |
-| Clear circle | 189.989800 s | 180.013167 s | 71 SIFT/RANSAC inliers outside the glass; local exterior MAE 1.42/255. |
-| Toolbar | 710.009300 s | 719.985933 s | 37 exterior inliers; local exterior MAE 8.60/255. Scroll/zoom and a replaced neutral region make this conditional evidence. |
-| Slider | 1091.990900 s | Analytic track | Uncovered colors and 21-pixel round track; hidden endpoint inferred, not recovered. |
-
-- Inputs are Apple's original HD downloads at 30000/1001 fps. No social-media repost, upscaled thumbnail or AI reconstruction is used as reference. Video compression and Apple presentation processing remain limitations.
-- Frame indexes, actual timestamps, geometry, foreground exclusion boxes, affine transforms and scores are saved in [results.json](experiments/reconstruction/results.json). Download URLs and exact SHA256 hashes are in [sources.json](experiments/reconstruction/sources.json).
-- Lens geometry is manually located at native resolution and held fixed during fitting. The source registration uses exterior features, not features already refracted inside the lens. An exterior MAE includes lighting/shadow differences; it is not pure registration error.
-
-### Optical and material fitting
-
-The [boundary-field and cap equations](model.md) are ported into [render.py](experiments/reconstruction/render.py). Their output is a source-coordinate lookup, followed by a separately fitted material:
-
-`output_c = clamp(gain_c × blurredSource_c(lookup) + offset_c + directionalRimLight, 0, 1)`
-
-- Optical parameters are shared across the whole element; there is no fitted per-pixel displacement image. Cap index is fixed at 1.33 to reduce the number of interchangeable parameters.
-- Material: one Gaussian blur before refraction; three channel gains; three offsets; nine achromatic rim-light coefficients. The light basis has fixed 1.4-pixel, fitted-width and four-times-fitted-width Gaussian profiles, each with constant, horizontal-normal and vertical-normal terms. The narrow term allows a thin reflection without forcing the broad highlight to be equally narrow.
-- This color operation is performed in **encoded RGB** to fit the screenshots. It is not a physical radiance computation, nor a claim that Apple uses this blur kernel or lighting basis. Gaussian blur and refraction do not generally commute.
-- Fitting uses up to 6,500 deterministic training samples from a half-resolution raster, with 1.3× residual weighting in the rim. Final scores use full-resolution floating-point renders. Saved PNGs are quantized afterward.
-- Differential evolution followed by bounded Powell optimization uses fixed seeds 222–226. Bounds: field edge 0–3, band 0.03–1, core 0–0.18, rim 0–1; cap height 0.01–1.2, gap 0–1.5, band 0.03–1; blur σ 0–35 pixels in 0.5-pixel steps; broad rim width 1–12 pixels. The constrained field instead fits an edge fraction of `(0.98−core)/max(D,T)` using the documented derivative bounds. Gain/lighting extremes receive penalties. Some fits reach search boundaries; none is certified globally optimal.
-- Initial searches showed that the starting optics could underperform the no-refraction baseline. Widening the edge/band search and separating narrow and broad highlights improved the fits. All current baselines were refitted with the same final material model.
-
-### What this changes about the model
-
-- **Strong edge refraction is supported by these references.** A largely neutral center can coexist with a narrow, strongly displaced boundary. The clear-circle fit requires a substantially narrower band than the previous default.
-- A single “depth” or zoom multiplier is insufficient. Band width, displacement profile, center scaling, blur and lighting need independent controls. The toolbar fit differs substantially from the clear control.
-- Broad blur can conceal a wrong optical map. The no-refraction baseline and separate rim score are necessary controls; a high whole-image similarity score would be misleading.
-- No common Apple geometry, shader, pressure law or universal preset has been identified. These are three static, conditional reconstructions. The remaining reflection and rim errors are visible in the figures, rather than concealed by a claim of parity.
+- **Inputs:** original 1920 × 1080 Apple downloads at 30000/1001 fps. No upscaled thumbnail, social-media repost or generated reference is used. Exact hashes and URLs: [sources.json](experiments/reconstruction/sources.json). Video compression/presentation processing remain limitations.
+- **Recovery:** exterior SIFT/RANSAC features register the uncovered dune and text frames. Page fields are robust degree-four RGB fits to uncovered, text-free pixels. Recovered text is composed over the target field, avoiding a constant-colored insertion. The slider's page is observed before contact; its covered track endpoint is inferred.
+- **Geometry:** the circle and toolbar use circle/rounded-rectangle distances; the slider uses numerical distance and normals to a continuous oval. Geometry is fixed during optical fitting. These 2D outlines do not identify a unique 3D body.
+- **Optics:** [field/cap equations](model.md), plus a [flexible boundary-profile comparator](model.md#reconstruction-comparators). No per-pixel displacement image is fitted.
+- **Sampling:** fitting samples the native source at pixel centers; the final render integrates 4 × 4 subpixels for material and coverage, in strips to bound memory. Reported scores describe that final render. This raster filtering is separate from Gaussian scattering. The prior half-resolution fit introduced smoothing of its own; source blur σ is also not the same as perceived output blur after compression/magnification.
+- **Scattering:** media σ is restricted to 0–0.5 pixel; the active slider to zero. The toolbar blends clear and blurred samples using a smooth distance-to-boundary weight, with core σ limited to 8 pixels and a fitted 2–30-pixel transition. The light/dark references use zero blur because their fields cannot constrain it.
+- **Material:** separate rim/core RGB gains, RGB offsets, nine directional rim-light terms and five smooth body-light terms. Core contrast changes smoothly inward. Every hypothesis gets the same basis. Bounded least squares replaces the former penalty on an unconstrained color fit; a weak numerical ridge handles constant/grayscale inputs. Operations use encoded RGB for screenshot fitting, not physical radiance.
+- **Compositing:** the 10-pixel contact band uses the recovered source plus a Gaussian-normalized exterior residual estimated outside the dilated lens. This removes old-reference rim fragments rather than drawing a new outline beside them. Farther exterior remains shared. The band is unscored and is not a validated shadow reconstruction.
+- **Lighting basis:** three Gaussian distance profiles—fixed 1.4 pixels, fitted width and four times that width—each multiplied by constant/X-normal/Y-normal terms; body terms are normalized X, Y, X², Y² and XY. This is a low-order approximation, not a recovered Apple lighting model.
+- **Search:** fixed seeds, differential evolution and bounded Powell refinement, up to 6,500 training samples, 1.3× rim residual weighting. Parameters and search bounds live in [reproduce.py](experiments/reconstruction/reproduce.py). Searches can reach bounds or local minima; none is certified globally optimal.
+- **Scope:** Apple design demonstrations do not establish their private pipeline. The UIKit slider is a recorded app demonstration. Both physical interpretation and cross-scene transfer remain hypotheses.
 
 ## Reproduce
 
-Use Python 3.11+ with NumPy, SciPy, OpenCV and Pillow. Recorded environment: NumPy 2.4.6, SciPy 1.17.1, OpenCV 5.0.0, Pillow 13.0.0, Linux DejaVu Sans. Font selection affects captions/redrawn figures, not numeric scores. Other library versions may produce different registrations or optimizer results.
+Python 3.11+, NumPy, SciPy, OpenCV and Pillow. Recorded environment: NumPy 2.4.6, SciPy 1.17.1, OpenCV 5.0.0, Pillow 13.0.0, Linux DejaVu Sans. Captions can vary with fonts; numeric scores do not use them.
 
-1. Download the two original HD videos from [the source manifest](experiments/reconstruction/sources.json) into a private directory as `219-hd.mp4` and `284-hd.mp4`. Do not commit the videos. The script rejects mismatched hashes and non-HD decoded frames.
-2. From the repository root, run:
+Download the two HD videos in the [manifest](experiments/reconstruction/sources.json) privately as `219-hd.mp4` and `284-hd.mp4`. Hashes and decoded dimensions are checked. From the repository root:
 
 ```sh
 python3 docs/liquid-glass/experiments/reconstruction/verify.py
 python3 docs/liquid-glass/experiments/reconstruction/reproduce.py /private/videos /private/results
-python3 docs/liquid-glass/experiments/reconstruction/publish.py /private/results docs/liquid-glass/assets
+python3 docs/liquid-glass/experiments/reconstruction/publish.py /private/results docs/liquid-glass/assets --sources /private/videos
 python3 docs/liquid-glass/experiments/reconstruction/sensitivity.py /private/results
 ```
 
-The default replay uses the committed parameters. Add `--fit` to rerun optimization, or `--case media`, `regular` or `slider` for one scene. Use a fresh output directory to avoid loading parameters from an earlier experiment. `publish.py` also refreshes the committed results record; review changed scores before committing it.
+The default replay uses committed parameters. `--fit` searches again; `--case` and `--model` limit the search. Optimization can warm-start from saved parameters and may find a different minimum; use a fresh output directory when comparing searches. Review regenerated results and figures together.
 
-Verification checks 30 numerical-reference mappings (maximum absolute error **1.42 × 10⁻¹⁴**), identity scores, a known 25.5/255 brightness error, spatial-shift detection, excluded-pixel invariance, disjoint fitting/withheld masks and 1,000 samples of the constrained parameterization. These validate the tools, **not an Apple match**.
+Verification covers portable mappings, known scoring errors/exclusions, constrained parameters, continuous-oval geometry, spline endpoint/zero-power limits, background-field recovery and material contrast endpoints. Tool correctness and image similarity are separate checks.
 
-## Attribution and next comparisons
+## Attribution and limits
 
-Apple reference frames © Apple Inc., reproduced here as attributed excerpts for rendering analysis. They are not original Localica assets or licensed app artwork. Source videos and private user references are not bundled. The right-hand glass computation and vector redraws are Localica experiments; their retained exterior context is still Apple imagery.
+Apple excerpts © Apple Inc., reproduced for attributed rendering analysis. Reference symbols and exterior context remain Apple imagery; only the computed glass material is a Localica reconstruction. Source videos, Apple fonts and private user references are not bundled.
 
-Before transferring these fits into production, compare frozen parameters against separate high-resolution captures with known backgrounds, multiple element sizes and pressed/released states. Reconstruct exterior shadows separately, then evaluate temporal stability and physical-device rendering cost. None of those unmeasured properties follows from a good fit to these three stills.
+The remaining calibration requires independently recovered backgrounds, multiple sizes and contact states, exterior-shadow reconstruction, temporal stability and physical-device measurements. A close still-image fit alone cannot establish those properties.

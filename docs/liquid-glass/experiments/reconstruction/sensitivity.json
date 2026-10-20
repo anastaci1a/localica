@@ -2,46 +2,76 @@
   "media": {
     "model": "cap",
     "source_shift_rmse_255": {
-      "0,0": 10.18761920928955,
-      "-1,0": 10.212074279785156,
-      "1,0": 10.194805145263672,
-      "0,-1": 10.38254165649414,
-      "0,1": 10.207191467285156
+      "0,0": 8.609354972839355,
+      "-1,0": 8.622776985168457,
+      "1,0": 8.660950660705566,
+      "0,-1": 8.849691390991211,
+      "0,1": 8.761407852172852
     },
-    "sampled_min_determinant": -7.4540923633980025,
-    "sampled_negative_determinant_fraction": 0.18854095283496708,
-    "sampled_max_displacement_px": 117.43298345437529,
+    "sampled_min_determinant": -7.454226811492482,
+    "sampled_negative_determinant_fraction": 0.1854423025355302,
+    "sampled_max_displacement_px": 116.3121441024301,
     "sample_count": 33563,
     "note": "Finite samples are not a global invertibility proof; \u00b11px source shifts are sensitivity probes, not confidence intervals. Source PNG quantization changes this baseline slightly."
   },
   "regular": {
-    "model": "cap",
+    "model": "spline",
     "source_shift_rmse_255": {
-      "0,0": 7.238173007965088,
-      "-1,0": 7.251380443572998,
-      "1,0": 7.24862003326416,
-      "0,-1": 7.231842041015625,
-      "0,1": 7.322455883026123
+      "0,0": 7.921942234039307,
+      "-1,0": 7.905820846557617,
+      "1,0": 7.995513916015625,
+      "0,-1": 8.045877456665039,
+      "0,1": 7.857601165771484
     },
-    "sampled_min_determinant": -19.688729197090094,
-    "sampled_negative_determinant_fraction": 0.5436704720504758,
-    "sampled_max_displacement_px": 194.2962620192724,
+    "sampled_min_determinant": -107.99370259172655,
+    "sampled_negative_determinant_fraction": 0.41005296587815737,
+    "sampled_max_displacement_px": 163.13064141782633,
     "sample_count": 47389,
     "note": "Finite samples are not a global invertibility proof; \u00b11px source shifts are sensitivity probes, not confidence intervals. Source PNG quantization changes this baseline slightly."
   },
   "slider": {
-    "model": "field",
+    "model": "spline",
     "source_shift_rmse_255": {
-      "0,0": 12.01516342163086,
-      "-1,0": 12.10447883605957,
-      "1,0": 12.177556991577148,
-      "0,-1": 12.868807792663574,
-      "0,1": 13.850584983825684
+      "0,0": 5.922541618347168,
+      "-1,0": 6.606673717498779,
+      "1,0": 5.98203182220459,
+      "0,-1": 10.40517520904541,
+      "0,1": 10.091832160949707
     },
-    "sampled_min_determinant": -1.770872936850667,
-    "sampled_negative_determinant_fraction": 0.2797971259509721,
-    "sampled_max_displacement_px": 27.893035660769012,
-    "sample_count": 5915,
+    "sampled_min_determinant": -4.510432836730916,
+    "sampled_negative_determinant_fraction": 0.28555995678790064,
+    "sampled_max_displacement_px": 29.771182834099218,
+    "sample_count": 5554,
+    "note": "Finite samples are not a global invertibility proof; \u00b11px source shifts are sensitivity probes, not confidence intervals. Source PNG quantization changes this baseline slightly."
+  },
+  "regular-light": {
+    "model": "default",
+    "source_shift_rmse_255": {
+      "0,0": 1.5318669080734253,
+      "-1,0": 1.5319794416427612,
+      "1,0": 1.5317580699920654,
+      "0,-1": 1.5319616794586182,
+      "0,1": 1.5317758321762085
+    },
+    "sampled_min_determinant": 0.16145046529699245,
+    "sampled_negative_determinant_fraction": 0.0,
+    "sampled_max_displacement_px": 21.742581118849248,
+    "sample_count": 23478,
+    "note": "Finite samples are not a global invertibility proof; \u00b11px source shifts are sensitivity probes, not confidence intervals. Source PNG quantization changes this baseline slightly."
+  },
+  "regular-dark": {
+    "model": "default",
+    "source_shift_rmse_255": {
+      "0,0": 0.8714381456375122,
+      "-1,0": 0.8714381456375122,
+      "1,0": 0.8714381456375122,
+      "0,-1": 0.8714381456375122,
+      "0,1": 0.8714381456375122
+    },
+    "sampled_min_determinant": 0.16145046529699245,
+    "sampled_negative_determinant_fraction": 0.0,
+    "sampled_max_displacement_px": 21.742581118849248,
+    "sample_count": 23478,
     "note": "Finite samples are not a global invertibility proof; \u00b11px source shifts are sensitivity probes, not confidence intervals. Source PNG quantization changes this baseline slightly."
   }
 }

@@ -10,13 +10,16 @@ from pathlib import Path
 import argparse,json,hashlib
 import cv2,numpy as np
 from scipy.optimize import differential_evolution,minimize
-from render import geometry,lookup,illumination,fit_material,shade
+from render import case_geometry,lookup,illumination,fit_material,shade,spline_basis
+from background import page_source,slider_source,paper
 
 ROOT=Path(__file__).resolve().parent
 CASES={
- 'media':dict(video='219',time=190,source_time=180,center=[960,542],half=[245,245],radius=245,crop=[620,220,1300,875],foreground=[[870,425,1088,666]]),
- 'regular':dict(video='219',time=710,source_time=720,center=[960,542],half=[392,170],radius=170,crop=[475,285,1445,845],foreground=[[695,462,872,628],[1068,470,1215,618]]),
- 'slider':dict(video='284',time=1092,source_time=None,center=[763.5,548.5],half=[118.5,56.5],radius=56.5,crop=[540,440,985,690],foreground=[]),
+ 'media':dict(video='219',time=190,source_time=180,center=[960,542],half=[245,245],radius=245,crop=[620,220,1300,875],foreground=[[870,425,1088,666]],sigma_max=.5),
+ 'regular':dict(video='219',time=710,source_time=720,center=[960,542],half=[392,170],radius=170,crop=[475,285,1445,845],foreground=[[695,462,872,628],[1068,470,1215,618]],sigma_max=8,blur_transition=30),
+ 'slider':dict(video='284',time=1092,source_time=None,center=[763.5,548.5],half=[118.5,56.5],radius=35.65,exponent=2.5,crop=[540,440,985,690],foreground=[],sigma_max=0),
+ 'regular-light':dict(video='219',time=915,source_time=None,center=[960,541],half=[245,106.5],radius=106.5,crop=[610,350,1310,730],foreground=[],sigma_max=0,models=['identity','default']),
+ 'regular-dark':dict(video='219',time=920,source_time=None,center=[960,541],half=[245,106.5],radius=106.5,crop=[610,350,1310,730],foreground=[],sigma_max=0,models=['identity','default']),
 }
 
 
@@ -43,23 +46,32 @@ def register(source,target,case):
     if case['source_time']==720:
         covered=np.zeros(source.shape[:2],np.uint8);covered[350:790,490:1420]=1
         contaminated=cv2.warpAffine(covered,mat,(1920,1080))>0
-        registered[contaminated]=(219/255,)*3;valid[contaminated]=False
+        registered,field_evidence=page_source(registered,target,contaminated)
+        valid[contaminated]=False
     exterior=(mask>0)&valid
     # Registration quality over a local non-glass band; exclude missing top source.
     band=np.zeros(mask.shape,bool);band[max(220,int(cy-hy-100)):int(cy+hy+100),int(cx-hx-150):int(cx+hx+150)]=True
     exterior&=band
-    return registered,{'matrix':mat.tolist(),'sift_inliers':int(inliers.sum()),'exterior_mae_255':float(np.abs(registered-target)[exterior].mean()*255),'exterior_pixels':int(exterior.sum())}
+    evidence={'matrix':mat.tolist(),'sift_inliers':int(inliers.sum()),'exterior_mae_255':float(np.abs(registered-target)[exterior].mean()*255),'exterior_pixels':int(exterior.sum())}
+    if case['source_time']==720:evidence['page_field']=field_evidence
+    return registered,evidence
 
 
 def prepare(folder,name,case):
     target,meta=frame(folder,case['video'],case['time'])
-    if name=='slider':
+    if name=='regular-light':
+        excluded=np.zeros(target.shape[:2],bool);excluded[340:730,600:1320]=True;excluded[700:]=True
+        source,evidence=paper(target,excluded);source[739:]=0
+        registration={'method':'smooth page field from uncovered light gradient; no optical-detail calibration','page_field':evidence,'exterior_mae_255':None}
+    elif name=='regular-dark':
+        source=np.zeros_like(target);source[:349]=target[:349]
+        registration={'method':'black field observed outside control; no optical-detail calibration','exterior_mae_255':0}
+    elif name=='slider':
         # Track/background inferred from their uncovered portions. Hidden value
         # endpoint is estimated from the nearly registered core, not claimed known.
-        source=target.copy();source[425:680,625:910]=np.median(target[405:425,625:910],axis=(0,1))
-        cv2.line(source,(580,550),(1378,550),tuple(float(x) for x in np.median(target[544:556,1000:1250],axis=(0,1))),21,cv2.LINE_AA)
-        cv2.line(source,(580,550),(719,550),tuple(float(x) for x in np.median(target[544:556,580:625],axis=(0,1))),21,cv2.LINE_AA)
-        registration={'method':'analytical 21px round track; gray/blue/background measured outside lens; hidden fill endpoint 719px inferred from core','exterior_mae_255':None}
+        uncovered,source_meta=frame(folder,'284',1090.5)
+        source,evidence=slider_source(target,uncovered)
+        registration={'method':'page field from resting control frame before active lens appears; analytical antialiased 21px round track; hidden fill endpoint 719px inferred from core','source_frame':source_meta,'page_field':evidence,'exterior_mae_255':None}
     else:
         source,source_meta=frame(folder,case['video'],case['source_time']);source,registration=register(source,target,case);registration['source_frame']=source_meta
     return source,target,meta,registration
@@ -71,7 +83,7 @@ def points(case,scale=1):
 
 
 def masks(case,xs,ys,x,y):
-    sd,nx,ny=geometry(x,y,case['half'],case['radius']);valid=sd<-.75
+    sd,nx,ny=case_geometry(case,x,y);valid=sd<-.75
     for x0,y0,x1,y1 in case['foreground']:valid&=~((xs>=x0)&(xs<=x1)&(ys>=y0)&(ys<=y1))
     # Spatial blocks, not randomly interleaved pixels; one in four held out.
     held=((xs//32+3*(ys//32))%4==0)&valid
@@ -79,6 +91,7 @@ def masks(case,xs,ys,x,y):
 
 
 def parameters(v,model):
+    if model=='spline':return dict(coefficients=list(v[:7]),core_x=v[7],core_y=v[8]),v[9],v[10]
     if model=='cap':return dict(height=v[0],gap=v[1],band=v[2],ior=1.33),v[3],v[4]
     if model=='bounded':
         D=v[3]*16/9+(1-v[3])*64/27;T=v[3]*256/243+(1-v[3])*1024/729
@@ -87,43 +100,90 @@ def parameters(v,model):
     return dict(edge=.4,band=.55,core=.012,rim=.35,kind=2),v[0],v[1]
 
 
-def fit(source,target,case,model,seed):
+def fit(source,target,case,model,seed,initial=None):
     xs,ys,x,y=points(case,2);sd,train,held,valid=masks(case,xs,ys,x,y)
     rng=np.random.default_rng(222);indices=np.flatnonzero(train);rng.shuffle(indices);indices=indices[:6500]
     px,py=x.flat[indices],y.flat[indices];tx,ty=xs.flat[indices],ys.flat[indices]
+    boundary=case_geometry(case,px,py)
+    basis=spline_basis(-boundary[0],case['radius']) if model=='spline' else None
     expected=target[ty.astype(int),tx.astype(int)]
     distance=-sd.flat[indices];weights=np.where(distance<min(case['half'])*.20,1.3,1.)
-    # Small fitting raster, then a full native-resolution final render/score.
-    small=cv2.resize(source,(960,540),interpolation=cv2.INTER_AREA)
+    # Native sampling during fitting too: downsampling itself softened the clear
+    # media texture and made a low-blur fit impossible to inspect correctly.
     blurs={}
     def sample(v):
+        transition=v[-1] if case.get('blur_transition') else None
+        if transition is not None:v=v[:-1]
         p,sigma,rimw=parameters(v,model)
-        key=round(sigma*2)/2
-        if key not in blurs:blurs[key]=cv2.GaussianBlur(small,(0,0),key/2) if key else small
-        lx,ly=lookup(px,py,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model)
-        # Resize pixel centers: original index x corresponds to (x+.5)/2-.5.
-        a=cv2.remap(blurs[key],((lx+case['center'][0]+.5)/2-.5).astype(np.float32),((ly+case['center'][1]+.5)/2-.5).astype(np.float32),cv2.INTER_LINEAR).reshape(-1,3)
-        light=illumination(px,py,case['half'],case['radius'],rimw)
+        if model=='spline':p['_basis']=basis
+        key=round(sigma*4)/4
+        if key not in blurs:blurs[key]=cv2.GaussianBlur(source,(0,0),key) if key else source
+        lx,ly=lookup(px,py,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model,boundary,case.get('exponent',0))
+        a=cv2.remap(blurs[key],(lx+case['center'][0]).astype(np.float32),(ly+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR).reshape(-1,3)
+        if case.get('blur_transition'):
+            clear=cv2.remap(source,(lx+case['center'][0]).astype(np.float32),(ly+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR).reshape(-1,3)
+            blend=np.clip(-boundary[0]/transition,0,1);blend=blend**3*(blend*(6*blend-15)+10)
+            a=clear+(a-clear)*blend[:,None]
+        light=illumination(px,py,case['half'],case['radius'],rimw,boundary)
         co,invalid=fit_material(a,light,expected,weights)
         pred=shade(a,light,co)
         error=float(np.mean(((pred-expected)*weights[:,None])**2)+invalid*.02)
         return error,co
-    bounds={'field':[(0,3),(.03,1),(0,.18),(0,1),(0,35),(1,12)],'bounded':[(0,1),(.03,1),(0,.18),(0,1),(0,35),(1,12)],'cap':[(.01,1.2),(0,1.5),(.03,1),(0,35),(1,12)],'default':[(0,35),(1,12)],'identity':[(0,35),(1,12)]}[model]
-    result=differential_evolution(lambda v:sample(v)[0],bounds,popsize=7,maxiter=65,tol=.001,seed=seed,polish=False,workers=1)
+    bounds={'spline':[(0,2.5)]*7+[(0,.3),(0,.65),(0,35),(1,12)],'field':[(0,3),(.03,1),(0,.18),(0,1),(0,35),(1,12)],'bounded':[(0,1),(.03,1),(0,.18),(0,1),(0,35),(1,12)],'cap':[(.01,1.2),(0,1.5),(.03,1),(0,35),(1,12)],'default':[(0,35),(1,12)],'identity':[(0,35),(1,12)]}[model]
+    bounds[-2]=(0,max(case.get('sigma_max',35),1e-6))
+    if case.get('blur_transition'):bounds.append((2,30))
+    start=None
+    if initial and model!='spline':
+        p=initial['parameters'];sigma=initial['sigma'];rimw=initial['rim_width']
+        if model=='cap':start=[p['height'],p['gap'],p['band'],sigma,rimw]
+        elif model in ('field','bounded'):
+            edge=p['edge']
+            if model=='bounded':edge/=((.98-p['core'])/(p['rim']*16/9+(1-p['rim'])*64/27))
+            start=[edge,p['band'],p['core'],p['rim'],sigma,rimw]
+        else:start=[sigma,rimw]
+        if case.get('blur_transition'):start.append(initial.get('blur_transition',2))
+        start=np.clip(start,np.array(bounds)[:,0],np.array(bounds)[:,1])
+    result=differential_evolution(lambda v:sample(v)[0],bounds,popsize=8 if model=='spline' else 7,maxiter=120 if model=='spline' else 65,tol=.001,seed=seed,polish=False,workers=1,x0=start)
     result2=minimize(lambda v:sample(v)[0],result.x,method='Powell',bounds=bounds,options={'maxiter':50,'xtol':.002,'ftol':1e-6})
     v=result2.x if result2.fun<result.fun else result.x;error,co=sample(v)
-    p,sigma,rimw=parameters(v,model)
-    return dict(model=model,parameters=p,sigma=round(sigma*2)/2,rim_width=rimw,material=co.tolist(),fit_loss=error,evaluations=int(result.nfev+result2.nfev))
+    transition=v[-1] if case.get('blur_transition') else None
+    p,sigma,rimw=parameters(v[:-1] if transition is not None else v,model)
+    return dict(model=model,parameters=p,sigma=round(sigma*4)/4,rim_width=rimw,blur_transition=transition,material=co.tolist(),fit_loss=error,evaluations=int(result.nfev+result2.nfev))
 
 
-def render(source,case,fit):
-    xs,ys,x,y=points(case);p=fit['parameters'];model=fit['model']
-    lx,ly=lookup(x,y,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model)
-    sigma=fit['sigma'];blur=cv2.GaussianBlur(source,(0,0),sigma) if sigma else source
+def render_grid(source,blur,case,fit,x,y):
+    p=fit['parameters'];model=fit['model']
+    boundary=case_geometry(case,x,y)
+    lx,ly=lookup(x,y,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model,boundary,case.get('exponent',0))
     sample=cv2.remap(blur,(lx+case['center'][0]).astype(np.float32),(ly+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR)
-    light=illumination(x,y,case['half'],case['radius'],fit['rim_width'])
+    if case.get('blur_transition'):
+        clear=cv2.remap(source,(lx+case['center'][0]).astype(np.float32),(ly+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR)
+        blend=np.clip(-boundary[0]/fit.get('blur_transition',case['blur_transition']),0,1);blend=blend**3*(blend*(6*blend-15)+10)
+        sample=clear+(sample-clear)*blend[...,None]
+    light=illumination(x,y,case['half'],case['radius'],fit['rim_width'],boundary)
     output=shade(sample,light,np.array(fit['material']))
-    return output
+    return output,boundary[0]<=0
+
+
+def render(source,case,fit,samples=4):
+    """Integrate 4×4 subpixels in bounded-memory strips, including coverage.
+
+    Fitting uses native pixel centers; final scores use this reconstructed image.
+    This is raster antialiasing, independent of the material Gaussian blur.
+    """
+    x0,y0,x1,y1=case['crop'];sigma=fit['sigma']
+    blur=cv2.GaussianBlur(source,(0,0),sigma) if sigma else source
+    result=np.zeros((y1-y0,x1-x0,3),np.float32)
+    for top in range(y0,y1,24):
+        bottom=min(top+24,y1)
+        yy,xx=np.mgrid[top:bottom:1/samples,x0:x1:1/samples]
+        xx=xx-.5+.5/samples-case['center'][0];yy=yy-.5+.5/samples-case['center'][1]
+        color,inside=render_grid(source,blur,case,fit,xx,yy)
+        shape=(bottom-top,samples,x1-x0,samples)
+        weight=inside.reshape(shape).sum(axis=(1,3))
+        premul=(color*inside[...,None]).reshape((*shape,3)).sum(axis=(1,3))
+        result[top-y0:bottom-y0]=premul/np.maximum(weight,1)[...,None]
+    return result
 
 
 def scores(pred,target,case):
@@ -146,7 +206,7 @@ def scores(pred,target,case):
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('sources',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--fit',action='store_true');ap.add_argument('--case',choices=CASES);args=ap.parse_args();args.out.mkdir(parents=True,exist_ok=True)
+    ap=argparse.ArgumentParser();ap.add_argument('sources',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--fit',action='store_true');ap.add_argument('--case',choices=CASES);ap.add_argument('--model',choices=['identity','default','field','cap','bounded','spline']);args=ap.parse_args();args.out.mkdir(parents=True,exist_ok=True)
     manifest=json.loads((ROOT/'sources.json').read_text())
     videos={case['video'] for name,case in CASES.items() if not args.case or name==args.case}
     for video in videos:
@@ -159,10 +219,10 @@ def main():
         x0,y0,x1,y1=case['crop'];crop=target[y0:y1,x0:x1]
         cv2.imwrite(str(args.out/f'{name}-source.png'),np.uint8(np.clip(source,0,1)*255)[:,:,::-1]);cv2.imwrite(str(args.out/f'{name}-target.png'),np.uint8(target*255)[:,:,::-1])
         fits={}
-        for i,model in enumerate(['identity','default','field','cap','bounded']):
+        for i,model in enumerate(case.get('models',['identity','default','field','cap','bounded','spline'])):
             dest=args.out/f'{name}-{model}.json'
-            if args.fit or (not dest.exists() and model not in saved.get(name,{}).get('models',{})):
-                print('Fitting',name,model,flush=True);f=fit(source,target,case,model,222+i);dest.write_text(json.dumps(f,indent=2))
+            if (args.fit and (not args.model or args.model==model)) or (not dest.exists() and model not in saved.get(name,{}).get('models',{})):
+                print('Fitting',name,model,flush=True);f=fit(source,target,case,model,222+i,saved.get(name,{}).get('models',{}).get(model));dest.write_text(json.dumps(f,indent=2))
             elif dest.exists():f=json.loads(dest.read_text())
             else:f=saved[name]['models'][model];dest.write_text(json.dumps(f,indent=2))
             output=render(source,case,f).astype(np.float32);f['scores']=scores(output,crop,case);fits[model]=f

@@ -124,6 +124,15 @@ F(p) = Q + Tout.xy × G/(−Tout.z)
 - `H=0` or `ior=1` explicitly gives the identity map. The `H→0` limit is not uniform at an exactly vertical rim when `G>0`; this comparator is unsuitable as a fade-to-zero-opacity formula. Fade material coverage independently.
 - Full Fresnel-weighted energy, internal reflections, absorption, dispersion, caustics and multiple scattering are absent. The lab adds an independent synthetic highlight (the field model uses a fixed 0.3-reference-height cap for that lighting only), so calling its complete output a physically accurate renderer would be incorrect.
 
+## Reconstruction comparators
+
+The [HD study](reconstruction.md) adds two offline hypotheses beyond the portable lab's circle/capsule equations:
+
+- **Continuous oval:** `|x/hx|^n+|y/hy|^n=1`. The slider uses `n=2.5`, a visually selected outline hypothesis. Distance is the signed Euclidean distance to the numerically nearest boundary point; the outward normal follows the implicit gradient there. This is not a capsule or a recovered Apple shape formula. The sampled minimum curvature radius is about 35.66 native pixels for half-extents 118.5 × 56.5; the optical band is limited to 35.65. Numeric curvature checks do not constitute a proof for all possible exponents.
+- **Flexible inverse-map profile:** `a(d)=min(hx,hy) Σ ci Bi(clamp(d/r,0,1))`, with cubic B-splines on knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]`. Seven coefficients are fitted and the final three are zero. Therefore `a`, `a′` and `a″` vanish at the inner join. The map is `F=(x(1−cxS), y(1−cyS))−a n`, with quintic `S` evaluated at `d/r`. This allows independently fitted central X/Y scale and a flexible folded rim, without a fitted displacement image. It is an empirical comparator, not a physical surface reconstruction or a nonfolding guarantee.
+
+[shapes.py](experiments/reconstruction/shapes.py) and [render.py](experiments/reconstruction/render.py) implement these extensions. Their tests cover circle limits, normals, the oval boundary, zero power and spline endpoint derivatives. The 30 older portability fixtures continue to cover the original field/cap; they do not validate the extra hypotheses or establish Apple fidelity. Material/scattering fits and their domains are specified only in the [comparison method](reconstruction.md#method).
+
 ## Sampling, coverage and color
 
 - Optical coordinates extend to the boundary. Apply antialiasing to final **coverage**, not by multiplying displacement by a several-pixel edge ramp. The lab uses a one-framebuffer-pixel coverage band; filtering can still soften the first visible pixel.

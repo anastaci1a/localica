@@ -55,6 +55,6 @@ The contacted edge stays fixed while the lens compresses and recovers. Compare w
 
 The specification defines the shared system and its acceptance checks. Physical-device performance still needs review; optical materialization remains deferred. Current selection lenses intentionally appear immediately; their entrance motion awaits [#107](https://github.com/anastaci1a/localica/issues/107). Requested glass-on-content and nested controls remain explicit departures from Apple's usual layer guidance.
 
-Update evidence and specification together when guidance or owner decisions change; source review dates live in the [atlas](sources.md). Keep release history in Git and Releases. The lab and its captures are original assets. The [reconstruction study](reconstruction.md#attribution-and-next-comparisons) separately includes attributed Apple excerpts; no source videos or Apple font files are bundled.
+Update evidence and specification together when guidance or owner decisions change; source review dates live in the [atlas](sources.md). Keep release history in Git and Releases. The lab and its captures are original assets. The [reconstruction study](reconstruction.md#attribution-and-limits) separately includes attributed Apple excerpts; no source videos or Apple font files are bundled.
 
 [Main repository](../../README.md) · [Evidence atlas](sources.md) · [Acceptance checks](specification.md#acceptance-checks)

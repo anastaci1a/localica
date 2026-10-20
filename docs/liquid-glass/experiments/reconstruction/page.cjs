@@ -12,8 +12,8 @@ fs.mkdirSync(out,{recursive:true});
   await page.setViewportSize({width,height:950});
   await page.goto(pathToFileURL(path.join(root,'site/liquid-glass/reconstruction.html')).href);
   await page.evaluate(async()=>{await Promise.all([...document.images].map(i=>i.decode()));});
-  assert.equal(await page.locator('details').count(),7);
-  assert.equal(await page.locator('img').count(),18);
+  assert.equal(await page.locator('details').count(),10);
+  assert.equal(await page.locator('img').count(),29);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Page overflows');
   await page.screenshot({path:path.join(out,`page-${width}.png`)});
   for(const details of await page.locator('details').all()){
@@ -26,5 +26,5 @@ fs.mkdirSync(out,{recursive:true});
   await page.screenshot({path:path.join(out,`measurements-${width}.png`)});
  }
  assert.deepEqual(errors,[]);await browser.close();
- console.log('PASS desktop/phone layout, 18 decoded figures, 7 expandable sections, native-HD pairs, no page errors');
+ console.log('PASS desktop/phone layout, 29 decoded figures, 10 expandable sections, 5 native-HD pairs, no page errors');
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -2,8 +2,11 @@
 import json
 from pathlib import Path
 import numpy as np
-from render import geometry,lookup
+from render import lookup,illumination,shade
 from reproduce import masks,points,scores,parameters
+from background import paper
+from shapes import superellipse,minimum_radius
+from scipy.interpolate import BSpline
 
 fixtures=json.loads((Path(__file__).parent.parent/'model-fixtures.json').read_text())
 error=0.;count=0
@@ -39,3 +42,49 @@ for _ in range(1000):
 print(f'PASS {count} portable map fixtures; maximum absolute error {error:.3g}')
 print('PASS identity, known brightness error, spatial shift, excluded-pixel and disjoint-block controls')
 print('PASS 1000 constrained-field parameter samples satisfy both sufficient local nonfolding bounds')
+
+x=rng.uniform(-70,70,100);y=rng.uniform(-70,70,100)
+sd,nx,ny=superellipse(x,y,[50,50],2)
+assert np.max(np.abs(sd-(np.hypot(x,y)-50)))<1e-4
+assert np.max(np.abs(np.hypot(nx,ny)-1))<1e-12
+t=np.linspace(.001,np.pi/2-.001,80)
+x=118.5*np.cos(t)**.8;y=56.5*np.sin(t)**.8
+sd,nx,ny=superellipse(x,y,[118.5,56.5],2.5)
+assert np.max(np.abs(sd))<1e-4
+assert 35.65<minimum_radius([118.5,56.5],2.5)<35.67
+knots=[0]*4+[.015,.04,.09,.2,.45,.75]+[1]*4
+bs=BSpline(knots,[.8,.5,.2,.6,.3,.1,.02,0,0,0],3)
+assert all(abs(bs(1,nu=i))<1e-10 for i in range(3))
+zero=dict(coefficients=[0]*7,core_x=0,core_y=0)
+assert np.max(np.abs(np.array(lookup(x,y,[120,60],50,zero,'spline'))-[x,y]))==0
+print('PASS continuous-oval distance/normal/curvature checks and spline C2/zero-power limits')
+
+yy,xx=np.mgrid[:96,:160];base=np.stack([.8+.02*xx/160,.81+.02*yy/96,np.full(xx.shape,.84)],axis=-1).astype(np.float32)
+image=base.copy();image[10:20,10:110]=0;image[40:60,60:100]=.7
+excluded=np.zeros(xx.shape,bool);excluded[40:60,60:100]=True
+field,evidence=paper(image,excluded)
+assert np.max(np.abs(field-base))<1e-5
+light=illumination(np.array([0.,10.]),np.array([0.,10.]),[100,50],50,4)
+co=np.zeros(23);co[:3]=co[-3:]=1
+sample=np.array([[.2,.3,.4],[.6,.7,.8]])
+assert np.max(np.abs(shade(sample,light,co)-sample))<1e-12
+co[-3:]=.5
+expected=sample*(1-.5*light[:,-1,None])
+assert np.max(np.abs(shade(sample,light,co)-expected))<1e-12
+print('PASS recovered background field without a color patch; identity/core-contrast material controls')
+
+if __name__=='__main__':
+    import argparse
+    ap=argparse.ArgumentParser();ap.add_argument('--figures',type=Path);args=ap.parse_args()
+    if args.figures:
+        from publish import read,glyph,compose,coverage
+        from reproduce import CASES
+        for name,probes in [('media',[(900,470),(950,600)]),('regular',[(780,542),(1143,542)])]:
+            target=read(args.figures/f'{name}-target.png');mask=glyph(name,target)>0
+            for x,y in probes:assert mask[y,x],(name,x,y,'Missing reference symbol segment')
+            report=json.loads((args.figures/f'{name}-report.json').read_text())
+            model=min(['field','cap','bounded','spline'],key=lambda m:report['models'][m]['fit_loss'])
+            output=compose(name,CASES[name],target,read(args.figures/f'{name}-{model}.png'),args.figures)
+            assert np.array_equal(output[mask],target[mask])
+            cov=coverage(name);assert cov.min()>=0 and cov.max()<=1
+        print('PASS native reference symbols including play gradient/archive dash; integrated shape coverage')
