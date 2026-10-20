@@ -39,8 +39,7 @@
         0,
         0
       ],
-      "threshold": 0.54,
-      "neutral_only": true
+      "threshold": 0.54
     }
   ],
   "reference": {
