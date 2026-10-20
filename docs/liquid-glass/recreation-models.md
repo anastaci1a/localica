@@ -198,6 +198,7 @@ C_final = (1−F) C_transmission_after_output_blur + F E
 - The reflection width and source kernel scale with each pose's `L`. Sample `E` at the unrefracted surface position; update its source offset during motion. Keep shape coverage, exterior shadow and foreground separate.
 - Reflection and transmission have independent filtering. Applying the transmission blur again after this mixture changes the model. Material derivatives therefore acquire `(1−F)` **after** their output filter.
 - This bounded mixture approximates the incident field from the available backdrop. It is not a recovered environment, a Fresnel law, or Apple's shader; the directional lobe does not explain the observed rainbow. No target RGB is used as its input.
+- Exponent `p=0` selects an isotropic rim. An explicitly declared RGB environment may replace the backdrop proxy; it adds no background sample or photographic observation. Home tests a uniform white field to improve the fitted material's poorly constrained outer edge. This remains an empirical lighting assumption, checked on both full composites as well as the frozen glass masks.
 - An absent option preserves the earlier calculation exactly. Source coverage includes the environment kernel separately. Frozen native gates remain unchanged; the excluded outer-contour band needs an additional visual/error check.
 
 ### Directional chromatic transmission

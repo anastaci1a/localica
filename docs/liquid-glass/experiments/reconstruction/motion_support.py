@@ -41,7 +41,7 @@ def prepare(study,p,known,cov,requested,axis='y'):
                     for RX,RY,active in chromatic for s in shifts(travel)
                     if (active&(study.valid if scope=='scored' else cov>0)).any()),default=1.)
     reflection=None
-    if 'grazing_reflection' in p:
+    if 'grazing_reflection' in p and 'environment_rgb' not in p['grazing_reflection']:
         from grazing_reflection import layers
         F,_=layers(study,p);active=F>1e-8
         x0,y0,x1,y1=study.crop;RY,RX=np.mgrid[y0:y1,x0:x1].astype(np.float32)
@@ -83,4 +83,6 @@ def prepare(study,p,known,cov,requested,axis='y'):
                       context_mean_source_observed_min=context_fraction(observed,actual),
                       context_mean_minimum_defined_confidence=context_fraction(known,actual,strict=True),
                       context_mean_minimum_observed_confidence=context_fraction(observed,actual,strict=True))
+    if 'environment_rgb' in p.get('grazing_reflection',{}):
+        report['reflection_environment_kind']='declared_constant_rgb'
     return source,actual,report
