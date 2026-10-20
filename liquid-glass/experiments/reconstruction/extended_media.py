@@ -87,7 +87,7 @@ def main():
     # Check the prepared renderer on the actual motion input, independently of
     # the frozen native scoring pass; cache speed cannot change the material.
     assert np.max(abs(prepared.render()-study.render(p,co,scale)))<2e-6
-    context=cv2.resize(study.target_crop,(width,height),interpolation=cv2.INTER_LANCZOS4) if scale>1 else study.target_crop
+    motion_support['exterior_context']='Exterior and refracted glass sample the same translated, nearest-completed source. Missing context remains an estimate; no fixed reference strip is spliced into the moving background.'
     video=out/'motion.mp4';log=(out/'encode.log').open('w')
     # yuv420 requires even dimensions; padding preserves all rendered pixels.
     W=width+width%2;H=height+height%2
@@ -101,10 +101,9 @@ def main():
             study.backdrop_shift=[float(sx),float(sy)]
             material=prepared.render()
             base=cv2.remap(study.source,xx+sx,yy+sy,cv2.INTER_LINEAR)
-            valid=cv2.remap(known,xx+sx,yy+sy,cv2.INTER_NEAREST)>0
-            # Unknown EXTERIOR context uses the reference context. Unknown
-            # input is never turned into a scored recovery claim.
-            base=np.where(valid[...,None],base,context)
+            # A fixed reference strip at the moving confidence boundary causes
+            # a visible cut. Translate the completed source consistently on
+            # both sides of that boundary; completion is presentation only.
             base=base*(1-opacity[...,None])
             frame=foreground(study,material*cov[...,None]+base*(1-cov[...,None]),scale)
             frame=np.uint8(np.rint(np.clip(frame,0,1)*255))
@@ -114,7 +113,7 @@ def main():
     finally:
         proc.stdin.close();assert proc.wait()==0;log.close()
     # Encoding does not need the large optical maps or the last RGB frame.
-    del prepared,cov,xx,yy,opacity,context,base,material,frame,valid
+    del prepared,cov,xx,yy,opacity,base,material,frame
     report=dict(state_sha256=state_digest(args.folder),render_files={name:hashlib.sha256((out/name).read_bytes()).hexdigest() for name in ['motion.mp4','comparison.png']},native_size=[x1-x0,y1-y0],output_size=[W,H],output_scale=scale,frames=args.frames,fps=args.fps,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,presentation_completion_native_delta=completion_delta,
         motion=f"Stationary element; recovered backdrop translates {'horizontally' if args.axis=='x' else 'vertically'}. Optical/material coefficients remain frozen.",
         limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.')

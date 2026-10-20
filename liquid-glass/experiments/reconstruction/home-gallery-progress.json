@@ -1,5 +1,5 @@
 {
-  "status": "In progress, not a final paired study",
+  "status": "Final paired study; corrected single-to-paired boundary and21 native paired passes verified",
   "rendering_code_commit": "db5ec56f13d87ccf2a39a827bc771944901372c2",
   "gallery_script_sha256": "000265a42d4acb834feaeeee3abde14d9a29295c82fa5db6f030edeaf72d2894",
   "state_record_sha256": "8bcfc2330a8a806ead115521ef69a5262847e116e1622162bb08566fdbd38c93",
@@ -55,16 +55,16 @@
       "grazing_reflection": {
         "strength": 0.5,
         "width": 0.00675,
-        "angular_power": 0.0,
-        "source_sigma": 0.0,
+        "angular_power": 0,
+        "source_sigma": 0,
         "direction": [
-          0.0,
-          1.0
+          0,
+          1
         ],
         "environment_rgb": [
-          1.0,
-          1.0,
-          1.0
+          1,
+          1,
+          1
         ]
       }
     },
@@ -192,22 +192,22 @@
         "loss": 40.18659131417412
       },
       "source_support": {
-        "source_defined_fraction": 1.0,
-        "gaussian_3sigma_defined_fraction": 1.0,
-        "source_observed_fraction": 1.0,
-        "gaussian_3sigma_observed_fraction": 1.0,
+        "source_defined_fraction": 1,
+        "gaussian_3sigma_defined_fraction": 1,
+        "source_observed_fraction": 1,
+        "gaussian_3sigma_observed_fraction": 1,
         "source_gaussian_radius_native_px": 21,
         "reflection_environment_kind": "declared_constant_rgb",
         "reflection_environment_rgb": [
-          1.0,
-          1.0,
-          1.0
+          1,
+          1,
+          1
         ],
         "reflection_background_sampling": false,
-        "context_mean_source_defined_fraction": 1.0,
-        "context_mean_source_observed_fraction": 1.0,
-        "context_mean_minimum_defined_confidence": 1.0,
-        "context_mean_minimum_observed_confidence": 1.0
+        "context_mean_source_defined_fraction": 1,
+        "context_mean_source_observed_fraction": 1,
+        "context_mean_minimum_defined_confidence": 1,
+        "context_mean_minimum_observed_confidence": 1
       },
       "presentation_completion": {
         "max_abs_rgb": 6.918076038360596,
@@ -243,30 +243,74 @@
         "loss": 103.24580164410571
       },
       "source_support": {
-        "source_defined_fraction": 1.0,
-        "gaussian_3sigma_defined_fraction": 1.0,
-        "source_observed_fraction": 1.0,
-        "gaussian_3sigma_observed_fraction": 1.0,
+        "source_defined_fraction": 1,
+        "gaussian_3sigma_defined_fraction": 1,
+        "source_observed_fraction": 1,
+        "gaussian_3sigma_observed_fraction": 1,
         "source_gaussian_radius_native_px": 21,
         "reflection_environment_kind": "declared_constant_rgb",
         "reflection_environment_rgb": [
-          1.0,
-          1.0,
-          1.0
+          1,
+          1,
+          1
         ],
         "reflection_background_sampling": false,
-        "context_mean_source_defined_fraction": 1.0,
-        "context_mean_source_observed_fraction": 1.0,
-        "context_mean_minimum_defined_confidence": 1.0,
-        "context_mean_minimum_observed_confidence": 1.0
+        "context_mean_source_defined_fraction": 1,
+        "context_mean_source_observed_fraction": 1,
+        "context_mean_minimum_defined_confidence": 1,
+        "context_mean_minimum_observed_confidence": 1
       },
       "presentation_completion": {
-        "max_abs_rgb": 1.519918441772461e-05,
-        "rmse": 1.0036565356585925e-07,
+        "max_abs_rgb": 0.00001519918441772461,
+        "rmse": 1.0036565356585925e-7,
         "method": "Nearest defined RGB extends unknown source only for presentation; input files, masks and native scores stay frozen."
       },
       "background_estimate": null
     }
   ],
-  "limits": "Progress snapshot only; final cross-reference/source/media verification remains separate."
+  "limits": "Two observed backgrounds in one Apple video. Context-dependent lighting is tested over their narrow brightness range; unrecovered presentation pixels remain estimates. Independent replay/source/media reports are stored with the paired study.",
+  "initial_historical_passes": 12,
+  "additional_single_passes": 10,
+  "total_initial_passes": 22,
+  "media_code_commit": "6a911b8b38f3cdb1167fe36743595b17ea3c0fbc",
+  "final_motion": {
+    "a": {
+      "axis": "x",
+      "travel_over_L": 0.3792134831460674,
+      "output_scale": 4,
+      "gif": {
+        "fps": 6,
+        "output_size": [
+          940,
+          960
+        ],
+        "master_relative_scale": 1,
+        "palette_colors": 256,
+        "palette_sampling": "All frame pixels",
+        "dither": "sierra2_4a",
+        "maximum_megabytes": 10,
+        "spatial_downsampling": false
+      },
+      "video_sha256": "fade24c77c8156973c5b52f6084d8a80aff2c81274e9ee75b1dda55e909f99e5"
+    },
+    "b": {
+      "axis": "y",
+      "travel_over_L": 0.5056179775280899,
+      "output_scale": 4,
+      "gif": {
+        "fps": 10,
+        "output_size": [
+          940,
+          960
+        ],
+        "master_relative_scale": 1,
+        "palette_colors": 256,
+        "palette_sampling": "All frame pixels",
+        "dither": "sierra2_4a",
+        "maximum_megabytes": 10,
+        "spatial_downsampling": false
+      },
+      "video_sha256": "c0ecad92b5b2626378e59aa15d3b877804945b8faa93a7693e434db9d4d5fcfc"
+    }
+  }
 }
