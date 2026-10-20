@@ -222,32 +222,34 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 
 </details>
 
-### Home control — under correction
+### Home control — corrected pairing in progress
 
-Frames A/B: 2.5/2.0 seconds. The foreground has been replaced with a clean symmetric vector. **The paired fit below regresses the best single-background result:** A's weighted loss is 55.738 versus the retained single's 40.345. Its internal paired checks did not catch that boundary error. The images remain visible for inspection; this study does **not** meet the no-regression requirement yet.
+Frames A/B: 2.5/2.0 seconds. The earlier pairing regressed the retained first-background result; its records are archived unchanged and do not count as current acceptance. The corrected baseline protects the original first loss 40.345 and improves the second from 114.298 to 103.329, using one sparse source-brightness response and the same clean vector. These 4× stills show corrected paired pass 1; twenty new paired experiments and motion captures remain in progress.
 
-[![Provisional Home control, background A: Apple left, reconstruction right](assets/study-music-home-vector-paired-a.png)](assets/study-music-home-vector-paired-a.png)
+[![Home correction, background A: Apple left, reconstruction right](assets/study-music-home-vector-progress-a.png)](assets/study-music-home-vector-progress-a.png)
 
-[![Provisional Home control, background B: Apple left, reconstruction right](assets/study-music-home-vector-paired-b.png)](assets/study-music-home-vector-paired-b.png)
+[![Home correction, background B: Apple left, reconstruction right](assets/study-music-home-vector-progress-b.png)](assets/study-music-home-vector-progress-b.png)
 
-- [Provisional shared recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Retained single recipe](experiments/reconstruction/studies/music-home-vector/accepted.json) · [A diagnostics](experiments/reconstruction/studies/music-home-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-home-vector/paired/b/diagnostics.json).
+- [Corrected recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Boundary/source verification](experiments/reconstruction/studies/music-home-vector/paired/bridge.json) · [Original single](experiments/reconstruction/studies/music-home-vector/accepted.json) · [Archived invalid-chain evidence](experiments/reconstruction/studies/music-home-vector/paired-invalid-boundary/status.json). A geometric 0.08L inset keeps the source-color calculation away from an unrecovered boundary.
+
+The motion below belongs to the previous invalid pairing; it will be replaced after the corrected chain is verified.
 <details>
-<summary>Provisional motion — background A</summary>
+<summary>Historical motion — background A</summary>
 
-<video controls preload="none" playsinline width="940" height="960" aria-label="Provisional Home control, background A motion"><source src="assets/study-music-home-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-a.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="940" height="960" aria-label="Home correction, background A motion"><source src="assets/study-music-home-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-a.mp4">Open video</a></video>
 
-<img src="assets/study-music-home-vector-paired-a.gif" alt="Provisional Home control motion on background A" width="940" height="960" loading="lazy" decoding="async">
+<img src="assets/study-music-home-vector-paired-a.gif" alt="Home correction motion on background A" width="940" height="960" loading="lazy" decoding="async">
 
 [Video](assets/study-music-home-vector-paired-a.mp4) · [GIF](assets/study-music-home-vector-paired-a.gif)
 
 </details>
 
 <details>
-<summary>Provisional motion — background B</summary>
+<summary>Historical motion — background B</summary>
 
-<video controls preload="none" playsinline width="940" height="960" aria-label="Provisional Home control, background B motion"><source src="assets/study-music-home-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-b.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="940" height="960" aria-label="Home correction, background B motion"><source src="assets/study-music-home-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-b.mp4">Open video</a></video>
 
-<img src="assets/study-music-home-vector-paired-b.gif" alt="Provisional Home control motion on background B" width="940" height="960" loading="lazy" decoding="async">
+<img src="assets/study-music-home-vector-paired-b.gif" alt="Home correction motion on background B" width="940" height="960" loading="lazy" decoding="async">
 
 [Video](assets/study-music-home-vector-paired-b.mp4) · [GIF](assets/study-music-home-vector-paired-b.gif)
 
@@ -307,7 +309,7 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 | Compact mini-player | 24.899 / 23.369 | 4.370 / 4.325 | 29 / 21 | Completed study |
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
-| Home | 55.738 / 114.298 | 6.956 / 9.731 | 22 / 20 | Boundary correction required |
+| Home, pass 1 | 40.345 / 103.329 | 5.871 / 9.226 | 10 / 1 | In progress |
 | Active switch, pass 24 | 232.758 / 276.129 | 12.061 / 14.677 | 24 / 24 | Paired calibration |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Home's missing single-to-paired boundary check is explicitly flagged above.

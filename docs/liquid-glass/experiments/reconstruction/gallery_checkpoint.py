@@ -57,8 +57,10 @@ def main():
                 samples=samples,limits='Progress snapshot only; final cross-reference/source/media verification remains separate.')
     (guide/'experiments/reconstruction'/args.snapshot).write_text(json.dumps(report,indent=2)+'\n')
     file=guide/'reconstruction.md';text=file.read_text()
-    start=text.index('## '+args.section+'\n');end=text.find('\n## ',start+1)
-    if end<0:end=len(text)
+    heading=re.search(r'(?m)^(#{2,3}) '+re.escape(args.section)+r'\n',text)
+    assert heading,'Missing gallery section'
+    start=heading.start();following=re.search(r'(?m)^#{1,'+str(len(heading[1]))+r'} ',text[heading.end():])
+    end=heading.end()+following.start() if following else len(text)
     section=text[start:end]
     section,n=re.subn(r'\bpaired pass \d+',f'paired pass {args.number}',section)
     assert n==1,'Keep one current pass label beside the figures'

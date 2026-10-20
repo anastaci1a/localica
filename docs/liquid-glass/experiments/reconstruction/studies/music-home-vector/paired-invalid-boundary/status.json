@@ -1,0 +1,6 @@
+{
+  "status": "Historical invalid single-to-paired boundary; not current acceptance",
+  "reason": "Initial paired A loss56.108072 exceeded retained single40.344658 with the same frozen reference protocol.",
+  "source_commit": "74fd684b97e2dcabdc40a837d5a635891d8a5950",
+  "media": "Original raw assets remain in that Git commit; current assets may be replaced by corrected captures."
+}
