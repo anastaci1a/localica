@@ -1,0 +1,23 @@
+{
+  "glass_pixels": 15289,
+  "source_defined_fraction": 1.0,
+  "gaussian_3sigma_defined_fraction": 1.0,
+  "source_observed_fraction": 1.0,
+  "gaussian_3sigma_observed_fraction": 1.0,
+  "source_gaussian_radius_native_px": 21,
+  "context_mean_source_defined_fraction": 1.0,
+  "context_mean_source_observed_fraction": 1.0,
+  "source_coordinate_range": [
+    [
+      351.3985290527344,
+      616.2110595703125
+    ],
+    [
+      463.55242919921875,
+      737.4287719726562
+    ]
+  ],
+  "inverted_local_mapping_fraction": 0.6958597684609851,
+  "background_estimate": null,
+  "limits": "Native-grid finite differences. Defined source may include explicitly declared estimates; observed support excludes those pixels. Negative Jacobian does not establish a physical caustic.3sigma omits Gaussian tails; output scattering is not propagated."
+}

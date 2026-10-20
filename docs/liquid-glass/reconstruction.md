@@ -230,7 +230,7 @@ Frames A/B: 2.5/2.0 seconds. The earlier pairing regressed the retained first-ba
 
 [![Home correction, background B: Apple left, reconstruction right](assets/study-music-home-vector-progress-b.png)](assets/study-music-home-vector-progress-b.png)
 
-- [Corrected recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Boundary/source verification](experiments/reconstruction/studies/music-home-vector/paired/bridge.json) · [Original single](experiments/reconstruction/studies/music-home-vector/accepted.json) · [Archived invalid-chain evidence](experiments/reconstruction/studies/music-home-vector/paired-invalid-boundary/status.json). A geometric 0.08L inset keeps the source-color calculation away from an unrecovered boundary.
+- [Corrected recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Boundary/source verification](experiments/reconstruction/studies/music-home-vector/paired/bridge.json) · [Original single](experiments/reconstruction/studies/music-home-vector/accepted.json) · [Archived invalid-chain evidence](experiments/reconstruction/studies/music-home-vector/paired-invalid-boundary/status.json). A geometric 0.08L inset keeps the source-color calculation away from an unrecovered boundary. [Reference-resolution replay](experiments/reconstruction/studies/music-home-vector/paired/verification.json) verifies the current chain. Display captures extend missing contact/background pixels with nearby known colors; [snapshot measurements](experiments/reconstruction/home-gallery-progress.json) report the difference from the frozen benchmark.
 
 The motion below belongs to the previous invalid pairing; it will be replaced after the corrected chain is verified.
 <details>
