@@ -1,6 +1,7 @@
 // Static Pages bundle. Only the public field guide is copied; no workspace data.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {execFileSync}=require('node:child_process');
+const {prepareMedia}=require('./guide-media.cjs');
 (async()=>{
   const {Marked}=await import('marked');
   const root=__dirname,out=path.resolve(process.argv[2]||path.join(root,'site'));
@@ -27,11 +28,11 @@ const {execFileSync}=require('node:child_process');
     if(file.endsWith('.html'))data=data.toString().replace(/(href|src)="((?!https?:|data:)[^"?]+\.(?:js|css|png|gif|svg|mp4))"/g,(_,attribute,url)=>`${attribute}="${url}?v=${source.slice(0,12)}"`);
     fs.mkdirSync(path.dirname(path.join(out,file)),{recursive:true});fs.writeFileSync(path.join(out,file),data);manifest.files[file]=crypto.createHash('sha256').update(data).digest('hex');}
   for(const name of pages){
-    const content=md.parse(fs.readFileSync(path.join(root,name),'utf8'));
+    const content=prepareMedia(md.parse(fs.readFileSync(path.join(root,name),'utf8')),root);
     write('liquid-glass/'+(name==='README.md'?'index.html':name.replace('.md','.html')),
-      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · ${name==='README.md'?'Liquid Glass':name.replace('.md','')}</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main>${content}</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/${source}/docs/liquid-glass">${source.slice(0,8)}</a> · Original studies; no claim of iOS parity.</footer></body></html>`);
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · ${name==='README.md'?'Liquid Glass':name.replace('.md','')}</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><script src="guide-media.js" defer></script><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main>${content}</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/${source}/docs/liquid-glass">${source.slice(0,8)}</a> · Original studies; no claim of iOS parity.</footer></body></html>`);
   }
-  for(const name of ['lab.html','lab.js','software.js','model.js','lab.css','guide.css'])write('liquid-glass/'+name,fs.readFileSync(path.join(root,name)));
+  for(const name of ['lab.html','lab.js','software.js','model.js','lab.css','guide.css','guide-media.js'])write('liquid-glass/'+name,fs.readFileSync(path.join(root,name)));
   for(const name of fs.readdirSync(path.join(root,'assets')))if(/\.(png|gif|svg|mp4)$/.test(name))write('liquid-glass/assets/'+name,fs.readFileSync(path.join(root,'assets',name)));
   write('liquid-glass/experiments/reference_patch.py',fs.readFileSync(path.join(root,'experiments/reference_patch.py')));
   // Study recipes/diagnostics are nested. Export tracked public inputs only;

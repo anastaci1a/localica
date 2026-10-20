@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "build": "node site.cjs",
-    "test": "node experiments/check-links.cjs && node experiments/browser.cjs && node experiments/software.cjs"
+    "test": "node experiments/check-links.cjs && node experiments/browser.cjs && node experiments/software.cjs",
+    "test:guide": "node experiments/check-links.cjs && node experiments/reconstruction/page.cjs && node experiments/reconstruction/media-loading.cjs"
   },
   "devDependencies": {
     "marked": "17.0.4",
