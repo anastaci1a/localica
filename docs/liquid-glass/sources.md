@@ -2,7 +2,9 @@
 
 [Guide home](README.md) · [Localica specification](specification.md) · [Motion lab](lab.html)
 
-Compiled 13 October 2026; material, custom-view and spring sources rechecked 19 October 2026. These are concise notes, not reproductions of the talks. Time links open the relevant discussion. **Localica implications** are interpretations, not Apple's private renderer. Versioned sessions describe their year's system; living HIG pages may evolve. [Optical evidence and reproducible experiments](optics.md) distinguish measured observations from model assumptions.
+For native-HD frame excerpts, recovered backgrounds and measured rendering comparisons, see [Apple reference reconstructions](reconstruction.md). Their source hashes and scoring exclusions are recorded separately from this guidance atlas.
+
+Compiled 13 October 2026; material, custom-view and spring sources rechecked 19 October 2026. These are concise notes, not reproductions of the talks. Time links open the relevant discussion. **Localica implications** are interpretations, not Apple's private renderer. Versioned sessions describe their year's system; living HIG pages may evolve. [Optical evidence](optics.md) distinguishes observations from assumptions; the [portable equations](model.md) separately state mathematical guarantees. Generic Snell optics follow [PBRT](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission); [W3C color conversions](https://www.w3.org/TR/css-color-4/#color-conversion-code) define encoded versus linear-light channels. Neither source describes Apple's shader.
 
 ## Interaction foundations
 
@@ -42,7 +44,7 @@ Watch: [dynamics, 1:29](https://developer.apple.com/videos/play/wwdc2025/219/?ti
 
 ### HIG · Materials and color
 
-Regular Liquid Glass blurs and adjusts background luminosity for readability. Clear emphasizes rich media and may need local dimming; it is not the universal default. Standard materials still organize the content layer. Custom glass should be selective. Semantic roles matter more than an apparent color in one screenshot. [Materials](https://developer.apple.com/design/human-interface-guidelines/materials).
+Regular Liquid Glass blurs and adjusts background luminosity for readability. Clear emphasizes rich media with prominent bright foreground content and compatible dimming; it is not the universal default. The HIG suggests 35% dark dimming for bright media when needed, not a universal glass opacity. Standard materials organize the content layer; transient active controls are an exception. System appearance/accessibility settings can modify material output. [Materials](https://developer.apple.com/design/human-interface-guidelines/materials). See the [role-specific comparisons](reconstruction.md#when-to-use-each-material).
 
 Color distinguishes meaning and hierarchy; materials pick up surrounding content, so a chosen tint needs testing in context rather than treatment as a fixed swatch. [Color](https://developer.apple.com/design/human-interface-guidelines/color).
 
@@ -55,6 +57,10 @@ Concentric geometry aligns nested curves and padding; fixed-radius shapes, capsu
 Watch: [geometry, 3:00](https://developer.apple.com/videos/play/wwdc2025/356/?time=180) · [structure, 6:16](https://developer.apple.com/videos/play/wwdc2025/356/?time=376) · [grouping, 9:00](https://developer.apple.com/videos/play/wwdc2025/356/?time=540) · [scroll edges, 11:00](https://developer.apple.com/videos/play/wwdc2025/356/?time=660).
 
 **Localica implication:** one surface geometry should drive clipping, rims and shadows. Fix crowded layout at its source; adding a glass wrapper is insufficient. See [geometry and readability](specification.md#geometry-and-readability).
+
+## Interface footage and optical audit
+
+The [context audit](optics.md#context-audit--19-october-2026) records newly inspected Music, media-control, slider/segment, Home/Lock Screen, Photos and Control Center footage alongside earlier quantitative measurements. It distinguishes original device footage from reused Apple inserts, announcement/beta imagery from known production behavior, and observations from shader assumptions. Preset values are hypotheses, not recovered Apple constants.
 
 ## Choosing and arranging controls
 

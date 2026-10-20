@@ -9,7 +9,7 @@ const {execFileSync}=require('node:child_process');
   const repo='https://github.com/anastaci1a/localica/blob/main/';
   const escape=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   const slug=s=>s.replace(/<[^>]*>/g,'').toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu,'').replace(/\s/g,'-');
-  const pages=['README.md','sources.md','specification.md','controls.md','optics.md'];
+  const pages=['README.md','sources.md','specification.md','controls.md','optics.md','model.md','reconstruction.md'];
   function link(href){
     if(!href||/^(https?:|#|mailto:)/.test(href))return href;
     const [file,hash]=href.split('#');
@@ -28,14 +28,20 @@ const {execFileSync}=require('node:child_process');
   for(const name of pages){
     const content=md.parse(fs.readFileSync(path.join(root,name),'utf8'));
     write('liquid-glass/'+(name==='README.md'?'index.html':name.replace('.md','.html')),
-      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · ${name==='README.md'?'Liquid Glass':name.replace('.md','')}</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main>${content}</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/${source}/docs/liquid-glass">${source.slice(0,8)}</a> · Original studies; no claim of iOS parity.</footer></body></html>`);
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · ${name==='README.md'?'Liquid Glass':name.replace('.md','')}</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a><a href="model.html">Equations</a></nav><main>${content}</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/${source}/docs/liquid-glass">${source.slice(0,8)}</a> · Original studies; no claim of iOS parity.</footer></body></html>`);
   }
-  for(const name of ['lab.html','lab.js','software.js','lab.css','guide.css'])write('liquid-glass/'+name,fs.readFileSync(path.join(root,name)));
+  for(const name of ['lab.html','lab.js','model.js','software.js','lab.css','guide.css'])write('liquid-glass/'+name,fs.readFileSync(path.join(root,name)));
   // Prune removed public media when rebuilding an existing Pages checkout.
   const assetDest=path.join(dest,'assets');
   if(fs.existsSync(assetDest))for(const name of fs.readdirSync(assetDest))if(/\.(png|gif|svg)$/.test(name)&&!fs.existsSync(path.join(root,'assets',name)))fs.unlinkSync(path.join(assetDest,name));
   for(const name of fs.readdirSync(path.join(root,'assets')))if(/\.(png|gif|svg)$/.test(name))write('liquid-glass/assets/'+name,fs.readFileSync(path.join(root,'assets',name)));
   write('liquid-glass/experiments/reference_patch.py',fs.readFileSync(path.join(root,'experiments/reference_patch.py')));
+  write('liquid-glass/experiments/context-sources.json',fs.readFileSync(path.join(root,'experiments/context-sources.json')));
+  write('liquid-glass/experiments/model-fixtures.json',fs.readFileSync(path.join(root,'experiments/model-fixtures.json')));
+  for(const name of ['render.py','reproduce.py','verify.py','publish.py','sensitivity.py','background.py','shapes.py','curvature.py','refine.py','solid.py','solid_material.py','verify-solid.py','verify-source.py','audit.py','contour.py','contour.json','sources.json','results.json','sensitivity.json','refinement.json']){
+    const file='experiments/reconstruction/'+name;
+    write('liquid-glass/'+file,fs.readFileSync(path.join(root,file)));
+  }
   write('.nojekyll','');
   write('index.html','<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="0;url=liquid-glass/lab.html"><title>Localica Liquid Glass lab</title><a href="liquid-glass/lab.html">Open the Liquid Glass lab</a></html>');
   fs.writeFileSync(path.join(out,'build.json'),JSON.stringify(manifest,null,2)+'\n');

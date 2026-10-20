@@ -2,7 +2,7 @@
 
 Research notes and implementation requirements for Localica’s glass rendering and interaction system, with links to primary Apple sources.
 
-[Apple evidence](sources.md) · [Optical findings](optics.md) · [Localica specification](specification.md) · [Interactive controls](controls.md) · [Live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) · [Project docs](../README.md)
+[Apple evidence](sources.md) · [Side-by-side reconstructions](reconstruction.md) · [Optical findings](optics.md) · [Portable equations](model.md) · [Localica specification](specification.md) · [Interactive controls](controls.md) · [Live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) · [Project docs](../README.md)
 
 ![The current dark lab showing a refracting lens over a gradient with vertical lines](assets/lab-desktop.png)
 
@@ -15,7 +15,9 @@ Research notes and implementation requirements for Localica’s glass rendering 
 | Implementation rules | [Localica specification](specification.md) |
 | Settings, sliders, switches and buttons | [Control roles, states and review exercises](controls.md) |
 | Interactive rendering model | [Live WebGL lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) — runs in your browser |
+| Portable formulas and verification | [Coordinate, optical, color and pressure contracts](model.md) |
 | Measurements and model limitations | [Optical findings and reproducible experiments](optics.md) |
+| HD reference comparisons | [Apple screenshots, fitted reconstructions and image-error measurements](reconstruction.md) |
 | Recorded demonstrations | Expand the demonstrations below |
 | App behavior | [Current interface contract](../interface.md) |
 
@@ -25,7 +27,7 @@ The guide separates **Apple evidence**, **Localica models**, and **shipped behav
 
 ![WebGL capture of a capsule refracting a gradient with vertical lines](assets/lab-clear.png)
 
-The lab samples an original backdrop through two selectable inverse-map models. WebGL and software rendering both apply refraction; the status line identifies the active renderer. Compare edge displacement, thickness, blur, contrast and synthetic reflection independently. Its coordinate diagnostic and reproducible browser tests check actual shader output. [Run and verify](optics.md#run-and-verify).
+The lab samples an original backdrop through two selectable inverse-map models. WebGL and software rendering both apply refraction; the status line identifies the active renderer. Context presets cover transparent controls, clear media, Regular light/dark surfaces and expanded menus. The sidebar separates Scene, Lens, Material and Motion. Compare edge displacement and central magnification independently; presets remain qualitative approximations. Its coordinate diagnostic and reproducible browser tests compare actual shader output with the independent numerical reference, including the outer edge. [Run and verify](optics.md#run-and-verify).
 
 <details>
 <summary>Panel expansion and collapse</summary>
@@ -53,6 +55,6 @@ The contacted edge stays fixed while the lens compresses and recovers. Compare w
 
 The specification defines the shared system and its acceptance checks. Physical-device performance still needs review; optical materialization remains deferred. Current selection lenses intentionally appear immediately; their entrance motion awaits [#107](https://github.com/anastaci1a/localica/issues/107). Requested glass-on-content and nested controls remain explicit departures from Apple's usual layer guidance.
 
-Update evidence and specification together when guidance or owner decisions change; source review dates live in the [atlas](sources.md). Keep release history in Git and Releases. The lab and its captures are original project assets; no Apple video frames or font files are included.
+Update evidence and specification together when guidance or owner decisions change; source review dates live in the [atlas](sources.md). Keep release history in Git and Releases. The lab and its captures are original assets. The [reconstruction study](reconstruction.md#attribution-and-limits) separately includes attributed Apple excerpts; no source videos or Apple font files are bundled.
 
 [Main repository](../../README.md) · [Evidence atlas](sources.md) · [Acceptance checks](specification.md#acceptance-checks)
