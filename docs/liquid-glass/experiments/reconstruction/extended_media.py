@@ -81,7 +81,7 @@ def main():
     delta=(presentation_native-still)[study.valid]*255
     completion_delta=dict(max_abs_rgb=float(np.max(abs(delta))),rmse=float(np.sqrt(np.mean(delta**2))))
     motion_support['completion']='Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.'
-    high=study.render(p,co,scale);study.comparison(high,out/'comparison.png',p,scale)
+    high=study.render(p,co,scale);study.comparison(high,out/'comparison.png',p,scale,context_completed=True)
     del high
     prepared=Prepared(study,p,co,scale)
     # Check the prepared renderer on the actual motion input, independently of

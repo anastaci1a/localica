@@ -8,6 +8,19 @@ import cv2,numpy as np
 from source_support import coordinates,masks,kernel_safe,fraction
 
 
+def complete(study,known):
+    """Presentation-only source extension; never alter frozen input files."""
+    missing=known<.999;source=study.source.copy()
+    assert (~missing).any(),'No defined source for presentation extension'
+    if missing.any():
+        _,labels=cv2.distanceTransformWithLabels(missing.astype(np.uint8),cv2.DIST_L2,5,labelType=cv2.DIST_LABEL_PIXEL)
+        lookup=np.zeros((int(labels.max())+1,3),np.float32)
+        lookup[labels[~missing]]=source[~missing]
+        source[missing]=lookup[labels[missing]]
+    assert np.array_equal(source[~missing],study.source[~missing])
+    return source
+
+
 def prepare(study,p,known,cov,requested):
     X,Y=coordinates(study,p)
     known,observed=masks(study,known);safe,_=kernel_safe(known,study,p);observed_safe,_=kernel_safe(observed,study,p)
@@ -44,14 +57,7 @@ def prepare(study,p,known,cov,requested):
         if context is not None:minimum=min(minimum,context_fraction(known,actual))
         if minimum>=.999:break
     full=min(fraction(known,X,Y,cov>0,s) for s in np.linspace(-actual,actual,33))
-    missing=known<.999
-    source=study.source.copy()
-    if missing.any():
-        _,labels=cv2.distanceTransformWithLabels(missing.astype(np.uint8),cv2.DIST_L2,5,labelType=cv2.DIST_LABEL_PIXEL)
-        lookup=np.zeros((int(labels.max())+1,3),np.float32)
-        lookup[labels[~missing]]=source[~missing]
-        source[missing]=lookup[labels[missing]]
-    assert np.array_equal(source[~missing],study.source[~missing])
+    source=complete(study,known)
     report=dict(requested_native_px=requested,actual_native_px=actual,
         minimum_scored_lookup_3sigma_defined_fraction=minimum,
         minimum_whole_shape_lookup_defined_fraction=full,
