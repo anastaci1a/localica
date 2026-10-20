@@ -1,18 +1,32 @@
 {
   "glass_pixels": 15221,
+  "source_defined_fraction": 1.0,
+  "gaussian_3sigma_defined_fraction": 1.0,
   "source_observed_fraction": 1.0,
   "gaussian_3sigma_observed_fraction": 1.0,
-  "source_gaussian_radius_native_px": 20,
+  "source_gaussian_radius_native_px": 21,
+  "reflection_environment_kind": "declared_constant_rgb",
+  "reflection_environment_rgb": [
+    1,
+    1,
+    1
+  ],
+  "reflection_background_sampling": false,
+  "context_mean_source_defined_fraction": 1.0,
+  "context_mean_source_observed_fraction": 1.0,
+  "context_mean_minimum_defined_confidence": 1.0,
+  "context_mean_minimum_observed_confidence": 1.0,
   "source_coordinate_range": [
     [
-      352.03271484375,
-      616.8441772460938
+      351.43023681640625,
+      616.2425537109375
     ],
     [
-      463.9073791503906,
-      728.7131958007812
+      463.5206604003906,
+      738.4631958007812
     ]
   ],
-  "inverted_local_mapping_fraction": 0.7226200643847316,
-  "limits": "Native-grid finite-difference diagnostics. A negative lookup Jacobian indicates local orientation reversal; a fold is a singular locus. Neither establishes a physical caustic. Source-known pixels may retain video/recovery error;3sigma omits a Gaussian tail and output scattering is not propagated."
+  "inverted_local_mapping_fraction": 0.6980487484396557,
+  "background_estimate": null,
+  "limits": "Native-grid finite differences. Defined source may include explicitly declared estimates; observed support excludes those pixels. Negative Jacobian does not establish a physical caustic.3sigma omits Gaussian tails; output scattering is not propagated."
 }

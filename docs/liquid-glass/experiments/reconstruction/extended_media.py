@@ -50,7 +50,7 @@ def finish(folder,report,budget,full_size=False):
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--frames',type=int,default=180);ap.add_argument('--travel',type=float,default=45);ap.add_argument('--scale',type=int,default=4);ap.add_argument('--fps',type=int,default=30);ap.add_argument('--gif-max-mb',type=float,default=90);ap.add_argument('--gif-full-size',action='store_true');ap.add_argument('--finish-existing',action='store_true');args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--frames',type=int,default=180);ap.add_argument('--travel',type=float,default=45);ap.add_argument('--axis',choices=['x','y'],default='y');ap.add_argument('--scale',type=int,default=4);ap.add_argument('--fps',type=int,default=30);ap.add_argument('--gif-max-mb',type=float,default=90);ap.add_argument('--gif-full-size',action='store_true');ap.add_argument('--finish-existing',action='store_true');args=ap.parse_args()
     assert args.scale>=1 and args.frames>0 and args.fps>0 and args.gif_max_mb>0
     if args.finish_existing:
         finish(args.folder,json.loads((args.folder/'final/render.json').read_text()),args.gif_max_mb,args.gif_full_size)
@@ -71,7 +71,7 @@ def main():
     opacity=shadow(study,p,(xx-study.case['center'][0])/study.L,(yy-study.case['center'][1])/study.L)
     known=cv2.imread(str(args.folder/'known.png'),cv2.IMREAD_GRAYSCALE).astype(np.float32)/255
     from motion_support import prepare
-    motion_source,travel,motion_support=prepare(study,p,known,native_cov,args.travel)
+    motion_source,travel,motion_support=prepare(study,p,known,native_cov,args.travel,args.axis)
     study.source=motion_source;study.cache.clear()
     # Unobserved source pixels are magenta diagnostics, not display content.
     # Extend them only in this presentation input, after freezing all scores
@@ -81,13 +81,13 @@ def main():
     delta=(presentation_native-still)[study.valid]*255
     completion_delta=dict(max_abs_rgb=float(np.max(abs(delta))),rmse=float(np.sqrt(np.mean(delta**2))))
     motion_support['completion']='Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.'
-    high=study.render(p,co,scale);study.comparison(high,out/'comparison.png',p,scale)
+    high=study.render(p,co,scale);study.comparison(high,out/'comparison.png',p,scale,context_completed=True)
     del high
     prepared=Prepared(study,p,co,scale)
     # Check the prepared renderer on the actual motion input, independently of
     # the frozen native scoring pass; cache speed cannot change the material.
     assert np.max(abs(prepared.render()-study.render(p,co,scale)))<2e-6
-    context=cv2.resize(study.target_crop,(width,height),interpolation=cv2.INTER_LANCZOS4) if scale>1 else study.target_crop
+    motion_support['exterior_context']='Exterior and refracted glass sample the same translated, nearest-completed source. Missing context remains an estimate; no fixed reference strip is spliced into the moving background.'
     video=out/'motion.mp4';log=(out/'encode.log').open('w')
     # yuv420 requires even dimensions; padding preserves all rendered pixels.
     W=width+width%2;H=height+height%2
@@ -97,13 +97,13 @@ def main():
     try:
         for i in range(args.frames):
             shift=np.float32(travel*np.sin(2*np.pi*i/args.frames))
-            study.backdrop_shift=[0.,float(shift)]
+            sx,sy=(shift,np.float32(0.)) if args.axis=='x' else (np.float32(0.),shift)
+            study.backdrop_shift=[float(sx),float(sy)]
             material=prepared.render()
-            base=cv2.remap(study.source,xx,yy+shift,cv2.INTER_LINEAR)
-            valid=cv2.remap(known,xx,yy+shift,cv2.INTER_NEAREST)>0
-            # Unknown EXTERIOR context uses the reference context. Unknown
-            # input is never turned into a scored recovery claim.
-            base=np.where(valid[...,None],base,context)
+            base=cv2.remap(study.source,xx+sx,yy+sy,cv2.INTER_LINEAR)
+            # A fixed reference strip at the moving confidence boundary causes
+            # a visible cut. Translate the completed source consistently on
+            # both sides of that boundary; completion is presentation only.
             base=base*(1-opacity[...,None])
             frame=foreground(study,material*cov[...,None]+base*(1-cov[...,None]),scale)
             frame=np.uint8(np.rint(np.clip(frame,0,1)*255))
@@ -113,9 +113,9 @@ def main():
     finally:
         proc.stdin.close();assert proc.wait()==0;log.close()
     # Encoding does not need the large optical maps or the last RGB frame.
-    del prepared,cov,xx,yy,opacity,context,base,material,frame,valid
+    del prepared,cov,xx,yy,opacity,base,material,frame
     report=dict(state_sha256=state_digest(args.folder),render_files={name:hashlib.sha256((out/name).read_bytes()).hexdigest() for name in ['motion.mp4','comparison.png']},native_size=[x1-x0,y1-y0],output_size=[W,H],output_scale=scale,frames=args.frames,fps=args.fps,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,presentation_completion_native_delta=completion_delta,
-        motion='Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.',
+        motion=f"Stationary element; recovered backdrop translates {'horizontally' if args.axis=='x' else 'vertically'}. Optical/material coefficients remain frozen.",
         limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.')
     if study.transmission_layers:report['foreground_response']=[layer['fit'][2] for layer in study.transmission_layers]
     (out/'render.json').write_text(json.dumps(report,indent=2)+'\n')

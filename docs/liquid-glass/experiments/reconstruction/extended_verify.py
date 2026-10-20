@@ -214,6 +214,16 @@ def main():
     assert supported(source,report)
     for key in ['source_defined_fraction','gaussian_3sigma_defined_fraction']:
         assert not supported(source,{**report,key:.998}),'Estimated source cannot waive undefined source coverage'
+    context=dict(source_defined_fraction=1.,gaussian_3sigma_defined_fraction=1.,source_observed_fraction=1.,gaussian_3sigma_observed_fraction=1.,
+                 context_mean_source_defined_fraction=1.,context_mean_source_observed_fraction=1.,
+                 context_mean_minimum_defined_confidence=1.,context_mean_minimum_observed_confidence=1.)
+    direct=SimpleNamespace(case={});assert supported(direct,context)
+    assert not supported(direct,{**context,'context_mean_source_defined_fraction':.99999,'context_mean_minimum_defined_confidence':0.}), 'One unknown mean sample must fail even when aggregate coverage is high'
+    assert not supported(direct,{**context,'context_mean_minimum_observed_confidence':.9999}), 'Partial unobserved interpolation cannot enter the source mean'
+    from source_support import confidence_at
+    mask=np.ones((8,8),np.float32);mask[:,:3]=0.;Y,X=np.mgrid[1:5,1:5].astype(np.float32)
+    assert np.array_equal(confidence_at(mask,X,Y,1.25),confidence_at(mask,X,Y,[0.,1.25]))
+    assert np.array_equal(confidence_at(mask,X,Y,[1.25,0.]),cv2.remap(mask,X+np.float32(1.25),Y,cv2.INTER_LINEAR))
     with tempfile.TemporaryDirectory() as directory:
         folder=Path(directory);observed=np.full((24,32),255,np.uint8);observed[:,12:20]=0
         cv2.imwrite(str(folder/'observed.png'),observed)

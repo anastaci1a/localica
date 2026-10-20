@@ -41,8 +41,8 @@ STAGES={
 class Cached:
     def __init__(self,study,p):
         self.study=study;self.p=p
-        from material_context import matrix
-        self.material_transform=matrix(study,p)
+        from material_context import affine
+        self.material_transform,self.material_offset=affine(study,p)
         a,b,c,d=study.crop
         yy,xx=np.mgrid[b:d:.5,a:c:.5]
         self.C,self.J=study.field((xx-.25-study.case['center'][0])/study.L,(yy-.25-study.case['center'][1])/study.L,p)
@@ -50,7 +50,7 @@ class Cached:
 
     def render(self,co):
         co=np.asarray(co)
-        if hasattr(self,'material_transform'):co=self.material_transform@co
+        if hasattr(self,'material_transform'):co=self.material_transform@co+getattr(self,'material_offset',0)
         pred=shade(self.C,self.J,co).reshape(self.H,2,self.W,2,3).mean((1,3)).astype(np.float32)
         sigma=self.study.kernel_sigma(self.p,'post_sigma')
         if sigma>.001:pred=cv2.GaussianBlur(pred,(0,0),sigma)

@@ -1,0 +1,99 @@
+{
+  "files": {
+    "motion.mp4": {
+      "bytes": 1048163,
+      "sha256": "b39c0407e016e33fcffea76a36d4e078a6aa89a1a0ca8439a32ed17cacd9ba68"
+    },
+    "motion.gif": {
+      "bytes": 8181545,
+      "sha256": "083b5f07902c789c844a3c755c3568db64cc0173fe8c3721d16ffbde6aa51d09"
+    },
+    "comparison.png": {
+      "bytes": 595356,
+      "sha256": "e5f1b0109a9ce113640ac13bb6d353105647c4fd9e123444a2626ccc1e0c9c67"
+    }
+  },
+  "native_size": [
+    235,
+    240
+  ],
+  "output_size": [
+    940,
+    960
+  ],
+  "output_scale": 4,
+  "frames": 180,
+  "fps": 30,
+  "travel_over_L": 0.5056179775280899,
+  "scores": {
+    "glass": {
+      "pixels": 15289,
+      "rmse": 9.730605125427246
+    },
+    "rim": {
+      "pixels": 8364,
+      "rmse": 12.651615142822266
+    },
+    "held": {
+      "pixels": 2804,
+      "rmse": 13.018393516540527
+    },
+    "interior": {
+      "pixels": 6925,
+      "rmse": 3.964904308319092
+    },
+    "ssim": 0.9711480736732483,
+    "loss": 114.2982829915206
+  },
+  "motion_support": {
+    "requested_native_px": 45,
+    "actual_native_px": 45,
+    "minimum_scored_lookup_3sigma_observed_fraction": 1,
+    "minimum_whole_shape_lookup_observed_fraction": 0.9952540480178671,
+    "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
+  },
+  "presentation_completion_native_delta": {
+    "max_abs_rgb": 0.2566078305244446,
+    "rmse": 0.00564589025452733
+  },
+  "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+  "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source artwork/text retain their original information quality; declared SVG icons are rerasterized, other coverage remains reference-derived.",
+  "foreground_response": [
+    {
+      "pixels": 4968,
+      "rmse": 3.43712148463007,
+      "parameters": [
+        [
+          0.981852780258496,
+          0.5368761771654439,
+          1.026092263616352
+        ],
+        [
+          0.18322434212306798,
+          0.9999999999999986,
+          0.978065523818989
+        ],
+        [
+          0.4117126664496811,
+          0.9902138500957417,
+          1.0499884013005976
+        ]
+      ],
+      "formula": "t*(1-s*(1-B)^g), per channel in encoded RGB"
+    }
+  ],
+  "render_files": {
+    "motion.mp4": "b39c0407e016e33fcffea76a36d4e078a6aa89a1a0ca8439a32ed17cacd9ba68"
+  },
+  "video_color": {
+    "matrix": "BT.601 / SMPTE170M",
+    "range": "Limited",
+    "method": "H.264 VUI/MP4 metadata-only stream copy",
+    "original_sha256": "48ee2a884a5f519bce6bb115f73b2f78399722a9c30c919240cd30c78bb2f427",
+    "corrected_sha256": "b39c0407e016e33fcffea76a36d4e078a6aa89a1a0ca8439a32ed17cacd9ba68",
+    "decoded_rgb_sha256": "SHA256=ef124a35ba82b52276a39930cd60e44375ea24194ba293a03f7230de721e997f",
+    "equal_decoded_rgb": true,
+    "limits": "Declares the existing conversion matrix. No new primaries/transfer calibration, color conversion, optical fit or image sample is introduced."
+  }
+}

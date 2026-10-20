@@ -11,7 +11,7 @@ from scipy.optimize import minimize
 
 def statistics(cache,co):
     s=cache.study;H,W=cache.H,cache.W;C,J=cache.C,cache.J
-    transform=getattr(cache,'material_transform',np.eye(23));effective=transform@co
+    transform=getattr(cache,'material_transform',np.eye(23));effective=transform@co+getattr(cache,'material_offset',0)
     core=J[...,-1]
     gain=(1-core[...,None])*effective[:3]+core[...,None]*effective[-3:]
     z=C*gain+effective[3:6]+(J[...,:-1]@effective[6:-3])[...,None]
