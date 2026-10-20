@@ -29,7 +29,6 @@ def main():
     # Freeze foreground response at native reference resolution before export.
     study.apply_foreground(still.copy())
     scale=args.scale;x0,y0,x1,y1=study.crop;width=(x1-x0)*scale;height=(y1-y0)*scale
-    high=study.render(p,co,scale);study.comparison(high,out/'comparison.png',p,scale)
     native_cov=study.shape_coverage(p);cov=study.shape_coverage(p,scale)
     yy,xx=np.mgrid[:height,:width].astype(np.float32)
     xx=x0-.5+(xx+.5)/scale;yy=y0-.5+(yy+.5)/scale
@@ -38,6 +37,15 @@ def main():
     from motion_support import prepare
     motion_source,travel,motion_support=prepare(study,p,known,native_cov,args.travel)
     study.source=motion_source;study.cache.clear()
+    # Unobserved source pixels are magenta diagnostics, not display content.
+    # Extend them only in this presentation input, after freezing all scores
+    # and foreground fits. The recorded benchmark still uses the original
+    # file; report any filter-tail effect even within its valid mask.
+    presentation_native=study.render(p,co)
+    delta=(presentation_native-still)[study.valid]*255
+    completion_delta=dict(max_abs_rgb=float(np.max(abs(delta))),rmse=float(np.sqrt(np.mean(delta**2))))
+    motion_support['completion']='Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.'
+    high=study.render(p,co,scale);study.comparison(high,out/'comparison.png',p,scale)
     prepared=Prepared(study,p,co,scale)
     # Check the prepared renderer on the actual motion input, independently of
     # the frozen native scoring pass; cache speed cannot change the material.
@@ -77,7 +85,7 @@ def main():
         if file.suffix in ['.mp4','.gif']:
             subprocess.run(['ffmpeg','-v','error','-i',str(file),'-f','null','-'],check=True)
         files[file.name]=dict(bytes=file.stat().st_size,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
-    report=dict(files=files,native_size=[x1-x0,y1-y0],output_size=[W,H],output_scale=scale,frames=args.frames,fps=args.fps,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,
+    report=dict(files=files,native_size=[x1-x0,y1-y0],output_size=[W,H],output_scale=scale,frames=args.frames,fps=args.fps,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,presentation_completion_native_delta=completion_delta,
         motion='Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.',
         limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source artwork/text retain their original information quality; declared SVG icons are rerasterized, other coverage remains reference-derived.')
     if study.transmission_layers:report['foreground_response']=[layer['fit'][2] for layer in study.transmission_layers]
