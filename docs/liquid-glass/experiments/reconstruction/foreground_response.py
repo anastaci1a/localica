@@ -19,11 +19,12 @@ def calibrate(B,T,seed):
     A=B[inside];Y=T[inside];p=[]
     for c in range(3):
         def residual(q):return q[0]*(1-q[1]*(1-np.clip(A[:,c],0,1))**q[2])-Y[:,c]
-        best=None
+        best_x=None;best_cost=float('inf')
         for gamma in [.5,1.,3.,8.]:
             fit=least_squares(residual,[min(1,float(Y[:,c].max())+.02),.5,gamma],bounds=([0,0,.1],[1,1,16]),max_nfev=200)
-            if best is None or np.sum(fit.fun**2)<best.cost:best=type('Fit',(),dict(x=fit.x,cost=np.sum(fit.fun**2)))
-        p.append(best.x)
+            cost=float(np.sum(fit.fun**2))
+            if cost<best_cost:best_x=fit.x;best_cost=cost
+        p.append(best_x)
     p=np.array(p)
     stencil=cv2.dilate(seed.astype(np.uint8),np.ones((3,3),np.uint8))>0
     background=cv2.inpaint(np.uint8(np.rint(T*255)),stencil.astype(np.uint8)*255,5,cv2.INPAINT_TELEA).astype(float)/255
