@@ -53,6 +53,9 @@ RADIAL_STAGES = {
  7: ('Radial-profile and central-power refinement', [*[f'c{i}' for i in range(7)],'core_x']),
  10: ('Joint radial optical and scattering settlement', ['sigma','post_sigma','core_x','gamma','rim_width','thin_width']),
  11: ('Circular silhouette and optical-boundary alignment', ['shape_dx','shape_dy','half_x_delta']),
+ 13: STAGES[20],
+ 14: ('Signed radial spline and source-scattering refinement', [*[f'c{i}' for i in range(7)],'sigma','core_x']),
+ 15: ('Radial output-scattering and brightness refinement', ['sigma','post_sigma','gamma','rim_width','thin_width']),
 }
 
 
@@ -277,14 +280,15 @@ def main():
         p=initial();_,co=study.fit(p);pred=study.render(p,co)
         old=dict(parameters=p,material=co.tolist(),scores=study.scores(pred));accepted_path.write_text(json.dumps(old,indent=2)+'\n')
     start=copy.deepcopy(p)
-    if args.number==20:
+    global_radial=study.case.get('radial') and args.number in (13,20)
+    if global_radial:
         assert study.case.get('radial'), 'Radial comparator only'
         start.update(spline=False,post_sigma=0.,amplitude=.5,band=.6,power=2.2,sigma=2.)
-    if args.number==3 and not start['spline']:
+    if args.number in (3,14) and not start['spline']:
         d=np.linspace(0,1,501)
         basis=BSpline.design_matrix(d,KNOTS,3).toarray()[:,:7]
         a=start['amplitude']*np.maximum(1-d/start['band'],0)**start['power']
-        c=lsq_linear(basis,a,bounds=(0,2.5)).x
+        c=lsq_linear(basis,a,bounds=(-2.5,2.5) if study.case.get('radial') else (0,2.5)).x
         start.update({f'c{i}':float(c[i]) for i in range(7)});start['spline']=True
     evaluations=0;best=[float('inf'),None,None]
     def objective(v):
@@ -298,9 +302,11 @@ def main():
             print(json.dumps({k:partial[k] for k in ['pass_number','evaluations','training_loss','seconds']}),flush=True)
         return loss
     x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
+    if study.case.get('radial'):
+        bounds=[(-2.5,2.5) if k.startswith('c') and k[1:].isdigit() else b for k,b in zip(keys,bounds)]
     # Powell handles the explicit finite bilinear-sampling resolution without
     # claiming infinitesimal derivatives through a quantized texture lookup.
-    if args.number==20:
+    if global_radial:
         # Test both signed displacement families rather than remaining in the
         # high-blur local minimum produced by an identity-map initialization.
         bounds=[(-2,2),(.03,1.5),(1.2,5),(0,16),(0,.15)]
