@@ -1,10 +1,10 @@
 {
   "status": "In progress, not a final paired study",
-  "rendering_code_commit": "5a6d2e4629e7cee3f14b5f2b007bc2d9d3faf8f7",
+  "rendering_code_commit": "6ae961ee56b0cbf03be175ce6488a83f99ca7ba5",
   "gallery_script_sha256": "000265a42d4acb834feaeeee3abde14d9a29295c82fa5db6f030edeaf72d2894",
-  "state_record_sha256": "15435bb4a25b4bac27babd69df607c1ed9d774b2cceb6d8604ecaf7b4f02593b",
+  "state_record_sha256": "c84a3f527fd9a367706fa1ac75aad558fb70bfa1f3896de7d915a62ee662018f",
   "single_passes": 10,
-  "paired_passes": 7,
+  "paired_passes": 8,
   "output_scale": 4,
   "recipe": {
     "parameters": {
@@ -30,10 +30,10 @@
       "c0": -2.5,
       "c1": 0.9682518163041112,
       "c2": 0.6757163045320522,
-      "c3": 0.7990727115750362,
-      "c4": 0.7055285072124556,
-      "c5": 0.025620458778148964,
-      "c6": -0.03247252264580707,
+      "c3": 0.7989154249496436,
+      "c4": 0.7050863084650834,
+      "c5": 0.026319148293094945,
+      "c6": -0.03254983876128028,
       "shadow": {
         "opacity": 0.06397813905839193,
         "sigma": 0.2381474908903573,
@@ -86,38 +86,38 @@
         },
         "rim": {
           "pixels": 8296,
-          "rmse": 7.339399337768555
+          "rmse": 7.336758613586426
         },
         "held": {
           "pixels": 2797,
-          "rmse": 6.786898136138916
+          "rmse": 6.7932047843933105
         },
         "interior": {
           "pixels": 6925,
-          "rmse": 3.3163890838623047
+          "rmse": 3.3233790397644043
         },
-        "ssim": 0.9783573746681213,
-        "loss": 40.21430637711671
+        "ssim": 0.9784010052680969,
+        "loss": 40.20267967155584
       },
       {
         "glass": {
           "pixels": 15289,
-          "rmse": 9.226411819458008
+          "rmse": 9.226197242736816
         },
         "rim": {
           "pixels": 8364,
-          "rmse": 12.074792861938477
+          "rmse": 12.075174331665039
         },
         "held": {
           "pixels": 2804,
-          "rmse": 11.332915306091309
+          "rmse": 11.332161903381348
         },
         "interior": {
           "pixels": 6925,
-          "rmse": 3.4416306018829346
+          "rmse": 3.438743829727173
         },
-        "ssim": 0.9767667055130005,
-        "loss": 103.3288593411802
+        "ssim": 0.9767286777496338,
+        "loss": 103.32885143534976
       }
     ],
     "foreground_response": [
@@ -143,8 +143,8 @@
         11.654429063513014
       ],
       "after_mse": [
-        8.949959418286962,
-        11.654429063513014
+        8.949958834763377,
+        11.653005991392844
       ]
     }
   },
@@ -163,18 +163,18 @@
         },
         "rim": {
           "pixels": 8296,
-          "rmse": 7.339399337768555
+          "rmse": 7.336758613586426
         },
         "held": {
           "pixels": 2797,
-          "rmse": 6.786898136138916
+          "rmse": 6.7932047843933105
         },
         "interior": {
           "pixels": 6925,
-          "rmse": 3.3163890838623047
+          "rmse": 3.3233790397644043
         },
-        "ssim": 0.9783573746681213,
-        "loss": 40.21430637711671
+        "ssim": 0.9784010052680969,
+        "loss": 40.20267967155584
       },
       "source_support": {
         "source_defined_fraction": 1.0,
@@ -186,8 +186,8 @@
         "context_mean_source_observed_fraction": 1.0
       },
       "presentation_completion": {
-        "max_abs_rgb": 6.924140453338623,
-        "rmse": 0.03840669244527817,
+        "max_abs_rgb": 6.9241557121276855,
+        "rmse": 0.03840675204992294,
         "method": "Nearest defined RGB extends unknown source only for presentation; input files, masks and native scores stay frozen."
       },
       "background_estimate": null
@@ -201,22 +201,22 @@
       "native": {
         "glass": {
           "pixels": 15289,
-          "rmse": 9.226411819458008
+          "rmse": 9.226197242736816
         },
         "rim": {
           "pixels": 8364,
-          "rmse": 12.074792861938477
+          "rmse": 12.075174331665039
         },
         "held": {
           "pixels": 2804,
-          "rmse": 11.332915306091309
+          "rmse": 11.332161903381348
         },
         "interior": {
           "pixels": 6925,
-          "rmse": 3.4416306018829346
+          "rmse": 3.438743829727173
         },
-        "ssim": 0.9767667055130005,
-        "loss": 103.3288593411802
+        "ssim": 0.9767286777496338,
+        "loss": 103.32885143534976
       },
       "source_support": {
         "source_defined_fraction": 1.0,
