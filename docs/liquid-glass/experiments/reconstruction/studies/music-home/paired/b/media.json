@@ -1,12 +1,12 @@
 {
   "files": {
     "motion.mp4": {
-      "bytes": 114763,
-      "sha256": "dc84acc0f5a7ef29b7cdf579a115992ab6b4afb6f6c6464ed73f898aac603e46"
+      "bytes": 115875,
+      "sha256": "709bcdb75831781990f0b7048249f43720e8ce09fa631df474ef2d77224138f0"
     },
     "motion.gif": {
-      "bytes": 1112278,
-      "sha256": "62ad255b58405f76ead71dbeec2b656f21f4971b3df7743b249daa51f33d74b6"
+      "bytes": 1130783,
+      "sha256": "3f50b186202bf0a8eebac608be93303eb54ec75154e2dac6b3600cd69fb18c76"
     },
     "comparison.png": {
       "bytes": 70541,
@@ -39,6 +39,14 @@
     },
     "ssim": 0.9690613746643066,
     "loss": 119.86689002005068
+  },
+  "motion_support": {
+    "requested_native_px": 45.0,
+    "actual_native_px": 45.0,
+    "minimum_scored_lookup_3sigma_observed_fraction": 1.0,
+    "minimum_whole_shape_lookup_observed_fraction": 0.9952540480178671,
+    "completion": "Nearest observed RGB extends unobserved input only for motion; frozen comparisons and scoring inputs are unchanged.",
+    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
   },
   "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
   "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Foreground coverage is reference-derived.",
