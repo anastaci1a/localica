@@ -1,0 +1,1245 @@
+{
+  "status": "Single-reference progress; paired verification and final motion pending",
+  "study": "active-segmented-selector",
+  "pass_number": 2,
+  "rendering_code_commit": "d25b4ba98cc7bfa86fa7e0cb6799ac60ae069bfc",
+  "script_sha256": "31b6253899ac78f5f7c4037ec0e51ff485b2ad0b70f823aea6ea74e5624af247",
+  "output_scale": 4,
+  "native": {
+    "glass": {
+      "pixels": 186310,
+      "rmse": 17.250041961669922
+    },
+    "rim": {
+      "pixels": 46479,
+      "rmse": 17.430387496948242
+    },
+    "held": {
+      "pixels": 45815,
+      "rmse": 16.860471725463867
+    },
+    "interior": {
+      "pixels": 139831,
+      "rmse": 17.18967628479004
+    },
+    "ssim": 0.9302115440368652,
+    "loss": 299.44028586369205
+  },
+  "recipe": {
+    "parameters": {
+      "sigma": 0.017141451958116168,
+      "amplitude": 0.5102947636556144,
+      "band": 0.9999868348716114,
+      "power": 3.9728673285431575,
+      "tangent": 0.0,
+      "tangent_band": 0.4,
+      "core_x": 0.0,
+      "core_y": 0.0,
+      "post_sigma": 0.0,
+      "coupling": 0.0,
+      "gamma": 1.0,
+      "rim_width": 0.07,
+      "thin_width": 0.015,
+      "spline": false,
+      "shape_dx": 0.0,
+      "shape_dy": 0.0,
+      "half_x_delta": 0.0,
+      "half_y_delta": 0.0,
+      "radius_delta": 0.0,
+      "c0": 0.0,
+      "c1": 0.0,
+      "c2": 0.0,
+      "c3": 0.0,
+      "c4": 0.0,
+      "c5": 0.0,
+      "c6": 0.0
+    },
+    "material": [
+      0.3078601075971529,
+      1.2033981344875087,
+      1.2131097659440786,
+      0.7261941465319515,
+      -0.06374377393445219,
+      -0.07175775873808746,
+      0.009138118190295384,
+      -0.0350212768688382,
+      -0.017197283157478104,
+      0.0008231058380128443,
+      -0.01260654561271197,
+      -0.009256701529021158,
+      -0.048101047430136254,
+      -0.008084047319073242,
+      -0.012864786885068149,
+      -0.00014382091120400698,
+      0.032017737907322985,
+      -0.005735054879410391,
+      0.037104344903525696,
+      0.0015050794087196927,
+      0.27264920236904333,
+      1.1737096624449466,
+      1.1834233937303411
+    ],
+    "scores": {
+      "glass": {
+        "pixels": 186310,
+        "rmse": 17.250041961669922
+      },
+      "rim": {
+        "pixels": 46479,
+        "rmse": 17.430387496948242
+      },
+      "held": {
+        "pixels": 45815,
+        "rmse": 16.860471725463867
+      },
+      "interior": {
+        "pixels": 139831,
+        "rmse": 17.18967628479004
+      },
+      "ssim": 0.9302115440368652,
+      "loss": 299.44028586369205
+    }
+  },
+  "source_support": {
+    "source_defined_fraction": 1.0,
+    "gaussian_3sigma_defined_fraction": 1.0,
+    "source_observed_fraction": 0.0,
+    "gaussian_3sigma_observed_fraction": 0.0,
+    "source_gaussian_radius_native_px": 8
+  },
+  "presentation_completion_delta": {
+    "rmse": 0.0,
+    "max_abs_rgb": 0.0
+  },
+  "background_estimate": {
+    "method": "Symmetric capsule from both exposed end contours, excluding a0.6L neighborhood of the lens to avoid its shadow; solid SF font outlines and sampled color. Incident text is selected red; a separate exterior retains gray text. No photographed lens pixels enter either modeled label.",
+    "limits": "Hidden track, text recoloring before refraction, font family/weight and layout transfer are estimates. Optical scores are conditional on these inputs, not proof of Apple geometry or compositing.",
+    "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+    "track_exclusion_over_L": 0.6,
+    "track_pose": [
+      957.4502833178284,
+      546.528019815616,
+      754.2856992978827,
+      111.35409130004376
+    ],
+    "track_contour_rmse": 0.50623443086781,
+    "lens_contour_rmse": 0.9264910718656283,
+    "font_calibration": [
+      {
+        "text": "Week",
+        "selected": {
+          "loss": 95.24169209471438,
+          "color": [
+            0.6210174560546875,
+            0.6210021376609802,
+            0.6210219860076904
+          ],
+          "layer": {
+            "box": [
+              290,
+              495,
+              550,
+              595
+            ],
+            "vector_asset": "Week-Text-Medium.svg",
+            "vector_sha256": "efa717df214f4071ffbf6d733b75eca4fed4996817cc0f9d178066b508033123",
+            "vector_box": [
+              310.08592633105695,
+              512.6698746430659,
+              536.1445073327874,
+              578.2915002207317
+            ]
+          },
+          "pose": [
+            423.11521683192217,
+            545.4806874318988,
+            65.62162557766575
+          ],
+          "provenance": {
+            "font_file": "SF-Pro-Text-Medium.otf",
+            "font_sha256": "6647a7ed74c6722f4bac674e0783b944f3d468c85aeb40a133a81797eb56294c",
+            "glyph": null,
+            "text": "Week",
+            "glyphs": [
+              "W",
+              "e",
+              "e",
+              "k"
+            ],
+            "bounds": [
+              89,
+              -21,
+              5370,
+              1512
+            ],
+            "advance": 5364,
+            "size_pt": 17,
+            "tracking_font_units": -47,
+            "units_per_em": 2048,
+            "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+          }
+        },
+        "trials": [
+          {
+            "loss": 135.72047158959322,
+            "color": [
+              0.6092804074287415,
+              0.6092657446861267,
+              0.6092822551727295
+            ],
+            "layer": {
+              "box": [
+                290,
+                495,
+                550,
+                595
+              ],
+              "vector_asset": "Week-Text-Regular.svg",
+              "vector_sha256": "0f44ea01bb2698a1a9cb0856af209c9f82397161e4189ed9fbb4957f8a7148e5",
+              "vector_box": [
+                309.9483049524442,
+                511.86767632576766,
+                535.2643324038916,
+                578.4452663012487
+              ]
+            },
+            "pose": [
+              422.6063186781679,
+              545.1564713135082,
+              66.57758997548098
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Regular.otf",
+              "font_sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+              "glyph": null,
+              "text": "Week",
+              "glyphs": [
+                "W",
+                "e",
+                "e",
+                "k"
+              ],
+              "bounds": [
+                90,
+                -19,
+                5251,
+                1506
+              ],
+              "advance": 5246,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 95.24169209471438,
+            "color": [
+              0.6210174560546875,
+              0.6210021376609802,
+              0.6210219860076904
+            ],
+            "layer": {
+              "box": [
+                290,
+                495,
+                550,
+                595
+              ],
+              "vector_asset": "Week-Text-Medium.svg",
+              "vector_sha256": "efa717df214f4071ffbf6d733b75eca4fed4996817cc0f9d178066b508033123",
+              "vector_box": [
+                310.08592633105695,
+                512.6698746430659,
+                536.1445073327874,
+                578.2915002207317
+              ]
+            },
+            "pose": [
+              423.11521683192217,
+              545.4806874318988,
+              65.62162557766575
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Medium.otf",
+              "font_sha256": "6647a7ed74c6722f4bac674e0783b944f3d468c85aeb40a133a81797eb56294c",
+              "glyph": null,
+              "text": "Week",
+              "glyphs": [
+                "W",
+                "e",
+                "e",
+                "k"
+              ],
+              "bounds": [
+                89,
+                -21,
+                5370,
+                1512
+              ],
+              "advance": 5364,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 117.96208456798922,
+            "color": [
+              0.6351404786109924,
+              0.6351219415664673,
+              0.6351463198661804
+            ],
+            "layer": {
+              "box": [
+                290,
+                495,
+                550,
+                595
+              ],
+              "vector_asset": "Week-Text-Semibold.svg",
+              "vector_sha256": "86cacfcb47239ab6d99ccdfd676cfc6155a55bec1036e0deced2fd992f550887",
+              "vector_box": [
+                309.8426595637703,
+                513.15720172976,
+                536.5963532853631,
+                578.0766322851974
+              ]
+            },
+            "pose": [
+              423.2195064245667,
+              545.6169170074787,
+              64.91943055543739
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Semibold.otf",
+              "font_sha256": "7fb222bb56b80c7329f657cb58a504370e4873f3d33255939e33e50a4a4148ac",
+              "glyph": null,
+              "text": "Week",
+              "glyphs": [
+                "W",
+                "e",
+                "e",
+                "k"
+              ],
+              "bounds": [
+                88,
+                -22,
+                5460,
+                1516
+              ],
+              "advance": 5452,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 157.0420210773591,
+            "color": [
+              0.6135585904121399,
+              0.6135457158088684,
+              0.6135618090629578
+            ],
+            "layer": {
+              "box": [
+                290,
+                495,
+                550,
+                595
+              ],
+              "vector_asset": "Week-Display-Regular.svg",
+              "vector_sha256": "f96aa0fd63c89efc5a109a0cc130f0c2a47b49f06ae51442d8cb0d36d59e690b",
+              "vector_box": [
+                309.3134513090008,
+                513.2331265397931,
+                534.2076848382796,
+                578.1798820971037
+              ]
+            },
+            "pose": [
+              421.76056807364023,
+              545.7065043184484,
+              64.9467555573105
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Regular.otf",
+              "font_sha256": "fa201942bfbbad09b0be750686a747d490901b3bc4618ecdfc30382cf28d4704",
+              "glyph": null,
+              "text": "Week",
+              "glyphs": [
+                "W",
+                "e",
+                "e",
+                "k"
+              ],
+              "bounds": [
+                45,
+                -20,
+                5111,
+                1443
+              ],
+              "advance": 5164,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 119.64889435912482,
+            "color": [
+              0.6248440146446228,
+              0.6248290538787842,
+              0.6248496770858765
+            ],
+            "layer": {
+              "box": [
+                290,
+                495,
+                550,
+                595
+              ],
+              "vector_asset": "Week-Display-Medium.svg",
+              "vector_sha256": "74d7d74d774ff9927507376b096866b78dac4825881d94f510d165440f609878",
+              "vector_box": [
+                309.7327898619612,
+                514.6737646814909,
+                535.2059590980956,
+                578.0434555553056
+              ]
+            },
+            "pose": [
+              422.46937448002836,
+              546.3586101183982,
+              63.3696908738147
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Medium.otf",
+              "font_sha256": "8f9c53c801b8e0e45743596aa3281329d04675528faeab7dcbfbaa34cd1577c7",
+              "glyph": null,
+              "text": "Week",
+              "glyphs": [
+                "W",
+                "e",
+                "e",
+                "k"
+              ],
+              "bounds": [
+                44,
+                -21,
+                5253,
+                1443
+              ],
+              "advance": 5298,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 151.0853223677259,
+            "color": [
+              0.6401019096374512,
+              0.6400831341743469,
+              0.6401093006134033
+            ],
+            "layer": {
+              "box": [
+                290,
+                495,
+                550,
+                595
+              ],
+              "vector_asset": "Week-Display-Semibold.svg",
+              "vector_sha256": "b130e4ee5960e80221d1d5332da9826cee1bed5840db9777f833e05ff8e245ee",
+              "vector_box": [
+                309.6087029253717,
+                515.356413921767,
+                535.7684998410504,
+                577.6396988511412
+              ]
+            },
+            "pose": [
+              422.68860138321105,
+              546.4980563864541,
+              62.28328492937427
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Semibold.otf",
+              "font_sha256": "ef94ac2356af4938fc96c35af41cc9e5788b9f2ff9b16561a800a4d6875c2cff",
+              "glyph": null,
+              "text": "Week",
+              "glyphs": [
+                "W",
+                "e",
+                "e",
+                "k"
+              ],
+              "bounds": [
+                43,
+                -21,
+                5359,
+                1443
+              ],
+              "advance": 5398,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          }
+        ]
+      },
+      {
+        "text": "Month",
+        "selected": {
+          "loss": 67.55996032152325,
+          "color": [
+            0.9745506644248962,
+            0.3754057288169861,
+            0.3914034366607666
+          ],
+          "layer": {
+            "box": [
+              780,
+              495,
+              1120,
+              595
+            ],
+            "vector_asset": "Month-Text-Semibold.svg",
+            "vector_sha256": "7ca40502e9b704d8e72f07018f3ee39dcdce85fa906135abbfb81ca931418e75",
+            "vector_box": [
+              803.6101175812724,
+              506.87475582571165,
+              1095.544907926305,
+              583.0531928041066
+            ]
+          },
+          "pose": [
+            949.5775127537887,
+            544.9639743149091,
+            76.178436978395
+          ],
+          "provenance": {
+            "font_file": "SF-Pro-Text-Semibold.otf",
+            "font_sha256": "7fb222bb56b80c7329f657cb58a504370e4873f3d33255939e33e50a4a4148ac",
+            "glyph": null,
+            "text": "Month",
+            "glyphs": [
+              "M",
+              "o",
+              "n",
+              "t",
+              "h"
+            ],
+            "bounds": [
+              178,
+              -22,
+              6072,
+              1516
+            ],
+            "advance": 6167,
+            "size_pt": 17,
+            "tracking_font_units": -47,
+            "units_per_em": 2048,
+            "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+          }
+        },
+        "trials": [
+          {
+            "loss": 891.9468591688201,
+            "color": [
+              0.9804376363754272,
+              0.3765582740306854,
+              0.3925178647041321
+            ],
+            "layer": {
+              "box": [
+                780,
+                495,
+                1120,
+                595
+              ],
+              "vector_asset": "Month-Text-Regular.svg",
+              "vector_sha256": "13cdb9819ca5b49116166120136fb421d0ac02bc845f5a047a31ec8d039b0e4d",
+              "vector_box": [
+                803.3988097995838,
+                505.25905859771046,
+                1093.2860989890767,
+                583.9206450770657
+              ]
+            },
+            "pose": [
+              948.3424543943302,
+              544.5898518373881,
+              78.66158647935526
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Regular.otf",
+              "font_sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+              "glyph": null,
+              "text": "Month",
+              "glyphs": [
+                "M",
+                "o",
+                "n",
+                "t",
+                "h"
+              ],
+              "bounds": [
+                184,
+                -19,
+                5804,
+                1506
+              ],
+              "advance": 5909,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 306.45424275426194,
+            "color": [
+              0.9791905283927917,
+              0.3683492839336395,
+              0.3845342695713043
+            ],
+            "layer": {
+              "box": [
+                780,
+                495,
+                1120,
+                595
+              ],
+              "vector_asset": "Month-Text-Medium.svg",
+              "vector_sha256": "8b730836021c8ed3367c7e0b12d1a2eaad183e21a2595003ce9ba2dec0f9ffbb",
+              "vector_box": [
+                803.4715636915979,
+                506.16231052916726,
+                1094.6948039383165,
+                583.4822321256721
+              ]
+            },
+            "pose": [
+              949.0831838149571,
+              544.8222713274197,
+              77.31992159650491
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Medium.otf",
+              "font_sha256": "6647a7ed74c6722f4bac674e0783b944f3d468c85aeb40a133a81797eb56294c",
+              "glyph": null,
+              "text": "Month",
+              "glyphs": [
+                "M",
+                "o",
+                "n",
+                "t",
+                "h"
+              ],
+              "bounds": [
+                181,
+                -21,
+                5955,
+                1512
+              ],
+              "advance": 6054,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 67.55996032152325,
+            "color": [
+              0.9745506644248962,
+              0.3754057288169861,
+              0.3914034366607666
+            ],
+            "layer": {
+              "box": [
+                780,
+                495,
+                1120,
+                595
+              ],
+              "vector_asset": "Month-Text-Semibold.svg",
+              "vector_sha256": "7ca40502e9b704d8e72f07018f3ee39dcdce85fa906135abbfb81ca931418e75",
+              "vector_box": [
+                803.6101175812724,
+                506.87475582571165,
+                1095.544907926305,
+                583.0531928041066
+              ]
+            },
+            "pose": [
+              949.5775127537887,
+              544.9639743149091,
+              76.178436978395
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Semibold.otf",
+              "font_sha256": "7fb222bb56b80c7329f657cb58a504370e4873f3d33255939e33e50a4a4148ac",
+              "glyph": null,
+              "text": "Month",
+              "glyphs": [
+                "M",
+                "o",
+                "n",
+                "t",
+                "h"
+              ],
+              "bounds": [
+                178,
+                -22,
+                6072,
+                1516
+              ],
+              "advance": 6167,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 959.6474380698055,
+            "color": [
+              0.9800173044204712,
+              0.38878679275512695,
+              0.4045146703720093
+            ],
+            "layer": {
+              "box": [
+                780,
+                495,
+                1120,
+                595
+              ],
+              "vector_asset": "Month-Display-Regular.svg",
+              "vector_sha256": "5162e970e39e8798f9a852fb4c5bad092340b5e492af4785264d080dc80a3675",
+              "vector_box": [
+                801.9843879744292,
+                506.3837820166982,
+                1094.0424822339078,
+                583.7757385284926
+              ]
+            },
+            "pose": [
+              948.0134351041685,
+              545.0797602725954,
+              77.39195651179448
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Regular.otf",
+              "font_sha256": "fa201942bfbbad09b0be750686a747d490901b3bc4618ecdfc30382cf28d4704",
+              "glyph": null,
+              "text": "Month",
+              "glyphs": [
+                "M",
+                "o",
+                "n",
+                "t",
+                "h"
+              ],
+              "bounds": [
+                140,
+                -20,
+                5661,
+                1443
+              ],
+              "advance": 5814,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 390.863633598201,
+            "color": [
+              0.9792847633361816,
+              0.37874358892440796,
+              0.39477139711380005
+            ],
+            "layer": {
+              "box": [
+                780,
+                495,
+                1120,
+                595
+              ],
+              "vector_asset": "Month-Display-Medium.svg",
+              "vector_sha256": "43fc658e5a6b40a5fb25e38b024e5c7a462468b81d1909d7e3c543295669e104",
+              "vector_box": [
+                802.3009445333614,
+                507.86416808350737,
+                1095.016050017416,
+                583.0985280604484
+              ]
+            },
+            "pose": [
+              948.6584972753888,
+              545.4813480719779,
+              75.234359976941
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Medium.otf",
+              "font_sha256": "8f9c53c801b8e0e45743596aa3281329d04675528faeab7dcbfbaa34cd1577c7",
+              "glyph": null,
+              "text": "Month",
+              "glyphs": [
+                "M",
+                "o",
+                "n",
+                "t",
+                "h"
+              ],
+              "bounds": [
+                133,
+                -21,
+                5829,
+                1443
+              ],
+              "advance": 5976,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 187.875127553707,
+            "color": [
+              0.9759308099746704,
+              0.38771960139274597,
+              0.4034782648086548
+            ],
+            "layer": {
+              "box": [
+                780,
+                495,
+                1120,
+                595
+              ],
+              "vector_asset": "Month-Display-Semibold.svg",
+              "vector_sha256": "f47754ddd46b237a3b8f05debff5cf4e3b3da392f92a97da7875c8413f05ec8c",
+              "vector_box": [
+                802.6354394024277,
+                508.9629077081119,
+                1095.394476909522,
+                582.4664630005808
+              ]
+            },
+            "pose": [
+              949.0149581559748,
+              545.7146853543463,
+              73.50355529246887
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Semibold.otf",
+              "font_sha256": "ef94ac2356af4938fc96c35af41cc9e5788b9f2ff9b16561a800a4d6875c2cff",
+              "glyph": null,
+              "text": "Month",
+              "glyphs": [
+                "M",
+                "o",
+                "n",
+                "t",
+                "h"
+              ],
+              "bounds": [
+                127,
+                -21,
+                5958,
+                1443
+              ],
+              "advance": 6101,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          }
+        ]
+      },
+      {
+        "text": "Year",
+        "selected": {
+          "loss": 154.98518669628538,
+          "color": [
+            0.6322090029716492,
+            0.6322090029716492,
+            0.6322090029716492
+          ],
+          "layer": {
+            "box": [
+              1360,
+              495,
+              1600,
+              595
+            ],
+            "vector_asset": "Year-Text-Medium.svg",
+            "vector_sha256": "71ff67142ace6bc2e46ab0a6e0eed44794abd70f0423e37ccf07f9925f51ceb1",
+            "vector_box": [
+              1385.151801425548,
+              516.2148488421703,
+              1564.466486599928,
+              577.4218199532199
+            ]
+          },
+          "pose": [
+            1474.809144012738,
+            546.8183343976951,
+            61.206971111049675
+          ],
+          "provenance": {
+            "font_file": "SF-Pro-Text-Medium.otf",
+            "font_sha256": "6647a7ed74c6722f4bac674e0783b944f3d468c85aeb40a133a81797eb56294c",
+            "glyph": null,
+            "text": "Year",
+            "glyphs": [
+              "Y",
+              "e",
+              "a",
+              "r"
+            ],
+            "bounds": [
+              70,
+              -21,
+              4359,
+              1443
+            ],
+            "advance": 4363,
+            "size_pt": 17,
+            "tracking_font_units": -47,
+            "units_per_em": 2048,
+            "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+          }
+        },
+        "trials": [
+          {
+            "loss": 172.40688699530438,
+            "color": [
+              0.6200781464576721,
+              0.6200781464576721,
+              0.6200781464576721
+            ],
+            "layer": {
+              "box": [
+                1360,
+                495,
+                1600,
+                595
+              ],
+              "vector_asset": "Year-Text-Regular.svg",
+              "vector_sha256": "d737a5793d9ac49478c90a3fc06bf3f0eabb5713842cacedf85ad145fe9539af",
+              "vector_box": [
+                1384.4563562802914,
+                515.1861218804263,
+                1563.0857341902001,
+                577.9791371495503
+              ]
+            },
+            "pose": [
+              1473.7710452352458,
+              546.5826295149883,
+              62.793015269124034
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Regular.otf",
+              "font_sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+              "glyph": null,
+              "text": "Year",
+              "glyphs": [
+                "Y",
+                "e",
+                "a",
+                "r"
+              ],
+              "bounds": [
+                69,
+                -19,
+                4228,
+                1443
+              ],
+              "advance": 4234,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 154.98518669628538,
+            "color": [
+              0.6322090029716492,
+              0.6322090029716492,
+              0.6322090029716492
+            ],
+            "layer": {
+              "box": [
+                1360,
+                495,
+                1600,
+                595
+              ],
+              "vector_asset": "Year-Text-Medium.svg",
+              "vector_sha256": "71ff67142ace6bc2e46ab0a6e0eed44794abd70f0423e37ccf07f9925f51ceb1",
+              "vector_box": [
+                1385.151801425548,
+                516.2148488421703,
+                1564.466486599928,
+                577.4218199532199
+              ]
+            },
+            "pose": [
+              1474.809144012738,
+              546.8183343976951,
+              61.206971111049675
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Medium.otf",
+              "font_sha256": "6647a7ed74c6722f4bac674e0783b944f3d468c85aeb40a133a81797eb56294c",
+              "glyph": null,
+              "text": "Year",
+              "glyphs": [
+                "Y",
+                "e",
+                "a",
+                "r"
+              ],
+              "bounds": [
+                70,
+                -21,
+                4359,
+                1443
+              ],
+              "advance": 4363,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 173.54621845297515,
+            "color": [
+              0.6492695212364197,
+              0.6492695212364197,
+              0.6492695212364197
+            ],
+            "layer": {
+              "box": [
+                1360,
+                495,
+                1600,
+                595
+              ],
+              "vector_asset": "Year-Text-Semibold.svg",
+              "vector_sha256": "2575b9e970a6855d290fa0d3e0303d27d2d1afe59627f5e0fc4eb0c06f2c9374",
+              "vector_box": [
+                1383.1458698804834,
+                516.6583090332225,
+                1565.3652906349469,
+                577.5227530380763
+              ]
+            },
+            "pose": [
+              1474.255580257715,
+              547.0905310356494,
+              60.86444400485384
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Text-Semibold.otf",
+              "font_sha256": "7fb222bb56b80c7329f657cb58a504370e4873f3d33255939e33e50a4a4148ac",
+              "glyph": null,
+              "text": "Year",
+              "glyphs": [
+                "Y",
+                "e",
+                "a",
+                "r"
+              ],
+              "bounds": [
+                71,
+                -22,
+                4457,
+                1443
+              ],
+              "advance": 4461,
+              "size_pt": 17,
+              "tracking_font_units": -47,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 225.88388447184116,
+            "color": [
+              0.632533073425293,
+              0.632533073425293,
+              0.632533073425293
+            ],
+            "layer": {
+              "box": [
+                1360,
+                495,
+                1600,
+                595
+              ],
+              "vector_asset": "Year-Display-Regular.svg",
+              "vector_sha256": "ba9c365b6c64a9f256c1e0ed65188be3df69934cc25ef512e25c829126ed70fb",
+              "vector_box": [
+                1385.593338565419,
+                514.1136805966498,
+                1561.4100467982685,
+                577.7189833030443
+              ]
+            },
+            "pose": [
+              1473.5016926818437,
+              545.9163319498471,
+              63.60530270639447
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Regular.otf",
+              "font_sha256": "fa201942bfbbad09b0be750686a747d490901b3bc4618ecdfc30382cf28d4704",
+              "glyph": null,
+              "text": "Year",
+              "glyphs": [
+                "Y",
+                "e",
+                "a",
+                "r"
+              ],
+              "bounds": [
+                25,
+                -20,
+                4069,
+                1443
+              ],
+              "advance": 4142,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 186.52915279380977,
+            "color": [
+              0.6374374032020569,
+              0.6374374032020569,
+              0.6374374032020569
+            ],
+            "layer": {
+              "box": [
+                1360,
+                495,
+                1600,
+                595
+              ],
+              "vector_asset": "Year-Display-Medium.svg",
+              "vector_sha256": "a5c88128ede776cfe96f772fc4c64192db29eb5eea1427ab41cd3bef28160859",
+              "vector_box": [
+                1385.3015842889215,
+                515.305845315351,
+                1561.7132606710404,
+                576.9593889351702
+              ]
+            },
+            "pose": [
+              1473.507422479981,
+              546.1326171252606,
+              61.65354361981909
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Medium.otf",
+              "font_sha256": "8f9c53c801b8e0e45743596aa3281329d04675528faeab7dcbfbaa34cd1577c7",
+              "glyph": null,
+              "text": "Year",
+              "glyphs": [
+                "Y",
+                "e",
+                "a",
+                "r"
+              ],
+              "bounds": [
+                26,
+                -21,
+                4215,
+                1443
+              ],
+              "advance": 4287,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          },
+          {
+            "loss": 195.00190668040887,
+            "color": [
+              0.6482836008071899,
+              0.6482836008071899,
+              0.6482836008071899
+            ],
+            "layer": {
+              "box": [
+                1360,
+                495,
+                1600,
+                595
+              ],
+              "vector_asset": "Year-Display-Semibold.svg",
+              "vector_sha256": "ad8411717f97bd593a6ba8a90f023dc23c78c0d563c5da9d3189cfbf58695df2",
+              "vector_box": [
+                1385.0450728010237,
+                516.0000138352464,
+                1561.967536292238,
+                576.2219358420209
+              ]
+            },
+            "pose": [
+              1473.5063045466309,
+              546.1109748386336,
+              60.22192200677462
+            ],
+            "provenance": {
+              "font_file": "SF-Pro-Display-Semibold.otf",
+              "font_sha256": "ef94ac2356af4938fc96c35af41cc9e5788b9f2ff9b16561a800a4d6875c2cff",
+              "glyph": null,
+              "text": "Year",
+              "glyphs": [
+                "Y",
+                "e",
+                "a",
+                "r"
+              ],
+              "bounds": [
+                27,
+                -21,
+                4328,
+                1443
+              ],
+              "advance": 4399,
+              "size_pt": 17,
+              "tracking_font_units": 45,
+              "units_per_em": 2048,
+              "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "limits": "Native masks and input hashes stay frozen. Higher output resolution creates no additional photographic evidence; input reconstruction assumptions remain separate from rendering accuracy."
+}
