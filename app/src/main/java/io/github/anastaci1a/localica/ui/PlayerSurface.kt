@@ -30,7 +30,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -320,19 +319,23 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 delayMs = settings.lyricDelayMs, durationMs = state.durationMs) }
             val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value
             val subtitleScale = 11f / MaterialTheme.typography.bodyLarge.fontSize.value
-            MarqueeTitle(state.title, settings.reducedMotion || (p > 0f && p < 1f),
+            val textMotionPaused = playerMarqueePaused(p, expanded, dragging, progress.isRunning)
+            MarqueeTitle(state.title, settings.reducedMotion,
                 Modifier.offset(textX, titleY).width(textWidth).scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title"),
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                motionPaused = textMotionPaused)
             val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
-            Text(buildAnnotatedString {
-                append((if (settings.albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist).orEmpty())
-                state.album?.let { album -> withStyle(SpanStyle(color = subtitleColor.copy(alpha = subtitleColor.alpha * smoothReveal((p - .65f) / .35f)))) {
+            val artist = (if (settings.albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist).orEmpty()
+            val albumVisibility = smoothReveal((p - .65f) / .35f)
+            MarqueeTitle(buildAnnotatedString {
+                append(artist)
+                state.album?.let { album -> withStyle(SpanStyle(color = subtitleColor.copy(alpha = subtitleColor.alpha * albumVisibility))) {
                     append(" · "); append(album)
                 } }
-            },
-                Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p),
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }, settings.reducedMotion,
+                Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag("player-artist"),
+                style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
+                visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
                 .testTag("player-seek-row").graphicsLayer { alpha = rowMotion.seekAlpha }) {
                 var seeking by remember(state.trackUri) { mutableStateOf<Float?>(null) }
