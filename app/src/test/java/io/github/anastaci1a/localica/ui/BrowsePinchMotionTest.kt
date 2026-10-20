@@ -138,4 +138,42 @@ class BrowsePinchMotionTest {
         assertTrue(closed)
     }
 
+    @Test fun aRetiredGenerationCannotPublishIntoOrClearANewerPinch() {
+        val motion = BrowsePinchMotion().apply {
+            source = BrowseStyle(listSize = ListSize.Compact)
+            target = BrowseStyle(listSize = ListSize.Normal)
+        }
+        val retired = motion.transaction
+        assertTrue(motion.owns(retired))
+        motion.clearTransaction()
+        motion.source = BrowseStyle(listSize = ListSize.Small)
+        motion.target = BrowseStyle(listSize = ListSize.Compact)
+        val current = motion.transaction
+
+        assertNotEquals(retired, current)
+        assertFalse("A late capture result must not publish its obsolete destination", motion.owns(retired))
+        // The production capture/settlement finally blocks use the same ownership guard.
+        if (motion.owns(retired)) motion.clearTransaction()
+        assertTrue(motion.owns(current))
+        assertEquals(ListSize.Small, motion.source?.listSize)
+        assertEquals(ListSize.Compact, motion.target?.listSize)
+    }
+
+    @Test fun committedHandoffStateDoesNotLeakIntoTheNextTransaction() {
+        val motion = BrowsePinchMotion().apply {
+            source = BrowseStyle(listSize = ListSize.Compact)
+            target = BrowseStyle(listSize = ListSize.Normal)
+            committed = true
+        }
+        val committedGeneration = motion.transaction
+        motion.clearTransaction()
+        assertFalse(motion.committed)
+        assertFalse(motion.owns(committedGeneration))
+
+        motion.source = BrowseStyle(listSize = ListSize.Normal)
+        motion.target = BrowseStyle(listSize = ListSize.Large)
+        assertFalse("A new preview must remain eligible for cancellation rollback", motion.committed)
+        assertTrue(motion.owns(motion.transaction))
+    }
+
 }

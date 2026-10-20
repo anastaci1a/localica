@@ -54,7 +54,9 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
             if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
-            if (recent.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val recentScroll = androidx.compose.foundation.lazy.rememberLazyListState()
+            if (recent.isNotEmpty()) LazyRow(Modifier.modalScroll(recentScroll), state = recentScroll,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
                     val cover by produceState<android.graphics.Bitmap?>(null, uri, recent, revision) {
                         value = try { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
