@@ -34,9 +34,19 @@ def kernel_safe(mask,study,p):
     return (cv2.erode(mask,np.ones((2*radius+1,2*radius+1),np.uint8),borderType=cv2.BORDER_CONSTANT,borderValue=0) if radius else mask),radius
 
 
+def confidence_at(confidence,X,Y,shift=0.):
+    dx,dy=(0.,shift) if np.isscalar(shift) else shift
+    return cv2.remap(confidence,(X+np.float32(dx)).astype(np.float32),
+                     (Y+np.float32(dy)).astype(np.float32),cv2.INTER_LINEAR)
+
+
 def fraction(confidence,X,Y,mask,shift=0.):
-    support=cv2.remap(confidence,X,Y+np.float32(shift),cv2.INTER_LINEAR)
+    support=confidence_at(confidence,X,Y,shift)
     return float((support[mask]>.999).mean())
+
+
+def minimum_confidence(confidence,X,Y,mask,shift=0.):
+    return float(confidence_at(confidence,X,Y,shift)[mask].min()) if mask.any() else 1.
 
 
 def coverage_report(study,p,X=None,Y=None):
@@ -73,6 +83,7 @@ def supported(study,report):
         if not study.case.get('allow_estimated_background'):
             keys+=['chromatic_source_observed_fraction','chromatic_gaussian_3sigma_observed_fraction']
     if 'context_mean_source_defined_fraction' in report:
-        keys+=['context_mean_source_defined_fraction']
-        if not study.case.get('allow_estimated_background'):keys+=['context_mean_source_observed_fraction']
+        for kind in ['defined']+([] if study.case.get('allow_estimated_background') else ['observed']):
+            value=report.get('context_mean_minimum_'+kind+'_confidence',report['context_mean_source_'+kind+'_fraction'])
+            if value<1-1e-7:return False
     return all(report[k]>=.999 for k in keys)

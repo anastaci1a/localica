@@ -180,7 +180,7 @@ b₆=(y−1/2)r₀, b₉=(y−1/2)r₁, b₁₂=(y−1/2)r₂; other b entries=0
 ```
 
 - The added light is identical in all three RGB channels; it cannot assign independent RGB materials to each background. It changes lighting, not the ray map or the sampled transmission colors. `A` is the preceding optional color-contraction matrix, otherwise identity.
-- Recompute the source mean when the backdrop moves. Source confidence must cover the mean's entire footprint separately from scored refracted rays. Material derivatives use `A`; the offset still affects clipping and therefore the active derivative regions.
+- Recompute the source mean when the backdrop moves. Every mean sample must have defined input, including interpolation support; average coverage cannot excuse a missing pixel. Check this footprint separately from scored rays and cap motion along its declared axis. Material derivatives use `A`; the offset still affects clipping and therefore the active derivative regions.
 - A declared calibration range `[l,h]` optionally replaces `y` with `l+(h−l)S(clamp((y−l)/(h−l),0,1))`. This bounded, C2 interpolation preserves the measured endpoints and prevents uncontrolled extrapolation.
 - This is an empirical encoded-brightness response, not radiometric illumination or an Apple formula. Home tests a narrow range of approximately 0.413–0.436; outside behavior is bounded but unvalidated. Zero response preserves the prior material.
 
