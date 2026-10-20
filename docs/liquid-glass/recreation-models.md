@@ -115,7 +115,7 @@ The `regular-light` and `regular-dark` recipes independently specify field param
 
 ## Music and switch profile family
 
-The newer [paired studies](reconstruction.md#apple-music-studies) use one normalized image-map family. Each `studies/<id>/paired/accepted.json` supplies the shared coefficients; `a.json` and `b.json` supply measured poses and frozen input hashes. Home is still provisional because its first paired baseline regressed the retained single result.
+The newer [paired studies](reconstruction.md#apple-music-studies) use one normalized image-map family. Each `studies/<id>/paired/accepted.json` supplies the shared coefficients; `a.json` and `b.json` supply measured poses and frozen input hashes. Home's corrected chain protects the retained single-background result; the earlier invalid pairing is archived separately.
 
 Subtract the recipe's shape offset from `v`, then apply its half-extent/radius corrections. Obtain boundary coordinate `s`, outward unit normal `n`, and `d=max(−s,0)`. The usual outline is a rounded rectangle/capsule. For a circle, keep equal half-extents and use `core_y=core_x` with no directional optical parameters.
 
@@ -237,4 +237,4 @@ For `t,s∈[0,1]` and `γ>0`, the function stays bounded and monotone. The affin
 - Compare native-resolution glass, rim, interior and foreground separately. Use identical source/mask definitions for cross-renderer scores. PNG rounding changes the reported errors slightly; record whether measurements precede or follow quantization.
 - Transfer the light circular playback recipe first to other Clear circular media controls. Preserve `σ/L`, not the reference pixel σ. Toolbar and active-slider geometry require their own mappings; a circular model should not be stretched into either shape without verification.
 - Do not score an unrecovered or moving backdrop as though it were known. Other media controls and Music toolbar footage are useful next references, but require their original glyphs and independent backdrop recovery. They remain candidates, not additional calibrated successes.
-- Display captures may extend unrecovered source pixels with the nearest known RGB. Blend this estimated contact context by distance from the shape, avoiding a visible confidence-mask boundary. Frozen benchmark inputs stay unchanged; report the display completion's RGB difference on the score mask, including filter/subpixel spill. This estimates missing context rather than recovering photographic detail.
+- Display captures may extend unrecovered source pixels with the nearest known RGB. Stills blend estimated contact context into the reference by distance from the shape; movies translate the completed source consistently inside and outside the lens, avoiding a fixed strip at the moving confidence boundary. Frozen benchmark inputs stay unchanged; report completion's RGB difference on the score mask, including filter/subpixel spill. Missing context remains estimated.

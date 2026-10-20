@@ -222,19 +222,20 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 
 </details>
 
-### Home control — corrected pairing in progress
+### Home control
 
-Frames A/B: 2.5/2.0 seconds. The earlier pairing regressed the retained first-background result; its records are archived unchanged and do not count as current acceptance. The corrected baseline protects the original first loss 40.345 and improves the second from 114.298 to 103.329, using one sparse source-brightness response and the same clean vector. These 4× stills show corrected paired pass 21; twenty new paired experiments and motion captures remain in progress.
+Frames A/B: 2.5/2.0 seconds. The corrected study has 22 initial/refinement and 21 paired experiments, with one sparse source-brightness response and a clean Home vector. Both references pass the frozen native loss, whole-glass and foreground gates. The earlier pairing regressed the first-background result; its unchanged archived records do not count as current acceptance.
 
 [![Home correction, background A: Apple left, reconstruction right](assets/study-music-home-vector-progress-a.png)](assets/study-music-home-vector-progress-a.png)
 
 [![Home correction, background B: Apple left, reconstruction right](assets/study-music-home-vector-progress-b.png)](assets/study-music-home-vector-progress-b.png)
 
-- [Corrected recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Boundary/source verification](experiments/reconstruction/studies/music-home-vector/paired/bridge.json) · [Original single](experiments/reconstruction/studies/music-home-vector/accepted.json) · [Archived invalid-chain evidence](experiments/reconstruction/studies/music-home-vector/paired-invalid-boundary/status.json). A geometric 0.08L inset keeps the source-color calculation away from an unrecovered boundary. [Reference-resolution replay](experiments/reconstruction/studies/music-home-vector/paired/verification.json) verifies the current chain. Display captures extend missing contact/background pixels with nearby known colors; [snapshot measurements](experiments/reconstruction/home-gallery-progress.json) report the difference from the frozen benchmark.
+- [Recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Single-to-paired boundary](experiments/reconstruction/studies/music-home-vector/paired/bridge.json) · [Independent native replay](experiments/reconstruction/studies/music-home-vector/paired/verification.json) · [Archived invalid chain](experiments/reconstruction/studies/music-home-vector/paired-invalid-boundary/status.json).
+- A 0.08L inset keeps the source-color calculation on defined pixels. A narrow uniform-white incident field improves the outer contour; it is an empirical lighting assumption, and a dark upper-rim mismatch remains. The source-brightness law is tested only over these two backgrounds.
+- These 4× captures show pass21. Missing background pixels are extended with nearby defined RGB for presentation, with [measured benchmark differences](experiments/reconstruction/home-gallery-progress.json). Motion uses the same completed, translated source inside and outside the lens; the extension is not photographic recovery. Four-second videos run at 30 fps; full-size GIFs stay below 10 MB by reducing frame rate.
 
-The motion below belongs to the previous invalid pairing; it will be replaced after the corrected chain is verified.
 <details>
-<summary>Historical motion — background A</summary>
+<summary>Motion — background A</summary>
 
 <video controls preload="none" playsinline width="940" height="960" aria-label="Home correction, background A motion"><source src="assets/study-music-home-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-a.mp4">Open video</a></video>
 
@@ -245,7 +246,7 @@ The motion below belongs to the previous invalid pairing; it will be replaced af
 </details>
 
 <details>
-<summary>Historical motion — background B</summary>
+<summary>Motion — background B</summary>
 
 <video controls preload="none" playsinline width="940" height="960" aria-label="Home correction, background B motion"><source src="assets/study-music-home-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-b.mp4">Open video</a></video>
 
@@ -309,10 +310,10 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 | Compact mini-player | 24.899 / 23.369 | 4.370 / 4.325 | 29 / 21 | Completed study |
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
-| Home, pass 21 | 40.187 / 103.246 | 5.861 / 9.223 | 10 / 21 | In progress |
+| Home | 40.187 / 103.246 | 5.861 / 9.223 | 22 / 21 | Corrected boundary verified |
 | Active switch, pass 24 | 232.758 / 276.129 | 12.061 / 14.677 | 24 / 24 | Paired calibration |
 
-- Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Home's missing single-to-paired boundary check is explicitly flagged above.
+- Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Independent replay also checks that the first paired baseline protects the retained single-background result.
 - These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.
 - Both references come from the same video, not independent device validation. Higher-resolution presentation does not create new source detail or change native scoring. GIFs may have lower resolution/frame rate than the 4× PNG/video masters; their encoding diagnostics are recorded with each study.
 
