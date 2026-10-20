@@ -21,6 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
@@ -104,6 +105,53 @@ class GlassShadowTest {
         org.junit.Assert.assertEquals("The popup owns its shadow while away from the bottom group", 0, darkPixels())
         compose.runOnIdle { anchor.modalPresent = false; anchor.shadowInModal = false }
         assertTrue("The returning trigger rejoins the union", darkPixels() > 100)
+    }
+
+    @Test fun paddedVisibilityPreservesTheWholeFieldAtEveryOpacityAndReversal() {
+        var alpha by mutableFloatStateOf(1f)
+        var expanded by mutableStateOf(false)
+        compose.setContent {
+            Column {
+                listOf(false, true).forEach { actual ->
+                    val geometry = remember { GlassShadowGeometry() }
+                    val width = if (expanded) 130.dp else 90.dp
+                    val height = if (expanded) 70.dp else 44.dp
+                    val radius = 22.dp
+                    Box(Modifier.size(220.dp, 170.dp).background(Color.White).testTag("padded-$actual"), Alignment.Center) {
+                        if (actual) Box(Modifier.size(width, height).glassShadowOpacity { alpha }
+                            .clearGlassShadow(.8f, .6f, radius)
+                            .background(Color.Red, androidx.compose.foundation.shape.RoundedCornerShape(radius)))
+                        else Box(Modifier.fillMaxSize().drawBehind {
+                            val w = width.roundToPx().toFloat(); val h = height.roundToPx().toFloat()
+                            val left = ((size.width-w)/2).roundToInt().toFloat()
+                            val top = ((size.height-h)/2).roundToInt().toFloat()
+                            val rect = RoundRect(left, top, left+w, top+h, CornerRadius(radius.toPx()))
+                            // A full-scene reference has no surface-sized clipping layer.
+                            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height),
+                                androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
+                            glassShadows(listOf(rect to 1f), .8f, .6f, geometry)
+                            drawRoundRect(Color.Red, androidx.compose.ui.geometry.Offset(rect.left, rect.top),
+                                androidx.compose.ui.geometry.Size(rect.width, rect.height), CornerRadius(radius.toPx()))
+                            drawContext.canvas.restore()
+                        })
+                    }
+                }
+            }
+        }
+        listOf(1f, .5f, 0f, .25f, 1f, .5f, 1f, 0f, 1f).forEachIndexed { index, opacity ->
+            compose.runOnIdle { alpha = opacity; expanded = index % 2 == 1 }
+            val expected = compose.onNodeWithTag("padded-false").captureToImage().toPixelMap()
+            val actual = compose.onNodeWithTag("padded-true").captureToImage().toPixelMap()
+            var error = 0f
+            var max = 0f
+            for (y in 0 until expected.height) for (x in 0 until expected.width) {
+                val difference = abs(expected[x,y].red - actual[x,y].red) + abs(expected[x,y].green - actual[x,y].green)
+                error += difference
+                max = maxOf(max, difference)
+            }
+            assertTrue("Padded field and foreground share opacity $opacity on reversal $index: max=$max error=$error",
+                max < .08f && error / (expected.width*expected.height) < .006f)
+        }
     }
 
     @Test fun retainedShadowMatchesFullGradientAfterShapeAndStrengthChange() {

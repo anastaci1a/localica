@@ -170,6 +170,26 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     return remember(scope) { RetainedGlassShadow(scope) }
 }
 
+/** Keep visibility compositing outside the surface clip without a tight ViewLayer.
+ * A popup-sized graphicsLayer clips its overflowing shadow on legacy Android.
+ * Binary visibility needs no layer. Fractional opacity keeps the entire padded
+ * field in one alpha operation, including overlapping rings and foreground. */
+@Composable internal fun Modifier.glassShadowOpacity(opacity: () -> Float): Modifier {
+    val inset = glassShadowInset()
+    val paint = remember { Paint() }
+    return drawWithContent {
+        val alpha = opacity().coerceIn(0f, 1f)
+        if (alpha <= 0f) return@drawWithContent
+        if (alpha >= 1f) drawContent()
+        else {
+            val padding = inset.toPx() + 2f
+            paint.alpha = alpha
+            drawContext.canvas.saveLayer(Rect(-padding, -padding, size.width + padding, size.height + padding), paint)
+            try { drawContent() } finally { drawContext.canvas.restore() }
+        }
+    }
+}
+
 @Composable internal fun Modifier.clearGlassShadow(strength: Float, spread: Float, radius: Dp?, visible: () -> Boolean = { true }): Modifier {
     val cache = rememberGlassShadow()
     return drawBehind {
