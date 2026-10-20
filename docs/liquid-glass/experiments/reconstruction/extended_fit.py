@@ -335,7 +335,8 @@ class Study:
                 color=np.clip(cv2.resize(np.asarray(color,dtype=np.float32),size,interpolation=cv2.INTER_CUBIC),0,1)
             if tuple(box) in self.vector_layers:
                 from vector_foreground import coverage
-                alpha=coverage(self.folder,self.vector_layers[tuple(box)],scale)
+                vector=self.vector_layers[tuple(box)]
+                alpha=coverage(self.folder,vector,scale)*vector.get('opacity',1.)
             region[:]=region*(1-alpha[...,None])+color*alpha[...,None]
         for layer in self.transmission_layers:
             from foreground_response import calibrate,response
