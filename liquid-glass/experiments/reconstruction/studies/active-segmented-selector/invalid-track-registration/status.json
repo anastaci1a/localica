@@ -1,0 +1,8 @@
+{
+  "status": "Invalid source registration; retained for audit, excluded from corrected experiment counts",
+  "source_commit": "948d66cae9c48883c270a33c2269345db0f2629a",
+  "excluded_initial_passes": 13,
+  "reason": "Track threshold included the selector shadow. Estimated vertical center was551.88/560 versus546.52 on distant exposed edges, shifting source captions and track bounds. Original contour residual35.12/26.93 geometric pixels; distant-edge residual about0.5pixel.",
+  "retained_private_inputs": "segmented-biased-track-preparation",
+  "correction": "Exclude a0.6L lens neighborhood, require both track ends, and reject contour RMS>=1.5px before freezing inputs. Frozen previous receipts/source files are unchanged."
+}
