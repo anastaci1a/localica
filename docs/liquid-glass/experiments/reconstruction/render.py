@@ -4,7 +4,7 @@ Optical formulas mirror ../../model.js; this is an offline comparison renderer,
 not the live lab's nine-tap/synthetic-light material. Inputs/outputs are encoded RGB.
 """
 import numpy as np
-from shapes import superellipse
+from shapes import superellipse,polynomial_oval,oval_field
 from scipy.interpolate import BSpline
 from scipy.optimize import lsq_linear
 
@@ -16,6 +16,7 @@ def spline_basis(distance,radius):
 
 
 def case_geometry(case,x,y):
+    if case.get('oval'):return polynomial_oval(x,y,case['half'],case['oval'])
     if case.get('exponent'):return superellipse(x,y,case['half'],case['exponent'])
     return geometry(x,y,case['half'],case['radius'])
 
@@ -30,15 +31,17 @@ def geometry(x, y, half, radius):
     return sd,nx,ny
 
 
-def lookup(x,y,half,radius,parameters,model='field',boundary=None,exponent=0):
-    sd,nx,ny=geometry(x,y,half,radius) if boundary is None else boundary
+def lookup(x,y,half,radius,parameters,model='field',boundary=None,exponent=0,oval=None):
+    if boundary is None:
+        boundary=polynomial_oval(x,y,half,oval) if oval else superellipse(x,y,half,exponent) if exponent else geometry(x,y,half,radius)
+    sd,nx,ny=boundary
     if model=='identity':return x.copy(),y.copy()
     if model in ('potential','tensor','chromatic'):
         from curvature import potential
-        return potential(x,y,half,radius,parameters,(sd,nx,ny))
-    if model in ('surface','reflection','spectral','colored'):
+        return potential(x,y,half,radius,parameters,(sd,nx,ny),tensor=model!='potential')
+    if model in ('surface','exponential','reflection','spectral','colored','environment'):
         from curvature import surface,snell_map
-        z,Nx,Ny,Nz=surface(x,y,half,radius,parameters,exponent)
+        z,Nx,Ny,Nz=surface(x,y,half,radius,parameters,exponent,oval)
         X,Y=snell_map(x,y,z,Nx,Ny,Nz,parameters.get('ior',1.33),min(half)*parameters['gap'])
         return np.where(sd<=0,X,x),np.where(sd<=0,Y,y)
     b=min(radius,min(half)*parameters.get('band',1))
@@ -68,7 +71,8 @@ def lookup(x,y,half,radius,parameters,model='field',boundary=None,exponent=0):
         if np.any(exitK<0):raise ValueError('TIR outside comparator domain')
         travel=H*f*C/-tz;outTravel=G/np.sqrt(exitK)
         baseX,baseY=x+tx*travel,y+ty*travel
-        if exponent:base_sd=(np.abs(baseX)/half[0])**exponent+(np.abs(baseY)/half[1])**exponent-1
+        if oval:base_sd=oval_field(baseX,baseY,half,oval)[0]-1
+        elif exponent:base_sd=(np.abs(baseX)/half[0])**exponent+(np.abs(baseY)/half[1])**exponent-1
         else:base_sd,*_=geometry(baseX,baseY,half,radius)
         if np.any((sd<=0)&(base_sd>1e-5)):raise ValueError('Plane exit outside cap body')
         X=x+tx*travel+ior*tx*outTravel;Y=y+ty*travel+ior*ty*outTravel
@@ -107,6 +111,10 @@ def fit_material(sample,light,target,weights):
     prior=np.zeros(count);prior[:3]=prior[-3:]=1
     gram+=np.eye(count)*ridge;rhs+=ridge*prior
     lower=np.full(count,-.8);upper=np.full(count,.8)
+    # Signed environment/basis coefficients can cancel. Their magnitude is not
+    # output radiance: a .8 coefficient ceiling clipped several reflection fits.
+    # Keep offsets/gains bounded separately and disclose the wider lighting fit.
+    lower[6:-3]=-4;upper[6:-3]=4
     lower[:3]=lower[-3:]=.05;upper[:3]=upper[-3:]=1.5
     co=np.linalg.solve(gram,rhs)
     if np.any(co<lower) or np.any(co>upper):

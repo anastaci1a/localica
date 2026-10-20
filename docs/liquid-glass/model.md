@@ -128,7 +128,8 @@ F(p) = Q + Tout.xy × G/(−Tout.z)
 
 The [HD study](reconstruction.md) tests offline hypotheses beyond the portable lab's circle/capsule equations:
 
-- **Continuous oval:** `|x/hx|^n+|y/hy|^n=1`. The slider uses `n=2.5`, a visually selected outline hypothesis. Distance is the signed Euclidean distance to the numerically nearest boundary point; the outward normal follows the implicit gradient there. This is not a capsule or a recovered Apple shape formula. The sampled minimum curvature radius is about 35.66 native pixels for half-extents 118.5 × 56.5; the optical band is limited to 35.65. Numeric curvature checks do not constitute a proof for all possible exponents.
+- **Superellipse control:** `|x/hx|^n+|y/hy|^n=1`. The earlier slider used visually selected `n=2.5`. Measuring the dark upper contour exposed its error; it remains a shape/control test, not the final slider outline.
+- **Measured smooth oval:** `u=x/hx`, `v=y/hy`, `Q(u)=1+a u²+b u⁴`, `T=u²+[v/Q(u)]²=1`. The [contour fit](experiments/reconstruction/contour.json) gives `a≈0.49940`, `b≈−0.23031` and half-extents 118.5 × 56.5. Thus `Tx=[2u−2v²Q′/Q³]/hx`, `Ty=2v/(hy Q²)`. Nearest-boundary distance and implicit-gradient normals use the same curve. Its sampled minimum curvature radius is about 43.39 pixels; the optical band is limited to 43.38. A measured dark ridge is still a silhouette proxy, not proof of Apple's equation. Bottom/right symmetry is assumed; numeric convexity sampling is not a proof for arbitrary coefficients.
 - **Flexible inverse-map profile:** `a(d)=min(hx,hy) Σ ci Bi(clamp(d/r,0,1))`, with cubic B-splines on knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]`. Seven coefficients are fitted and the final three are zero. Therefore `a`, `a′` and `a″` vanish at the inner join. The map is `F=(x(1−cxS), y(1−cyS))−a n`, with quintic `S` evaluated at `d/r`. This allows independently fitted central X/Y scale and a flexible folded rim, without a fitted displacement image. It is an empirical comparator, not a physical surface reconstruction or a nonfolding guarantee.
 
 ### Tangential curvature and smooth crowns
@@ -156,24 +157,70 @@ The extra normal term is required by this potential; dropping it would break equ
 
 ```text
 circle / oval: T = |x/hx|ⁿ + |y/hy|ⁿ
+measured oval: T = u² + [v/Q(u)]²
 capsule:       T = [max(|x|−(hx−r),0)² + y²]/r²
-s = 1−Tᵐ; C = 1−(c/2)[(x/hx)²+(y/hy)²]
+s = 1−Tᵐ
+A = cx(x/hx)²+cy(y/hy)²; W = (1−k)+kT; C = 1−AW
 z(p) = H sᵝ C                    // inside T<1
 N ∝ ( H[βmTᵐ⁻¹Tx C − s Cx],
       H[βmTᵐ⁻¹Ty C − s Cy], s¹⁻ᵝ )
 ```
 
-Domains: `H=min(h)×height`, `height∈[0.01,1.8]`, `m∈[1,40]`, `β∈[0.2,0.95]`, `c∈[0,0.7]`; `n=2` for the circle and `2.5` for the study's oval. Increasing `m` concentrates curvature near the boundary while preserving a smooth central crown. At `m=1, β=1/2, c=0`, a circle/ellipse has an ellipsoidal meridian. Neither uniform curvature nor a planar center is assumed. The capsule retains its footprint's straight/arc curvature join; the circle and oval have no distance-band shoulder.
+Domains: `H=min(h)×height`, `height∈[0.01,1.8]`, `m∈[1,40]`, `β∈[0.2,0.95]`; `n=2` for the circle, or the fitted polynomial field for the measured oval. Earlier broad-crown trials use `cx=cy=c/2`, `c∈[0,0.7]`, `k=0`. Independent X/Y crowns and `k∈[0,1]` vary how cross-sections change with depth; require `C>0`. Increasing `m` concentrates curvature near the boundary. At `m=1, β=1/2, cx=cy=0`, a circle/ellipse has an ellipsoidal meridian. Height, central curvature and rim curvature are distinct parameters.
 
-The same two-interface Snell construction above uses this normal and height. The outline constrains the silhouette, not `H,m,β,c` uniquely. For a height graph, principal curvatures are eigenvalues of `I⁻¹II`, where `I=Id+∇z⊗∇z` and `II=Hess(z)/sqrt(1+|∇z|²)` (sign depends on chosen orientation). Height alone is not a curvature radius. The current checks establish analytic-normal/scale/mirror limits; full path-validity and temporal calibration remain open.
+The capsule formula uses its long-axis frame, `hx≥hy=r`; rotate coordinates for a vertical capsule. It is not a general rounded-rectangle height field. Those additional footprints need their own validated implicit geometry before reuse.
+
+The exponential alternative substitutes `s=[1−exp(−m(1−T))]/[1−exp(−m)]`, with `−ds/dT=m exp(−m(1−T))/[1−exp(−m)]`. It provides another smooth crown without an inner join; use `expm1` near small arguments. Both families use the same two-interface Snell construction, `G=min(h)×gap`, `gap∈[0,1.5]` and reference IOR 1.33.
+
+The outline does not identify `H,m,β,c` uniquely. For a height graph, principal curvatures are eigenvalues of `I⁻¹II`, where `I=Id+∇z⊗∇z` and `II=Hess(z)/sqrt(1+|∇z|²)` (sign depends on chosen orientation). Height alone is not a curvature radius. The current checks establish analytic-normal/scale/mirror limits; full path-validity and temporal calibration remain open.
+
+**Independent transverse curvature.** A preferred longitudinal section need not produce the desired optical onset across Y. For a separable footprint `T=U(x)+V(x,y)`, set `S=1−U`, `W=V/S` inside the body and use:
+
+```text
+T* = U + S Wᵖ, p≥1
+T*x = Ux[1+(p−1)Wᵖ] + pWᵖ⁻¹Vx
+T*y = pWᵖ⁻¹Vy
+```
+
+Use `T*` consistently in the height, crown and analytic normal. At `p=1` it recovers the original field. It preserves the silhouette (`W=1`) and longitudinal Y=0 section (`W=0`), while larger `p` reduces central transverse curvature. The implementation's `cross_section_power` controls `p`; exterior occupancy retains the original field to avoid singular perspective extrapolation at `U=1`. This is a geometric hypothesis for a quiet interior and strong near-rim refraction, not a measured Apple parameter. Preserve coverage and validate convexity/path behavior before using a new combination.
+
+### Cap joins and closed-body tracing
+
+The capsule's `q=max(|x|−a,0)`, `a=hx−r`, gives a C1 surface with a jump in second derivatives at the straight/circular join. A continuous normal does not ensure continuous curvature or optical magnification. The optional geometric transition uses `s=|x|−a`, width `0<w<a`, and:
+
+```text
+u = clamp((s/w+1)/2, 0, 1)
+q = 0                     for s≤−w
+q = w(2u³−u⁴)            for −w<s<w
+q = s                     for s≥w
+q′ = 3u²−2u³             within the transition
+```
+
+Value, first and second derivative match both adjoining pieces. Use this `q` in the footprint and its derivatives; `cap_join=w/r` controls the width. The silhouette changes slightly, so coverage must follow the modified footprint too. This is not a promise of C2 smoothness for arbitrary footprints or a reconstruction of Apple's shape.
+
+The offline [closed-body comparator](experiments/reconstruction/solid.py) replaces the flat exit with `−rear×z(x,y)≤Z≤z(x,y)`, inside `T≤1`. Front and rear normals come from the same height gradient. Changing `cx,cy,k` therefore changes the actual body and all traced interfaces, rather than directly widening a sampled image.
+
+For unit incident direction `I`, an opposing unit normal `N`, index ratio `η=ni/nt`, `ci=−I·N` and `K=1−η²(1−ci²)`:
+
+```text
+reflected   = I + 2ci N
+transmitted = ηI + (ηci−sqrt(K))N       when K≥0
+```
+
+Unpolarized dielectric Fresnel weights split each path. At total internal reflection (`K<0`) there is no transmitted direction; its entire weight continues along reflection. Subsequent transmissions hit the background plane or the environment. A finite path series reports remaining untraced energy; it must not silently become fabricated background detail. A local first-path Jacobian does not describe this entire multi-path image.
+
+- Intersection bisection requires a convex supported body. The general parameter family is **not certified convex**; new combinations need geometry/path checks before interpretation. Body continuity alone is insufficient.
+- The [material fit](experiments/reconstruction/solid_material.py) still uses encoded-RGB nuisance lighting, including signed coefficients. Correct Snell paths do not make that fitted lighting radiometrically physical.
+- [Independent controls](experiments/reconstruction/verify-solid.py) compare intersections with an analytic ellipsoid, check Snell/Fresnel, explicit TIR, energy accounting, scale/mirror limits, analytic cross-coupled normals and C2 join derivatives. Example horizontal stretch emerges from geometry, but these checks do not calibrate it to Apple.
+- This comparator is separate from the interactive lab's existing field/flat-exit models. No Apple-shader or live-lab parity claim follows from the offline experiment.
 
 ### Reflection versus color separation
 
-For a view direction along +Z, the reflected lookup direction is `R=(2NzNx,2NzNy,2Nz²−1)`. The surface comparator fits a low-order environment evaluated at **that direction**, weighted by unpolarized dielectric Fresnel reflectance. It replaces independently positioned Gaussian highlight bands; changing the surface changes reflection and transmission together. The RGB-environment alternative has four coefficients per channel for `E(R)=e0+exRx+eyRy+ezRz`, plus smooth body terms. The environment is inferred nuisance lighting, not a measured Apple light rig. Encoded-RGB fitting is not energy-conserving radiometry.
+For a view direction along +Z, the reflected lookup direction is `R=(2NzNx,2NzNy,2Nz²−1)`. The surface comparator fits a low-order environment evaluated at **that direction**, weighted by unpolarized dielectric Fresnel reflectance. It replaces independently positioned Gaussian highlight bands; changing the surface changes reflection and transmission together. The first-order RGB environment uses `E(R)=e0+exRx+eyRy+ezRz`; the quadratic alternative adds `RxRy,RxRz,RyRz,Rx²−Ry²,3Rz²−1` per channel. Neither paints a particular edge. The environment is inferred nuisance lighting, not a measured Apple light rig; signed polynomial coefficients do not enforce a nonnegative physical environment. Encoded-RGB fitting is not energy-conserving radiometry.
 
 [Dispersion](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission) means wavelength-dependent refraction; a colored rim alone does not identify it. Two explicit controls are tested:
 
-- **Snell RGB proxy:** `n(λ)=1.33+B(λ⁻²−0.55⁻²)`, `λ={0.65,0.55,0.45} μm`, `B∈[0,0.025] μm²`. Trace one ray per representative RGB channel. All indices remain below `√2`, preserving this comparator's flat-exit TIR bound. This is a three-sample approximation, not spectral-to-RGB integration.
+- **Snell RGB proxy:** `n(λ)=1.33+B(λ⁻²−0.55⁻²)`, `λ={0.65,0.55,0.45} μm`, `B∈[0,0.025] μm²`. Trace one ray per channel and evaluate wavelength-dependent entry Fresnel factors. Transmission is scaled relative to the reference wavelength by `(1−Fλ)/(1−FG)`; reflected-environment terms use `Fλ`. At `B=0` both recover the common-IOR comparator. All indices stay below `√2`, preserving its flat-exit TIR bound. This is not spectral-to-RGB integration or complete internal/exit-reflection transport.
 - **Image-map sensitivity:** `Fλ=p+[1+D(λ⁻²−0.55⁻²)](F0−p)`, `D∈[0,0.2] μm²`. This tests channel separation on the better-fitting flexible map; it is not equivalent to changing a physical IOR. `D=0` recovers the common lookup exactly.
 
 [curvature.py](experiments/reconstruction/curvature.py) implements these hypotheses. [verify.py](experiments/reconstruction/verify.py) checks finite-differenced height normals, scale/mirror/Snell/Fresnel limits, potential mixed derivatives, tangential scale and integrated material regression. The 30 older fixtures still cover only the original field/cap. Image scores and color evidence belong to the [comparison study](reconstruction.md), not mathematical proof of Apple's renderer.
