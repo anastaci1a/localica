@@ -9,6 +9,7 @@ The circular playback control is the **current most-polished calibration**, sele
 ## Common contract
 
 - Let the element's shorter dimension be `D`; use `L=D/2` as the length unit. Local output coordinates are `v=(p−center)/L`. Every spatial parameter in `recipes.json` is dimensionless in these units, including blur, rim lighting and shape dimensions. Multiply by `L` only when sampling the backdrop or rasterizing. `reference_length` records the source-image scale; it is not an extra model parameter.
+- Across differently sized observations, use each pose's `Lᵢ`: `σᵢ=σ̂Lᵢ`. Optimizer records may store `σref` at an explicitly declared `Lref`, giving `σᵢ=σref Lᵢ/Lref`; published normalized lengths remain `σ̂=σref/Lref`. Source and output blur use the same conversion. Raster sampling/quarter-pixel kernel quantization remain implementation approximations.
 - `F(v)` is the **inverse map**: the backdrop sample is `B(center+L F(v))`. It describes where to read pixels, not the direction in which the visible feature moves. Independent foreground content is composited afterward.
 - The examples operate on **encoded RGB values in [0,1]**. This is a calibrated image-space approximation; changing to linear-light processing changes the output. Coordinates increase rightward/downward, and the camera is frontal.
 - Let `s(v)` be signed distance to the outline, negative inside, `n=∇s` the outward unit normal and `d=max(−s,0)`. Shape coverage is independent of material color. Evaluate the equations continuously before coverage/raster filtering.

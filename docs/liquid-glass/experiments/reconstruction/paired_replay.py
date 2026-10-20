@@ -58,8 +58,13 @@ def main():
         s.comparison(pred,folder/'comparison.png',p);metrics.append(score);studies.append(s)
         subprocess.run([sys.executable,str(Path(__file__).with_name('extended_diagnostics.py')),str(folder)],check=True)
         diagnostic=json.loads((folder/'diagnostics.json').read_text())
-        assert diagnostic['source_observed_fraction']>=.999,'Unobserved source under a scored lookup'
-        assert diagnostic['gaussian_3sigma_observed_fraction']>=.999,'Source-scattering footprint crosses a recovery gap'
+        assert diagnostic['source_defined_fraction']>=.999,'Undefined source under a scored lookup'
+        assert diagnostic['gaussian_3sigma_defined_fraction']>=.999,'Source-scattering footprint crosses an undefined gap'
+        if not case.get('allow_estimated_background'):
+            assert diagnostic['source_observed_fraction']>=.999,'Unobserved source under a scored lookup'
+            assert diagnostic['gaussian_3sigma_observed_fraction']>=.999,'Source-scattering footprint crosses a recovery gap'
+        else:
+            assert case.get('source_observation_mask') and diagnostic['background_estimate'],'Explicit estimation provenance is required'
         if args.motion:subprocess.run([sys.executable,str(Path(__file__).with_name('extended_media.py')),str(folder),'--frames','180','--travel','45'],check=True)
     if 'foreground_response' in state:
         errors=foreground_errors(studies,p,state['material'],state['foreground_response'])
@@ -76,7 +81,8 @@ def main():
         assert np.max(abs(np.array(actual)-state['foreground_style_scores']['after_mse']))<1e-3,'Static foreground replay mismatch'
     report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,foreground_style_scores=state.get('foreground_style_scores'),
         gate='Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.',
-        scope='Same video, different observed backdrops. Does not establish generality across devices, apps or lighting.')
+        background_estimates=[case.get('background_estimate') for case in cases],
+        scope='Two observed instances; diagnostics distinguish direct source evidence from any explicit source estimate. Does not establish generality across devices, apps or lighting.')
     (args.out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
     print('PASS paired replay',args.study,json.dumps(report))
 
