@@ -41,6 +41,8 @@ class ModalGestureTakeoverTest {
     private var child by mutableStateOf(false)
     private var style by mutableStateOf(BrowseStyle(listSize = ListSize.Compact))
     private val original = style
+    // The route key owns the pointerInput transaction. A preview recomposition is not navigation.
+    private val fixtureRoute = BrowseRoute(MainTab.Songs)
     private val motion = BrowsePinchMotion()
     private lateinit var rootWindow: Window
     private lateinit var rootView: android.view.View
@@ -91,7 +93,7 @@ class ModalGestureTakeoverTest {
                 ActionTextButton({ popupActivations++; popup = true }, Modifier.testTag("open-modal").height(64.dp)) { Text("Open options") }
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                     var modifier = Modifier.fillMaxSize().testTag("background-grid").controlScrollParent(grid, ControlScrollAxis.Vertical)
-                    if (pinch) modifier = modifier.browsePinch(true, motion, style, BrowseRoute(MainTab.Songs), grid,
+                    if (pinch) modifier = modifier.browsePinch(true, motion, style, fixtureRoute, grid,
                         constraints.maxWidth, density, scope, false, onPreview = { style = it }, onCommit = {
                             commits++; style = it
                             if (openOnCommit) popup = true
@@ -145,7 +147,7 @@ class ModalGestureTakeoverTest {
         val touch = WindowTouch(rootWindow)
         for (releaseFirst in listOf(0, 1)) {
             beginPinch(touch, area)
-            await { motion.held && style != original }
+            await("held preview, release-first=$releaseFirst") { motion.held && style != original }
             touch.down(2, trigger); touch.up(2)
             await { popup && rootOwner.blocked && motion.source == null }
             compose.runOnUiThread { assertEquals(original, style); assertEquals(0, commits) }
@@ -183,7 +185,7 @@ class ModalGestureTakeoverTest {
         beginPinch(touch, area)
         await { style != original }
         touch.up(1); touch.up(0)
-        await { commits == 1 }
+        await("fresh release after dismissal") { commits == 1 }
     }
 
     @Test fun takeoverCancelsUncommittedSettleButPreservesAnAlreadyPublishedRelease() {
@@ -202,7 +204,7 @@ class ModalGestureTakeoverTest {
         beginPinch(touch, area)
         await { style != original }
         touch.up(1); touch.up(0)
-        await { commits == 1 && popup && motion.source == null }
+        await("published release opens modal during handoff") { commits == 1 && popup && motion.source == null }
         compose.runOnUiThread {
             assertTrue("Take over during retained handoff, not only after normal cleanup", retiredCommittedHandoff)
             assertEquals(ListSize.Normal, style.listSize)
@@ -241,8 +243,8 @@ class ModalGestureTakeoverTest {
         // A semantics click verifies that accessible activation still opens the shared modal.
         compose.mainClock.autoAdvance = true
         compose.onNodeWithTag("open-modal").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
-        compose.onNodeWithTag("popup-grid").assertExists()
         compose.mainClock.autoAdvance = false
+        awaitNode("popup-grid")
         val popupArea = bounds("popup-grid", popupOrigin)
         val nestedTrigger = bounds("open-child", popupOrigin).center
         val parentTouch = WindowTouch(popupWindow)
@@ -296,15 +298,16 @@ class ModalGestureTakeoverTest {
                 io.github.anastaci1a.localica.library.Track("modal:$it", "Song %03d".format(it),
                     fileName = "$it.mp3", relativePath = "$it.mp3")
             }
+            val library = LibraryUiState(io.github.anastaci1a.localica.library.LibrarySnapshot(
+                folders = listOf(io.github.anastaci1a.localica.library.FolderSelection("root", "Music")), tracks = tracks), loading = false)
+            val playlists = io.github.anastaci1a.localica.playlist.PlaylistState()
             compose.setContent { LocalicaTheme {
                 val view = LocalView.current
                 rootView = view
                 rootWindow = checkNotNull(view.context.activity()).window
                 rootOwner = checkNotNull(LocalModalGestures.current)
                 Box(Modifier.fillMaxSize()) {
-                    BrowserScreen(LibraryUiState(io.github.anastaci1a.localica.library.LibrarySnapshot(
-                        folders = listOf(io.github.anastaci1a.localica.library.FolderSelection("root", "Music")), tracks = tracks), loading = false),
-                        io.github.anastaci1a.localica.playlist.PlaylistState(), route, {}, {}, {}, { _, _, _ -> },
+                    BrowserScreen(library, playlists, route, {}, {}, {}, { _, _, _ -> },
                         null, null, true, false, queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
                     ActionTextButton({ popup = true }, Modifier.align(androidx.compose.ui.Alignment.TopEnd)
                         .height(56.dp).testTag("open-modal")) { Text("Options") }
@@ -312,6 +315,7 @@ class ModalGestureTakeoverTest {
                 if (popup) GlassAlertDialog({ popup = false }, title = { Text("Options") },
                     confirmButton = { ActionTextButton({ popup = false }) { Text("Done") } })
             } }
+            awaitNode("browser-list")
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(30)
             val before = compose.onNodeWithText("Song 029").fetchSemanticsNode().boundsInRoot.top
@@ -349,9 +353,26 @@ class ModalGestureTakeoverTest {
     }
     private fun position(state: LazyGridState): Pair<Int, Int> = compose.runOnUiThread { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
     private fun pump(millis: Long) { compose.mainClock.advanceTimeBy(millis) }
-    private fun await(condition: () -> Boolean) = compose.waitUntil(5000) {
+    private fun awaitNode(tag: String) = compose.waitUntil(5000) {
         compose.mainClock.advanceTimeByFrame()
-        compose.runOnUiThread(condition)
+        compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+    }
+    private fun await(phase: String = "modal transition", condition: () -> Boolean) {
+        try {
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnUiThread(condition)
+            }
+        } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
+            val state = compose.runOnUiThread {
+                "popup=$popup child=$child blocked=${if (::rootOwner.isInitialized) rootOwner.blocked else null} " +
+                    "style=$style source=${motion.source} target=${motion.target} generation=${motion.transaction} " +
+                    "held=${motion.held} capturing=${motion.capturing} captureProblem=${motion.captureProblem} " +
+                    "progress=${motion.progress.value} finger=${motion.fingerProgress} committed=${motion.committed} " +
+                    "commits=$commits disposed=${motion.disposed}"
+            }
+            throw AssertionError("$phase: $state", failure)
+        }
     }
 
     private inner class WindowTouch(private val window: Window) {
