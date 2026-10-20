@@ -89,9 +89,16 @@ private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
 internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier, showIcon: Boolean = true) {
     val base = MaterialTheme.colorScheme.surfaceContainer
     val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = .065f)
+    val reducedMotion = LocalReducedMotion.current
+    val sharedActivity = LocalLoadingShimmerActivity.current
+    if (loading && !reducedMotion && sharedActivity != null) DisposableEffect(sharedActivity) {
+        sharedActivity.acquire()
+        onDispose { sharedActivity.release() }
+    }
     // The sweep is read during drawing; it doesn't recompose or remeasure scrolling rows.
-    val progress: State<Float>? = if (loading && !LocalReducedMotion.current) {
-        rememberInfiniteTransition(label = "Artwork loading").animateFloat(-1f, 2f,
+    val progress: State<Float>? = if (loading && !reducedMotion) {
+        if (sharedActivity != null) LocalLoadingShimmer.current
+        else LocalLoadingShimmer.current ?: rememberInfiniteTransition(label = "Artwork loading").animateFloat(-1f, 2f,
             infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "Artwork shimmer")
     } else null
     Box(modifier.then(if (loading) Modifier.testTag("artwork-loading") else Modifier), contentAlignment = Alignment.Center) {
@@ -103,6 +110,6 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
                     start = Offset(x - size.width * .6f, 0f), end = Offset(x + size.width * .6f, size.height)))
             }
         }
-        if (showIcon) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
+        if (showIcon && !(loading && sharedActivity != null)) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
     }
 }

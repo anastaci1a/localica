@@ -87,12 +87,14 @@ internal fun rememberBrowseSortSnapshot(): BrowseSortSnapshot {
 @Composable
 internal fun WarmBrowsePresentations(cache: BrowsePresentationCache, library: LibrarySnapshot,
     playlists: List<ManualPlaylist>, queues: List<ListeningQueue>, filters: LibraryFilters, routes: List<BrowseRoute>,
-    sorts: BrowseSortSnapshot) {
+    sorts: BrowseSortSnapshot, libraryLoading: Boolean = false, playlistsLoading: Boolean = false,
+    queuesLoading: Boolean = false) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember(context) { BrowsePreferences(context) }
     val source = BrowseSourceRevision(library, playlists, queues, filters)
-    LaunchedEffect(source, routes, sorts) {
+    LaunchedEffect(source, routes, sorts, libraryLoading, playlistsLoading, queuesLoading) {
         for (route in routes.distinct()) {
+            if (!browseCatalogReady(route, libraryLoading, playlistsLoading, queuesLoading, filters)) continue
             val style = preferences.read(route)
             if (cache.get(library, playlists, queues, filters, route, style, sorts) != null) continue
             val result = withContext(kotlinx.coroutines.Dispatchers.Default) {
@@ -107,9 +109,12 @@ internal fun WarmBrowsePresentations(cache: BrowsePresentationCache, library: Li
             val route = BrowseRoute(it, search = true, globalSearch = true, key = "warm-search:$it")
             route to preferences.read(route)
         }.distinctBy { (_, style) -> style.sort to style.ascending }.take(2)
-        for ((route, style) in globalSearches) withContext(kotlinx.coroutines.Dispatchers.Default) {
-            val context = currentCoroutineContext()
-            BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections, sorts) { context.ensureActive() }
+        for ((route, style) in globalSearches) {
+            if (!browseCatalogReady(route, libraryLoading, playlistsLoading, queuesLoading, filters)) continue
+            withContext(kotlinx.coroutines.Dispatchers.Default) {
+                val context = currentCoroutineContext()
+                BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections, sorts) { context.ensureActive() }
+            }
         }
     }
 }
@@ -122,15 +127,16 @@ internal data class BrowsePresentationState(val current: PresentedBrowse?, val c
 internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: List<ManualPlaylist>,
     queues: List<ListeningQueue>, libraryFilters: LibraryFilters, route: BrowseRoute, style: BrowseStyle,
     reducedMotion: Boolean, queryDispatcher: kotlinx.coroutines.CoroutineDispatcher,
-    sorts: BrowseSortSnapshot): BrowsePresentationState {
+    sorts: BrowseSortSnapshot, sourcesReady: Boolean = true, animateArrival: Boolean = true): BrowsePresentationState {
     // Query work and filter motion are independent. Departing rows begin fading
     // immediately; only a result for the latest request may replace them.
     val presentationCache = LocalBrowsePresentationCache.current ?: remember { BrowsePresentationCache() }
     val source = BrowseSourceRevision(library, playlists, queues, libraryFilters)
-    val cachedPresentation = remember(source, route, style, sorts) {
-        presentationCache.get(library, playlists, queues, libraryFilters, route, style, sorts)
+    val cachedPresentation = remember(source, route, style, sorts, sourcesReady) {
+        if (sourcesReady) presentationCache.get(library, playlists, queues, libraryFilters, route, style, sorts) else null
     }
-    val queriedPresentation by produceState(cachedPresentation, source, route, style, sorts) {
+    val queriedPresentation by produceState(cachedPresentation, source, route, style, sorts, sourcesReady) {
+        if (!sourcesReady) { value = null; return@produceState }
         if (cachedPresentation != null) { value = cachedPresentation; return@produceState }
         val queried = withContext(queryDispatcher) {
             val context = currentCoroutineContext()
@@ -140,21 +146,24 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
             presentationCache.put(library, playlists, queues, libraryFilters, it)
         }
     }
-    val candidate = cachedPresentation ?: queriedPresentation
+    // produceState retains its previous value until its restarted producer runs.
+    // Gate synchronously so a warmed or superseded partial catalog cannot reach the first frame.
+    val candidate = if (sourcesReady) cachedPresentation ?: queriedPresentation else null
     var presentation by remember(route.key) { mutableStateOf(cachedPresentation) }
     var displayedFilter by remember(route.key) { mutableStateOf(route.filter) }
     val reveal = remember(route.key) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
-    LaunchedEffect(source, route, style, candidate, reducedMotion, sorts) {
+    LaunchedEffect(source, route, style, candidate, reducedMotion, sorts, sourcesReady, animateArrival) {
+        if (!sourcesReady) { reveal.snapTo(0f); return@LaunchedEffect }
         if (displayedFilter != route.filter) {
             if (reducedMotion) reveal.snapTo(0f) else reveal.animateTo(0f, androidx.compose.animation.core.tween(110))
         }
         if (candidate?.source == source && candidate.route == route && candidate.style == style && candidate.sorts == sorts) {
             presentation = candidate
             displayedFilter = route.filter
-            if (reducedMotion) reveal.snapTo(1f) else if (reveal.value < 1f)
+            if (reducedMotion || !animateArrival) reveal.snapTo(1f) else if (reveal.value < 1f)
                 reveal.animateTo(1f, androidx.compose.animation.core.tween(180))
         }
     }
-    return BrowsePresentationState(presentation, cachedPresentation != null, reveal,
-        presentation?.source != source || presentation?.route != route || presentation?.style != style || presentation?.sorts != sorts)
+    return BrowsePresentationState(presentation.takeIf { sourcesReady }, cachedPresentation != null, reveal,
+        !sourcesReady || presentation?.source != source || presentation?.route != route || presentation?.style != style || presentation?.sorts != sorts)
 }

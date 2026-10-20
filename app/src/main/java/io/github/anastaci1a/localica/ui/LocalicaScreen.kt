@@ -100,7 +100,8 @@ fun LocalicaScreen(
         val queue = queues.library.queues.firstOrNull { it.id == queues.browsedId } ?: queues.library.active
         pages + listOfNotNull(queue?.let { BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, it.id), it.name) })
     }
-    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, queues.library.queues, libraryFilters, warmRoutes, browseSorts)
+    WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, queues.library.queues, libraryFilters, warmRoutes, browseSorts,
+        libraryLoading = library.loading, playlistsLoading = playlist.loading, queuesLoading = queues.loading)
     val artworkStore = remember { BrowseArtworkStore() }
     val retainedRoutes = navigation.stacks.values.mapNotNull { it.lastOrNull()?.key }.toMutableSet()
     var backDestination = navigation
