@@ -85,5 +85,31 @@ def main():
     assert permitted([score(9,2.9),score(20,4)],baseline)
     print('PASS joint-average gains cannot hide either sample loss/glass regression')
 
+    # An independent affine/clip/filter fixture checks the sufficient-statistic
+    # proposal model. Clipping is fixed within these small perturbations; the
+    # full native renderer still owns acceptance when a proposal crosses it.
+    from types import SimpleNamespace
+    from paired_fit import Cached
+    from material_local import statistics
+    rng=np.random.default_rng(222);H,W=24,32
+    cache=Cached.__new__(Cached);cache.H=H;cache.W=W
+    cache.C=rng.choice([.1,.4,.6,.9],(H*2,W*2,3)).astype(np.float32)
+    cache.J=rng.uniform(-.01,.01,(H*2,W*2,15));cache.J[...,-1]=rng.uniform(0,1,(H*2,W*2))
+    yy,xx=np.mgrid[:H,:W];valid=np.ones((H,W),bool);rim=(xx<5)|(xx>=W-5)|(yy<5)|(yy>=H-5)
+    cache.study=SimpleNamespace(target_crop=rng.uniform(.1,.9,(H,W,3)).astype(np.float32),valid=valid,rim=rim)
+    maximum=0
+    for clipping in [False,True]:
+        co=np.zeros(23);co[:3]=co[-3:]=1.4 if clipping else .4;co[3:6]=-.2 if clipping else .3
+        for sigma in [0.,.75]:
+            cache.p=dict(post_sigma=sigma);base=cache.render(co);forms=statistics(cache,co)
+            delta=rng.normal(0,.0001,23);actual=cache.render(co+delta)
+            for name,mask in [('glass',valid),('rim',rim)]:
+                Q,g=forms[name];target=cache.study.target_crop[mask]
+                before=float(np.mean((base[mask].astype(float)-target)**2))*255**2
+                after=float(np.mean((actual[mask].astype(float)-target)**2))*255**2
+                difference=abs(after-(before+2*g@delta+delta@Q@delta));maximum=max(maximum,difference)
+                assert difference<.005,(clipping,sigma,name,difference)
+    print('PASS clipped/unclipped subpixel/filter quadratic proposals; max MSE difference',maximum)
+
 
 if __name__=='__main__':main()

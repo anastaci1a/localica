@@ -69,7 +69,15 @@ def foreground_errors(studies,p,co,params):
     return errors
 
 
+def local_material_allowed(caches,old):
+    # Nonlinear foreground constraints stay on the direct search path.
+    return 'foreground_response' not in old and 'foreground_styles' not in old and max(c.study.valid.sum() for c in caches)>60000
+
+
 def material_trial(caches,old,keys):
+    if local_material_allowed(caches,old):
+        from material_local import trial
+        return trial(caches,old,keys,progress=lambda row:print(json.dumps(dict(material_local=row)),flush=True))
     co=np.array(old['material']);baseline=old['scores'];scale=max(1,np.mean([s['loss'] for s in baseline]))
     if not keys:return co,baseline,0
     memo={};calls=0;foreground_memo=[]
@@ -142,7 +150,8 @@ def main():
     if args.number in [1,2,5,6,19]:
         co,metric,evaluations=material_trial(caches,old,keys)
         current.update(material=co.tolist(),scores=metric)
-        trials.append(dict(kind='Constrained shared material',scores=metric,evaluations=evaluations))
+        accelerated=local_material_allowed(caches,old)
+        trials.append(dict(kind='Local clipped-affine proposals with full native gates' if accelerated else 'Constrained shared material',scores=metric,evaluations=evaluations))
     elif args.number==3:
         # Coordinate probes test genuinely shared optics, without giving each
         # sample its own displacement profile or material coefficients.
