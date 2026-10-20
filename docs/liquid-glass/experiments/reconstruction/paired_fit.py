@@ -32,6 +32,7 @@ STAGES={
  18:('Shared foreground recalibration after optical refinement',[]),
  19:('Final shared transmission and environment settlement',list(range(23))),
  20:('Shared joint optical pattern settlement',[]),
+ 21:('Shared solid-vector foreground color and opacity',[]),
 }
 
 
@@ -212,6 +213,11 @@ def main():
                         allow=all(a<=b+1e-8 for a,b in zip(fg,before))
                     trials.append(dict(key=key,delta=sign*step*size,accepted=allow,scores=metric,foreground_mse=fg))
                     if allow:current.update(parameters=q,scores=metric)
+    elif args.number==21:
+        from static_foreground import fit_shared
+        styles,report=fit_shared(studies,p,current['material'],old.get('foreground_styles'))
+        current.update(foreground_styles=styles,foreground_style_scores=report)
+        evaluations=report['optimizer_evaluations'];trials.append(dict(kind='Shared bounded static foreground',**report))
     else:
         # Foreground is outside the optical score masks. Fit one response to
         # both observed glyphs; never fit an independent response per scene.
@@ -261,6 +267,7 @@ def main():
     record_path.write_text(json.dumps(record,indent=2)+'\n');saved.write_text(json.dumps(current,indent=2)+'\n')
     for i,s in enumerate(studies):
         if 'foreground_response' in current:s.case['foreground_response']=current['foreground_response']
+        if 'foreground_styles' in current:s.case['foreground_styles']=current['foreground_styles']
         pred=s.render(current['parameters'],np.array(current['material']));s.comparison(pred,folder/f'pass-{args.number:02}-{i}.png',current['parameters'])
     print(json.dumps(dict(pass_number=args.number,accepted=advance,scores=current['scores'],evaluations=evaluations,seconds=time.time()-t0)),flush=True)
 

@@ -102,5 +102,27 @@
       "ssim": 0.9758468866348267,
       "loss": 50.753149258816364
     }
-  ]
+  ],
+  "foreground_styles": {
+    "search.svg": {
+      "color": [
+        0.23791402964793887,
+        0.2092211291437152,
+        0.2142868270726464
+      ],
+      "opacity": 0.5959399154311875
+    }
+  },
+  "foreground_style_scores": {
+    "before_mse": [
+      71.87020154873579,
+      64.53411002169112
+    ],
+    "after_mse": [
+      60.53534276319427,
+      58.78391947916729
+    ],
+    "optimizer_evaluations": 52,
+    "formula": "P=(1-a)B+a(t*B+q); t=1-opacity, q=opacity*color; one shared color/opacity"
+  }
 }

@@ -39,6 +39,7 @@ def main():
                 assert source.is_file(),f'Missing private solid-vector input: {source}'
                 shutil.copyfile(source,folder/layer['vector_asset'])
         if 'foreground_response' in state:case['foreground_response']=state['foreground_response']
+        if 'foreground_styles' in state:case['foreground_styles']=state['foreground_styles']
         (folder/'case.json').write_text(json.dumps(case,indent=2)+'\n')
         p=state['parameters'].copy();p['sigma']*=min(case['half']);p['post_sigma']*=min(case['half'])
         accepted=dict(parameters=p,material=state['material'],scores=state['scores'][index])
@@ -60,7 +61,16 @@ def main():
         errors=foreground_errors(studies,p,state['material'],state['foreground_response'])
         stored=state['foreground_scores']['after_mse'];assert np.max(abs(np.array(errors)-stored))<1e-5
     else:errors=None
-    report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,
+    if 'foreground_style_scores' in state:
+        # Replay the actual compositor, not the optimizer's linear surrogate.
+        actual=[]
+        for s in studies:
+            pred=s.render(p,np.array(state['material']));composite=s.apply_foreground(pred.copy());x0,y0,_,_=s.crop
+            for layer in s.case['foreground_layers']:
+                if 'vector_asset' in layer and layer['mode']!='transmission':
+                    a,b,c,d=layer['box'];actual.append(float(np.mean((composite[b-y0:d-y0,a-x0:c-x0]-s.target[b:d,a:c])**2))*255**2)
+        assert np.max(abs(np.array(actual)-state['foreground_style_scores']['after_mse']))<1e-3,'Static foreground replay mismatch'
+    report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,foreground_style_scores=state.get('foreground_style_scores'),
         gate='Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.',
         scope='Same video, different observed backdrops. Does not establish generality across devices, apps or lighting.')
     (args.out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')

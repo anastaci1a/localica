@@ -329,6 +329,9 @@ class Study:
         for box,alpha,color in self.foreground_layers:
             a,b,c,d=box
             region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
+            vector=self.vector_layers.get(tuple(box))
+            style=self.case.get('foreground_styles',{}).get(vector['vector_asset'],{}) if vector else {}
+            if 'color' in style:color=np.broadcast_to(np.asarray(style['color'],np.float32),(*alpha.shape,3))
             if scale>1:
                 size=((c-a)*scale,(d-b)*scale)
                 if tuple(box) not in self.vector_layers:alpha=np.clip(cv2.resize(alpha,size,interpolation=cv2.INTER_CUBIC),0,1)
@@ -336,7 +339,7 @@ class Study:
             if tuple(box) in self.vector_layers:
                 from vector_foreground import coverage
                 vector=self.vector_layers[tuple(box)]
-                alpha=coverage(self.folder,vector,scale)*vector.get('opacity',1.)
+                alpha=coverage(self.folder,vector,scale)*style.get('opacity',vector.get('opacity',1.))
             region[:]=region*(1-alpha[...,None])+color*alpha[...,None]
         for layer in self.transmission_layers:
             from foreground_response import calibrate,response
