@@ -1,0 +1,90 @@
+{
+  "id": "music-search-vector-a",
+  "category": "Detached circular navigation/search control",
+  "radial": true,
+  "center": [
+    1512,
+    673
+  ],
+  "half": [
+    89,
+    89
+  ],
+  "radius": 89,
+  "crop": [
+    1395,
+    560,
+    1635,
+    795
+  ],
+  "foreground": [
+    [
+      1467,
+      626,
+      1563,
+      722
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "mask",
+      "box": [
+        1467,
+        626,
+        1563,
+        722
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.72,
+      "vector_asset": "search.svg",
+      "vector_box": [
+        1470.9009527995063,
+        630.7918309178898,
+        1554.4080442125164,
+        714.2989223308999
+      ],
+      "vector_sha256": "da95145b096fc39155c93be845ba7a50c27bc97184874970d28df684d754aa49",
+      "opacity": 0.4187133312225342
+    }
+  ],
+  "reference": {
+    "video": "music",
+    "seconds": 2.5,
+    "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+  },
+  "foreground_method": "Solid analytic circular-ring/45-degree capsule SVG, square placement. Black opacity is a separate renderer coefficient; no image-derived matte or baked gray texture.",
+  "background": "Masked temporal translation mosaic, frozen observed-pixel confidence.",
+  "input_names": {
+    "source.png": "source-2.5.png",
+    "target.png": "target-2.5.png",
+    "known.png": "known-2.5.png"
+  },
+  "source_sha256": {
+    "source.png": "84da0d24f30dc1f4080b568756d79044a9ac6568ecbff9595d02a38cd3239fb1",
+    "target.png": "efffc64b8a6ee5b84f0bfc295369aad38db8531e4686674861074592fbee54de",
+    "known.png": "03433579b8ddf8771df2bacf7aa1566e84b71bc81df71da1cd64069c00ff2413"
+  },
+  "foreground_provenance": {
+    "kind": "clean symmetric vector trace",
+    "source": "Official Apple WWDC25 Music video",
+    "original_vector": false,
+    "collection": "Private localica-feedback/liquid-glass-icons/clean/search.svg"
+  },
+  "continuation": {
+    "baseline": "music-search",
+    "additional_single_pass_minimum": 10,
+    "paired_pass_minimum": 20
+  },
+  "exterior_reference_shape": {
+    "shape_dx": -0.01094003499211507,
+    "shape_dy": -0.001400833306792197,
+    "half_x_delta": -0.002787508241754526,
+    "half_y_delta": 0,
+    "radius_delta": 0,
+    "cap_join_width": 0
+  }
+}

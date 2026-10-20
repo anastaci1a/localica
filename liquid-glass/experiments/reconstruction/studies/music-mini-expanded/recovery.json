@@ -1,0 +1,10 @@
+{
+  "method": "Masked SIFT translation pose graph; top310px only, x290..1700. No lens-covered pixel is used as background evidence.",
+  "video_sha256": "6b86a90b7166736c458c5c17ff55d8ac35d5b19d29ad889cc34afaa9fa4ce20b",
+  "frames": 79,
+  "pose_graph_edges": 287,
+  "median_edge_residual_px": 0.00600969503330728,
+  "max_edge_residual_px": 0.23289981132780707,
+  "source_encoding": "Original Apple1920x1080,30fps. Official media ZIP contains only stills; alternate larger video URLs unavailable.",
+  "limits": "Mosaic confidence marks observed pixels; repeated-artwork outliers are removed. Not an independently captured ground-truth layer."
+}
