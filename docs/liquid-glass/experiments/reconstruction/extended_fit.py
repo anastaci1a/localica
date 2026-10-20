@@ -102,12 +102,20 @@ class Study:
         self.backdrop_shift=[0.,0.]
         self.target_crop=self.target[y0:y1,x0:x1]
         self.expected=self.target_crop.reshape(-1,3)[self.indices]
-        self.foreground_layers=[];self.transmission_layers=[]
+        self.foreground_layers=[];self.transmission_layers=[];self.vector_layers={}
         for layer in self.case.get('foreground_layers',[]):
             a,b,c,d=layer['box'];T=self.target[b:d,a:c].copy()
+            vector=None
+            if 'vector_asset' in layer:
+                from vector_foreground import coverage
+                vector=coverage(self.folder,layer)
+                self.vector_layers[tuple(layer['box'])]=layer
             if layer['mode']=='transmission':
-                seed=(T[:,:,0]-T[:,:,1]>.25)&(T[:,:,0]-T[:,:,2]>.15)
+                seed=vector>.995 if vector is not None else (T[:,:,0]-T[:,:,1]>.25)&(T[:,:,0]-T[:,:,2]>.15)
                 self.transmission_layers.append(dict(box=layer['box'],target=T,seed=seed,fit=None))
+                continue
+            if vector is not None:
+                self.foreground_layers.append((layer['box'],vector,np.broadcast_to(np.asarray(layer['color']),T.shape)))
                 continue
             if layer['mode']=='artwork':
                 # Reference cover artwork is content, not a glass shader.
@@ -251,6 +259,14 @@ class Study:
         if p['post_sigma']>.001:result=cv2.GaussianBlur(result,(0,0),p['post_sigma']*scale)
         return result
 
+    def shape_coverage(self,p,scale=1):
+        x0,y0,x1,y1=self.crop
+        result=np.empty(((y1-y0)*scale,(x1-x0)*scale),np.float32)
+        for row,bottom,W,x,y in self.raster_tiles(scale):
+            *_,(sd,_,_)=self.shape(x,y,p)
+            result[row:bottom]=(sd<=0).reshape(bottom-row,2,W,2).mean((1,3))
+        return result
+
     def scores(self,pred):
         error=(pred-self.target_crop)*255
         result={}
@@ -271,9 +287,7 @@ class Study:
         H,W=(y1-y0)*scale,(x1-x0)*scale;offset=.5-.25/scale
         original=np.uint8(np.rint(self.target_crop*255))
         if scale>1:original=cv2.resize(original,(W,H),interpolation=cv2.INTER_LANCZOS4)
-        yy,xx=np.mgrid[y0:y1:.5/scale,x0:x1:.5/scale]
-        *_,(sd,_,_)=self.shape((xx-offset-self.case['center'][0])/self.L,(yy-offset-self.case['center'][1])/self.L,p)
-        cov=(sd<=0).reshape(H,2,W,2).mean((1,3))
+        cov=self.shape_coverage(p,scale)
         context=self.target_crop.copy() if scale==1 else original.astype(np.float32)/255
         yy,xx=np.mgrid[:H,:W].astype(np.float32)
         px=x0-.5+(xx+.5)/scale;py=y0-.5+(yy+.5)/scale
@@ -299,8 +313,11 @@ class Study:
             region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
             if scale>1:
                 size=((c-a)*scale,(d-b)*scale)
-                alpha=np.clip(cv2.resize(alpha,size,interpolation=cv2.INTER_CUBIC),0,1)
+                if tuple(box) not in self.vector_layers:alpha=np.clip(cv2.resize(alpha,size,interpolation=cv2.INTER_CUBIC),0,1)
                 color=np.clip(cv2.resize(np.asarray(color,dtype=np.float32),size,interpolation=cv2.INTER_CUBIC),0,1)
+            if tuple(box) in self.vector_layers:
+                from vector_foreground import coverage
+                alpha=coverage(self.folder,self.vector_layers[tuple(box)],scale)
             region[:]=region*(1-alpha[...,None])+color*alpha[...,None]
         for layer in self.transmission_layers:
             from foreground_response import calibrate,response
@@ -309,7 +326,10 @@ class Study:
                 background=region if scale==1 else cv2.resize(region,(c-a,d-b),interpolation=cv2.INTER_AREA)
                 layer['fit']=calibrate(background,layer['target'],layer['seed'],self.case.get('foreground_response'))
             params,alpha,_=layer['fit']
-            if scale>1:alpha=np.clip(cv2.resize(alpha,((c-a)*scale,(d-b)*scale),interpolation=cv2.INTER_CUBIC),0,1)
+            if tuple(layer['box']) in self.vector_layers:
+                from vector_foreground import coverage
+                alpha=coverage(self.folder,self.vector_layers[tuple(layer['box'])],scale)
+            elif scale>1:alpha=np.clip(cv2.resize(alpha,((c-a)*scale,(d-b)*scale),interpolation=cv2.INTER_CUBIC),0,1)
             region[:]=region*(1-alpha[...,None])+response(region,params)*alpha[...,None]
         return out
 

@@ -13,6 +13,7 @@ The circular playback control is the **current most-polished calibration**, sele
 - The examples operate on **encoded RGB values in [0,1]**. This is a calibrated image-space approximation; changing to linear-light processing changes the output. Coordinates increase rightward/downward, and the camera is frontal.
 - Let `s(v)` be signed distance to the outline, negative inside, `n=∇s` the outward unit normal and `d=max(−s,0)`. Shape coverage is independent of material color. Evaluate the equations continuously before coverage/raster filtering.
 - Gaussian `σ` is standard deviation, not kernel diameter. Source blur, glass blur after refraction/shading, and foreground-color blur are different operations. The foreground's coverage remains sharp.
+- Foreground geometry must use a verified exact vector, or a clean symmetric trace when none is available. Solid coverage is independent of tint, transmission and blur, and is rasterized anew at each output resolution. The Home/Search follow-up uses private SVG inputs with frozen hashes; older photo-derived masks below remain historical calibrations pending replacement. Optical masks/scores stay fixed when foreground measurements change.
 - Parameters and operation order are fixed for replay. Re-optimizing coefficients produces a new calibration, not an exact reproduction of this one. Source registration, the estimated hidden backdrop, video decoding and raster conventions are additional inputs.
 
 ## Playback: radial map and smooth inner transition
