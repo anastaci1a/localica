@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.draw.clip
@@ -75,10 +76,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk)
-    val lyricVisibility by animateFloatAsState(if (lyricsOpen && expanded) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
-    // While the finger is down expanded remains true. Progress, rather than release,
-    // must restore the same artwork and metadata as the surface returns to the miniplayer.
-    val lyricProgress = lyricVisibility * p
+    val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
+    // Mode selection survives minimization. The finger drives its layout and reveal
+    // immediately, including the fully expanded endpoint before onExpanded changes.
+    val lyricMotion = playerLyricsMotion(p, lyricVisibility)
+    val lyricProgress = lyricMotion.layout
     val backgroundProgress by animateFloatAsState(if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f,
         tween(settings.motionDuration(400)), label = "Artwork layout")
     var startExpanded by remember { mutableStateOf(expanded) }
@@ -165,7 +167,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
     val lyricMetadataY = maxOf(ordinarySeekY, lyricSeekY)
     val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricProgress
-    val seekY = metadataY + 64.dp
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricBarCenter = lyricMetadataY + 64.dp + 20.dp
     val shelfTop = virtualHeight - navigationInset - CollapsedQueueHeight
@@ -176,6 +177,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val subtitleY = 24.dp + (metadataY + 34.dp - 24.dp) * p
     val transportY = (CompactControlSize - 48.dp) / 2 +
         (normalTransport + (lyricTransport - normalTransport) * lyricProgress - (CompactControlSize - 48.dp) / 2) * transportMotion
+    val fullTransportY = normalTransport + (lyricTransport - normalTransport) * lyricProgress
+    val rowMotion = playerRowMotion(p, (titleY - metadataY).value, (transportY - fullTransportY).value, lyricVisibility)
+    val seekY = metadataY + 64.dp + rowMotion.seekOffset.dp
+    val actionsY = ordinarySeekY + 128.dp + 32.dp * lyricVisibility + rowMotion.actionsOffset.dp
     val backgroundReveal = smoothReveal((p - .38f) / .59f)
     val handleReveal = smoothReveal((p - .72f) / .28f)
     val glassFrost = smoothReveal((p - .08f) / .8f)
@@ -187,7 +192,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Removing it during the handoff briefly reveals the square beneath the wash.
     val edgeSoftness = backgroundProgress * smoothReveal(p / .18f)
     val edgeBand = .02f + .24f * smoothReveal(p / .75f)
-    val fullControlsReveal = smoothReveal((p - .8f) / .2f)
     val contentInset = 32.dp
     val contentWidth = windowWidth - contentInset * 2
     val transportWidth = minOf(contentWidth, 280.dp)
@@ -243,7 +247,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
                     Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer {
                         val remaining = if (neighbor) kotlin.math.abs(swipeOffset) else artPixels - kotlin.math.abs(swipeOffset)
-                        alpha = (1f - lyricProgress) * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
+                        alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
                         translationX = offset
                         rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -27f
                         cameraDistance = 24f * density.density
@@ -300,7 +304,15 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
                     .height((lyricMetadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
-                    .graphicsLayer { alpha = lyricProgress * p },
+                    .graphicsLayer { alpha = lyricMotion.contentAlpha }
+                    // Keep scroll/source identity through a cancelled collapse, but invisible
+                    // lyrics must not intercept the next player gesture or accessibility.
+                    .layout { measurable, constraints ->
+                        val child = measurable.measure(constraints)
+                        layout(child.width, child.height) {
+                            if (lyricMotion.contentAlpha > 0f) child.place(0, 0)
+                        }
+                    },
                 contentHeight = (metadataY - statusInset - 64.dp).coerceAtLeast(96.dp), sourcesAnchor = sourcesAnchor,
                 result = lyricsResult, sourcesVisible = sourcesVisible, onSourcesDismiss = { sourcesVisible = false },
                 originPreparation = sourcesPreparation,
@@ -321,7 +333,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p),
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (fullControlsReveal > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth).graphicsLayer { alpha = fullControlsReveal }) {
+            if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
+                .testTag("player-seek-row").graphicsLayer { alpha = rowMotion.seekAlpha }) {
                 var seeking by remember(state.trackUri) { mutableStateOf<Float?>(null) }
                 val duration = (state.durationMs ?: 0).coerceAtLeast(1).toFloat()
                 PlayerSeekBar((seeking ?: state.positionMs.toFloat()).coerceIn(0f, duration), { seeking = it },
@@ -335,8 +348,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelSmall)
                 }
             }
-            if (fullControlsReveal > 0f && lyricProgress < 1f) Box(Modifier.offset(x = contentInset, y = ordinarySeekY + 128.dp + 32.dp * lyricProgress)
-                .width(contentWidth).height(48.dp * actionRows).graphicsLayer { alpha = fullControlsReveal * (1f - lyricProgress) }
+            if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
+                .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").graphicsLayer { alpha = rowMotion.actionsAlpha }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,
                 y = transportY),
