@@ -179,11 +179,30 @@ def main():
         assert fraction(defined,x,y,valid)==1. and fraction(direct,x,y,valid)==.75
         safe,_=kernel_safe(direct,source,{})
         assert fraction(safe,x,y,valid)<.75
+        safe,_=kernel_safe(defined,source,{})
+        assert fraction(safe,x,y,valid)<1.,'A Gaussian footprint outside the input image is unsupported'
         case['allow_estimated_background']=False
         try:masks(source,defined)
         except AssertionError:pass
         else:raise AssertionError('Undeclared background estimate accepted')
     print('PASS defined input cannot be reported as direct observation; Gaussian footprint and explicit-estimate guards')
+
+    from paired_replay import verify_boundary
+    with tempfile.TemporaryDirectory() as directory:
+        root=Path(directory);paired=root/'paired';paired.mkdir()
+        case=dict(center=[0,0],half=[1,1],radius=1,crop=[0,0,2,2],foreground=[],source_sha256={'source.png':'frozen'})
+        (root/'case.json').write_text(json.dumps(case));(paired/'a.json').write_text(json.dumps(case))
+        score=dict(loss=1.,glass=dict(rmse=1.));(root/'accepted.json').write_text(json.dumps(dict(scores=score)))
+        assert verify_boundary(paired,dict(previous=dict(scores=[score])))['same_reference_protocol']
+        for bad in [dict(loss=1.1,glass=dict(rmse=1.)),dict(loss=1.,glass=dict(rmse=1.1))]:
+            try:verify_boundary(paired,dict(previous=dict(scores=[bad])))
+            except AssertionError:pass
+            else:raise AssertionError('Regressing single-to-paired boundary accepted')
+        case['foreground']=[[0,0,1,1]];(paired/'a.json').write_text(json.dumps(case))
+        try:verify_boundary(paired,dict(previous=dict(scores=[score])))
+        except AssertionError:pass
+        else:raise AssertionError('Changed reference protocol accepted')
+    print('PASS single-to-paired boundary protects native loss, glass RMSE and the frozen reference protocol')
 
 
 if __name__=='__main__':main()

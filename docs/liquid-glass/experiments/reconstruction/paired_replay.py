@@ -12,10 +12,21 @@ from paired_fit import Cached
 from vector_foreground import copy_assets
 
 
+def verify_boundary(root,first):
+    single=json.loads((root.parent/'accepted.json').read_text())
+    first_case=json.loads((root.parent/'case.json').read_text());paired_case=json.loads((root/'a.json').read_text())
+    for key in ['center','half','radius','crop','foreground','source_sha256']:
+        assert first_case[key]==paired_case[key],f'First-reference protocol changed at paired boundary: {key}'
+    score=first['previous']['scores'][0]
+    assert permitted([score],[single['scores']]),'Paired baseline regresses the retained single-background result'
+    return dict(single_loss=single['scores']['loss'],paired_initial_loss=score['loss'],same_reference_protocol=True)
+
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('study');ap.add_argument('inputs',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--motion',action='store_true');ap.add_argument('--icons','--assets',dest='icons',type=Path);ap.add_argument('--minimum',type=int,default=20);args=ap.parse_args()
     root=Path(__file__).parent/'studies'/args.study/'paired'
     rows=[json.loads(line) for line in (root/'passes.jsonl').read_text().splitlines() if line]
+    boundary=verify_boundary(root,rows[0])
     assert len(rows)>=args.minimum and [r['pass_number'] for r in rows]==list(range(1,len(rows)+1))
     valid_count=sum(r.get('valid_experiment',True) for r in rows)
     assert valid_count>=args.minimum,'Invalid experiments do not count toward the minimum'
@@ -79,7 +90,7 @@ def main():
                 if 'vector_asset' in layer and layer['mode']!='transmission' and layer.get('fit_style',True):
                     a,b,c,d=layer['box'];actual.append(float(np.mean((composite[b-y0:d-y0,a-x0:c-x0]-s.target[b:d,a:c])**2))*255**2)
         assert np.max(abs(np.array(actual)-state['foreground_style_scores']['after_mse']))<1e-3,'Static foreground replay mismatch'
-    report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,foreground_style_scores=state.get('foreground_style_scores'),
+    report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,foreground_style_scores=state.get('foreground_style_scores'),initial_boundary=boundary,
         gate='Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.',
         background_estimates=[case.get('background_estimate') for case in cases],
         scope='Two observed instances; diagnostics distinguish direct source evidence from any explicit source estimate. Does not establish generality across devices, apps or lighting.')

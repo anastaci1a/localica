@@ -29,7 +29,7 @@ def masks(study,defined=None):
 
 def kernel_safe(mask,study,p):
     radius=int(np.ceil(3*round(study.kernel_sigma(p)*4)/4))
-    return (cv2.erode(mask,np.ones((2*radius+1,2*radius+1),np.uint8)) if radius else mask),radius
+    return (cv2.erode(mask,np.ones((2*radius+1,2*radius+1),np.uint8),borderType=cv2.BORDER_CONSTANT,borderValue=0) if radius else mask),radius
 
 
 def fraction(confidence,X,Y,mask,shift=0.):
