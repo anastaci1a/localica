@@ -12,11 +12,7 @@ from extended_shadow import shadow
 
 
 def foreground(study,out):
-    x0,y0,_,_=study.crop
-    for box,alpha,color in study.foreground_layers:
-        a,b,c,d=box;region=out[b-y0:d-y0,a-x0:c-x0]
-        out[b-y0:d-y0,a-x0:c-x0]=region*(1-alpha[...,None])+color*alpha[...,None]
-    return out
+    return study.apply_foreground(out)
 
 
 def main():
@@ -72,6 +68,7 @@ def main():
     report=dict(files=files,native_size=[W,H],frames=args.frames,fps=15,travel_over_L=args.travel/study.L,scores=current,
         motion='Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.',
         limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Foreground coverage is reference-derived.')
+    if study.transmission_layers:report['foreground_response']=[layer['fit'][2] for layer in study.transmission_layers]
     (out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report),flush=True)
 

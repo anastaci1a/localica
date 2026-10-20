@@ -102,9 +102,13 @@ class Study:
         self.backdrop_shift=[0.,0.]
         self.target_crop=self.target[y0:y1,x0:x1]
         self.expected=self.target_crop.reshape(-1,3)[self.indices]
-        self.foreground_layers=[]
+        self.foreground_layers=[];self.transmission_layers=[]
         for layer in self.case.get('foreground_layers',[]):
             a,b,c,d=layer['box'];T=self.target[b:d,a:c].copy()
+            if layer['mode']=='transmission':
+                seed=(T[:,:,0]-T[:,:,1]>.25)&(T[:,:,0]-T[:,:,2]>.15)
+                self.transmission_layers.append(dict(box=layer['box'],target=T,seed=seed,fit=None))
+                continue
             if layer['mode']=='artwork':
                 # Reference cover artwork is content, not a glass shader.
                 yy,xx=np.mgrid[:d-b,:c-a]
@@ -264,11 +268,23 @@ class Study:
             known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)[y0:y1,x0:x1]>0
             context=np.where(known[...,None],source*(1-blend[...,None])+context*blend[...,None],context)
         out=pred*cov[...,None]+context*(1-cov[...,None])
+        out=self.apply_foreground(out)
+        pair(original,np.uint8(np.rint(np.clip(out,0,1)*255)),('Apple','Reconstruction'),font_size=16).save(dest)
+
+    def apply_foreground(self,out):
+        x0,y0,_,_=self.crop
         for box,alpha,color in self.foreground_layers:
             a,b,c,d=box
             region=out[b-y0:d-y0,a-x0:c-x0]
             out[b-y0:d-y0,a-x0:c-x0]=region*(1-alpha[...,None])+color*alpha[...,None]
-        pair(original,np.uint8(np.rint(np.clip(out,0,1)*255)),('Apple','Reconstruction'),font_size=16).save(dest)
+        for layer in self.transmission_layers:
+            from foreground_response import calibrate,response
+            a,b,c,d=layer['box'];region=out[b-y0:d-y0,a-x0:c-x0]
+            if layer['fit'] is None:
+                layer['fit']=calibrate(region,layer['target'],layer['seed'])
+            params,alpha,_=layer['fit']
+            out[b-y0:d-y0,a-x0:c-x0]=region*(1-alpha[...,None])+response(region,params)*alpha[...,None]
+        return out
 
 
 def main():
