@@ -224,7 +224,7 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 
 ### Home control — corrected pairing in progress
 
-Frames A/B: 2.5/2.0 seconds. The earlier pairing regressed the retained first-background result; its records are archived unchanged and do not count as current acceptance. The corrected baseline protects the original first loss 40.345 and improves the second from 114.298 to 103.329, using one sparse source-brightness response and the same clean vector. These 4× stills show corrected paired pass 10; twenty new paired experiments and motion captures remain in progress.
+Frames A/B: 2.5/2.0 seconds. The earlier pairing regressed the retained first-background result; its records are archived unchanged and do not count as current acceptance. The corrected baseline protects the original first loss 40.345 and improves the second from 114.298 to 103.329, using one sparse source-brightness response and the same clean vector. These 4× stills show corrected paired pass 11; twenty new paired experiments and motion captures remain in progress.
 
 [![Home correction, background A: Apple left, reconstruction right](assets/study-music-home-vector-progress-a.png)](assets/study-music-home-vector-progress-a.png)
 
@@ -309,7 +309,7 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 | Compact mini-player | 24.899 / 23.369 | 4.370 / 4.325 | 29 / 21 | Completed study |
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
-| Home, pass 10 | 40.203 / 103.329 | 5.862 / 9.226 | 10 / 10 | In progress |
+| Home, pass 11 | 40.203 / 103.329 | 5.862 / 9.226 | 10 / 11 | In progress |
 | Active switch, pass 24 | 232.758 / 276.129 | 12.061 / 14.677 | 24 / 24 | Paired calibration |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Home's missing single-to-paired boundary check is explicitly flagged above.
