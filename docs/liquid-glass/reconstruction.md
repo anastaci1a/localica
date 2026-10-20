@@ -1,8 +1,10 @@
 # Apple reference recreations
 
-**Apple is on the left; our rendering is on the right.** Five native-HD studies have frozen, dimensionless mathematical recipes and a deterministic replay command. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
+**Apple is on the left; our rendering is on the right.** The comparisons below include the earlier HD studies and newer paired-background studies. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
 
 [Mathematical specification](recreation-models.md) · [Parameters](experiments/reconstruction/recipes.json) · [Scores](#scores) · [Reproduce](#reproduce) · [Material roles](#material-roles) · [Guide](README.md)
+
+[Playback](#clear-playback-control) · [Toolbar](#archive-and-plus-toolbar) · [Slider](#active-slider) · [Light/dark](#light-and-dark-surfaces) · [Apple Music](#apple-music-studies) · [Switch in progress](#active-switch--in-progress)
 
 ## Clear playback control
 
@@ -90,7 +92,95 @@ These test tone, broad lighting and rim. Nearly uniform backdrops cannot identif
 
 </details>
 
+## Apple Music studies
+
+References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Click a comparison for its full-size image.
+
+### Expanded mini-player
+
+Frame A: 0 seconds. Frame B: 6.033 seconds. Cover art is a separate high-resolution image; symbols and labels use vector geometry. Recovered background strips and registration limits are recorded with the measurements.
+
+[![Expanded mini-player, background A: Apple left, reconstruction right](assets/study-music-mini-expanded-vector-paired-a.png)](assets/study-music-mini-expanded-vector-paired-a.png)
+
+[![Expanded mini-player, background B: Apple left, reconstruction right](assets/study-music-mini-expanded-vector-paired-b.png)](assets/study-music-mini-expanded-vector-paired-b.png)
+
+- [Shared recipe](experiments/reconstruction/studies/music-mini-expanded-vector/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-mini-expanded-vector/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-mini-expanded-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-mini-expanded-vector/paired/b/diagnostics.json).
+- Motion: [A GIF](assets/study-music-mini-expanded-vector-paired-a.gif) / [A video](assets/study-music-mini-expanded-vector-paired-a.mp4) · [B GIF](assets/study-music-mini-expanded-vector-paired-b.gif) / [B video](assets/study-music-mini-expanded-vector-paired-b.mp4).
+
+### Compact mini-player
+
+Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback component. The exterior mask remains fixed while the silhouette is refined; it cannot move to conceal shadow error.
+
+[![Compact mini-player, background A: Apple left, reconstruction right](assets/study-music-mini-compact-vector-paired-a.png)](assets/study-music-mini-compact-vector-paired-a.png)
+
+[![Compact mini-player, background B: Apple left, reconstruction right](assets/study-music-mini-compact-vector-paired-b.png)](assets/study-music-mini-compact-vector-paired-b.png)
+
+- [Shared recipe](experiments/reconstruction/studies/music-mini-compact-vector/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-mini-compact-vector/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-mini-compact-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-mini-compact-vector/paired/b/diagnostics.json).
+- Motion: [A GIF](assets/study-music-mini-compact-vector-paired-a.gif) / [A video](assets/study-music-mini-compact-vector-paired-a.mp4) · [B GIF](assets/study-music-mini-compact-vector-paired-b.gif) / [B video](assets/study-music-mini-compact-vector-paired-b.mp4).
+
+### Detached Search control
+
+Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; color and opacity are fitted separately. The icon geometry does not contain video compression artifacts.
+
+[![Search control, background A: Apple left, reconstruction right](assets/study-music-search-vector-paired-a.png)](assets/study-music-search-vector-paired-a.png)
+
+[![Search control, background B: Apple left, reconstruction right](assets/study-music-search-vector-paired-b.png)](assets/study-music-search-vector-paired-b.png)
+
+- [Shared recipe](experiments/reconstruction/studies/music-search-vector/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-search-vector/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-search-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-search-vector/paired/b/diagnostics.json).
+- Motion: [A GIF](assets/study-music-search-vector-paired-a.gif) / [A video](assets/study-music-search-vector-paired-a.mp4) · [B GIF](assets/study-music-search-vector-paired-b.gif) / [B video](assets/study-music-search-vector-paired-b.mp4).
+
+### Navigation control
+
+Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray selection backing, symbols and text. Original font outlines are used for labels; unresolved symbols use clean traces or a documented public vector. **The upper rim on B remains too dark.** The mostly white background A weakly constrains refraction.
+
+[![Navigation control, background A: Apple left, reconstruction right](assets/study-music-navigation-paired-a.png)](assets/study-music-navigation-paired-a.png)
+
+[![Navigation control, background B: Apple left, reconstruction right](assets/study-music-navigation-paired-b.png)](assets/study-music-navigation-paired-b.png)
+
+- [Shared recipe](experiments/reconstruction/studies/music-navigation/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-navigation/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-navigation/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-navigation/paired/b/diagnostics.json).
+- Motion: [A GIF](assets/study-music-navigation-paired-a.gif) / [A video](assets/study-music-navigation-paired-a.mp4) · [B GIF](assets/study-music-navigation-paired-b.gif) / [B video](assets/study-music-navigation-paired-b.mp4).
+
+### Home control — under correction
+
+Frames A/B: 2.5/2.0 seconds. The foreground has been replaced with a clean symmetric vector. **The paired fit below regresses the best single-background result:** A's weighted loss is 55.738 versus the retained single's 40.345. Its internal paired checks did not catch that boundary error. The images remain visible for inspection; this study does **not** meet the no-regression requirement yet.
+
+[![Provisional Home control, background A: Apple left, reconstruction right](assets/study-music-home-vector-paired-a.png)](assets/study-music-home-vector-paired-a.png)
+
+[![Provisional Home control, background B: Apple left, reconstruction right](assets/study-music-home-vector-paired-b.png)](assets/study-music-home-vector-paired-b.png)
+
+- [Provisional shared recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Retained single recipe](experiments/reconstruction/studies/music-home-vector/accepted.json) · [A diagnostics](experiments/reconstruction/studies/music-home-vector/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-home-vector/paired/b/diagnostics.json).
+- Provisional motion: [A GIF](assets/study-music-home-vector-paired-a.gif) / [A video](assets/study-music-home-vector-paired-a.mp4) · [B GIF](assets/study-music-home-vector-paired-b.gif) / [B video](assets/study-music-home-vector-paired-b.mp4).
+
+## Active switch — in progress
+
+Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× snapshots** show 24 initial experiments and paired pass 6, not a completed study. Both use one signed image map and material, with the measured pose/size of each thumb.
+
+[![Switch progress, green track: Apple left, reconstruction right](assets/study-active-switch-progress-a.png)](assets/study-active-switch-progress-a.png)
+
+[![Switch progress, gray track: Apple left, reconstruction right](assets/study-active-switch-progress-b.png)](assets/study-active-switch-progress-b.png)
+
+- The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
+- The gray-track rendering retains excess green in its rim. Colored reflection and edge shape remain incomplete; there is no claim of a recovered Apple solid.
+- [Frozen pass/model evidence at c81a238](https://github.com/anastaci1a/localica/tree/c81a238e4e4afdc13074f6c8809d14f1fce5dada/docs/liquid-glass/experiments/reconstruction/studies/active-switch) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). Final paired verification and motion captures are pending.
+
 ## Scores
+
+### Music and switch studies
+
+| Study | Weighted loss A / B | Glass RMSE A / B | Initial / paired passes | Status |
+| --- | ---: | ---: | ---: | --- |
+| Expanded mini-player | 29.031 / 9.723 | 4.366 / 2.571 | 22 / 21 | Completed study |
+| Compact mini-player | 24.899 / 23.369 | 4.370 / 4.325 | 29 / 21 | Completed study |
+| Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
+| Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
+| Home | 55.738 / 114.298 | 6.956 / 9.731 | 22 / 20 | Boundary correction required |
+| Active switch, pass 6 | 256.660 / 474.422 | 12.649 / 18.256 | 24 / 6 | In progress |
+
+- Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Home's missing single-to-paired boundary check is explicitly flagged above.
+- These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.
+- Both references come from the same video, not independent device validation. Higher-resolution presentation does not create new source detail or change native scoring. GIFs may have lower resolution/frame rate than the 4× PNG/video masters; their encoding diagnostics are recorded with each study.
+
+### Earlier HD studies
 
 | Scene | Glass RMSE | Rim RMSE | Interior RMSE | Withheld-block RMSE | SSIM |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -161,6 +251,6 @@ Historical search tools and [results.json](experiments/reconstruction/results.js
 
 ## Attribution and limits
 
-Apple excerpts © Apple Inc., reproduced for attributed rendering analysis. Original videos are 1920 × 1080 at 30000/1001 fps; URLs/hashes are recorded. Source videos, Apple fonts and private user feedback are not bundled.
+Apple excerpts © Apple Inc., reproduced for attributed rendering analysis. Original frame sizes/rates, URLs and hashes are recorded with each study. Source videos, Apple fonts and private user feedback are not bundled.
 
 Remaining validation: independent scenes, multiple sizes/contact states, temporal stability, reconstructed exterior shadows and device performance. Further lab work is preserved separately; these frozen studies do not replace the deployed lab or native renderer.
