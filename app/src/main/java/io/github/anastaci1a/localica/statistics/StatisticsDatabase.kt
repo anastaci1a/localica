@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.statistics
 
 import androidx.room.*
 import io.github.anastaci1a.localica.library.LibrarySnapshot
+import io.github.anastaci1a.localica.library.Track
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -25,9 +26,24 @@ interface StatisticsDao {
 abstract class StatisticsDatabase : RoomDatabase() { abstract fun statistics(): StatisticsDao }
 
 data class ListeningStatistics(val tracks: Map<String, Long> = emptyMap(), val playlists: Map<String, Long> = emptyMap()) {
-    fun applyTo(snapshot: LibrarySnapshot) = snapshot.copy(
-        tracks = snapshot.tracks.map { it.copy(playCount = tracks[it.id] ?: 0) }, playlistPlays = playlists, trackPlays = tracks)
+    fun applyTo(snapshot: LibrarySnapshot): LibrarySnapshot {
+        var changed: MutableList<Track>? = null
+        snapshot.tracks.forEachIndexed { index, track ->
+            val count = tracks[track.id] ?: 0
+            if (track.playCount != count) {
+                val updated = changed ?: snapshot.tracks.toMutableList().also { changed = it }
+                updated[index] = track.copy(playCount = count)
+            }
+        }
+        if (changed == null && snapshot.playlistPlays == playlists && snapshot.trackPlays == tracks) return snapshot
+        return snapshot.copy(tracks = changed ?: snapshot.tracks, playlistPlays = playlists, trackPlays = tracks)
+    }
 }
+
+/** Both the statistics map preparation and track overlay stay off the UI collector. */
+internal fun Flow<LibrarySnapshot>.withListeningStatistics(statistics: Flow<ListeningStatistics>,
+    dispatcher: CoroutineDispatcher = Dispatchers.Default): Flow<LibrarySnapshot> =
+    combine(this, statistics) { snapshot, counts -> counts.applyTo(snapshot) }.flowOn(dispatcher)
 
 /** App-owned writes survive service teardown. Retry the same event ID without double counting. */
 class StatisticsRepository(private val dao: StatisticsDao,

@@ -7,6 +7,7 @@ import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.playback.PlaybackConnection
 import io.github.anastaci1a.localica.scanner.ScanController
 import io.github.anastaci1a.localica.scanner.ScanState
+import io.github.anastaci1a.localica.statistics.withListeningStatistics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -40,7 +41,7 @@ class LibraryViewModel(
 
     init {
         viewModelScope.launch {
-            combine(repository.snapshots, statistics) { snapshot, counts -> counts.applyTo(snapshot) }.catch { mutableLibrary.update { it.copy(loading = false, problem = LibraryProblem.LoadFailed) } }
+            repository.snapshots.withListeningStatistics(statistics).catch { mutableLibrary.update { it.copy(loading = false, problem = LibraryProblem.LoadFailed) } }
                 .collect { snapshot ->
                     mutableLibrary.update { it.copy(snapshot = snapshot, loading = false, metadataFailures = snapshot.metadataFailures.size) }
                     refreshAccess()
