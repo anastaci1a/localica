@@ -30,16 +30,26 @@ class PlayerSeekPositionTest {
         assertEquals(95_280f, position.displayed(acknowledged.copy(positionMs = 95_280)))
     }
 
-    @Test fun otherRequestSameTargetOrReceiptForOtherVisitCannotAcknowledgeRelease() {
+    @Test fun priorRequestSameTargetOrReceiptForOtherVisitCannotAcknowledgeRelease() {
         val position = PlayerSeekPosition()
         position.edit(95_000f)
         position.finish(live) { 5 }
-        for (ack in listOf(receipt(4, 95_000), receipt(6, 95_000), receipt(5, 95_000, "visit-b"))) {
+        for (ack in listOf(receipt(4, 95_000), receipt(5, 95_000, "visit-b"))) {
             val sample = live.copy(positionMs = 50_000, seekAcknowledgement = ack)
             position.observe(ack)
             assertEquals(95_000f, position.displayed(sample))
             assertNotNull(position.pending)
         }
+    }
+
+    @Test fun newerExternalSeekSupersedesPendingWhenItsOwnReceiptWasConflated() {
+        val position = PlayerSeekPosition()
+        position.edit(95_000f); position.finish(live) { 5 }
+        // A lyric tap or ten-second action dispatches request 6 through the same connection.
+        val newer = live.copy(positionMs = 30_000, seekAcknowledgement = receipt(6, 30_000))
+        assertEquals(30_000f, position.displayed(newer))
+        position.observe(newer.seekAcknowledgement)
+        assertNull(position.pending)
     }
 
     @Test fun rapidOppositeAndRepeatedDestinationSeeksRejectEveryOlderReceipt() {

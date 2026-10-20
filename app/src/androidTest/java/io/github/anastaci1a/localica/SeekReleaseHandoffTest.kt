@@ -141,6 +141,16 @@ class SeekReleaseHandoffTest {
     }
 
 
+    @Test fun newerExternalSeekReceiptSupersedesSliderWhenEarlierReceiptWasConflated() {
+        fixture()
+        seek().performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(95_000f)) }
+        assertFrame(95_000, "slider request pending")
+        compose.runOnIdle { acknowledge(30_000, 6) }
+        assertFrame(30_000, "newer lyric or action seek supersedes pending slider")
+        compose.runOnIdle { playback = playback.copy(positionMs = 31_000) }
+        assertFrame(31_000, "newer external playback continues")
+    }
+
     @Test fun abaDestinationSequenceDoesNotLetFirstReceiptReleaseTheThirdSeek() {
         fixture()
         for (target in listOf(95_000f, 10_000f, 95_000f)) {
