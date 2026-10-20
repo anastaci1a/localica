@@ -455,6 +455,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val flight = if (placement != GlassPlacement.Search) null
                     else if (!visible && searchFlight?.opening != false)
                         SearchMorphFlight(searchMotion.rendered.takeIf { it.width > 0f } ?: origin, p, opening = false)
+                    else if (visible && searchFlight?.opening == false)
+                        SearchMorphFlight(searchMotion.rendered.takeIf { it.width > 0f } ?: origin, p, opening = true)
                     else searchFlight
                 // Native IME-owned Back updates its target before the editor's
                 // effect runs. Hold that first layout at the pre-Back rectangle,
