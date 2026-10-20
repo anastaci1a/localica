@@ -21,7 +21,7 @@ def main():
     Y=(color[...,1]*(H+2)-1).astype(np.float32)
     known=cv2.imread(str(args.folder/'known.png'),cv2.IMREAD_GRAYSCALE).astype(np.float32)/255
     support=cv2.remap(known,X,Y,cv2.INTER_LINEAR)
-    radius=int(np.ceil(3*round(p['sigma']*4)/4))
+    radius=int(np.ceil(3*round(study.kernel_sigma(p)*4)/4))
     safe=cv2.erode(known,np.ones((2*radius+1,2*radius+1),np.uint8)) if radius else known
     safe=cv2.remap(safe,X,Y,cv2.INTER_LINEAR)
     dxdy,dxdx=np.gradient(X);dydy,dydx=np.gradient(Y)

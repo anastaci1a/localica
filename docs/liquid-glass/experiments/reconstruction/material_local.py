@@ -24,7 +24,8 @@ def statistics(cache,co):
         F[...,channel+3]=average(active)
         F[...,6:20]=average(active[...,None]*J[...,:-1])
         F[...,channel+20]=average(active*C[...,channel]*core)
-        if cache.p['post_sigma']>.001:F=cv2.GaussianBlur(F,(0,0),cache.p['post_sigma'])
+        sigma=s.kernel_sigma(cache.p,'post_sigma')
+        if sigma>.001:F=cv2.GaussianBlur(F,(0,0),sigma)
         for name,mask in [('glass',s.valid),('rim',s.rim)]:
             X=F[mask];e=residual[...,channel][mask];factor=255**2/(3*mask.sum())
             forms[name][0]+=(X.T@X)*factor

@@ -24,12 +24,12 @@ class Prepared:
         out=np.empty(((y1-y0)*self.scale,(x1-x0)*self.scale,3),np.float32)
         for row,bottom,W,X,Y,gain,light,blend in self.tiles if tiles is None else tiles:
             x=(X+s.backdrop_shift[0]).astype(np.float32);y=(Y+s.backdrop_shift[1]).astype(np.float32)
-            C=cv2.remap(s.blur(p['sigma']),x,y,cv2.INTER_LINEAR)
+            C=cv2.remap(s.blur(s.kernel_sigma(p)),x,y,cv2.INTER_LINEAR)
             if blend is not None:
                 clear=cv2.remap(s.source,x,y,cv2.INTER_LINEAR)
                 C=clear+(C-clear)*blend[...,None]
             C=np.maximum(C,0)**p['gamma']
             C=np.clip(C*gain+self.co[3:6]+light[...,None],0,1)
             out[row:bottom]=C.reshape(bottom-row,2,W,2,3).mean((1,3))
-        if p['post_sigma']>.001:out=cv2.GaussianBlur(out,(0,0),p['post_sigma']*self.scale)
+        if s.kernel_sigma(p,'post_sigma')>.001:out=cv2.GaussianBlur(out,(0,0),s.kernel_sigma(p,'post_sigma')*self.scale)
         return out

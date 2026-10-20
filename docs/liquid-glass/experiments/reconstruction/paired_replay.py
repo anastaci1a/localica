@@ -45,7 +45,8 @@ def main():
         if 'foreground_response' in state:case['foreground_response']=state['foreground_response']
         if 'foreground_styles' in state:case['foreground_styles']=state['foreground_styles']
         (folder/'case.json').write_text(json.dumps(case,indent=2)+'\n')
-        p=state['parameters'].copy();p['sigma']*=min(case['half']);p['post_sigma']*=min(case['half'])
+        length=case.get('parameter_length_reference',min(case['half']))
+        p=state['parameters'].copy();p['sigma']*=length;p['post_sigma']*=length
         accepted=dict(parameters=p,material=state['material'],scores=state['scores'][index])
         (folder/'accepted.json').write_text(json.dumps(accepted,indent=2)+'\n')
         s=Study(folder);pred=s.render(p,np.array(state['material']));score=s.scores(pred)
@@ -61,7 +62,6 @@ def main():
         assert diagnostic['gaussian_3sigma_observed_fraction']>=.999,'Source-scattering footprint crosses a recovery gap'
         if args.motion:subprocess.run([sys.executable,str(Path(__file__).with_name('extended_media.py')),str(folder),'--frames','180','--travel','45'],check=True)
     if 'foreground_response' in state:
-        assert abs(studies[0].L-studies[1].L)<1e-12
         errors=foreground_errors(studies,p,state['material'],state['foreground_response'])
         stored=state['foreground_scores']['after_mse'];assert np.max(abs(np.array(errors)-stored))<1e-5
     else:errors=None

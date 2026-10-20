@@ -127,7 +127,7 @@ def main():
     cache.C=rng.choice([.1,.4,.6,.9],(H*2,W*2,3)).astype(np.float32)
     cache.J=rng.uniform(-.01,.01,(H*2,W*2,15));cache.J[...,-1]=rng.uniform(0,1,(H*2,W*2))
     yy,xx=np.mgrid[:H,:W];valid=np.ones((H,W),bool);rim=(xx<5)|(xx>=W-5)|(yy<5)|(yy>=H-5)
-    cache.study=SimpleNamespace(target_crop=rng.uniform(.1,.9,(H,W,3)).astype(np.float32),valid=valid,rim=rim)
+    cache.study=SimpleNamespace(target_crop=rng.uniform(.1,.9,(H,W,3)).astype(np.float32),valid=valid,rim=rim,kernel_sigma=lambda p,key:p[key])
     maximum=0
     for clipping in [False,True]:
         co=np.zeros(23);co[:3]=co[-3:]=1.4 if clipping else .4;co[3:6]=-.2 if clipping else .3
@@ -155,6 +155,18 @@ def main():
         q={**p,**{f'c{i}':float(v) for i,v in enumerate(coefficients+delta)}}
         assert np.max(abs(fast.render(coefficients+delta)-fixture.render(q,co)))<2e-6
     print('PASS prepared profile lookup with coupling, orientation gain, shape correction, smooth caps and output blur')
+
+    # Different observation sizes share normalized source/output lengths.
+    # Check both the unit conversion and independent cached/full raster paths.
+    for reference in [8.,32.]:
+        fixture.case['parameter_length_reference']=reference
+        assert fixture.kernel_sigma(p)/fixture.L==p['sigma']/reference
+        assert fixture.kernel_sigma(p,'post_sigma')/fixture.L==p['post_sigma']/reference
+        full=fixture.render(p,co);cache=Cached(fixture,p)
+        assert np.max(abs(cache.render(co)-full))<2e-6
+        fast=ProfileCache(fixture,p,co)
+        assert np.max(abs(fast.render(coefficients)-full))<2e-6
+    print('PASS explicit common length basis scales both kernels at unequal observation sizes')
 
 
 if __name__=='__main__':main()

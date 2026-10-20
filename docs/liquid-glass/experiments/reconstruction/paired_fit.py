@@ -47,7 +47,8 @@ class Cached:
 
     def render(self,co):
         pred=shade(self.C,self.J,np.asarray(co)).reshape(self.H,2,self.W,2,3).mean((1,3)).astype(np.float32)
-        if self.p['post_sigma']>.001:pred=cv2.GaussianBlur(pred,(0,0),self.p['post_sigma'])
+        sigma=self.study.kernel_sigma(self.p,'post_sigma')
+        if sigma>.001:pred=cv2.GaussianBlur(pred,(0,0),sigma)
         return pred
 
 
@@ -128,9 +129,8 @@ def main():
     execution_hash=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     record_path=folder/f'pass-{args.number:02}.json';assert not record_path.exists(),'Keep paired trials immutable'
     studies=[Study(folder/'a'),Study(folder/'b')]
-    # Current paired studies have matched reference scale. Generalizing to
-    # differently sized references requires converting sigma/post_sigma per L.
-    assert abs(studies[0].L-studies[1].L)<1e-12,'Normalize kernels before comparing different reference scales'
+    # Differently sized poses must explicitly declare one shared length basis.
+    assert abs(studies[0].case.get('parameter_length_reference',studies[0].L)-studies[1].case.get('parameter_length_reference',studies[1].L))<1e-12,'Declare one common parameter-length reference for unequal poses'
     saved=folder/'accepted.json'
     if saved.exists():old=json.loads(saved.read_text())
     else:

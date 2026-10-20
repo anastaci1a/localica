@@ -21,7 +21,7 @@ def coordinates(study,p):
 
 def prepare(study,p,known,cov,requested):
     X,Y=coordinates(study,p)
-    radius=int(np.ceil(3*round(p['sigma']*4)/4))
+    radius=int(np.ceil(3*round(study.kernel_sigma(p)*4)/4))
     safe=cv2.erode(known,np.ones((2*radius+1,2*radius+1),np.uint8)) if radius else known
     def fraction(shift,mask,confidence):
         support=cv2.remap(confidence,X,Y+np.float32(shift),cv2.INTER_LINEAR)
