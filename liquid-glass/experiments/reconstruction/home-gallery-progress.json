@@ -1,7 +1,7 @@
 {
   "status": "In progress, not a final paired study",
-  "rendering_code_commit": "6df5316f38f1ec6678be5da6c433ad79bce4e0da",
-  "gallery_script_sha256": "4937d2578d3ff665d2ab02dcbdad240617d8ed6c7600ddaa1ed3c234e1f68479",
+  "rendering_code_commit": "48ccdf74bf929e81fbef6d3a3a86a3e002e4c418",
+  "gallery_script_sha256": "000265a42d4acb834feaeeee3abde14d9a29295c82fa5db6f030edeaf72d2894",
   "state_record_sha256": "16e44b4db42d21683c71ef81d7eba378bfd8e192ea81de5329ecc686d1a410aa",
   "single_passes": 10,
   "paired_passes": 1,
@@ -185,6 +185,11 @@
         "context_mean_source_defined_fraction": 1.0,
         "context_mean_source_observed_fraction": 1.0
       },
+      "presentation_completion": {
+        "max_abs_rgb": 6.920355796813965,
+        "rmse": 0.038442496210336685,
+        "method": "Nearest defined RGB extends unknown source only for presentation; input files, masks and native scores stay frozen."
+      },
       "background_estimate": null
     },
     {
@@ -221,6 +226,11 @@
         "source_gaussian_radius_native_px": 21,
         "context_mean_source_defined_fraction": 1.0,
         "context_mean_source_observed_fraction": 1.0
+      },
+      "presentation_completion": {
+        "max_abs_rgb": 1.519918441772461e-05,
+        "rmse": 1.0036565356585925e-07,
+        "method": "Nearest defined RGB extends unknown source only for presentation; input files, masks and native scores stay frozen."
       },
       "background_estimate": null
     }

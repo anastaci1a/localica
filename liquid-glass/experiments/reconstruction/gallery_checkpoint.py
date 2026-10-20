@@ -32,8 +32,19 @@ def main():
         assert abs(score['loss']-state['scores'][index]['loss'])<1e-6,'Snapshot changes frozen native loss'
         assert abs(score['glass']['rmse']-state['scores'][index]['glass']['rmse'])<1e-6
         footprint=coverage_report(study,p);assert supported(study,footprint)
+        # Keep diagnostic unknown-source colors out of unscored edge/context
+        # pixels too. Benchmark the ORIGINAL source above; display the same
+        # explicit nearest-source estimate used by the motion exporter.
+        import cv2
+        from motion_support import complete
+        known=cv2.imread(str(study.folder/'known.png'),cv2.IMREAD_GRAYSCALE).astype(np.float32)/255
+        study.source=complete(study,known);study.cache.clear()
+        presentation=study.render(p,co)
+        delta=(presentation-prediction)[study.valid]*255
+        completion=dict(max_abs_rgb=float(np.max(abs(delta))),rmse=float(np.sqrt(np.mean(delta**2))),
+                        method='Nearest defined RGB extends unknown source only for presentation; input files, masks and native scores stay frozen.')
         image=guide/'assets'/f'study-{args.id}-progress-{name}.png'
-        study.comparison(study.render(p,co,4),image,p,4)
+        study.comparison(study.render(p,co,4),image,p,4,context_completed=True)
         if args.id=='active-switch':
             from PIL import Image
             comparison=Image.open(image);width=(comparison.width-2)//2
@@ -44,7 +55,7 @@ def main():
                 a=comparison.crop((left,top,left+384,top+288))
                 b=comparison.crop((left+width+2,top,left+width+386,top+288))
                 details.append((f"{name.upper()} · {patch['region'].replace('_',' ')}",a,b))
-        samples.append(dict(reference=study.case['reference'],native=score,source_support=footprint,
+        samples.append(dict(reference=study.case['reference'],native=score,source_support=footprint,presentation_completion=completion,
                             background_estimate=study.case.get('background_estimate')))
     case=json.loads((args.folder/'a/case.json').read_text())
     L=case.get('parameter_length_reference',min(case['half']))

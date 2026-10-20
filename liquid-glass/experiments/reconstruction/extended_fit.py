@@ -344,7 +344,7 @@ class Study:
         result['loss']=.7*result['glass']['rmse']**2+.3*result['rim']['rmse']**2
         return result
 
-    def comparison(self,pred,dest,p,scale=1):
+    def comparison(self,pred,dest,p,scale=1,context_completed=False):
         x0,y0,x1,y1=self.crop
         H,W=(y1-y0)*scale,(x1-x0)*scale;offset=.5-.25/scale
         original=np.uint8(np.rint(self.target_crop*255))
@@ -362,7 +362,8 @@ class Study:
             u=np.clip((native_sd-.20)/.15,0,1);blend=u**3*(u*(6*u-15)+10)
             known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)
             known=cv2.remap(known,px,py,cv2.INTER_NEAREST)>0
-            context=np.where(known[...,None],source*(1-blend[...,None])+context*blend[...,None],context)
+            clean=source*(1-blend[...,None])+context*blend[...,None]
+            context=clean if context_completed else np.where(known[...,None],clean,context)
         out=pred*cov[...,None]+context*(1-cov[...,None])
         out=self.apply_foreground(out,scale)
         labels=('Apple source','Reconstruction (4x)') if scale==4 else ('Apple','Reconstruction')
