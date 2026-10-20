@@ -10,7 +10,7 @@ const output=process.env.LAB_EVIDENCE;
   const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   for(const width of [1280,390]){
    await page.setViewportSize({width,height:950});await page.goto(url);
-   assert.equal(await page.locator('img[data-comparison-top]').count(),17,'Enhance every primary A/B pair');
+   assert.equal(await page.locator('img[data-comparison-top]').count(),18,'Enhance every primary A/B pair');
    assert.equal(await page.locator('details img[data-comparison-top]').count(),0,'Do not enhance dropdown media');
    assert.equal(await page.locator('img[src*="rim"][data-comparison-top]').count(),0,'Leave supplementary crop sheets unchanged');
    const image=page.locator('img[data-comparison-top]').first();await image.evaluate(i=>i.decode());
@@ -47,6 +47,6 @@ const output=process.env.LAB_EVIDENCE;
   assert.deepEqual(colors,[[255,0,0],[0,0,255]],'Crop caption/gutter and align corresponding source halves');
   const noJS=await browser.newContext({javaScriptEnabled:false}),plain=await noJS.newPage();await plain.goto(url);
   assert.equal(await plain.locator('.comparison').count(),0);assert(await plain.locator('img').first().isVisible(),'No-JS original pair remains available');await noJS.close();
-  assert.deepEqual(errors,[]);console.log('PASS17 primary pairs; desktop/phone, drag bounds, keyboard, reload, exact half/header/gutter crop, dropdown exclusion and no-JS fallback');
+ assert.deepEqual(errors,[]);console.log('PASS18 primary pairs; desktop/phone, drag bounds, keyboard, reload, exact half/header/gutter crop, dropdown exclusion and no-JS fallback');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});
