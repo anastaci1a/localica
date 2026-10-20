@@ -125,7 +125,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val panelReady = LocalGlassPanelReady.current
     val reportSearchOpening = LocalSearchOpeningReady.current
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
-    val keyboardClosing = WindowInsets.ime.getBottom(density) > 0 && WindowInsets.imeAnimationTarget.getBottom(density) == 0
+    val keyboardClosing = WindowInsets.imeAnimationTarget.getBottom(density) == 0 &&
+        (WindowInsets.ime.getBottom(density) > 0 || WindowInsets.imeAnimationSource.getBottom(density) > 0)
     var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
     LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing, reportSearchOpening, scopedEditor?.focused) {
         // Dialog attachment and IME focus happen outside Compose's animation clock.
