@@ -54,7 +54,8 @@ class Cached:
         pred=shade(self.C,self.J,co).reshape(self.H,2,self.W,2,3).mean((1,3)).astype(np.float32)
         sigma=self.study.kernel_sigma(self.p,'post_sigma')
         if sigma>.001:pred=cv2.GaussianBlur(pred,(0,0),sigma)
-        return pred
+        from grazing_reflection import apply
+        return apply(self.study,self.p,pred)
 
 
 def scores(caches,co):return [c.study.scores(c.render(co),include_ssim=False) for c in caches]
