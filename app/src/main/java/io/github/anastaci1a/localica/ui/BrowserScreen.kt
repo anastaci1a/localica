@@ -154,7 +154,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     val browse = rememberBrowsePresentation(library.snapshot, playlists.playlists, queueState.library.queues,
-        libraryFilters, route, style, reducedMotion, queryDispatcher, sorts)
+        libraryFilters, route, style, reducedMotion, queryDispatcher, sorts,
+        sourcesReady = browseCatalogReady(route, library.loading, playlists.loading, queueState.loading, libraryFilters),
+        animateArrival = route.search || route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist))
     val presentation = browse.current
     val loadedResult = presentation?.result
     val displayedStyle = presentation?.style ?: style
@@ -523,17 +525,39 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val dragColors = MaterialTheme.colorScheme
             val dragInk = LocalContentColor.current
             SideEffect { reorder.style = displayedStyle; reorder.cellGeometry = cellGeometry; reorder.colors = dragColors; reorder.ink = dragInk }
-            if (loadedResult == null && !artDetail) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = if (showFilters || showSearchPill) pillSlotHeight else 0.dp).testTag("browse-loading"))
+            val loadingReducedMotion = reducedMotion || LocalReducedMotion.current
+            val skeletonReveal = !artDetail && !route.search
+            val displayedRoute = presentation?.route ?: route
+            val artistOnlyLoading = displayedRoute.collection == null && (displayedRoute.filter in setOf(MediaKind.Artist, MediaKind.AlbumArtist) ||
+                (displayedRoute.filter == null && displayedRoute.tab in setOf(MainTab.Artists, MainTab.AlbumArtists)))
+            val loadingReveal = rememberBrowseLoadingReveal(displayedRoute.key to displayedRoute.filter,
+                loadedResult != null, browse.cached, columns,
+                with(density) { viewportWidth.toDp().value }, with(density) { constraints.maxHeight.toDp().value }, loadingReducedMotion,
+                geometryKey = Triple(displayedStyle.presentation to displayedStyle.listSize, displayedStyle.extraInfo, density.fontScale))
+            val loadingActivity = remember { LoadingShimmerActivity() }
+            val pendingArtwork by remember(loadingActivity) { derivedStateOf(structuralEqualityPolicy()) { loadingActivity.count > 0 } }
+            val shimmer = rememberBrowseLoadingShimmer(loadedResult == null || !loadingReveal.complete || pendingArtwork, loadingReducedMotion)
+            CompositionLocalProvider(LocalLoadingShimmer provides shimmer, LocalLoadingShimmerActivity provides loadingActivity,
+                LocalReducedMotion provides loadingReducedMotion) {
+            if (loadedResult == null && !artDetail) BrowseLoadingViewport(displayedStyle, cellGeometry,
+                viewportWidth, constraints.maxHeight, if (showFilters || showSearchPill) pillSlotHeight else 0.dp,
+                popupDismiss == null && displayedStyle.extraInfo != ExtraInfo.None, artistOnlyLoading)
             else SelectionViewport(Modifier.fillMaxSize()
                 // Floating controls sample the finished scrolling scene, including
                 // its fade and selection/overscroll transforms, never the raw grid.
                 .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, if (artDetail) collectionSource else surroundingBackdrop)
                     .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
-                .graphicsLayer { alpha = if (artDetail) 1f else browse.reveal.value }
+                .graphicsLayer { alpha = if (artDetail || (skeletonReveal && !queryPending)) 1f else browse.reveal.value }
                 .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier)
                 .pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
+                .pointerInput(loadingReveal) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        loadingReveal.revealImmediately()
+                    }
+                }
                 .semantics { stateDescription = if (displayedStyle.presentation == Presentation.List) "List, ${displayedStyle.listSize.name}"
                     else if (columns == 1) "Gallery, 1 column" else "Gallery, $columns columns" }
                 .browsePinch(enabled && !playerOpen && !queryPending && reorder.drag == null,
@@ -584,6 +608,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                     val item = entry
                     val itemIndex = itemIndices[item.key] ?: 0
+                    val loadingCell = if (skeletonReveal && !loadingReveal.complete) loadingReveal.cell(itemIndex) else null
                     val current = route.collection?.kind == MediaKind.Queue && item.row != null && item.row.id == playingEntryId
                     val selectedCount = session.selectedCount(item, route.collection)
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
@@ -612,7 +637,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
                         Column(Modifier.then(if (pinchMotion.visualSource == null) Modifier.animateBounds(this@LookaheadScope,
                             modifier = Modifier.fillMaxWidth().padding(cellGeometry.cardInset.dp),
-                            boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder) 0 else 350) })
+                            boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder || loadingCell != null) 0 else 350) })
                             else Modifier.fillMaxWidth().padding(cellGeometry.cardInset.dp).graphicsLayer {
                                 val placed = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.key }
                                 if (placed != null) {
@@ -622,7 +647,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     translationX = (old.left - position.x - cellGeometry.gridInset.dp.roundToPx() + alignment) * (1f - pinchMotion.progress.value)
                                     translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
                                 }
-                            }).onGloballyPositioned { reorder.itemCoordinates[item.key] = it }
+                            }).onGloballyPositioned {
+                                reorder.itemCoordinates[item.key] = it
+                                val origin = it.positionInRoot() - reorder.viewportOrigin
+                                loadingCell?.place(origin.x / density.density,
+                                    (origin.y - with(density) { (if (showFilters || showSearchPill) pillSlotHeight else 0.dp).toPx() }) / density.density)
+                            }
                             // Frost is redrawn separately from frozen content so its
                             // corners stay identical to selection during pinch.
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->
@@ -648,11 +678,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         )) {
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
                                 showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,
+                                loadingReveal = loadingCell, artistOnlyLoading = artistOnlyLoading,
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
                         }
 
                     }
                 }
+            }
             }
             }
             CompositionLocalProvider(LocalFrostedBackdrop provides

@@ -45,6 +45,13 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
     fun titleWidth(infoWidth: Int) =
         (available - if (trailing) infoWidth + (if (infoWidth > 0) px(8) else 0) else 0).coerceAtLeast(0)
 
+    /** Placeholder widths stay unchanged when the real (possibly shorter) label arrives. */
+    fun loadingInformationWidth(showInformation: Boolean): Int = when {
+        !showInformation -> 0
+        trailing -> informationLimit
+        else -> (titleWidth(0) * .65f).roundToInt()
+    }
+
     fun place(titleHeight: Int, infoWidth: Int, infoHeight: Int): BrowseItemPlacement {
         val textHeight = if (trailing) maxOf(titleHeight, infoHeight) else titleHeight + infoHeight
         val minimum = px(when (style.listSize) { ListSize.Compact -> 56; ListSize.Small -> 48; ListSize.Smallest -> 40; else -> 48 })
