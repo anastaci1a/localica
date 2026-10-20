@@ -17,9 +17,14 @@ def layers(study,p,scale=1,row=0,bottom=None):
     direction=np.asarray(q.get('direction',[0.,1.]),float)
     assert np.isfinite(direction).all() and abs(np.linalg.norm(direction)-1)<1e-9
     strength,width,power=q['strength'],q['width'],q['angular_power']
-    assert 0<=strength<=1 and width>0 and power>0 and q['source_sigma']>=0
+    assert 0<=strength<=1 and width>0 and power>=0 and q.get('source_sigma',0)>=0
     u=np.clip(np.maximum(-sd,0)/width,0,1);smooth=u**3*(u*(6*u-15)+10)
-    weight=strength*(1-smooth)*np.maximum(nx*direction[0]+ny*direction[1],0)**power
+    angular=np.maximum(nx*direction[0]+ny*direction[1],0)**power if power else np.ones_like(sd)
+    weight=strength*(1-smooth)*angular
+    if 'environment_rgb' in q:
+        color=np.asarray(q['environment_rgb'],float)
+        assert color.shape==(3,) and np.isfinite(color).all() and np.all((color>=0)&(color<=1))
+        return weight,np.broadcast_to(color,(*weight.shape,3))
     sigma=q['source_sigma']*study.L;key=('grazing_environment',sigma)
     if key not in study.cache:study.cache[key]=cv2.GaussianBlur(study.source,(0,0),sigma) if sigma>.001 else study.source
     study.cache.move_to_end(key)
@@ -41,6 +46,9 @@ def apply(study,p,prediction,scale=1):
 
 
 def support(study,p,defined,observed,shift=0.):
+    if 'environment_rgb' in p['grazing_reflection']:
+        return dict(reflection_environment_kind='declared_constant_rgb',reflection_environment_rgb=p['grazing_reflection']['environment_rgb'],
+                    reflection_background_sampling=False)
     from source_support import fraction
     weight,_=layers(study,p);active=(weight>1e-8)&study.valid
     if not active.any():return {k:1. for k in ['reflection_source_defined_fraction','reflection_gaussian_3sigma_defined_fraction','reflection_source_observed_fraction','reflection_gaussian_3sigma_observed_fraction']}
