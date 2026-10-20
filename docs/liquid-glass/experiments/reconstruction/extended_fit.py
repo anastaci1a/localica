@@ -32,7 +32,7 @@ STAGES = {
  17: ('Coupled cap and normal-profile refinement', [*[f'c{i}' for i in range(7)],'cap_normal_gain','cap_tangent_fade']),
  18: ('C2 cap-to-body curvature join', ['cap_join_width']),
  19: ('Smooth-cap optical settlement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition','cap_normal_gain']),
- 20: ('Global signed radial-profile restart', ['amplitude','band','power','sigma','core_x']),
+ 20: ('Joint smooth-cap profile and output-scattering settlement', [*[f'c{i}' for i in range(7)],'sigma','post_sigma','core_x','core_y','gamma']),
 }
 BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               tangent=(0,.45), tangent_band=(.03,1), core_x=(0,.025),core_y=(0,.18),
@@ -53,7 +53,7 @@ RADIAL_STAGES = {
  7: ('Radial-profile and central-power refinement', [*[f'c{i}' for i in range(7)],'core_x']),
  10: ('Joint radial optical and scattering settlement', ['sigma','post_sigma','core_x','gamma','rim_width','thin_width']),
  11: ('Circular silhouette and optical-boundary alignment', ['shape_dx','shape_dy','half_x_delta']),
- 13: STAGES[20],
+ 13: ('Global signed radial-profile restart', ['amplitude','band','power','sigma','core_x']),
  14: ('Signed radial spline and source-scattering refinement', [*[f'c{i}' for i in range(7)],'sigma','core_x']),
  15: ('Radial output-scattering and brightness refinement', ['sigma','post_sigma','gamma','rim_width','thin_width']),
  16: ('Seeded radial-spline neighborhood search', [*[f'c{i}' for i in range(7)],'sigma']),
@@ -343,9 +343,10 @@ class Study:
         labels=('Apple source','Reconstruction (4x)') if scale==4 else ('Apple','Reconstruction')
         pair(original,np.uint8(np.rint(np.clip(out,0,1)*255)),labels,font_size=16*scale).save(dest)
 
-    def apply_foreground(self,out,scale=1):
+    def apply_foreground(self,out,scale=1,stop_before=None):
         x0,y0,_,_=self.crop
         for box,alpha,color in self.foreground_layers:
+            if stop_before is not None and tuple(box)==tuple(stop_before):return out
             a,b,c,d=box
             region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
             vector=self.vector_layers.get(tuple(box))
@@ -365,6 +366,10 @@ class Study:
                 from vector_foreground import coverage
                 vector=self.vector_layers[tuple(box)]
                 alpha=coverage(self.folder,vector,scale)*style.get('opacity',vector.get('opacity',1.))
+                if 'response' in style:
+                    from foreground_response import response
+                    alpha=coverage(self.folder,vector,scale)
+                    color=response(region,style['response'])
             region[:]=region*(1-alpha[...,None])+color*alpha[...,None]
         for layer in self.transmission_layers:
             from foreground_response import calibrate,response

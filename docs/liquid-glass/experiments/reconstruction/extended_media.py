@@ -13,6 +13,7 @@ from PIL import Image
 from extended_fit import Study
 from extended_shadow import shadow
 from prepared import Prepared
+from video_color import ENCODING_COLOR_ARGS,probe
 
 
 def foreground(study,out,scale=1):
@@ -43,6 +44,7 @@ def finish(folder,report,budget,full_size=False):
             subprocess.run(['ffmpeg','-v','error','-threads','2','-i',str(file),'-fps_mode','passthrough','-enc_time_base','1/1000','-f','null','-'],check=True)
         files[file.name]=dict(bytes=file.stat().st_size,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
     report.update(files=files,gif=dict(fps=fps,output_size=[width,height],master_relative_scale=factor,palette_colors=256,palette_sampling='All frame pixels',dither='sierra2_4a',maximum_megabytes=budget,spatial_downsampling=factor!=1))
+    report.setdefault('video_color',dict(metadata=probe(video),limits='Encoded RGB export metadata; no measured display/transfer-function calibration.'))
     (out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report),flush=True)
 
@@ -89,7 +91,9 @@ def main():
     video=out/'motion.mp4';log=(out/'encode.log').open('w')
     # yuv420 requires even dimensions; padding preserves all rendered pixels.
     W=width+width%2;H=height+height%2
-    proc=subprocess.Popen(['ffmpeg','-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate',str(args.fps),'-i','pipe:0','-an','-c:v','libx264','-threads','2','-preset','fast','-crf','17','-x264-params','rc-lookahead=4:sync-lookahead=1','-pix_fmt','yuv420p','-movflags','+faststart',str(video)],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=log)
+    proc=subprocess.Popen(['ffmpeg','-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate',str(args.fps),'-i','pipe:0','-an',
+        *ENCODING_COLOR_ARGS,
+        '-c:v','libx264','-threads','2','-preset','fast','-crf','17','-x264-params','rc-lookahead=4:sync-lookahead=1','-pix_fmt','yuv420p','-movflags','+faststart',str(video)],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=log)
     try:
         for i in range(args.frames):
             shift=np.float32(travel*np.sin(2*np.pi*i/args.frames))

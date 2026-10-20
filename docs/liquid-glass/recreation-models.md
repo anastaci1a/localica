@@ -127,6 +127,17 @@ glass = clamp(sample × gain + coefficients[3:6]
 
 The scalar lighting term is added to all RGB channels. This is a bounded fitted basis, not a Fresnel/environment reconstruction. In particular, the white inner band in some earlier fits can arise from these terms independently of refraction. Do not interpret a fit coefficient as physical radiance or encode it as an extra painted outline.
 
+## Solid-vector foreground responses
+
+Foreground coverage `α` comes from solid geometry, independently of material color. Its input `B` includes preceding layers, such as a fixed selection backing. Affine styles use `F(B)=(1−o)B+oC`; response styles use the shared per-channel function:
+
+```text
+F_c(B) = t_c [1−s_c(1−clamp(B_c,0,1))^γ_c]
+output = (1−α)B + αF(B)
+```
+
+For `t,s∈[0,1]` and `γ>0`, the function stays bounded and monotone. The affine operation embeds exactly with `v=1−o`, `q=oC`, `t=v+q`, `s=v/t` and `γ=1`; set `s=0` when `t=0`. Response styles already contain opacity, so applying it again would change the model. One fitted response is used on both observed backgrounds; it is an empirical color function, not a Fresnel law. Glass and foreground errors remain separate.
+
 ## Reproducing and transferring a model
 
 - Preserve equations, operation order, color space, shape and all normalized parameters when changing renderer. The source image's registration and the glyph coverage are separate inputs. Use the [frozen replay command](reconstruction.md#reproduce); optimization commands are for research only.

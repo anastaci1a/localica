@@ -51,3 +51,38 @@ def copy_assets(case,source,destination):
                 path=Path(source)/layer[key]
                 assert path.is_file(),f'Missing private foreground input: {path}'
                 shutil.copyfile(path,Path(destination)/layer[key])
+
+
+def fit_geometry(studies,p,co,key,variant,start,bounds):
+    """Fit a low-dimensional clean SVG family on both fixed backgrounds.
+
+    variant(parameters,layer) returns solid SVG bytes and its placement.
+    This fits leaf symbols; foreground before the symbol is part of its input.
+    It never changes the glass map, scoring masks or per-scene geometry recipes.
+    """
+    from scipy.optimize import minimize
+    from foreground_response import response
+    samples=[]
+    for s in studies:
+        G=s.render(p,np.asarray(co));layer=next(l for l in s.case['foreground_layers'] if l.get('style_key',l.get('vector_asset'))==key)
+        B=s.apply_foreground(G.copy(),stop_before=layer['box']);a,b,c,d=layer['box'];x0,y0,_,_=s.crop
+        samples.append((B[b-y0:d-y0,a-x0:c-x0],s.target[b:d,a:c],layer,s.case['foreground_styles'][key]))
+    assert len({layer['vector_sha256'] for _,_,layer,_ in samples})==1
+    def errors(v):
+        result=[];digest=None
+        for B,T,layer,style in samples:
+            raw,placement=variant(v,layer);current=hashlib.sha256(raw).hexdigest()
+            assert digest in [None,current],'One common SVG geometry is required';digest=current
+            A=_coverage(raw,tuple(layer['box']),tuple(placement),1)
+            if 'response' in style:C=response(B,style['response'])
+            else:A=A*style['opacity'];C=np.asarray(style['color'],np.float32)
+            pred=B*(1-A[...,None])+C*A[...,None]
+            result.append(float(np.mean((pred-T)**2))*255**2)
+        return np.array(result)
+    start=np.asarray(start,float);before=errors(start)
+    fit=minimize(lambda v:errors(v).mean(),start,method='Powell',bounds=bounds,options=dict(maxfev=1600,xtol=.002,ftol=1e-8))
+    best=start.copy();after=before
+    for t in [1,.5,.25,.125,.0625]:
+        v=start+t*(fit.x-start);trial=errors(v)
+        if np.all(trial<=before+1e-8) and trial.sum()<after.sum():best=v;after=trial
+    return best,dict(before_mse=before.tolist(),after_mse=after.tolist(),evaluations=int(fit.nfev),gate='Both backgrounds retain or improve full-box foreground MSE; fixed glass/masks and one common clean SVG family.')

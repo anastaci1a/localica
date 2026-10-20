@@ -10,6 +10,7 @@ from vector_foreground import coverage
 
 
 def fit_samples(samples,style):
+    assert 'response' not in style,'Use the response fitter for a nonlinear foreground'
     opacity=style['opacity'];base=np.array([1-opacity,*np.asarray(style['color'])*opacity])
     def errors(v):
         return np.array([float(np.mean((B*(1-A[...,None])+A[...,None]*(v[0]*B+v[1:])-T)**2))*255**2 for B,T,A in samples])
@@ -29,12 +30,15 @@ def fit_shared(studies,p,co,styles=None):
     for s in studies:
         pred=s.render(p,np.asarray(co));x0,y0,_,_=s.crop;current=[]
         for layer in s.case['foreground_layers']:
-            if 'vector_asset' not in layer or layer['mode']=='transmission':continue
+            if 'vector_asset' not in layer or layer['mode']=='transmission' or not layer.get('fit_style',True):continue
             key=layer.get('style_key',layer['vector_asset']);current.append(key)
             assert key not in current[:-1],'Use distinct style keys for repeated placements'
             assert digests.get(key,layer['vector_sha256'])==layer['vector_sha256'],'Require identical vector geometry'
             digests[key]=layer['vector_sha256'];defaults[key]=dict(color=layer['color'],opacity=layer.get('opacity',1.))
-            a,b,c,d=layer['box'];groups.setdefault(key,[]).append((pred[b-y0:d-y0,a-x0:c-x0],s.target[b:d,a:c],coverage(s.folder,layer)))
+            # A child symbol sees already-composited fixed content, such as
+            # a selection backing. Do not fit it against the bare glass.
+            background=s.apply_foreground(pred.copy(),stop_before=layer['box'])
+            a,b,c,d=layer['box'];groups.setdefault(key,[]).append((background[b-y0:d-y0,a-x0:c-x0],s.target[b:d,a:c],coverage(s.folder,layer)))
         if order is None:order=current
         assert current==order,'Require matching foreground roles/order across scenes'
     assert order,'No static vectors to fit'
