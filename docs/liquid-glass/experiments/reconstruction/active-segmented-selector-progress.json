@@ -1,8 +1,8 @@
 {
   "status": "Single-reference progress; paired verification and final motion pending",
   "study": "active-segmented-selector",
-  "pass_number": 11,
-  "rendering_code_commit": "556e4a432f0cb486b8a32adacf2d53e8bdd88b0d",
+  "pass_number": 12,
+  "rendering_code_commit": "c14bbc209ba9d75e49355503ec01cf48f83e6dd5",
   "script_sha256": "31b6253899ac78f5f7c4037ec0e51ff485b2ad0b70f823aea6ea74e5624af247",
   "output_scale": 4,
   "native": {
@@ -52,7 +52,15 @@
       "c3": 0.40227439757599937,
       "c4": 0.28980994421289064,
       "c5": 0.11556713655786788,
-      "c6": 0.00811207533252288
+      "c6": 0.00811207533252288,
+      "shadow": {
+        "opacity": 0.030792257176537066,
+        "sigma": 0.14035990212261495,
+        "offset": [
+          0.0081036453594727,
+          0.09999999835491878
+        ]
+      }
     },
     "material": [
       0.36952428009149346,
@@ -97,7 +105,11 @@
         "rmse": 19.530004501342773
       },
       "ssim": 0.9137924313545227,
-      "loss": 329.57096629490366
+      "loss": 329.57096629490366,
+      "exterior": {
+        "pixels": 50342,
+        "rmse": 8.40495199848145
+      }
     }
   },
   "source_support": {
