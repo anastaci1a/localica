@@ -101,7 +101,7 @@
         "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
         "variant_status": "Original font outlines; app symbol/weight assignment inferred by contour comparison, not read from Apple source code."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         727.7185610943901,
         625.8600710051332,
@@ -148,7 +148,7 @@
         "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
         "variant_status": "Original font outlines; app symbol/weight assignment inferred by contour comparison, not read from Apple source code."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         730.3768266091996,
         685.425823335896,
@@ -193,7 +193,7 @@
         "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
         "variant_status": "Original font outlines; app symbol/weight assignment inferred by contour comparison, not read from Apple source code."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         1068.847742725024,
         638.8544388773489,
@@ -238,7 +238,7 @@
         "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
         "variant_status": "Original font outlines; app symbol/weight assignment inferred by contour comparison, not read from Apple source code."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         1211.6821800372725,
         641.0642404289682,
