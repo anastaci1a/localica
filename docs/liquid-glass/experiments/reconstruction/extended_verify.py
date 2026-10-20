@@ -111,5 +111,19 @@ def main():
                 assert difference<.005,(clipping,sigma,name,difference)
     print('PASS clipped/unclipped subpixel/filter quadratic proposals; max MSE difference',maximum)
 
+    from profile_cache import ProfileCache
+    fixture=Study.__new__(Study);fixture.L=16.;fixture.half=np.array([2.,1.]);fixture.radius=1.
+    fixture.case=dict(center=[48.,24.],radial=False);fixture.crop=[12,4,84,44]
+    y,x=np.mgrid[:48,:96];fixture.source=np.stack([x/96,y/48,(x/96+y/48)/2],-1).astype(np.float32)
+    fixture.cache=OrderedDict();fixture.backdrop_shift=[0.,0.]
+    p=initial();p.update(spline=True,sigma=1.5,post_sigma=.4,tangent=.05,coupling=.2,cap_normal_gain=.2,cap_tangent_fade=.1,cap_join_width=.1,shape_dx=.01,half_x_delta=.02)
+    coefficients=np.array([.6,.4,.3,.2,.1,.02,0.]);p.update({f'c{i}':float(v) for i,v in enumerate(coefficients)})
+    co=np.zeros(23);co[:3]=co[-3:]=.6;co[3:6]=.1
+    fast=ProfileCache(fixture,p,co)
+    for delta in [np.zeros(7),rng.normal(0,.02,7)]:
+        q={**p,**{f'c{i}':float(v) for i,v in enumerate(coefficients+delta)}}
+        assert np.max(abs(fast.render(coefficients+delta)-fixture.render(q,co)))<2e-6
+    print('PASS prepared profile lookup with coupling, orientation gain, shape correction, smooth caps and output blur')
+
 
 if __name__=='__main__':main()
