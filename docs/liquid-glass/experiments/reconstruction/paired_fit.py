@@ -5,10 +5,10 @@ the original masks remain authoritative; a joint average cannot hide a loss.
 The cached renderer changes only evaluation cost, not optical/material order.
 """
 from pathlib import Path
-import argparse,copy,json,time
+import argparse,copy,hashlib,json,time
 import cv2,numpy as np
 from scipy.optimize import minimize
-from extended_fit import Study
+from extended_fit import Study,BOUNDS
 from render import shade
 
 STAGES={
@@ -20,6 +20,18 @@ STAGES={
  6:('Foreground-aware shared-material settlement',list(range(23))),
  7:('Shared native radial-profile settlement',[]),
  8:('Corrected shared native radial-profile settlement',[]),
+ 9:('Shared source-kernel neighborhood',[]),
+ 10:('Shared output-scattering neighborhood',[]),
+ 11:('Shared center magnification neighborhood',[]),
+ 12:('Shared monotone input response neighborhood',[]),
+ 13:('Shared outer spline pattern search',[]),
+ 14:('Shared inner spline pattern search',[]),
+ 15:('Shared lighting-width neighborhood',[]),
+ 16:('Shared circular silhouette registration',[]),
+ 17:('Shared distance-dependent scattering neighborhood',[]),
+ 18:('Shared foreground recalibration after optical refinement',[]),
+ 19:('Final shared transmission and environment settlement',list(range(23))),
+ 20:('Shared joint optical pattern settlement',[]),
 }
 
 
@@ -37,7 +49,7 @@ class Cached:
         return pred
 
 
-def scores(caches,co):return [c.study.scores(c.render(co)) for c in caches]
+def scores(caches,co):return [c.study.scores(c.render(co),include_ssim=False) for c in caches]
 
 
 def permitted(candidate,previous,tolerance=1e-8):
@@ -67,7 +79,7 @@ def material_trial(caches,old,keys):
             current=co.copy();current[keys]=v
             metrics=[];foreground_memo.clear()
             for cache in caches:
-                pred=cache.render(current);metrics.append(cache.study.scores(pred))
+                pred=cache.render(current);metrics.append(cache.study.scores(pred,include_ssim=False))
                 if 'foreground_response' in old:
                     from foreground_response import response
                     s=cache.study;x0,y0,_,_=s.crop
@@ -100,6 +112,7 @@ def material_trial(caches,old,keys):
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--pass',dest='number',type=int,required=True);args=ap.parse_args()
     t0=time.time();name,keys=STAGES[args.number];folder=args.folder
+    execution_hash=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     record_path=folder/f'pass-{args.number:02}.json';assert not record_path.exists(),'Keep paired trials immutable'
     studies=[Study(folder/'a'),Study(folder/'b')]
     # Current paired studies have matched reference scale. Generalizing to
@@ -114,10 +127,15 @@ def main():
             reference=c.study.render(p,np.array(co));prediction=c.render(co)
             assert np.max(abs(reference-prediction))<2e-6,'Cache changes renderer'
         old=dict(parameters=p,material=co,scores=scores(caches,co))
+        foreground=initial.get('foreground_response',studies[0].case.get('foreground_response'))
+        if foreground is not None:
+            old['foreground_response']=foreground
+            error=foreground_errors(studies,p,co,foreground)
+            old['foreground_scores']=dict(before_mse=error,after_mse=error)
         (folder/'baseline.json').write_text(json.dumps(old,indent=2)+'\n')
         saved.write_text(json.dumps(old,indent=2)+'\n')
     current=copy.deepcopy(old);p=current['parameters'];caches=[Cached(s,p) for s in studies];trials=[];evaluations=0
-    if args.number in [1,2,5,6]:
+    if args.number in [1,2,5,6,19]:
         co,metric,evaluations=material_trial(caches,old,keys)
         current.update(material=co.tolist(),scores=metric)
         trials.append(dict(kind='Constrained shared material',scores=metric,evaluations=evaluations))
@@ -135,7 +153,10 @@ def main():
             if accept:current.update(parameters=candidate,scores=metric)
     elif args.number in [7,8]:
         assert p['spline'],'Spline comparator required'
-        optical_keys=[f'c{i}' for i in range(7)];x=np.array([p[k] for k in optical_keys]);scale=max(1,np.mean([s['loss'] for s in old['scores']]))
+        vector_followup=bool(studies[0].vector_layers)
+        subset=range(3) if args.number==7 else range(3,7)
+        optical_keys=[f'c{i}' for i in (subset if vector_followup else range(7))];x=np.array([p[k] for k in optical_keys]);scale=max(1,np.mean([s['loss'] for s in old['scores']]))
+        if vector_followup:name='Shared native '+('outer' if args.number==7 else 'inner')+' radial spline settlement'
         memo={};calls=0
         def evaluate(v):
             nonlocal calls
@@ -161,6 +182,33 @@ def main():
             allowed=permitted(metric,old['scores']) and (not fg or all(a<=b+1e-8 for a,b in zip(fg,old['foreground_scores']['after_mse'])))
             if allowed and sum(s['loss'] for s in metric)<best:current.update(parameters=q,scores=metric);best=sum(s['loss'] for s in metric)
         trials.append(dict(kind='Constrained native spline',scores=current['scores'],evaluations=calls));evaluations=calls
+    elif args.number in [9,10,11,12,13,14,15,16,17,20]:
+        # Each pass explores a different live parameter family at two scales.
+        # These are native-rendered optical trials, not verification reruns.
+        families={
+            9:[('sigma',1.)],10:[('post_sigma',.3)],11:[('core_x',.006)],
+            12:[('gamma',.06)],13:[(f'c{i}',.06) for i in range(3)],
+            14:[(f'c{i}',.06) for i in range(3,7)],
+            15:[('rim_width',.01),('thin_width',.004)],
+            16:[('shape_dx',.008),('shape_dy',.008),('half_x_delta',.008)],
+            17:[('blur_transition',.08),('sigma',.5)],
+            20:[(f'c{i}',.02) for i in range(7)]+[('sigma',.25),('post_sigma',.08),('core_x',.002)]}
+        for size in [1.,.25]:
+            for key,step in families[args.number]:
+                for sign in [-1,1]:
+                    q=copy.deepcopy(current['parameters']);q[key]=q.get(key,0.)+sign*step*size
+                    low,high=BOUNDS[key]
+                    if key.startswith('c') and key[1:].isdigit() and studies[0].case.get('radial'):low=-2.5
+                    if not low<=q[key]<=high:continue
+                    metric=scores([Cached(s,q) for s in studies],current['material']);evaluations+=1
+                    allow=permitted(metric,current['scores'])
+                    fg=[]
+                    if allow and 'foreground_response' in current:
+                        fg=foreground_errors(studies,q,current['material'],current['foreground_response'])
+                        before=foreground_errors(studies,current['parameters'],current['material'],current['foreground_response'])
+                        allow=all(a<=b+1e-8 for a,b in zip(fg,before))
+                    trials.append(dict(key=key,delta=sign*step*size,accepted=allow,scores=metric,foreground_mse=fg))
+                    if allow:current.update(parameters=q,scores=metric)
     else:
         # Foreground is outside the optical score masks. Fit one response to
         # both observed glyphs; never fit an independent response per scene.
@@ -204,7 +252,7 @@ def main():
         advance=advance and all(a<=b+1e-8 for a,b in zip(after,before))
         current['foreground_scores']=dict(before_mse=before,after_mse=after)
     if not advance:current=old
-    record=dict(pass_number=args.number,experiment=name,accepted=advance,previous=old,current=current,trials=trials,evaluations=evaluations,seconds=time.time()-t0,
+    record=dict(pass_number=args.number,experiment=name,execution_code_sha256=execution_hash,accepted=advance,previous=old,current=current,trials=trials,evaluations=evaluations,seconds=time.time()-t0,
         gate='Neither sample loss nor whole-glass RMSE may increase. One shared optical profile and23-coefficient material. Foreground follow-up also checks both interior errors.',
         limits='Two observations from the same Apple video, not independent device validation or proof of cross-scene universality.')
     record_path.write_text(json.dumps(record,indent=2)+'\n');saved.write_text(json.dumps(current,indent=2)+'\n')
