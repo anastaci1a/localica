@@ -19,6 +19,7 @@ STAGES={
  5:('Joint shared-material settlement',list(range(23))),
  6:('Foreground-aware shared-material settlement',list(range(23))),
  7:('Shared native radial-profile settlement',[]),
+ 8:('Corrected shared native radial-profile settlement',[]),
 }
 
 
@@ -106,7 +107,33 @@ def main():
     assert abs(studies[0].L-studies[1].L)<1e-12,'Normalize kernels before comparing different reference scales'
     saved=folder/'accepted.json'
     if saved.exists():old=json.loads(saved.read_text())
-    elif args.number==7:
+    else:
+        initial=json.loads((folder/'initial.json').read_text());p=initial['parameters'];co=initial['material']
+        caches=[Cached(s,p) for s in studies]
+        for c in caches:
+            reference=c.study.render(p,np.array(co));prediction=c.render(co)
+            assert np.max(abs(reference-prediction))<2e-6,'Cache changes renderer'
+        old=dict(parameters=p,material=co,scores=scores(caches,co))
+        (folder/'baseline.json').write_text(json.dumps(old,indent=2)+'\n')
+        saved.write_text(json.dumps(old,indent=2)+'\n')
+    current=copy.deepcopy(old);p=current['parameters'];caches=[Cached(s,p) for s in studies];trials=[];evaluations=0
+    if args.number in [1,2,5,6]:
+        co,metric,evaluations=material_trial(caches,old,keys)
+        current.update(material=co.tolist(),scores=metric)
+        trials.append(dict(kind='Constrained shared material',scores=metric,evaluations=evaluations))
+    elif args.number==3:
+        # Coordinate probes test genuinely shared optics, without giving each
+        # sample its own displacement profile or material coefficients.
+        probes=[('sigma',-.5),('sigma',.5),('post_sigma',-.2),('post_sigma',.2)]
+        probes += [(f'c{i}',sign*.025) for i in range(7) for sign in [-1,1]] if p['spline'] else [('amplitude',-.025),('amplitude',.025),('band',-.015),('band',.015)]
+        for key,delta in probes:
+            candidate=copy.deepcopy(current['parameters']);candidate[key]+=delta
+            if key in ['sigma','post_sigma'] and candidate[key]<0:continue
+            trial_caches=[Cached(s,candidate) for s in studies];metric=scores(trial_caches,current['material']);evaluations+=1
+            accept=permitted(metric,current['scores'])
+            trials.append(dict(key=key,delta=delta,accepted=accept,scores=metric))
+            if accept:current.update(parameters=candidate,scores=metric)
+    elif args.number in [7,8]:
         assert p['spline'],'Spline comparator required'
         optical_keys=[f'c{i}' for i in range(7)];x=np.array([p[k] for k in optical_keys]);scale=max(1,np.mean([s['loss'] for s in old['scores']]))
         memo={};calls=0
@@ -134,32 +161,6 @@ def main():
             allowed=permitted(metric,old['scores']) and (not fg or all(a<=b+1e-8 for a,b in zip(fg,old['foreground_scores']['after_mse'])))
             if allowed and sum(s['loss'] for s in metric)<best:current.update(parameters=q,scores=metric);best=sum(s['loss'] for s in metric)
         trials.append(dict(kind='Constrained native spline',scores=current['scores'],evaluations=calls));evaluations=calls
-    else:
-        initial=json.loads((folder/'initial.json').read_text());p=initial['parameters'];co=initial['material']
-        caches=[Cached(s,p) for s in studies]
-        for c in caches:
-            reference=c.study.render(p,np.array(co));prediction=c.render(co)
-            assert np.max(abs(reference-prediction))<2e-6,'Cache changes renderer'
-        old=dict(parameters=p,material=co,scores=scores(caches,co))
-        (folder/'baseline.json').write_text(json.dumps(old,indent=2)+'\n')
-        saved.write_text(json.dumps(old,indent=2)+'\n')
-    current=copy.deepcopy(old);p=current['parameters'];caches=[Cached(s,p) for s in studies];trials=[];evaluations=0
-    if args.number in [1,2,5,6]:
-        co,metric,evaluations=material_trial(caches,old,keys)
-        current.update(material=co.tolist(),scores=metric)
-        trials.append(dict(kind='Constrained shared material',scores=metric,evaluations=evaluations))
-    elif args.number==3:
-        # Coordinate probes test genuinely shared optics, without giving each
-        # sample its own displacement profile or material coefficients.
-        probes=[('sigma',-.5),('sigma',.5),('post_sigma',-.2),('post_sigma',.2)]
-        probes += [(f'c{i}',sign*.025) for i in range(7) for sign in [-1,1]] if p['spline'] else [('amplitude',-.025),('amplitude',.025),('band',-.015),('band',.015)]
-        for key,delta in probes:
-            candidate=copy.deepcopy(current['parameters']);candidate[key]+=delta
-            if key in ['sigma','post_sigma'] and candidate[key]<0:continue
-            trial_caches=[Cached(s,candidate) for s in studies];metric=scores(trial_caches,current['material']);evaluations+=1
-            accept=permitted(metric,current['scores'])
-            trials.append(dict(key=key,delta=delta,accepted=accept,scores=metric))
-            if accept:current.update(parameters=candidate,scores=metric)
     else:
         # Foreground is outside the optical score masks. Fit one response to
         # both observed glyphs; never fit an independent response per scene.

@@ -16,6 +16,8 @@ def main():
     root=Path(__file__).parent/'studies'/args.study/'paired'
     rows=[json.loads(line) for line in (root/'passes.jsonl').read_text().splitlines() if line]
     assert len(rows)>=5 and [r['pass_number'] for r in rows]==list(range(1,len(rows)+1))
+    valid_count=sum(r.get('valid_experiment',True) for r in rows)
+    assert valid_count>=5,'Invalid experiments do not count toward the minimum'
     previous=None
     for row in rows:
         old=row['previous'];new=row['current']
@@ -53,7 +55,7 @@ def main():
         errors=foreground_errors(studies,p,state['material'],state['foreground_response'])
         stored=state['foreground_scores']['after_mse'];assert np.max(abs(np.array(errors)-stored))<1e-5
     else:errors=None
-    report=dict(paired_passes=len(rows),scores=metrics,foreground_mse=errors,
+    report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,
         gate='Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.',
         scope='Same video, different observed backdrops. Does not establish generality across devices, apps or lighting.')
     (args.out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
