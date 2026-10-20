@@ -61,6 +61,21 @@ RADIAL_STAGES = {
  18: ('Radial spline and rim-scattering settlement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition']),
 }
 
+# Follow-ups start from a fitted spline: amplitude/band/power are inactive in
+# that state and must not be counted as new optical refinement experiments.
+RADIAL_FOLLOWUP_STAGES = {
+ 1: ('Follow-up source scattering', ['sigma']),
+ 2: ('Follow-up outer radial spline', ['c0','c1','c2']),
+ 3: ('Follow-up inner radial spline', ['c3','c4','c5','c6']),
+ 4: ('Follow-up output-space scattering', ['post_sigma']),
+ 5: ('Follow-up isotropic center magnification', ['core_x']),
+ 6: ('Follow-up source/output scattering separation', ['sigma','post_sigma']),
+ 7: ('Follow-up broad and thin rim lighting', ['rim_width','thin_width']),
+ 8: ('Follow-up monotone source response', ['gamma','sigma']),
+ 9: ('Follow-up circular silhouette registration', ['shape_dx','shape_dy','half_x_delta']),
+ 10: ('Follow-up joint spline and scattering', [*[f'c{i}' for i in range(7)],'sigma','post_sigma','core_x']),
+}
+
 
 def initial():
     p=dict(sigma=0.,amplitude=0.,band=.35,power=2.2,tangent=0.,tangent_band=.4,
@@ -339,6 +354,7 @@ def main():
     assert not (args.folder/f'pass-{args.number:02}'/'record.json').exists(), 'Keep completed passes immutable'
     t0=time.time();study=Study(args.folder)
     stages={**STAGES,**RADIAL_STAGES} if study.case.get('radial') else STAGES
+    if study.case.get('radial') and study.case.get('continuation'):stages.update(RADIAL_FOLLOWUP_STAGES)
     stage,keys=stages[args.number]
     accepted_path=args.folder/'accepted.json'
     if accepted_path.exists():old=json.loads(accepted_path.read_text());p=old['parameters']

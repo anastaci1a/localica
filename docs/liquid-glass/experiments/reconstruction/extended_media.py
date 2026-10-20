@@ -9,47 +9,56 @@ import cv2,numpy as np
 from PIL import Image
 from extended_fit import Study
 from extended_shadow import shadow
+from prepared import Prepared
 
 
-def foreground(study,out):
-    return study.apply_foreground(out)
+def foreground(study,out,scale=1):
+    return study.apply_foreground(out,scale)
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--frames',type=int,default=90);ap.add_argument('--travel',type=float,default=45);args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--frames',type=int,default=180);ap.add_argument('--travel',type=float,default=45);ap.add_argument('--scale',type=int,default=4);ap.add_argument('--fps',type=int,default=30);args=ap.parse_args()
+    assert args.scale>=1 and args.frames>0 and args.fps>0
     study=Study(args.folder);accepted=json.loads((args.folder/'accepted.json').read_text());p=accepted['parameters'];co=np.array(accepted['material'])
     out=args.folder/'final';out.mkdir(exist_ok=True)
-    still=study.render(p,co);study.comparison(still,out/'comparison.png',p)
+    still=study.render(p,co)
     # Final rendering must reproduce the accepted scoring state, not merely
     # reuse its stored score metadata or its last screenshot.
     current=study.scores(still)
     assert abs(current['loss']-accepted['scores']['loss'])<1e-6
-    x0,y0,x1,y1=study.crop;width=x1-x0;height=y1-y0
-    yy,xx=np.mgrid[y0:y1:.5,x0:x1:.5]
-    *_,(sd,_,_)=study.shape((xx-.25-study.case['center'][0])/study.L,(yy-.25-study.case['center'][1])/study.L,p)
-    cov=(sd<=0).reshape(height,2,width,2).mean((1,3))
-    yy,xx=np.mgrid[y0:y1,x0:x1].astype(np.float32)
-    opacity=shadow(study,p,study.x,study.y)
+    # Freeze foreground response at native reference resolution before export.
+    study.apply_foreground(still.copy())
+    scale=args.scale;x0,y0,x1,y1=study.crop;width=(x1-x0)*scale;height=(y1-y0)*scale
+    high=study.render(p,co,scale);study.comparison(high,out/'comparison.png',p,scale)
+    native_cov=study.shape_coverage(p);cov=study.shape_coverage(p,scale)
+    yy,xx=np.mgrid[:height,:width].astype(np.float32)
+    xx=x0-.5+(xx+.5)/scale;yy=y0-.5+(yy+.5)/scale
+    opacity=shadow(study,p,(xx-study.case['center'][0])/study.L,(yy-study.case['center'][1])/study.L)
     known=cv2.imread(str(args.folder/'known.png'),cv2.IMREAD_GRAYSCALE).astype(np.float32)/255
     from motion_support import prepare
-    motion_source,travel,motion_support=prepare(study,p,known,cov,args.travel)
+    motion_source,travel,motion_support=prepare(study,p,known,native_cov,args.travel)
     study.source=motion_source;study.cache.clear()
+    prepared=Prepared(study,p,co,scale)
+    # Check the prepared renderer on the actual motion input, independently of
+    # the frozen native scoring pass; cache speed cannot change the material.
+    assert np.max(abs(prepared.render()-study.render(p,co,scale)))<2e-6
+    context=cv2.resize(study.target_crop,(width,height),interpolation=cv2.INTER_LANCZOS4) if scale>1 else study.target_crop
     video=out/'motion.mp4';log=(out/'encode.log').open('w')
-    # yuv420 requires even dimensions; padding preserves all native pixels.
+    # yuv420 requires even dimensions; padding preserves all rendered pixels.
     W=width+width%2;H=height+height%2
-    proc=subprocess.Popen(['ffmpeg','-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate','15','-i','pipe:0','-an','-c:v','libx264','-preset','fast','-crf','17','-pix_fmt','yuv420p','-movflags','+faststart',str(video)],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=log)
+    proc=subprocess.Popen(['ffmpeg','-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate',str(args.fps),'-i','pipe:0','-an','-c:v','libx264','-preset','fast','-crf','17','-pix_fmt','yuv420p','-movflags','+faststart',str(video)],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=log)
     try:
         for i in range(args.frames):
             shift=np.float32(travel*np.sin(2*np.pi*i/args.frames))
             study.backdrop_shift=[0.,float(shift)]
-            material=study.render(p,co)
+            material=prepared.render()
             base=cv2.remap(study.source,xx,yy+shift,cv2.INTER_LINEAR)
             valid=cv2.remap(known,xx,yy+shift,cv2.INTER_NEAREST)>0
             # Unknown EXTERIOR context uses the reference context. Unknown
             # input is never turned into a scored recovery claim.
-            base=np.where(valid[...,None],base,study.target_crop)
+            base=np.where(valid[...,None],base,context)
             base=base*(1-opacity[...,None])
-            frame=foreground(study,material*cov[...,None]+base*(1-cov[...,None]))
+            frame=foreground(study,material*cov[...,None]+base*(1-cov[...,None]),scale)
             frame=np.uint8(np.rint(np.clip(frame,0,1)*255))
             if W!=width or H!=height:frame=cv2.copyMakeBorder(frame,0,H-height,0,W-width,cv2.BORDER_REPLICATE)
             proc.stdin.write(frame.tobytes())
@@ -68,9 +77,9 @@ def main():
         if file.suffix in ['.mp4','.gif']:
             subprocess.run(['ffmpeg','-v','error','-i',str(file),'-f','null','-'],check=True)
         files[file.name]=dict(bytes=file.stat().st_size,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
-    report=dict(files=files,native_size=[W,H],frames=args.frames,fps=15,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,
+    report=dict(files=files,native_size=[x1-x0,y1-y0],output_size=[W,H],output_scale=scale,frames=args.frames,fps=args.fps,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,
         motion='Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.',
-        limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Foreground coverage is reference-derived.')
+        limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source artwork/text retain their original information quality; declared SVG icons are rerasterized, other coverage remains reference-derived.')
     if study.transmission_layers:report['foreground_response']=[layer['fit'][2] for layer in study.transmission_layers]
     (out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report),flush=True)
