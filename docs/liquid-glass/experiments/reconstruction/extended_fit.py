@@ -282,17 +282,18 @@ class Study:
             result[row:bottom]=(sd<=0).reshape(bottom-row,2,W,2).mean((1,3))
         return result
 
-    def scores(self,pred):
+    def scores(self,pred,include_ssim=True):
         error=(pred-self.target_crop)*255
         result={}
         for name,mask in [('glass',self.valid),('rim',self.rim),('held',self.held),('interior',self.valid&~self.rim)]:
             result[name]=dict(pixels=int(mask.sum()),rmse=float(np.sqrt(np.mean(error[mask]**2))))
-        A=pred.mean(2)*255;B=self.target_crop.mean(2)*255
-        mean=lambda q:cv2.GaussianBlur(q,(11,11),1.5)
-        a,b=mean(A),mean(B)
-        ss=((2*a*b+6.5025)*(2*(mean(A*B)-a*b)+58.5225))/((a*a+b*b+6.5025)*(mean(A*A)-a*a+mean(B*B)-b*b+58.5225))
-        safe=cv2.erode(self.valid.astype(np.uint8),np.ones((11,11),np.uint8))>0
-        result['ssim']=float(ss[safe].mean())
+        if include_ssim:
+            A=pred.mean(2)*255;B=self.target_crop.mean(2)*255
+            mean=lambda q:cv2.GaussianBlur(q,(11,11),1.5)
+            a,b=mean(A),mean(B)
+            ss=((2*a*b+6.5025)*(2*(mean(A*B)-a*b)+58.5225))/((a*a+b*b+6.5025)*(mean(A*A)-a*a+mean(B*B)-b*b+58.5225))
+            safe=cv2.erode(self.valid.astype(np.uint8),np.ones((11,11),np.uint8))>0
+            result['ssim']=float(ss[safe].mean())
         # Frozen overall score: weighted squared native RGB and rim mismatch.
         result['loss']=.7*result['glass']['rmse']**2+.3*result['rim']['rmse']**2
         return result
