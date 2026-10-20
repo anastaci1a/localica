@@ -25,13 +25,13 @@ internal fun Modifier.hasScrollEdgeFade() = foldIn(false) { found, element ->
 
 /** Mask only overflowing scroll content. Fit-to-content bodies need no offscreen buffer. */
 internal fun Modifier.scrollEdgeFade(scroll: ScrollState, reverseScrolling: Boolean = false): Modifier =
-    fadingScrollEdges({ scroll.viewportSize > 0 && scroll.maxValue > 0 },
+    modalScroll(scroll).fadingScrollEdges({ scroll.viewportSize > 0 && scroll.maxValue > 0 },
         { (if (reverseScrolling) scroll.maxValue - scroll.value else scroll.value).toFloat() },
         { (if (reverseScrolling) scroll.value else scroll.maxValue - scroll.value).toFloat() })
 
 /** Lazy bodies use measured item bounds, including partial rows and content padding. */
 internal fun Modifier.scrollEdgeFade(scroll: LazyListState): Modifier =
-    fadingScrollEdges({ scroll.canScrollBackward || scroll.canScrollForward }, {
+    modalScroll(scroll).fadingScrollEdges({ scroll.canScrollBackward || scroll.canScrollForward }, {
         val layout = scroll.layoutInfo
         val first = layout.visibleItemsInfo.firstOrNull()
         when {
@@ -50,7 +50,7 @@ internal fun Modifier.scrollEdgeFade(scroll: LazyListState): Modifier =
     })
 
 internal fun Modifier.scrollEdgeFade(scroll: LazyGridState): Modifier =
-    fadingScrollEdges({ scroll.canScrollBackward || scroll.canScrollForward }, {
+    modalScroll(scroll).fadingScrollEdges({ scroll.canScrollBackward || scroll.canScrollForward }, {
         val layout = scroll.layoutInfo
         val first = layout.visibleItemsInfo.firstOrNull()
         when {

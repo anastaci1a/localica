@@ -34,11 +34,13 @@ internal fun Modifier.controlScrollParent(axis: Int, available: () -> Boolean): 
 
 internal fun Modifier.controlScrollParent(state: ScrollableState, axis: Int): Modifier =
     (if ((axis and ControlScrollAxis.Vertical) != 0) popupScrollEdges(state) else this)
+        .modalScroll(state)
         .controlScrollParent(axis) { state.canScrollBackward || state.canScrollForward }
 
 internal fun Modifier.controlVerticalScroll(state: ScrollState, enabled: Boolean = true,
     reverseScrolling: Boolean = false): Modifier =
     popupScrollEdges(state, reverseScrolling)
+        .modalScroll(state)
         .controlScrollParent(ControlScrollAxis.Vertical) { enabled && (state.canScrollBackward || state.canScrollForward) }
         .verticalScroll(state, enabled, reverseScrolling = reverseScrolling)
 
@@ -57,5 +59,5 @@ private fun Modifier.popupScrollEdges(state: ScrollableState, reverseScrolling: 
 
 internal fun Modifier.controlHorizontalScroll(state: ScrollState, enabled: Boolean = true,
     reverseScrolling: Boolean = false): Modifier =
-    controlScrollParent(ControlScrollAxis.Horizontal) { enabled && (state.canScrollBackward || state.canScrollForward) }
+    modalScroll(state).controlScrollParent(ControlScrollAxis.Horizontal) { enabled && (state.canScrollBackward || state.canScrollForward) }
         .horizontalScroll(state, enabled, reverseScrolling = reverseScrolling)

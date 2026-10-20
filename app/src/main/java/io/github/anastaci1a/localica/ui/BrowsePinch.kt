@@ -43,6 +43,10 @@ internal class BrowsePinchMotion {
     var disposed = false
     var capturing by mutableStateOf(false)
     var captureProblem = false
+    var transaction = 0L
+        private set
+    var committed = false
+    fun owns(generation: Long) = !disposed && transaction == generation && source != null
     fun failCapture() {
         // The preview has not been published. A held gesture can retire now;
         // a release already joining the readback owns the final cleanup.
@@ -69,6 +73,8 @@ internal class BrowsePinchMotion {
     var viewportWidth = 1f
     var rightToLeft = false
     fun clearTransaction() {
+        transaction++
+        committed = false
         held = false; fingerProgress = 0f; capturing = false; captureProblem = false
         source = null; target = null; focusKey = null
         focusTop = 0; focusFraction = 0f; focusEdge = 0
@@ -174,6 +180,23 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     onCommit: (BrowseStyle) -> Unit, onAnchor: (BrowseZoomAnchor?) -> Unit): Modifier {
     val captureLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    OnModalGestureCancellation {
+        val source = motion.source
+        if (source != null) {
+            val rollback = !motion.committed
+            val anchor = motion.focusKey?.let {
+                BrowseZoomAnchor(route, source, it, motion.focusTop, motion.focusFraction, motion.focusEdge)
+            }
+            motion.capture?.cancel(); motion.tracking?.cancel(); motion.settling?.cancel()
+            // Retire the generation before callbacks can start another transaction.
+            // Cancelled readback/settlement finally blocks must not clear a newer owner.
+            motion.clearTransaction()
+            if (rollback) {
+                onPreview(source)
+                onAnchor(anchor)
+            }
+        }
+    }
     DisposableEffect(motion) {
         motion.disposed = false
         onDispose { motion.dispose() }
@@ -190,23 +213,29 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
         },
         onRelease = { cancelled ->
             if (!motion.disposed && motion.source != null && motion.target != null) {
+                val generation = motion.transaction
                 motion.held = false
                 motion.tracking?.cancel()
                 motion.settling = scope.launch {
                     try {
                         motion.capture?.join()
-                        if (motion.disposed || motion.captureProblem) return@launch
+                        if (!motion.owns(generation) || motion.captureProblem) return@launch
                         val commit = !cancelled && motion.fingerProgress >= .35f
                         val destination = if (commit) motion.target else motion.source
                         if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
                         else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
                         if (destination != null) {
-                            if (cancelled) onPreview(destination) else onCommit(destination)
+                            if (cancelled) onPreview(destination) else {
+                                // A takeover after persistence only retires retained drawings;
+                                // it must not undo an already completed, genuine release.
+                                motion.committed = true
+                                onCommit(destination)
+                            }
                             motion.focusKey?.let { onAnchor(BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge)) }
                         }
                         // Keep retained drawings through the source-layout handoff.
                         withFrameNanos { }; withFrameNanos { }
-                    } finally { motion.clearTransaction() }
+                    } finally { if (motion.owns(generation)) motion.clearTransaction() }
                 }
             }
         }) { zoomIn, midpoint ->
@@ -216,6 +245,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
             motion.capturing = true
             motion.source = style
+            val generation = motion.transaction
             motion.target = next
             motion.targetColumns = galleryColumns(next.presentation, with(density) { width.toDp().value }, next.itemsPerRow)
             motion.held = true
@@ -282,19 +312,22 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         // virtualization changes the live rows during readback.
                         val highlights = motion.currentHighlights.toMap()
                         val image = captureLayer.pinchSnapshot(density, layoutDirection)
+                        if (!motion.owns(generation)) return@launch
                         drawings.forEachIndexed { i, (key, layer) -> motion.frozen[key] = FrozenBrowseItem(image, origins[i], layer.size,
                             highlights[key]?.let(::RetainedCurrentSongHighlight)) }
                     }
-                    onPreview(next)
+                    if (motion.owns(generation)) onPreview(next)
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                    if (!motion.disposed) { onAnchor(null); motion.failCapture() }
+                    if (motion.owns(generation)) { onAnchor(null); motion.failCapture() }
                     throw cancelled
                 } catch (failure: Exception) {
                     android.util.Log.w("BrowsePinch", "Source capture failed; retaining the original view", failure)
-                    onAnchor(null)
-                    motion.failCapture()
-                } finally { motion.capturing = false }
-                if (motion.held && !reducedMotion) {
+                    if (motion.owns(generation)) {
+                        onAnchor(null)
+                        motion.failCapture()
+                    }
+                } finally { if (motion.owns(generation)) motion.capturing = false }
+                if (motion.owns(generation) && motion.held && !reducedMotion) {
                     motion.tracking = scope.launch {
                         motion.progress.animateTo(motion.fingerProgress, androidx.compose.animation.core.spring(1f, 1600f))
                     }

@@ -160,6 +160,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
     var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var dismissalAttempt by remember { mutableIntStateOf(0) }
+    val gestures = rememberModalGestureScope()
+    DisposableEffect(gestures, visible, dismissalAttempt) {
+        if (visible) gestures.activate() else gestures.deactivate()
+        onDispose { gestures.deactivate() }
+    }
     val searchMotion = remember { SearchMorphMotion() }
     SideEffect { searchMotion.observer = searchObserver }
     var searchFlight by remember { mutableStateOf<SearchMorphFlight?>(null) }
@@ -183,6 +188,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         // composition can swallow a quick tap on a neighboring trigger.
         beginSearchReturn()
         modalWindow?.glassInput(false)
+        gestures.deactivate()
         onDismiss()
         dismissalAttempt++
     }
@@ -297,7 +303,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         parentPanels?.let { it.intValue++ }
         onDispose { parentPanels?.let { it.intValue-- } }
     }
-    Dialog(onDismissRequest = dismissNow, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { TextEditingFocusHost {
+    Dialog(onDismissRequest = dismissNow, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
         val reportSearchOpening = remember(window, searchOpeningGeneration) {
@@ -590,5 +596,5 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }
             }
         }
-    } }
+    } } }
 }

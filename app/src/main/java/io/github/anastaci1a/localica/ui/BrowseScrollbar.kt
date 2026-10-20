@@ -20,15 +20,30 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.library.TrackSort
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** Direct manipulation follows the finger; programmatic navigation uses ListMotion. */
 @Composable
 internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sort: TrackSort, modifier: Modifier = Modifier) {
     if (items.size < 40 || (!state.canScrollForward && !state.canScrollBackward)) return
-    val requests = remember { Channel<Int>(Channel.CONFLATED) }
-    LaunchedEffect(state) { for (index in requests) state.scrollToItem(index + 1) }
+    val owner = LocalModalGestures.current
+    val requests = remember { Channel<Pair<Int, Long?>>(Channel.CONFLATED) }
+    fun request(index: Int): Boolean {
+        if (owner?.blocked == true) return false
+        return requests.trySend(index to owner?.generation).isSuccess
+    }
+    LaunchedEffect(state, owner) {
+        for ((index, generation) in requests) {
+            // Cancelling one scroll mutation must not kill this request consumer.
+            // Requests queued by an old contact cannot run after modal dismissal.
+            launch {
+                if (owner?.blocked != true && generation == owner?.generation) state.scrollToItem(index + 1)
+            }.join()
+        }
+    }
     var dragging by remember { mutableStateOf(false) }
+    OnModalGestureCancellation { dragging = false }
     var target by remember { mutableIntStateOf(0) }
     val lastStart = items.lastIndex
     val fraction = if (!state.canScrollForward) 1f else ((state.firstVisibleItemIndex - 1).coerceAtLeast(0).toFloat() / lastStart).coerceIn(0f, 1f)
@@ -42,13 +57,13 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
         fun seek(y: Float) {
             dragY = y
             target = (((y - halfThumb) / travel).coerceIn(0f, 1f) * lastStart).roundToInt()
-            requests.trySend(target)
+            request(target)
         }
         Box(Modifier.align(Alignment.CenterEnd).width(20.dp).fillMaxHeight().testTag("browse-scrollbar")
             .semantics {
                 contentDescription = "Scroll list"
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
-                setProgress { requests.trySend((it.coerceIn(0f, 1f) * lastStart).roundToInt()); true }
+                setProgress { request((it.coerceIn(0f, 1f) * lastStart).roundToInt()) }
             }
             .pointerInput(lastStart, travel) {
                 detectVerticalDragGestures(onDragStart = { dragging = true; seek(it.y) },

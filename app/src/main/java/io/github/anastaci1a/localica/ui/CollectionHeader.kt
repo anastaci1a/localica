@@ -82,10 +82,11 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
 
 @Composable
 internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<String>, onSelection: (List<String>) -> Unit) {
+    val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     Column(Modifier.fillMaxWidth()) {
         Text("Albums", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
         SelectionViewport(Modifier.fillMaxWidth()) { overscroll ->
-        LazyRow(Modifier.nestedScroll(HorizontalGestureOwner), overscrollEffect = overscroll,
+        LazyRow(Modifier.modalScroll(scroll).nestedScroll(HorizontalGestureOwner), state = scroll, overscrollEffect = overscroll,
             contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "all-albums") {
                 Column(Modifier.width(136.dp).selectionLens(selectedIds.isEmpty(), false).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
