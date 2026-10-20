@@ -1,16 +1,16 @@
 {
   "files": {
     "motion.mp4": {
-      "bytes": 114593,
-      "sha256": "dcf07352522e3a1ac1fa31e23948567d3da4442679f30f18f2879d02acc1542d"
+      "bytes": 114763,
+      "sha256": "dc84acc0f5a7ef29b7cdf579a115992ab6b4afb6f6c6464ed73f898aac603e46"
     },
     "motion.gif": {
-      "bytes": 1119397,
-      "sha256": "58dfb66723626542cc668967d21df7797bf4d616899687e790f01cabc04ca9c8"
+      "bytes": 1112278,
+      "sha256": "62ad255b58405f76ead71dbeec2b656f21f4971b3df7743b249daa51f33d74b6"
     },
     "comparison.png": {
-      "bytes": 70517,
-      "sha256": "d8fd521f035b5e1ae0bff7f468959cd49a52d722388012ed6d8f5bd0f1d8032a"
+      "bytes": 70541,
+      "sha256": "9dfd7fa9bf26953a60f8befc0ea54f8e9295e8ece9dcf739903751973b3cfad3"
     }
   },
   "native_size": [
@@ -23,29 +23,29 @@
   "scores": {
     "glass": {
       "pixels": 15289,
-      "rmse": 10.036589622497559
+      "rmse": 9.970083236694336
     },
     "rim": {
       "pixels": 8364,
-      "rmse": 13.029637336730957
+      "rmse": 12.946698188781738
     },
     "held": {
       "pixels": 2804,
-      "rmse": 13.613531112670898
+      "rmse": 13.529698371887207
     },
     "interior": {
       "pixels": 6925,
-      "rmse": 4.165192604064941
+      "rmse": 4.124717712402344
     },
-    "ssim": 0.967451274394989,
-    "loss": 121.444626613318
+    "ssim": 0.9690613746643066,
+    "loss": 119.86689002005068
   },
   "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
   "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Foreground coverage is reference-derived.",
   "foreground_response": [
     {
       "pixels": 4952,
-      "rmse": 4.773810033020626,
+      "rmse": 4.773807604353187,
       "parameters": [
         [
           0.9741703882539832,
