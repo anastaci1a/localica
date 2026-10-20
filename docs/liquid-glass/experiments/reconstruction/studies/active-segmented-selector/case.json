@@ -35,8 +35,8 @@
     "observed.png": "observed-16.400.png"
   },
   "source_sha256": {
-    "source.png": "5a840da497409a0985689b9e2c9048382ed1ae8a49f36ca0628db38f43314f74",
-    "exterior.png": "854742d6bede6c4c19fb748a4f7a9e7a56a52351273b5c85861b98dfea5ba6fe",
+    "source.png": "9318e297ea9b8d166373bbfe662c792c76cbf8134e51941797951025bb065ac7",
+    "exterior.png": "d1543fcef1eb07c09268a12a079104b30e213b5bfc803bbbe1227650ba10a179",
     "target.png": "ff3d2bcba20652c80f4ad25834a98fbbe708ef87668f8c70e70932e45c33ed1b",
     "known.png": "a2f32becc8c9f3b819da2f3a7c67eff1606bdce63ed1f5704a4883ad08dfd8e3",
     "observed.png": "dfab9753fa42ddc4f537e6d361345651d542c392f9839f0bb685e35b36c76e78"
@@ -45,16 +45,17 @@
   "source_observation_mask": "observed.png",
   "allow_estimated_background": true,
   "background_estimate": {
-    "method": "Symmetric capsule from exposed track edges; solid SF font outlines and sampled color. Incident text is selected red; a separate exterior retains gray text. No photographed lens pixels enter either modeled label.",
+    "method": "Symmetric capsule from both exposed end contours, excluding a0.6L neighborhood of the lens to avoid its shadow; solid SF font outlines and sampled color. Incident text is selected red; a separate exterior retains gray text. No photographed lens pixels enter either modeled label.",
     "limits": "Hidden track, text recoloring before refraction, font family/weight and layout transfer are estimates. Optical scores are conditional on these inputs, not proof of Apple geometry or compositing.",
     "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+    "track_exclusion_over_L": 0.6,
     "track_pose": [
-      957.4232228790313,
-      551.877921877281,
-      753.9282020000145,
-      116.95702218136061
+      957.4502833178284,
+      546.528019815616,
+      754.2856992978827,
+      111.35409130004376
     ],
-    "track_contour_rmse": 35.12153457310669,
+    "track_contour_rmse": 0.50623443086781,
     "lens_contour_rmse": 0.9264910718656283,
     "font_calibration": [
       {
