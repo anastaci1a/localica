@@ -35,12 +35,15 @@ def page_source(registered,target,contaminated):
 def slider_source(target,uncovered):
     excluded=np.zeros(uncovered.shape[:2],bool);excluded[500:610,540:1450]=True
     source,evidence=paper(uncovered,excluded)
-    # Native-resolution antialiased round tracks. Uncovered portions determine
-    # colors/thickness; the hidden blue endpoint remains an explicit estimate.
-    scale=4;canvas=np.uint8(np.clip(source,0,1)*255)
-    canvas=cv2.resize(canvas,None,fx=scale,fy=scale,interpolation=cv2.INTER_LINEAR)
-    for end,color in [(1378,np.median(target[544:556,1000:1250],axis=(0,1))),(719,np.median(target[544:556,580:625],axis=(0,1)))]:
-        rgb=tuple(int(round(float(c)*255)) for c in color)
-        cv2.line(canvas,(580*scale,550*scale),(end*scale,550*scale),rgb,21*scale,cv2.LINE_AA)
-        for x in [580,end]:cv2.circle(canvas,(x*scale,550*scale),int(10.5*scale),rgb,-1,cv2.LINE_AA)
-    return cv2.resize(canvas,(1920,1080),interpolation=cv2.INTER_AREA).astype(np.float32)/255,evidence
+    # Exposed blue span is y540..559 (20px), centered at 549.5. The old OpenCV
+    # 21px stroke rasterized to a 22px span, inflating width before any optics.
+    # Integrate the same continuous capsule used to define the input geometry.
+    # The covered blue endpoint is still an explicit estimate, not observed.
+    for end,color in [(1377.5,np.median(target[544:556,1000:1250],axis=(0,1))),(718.5,np.median(target[544:556,580:625],axis=(0,1)))]:
+        x0,x1=568,int(np.ceil(end+12));y0,y1=537,563
+        yy,xx=np.mgrid[y0:y1:.25,x0:x1:.25];xx=xx-.375;yy=yy-.375
+        dx=np.maximum(np.maximum(579.5-xx,xx-end),0)
+        alpha=(dx*dx+(yy-549.5)**2<=100).reshape(y1-y0,4,x1-x0,4).mean((1,3))[...,None]
+        source[y0:y1,x0:x1]=source[y0:y1,x0:x1]*(1-alpha)+color*alpha
+    evidence['track_geometry']={'center_y':549.5,'diameter':20.,'start_center_x':579.5,'gray_end_center_x':1377.5,'estimated_blue_end_center_x':718.5,'coverage_subpixels_per_axis':4}
+    return source,evidence

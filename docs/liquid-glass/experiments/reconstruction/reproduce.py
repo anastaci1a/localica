@@ -72,7 +72,7 @@ def prepare(folder,name,case):
         # endpoint is estimated from the nearly registered core, not claimed known.
         uncovered,source_meta=frame(folder,'284',1090.5)
         source,evidence=slider_source(target,uncovered)
-        registration={'method':'page field from resting control frame before active lens appears; analytical antialiased 21px round track; hidden fill endpoint 719px inferred from core','source_frame':source_meta,'page_field':evidence,'exterior_mae_255':None}
+        registration={'method':'page field from resting control frame; integrated 20px capsule track centered at y549.5; hidden fill endpoint718.5px remains estimated','source_frame':source_meta,'page_field':evidence,'exterior_mae_255':None}
     else:
         source,source_meta=frame(folder,case['video'],case['source_time']);source,registration=register(source,target,case);registration['source_frame']=source_meta
     return source,target,meta,registration
