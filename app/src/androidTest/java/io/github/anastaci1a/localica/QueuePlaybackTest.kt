@@ -159,7 +159,8 @@ class QueuePlaybackTest {
                 await { !queues.state.value.settings.preloadNext }
                 assertFalse(QueuePreferences(context).read().preloadNext)
                 queues.settings(QueueSettings(switching = QueueSwitch.Paused, maximum = 2))
-                playback.play(tracks[0])
+                // Retention applies to a distinct request; replaying the saved source now reuses it.
+                queues.tap(listOf(tracks[0]), 0, sourceName = "Another source")
                 await { queues.state.value.pending != null }
                 val activeBeforeCancel = queues.state.value.library.activeId
                 queues.cancelCreation()
@@ -167,7 +168,7 @@ class QueuePlaybackTest {
                 assertEquals(activeBeforeCancel, queues.state.value.library.activeId)
                 assertEquals(2, queues.state.value.library.queues.size)
                 assertTrue(playback.state.value.isPlaying)
-                playback.play(tracks[0])
+                queues.tap(listOf(tracks[0]), 0, sourceName = "Another source")
                 await { queues.state.value.pending != null }
                 queues.confirmCreation(setOf(queues.state.value.pending!!.suggestedRemoval!!))
                 await { queues.state.value.pending == null && queues.state.value.library.activeId != activeBeforeCancel }
