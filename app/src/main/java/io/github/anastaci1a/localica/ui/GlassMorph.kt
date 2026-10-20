@@ -362,9 +362,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (page) androidx.compose.ui.unit.IntOffset(with(density) { (28.dp.toPx() * (1f - p)).roundToInt() }, 0)
                         else androidx.compose.ui.unit.IntOffset(mix(if (detached) x else start.left, x).roundToInt(),
                             mix(if (detached) y + margin * 2 else start.top, y).roundToInt())
-                    }.graphicsLayer {
-                        // Native readiness survives logical close; this popup must still own drawing.
-                        alpha = if (detached) p else if (present && window != null && readyWindow === window) 1f else 0f
                     }.drawWithContent {
                         // Match the trigger's draw-space deformation. A layout-layer
                         // scale changes global sampling coordinates, causing a small
@@ -374,6 +371,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             this@drawWithContent.drawContent()
                         }
                     }
+                        .glassShadowOpacity {
+                            // Keep this window's padded shadow in the same draw pass.
+                            // A tight alpha graphics layer clips the moving field on
+                            // legacy Android and changes it when the trigger takes over.
+                            if (detached) p else if (present && window != null && readyWindow === window) 1f else 0f
+                        }
                         .clearGlassShadow(LocalGlassAppearance.current.shadowStrength *
                             (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else if (detached) p else 1f),
                             LocalGlassAppearance.current.shadowSpread, radius)
