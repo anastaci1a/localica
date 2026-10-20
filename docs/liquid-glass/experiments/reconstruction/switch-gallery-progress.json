@@ -1,14 +1,14 @@
 {
   "status": "In progress, not a final paired study",
-  "rendering_code_commit": "12cb243dfddab8a9b9147799bd34cd3a4f0c68da",
+  "rendering_code_commit": "31b18c8526da771fc44903930bbc8067c3afeda8",
   "gallery_script_sha256": "c261e82aa384b4c369b6a67e73ccf0b772e908ab7c8c094eac2bd1e5dbb909c5",
-  "state_record_sha256": "1970f6d1cb89b48c7ae1e7235d0cb0a92e3301ffdca7cefb3e143497e0ae23c1",
+  "state_record_sha256": "ff2b44301117bf02978960b0d789887402277428b4c10ad6523ee87a8f7d46e4",
   "single_passes": 24,
-  "paired_passes": 8,
+  "paired_passes": 9,
   "output_scale": 4,
   "recipe": {
     "parameters": {
-      "sigma": 0.01484674420027103,
+      "sigma": 0.019465681844612833,
       "amplitude": 0.7839488678764915,
       "band": 0.41709079115813363,
       "power": 2.793583791362869,
@@ -76,42 +76,42 @@
       {
         "glass": {
           "pixels": 240456,
-          "rmse": 12.630545616149902
+          "rmse": 12.61695384979248
         },
         "rim": {
           "pixels": 70466,
-          "rmse": 21.90899658203125
+          "rmse": 21.876811981201172
         },
         "held": {
           "pixels": 61420,
-          "rmse": 13.88744068145752
+          "rmse": 13.92994499206543
         },
         "interior": {
           "pixels": 169990,
-          "rmse": 5.165726184844971
+          "rmse": 5.175279140472412
         },
-        "ssim": 0.9597131609916687,
-        "loss": 255.67271716258756
+        "ssim": 0.958936870098114,
+        "loss": 255.00973785170345
       },
       {
         "glass": {
           "pixels": 208969,
-          "rmse": 18.19387435913086
+          "rmse": 18.0498104095459
         },
         "rim": {
           "pixels": 60968,
-          "rmse": 28.162132263183594
+          "rmse": 28.045942306518555
         },
         "held": {
           "pixels": 53183,
-          "rmse": 17.939973831176758
+          "rmse": 17.77536964416504
         },
         "interior": {
           "pixels": 148001,
-          "rmse": 11.860135078430176
+          "rmse": 11.661084175109863
         },
-        "ssim": 0.9253391623497009,
-        "loss": 469.6436530198014
+        "ssim": 0.9291901588439941,
+        "loss": 464.0294230325562
       }
     ]
   },
@@ -127,29 +127,29 @@
       "native": {
         "glass": {
           "pixels": 240456,
-          "rmse": 12.630545616149902
+          "rmse": 12.61695384979248
         },
         "rim": {
           "pixels": 70466,
-          "rmse": 21.90899658203125
+          "rmse": 21.876811981201172
         },
         "held": {
           "pixels": 61420,
-          "rmse": 13.88744068145752
+          "rmse": 13.92994499206543
         },
         "interior": {
           "pixels": 169990,
-          "rmse": 5.165726184844971
+          "rmse": 5.175279140472412
         },
-        "ssim": 0.9597131609916687,
-        "loss": 255.67271716258756
+        "ssim": 0.958936870098114,
+        "loss": 255.00973785170345
       },
       "source_support": {
         "source_defined_fraction": 1.0,
         "gaussian_3sigma_defined_fraction": 1.0,
         "source_observed_fraction": 0.0,
         "gaussian_3sigma_observed_fraction": 0.0,
-        "source_gaussian_radius_native_px": 10
+        "source_gaussian_radius_native_px": 13
       },
       "background_estimate": {
         "method": "Symmetric vector capsule fitted from resting-track outer contours; active-frame color measured from exposed track. Distant unoccluded RGB is copied; hidden/halo-adjacent input is modeled.",
@@ -231,29 +231,29 @@
       "native": {
         "glass": {
           "pixels": 208969,
-          "rmse": 18.19387435913086
+          "rmse": 18.0498104095459
         },
         "rim": {
           "pixels": 60968,
-          "rmse": 28.162132263183594
+          "rmse": 28.045942306518555
         },
         "held": {
           "pixels": 53183,
-          "rmse": 17.939973831176758
+          "rmse": 17.77536964416504
         },
         "interior": {
           "pixels": 148001,
-          "rmse": 11.860135078430176
+          "rmse": 11.661084175109863
         },
-        "ssim": 0.9253391623497009,
-        "loss": 469.6436530198014
+        "ssim": 0.9291901588439941,
+        "loss": 464.0294230325562
       },
       "source_support": {
         "source_defined_fraction": 1.0,
         "gaussian_3sigma_defined_fraction": 1.0,
         "source_observed_fraction": 0.0,
         "gaussian_3sigma_observed_fraction": 0.0,
-        "source_gaussian_radius_native_px": 9
+        "source_gaussian_radius_native_px": 12
       },
       "background_estimate": {
         "method": "Symmetric vector capsule fitted from resting-track outer contours; active-frame color measured from exposed track. Distant unoccluded RGB is copied; hidden/halo-adjacent input is modeled.",
