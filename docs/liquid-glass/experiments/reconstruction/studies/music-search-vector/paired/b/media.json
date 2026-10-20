@@ -1,0 +1,62 @@
+{
+  "files": {
+    "motion.mp4": {
+      "bytes": 937747,
+      "sha256": "4f19eb6f96a5cdb063a23d5f9e2271cbaabc1a2de89844397a37574d4a7b58c2"
+    },
+    "motion.gif": {
+      "bytes": 8304673,
+      "sha256": "ca8e8c8b121dc1263a409cf75e4d5ff9e9bc2ea1ed4eca3e43ca75971fe7f851"
+    },
+    "comparison.png": {
+      "bytes": 563744,
+      "sha256": "a82e7f018a8f5ec2b1eda4da3d324dafb8e909c3582d26f72670dbdc0fdd7e86"
+    }
+  },
+  "native_size": [
+    240,
+    235
+  ],
+  "output_size": [
+    960,
+    940
+  ],
+  "output_scale": 4,
+  "frames": 180,
+  "fps": 30,
+  "travel_over_L": 0.5056179775280899,
+  "scores": {
+    "glass": {
+      "pixels": 14904,
+      "rmse": 6.5921311378479
+    },
+    "rim": {
+      "pixels": 8364,
+      "rmse": 8.232823371887207
+    },
+    "held": {
+      "pixels": 4763,
+      "rmse": 5.967041492462158
+    },
+    "interior": {
+      "pixels": 6540,
+      "rmse": 3.5141570568084717
+    },
+    "ssim": 0.9758468866348267,
+    "loss": 50.753149258816364
+  },
+  "motion_support": {
+    "requested_native_px": 45.0,
+    "actual_native_px": 45.0,
+    "minimum_scored_lookup_3sigma_observed_fraction": 1.0,
+    "minimum_whole_shape_lookup_observed_fraction": 1.0,
+    "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
+  },
+  "presentation_completion_native_delta": {
+    "max_abs_rgb": 0.0,
+    "rmse": 0.0
+  },
+  "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+  "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source artwork/text retain their original information quality; declared SVG icons are rerasterized, other coverage remains reference-derived."
+}
