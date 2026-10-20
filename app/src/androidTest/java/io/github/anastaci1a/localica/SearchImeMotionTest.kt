@@ -1,8 +1,16 @@
 package io.github.anastaci1a.localica
 
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,7 +50,9 @@ class SearchImeMotionTest {
     private lateinit var anchor: GlassAnchor
     private var popupView: android.view.View? = null
     private var keyboardSettled = true
+    private var motionSpeed = 1f
     private val samples = mutableListOf<SearchMorphSample>()
+    private val keyboardSetup = mutableListOf<String>()
 
     @Before fun prepareWindow() {
         compose.activityRule.scenario.onActivity {
@@ -56,12 +66,15 @@ class SearchImeMotionTest {
         val root = additional?.let { java.io.File(it) } ?: requireNotNull(compose.activity.getExternalFilesDir(null))
         val directory = java.io.File(root, "search-ime-motion").apply { mkdirs() }
         java.io.File(directory, "${name.methodName}.txt").writeText(compose.runOnUiThread { samples.toList() }.joinToString("\n"))
+        java.io.File(directory, "${name.methodName}-keyboard-setup.txt").writeText(keyboardSetup.joinToString("\n"))
     }
 
     private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false) {
         text = initialQuery
         keyboardAllowed = !deferKeyboard
         compose.setContent { LocalicaTheme {
+            val speed = LocalMotionSpeed.current
+            SideEffect { motionSpeed = speed }
             CompositionLocalProvider(LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides { samples += it }) {
                 anchor = rememberGlassAnchor()
@@ -101,12 +114,20 @@ class SearchImeMotionTest {
         compose.mainClock.autoAdvance = false
     }
 
-    private fun advanceUntil(predicate: () -> Boolean) {
+    private fun advanceUntil(
+        wallTimeoutMillis: Long = 5000,
+        virtualTimeoutMillis: Long = Long.MAX_VALUE,
+        predicate: () -> Boolean,
+    ) {
         val start = compose.mainClock.currentTime
+        val wallStart = SystemClock.uptimeMillis()
         try {
-            compose.waitUntil(5000) {
+            compose.waitUntil(wallTimeoutMillis) {
                 compose.mainClock.advanceTimeBy(32)
-                compose.runOnUiThread(predicate)
+                val satisfied = compose.runOnUiThread(predicate)
+                if (!satisfied && compose.mainClock.currentTime - start >= virtualTimeoutMillis)
+                    throw ComposeTimeoutException("Animation exceeded its ${virtualTimeoutMillis}ms virtual budget")
+                satisfied
             }
         } catch (timeout: ComposeTimeoutException) {
             val state = compose.runOnUiThread {
@@ -114,13 +135,25 @@ class SearchImeMotionTest {
                     "running=${anchor.contact.expansion.isRunning} keyboardSettled=$keyboardSettled " +
                     "placedFrames=${samples.size} last=${samples.lastOrNull()}"
             }
-            throw AssertionError("Search readiness timed out after ${compose.mainClock.currentTime - start}ms " +
-                "of virtual frames: $state", timeout)
+            throw AssertionError("Search readiness timed out after ${SystemClock.uptimeMillis() - wallStart}ms wall " +
+                "and ${compose.mainClock.currentTime - start}ms virtual " +
+                "(budgets: wall=$wallTimeoutMillis, virtual=$virtualTimeoutMillis): $state", timeout)
         }
     }
 
     private fun opened() {
-        advanceUntil {
+        // Native focus/insets use real time; the spring uses the controlled clock.
+        // Slow API26 rendering can consume five wall seconds before one virtual
+        // second has elapsed, so give the started spring its actual frame budget.
+        advanceUntil { anchor.contact.expansion.isRunning || anchor.contact.expansion.value == 1f }
+        val springMillis = compose.runOnUiThread {
+            val expansion = anchor.contact.expansion
+            (TargetBasedAnimation(
+                glassMorphSpring(motionSpeed), Float.VectorConverter, expansion.value, 1f,
+                AnimationVector1D(expansion.velocity),
+            ).durationNanos + 999_999L) / 1_000_000L
+        }
+        advanceUntil(wallTimeoutMillis = 20000, virtualTimeoutMillis = springMillis + 256L) {
             // Position callbacks need not repeat when the final spring tick only
             // changes metadata: observe the actual clock and last placed geometry.
             anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning &&
@@ -325,6 +358,97 @@ class SearchImeMotionTest {
             Regex("\\bmIsInputViewShown=(true|false)\\b").find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1))
     }
 
+    private fun prepareDockedKeyboard() {
+        lateinit var editor: EditText
+        lateinit var root: FrameLayout
+        val input = requireNotNull(compose.activity.getSystemService(InputMethodManager::class.java))
+        compose.runOnUiThread {
+            root = FrameLayout(compose.activity).apply { isFocusableInTouchMode = true }
+            editor = EditText(compose.activity).apply { setSingleLine() }
+            root.addView(editor, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+            compose.activity.setContentView(root)
+            editor.requestFocus()
+        }
+        fun record(label: String) {
+            keyboardSetup += "${SystemClock.uptimeMillis()} $label " + compose.runOnUiThread {
+                val insets = ViewCompat.getRootWindowInsets(editor)
+                "focused=${editor.isFocused} windowFocused=${editor.hasWindowFocus()} " +
+                    "visible=${insets?.isVisible(WindowInsetsCompat.Type.ime())} " +
+                    "ime=${insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom} " +
+                    "navigation=${insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom}"
+            }
+        }
+        fun awaitNativeInputView(shown: Boolean, timeoutMillis: Long) {
+            var nextShowRequest = 0L
+            try {
+                compose.waitUntil(timeoutMillis) {
+                    val placed = compose.runOnUiThread {
+                        val insets = ViewCompat.getRootWindowInsets(editor) ?: return@runOnUiThread false
+                        val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                        val navigation = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+                        if (shown) insets.isVisible(WindowInsetsCompat.Type.ime()) && ime > navigation
+                        else !insets.isVisible(WindowInsetsCompat.Type.ime()) && ime == 0
+                    }
+                    if (shown && !placed && SystemClock.uptimeMillis() >= nextShowRequest) {
+                        // A request rejected under the old policy need not replay
+                        // when its observer arrives. Retry only this setup editor.
+                        val requested = compose.runOnUiThread { input.showSoftInput(editor, 0) }
+                        record("native-show-request=$requested")
+                        nextShowRequest = SystemClock.uptimeMillis() + 1000L
+                    }
+                    placed && Regex("\\bmIsInputViewShown=(true|false)\\b")
+                        .find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1) == shown.toString()
+                }
+            } catch (timeout: ComposeTimeoutException) {
+                record("native-input-view-$shown-timeout")
+                val state = keyboardSetup.last()
+                keyboardSetup += shell("dumpsys -t 2 input_method")
+                throw AssertionError("Native keyboard setup did not reach shown=$shown: $state", timeout)
+            }
+            record("native-input-view-$shown-settled")
+        }
+        var failure: Throwable? = null
+        try {
+            record("installed-native-editor")
+            compose.waitUntil(5000) {
+                compose.runOnUiThread {
+                    editor.isAttachedToWindow && editor.hasWindowFocus() && editor.isFocused && input.isActive(editor)
+                }
+            }
+            // A shell setting write can notify a background IME after Android's
+            // 10-second observer delay (AOSP Settings fix 632fd439248). Prove the
+            // real input view and occlusion here, before measuring search motion.
+            awaitNativeInputView(shown = true, timeoutMillis = 15000)
+        } catch (error: Throwable) {
+            failure = error
+            throw error
+        } finally {
+            try {
+                compose.runOnUiThread {
+                    root.requestFocus()
+                    input.hideSoftInputFromWindow(editor.windowToken, 0)
+                }
+                awaitNativeInputView(shown = false, timeoutMillis = 5000)
+            } catch (cleanup: Throwable) {
+                if (failure != null) failure.addSuppressed(cleanup) else {
+                    failure = cleanup
+                    throw cleanup
+                }
+            } finally {
+                try {
+                    compose.runOnUiThread {
+                        (root.parent as? ViewGroup)?.removeView(root)
+                        assertEquals("The Compose test rule requires an empty activity content host", 0,
+                            compose.activity.findViewById<ViewGroup>(android.R.id.content).childCount)
+                    }
+                } catch (removal: Throwable) {
+                    if (failure != null) failure.addSuppressed(removal) else throw removal
+                }
+            }
+        }
+    }
+
     private fun withDockedKeyboard(block: () -> Unit) = withNativeAnimations {
         val key = "show_ime_with_hard_keyboard"
         val original = shell("settings get secure $key")
@@ -332,9 +456,8 @@ class SearchImeMotionTest {
         try {
             shell("settings put secure $key 1")
             assertEquals("1", shell("settings get secure $key"))
-            // The IME's private cached policy need not refresh before an editor
-            // binds. Assert the setting here and its real input view/occlusion in
-            // each fixture after focus, rather than polling that inactive cache.
+            keyboardSetup += "${SystemClock.uptimeMillis()} configured $key=1 (original=$original)"
+            prepareDockedKeyboard()
             block()
         } finally {
             if (original == "null") shell("settings delete secure $key") else shell("settings put secure $key $original")
