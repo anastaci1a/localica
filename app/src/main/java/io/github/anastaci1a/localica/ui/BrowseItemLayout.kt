@@ -24,7 +24,7 @@ import io.github.anastaci1a.localica.browse.*
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: BrowseCellGeometry,
-    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0) {
+    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0, loadingReveal: BrowseLoadingCell? = null, artistOnlyLoading: Boolean = false) {
     val gallery = style.presentation != Presentation.List
     val from = pinch?.visualSource
     val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
@@ -35,7 +35,17 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     // Read by the graphics layer: measuring an endpoint updates its
     // radius in the same layout pass without recomposing or changing artwork identity.
     val artCorner = remember { mutableFloatStateOf(0f) }
-    val duration = if (reducedMotion || from != null) 0 else 350
+    val duration = if (reducedMotion || from != null || loadingReveal != null) 0 else 350
+    val artist = item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist,
+        io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)
+    val loadingInformation = showInformation && style.extraInfo != ExtraInfo.None
+    val infoLine = MaterialTheme.typography.bodySmall.lineHeight
+    fun Modifier.reveal() = if (loadingReveal == null) this else graphicsLayer { alpha = loadingReveal.alpha }
+    fun Modifier.artShape() = graphicsLayer {
+        shape = RoundedCornerShape(browseLoadingArtCorner(artCorner.floatValue, size.minDimension,
+            artist, artistOnlyLoading, loadingReveal?.alpha ?: 1f))
+        clip = true
+    }
     fun trailing(value: BrowseStyle) = value.presentation == Presentation.List && value.listSize.trailingInformation
     val titleSize by animateFloatAsState(style.browseTitleSize(geometry.columns).toFloat(), tween(duration), label = "Browse title size")
     val titleLine by animateFloatAsState(style.browseTitleLine(geometry.columns).toFloat(), tween(duration), label = "Browse title line")
@@ -46,22 +56,23 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     Layout(modifier = Modifier.fillMaxWidth(), content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
             item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).testTag("browse-art-${item.key}")) {
-            if (numberAlpha > 0f) Text(requireNotNull(trackNumber), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha }.wrapContentSize(),
+            if (numberAlpha > 0f) Text(requireNotNull(trackNumber), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (numberAlpha < 1f)
                 MediaArtwork(item.coverUris, Modifier.fillMaxSize().graphicsLayer {
-                    alpha = 1f - numberAlpha
-                    shape = artworkShape(item.ref.kind, RoundedCornerShape(artCorner.floatValue))
+                    alpha = (1f - numberAlpha) * (loadingReveal?.alpha ?: 1f)
+                    shape = RoundedCornerShape(browseLoadingArtCorner(artCorner.floatValue, size.minDimension,
+                        artist, artistOnlyLoading, loadingReveal?.alpha ?: 1f))
                     clip = true
-                }, shape = artworkShape(item.ref.kind, androidx.compose.ui.graphics.RectangleShape))
+                }, shape = androidx.compose.ui.graphics.RectangleShape)
         }
-        Box(Modifier.morph().testTag("browse-text-${item.key}")) {
+        Box(Modifier.morph().reveal().testTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, progress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (trackNumber != null) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
                 maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis)
         }
-        Box(Modifier.morph().testTag("browse-info-${item.key}")) {
+        Box(Modifier.morph().reveal().testTag("browse-info-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(informationParagraph,
                 if (showInformation) item.information(style, inheritedInformation) else null, progress,
                 if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified)
@@ -69,7 +80,14 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                 color = if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified,
                 style = MaterialTheme.typography.bodySmall, maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis) }
         }
-        Box(Modifier.testTag("browse-menu-${item.key}")) { menu(!gallery) }
+        Box(Modifier.reveal().testTag("browse-menu-${item.key}")) { menu(!gallery) }
+        if (loadingReveal != null) {
+        Box(Modifier.artShape().testTag("browse-loading-art-${item.key}")) {
+            BrowseLoadingShape(Modifier.fillMaxSize(), { 0f }) { 1f - (loadingReveal?.alpha ?: 1f) }
+        }
+        BrowseLoadingShape(Modifier.testTag("browse-loading-title-${item.key}"), { artCorner.floatValue }) { 1f - (loadingReveal?.alpha ?: 1f) }
+        BrowseLoadingShape(Modifier.testTag("browse-loading-info-${item.key}"), { artCorner.floatValue }) { if (loadingInformation) 1f - (loadingReveal?.alpha ?: 1f) else 0f }
+        }
     }) { children, constraints ->
         if (measureEndpoints != null) {
             val width = (constraints.maxWidth - geometry.contentInset.dp.roundToPx() * 2).coerceAtLeast(0)
@@ -88,6 +106,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                 mix(source.information?.size?.height ?: 0, target.information?.size?.height ?: 0).coerceAtLeast(0)))
             val actions = children[3].measure(Constraints.fixed(mix(source.menuWidth, target.menuWidth).coerceAtLeast(0),
                 mix(source.menuHeight, target.menuHeight).coerceAtLeast(0)))
+            children.drop(4).forEach { it.measure(Constraints.fixed(0, 0)) }
             return@Layout layout(constraints.maxWidth, target.height) {
                 art.placeRelative(mix(source.artX, target.artX), mix(source.artY, target.artY))
                 text.placeRelative(mix(source.titleX, target.titleX), mix(source.titleY, target.titleY))
@@ -101,10 +120,24 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         val information = children[2].measure(Constraints(maxWidth = metrics.informationLimit))
         val textWidth = metrics.titleWidth(information.width)
         val text = children[1].measure(Constraints.fixedWidth(textWidth))
-        val placement = metrics.place(text.height, information.width, information.height)
+        val reserve = if (from == null) loadingReveal?.reservation ?: 0f else 0f
+        val reservedTitle = maxOf(text.height, metrics.titleLine.sp.roundToPx() * metrics.lines)
+        val reservedInfo = if (loadingInformation) maxOf(information.height, infoLine.roundToPx() * metrics.lines) else information.height
+        fun retained(real: Int, reserved: Int) = (real + (reserved - real) * reserve).toInt()
+        val placement = metrics.place(retained(text.height, reservedTitle), information.width,
+            retained(information.height, reservedInfo))
         val art = children[0].measure(Constraints.fixed(metrics.art, metrics.art))
         val actions = children[3].measure(Constraints.fixed(metrics.menu, placement.menuHeight))
+        val blankArt = children.getOrNull(4)?.measure(Constraints.fixed(metrics.art, metrics.art))
+        val blankInfoWidth = metrics.loadingInformationWidth(loadingInformation)
+        val blankTitle = children.getOrNull(5)?.measure(Constraints.fixed(metrics.titleWidth(blankInfoWidth), reservedTitle))
+        val blankInfo = children.getOrNull(6)?.measure(Constraints.fixed(blankInfoWidth, if (loadingInformation) infoLine.roundToPx() else 0))
+        val blankPlacement = metrics.place(retained(text.height, reservedTitle), blankInfoWidth,
+            retained(information.height, reservedInfo))
         layout(constraints.maxWidth, placement.height) {
+            blankArt?.placeRelative(placement.artX, placement.artY)
+            blankTitle?.placeRelative(placement.titleX, placement.titleY)
+            blankInfo?.placeRelative(blankPlacement.infoX, blankPlacement.infoY)
             art.placeRelative(placement.artX, placement.artY)
             text.placeRelative(placement.titleX, placement.titleY)
             information.placeRelative(placement.infoX, placement.infoY)
