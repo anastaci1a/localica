@@ -16,8 +16,10 @@ import kotlinx.coroutines.delay
 /** A watchdog for rejected/unavailable seeks, never a delay on successful acknowledgement. */
 internal const val SeekAcknowledgementTimeoutMs = 2_000L
 
+/** A newer same-connection seek also supersedes this request if flow receipts coalesce. */
 internal class PendingSeek(val positionMs: Long, val requestId: Long, val playbackVisit: String?) {
-    fun acknowledgedBy(receipt: SeekAcknowledgement?): Boolean = receipt?.requestId == requestId && receipt.playbackVisit == playbackVisit
+    fun acknowledgedBy(receipt: SeekAcknowledgement?): Boolean = receipt != null &&
+        receipt.requestId >= requestId && receipt.playbackVisit == playbackVisit
 }
 
 /** Finger preview and committed-but-unacknowledged playback have separate ownership. */
