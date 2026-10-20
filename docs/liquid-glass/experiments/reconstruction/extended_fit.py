@@ -24,11 +24,13 @@ STAGES = {
  8: ('Monotone input brightness response', ['gamma','sigma']),
  9: ('Directional thin-rim and broad lighting', ['rim_width','thin_width']),
  10: ('Joint optical and scattering settlement', ['sigma','post_sigma','tangent','tangent_band','core_x','core_y','gamma']),
+ 11: ('Measured silhouette and optical-boundary alignment', ['shape_dx','shape_dy','half_x_delta','half_y_delta','radius_delta']),
 }
 BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               tangent=(0,.45), tangent_band=(.03,1), core_x=(0,.025),core_y=(0,.18),
               post_sigma=(0,3), coupling=(0,1),gamma=(.65,1.55),
               rim_width=(.008,.30), thin_width=(.003,.05),
+              shape_dx=(-.05,.05),shape_dy=(-.05,.05),half_x_delta=(-.05,.05),half_y_delta=(-.05,.05),radius_delta=(-.05,.05),
               **{f'c{i}':(0,2.5) for i in range(7)})
 
 
@@ -36,6 +38,7 @@ def initial():
     p=dict(sigma=0.,amplitude=0.,band=.35,power=2.2,tangent=0.,tangent_band=.4,
            core_x=0.,core_y=0.,post_sigma=0.,coupling=0.,gamma=1.,
            rim_width=.07,thin_width=.015,spline=False)
+    p.update(shape_dx=0.,shape_dy=0.,half_x_delta=0.,half_y_delta=0.,radius_delta=0.)
     p.update({f'c{i}':0. for i in range(7)})
     return p
 
@@ -99,10 +102,16 @@ class Study:
         while len(self.cache)>8:self.cache.popitem(last=False)
         return self.cache[key]
 
+    def shape(self,x,y,p):
+        x=x-p.get('shape_dx',0);y=y-p.get('shape_dy',0)
+        half=self.half+[p.get('half_x_delta',0),p.get('half_y_delta',0)]
+        radius=min(self.radius+p.get('radius_delta',0),min(half))
+        return x,y,half,radius,geometry(x,y,half,radius)
+
     def field(self,x,y,p):
-        sd,nx,ny=geometry(x,y,self.half,self.radius);d=np.maximum(-sd,0)
+        x,y,half,radius,(sd,nx,ny)=self.shape(x,y,p);d=np.maximum(-sd,0)
         if p['spline']:
-            basis=BSpline.design_matrix(np.clip(d/self.radius,0,1).ravel(),KNOTS,3).toarray()[:,:7].reshape((*x.shape,7))
+            basis=BSpline.design_matrix(np.clip(d/radius,0,1).ravel(),KNOTS,3).toarray()[:,:7].reshape((*x.shape,7))
             a=basis@np.array([p[f'c{i}'] for i in range(7)])
         else:
             a=p['amplitude']*np.maximum(1-d/p['band'],0)**p['power']
@@ -115,9 +124,10 @@ class Study:
         # potential coupling. This is an empirical blend, not a thick solid.
         coupling=.5*p['coupling']*p['tangent']*Wd*x*x
         X-=coupling*nx;Y-=coupling*ny
+        X+=p.get('shape_dx',0);Y+=p.get('shape_dy',0)
         thin=np.exp(-(d/p['thin_width'])**2)
         e=np.exp(-(d/p['rim_width'])**2);f=np.exp(-(d/(4*p['rim_width']))**2)
-        xx=x/self.half[0];yy=y/self.half[1];z=np.clip(d/.3,0,1);core=z**3*(z*(6*z-15)+10)
+        xx=x/half[0];yy=y/half[1];z=np.clip(d/.3,0,1);core=z**3*(z*(6*z-15)+10)
         light=np.stack([thin,thin*nx,thin*ny,e,e*nx,e*ny,f,f*nx,f*ny,xx,yy,xx*xx,yy*yy,xx*yy,core],axis=-1)
         texture=self.blur(p['sigma'])
         sample=cv2.remap(texture,(X*self.L+self.case['center'][0]).astype(np.float32),
@@ -170,11 +180,11 @@ class Study:
         result['loss']=.7*result['glass']['rmse']**2+.3*result['rim']['rmse']**2
         return result
 
-    def comparison(self,pred,dest):
+    def comparison(self,pred,dest,p):
         x0,y0,x1,y1=self.crop
         original=np.uint8(np.rint(self.target_crop*255))
         yy,xx=np.mgrid[y0:y1:.5,x0:x1:.5]
-        sd,*_=geometry((xx-.25-self.case['center'][0])/self.L,(yy-.25-self.case['center'][1])/self.L,self.half,self.radius)
+        *_,(sd,_,_)=self.shape((xx-.25-self.case['center'][0])/self.L,(yy-.25-self.case['center'][1])/self.L,p)
         cov=(sd<=0).reshape(y1-y0,2,x1-x0,2).mean((1,3))
         out=pred*cov[...,None]+self.target_crop*(1-cov[...,None])
         for box,alpha,color in self.foreground_layers:
@@ -206,7 +216,7 @@ def main():
         loss,co=study.fit(candidate);evaluations+=1
         if loss<best[0]:best[:]=[loss,candidate,co]
         return loss
-    x=np.array([start[k] for k in keys]);bounds=[BOUNDS[k] for k in keys]
+    x=np.array([start.get(k,0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
     # Powell handles the explicit finite bilinear-sampling resolution without
     # claiming infinitesimal derivatives through a quantized texture lookup.
     result=minimize(objective,x,method='Powell',bounds=bounds,
@@ -223,9 +233,9 @@ def main():
         limits='Same-frame calibration; source recovery/coverage assumptions are fixed, not independent validation.')
     dest=args.folder/f'pass-{args.number:02}';dest.mkdir(exist_ok=True)
     (dest/'record.json').write_text(json.dumps(record,indent=2)+'\n')
-    study.comparison(pred,dest/'candidate.png')
+    study.comparison(pred,dest/'candidate.png',candidate)
     kept=study.render(current['parameters'],np.array(current['material']))
-    study.comparison(kept,dest/'accepted.png')
+    study.comparison(kept,dest/'accepted.png',current['parameters'])
     np.save(dest/'material.npy',kept)
     accepted_path.write_text(json.dumps(current,indent=2)+'\n')
     print(json.dumps(dict(pass_number=args.number,experiment=stage,accepted=advance,

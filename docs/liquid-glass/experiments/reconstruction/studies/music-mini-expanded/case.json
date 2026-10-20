@@ -89,12 +89,12 @@
         465
       ],
       "color": [
-        0.38,
-        0.38,
-        0.39
+        0,
+        0,
+        0
       ],
-      "threshold": 0.46,
-      "neutral_only": true
+      "threshold": 0.55,
+      "neutral_only": false
     },
     {
       "mode": "mask",
