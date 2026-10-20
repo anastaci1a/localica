@@ -57,6 +57,17 @@ data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading:
 
 /** Pure queue edits keep occurrence identity separate from the song's library identity. */
 object QueueEdits {
+    /** Snapshot identity excludes generated occurrence IDs and mutable playback/metadata state. */
+    fun equivalent(library: QueueLibrary, tracks: List<Track>, name: String,
+        playlistOrigins: List<String?> = emptyList()): ListeningQueue? {
+        fun matches(queue: ListeningQueue) = queue.name == name && queue.entries.size == tracks.size &&
+            queue.entries.indices.all { index ->
+                val entry = queue.entries[index]
+                entry.track.id == tracks[index].id && entry.sourcePlaylistId == playlistOrigins.getOrNull(index)
+            }
+        return library.active?.takeIf(::matches) ?: library.queues.firstOrNull(::matches)
+    }
+
     fun randomize(queue: ListeningQueue, keepCurrentFirst: Boolean, random: kotlin.random.Random = kotlin.random.Random.Default): ListeningQueue {
         val current = queue.entries.firstOrNull { keepCurrentFirst && it.id == queue.currentEntryId }
         val remaining = queue.entries.filterNot { it.id == current?.id }.shuffled(random)

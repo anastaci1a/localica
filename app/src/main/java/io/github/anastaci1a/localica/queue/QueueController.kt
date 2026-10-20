@@ -254,6 +254,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val current = state.value.library.active
         val expand = action == SongTap.NewQueue || action == SongTap.PlayNow
         if (action == SongTap.NewQueue || current == null) {
+            if (reuse(tracks, selectedIndex, expand, sourceName, playlistOrigins)) return true
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
                 mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName, playlistOrigins)) }
                 return false
@@ -273,6 +274,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun confirmCreation(removals: Set<String>) = submit {
         val pending = state.value.pending ?: return@submit
         capture()
+        if (reuse(pending.tracks, pending.selectedIndex, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)) {
+            pendingComplete?.invoke(true); pendingComplete = null
+            return@submit
+        }
         if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, removals)) {
             reportProblem("Select enough inactive queues to make room. The current queue is protected.")
             return@submit
@@ -284,12 +289,15 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         mutable.update { it.copy(pending = null, problem = problemAfterSuccess(it)) }
         pendingComplete?.invoke(false); pendingComplete = null
     }
+    private suspend fun reuse(tracks: List<Track>, selectedIndex: Int, expandPlayer: Boolean,
+        sourceName: String, playlistOrigins: List<String?>): Boolean {
+        val queue = QueueEdits.equivalent(state.value.library, tracks, sourceName, playlistOrigins) ?: return false
+        selectEntry(queue, queue.entries[selectedIndex].id, expandPlayer)
+        mutable.update { it.copy(pending = null) }
+        return true
+    }
     private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String, playlistOrigins: List<String?>) {
-        val names = state.value.library.queues.filterNot { it.id in removals }.map { it.name }.toSet()
-        var name = sourceName
-        var suffix = 2
-        while (name in names) name = "$sourceName (${suffix++})"
-        val queue = QueueEdits.create(tracks, selectedIndex, name, playlistOrigins).copy(lastActivatedAt = nextActivation())
+        val queue = QueueEdits.create(tracks, selectedIndex, sourceName, playlistOrigins).copy(lastActivatedAt = nextActivation())
         val next = QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id)
         // These tracks came from the visible list. Start the decoder before serializing a
         // potentially large queue, and avoid re-reading the entire library on every song tap.
@@ -319,6 +327,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun selectEntry(id: String) = submit {
         capture()
         val active = state.value.library.queues.firstOrNull { queue -> queue.entries.any { it.id == id } } ?: return@submit
+        selectEntry(active, id, expandPlayer = true)
+    }
+    private suspend fun selectEntry(active: ListeningQueue, id: String, expandPlayer: Boolean) {
         val selected = active.copy(currentEntryId = id, positionMs = 0, lastActivatedAt = nextActivation(),
             journey = journey(active).select(id, active.entries.map { it.id }))
         val next = state.value.library.update(selected).copy(activeId = active.id)
@@ -331,7 +342,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             } else activate(play = true, seek = true)
         }
         mutable.update { it.copy(browsedId = active.id) }
-        requestPlayer()
+        if (expandPlayer) requestPlayer()
     }
     private fun nextActivation() = maxOf(System.currentTimeMillis(), (state.value.library.queues.maxOfOrNull { it.lastActivatedAt } ?: 0) + 1)
     fun rename(id: String, name: String) = submit {
