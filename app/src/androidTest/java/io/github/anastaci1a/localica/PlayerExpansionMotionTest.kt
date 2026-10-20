@@ -87,11 +87,14 @@ class PlayerExpansionMotionTest {
                 for (y in 0 until content.height step 2) for (x in 0 until content.width step 2)
                     brightest = maxOf(brightest, content[x, y].red)
                 assertTrue("Lyrics/empty ink is physically visible before release: $brightest", brightest > .28f)
+                recordSemantics(artworkLayout, "held-$contentTag")
+                // While held, the collapsed player remains a clickable semantics merger.
+                // Inspect physical child geometry in the same unmerged tree before/after release.
                 val player = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
                 val title = compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-                val seek = compose.onNodeWithTag("player-seek-row").fetchSemanticsNode().boundsInRoot
+                val seek = compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
                 val transport = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
-                val panel = compose.onNodeWithTag("lyrics-panel").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                val panel = compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
                 compose.onNodeWithTag(contentTag, true).assertIsDisplayed()
                 compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
                 // Inspect actual player pixels, not a potentially transparent cover layer capture.
@@ -110,15 +113,16 @@ class PlayerExpansionMotionTest {
                 compose.onRoot().performTouchInput { moveTo(Offset(start.x, 0f), delayMillis = 160) }
                 compose.mainClock.advanceTimeByFrame()
                 assertEquals("Held reversal restores the exact seek target", seek,
-                    compose.onNodeWithTag("player-seek-row").fetchSemanticsNode().boundsInRoot)
+                    compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
                 compose.onRoot().performTouchInput { advanceEventTime(200); up() }
                 fingerDown = false
                 compose.mainClock.autoAdvance = true
                 compose.waitForIdle()
                 assertTrue(expanded)
-                assertEquals("Release cannot change lyrics geometry", panel, compose.onNodeWithTag("lyrics-panel").fetchSemanticsNode().boundsInRoot)
+                recordSemantics(artworkLayout, "released-$contentTag")
+                assertEquals("Release cannot change lyrics geometry", panel, compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
                 assertEquals(title, compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
-                assertEquals(seek, compose.onNodeWithTag("player-seek-row").fetchSemanticsNode().boundsInRoot)
+                assertEquals(seek, compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
                 assertEquals(transport, compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot)
                 assertEquals(player, compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot)
 
@@ -127,7 +131,7 @@ class PlayerExpansionMotionTest {
                     compose.runOnIdle { scope.launch { progress.snapTo(p) } }
                     compose.onNodeWithTag("player-actions-row", true).assertDoesNotExist()
                     compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
-                    if (p <= .78f) compose.onNodeWithTag("lyrics-panel").assertIsNotDisplayed()
+                    if (p <= .78f) compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).assertIsNotDisplayed()
                     else compose.onNodeWithTag(contentTag, true).assertExists()
                 }
             }
@@ -135,6 +139,17 @@ class PlayerExpansionMotionTest {
             if (fingerDown) runCatching { compose.onRoot().performTouchInput { cancel() } }
             compose.mainClock.autoAdvance = true
         }
+    }
+
+    private fun recordSemantics(layout: ArtworkLayout, stage: String) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+            ?.takeIf { it.isNotBlank() }?.let(::File)
+            ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+        val directory = File(root, "player-expansion-motion")
+        check(directory.isDirectory || directory.mkdirs())
+        File(directory, "$layout-$stage.txt").writeText(
+            "MERGED\n${compose.onRoot().printToString()}\nUNMERGED\n${compose.onRoot(useUnmergedTree = true).printToString()}")
     }
 
     @Test fun artworkSeekAndActionsHaveSeparateScreenSpaceMotionBetweenTitleAndTransport() {
