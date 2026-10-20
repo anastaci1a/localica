@@ -1,10 +1,10 @@
 {
   "status": "In progress, not a final paired study",
-  "rendering_code_commit": "32fe42524eef451a5b3e5670c413cb77b9f52fc7",
+  "rendering_code_commit": "db5ec56f13d87ccf2a39a827bc771944901372c2",
   "gallery_script_sha256": "000265a42d4acb834feaeeee3abde14d9a29295c82fa5db6f030edeaf72d2894",
-  "state_record_sha256": "37e6e304874b26f2901da2202807ad1e9dabc1ee9b497935bd4fc899fc2d7a5a",
+  "state_record_sha256": "8bcfc2330a8a806ead115521ef69a5262847e116e1622162bb08566fdbd38c93",
   "single_passes": 10,
-  "paired_passes": 20,
+  "paired_passes": 21,
   "output_scale": 4,
   "recipe": {
     "parameters": {
@@ -51,7 +51,22 @@
       "ambient_rim_luma_range": [
         0.4128481986763243,
         0.43633079011162007
-      ]
+      ],
+      "grazing_reflection": {
+        "strength": 0.5,
+        "width": 0.00675,
+        "angular_power": 0.0,
+        "source_sigma": 0.0,
+        "direction": [
+          0.0,
+          1.0
+        ],
+        "environment_rgb": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
     },
     "material": [
       0.5983243660959007,
@@ -82,22 +97,22 @@
       {
         "glass": {
           "pixels": 15221,
-          "rmse": 5.86127233505249
+          "rmse": 5.860626697540283
         },
         "rim": {
           "pixels": 8296,
-          "rmse": 7.336642265319824
+          "rmse": 7.335695743560791
         },
         "held": {
           "pixels": 2797,
-          "rmse": 6.7899346351623535
+          "rmse": 6.790391445159912
         },
         "interior": {
           "pixels": 6925,
           "rmse": 3.32079815864563
         },
         "ssim": 0.9784106016159058,
-        "loss": 40.19605528873933
+        "loss": 40.18659131417412
       },
       {
         "glass": {
@@ -110,7 +125,7 @@
         },
         "held": {
           "pixels": 2804,
-          "rmse": 11.380032539367676
+          "rmse": 11.379558563232422
         },
         "interior": {
           "pixels": 6925,
@@ -159,22 +174,22 @@
       "native": {
         "glass": {
           "pixels": 15221,
-          "rmse": 5.86127233505249
+          "rmse": 5.860626697540283
         },
         "rim": {
           "pixels": 8296,
-          "rmse": 7.336642265319824
+          "rmse": 7.335695743560791
         },
         "held": {
           "pixels": 2797,
-          "rmse": 6.7899346351623535
+          "rmse": 6.790391445159912
         },
         "interior": {
           "pixels": 6925,
           "rmse": 3.32079815864563
         },
         "ssim": 0.9784106016159058,
-        "loss": 40.19605528873933
+        "loss": 40.18659131417412
       },
       "source_support": {
         "source_defined_fraction": 1.0,
@@ -182,6 +197,13 @@
         "source_observed_fraction": 1.0,
         "gaussian_3sigma_observed_fraction": 1.0,
         "source_gaussian_radius_native_px": 21,
+        "reflection_environment_kind": "declared_constant_rgb",
+        "reflection_environment_rgb": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "reflection_background_sampling": false,
         "context_mean_source_defined_fraction": 1.0,
         "context_mean_source_observed_fraction": 1.0,
         "context_mean_minimum_defined_confidence": 1.0,
@@ -211,7 +233,7 @@
         },
         "held": {
           "pixels": 2804,
-          "rmse": 11.380032539367676
+          "rmse": 11.379558563232422
         },
         "interior": {
           "pixels": 6925,
@@ -226,6 +248,13 @@
         "source_observed_fraction": 1.0,
         "gaussian_3sigma_observed_fraction": 1.0,
         "source_gaussian_radius_native_px": 21,
+        "reflection_environment_kind": "declared_constant_rgb",
+        "reflection_environment_rgb": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "reflection_background_sampling": false,
         "context_mean_source_defined_fraction": 1.0,
         "context_mean_source_observed_fraction": 1.0,
         "context_mean_minimum_defined_confidence": 1.0,
