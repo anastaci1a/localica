@@ -1,7 +1,7 @@
 {
   "state_sha256": "a2f261471078ae9d60e62dec666dfeaead228f1430feda80fde47d11761ff6d5",
   "render_files": {
-    "motion.mp4": "b90099c91f71f5bb11e40dc36c721831e1ed2f39300c911b0e19493707d124b0",
+    "motion.mp4": "5658cbc3d75b66e1ada5fc4a78bee38ba71b6e6ffeb124bc87bfb98527fbc15e",
     "comparison.png": "5ff35021e2e496dfd754f1ae830007435fee9c7cefbbe5b96a39f3fd61d831d1"
   },
   "native_size": [
@@ -38,23 +38,23 @@
   },
   "motion_support": {
     "requested_native_px": 45,
-    "actual_native_px": 45.0,
-    "minimum_scored_lookup_3sigma_observed_fraction": 1.0,
-    "minimum_whole_shape_lookup_observed_fraction": 1.0,
+    "actual_native_px": 45,
+    "minimum_scored_lookup_3sigma_observed_fraction": 1,
+    "minimum_whole_shape_lookup_observed_fraction": 1,
     "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
     "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
   },
   "presentation_completion_native_delta": {
-    "max_abs_rgb": 0.0,
-    "rmse": 0.0
+    "max_abs_rgb": 0,
+    "rmse": 0
   },
   "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
   "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs.",
   "manifest_recovery": "Completed video from the immediately preceding render, before GIF-budget failure. Dimensions/frame count/fps checked; original MP4 retained, native state replayed, manifest written to finish GIF without repeating optical frames.",
   "files": {
     "motion.mp4": {
-      "bytes": 3998789,
-      "sha256": "b90099c91f71f5bb11e40dc36c721831e1ed2f39300c911b0e19493707d124b0"
+      "bytes": 3998793,
+      "sha256": "5658cbc3d75b66e1ada5fc4a78bee38ba71b6e6ffeb124bc87bfb98527fbc15e"
     },
     "motion.gif": {
       "bytes": 38167798,
@@ -77,5 +77,15 @@
     "dither": "sierra2_4a",
     "maximum_megabytes": 90,
     "spatial_downsampling": true
+  },
+  "video_color": {
+    "matrix": "BT.601 / SMPTE170M",
+    "range": "Limited",
+    "method": "H.264 VUI/MP4 metadata-only stream copy",
+    "original_sha256": "b90099c91f71f5bb11e40dc36c721831e1ed2f39300c911b0e19493707d124b0",
+    "corrected_sha256": "5658cbc3d75b66e1ada5fc4a78bee38ba71b6e6ffeb124bc87bfb98527fbc15e",
+    "decoded_rgb_sha256": "SHA256=3d93397ab6497a39c4b75362e4416bfc6806e915dc6a320e5e7d83822d8eae76",
+    "equal_decoded_rgb": true,
+    "limits": "Declares the existing conversion matrix. No new primaries/transfer calibration, color conversion, optical fit or image sample is introduced."
   }
 }

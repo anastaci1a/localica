@@ -1,0 +1,98 @@
+{
+  "state_sha256": "78f21faecbbe5a76e44321d6bb796a08a78102efde1842ac64dd5f75ba82dcb9",
+  "render_files": {
+    "motion.mp4": "22e9620616b78d069daf3dac313a0e72c1ed0099bd8224302187f7484573b1ca",
+    "comparison.png": "cbbca88b7eda3a0387ca182b53f05bd27a141c9b633e496140ec8cb0dd8ba1fa"
+  },
+  "native_size": [
+    785,
+    570
+  ],
+  "output_size": [
+    3140,
+    2280
+  ],
+  "output_scale": 4,
+  "frames": 120,
+  "fps": 30,
+  "travel_over_L": 0.225,
+  "scores": {
+    "glass": {
+      "pixels": 208969,
+      "rmse": 14.676543235778809
+    },
+    "rim": {
+      "pixels": 60968,
+      "rmse": 20.440834045410156
+    },
+    "held": {
+      "pixels": 53183,
+      "rmse": 14.931571960449219
+    },
+    "interior": {
+      "pixels": 148001,
+      "rmse": 11.489672660827637
+    },
+    "ssim": 0.9317532181739807,
+    "loss": 276.12895388777895
+  },
+  "motion_support": {
+    "requested_native_px": 45,
+    "actual_native_px": 45.0,
+    "minimum_scored_lookup_3sigma_defined_fraction": 1.0,
+    "minimum_whole_shape_lookup_defined_fraction": 1.0,
+    "minimum_scored_lookup_3sigma_observed_fraction": 0.0,
+    "minimum_whole_shape_lookup_observed_fraction": 0.0,
+    "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates.",
+    "reflection_environment_3sigma_defined_min": 1.0,
+    "reflection_environment_3sigma_observed_min": 0.0,
+    "reflection_environment_full_defined_min": 1.0,
+    "reflection_environment_full_observed_min": 0.0,
+    "chromatic_source_3sigma_defined_min": 1.0,
+    "chromatic_source_3sigma_observed_min": 0.0,
+    "chromatic_source_full_defined_min": 1.0,
+    "chromatic_source_full_observed_min": 0.0
+  },
+  "presentation_completion_native_delta": {
+    "max_abs_rgb": 0.0,
+    "rmse": 0.0
+  },
+  "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+  "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.",
+  "files": {
+    "motion.mp4": {
+      "bytes": 572355,
+      "sha256": "22e9620616b78d069daf3dac313a0e72c1ed0099bd8224302187f7484573b1ca"
+    },
+    "motion.gif": {
+      "bytes": 4089832,
+      "sha256": "4e269756859dfaf9d22105a5d028bc902fbf4144b37eebd7654dee6a324b5a12"
+    },
+    "comparison.png": {
+      "bytes": 1217776,
+      "sha256": "cbbca88b7eda3a0387ca182b53f05bd27a141c9b633e496140ec8cb0dd8ba1fa"
+    }
+  },
+  "gif": {
+    "fps": 15,
+    "output_size": [
+      1570,
+      1140
+    ],
+    "master_relative_scale": 0.5,
+    "palette_colors": 256,
+    "palette_sampling": "All frame pixels",
+    "dither": "sierra2_4a",
+    "maximum_megabytes": 10.0,
+    "spatial_downsampling": true
+  },
+  "video_color": {
+    "metadata": {
+      "codec_name": "h264",
+      "color_range": "tv",
+      "color_space": "smpte170m"
+    },
+    "limits": "Encoded RGB export metadata; no measured display/transfer-function calibration."
+  }
+}

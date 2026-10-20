@@ -1,0 +1,196 @@
+{
+  "paired_passes": 24,
+  "record_count": 24,
+  "excluded_passes": [],
+  "scores": [
+    {
+      "glass": {
+        "pixels": 240456,
+        "rmse": 12.061294555664062
+      },
+      "rim": {
+        "pixels": 70466,
+        "rmse": 20.890653610229492
+      },
+      "held": {
+        "pixels": 61420,
+        "rmse": 13.097060203552246
+      },
+      "interior": {
+        "pixels": 169990,
+        "rmse": 4.986932277679443
+      },
+      "ssim": 0.9613863229751587,
+      "loss": 232.75820092972242
+    },
+    {
+      "glass": {
+        "pixels": 208969,
+        "rmse": 14.676543235778809
+      },
+      "rim": {
+        "pixels": 60968,
+        "rmse": 20.440834045410156
+      },
+      "held": {
+        "pixels": 53183,
+        "rmse": 14.931571960449219
+      },
+      "interior": {
+        "pixels": 148001,
+        "rmse": 11.489672660827637
+      },
+      "ssim": 0.9317532181739807,
+      "loss": 276.12895388777895
+    }
+  ],
+  "foreground_mse": null,
+  "foreground_style_scores": null,
+  "initial_boundary": {
+    "single_loss": 257.9405271237911,
+    "paired_initial_loss": 257.9405271237911,
+    "same_reference_protocol": true
+  },
+  "gate": "Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.",
+  "background_estimates": [
+    {
+      "method": "Symmetric vector capsule fitted from resting-track outer contours; active-frame color measured from exposed track. Distant unoccluded RGB is copied; hidden/halo-adjacent input is modeled.",
+      "limits": "Track symmetry, hidden color uniformity and separation from the thumb shadow are assumptions. Conditional rendering scores are not proof of complete photographic background recovery or proprietary Apple optics.",
+      "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+      "resting_track_fits": [
+        {
+          "parameters": [
+            965.213279678726,
+            541.3490350099561,
+            349.4216127615785,
+            155.03863989516324
+          ],
+          "contour_pixels": 1842,
+          "contour_rmse": 1.091545056774528,
+          "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+        },
+        {
+          "parameters": [
+            964.414372256658,
+            541.3525153680196,
+            338.98417484505813,
+            150.02600432441
+          ],
+          "contour_pixels": 1606,
+          "contour_rmse": 0.8637752919035037,
+          "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+        }
+      ],
+      "track_center_over_L": [
+        -0.3454351977887942,
+        0.022114126991076496
+      ],
+      "track_half_over_L": [
+        1.5966264521853915,
+        0.6976502849792373
+      ],
+      "track_color": [
+        0.4745098039215686,
+        0.7529411764705882,
+        0.5176470588235295
+      ],
+      "track_color_5_95": [
+        [
+          0.47058823529411764,
+          0.7450980392156863,
+          0.5176470588235295
+        ],
+        [
+          0.47843137254901963,
+          0.7568627450980392,
+          0.5215686274509804
+        ]
+      ],
+      "background_color": [
+        0.9294117647058824,
+        0.9294117647058824,
+        0.9294117647058824
+      ],
+      "exposed_track_fit": {
+        "circle": [
+          770.5849394785937,
+          541.2877084935681,
+          151.04128669800488
+        ],
+        "visible_contour_pixels": 480,
+        "contour_rmse": 0.6725363469285401,
+        "method": "Active-frame exposed end-cap circle; hidden end mirrored about the measured resting track center."
+      }
+    },
+    {
+      "method": "Symmetric vector capsule fitted from resting-track outer contours; active-frame color measured from exposed track. Distant unoccluded RGB is copied; hidden/halo-adjacent input is modeled.",
+      "limits": "Track symmetry, hidden color uniformity and separation from the thumb shadow are assumptions. Conditional rendering scores are not proof of complete photographic background recovery or proprietary Apple optics.",
+      "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+      "resting_track_fits": [
+        {
+          "parameters": [
+            965.213279678726,
+            541.3490350099561,
+            349.4216127615785,
+            155.03863989516324
+          ],
+          "contour_pixels": 1842,
+          "contour_rmse": 1.091545056774528,
+          "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+        },
+        {
+          "parameters": [
+            964.414372256658,
+            541.3525153680196,
+            338.98417484505813,
+            150.02600432441
+          ],
+          "contour_pixels": 1606,
+          "contour_rmse": 0.8637752919035037,
+          "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+        }
+      ],
+      "track_center_over_L": [
+        0.50207186128329,
+        0.026686163674783644
+      ],
+      "track_half_over_L": [
+        1.669253738869852,
+        0.7319072570633979
+      ],
+      "track_color": [
+        0.7450980392156863,
+        0.7647058823529411,
+        0.7411764705882353
+      ],
+      "track_color_5_95": [
+        [
+          0.7372549019607844,
+          0.7568627450980392,
+          0.7333333333333333
+        ],
+        [
+          0.7490196078431373,
+          0.7686274509803922,
+          0.7450980392156863
+        ]
+      ],
+      "background_color": [
+        0.9294117647058824,
+        0.9294117647058824,
+        0.9294117647058824
+      ],
+      "exposed_track_fit": {
+        "circle": [
+          1151.8836686179488,
+          541.3372327349567,
+          146.38145141267958
+        ],
+        "visible_contour_pixels": 466,
+        "contour_rmse": 0.7597337191579999,
+        "method": "Active-frame exposed end-cap circle; hidden end mirrored about the measured resting track center."
+      }
+    }
+  ],
+  "scope": "Two observed instances; diagnostics distinguish direct source evidence from any explicit source estimate. Does not establish generality across devices, apps or lighting."
+}

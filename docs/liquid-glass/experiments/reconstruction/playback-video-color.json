@@ -1,0 +1,16 @@
+{
+  "input": {
+    "git_commit": "14abd2320213f35b0e3c9be513b9ff40ef836f52",
+    "asset": "docs/liquid-glass/assets/playback-settled.mp4",
+    "manifest": null,
+    "manifest_sha256": null
+  },
+  "matrix": "BT.601 / SMPTE170M",
+  "range": "Limited",
+  "method": "H.264 VUI/MP4 metadata-only stream copy",
+  "original_sha256": "03d6275120023f03e29275d55a381e7f99a5520c545d6620c4f37f848726bb7f",
+  "corrected_sha256": "392e42192f5d54738e3ba4d247c31b1a438c10d1afd0356503da5d6004f998b2",
+  "decoded_rgb_sha256": "SHA256=7fa1d06d5116eeaa03d6e759876c7485373eb6d99b45a23af310c3f2306f88bb",
+  "equal_decoded_rgb": true,
+  "limits": "Declares the existing conversion matrix. No new primaries/transfer calibration, color conversion, optical fit or image sample is introduced."
+}

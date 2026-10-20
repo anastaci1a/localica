@@ -1,8 +1,8 @@
 {
   "files": {
     "motion.mp4": {
-      "bytes": 505995,
-      "sha256": "89e59b8e18d2960649121ac71b6c759b2801e4b665e23a751b6375745350a025"
+      "bytes": 505999,
+      "sha256": "ef0e7a912631e96039b732d8c6449ad5b4d9d86694e5fa4f6ff954e44195bc9b"
     },
     "motion.gif": {
       "bytes": 8710066,
@@ -48,7 +48,7 @@
   "motion_support": {
     "requested_native_px": 45,
     "actual_native_px": 5.625,
-    "minimum_scored_lookup_3sigma_observed_fraction": 1.0,
+    "minimum_scored_lookup_3sigma_observed_fraction": 1,
     "minimum_whole_shape_lookup_observed_fraction": 0.9942171173326952,
     "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
     "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
@@ -82,5 +82,18 @@
       ],
       "formula": "t*(1-s*(1-B)^g), per channel in encoded RGB"
     }
-  ]
+  ],
+  "render_files": {
+    "motion.mp4": "ef0e7a912631e96039b732d8c6449ad5b4d9d86694e5fa4f6ff954e44195bc9b"
+  },
+  "video_color": {
+    "matrix": "BT.601 / SMPTE170M",
+    "range": "Limited",
+    "method": "H.264 VUI/MP4 metadata-only stream copy",
+    "original_sha256": "89e59b8e18d2960649121ac71b6c759b2801e4b665e23a751b6375745350a025",
+    "corrected_sha256": "ef0e7a912631e96039b732d8c6449ad5b4d9d86694e5fa4f6ff954e44195bc9b",
+    "decoded_rgb_sha256": "SHA256=9c9b05f26812d3f860336d8ad659859266647bf7658ef1655ba5c2fe1341a2f2",
+    "equal_decoded_rgb": true,
+    "limits": "Declares the existing conversion matrix. No new primaries/transfer calibration, color conversion, optical fit or image sample is introduced."
+  }
 }

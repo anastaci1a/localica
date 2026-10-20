@@ -9,6 +9,7 @@ The circular playback control is the **current most-polished calibration**, sele
 ## Common contract
 
 - Let the element's shorter dimension be `D`; use `L=D/2` as the length unit. Local output coordinates are `v=(p−center)/L`. Every spatial parameter in `recipes.json` is dimensionless in these units, including blur, rim lighting and shape dimensions. Multiply by `L` only when sampling the backdrop or rasterizing. `reference_length` records the source-image scale; it is not an extra model parameter.
+- Across differently sized observations, use each pose's `Lᵢ`: `σᵢ=σ̂Lᵢ`. Optimizer records may store `σref` at an explicitly declared `Lref`, giving `σᵢ=σref Lᵢ/Lref`; published normalized lengths remain `σ̂=σref/Lref`. Source and output blur use the same conversion. Raster sampling/quarter-pixel kernel quantization remain implementation approximations.
 - `F(v)` is the **inverse map**: the backdrop sample is `B(center+L F(v))`. It describes where to read pixels, not the direction in which the visible feature moves. Independent foreground content is composited afterward.
 - The examples operate on **encoded RGB values in [0,1]**. This is a calibrated image-space approximation; changing to linear-light processing changes the output. Coordinates increase rightward/downward, and the camera is frontal.
 - Let `s(v)` be signed distance to the outline, negative inside, `n=∇s` the outward unit normal and `d=max(−s,0)`. Shape coverage is independent of material color. Evaluate the equations continuously before coverage/raster filtering.
@@ -112,6 +113,32 @@ F(x,y) = ((1−core S)x, (1−core S)y) − a n
 
 The `regular-light` and `regular-dark` recipes independently specify field parameters and material coefficients. Neither uses Gaussian blur. Their nearly uniform backdrops cannot identify an optical model; high scores here validate tone/rim approximation, **not refraction**.
 
+## Music and switch profile family
+
+The newer [paired studies](reconstruction.md#apple-music-studies) use one normalized image-map family. Each `studies/<id>/paired/accepted.json` supplies the shared coefficients; `a.json` and `b.json` supply measured poses and frozen input hashes. Home is still provisional because its first paired baseline regressed the retained single result.
+
+Subtract the recipe's shape offset from `v`, then apply its half-extent/radius corrections. Obtain boundary coordinate `s`, outward unit normal `n`, and `d=max(−s,0)`. The usual outline is a rounded rectangle/capsule. For a circle, keep equal half-extents and use `core_y=core_x` with no directional optical parameters.
+
+For `spline=true`, evaluate a cubic B-spline at `clamp(d/R,0,1)`, with knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]` and coefficients `[c0,…,c6,0,0,0]`. Otherwise use `a=amplitude×max(1−d/band,0)^power`. Signed spline coefficients permit folds and reduced center images; they are not lens heights.
+
+```text
+q = n_x² (horizontal major axis), or n_y² (vertical major axis)
+a ← a (1 + cap_normal_gain q)
+u = clamp(d/tangent_band,0,1)
+W = (1−u)^m (1+mu) (1−cap_tangent_fade q)
+W_d = −m(m+1)u(1−u)^(m−1) / tangent_band
+τ = −n_y x + n_x y
+K = ½ coupling × tangent × W_d × x²
+F_x = (1−core_x)x − a n_x + tangent W τ n_y − K n_x
+F_y = (1−core_y)y − a n_y − tangent W τ n_x − K n_y
+```
+
+Here `m=tangent_exponent` (default 4). Restore the shape offset to `F` before backdrop lookup. Missing cap gains/fades are zero. `W_d` is deliberately the base falloff derivative **without** the orientation weight; with these empirical tensor terms, the field is not asserted to be a gradient potential or ray trace through an identified solid.
+
+The compact mini-player additionally smooths the capsule's cap/body join. Along its major axis let `a=max(h)−R`, `z=|x|−a`, and `w=cap_join_width`. Replace `max(z,0)` by `q=w(2t³−t⁴)` for `|z|<w`, where `t=(z/w+1)/2`; use 0 below and `z` above that interval. The boundary coordinate is `sqrt(q²+y²)−R`; normalize its analytic gradient for `n`. This is a C2 implicit join, **not exact Euclidean distance** in the join band. Rotate axes for a vertical capsule.
+
+Sample the source-blurred backdrop through `F`. When `blur_transition>0`, blend clear and source-blurred samples with quintic smoothstep of `d/blur_transition`, then apply `sample^gamma`. Apply the common material, average subpixels, then apply output Gaussian blur. Coverage, exterior shadows and solid-vector foreground layers remain separate. Exact normalized coefficients, foreground styles and any context option are part of each recipe, not inferred from its preview image.
+
 ## Common material function
 
 All five frozen recipes have 23 coefficients. Define `X=x/h_x`, `Y=y/h_y`, `thin=exp[−(d/thin_rim)²]`, `e=exp[−(d/rim_width)²]`, `f=exp[−(d/(4 rim_width))²]`. Let `z=clamp(d/.30,0,1)` and `c=6z⁵−15z⁴+10z³`. The 14 lighting basis values, in order, are:
@@ -127,6 +154,55 @@ glass = clamp(sample × gain + coefficients[3:6]
 
 The scalar lighting term is added to all RGB channels. This is a bounded fitted basis, not a Fresnel/environment reconstruction. In particular, the white inner band in some earlier fits can arise from these terms independently of refraction. Do not interpret a fit coefficient as physical radiance or encode it as an extra painted outline.
 
+### Source-context color response
+
+The active-switch study optionally contracts the **material's** RGB bias on neutral backgrounds. Let `μ` be the area mean of the unrefracted, encoded-RGB backdrop over the current footprint, and `χ=max(μ)−min(μ)`. With shared sensitivity `k≥0`, floor `f∈[0,1]`, and encoded-luma weights `w=(.2126,.7152,.0722)`:
+
+```text
+t = f + (1−f) clamp(kχ,0,1)
+A = t I + (1−t) 1 wᵀ
+effective_triplet = A × shared_triplet
+```
+
+Apply `A` to the rim gain, offset and core gain triplets before the common material calculation. Leave the 14 scalar lighting coefficients and sampled RGB ray colors unchanged. Thus `wᵀA=wᵀ`: contraction preserves each coefficient triplet's encoded-luma response, while reducing its color bias. This is not desaturation of the final image or a radiometric conservation law.
+
+- Use the same `k,f` and 23 base coefficients on both backgrounds; recompute `μ` when the backdrop or footprint moves. The reference implementation uses native-center area quadrature, independent of target/foreground/scoring masks.
+- An absent context option means `A=I`, preserving earlier recipes. The current switch selects `k=10,f=0`; it still misses colored rim detail. This empirical adaptation is not an identified Apple formula.
+
+### Directional grazing reflection
+
+The switch follow-up separates a reflected field from the transmission's output blur. With normalized inward distance `d`, outward normal `n`, unit lighting direction `l`, `0≤a≤1`, width `w>0`, angular exponent `p>0`, and quintic smoothstep `S`:
+
+```text
+u = clamp(d/w,0,1)
+F = a [1−S(u)] max(n·l,0)^p
+E = Gaussian(unrefracted source, σ_environment/L)
+C_final = (1−F) C_transmission_after_output_blur + F E
+```
+
+- The reflection width and source kernel scale with each pose's `L`. Sample `E` at the unrefracted surface position; update its source offset during motion. Keep shape coverage, exterior shadow and foreground separate.
+- Reflection and transmission have independent filtering. Applying the transmission blur again after this mixture changes the model. Material derivatives therefore acquire `(1−F)` **after** their output filter.
+- This bounded mixture approximates the incident field from the available backdrop. It is not a recovered environment, a Fresnel law, or Apple's shader; the directional lobe does not explain the observed rainbow. No target RGB is used as its input.
+- An absent option preserves the earlier calculation exactly. Source coverage includes the environment kernel separately. Frozen native gates remain unchanged; the excluded outer-contour band needs an additional visual/error check.
+
+### Directional chromatic transmission
+
+The switch's lateral color-fringe hypothesis separates background channels **before** common lighting. For the existing map `F(x)`, source `B`, gamma `γ`, fixed direction `u=(cos θ,sin θ)` and signed separation `δ`:
+
+```text
+s_R=1, s_G=0, s_B=−1
+q_c = x + s_c δ u
+F_out(q) = F(q) inside the footprint, q outside
+D_c(x) = max(B_c(F_out(q_c)),0)^γ
+z = (x_x−shape_dx)/half_width
+w(x) = a [1−S(clamp((z−fade_center)/fade_width+1/2,0,1))]
+T_c(x) = (1−w) max(B_c(F(x)),0)^γ + w D_c(x)
+```
+
+- `B` uses the existing source-filter rule. Apply material gain and lighting at **x**, then subpixel integration, output filtering and the preceding reflection mixture. Do not shift the finished highlights/shadow or multiply gamma twice.
+- `δ` uses the pose's `L`; the fade center/width use horizontal half-width. The separation remains constant across the fade: its contribution decreases, not its length. Check each displaced ray and source kernel separately, including during backdrop movement.
+- Symmetric RGB offsets are a controllable approximation to lateral chromatic aberration, not measured wavelengths, a dispersion law or Apple's implementation. Direction and left-side fade remain hypotheses calibrated across the two references. An absent option, zero strength or zero separation preserves the prior model.
+
 ## Solid-vector foreground responses
 
 Foreground coverage `α` comes from solid geometry, independently of material color. Its input `B` includes preceding layers, such as a fixed selection backing. Affine styles use `F(B)=(1−o)B+oC`; response styles use the shared per-channel function:
@@ -141,7 +217,7 @@ For `t,s∈[0,1]` and `γ>0`, the function stays bounded and monotone. The affin
 ## Reproducing and transferring a model
 
 - Preserve equations, operation order, color space, shape and all normalized parameters when changing renderer. The source image's registration and the glyph coverage are separate inputs. Use the [frozen replay command](reconstruction.md#reproduce); optimization commands are for research only.
-- The reference implementation uses bilinear lookup, four samples per output axis for still materials, separate shape coverage and reflected-border Gaussian filtering. These sampling choices affect exact raster pixels; they are not physical model constants. Higher sampling must converge to the same continuous map.
+- The reference implementation uses bilinear lookup, separate shape coverage and reflected-border Gaussian filtering. Earlier HD recipes use four samples per output axis; the newer Music/switch studies use two. Preserve each study's native protocol when replaying its scores. These sampling choices affect exact raster pixels; they are not physical model constants.
 - Compare native-resolution glass, rim, interior and foreground separately. Use identical source/mask definitions for cross-renderer scores. PNG rounding changes the reported errors slightly; record whether measurements precede or follow quantization.
 - Transfer the light circular playback recipe first to other Clear circular media controls. Preserve `σ/L`, not the reference pixel σ. Toolbar and active-slider geometry require their own mappings; a circular model should not be stretched into either shape without verification.
 - Do not score an unrecovered or moving backdrop as though it were known. Other media controls and Music toolbar footage are useful next references, but require their original glyphs and independent backdrop recovery. They remain candidates, not additional calibrated successes.

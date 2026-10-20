@@ -4,34 +4,38 @@ Frozen scoring inputs are never edited. Missing motion context is completed by
 nearest observed RGB, and travel is capped against the scored source footprint.
 Completion is an estimate, not newly recovered evidence.
 """
-from collections import OrderedDict
 import cv2,numpy as np
-
-
-def coordinates(study,p):
-    original,cache,shift=study.source,study.cache,study.backdrop_shift
-    H,W=original.shape[:2];Y,X=np.mgrid[:H,:W]
-    try:
-        study.source=np.stack([(X+1)/(W+2),(Y+1)/(H+2),np.ones_like(X)],-1).astype(np.float32)
-        study.cache=OrderedDict();study.backdrop_shift=[0.,0.]
-        C,_=study.field(study.x,study.y,{**p,'sigma':0.,'gamma':1.})
-        return (C[...,0]*(W+2)-1).astype(np.float32),(C[...,1]*(H+2)-1).astype(np.float32)
-    finally:study.source=original;study.cache=cache;study.backdrop_shift=shift
+from source_support import coordinates,masks,kernel_safe,fraction
 
 
 def prepare(study,p,known,cov,requested):
     X,Y=coordinates(study,p)
-    radius=int(np.ceil(3*round(p['sigma']*4)/4))
-    safe=cv2.erode(known,np.ones((2*radius+1,2*radius+1),np.uint8)) if radius else known
-    def fraction(shift,mask,confidence):
-        support=cv2.remap(confidence,X,Y+np.float32(shift),cv2.INTER_LINEAR)
-        return float((support[mask]>.999).mean())
+    known,observed=masks(study,known);safe,_=kernel_safe(known,study,p);observed_safe,_=kernel_safe(observed,study,p)
+    from chromatic_transmission import support_rays
+    chromatic=support_rays(study,p)
+    def chromatic_fraction(confidence,scope,travel):
+        return min((fraction(confidence,RX.astype(np.float32),RY.astype(np.float32),active&(study.valid if scope=='scored' else cov>0),s)
+                    for RX,RY,active in chromatic for s in np.linspace(-travel,travel,33)
+                    if (active&(study.valid if scope=='scored' else cov>0)).any()),default=1.)
+    reflection=None
+    if 'grazing_reflection' in p:
+        from grazing_reflection import layers
+        F,_=layers(study,p);active=F>1e-8
+        x0,y0,x1,y1=study.crop;RY,RX=np.mgrid[y0:y1,x0:x1].astype(np.float32)
+        radius=int(np.ceil(3*p['grazing_reflection']['source_sigma']*study.L))
+        def safe_reflection(mask):return cv2.erode(mask,np.ones((2*radius+1,2*radius+1),np.uint8),borderType=cv2.BORDER_CONSTANT,borderValue=0) if radius else mask
+        reflection=(RX,RY,active&study.valid,active&(cov>0),safe_reflection(known),safe_reflection(observed))
+    def reflected_fraction(confidence,scope,travel):
+        RX,RY,scored,whole,_,_=reflection;mask=scored if scope=='scored' else whole
+        return min(fraction(confidence,RX,RY,mask,s) for s in np.linspace(-travel,travel,33)) if mask.any() else 1.
     actual=0.;minimum=0.
     for scale in [1.,.75,.5,.25,.125,0.]:
         actual=requested*scale
-        minimum=min(fraction(s,study.valid,safe) for s in np.linspace(-actual,actual,33))
+        minimum=min(fraction(safe,X,Y,study.valid,s) for s in np.linspace(-actual,actual,33))
+        if reflection is not None:minimum=min(minimum,reflected_fraction(reflection[4],'scored',actual))
+        if chromatic:minimum=min(minimum,chromatic_fraction(safe,'scored',actual))
         if minimum>=.999:break
-    full=min(fraction(s,cov>0,known) for s in np.linspace(-actual,actual,33))
+    full=min(fraction(known,X,Y,cov>0,s) for s in np.linspace(-actual,actual,33))
     missing=known<.999
     source=study.source.copy()
     if missing.any():
@@ -40,8 +44,21 @@ def prepare(study,p,known,cov,requested):
         lookup[labels[~missing]]=source[~missing]
         source[missing]=lookup[labels[missing]]
     assert np.array_equal(source[~missing],study.source[~missing])
-    return source,actual,dict(requested_native_px=requested,actual_native_px=actual,
-        minimum_scored_lookup_3sigma_observed_fraction=minimum,
-        minimum_whole_shape_lookup_observed_fraction=full,
+    report=dict(requested_native_px=requested,actual_native_px=actual,
+        minimum_scored_lookup_3sigma_defined_fraction=minimum,
+        minimum_whole_shape_lookup_defined_fraction=full,
+        minimum_scored_lookup_3sigma_observed_fraction=min(fraction(observed_safe,X,Y,study.valid,s) for s in np.linspace(-actual,actual,33)),
+        minimum_whole_shape_lookup_observed_fraction=min(fraction(observed,X,Y,cov>0,s) for s in np.linspace(-actual,actual,33)),
         completion='Nearest observed RGB extends unobserved input only for motion; frozen comparisons and scoring inputs are unchanged.',
         limits='Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates.')
+    if reflection is not None:
+        report.update(reflection_environment_3sigma_defined_min=reflected_fraction(reflection[4],'scored',actual),
+                      reflection_environment_3sigma_observed_min=reflected_fraction(reflection[5],'scored',actual),
+                      reflection_environment_full_defined_min=reflected_fraction(known,'whole',actual),
+                      reflection_environment_full_observed_min=reflected_fraction(observed,'whole',actual))
+    if chromatic:
+        report.update(chromatic_source_3sigma_defined_min=chromatic_fraction(safe,'scored',actual),
+                      chromatic_source_3sigma_observed_min=chromatic_fraction(observed_safe,'scored',actual),
+                      chromatic_source_full_defined_min=chromatic_fraction(known,'whole',actual),
+                      chromatic_source_full_observed_min=chromatic_fraction(observed,'whole',actual))
+    return source,actual,report
