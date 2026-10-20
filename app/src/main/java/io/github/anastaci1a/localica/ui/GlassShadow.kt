@@ -12,7 +12,9 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.offset
 import kotlin.math.ceil
@@ -22,6 +24,17 @@ import kotlinx.coroutines.*
 
 /** Reserve the same extent that the shadow renderer actually draws. */
 @Composable internal fun glassShadowInset(): Dp = (6f + 28f * LocalGlassAppearance.current.shadowSpread).dp
+
+/** Lambda offset uses a surface-sized placement layer, clipping overflowing shadows
+ * on legacy Android even without an alpha layer. Keep its placement-phase reads,
+ * dimensions and RTL behavior, but draw into the enclosing window's display list. */
+internal fun Modifier.glassShadowOffset(offset: Density.() -> IntOffset): Modifier = layout { measurable, constraints ->
+    val child = measurable.measure(constraints)
+    layout(child.width, child.height) {
+        val position = offset()
+        child.placeRelative(position.x, position.y)
+    }
+}
 
 /** Expand a scrolling strip's clip, without changing its content's layout slot.
  * Pair with matching inner padding after horizontalScroll. */
