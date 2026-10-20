@@ -168,5 +168,22 @@ def main():
         assert np.max(abs(fast.render(coefficients)-full))<2e-6
     print('PASS explicit common length basis scales both kernels at unequal observation sizes')
 
+    import cv2,tempfile,hashlib
+    from source_support import masks,kernel_safe,fraction
+    with tempfile.TemporaryDirectory() as directory:
+        folder=Path(directory);observed=np.full((24,32),255,np.uint8);observed[:,12:20]=0
+        cv2.imwrite(str(folder/'observed.png'),observed)
+        case=dict(source_observation_mask='observed.png',source_sha256={'observed.png':hashlib.sha256((folder/'observed.png').read_bytes()).hexdigest()},allow_estimated_background=True,background_estimate={'method':'Fixture only'})
+        source=SimpleNamespace(folder=folder,case=case,kernel_sigma=lambda p:1.)
+        defined,direct=masks(source,np.ones((24,32),np.float32));y,x=np.mgrid[:24,:32].astype(np.float32);valid=defined>0
+        assert fraction(defined,x,y,valid)==1. and fraction(direct,x,y,valid)==.75
+        safe,_=kernel_safe(direct,source,{})
+        assert fraction(safe,x,y,valid)<.75
+        case['allow_estimated_background']=False
+        try:masks(source,defined)
+        except AssertionError:pass
+        else:raise AssertionError('Undeclared background estimate accepted')
+    print('PASS defined input cannot be reported as direct observation; Gaussian footprint and explicit-estimate guards')
+
 
 if __name__=='__main__':main()
