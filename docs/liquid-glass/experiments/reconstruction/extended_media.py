@@ -113,7 +113,7 @@ def main():
     finally:
         proc.stdin.close();assert proc.wait()==0;log.close()
     # Encoding does not need the large optical maps or the last RGB frame.
-    del prepared,cov,xx,yy,opacity,context,base,material,frame,valid
+    del prepared,cov,xx,yy,opacity,base,material,frame
     report=dict(state_sha256=state_digest(args.folder),render_files={name:hashlib.sha256((out/name).read_bytes()).hexdigest() for name in ['motion.mp4','comparison.png']},native_size=[x1-x0,y1-y0],output_size=[W,H],output_scale=scale,frames=args.frames,fps=args.fps,travel_over_L=travel/study.L,scores=current,motion_support=motion_support,presentation_completion_native_delta=completion_delta,
         motion=f"Stationary element; recovered backdrop translates {'horizontally' if args.axis=='x' else 'vertically'}. Optical/material coefficients remain frozen.",
         limits='Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.')
