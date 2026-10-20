@@ -132,6 +132,29 @@ The [HD study](reconstruction.md) tests offline hypotheses beyond the portable l
 - **Measured smooth oval:** `u=x/hx`, `v=y/hy`, `Q(u)=1+a u²+b u⁴`, `T=u²+[v/Q(u)]²=1`. The [contour fit](experiments/reconstruction/contour.json) gives `a≈0.49940`, `b≈−0.23031` and half-extents 118.5 × 56.5. Thus `Tx=[2u−2v²Q′/Q³]/hx`, `Ty=2v/(hy Q²)`. Nearest-boundary distance and implicit-gradient normals use the same curve. Its sampled minimum curvature radius is about 43.39 pixels; the optical band is limited to 43.38. A measured dark ridge is still a silhouette proxy, not proof of Apple's equation. Bottom/right symmetry is assumed; numeric convexity sampling is not a proof for arbitrary coefficients.
 - **Flexible inverse-map profile:** `a(d)=min(hx,hy) Σ ci Bi(clamp(d/r,0,1))`, with cubic B-splines on knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]`. Seven coefficients are fitted and the final three are zero. Therefore `a`, `a′` and `a″` vanish at the inner join. The map is `F=(x(1−cxS), y(1−cyS))−a n`, with quintic `S` evaluated at `d/r`. This allows independently fitted central X/Y scale and a flexible folded rim, without a fitted displacement image. It is an empirical comparator, not a physical surface reconstruction or a nonfolding guarantee.
 
+### Radial transition and foreground-color controls
+
+For the circular playback study, a radial inverse map isolates the rim-to-center transition from silhouette and lighting. With `r=|v|`, inward depth `d=R−r`, and displacement `a(d)`, use `F(v)=(1−a/r)v`; the center is identity when the displacement support ends before `R`. The initial profile is `a0=A clamp(1−d/b,0,1)^p`, `p>2`. An exponent barely above two is mathematically C2 at its inner endpoint but its second derivative approaches zero very slowly. C2 continuity alone does not ensure a perceptually gradual transition at pixel scale.
+
+The following splice preserves the outer map and independently varies the inner tail. Define `da=b/4`, `ds=b/2`, `w0=b/2`, width factor `k≥1`, shoulder gain `g>0`, and inner-end exponent `q>2`:
+
+```text
+for d≤ds:
+  a = a0(d) [1+(g−1) S5(clamp((d−da)/(ds−da),0,1))]
+for ds<d<ds+k w0:
+  t = (d−ds)/(k w0)
+  a = g A 2^(−p) (1−t)^q
+      × exp[(q−pk)t + (q−pk²)t²/2]
+after that: a = 0
+S5(u) = 10u³−15u⁴+6u⁵
+```
+
+- At `ds`, value, first and second derivative match `g a0`; the gain ramp also joins C2. `q>3` makes the **inner endpoint** C3; it does not make the entire splice C3. `k=g=1, q=p` recovers the original profile exactly.
+- Require `ds+k w0<R` for a quiet center. The outermost `b/4` is unchanged. Tail support grows with `k`, but visible transition width need not grow proportionally: matching the entry derivatives constrains the tail. Neither `g` nor `q` is a measured physical surface curvature.
+- The radial/tangential Jacobian eigenvalues are `1+a′(d)` and `1−a/r`. A sign change can invert source detail. Test supported parameters for additional folds; smoothness and gradient-potential integrability do not establish a valid refracting solid or Apple fidelity.
+
+Foreground color is a separate control. Independent RGB power responses can fit one pose yet reverse warm hues when moved over a different part of the source. A shared monotone scalar response `C=(f(BR),f(BG),f(BB))` preserves channel ordering and neutral grays, with a white plateau if `f(u)=1` above a threshold. One compact approximation uses monotone PCHIP through input knots `t[0,.3,.55,.8,1]` followed by `1`, with increasing output values from a configurable floor to `1`, followed by `1`. Positive normalized output increments enforce ordering. This interpolation is C1, not generally C2. It may fit the measured icon less closely than independent channels; retain that accuracy/generalization tradeoff. These are empirical encoded-RGB shading controls, not identified Apple lighting equations.
+
 ### Tangential curvature and smooth crowns
 
 A scalar normal offset cannot explain all two-dimensional distortion. On the toolbar's straight horizontal edge, `n=(0,±1)`: `F=p−a(d)n` changes Y while leaving X unchanged. A displaced strip is not necessarily a widened strip. The following alternatives expose that restriction rather than increasing one depth gain.
