@@ -302,7 +302,7 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 
 ## Active segmented selector
 
-Single-reference pass 10. Weighted loss 329.571; glass RMSE 18.819 The source is Apple's Details video at 16.4 seconds. A second observed position at 16.5 seconds is reserved for paired calibration; no paired acceptance is claimed yet.
+Single-reference pass 11. Weighted loss 329.571; glass RMSE 18.819 The source is Apple's Details video at 16.4 seconds. A second observed position at 16.5 seconds is reserved for paired calibration; no paired acceptance is claimed yet.
 
 [![Active segmented selector: Apple left, reconstruction right](assets/study-active-segmented-selector-progress-a.png)](assets/study-active-segmented-selector-progress-a.png)
 
