@@ -55,7 +55,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null,
     artworkVisit: String? = null, previousArtwork: ArtworkNeighbor? = null, nextArtwork: ArtworkNeighbor? = null,
     onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black,
-    actions: @Composable () -> Unit = {}) {
+    onSeekRequest: ((Long, String?) -> Long)? = null, actions: @Composable () -> Unit = {}) {
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
     val playerScroll = rememberScrollState()
@@ -88,6 +88,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     var movement by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     var owner by remember { mutableStateOf(VerticalOwner.Undecided) }
+    val seekPosition = rememberPlayerSeekPosition(state, artworkVisit)
     var scrubDragging by remember { mutableStateOf(false) }
     var scrubOverCancel by remember { mutableStateOf(false) }
     var scrubCancelBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -338,18 +339,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
                 .testTag("player-seek-row").graphicsLayer { alpha = rowMotion.seekAlpha }) {
-                var seeking by remember(state.trackUri) { mutableStateOf<Float?>(null) }
-                val duration = (state.durationMs ?: 0).coerceAtLeast(1).toFloat()
-                PlayerSeekBar((seeking ?: state.positionMs.toFloat()).coerceIn(0f, duration), { seeking = it },
-                    valueRange = 0f..duration, onValueChangeFinished = { seeking?.let { onSeek(it.toLong()) }; seeking = null },
-                    enabled = state.connected && (state.durationMs ?: 0) > 0,
-                    modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = "Seek" },
-                    cancelBounds = scrubCancelBounds, onCancel = { seeking = null }, liveValue = state.positionMs.toFloat(),
+                PlayerSeekControls(state, onSeek, artworkVisit, scrubCancelBounds, onSeekRequest = onSeekRequest, position = seekPosition,
                     onDrag = { active, hovered -> scrubDragging = active; scrubOverCancel = hovered })
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(formatTime(seeking?.toLong() ?: state.positionMs), style = MaterialTheme.typography.labelSmall)
-                    Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelSmall)
-                }
             }
             if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
                 .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").graphicsLayer { alpha = rowMotion.actionsAlpha }

@@ -8,6 +8,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import io.github.anastaci1a.localica.queue.queueVisit
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.LocalicaApplication
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 enum class PlaybackProblem { Connection, Unreadable, Unsupported, Failed }
+
+/** Receipt for a specific command after the queue actor applies or rejects it. */
+data class SeekAcknowledgement(val requestId: Long, val positionMs: Long,
+    val playbackVisit: String? = null, val applied: Boolean = true)
 
 data class PlaybackState(
     val connected: Boolean = false,
@@ -43,6 +48,8 @@ data class PlaybackState(
     val playWhenReady: Boolean = false,
     val sampledAtMs: Long = 0,
     val playbackSpeed: Float = 1f,
+    val seekAcknowledgement: SeekAcknowledgement? = null,
+    val playbackVisit: String? = null,
 )
 
 interface PlaybackActions {
@@ -61,6 +68,8 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var controller: MediaController? = null
     private var closed = false
+    private var nextSeekRequest = 0L
+    private var seekAcknowledgement: SeekAcknowledgement? = null
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { publish() }
     }
@@ -99,13 +108,31 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
     fun retry() { queues.retryPlayback() }
 
     override fun toggle() { queues.togglePlayback() }
-    override fun seekTo(positionMs: Long) { queues.seek(positionMs) }
+    override fun seekTo(positionMs: Long) { requestSeek(positionMs) }
+
+    /** Return identity immediately; completion is published only after native application. */
+    fun requestSeek(positionMs: Long, expectedVisit: String? = queues.playbackSample()?.playbackVisit): Long {
+        val requestId = ++nextSeekRequest
+        val visit = expectedVisit
+        queues.requestSeek(positionMs, expectedVisit) { applied, sample ->
+            if (!closed) {
+                seekAcknowledgement = SeekAcknowledgement(requestId, sample?.positionMs ?: 0, visit, applied)
+                publish()
+            }
+        }
+        return requestId
+    }
 
     override fun clear() { queues.clearPlayback() }
 
     private fun publish() {
         val player = controller ?: return
         val metadata = player.mediaMetadata
+        val visit = player.currentMediaItem?.queueVisit
+        // The command actor and service are in-process. Sampling that same native
+        // visit avoids replaying older remote-controller positions after a receipt,
+        // while every later poll still follows real playback advancement.
+        val native = queues.playbackSample()?.takeIf { it.playbackVisit == visit }
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it >= 0 }
             ?: metadata.extras?.takeIf { it.containsKey("durationMs") }?.getLong("durationMs")
         mutableState.value = PlaybackState(
@@ -117,7 +144,7 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
             album = metadata.albumTitle?.toString(),
             albumArtist = metadata.albumArtist?.toString(),
             fileName = metadata.extras?.getString("fileName").orEmpty(),
-            positionMs = player.currentPosition.coerceAtLeast(0).let { if (duration != null) it.coerceAtMost(duration) else it },
+            positionMs = (native?.positionMs ?: player.currentPosition).coerceAtLeast(0).let { if (duration != null) it.coerceAtMost(duration) else it },
             durationMs = duration,
             isPlaying = player.isPlaying,
             isBuffering = player.playbackState == Player.STATE_BUFFERING,
@@ -127,6 +154,8 @@ class PlaybackConnection(context: Context) : PlaybackActions, AutoCloseable {
             playWhenReady = player.playWhenReady,
             sampledAtMs = android.os.SystemClock.elapsedRealtime(),
             playbackSpeed = player.playbackParameters.speed,
+            seekAcknowledgement = seekAcknowledgement?.takeIf { it.playbackVisit == visit },
+            playbackVisit = visit,
         )
     }
 
