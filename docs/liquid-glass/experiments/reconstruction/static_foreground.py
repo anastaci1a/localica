@@ -10,6 +10,7 @@ from vector_foreground import coverage
 
 
 def fit_samples(samples,style):
+    assert 'response' not in style,'Use the response fitter for a nonlinear foreground'
     opacity=style['opacity'];base=np.array([1-opacity,*np.asarray(style['color'])*opacity])
     def errors(v):
         return np.array([float(np.mean((B*(1-A[...,None])+A[...,None]*(v[0]*B+v[1:])-T)**2))*255**2 for B,T,A in samples])

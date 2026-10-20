@@ -366,6 +366,10 @@ class Study:
                 from vector_foreground import coverage
                 vector=self.vector_layers[tuple(box)]
                 alpha=coverage(self.folder,vector,scale)*style.get('opacity',vector.get('opacity',1.))
+                if 'response' in style:
+                    from foreground_response import response
+                    alpha=coverage(self.folder,vector,scale)
+                    color=response(region,style['response'])
             region[:]=region*(1-alpha[...,None])+color*alpha[...,None]
         for layer in self.transmission_layers:
             from foreground_response import calibrate,response

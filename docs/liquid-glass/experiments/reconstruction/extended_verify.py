@@ -102,6 +102,11 @@ def main():
     assert actual.min()>=0 and actual.max()<=1
     assert np.all(alpha[8:32,8:32]==1)
     print('PASS foreground-response recovery, held-range monotonicity, gamut and opaque interior')
+    from foreground_response import affine_response
+    style=dict(color=[.9,.2,.4],opacity=.75)
+    assert np.max(abs(response(B,affine_response(style))-(B*.25+np.array(style['color'])*.75)))<1e-12
+    assert np.max(abs(response(B,affine_response(dict(color=[0,0,0],opacity=1)))))==0
+    print('PASS color/opacity embeds exactly in the monotone response, including black ink')
 
     from paired_fit import permitted
     def score(loss,rmse):return dict(loss=loss,glass=dict(rmse=rmse))

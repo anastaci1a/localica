@@ -33,6 +33,7 @@ STAGES={
  19:('Final shared transmission and environment settlement',list(range(23))),
  20:('Shared joint optical pattern settlement',[]),
  21:('Shared solid-vector foreground color and opacity',[]),
+ 22:('Shared nonlinear vector foreground response',[]),
 }
 
 
@@ -122,7 +123,7 @@ def material_trial(caches,old,keys):
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--pass',dest='number',type=int,required=True);args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--pass',dest='number',type=int,required=True);ap.add_argument('--style',action='append');args=ap.parse_args()
     t0=time.time();name,keys=STAGES[args.number];folder=args.folder
     execution_hash=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     record_path=folder/f'pass-{args.number:02}.json';assert not record_path.exists(),'Keep paired trials immutable'
@@ -232,6 +233,32 @@ def main():
                         allow=all(a<=b+1e-8 for a,b in zip(fg,before))
                     trials.append(dict(key=key,delta=sign*step*size,accepted=allow,scores=metric,foreground_mse=fg))
                     if allow:current.update(parameters=q,scores=metric)
+    elif args.number==22:
+        from foreground_response import fit_blended
+        from vector_foreground import coverage
+        styles=copy.deepcopy(old['foreground_styles']);predictions=[s.render(p,np.asarray(current['material'])) for s in studies]
+        def full_errors():
+            errors=[]
+            for s,G in zip(studies,predictions):
+                s.case['foreground_styles']=styles;composite=s.apply_foreground(G.copy());x0,y0,_,_=s.crop
+                for layer in s.case['foreground_layers']:
+                    if 'vector_asset' not in layer or layer['mode']=='transmission' or not layer.get('fit_style',True):continue
+                    a,b,c,d=layer['box'];errors.append(float(np.mean((composite[b-y0:d-y0,a-x0:c-x0]-s.target[b:d,a:c])**2))*255**2)
+            return errors
+        before=full_errors();assert np.max(abs(np.asarray(before)-old['foreground_style_scores']['after_mse']))<1e-3
+        for key in args.style or list(styles):
+            samples=[];digest=None
+            for s,G in zip(studies,predictions):
+                layer=next(l for l in s.case['foreground_layers'] if l.get('style_key',l.get('vector_asset'))==key)
+                assert layer.get('fit_style',True) and layer['mode']!='transmission'
+                assert digest in [None,layer['vector_sha256']];digest=layer['vector_sha256']
+                s.case['foreground_styles']=styles;B=s.apply_foreground(G.copy(),stop_before=layer['box']);a,b,c,d=layer['box'];x0,y0,_,_=s.crop
+                samples.append((B[b-y0:d-y0,a-x0:c-x0],s.target[b:d,a:c],coverage(s.folder,layer)))
+            styles[key],report=fit_blended(samples,styles[key]);trials.append(dict(style_key=key,**report));evaluations+=report['evaluations']
+        after=full_errors();assert np.all(np.asarray(after)<=np.asarray(before)+1e-5),'A foreground role regressed'
+        current['foreground_styles']=styles
+        current['foreground_style_scores']=dict(old['foreground_style_scores'],before_mse=before,after_mse=after,
+            optimizer_evaluations=evaluations,formula='Shared affine color/opacity, or per-channel monotone response where declared by a style.')
     elif args.number==21:
         from static_foreground import fit_shared
         styles,report=fit_shared(studies,p,current['material'],old.get('foreground_styles'))
