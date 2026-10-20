@@ -468,7 +468,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     ?: searchMotion.rendered.takeIf { holdImeBack && it.width > 0f }
                     ?: searchPlacement.value.takeIf { placement == GlassPlacement.Search && it.width > 0f })?.translate(-windowOrigin)
                 Box(Modifier.fillMaxSize().onGloballyPositioned { windowOrigin = it.backdropPosition(view) }) {
-                    Layout(modifier = Modifier.offset {
+                    Layout(modifier = Modifier.glassShadowOffset {
                         val rightAligned = start.center.x > availableWidth / 2f
                         val x = if (placement == GlassPlacement.Menu)
                             (if (anchor.contextual) start.center.x - targetWidth / 2f else if (rightAligned) start.right - targetWidth else start.left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))

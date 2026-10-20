@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
@@ -13,9 +14,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -25,6 +30,35 @@ import kotlin.math.roundToInt
 
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun shadowOffsetMatchesOrdinaryPlacementWithoutRemeasuring() {
+        var offset by mutableStateOf(IntOffset.Zero)
+        var direction by mutableStateOf(LayoutDirection.Ltr)
+        var measures = 0
+        compose.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                Box(Modifier.size(240.dp, 180.dp), Alignment.Center) {
+                    Box(Modifier.size(90.dp, 44.dp).offset { offset }.testTag("ordinary-offset"))
+                    Box(Modifier.layout { measurable, constraints ->
+                        measures++
+                        val child = measurable.measure(constraints)
+                        layout(child.width, child.height) { child.place(0, 0) }
+                    }.size(90.dp, 44.dp).glassShadowOffset { offset }.testTag("shadow-offset"))
+                }
+            }
+        }
+        for (rtl in listOf(false, true)) {
+            compose.runOnIdle { direction = if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr }
+            val measured = compose.runOnIdle { measures }
+            for (position in listOf(IntOffset(31, -17), IntOffset(-23, 11), IntOffset.Zero)) {
+                compose.runOnIdle { offset = position }
+                val expected = compose.onNodeWithTag("ordinary-offset").fetchSemanticsNode().boundsInRoot
+                val actual = compose.onNodeWithTag("shadow-offset").fetchSemanticsNode().boundsInRoot
+                org.junit.Assert.assertEquals("Keep layout coordinates and RTL placement", expected, actual)
+                compose.runOnIdle { org.junit.Assert.assertEquals("Offset reads belong to placement", measured, measures) }
+            }
+        }
+    }
 
     @Test fun pageShadowEscapesTheClippedHeaderRow() {
         compose.setContent { LocalicaTheme {
@@ -110,21 +144,25 @@ class GlassShadowTest {
     @Test fun paddedVisibilityPreservesTheWholeFieldAtEveryOpacityAndReversal() {
         var alpha by mutableFloatStateOf(1f)
         var expanded by mutableStateOf(false)
-        compose.setContent {
+        var rtl by mutableStateOf(false)
+        compose.setContent { CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
             Column {
                 listOf(false, true).forEach { actual ->
                     val geometry = remember { GlassShadowGeometry() }
                     val width = if (expanded) 130.dp else 90.dp
                     val height = if (expanded) 70.dp else 44.dp
                     val radius = 22.dp
+                    val x = if (expanded) 9.dp else (-13).dp
+                    val y = if (expanded) (-7).dp else 11.dp
                     Box(Modifier.size(220.dp, 170.dp).background(Color.White).testTag("padded-$actual"), Alignment.Center) {
-                        if (actual) Box(Modifier.size(width, height).glassShadowOpacity { alpha }
+                        if (actual) Box(Modifier.size(width, height)
+                            .glassShadowOffset { IntOffset(x.roundToPx(), y.roundToPx()) }.glassShadowOpacity { alpha }
                             .clearGlassShadow(.8f, .6f, radius)
-                            .background(Color.Red, androidx.compose.foundation.shape.RoundedCornerShape(radius)))
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(radius)).background(Color.Red))
                         else Box(Modifier.fillMaxSize().drawBehind {
                             val w = width.roundToPx().toFloat(); val h = height.roundToPx().toFloat()
-                            val left = ((size.width-w)/2).roundToInt().toFloat()
-                            val top = ((size.height-h)/2).roundToInt().toFloat()
+                            val left = ((size.width-w)/2).roundToInt().toFloat() + x.roundToPx() * (if (rtl) -1 else 1)
+                            val top = ((size.height-h)/2).roundToInt().toFloat() + y.roundToPx()
                             val rect = RoundRect(left, top, left+w, top+h, CornerRadius(radius.toPx()))
                             // A full-scene reference has no surface-sized clipping layer.
                             drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height),
@@ -137,9 +175,9 @@ class GlassShadowTest {
                     }
                 }
             }
-        }
+        } }
         listOf(1f, .5f, 0f, .25f, 1f, .5f, 1f, 0f, 1f).forEachIndexed { index, opacity ->
-            compose.runOnIdle { alpha = opacity; expanded = index % 2 == 1 }
+            compose.runOnIdle { alpha = opacity; expanded = index % 2 == 1; rtl = index % 3 == 1 }
             val expected = compose.onNodeWithTag("padded-false").captureToImage().toPixelMap()
             val actual = compose.onNodeWithTag("padded-true").captureToImage().toPixelMap()
             var error = 0f
