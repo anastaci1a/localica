@@ -43,6 +43,17 @@ BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               cap_join_width=(0,.35),
               **{f'c{i}':(0,2.5) for i in range(7)})
 
+# Circular controls have no preferred optical axis. Lighting may still be
+# directional, but a radial field cannot gain an arbitrary axis to fit noise.
+RADIAL_STAGES = {
+ 4: ('Radial source versus output-space scattering', ['sigma','post_sigma']),
+ 5: ('Isotropic central registration', ['core_x']),
+ 6: ('Circular thin-rim and broad lighting', ['rim_width','thin_width']),
+ 7: ('Radial-profile and central-power refinement', [*[f'c{i}' for i in range(7)],'core_x']),
+ 10: ('Joint radial optical and scattering settlement', ['sigma','post_sigma','core_x','gamma','rim_width','thin_width']),
+ 11: ('Circular silhouette and optical-boundary alignment', ['shape_dx','shape_dy','half_x_delta']),
+}
+
 
 def initial():
     p=dict(sigma=0.,amplitude=0.,band=.35,power=2.2,tangent=0.,tangent_band=.4,
@@ -122,8 +133,11 @@ class Study:
 
     def shape(self,x,y,p):
         x=x-p.get('shape_dx',0);y=y-p.get('shape_dy',0)
-        half=self.half+[p.get('half_x_delta',0),p.get('half_y_delta',0)]
+        radial=self.case.get('radial',False)
+        dy=p.get('half_x_delta',0) if radial else p.get('half_y_delta',0)
+        half=self.half+[p.get('half_x_delta',0),dy]
         radius=min(self.radius+p.get('radius_delta',0),min(half))
+        if radial:radius=min(half)
         join=p.get('cap_join_width',0)
         if join>1e-8 and abs(half[0]-half[1])>join:
             from curvature import capsule_offset
@@ -157,8 +171,10 @@ class Study:
         W=v**exponent*(1+exponent*u);Wd=-exponent*(exponent+1)*u*v**(exponent-1)/p['tangent_band']
         W*=1-p.get('cap_tangent_fade',0)*cap_weight
         tangent_pos=-ny*x+nx*y
+        radial=self.case.get('radial',False)
+        core_y=p['core_x'] if radial else p['core_y']
         X=(1-p['core_x'])*x-a*nx+p['tangent']*W*tangent_pos*ny
-        Y=(1-p['core_y'])*y-a*ny-p['tangent']*W*tangent_pos*nx
+        Y=(1-core_y)*y-a*ny-p['tangent']*W*tangent_pos*nx
         # A normal-coupling comparator inspired by a gradient potential. The
         # full tensor field (especially with orientation weights) is empirical;
         # adding this term does not prove integrability or a physical solid.
@@ -251,7 +267,9 @@ class Study:
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);ap.add_argument('--pass',dest='number',type=int,required=True);ap.add_argument('--budget',type=int,default=900);args=ap.parse_args()
     assert not (args.folder/f'pass-{args.number:02}'/'record.json').exists(), 'Keep completed passes immutable'
-    t0=time.time();study=Study(args.folder);stage,keys=STAGES[args.number]
+    t0=time.time();study=Study(args.folder)
+    stages={**STAGES,**RADIAL_STAGES} if study.case.get('radial') else STAGES
+    stage,keys=stages[args.number]
     accepted_path=args.folder/'accepted.json'
     if accepted_path.exists():old=json.loads(accepted_path.read_text());p=old['parameters']
     else:
