@@ -127,5 +127,10 @@
       ],
       "threshold": 0.18
     }
-  ]
+  ],
+  "input_names": {
+    "source.png": "source-0.0.png",
+    "target.png": "target-0.0.png",
+    "known.png": "known-0.0.png"
+  }
 }

@@ -194,7 +194,16 @@ class Study:
         yy,xx=np.mgrid[y0:y1:.5,x0:x1:.5]
         *_,(sd,_,_)=self.shape((xx-.25-self.case['center'][0])/self.L,(yy-.25-self.case['center'][1])/self.L,p)
         cov=(sd<=0).reshape(y1-y0,2,x1-x0,2).mean((1,3))
-        out=pred*cov[...,None]+self.target_crop*(1-cov[...,None])
+        context=self.target_crop.copy()
+        if 'shadow' in p:
+            q=p['shadow'];*_,(shadow_sd,_,_)=self.shape(self.x-q['offset'][0],self.y-q['offset'][1],p)
+            opacity=q['opacity']*np.exp(-.5*(np.maximum(shadow_sd,0)/q['sigma'])**2)
+            source=self.source[y0:y1,x0:x1]*(1-opacity[...,None])
+            *_,(native_sd,_,_)=self.shape(self.x,self.y,p)
+            u=np.clip((native_sd-.20)/.15,0,1);blend=u**3*(u*(6*u-15)+10)
+            known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)[y0:y1,x0:x1]>0
+            context=np.where(known[...,None],source*(1-blend[...,None])+context*blend[...,None],context)
+        out=pred*cov[...,None]+context*(1-cov[...,None])
         for box,alpha,color in self.foreground_layers:
             a,b,c,d=box
             region=out[b-y0:d-y0,a-x0:c-x0]
