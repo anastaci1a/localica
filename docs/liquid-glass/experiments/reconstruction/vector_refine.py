@@ -57,23 +57,24 @@ def main():
         layer['vector_provenance']=dict(method='Clean symmetric frame trace; translate/uniformly scale the whole smooth note cutout, not individual screenshot pixels.',generator='vector_shapes.library_variant',
             svg_viewbox=[100,132],note_transform=dict(dx=float(v[0]),dy=float(v[1]),scale=float(v[2]),center=[46.45,86.35]),
             pose_delta_over_L=[float(v[3]/s.L),float(v[4]/s.L)],pose_scale=float(v[5]))
-        (s.folder/'library-refined.svg').write_bytes(raw)
+        asset=s.folder/'library-refined.svg'
+        assert not asset.exists() or asset.read_bytes()==raw,'Do not overwrite a different vector proposal'
+        asset.write_bytes(raw)
         changes.append(dict(previous=previous,current=copy.deepcopy(layer)))
-    # Reload asset coverage and actual compositing before accepting anything.
-    candidates=[]
-    for s in studies:
-        (s.folder/'case.json').write_text(json.dumps(s.case,indent=2)+'\n');candidates.append(Study(s.folder))
-    after=foreground_errors(candidates,p,co)
-    metrics=[s.scores(s.render(p,np.asarray(co))) for s in candidates]
+    # Vector descriptors are shared with the compositor; coverage is evaluated
+    # from their new immutable assets. Do not write cases until the gates pass.
+    after=foreground_errors(studies,p,co)
+    metrics=[s.scores(s.render(p,np.asarray(co))) for s in studies]
     allowed=permitted(metrics,old['scores']) and bool(np.all(np.asarray(after)<=np.asarray(before)+1e-5))
     if allowed:
         current['scores']=metrics
         current['foreground_style_scores']=dict(old['foreground_style_scores'],before_mse=before,after_mse=after,
             optimizer_evaluations=fit['evaluations'],formula='Unchanged shared foreground responses; one common clean Library geometry family.')
+        for s in studies:(s.folder/'case.json').write_text(json.dumps(s.case,indent=2)+'\n')
     else:
         for s,change in zip(studies,changes):
             layer=next(l for l in s.case['foreground_layers'] if l.get('style_key',l.get('vector_asset'))=='library.svg')
-            layer.clear();layer.update(change['previous']);(s.folder/'case.json').write_text(json.dumps(s.case,indent=2)+'\n')
+            layer.clear();layer.update(change['previous'])
     record=dict(pass_number=args.pass_number,experiment='Shared clean Library note geometry',accepted=allowed,previous=old,current=current,
         trials=[dict(parameters=v.tolist(),**fit,before_mse=before,after_mse=after,scores=metrics)],foreground_case_changes=changes,
         seconds=time.time()-began,gate='Both frozen glass losses/RMSE and every foreground role on both backgrounds retain or improve.',

@@ -49,12 +49,12 @@ def main():
         assert name not in assets or assets[name]==raw,'Contradictory repeated vector provenance'
         assets[name]=raw
     assert assets,'No solid-vector inputs declared'
-    # Finish validation before touching the destination.
-    a.out.mkdir(parents=True,exist_ok=True)
+    # Finish all validation before touching the destination.
     for name,raw in assets.items():
         destination=a.out/name
         assert not destination.exists() or destination.read_bytes()==raw,f'Do not overwrite a different asset: {name}'
-        destination.write_bytes(raw)
+    a.out.mkdir(parents=True,exist_ok=True)
+    for name,raw in assets.items():(a.out/name).write_bytes(raw)
     print(json.dumps(dict(case=case['id'],vectors={name:digest(raw) for name,raw in assets.items()})),flush=True)
 
 

@@ -58,8 +58,12 @@ def main():
                 best=dict(raw=raw,metadata=metadata,color=C.tolist(),placement=[placement(fit.x,l) for l in layers],font=font.name);best_error=errors
         if best is not None:
             filename=key.replace('.svg','-refined.svg');sha=hashlib.sha256(best['raw']).hexdigest()
+            if any((s.folder/filename).exists() and (s.folder/filename).read_bytes()!=best['raw'] for s in studies):
+                filename=key.replace('.svg',f'-{sha[:12]}.svg')
             for i,(s,layer) in enumerate(zip(studies,layers)):
-                previous=copy.deepcopy(layer);(s.folder/filename).write_bytes(best['raw'])
+                previous=copy.deepcopy(layer);asset=s.folder/filename
+                assert not asset.exists() or asset.read_bytes()==best['raw'],'Do not overwrite a different vector proposal'
+                asset.write_bytes(best['raw'])
                 layer.update(vector_asset=filename,style_key=key,vector_sha256=sha,vector_box=best['placement'][i],vector_provenance=dict(best['metadata'],source_url='https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg',method='Original font outlines; family/weight/pose inferred by two-reference fit, not read from Apple app code.'))
                 changes.append(dict(scene=i,previous=previous,current=copy.deepcopy(layer)))
                 s.case['foreground_styles'][key]=dict(color=best['color'],opacity=1.)
