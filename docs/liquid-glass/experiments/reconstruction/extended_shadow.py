@@ -16,6 +16,27 @@ def shadow(study,p,x,y):
     return q['opacity']*np.exp(-.5*(np.maximum(sd,0)/q['sigma'])**2)
 
 
+def refit_fixed_region(study,p,reference):
+    """Keep the original exterior scoring pixels when geometry is refined."""
+    *_,(sd,_,_)=study.shape(study.x,study.y,reference)
+    x0,y0,x1,y1=study.crop
+    B=study.source[y0:y1,x0:x1];T=study.target_crop
+    known=cv2.imread(str(study.folder/'known.png'),cv2.IMREAD_GRAYSCALE)[y0:y1,x0:x1]>0
+    mask=(sd>1.5/study.L)&(sd<.20)&known
+    X=study.x*study.L+study.case['center'][0];Y=study.y*study.L+study.case['center'][1]
+    for a,b,c,d in study.case.get('exterior_exclusions',[]):mask&=~((X>=a)&(X<=c)&(Y>=b)&(Y<=d))
+    px,py=study.x[mask],study.y[mask];B=B[mask];T=T[mask]
+    q=p['shadow'];start=[q['opacity'],q['sigma'],*q['offset']]
+    def evaluate(v):
+        candidate={**p,'shadow':dict(opacity=float(v[0]),sigma=float(v[1]),offset=list(map(float,v[2:4])))}
+        alpha=shadow(study,candidate,px,py)
+        return float(np.mean((B*(1-alpha[...,None])-T)**2))
+    result=minimize(evaluate,start,method='Powell',bounds=[(0,.3),(.015,.5),(-.05,.05),(-.10,.10)],options=dict(maxfev=900,xtol=1e-7,ftol=1e-10))
+    v=result.x if result.fun<evaluate(start) else start
+    candidate={**p,'shadow':dict(opacity=float(v[0]),sigma=float(v[1]),offset=list(map(float,v[2:4])))}
+    return candidate,dict(pixels=int(mask.sum()),rmse=float(np.sqrt(evaluate(v))*255))
+
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('folder',type=Path);args=ap.parse_args();t0=time.time()
     study=Study(args.folder);old=json.loads((args.folder/'accepted.json').read_text());p=old['parameters']
