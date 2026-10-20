@@ -29,16 +29,16 @@ def finish(folder,report,budget):
         assert hashlib.sha256((out/name).read_bytes()).hexdigest()==digest,'Rendered artifact changed'
     for fps in [15,12,10,6]:
         palette=out/'palette.png'
-        subprocess.run(['ffmpeg','-v','error','-threads','2','-filter_threads','1','-y','-i',str(video),'-vf',f'fps={fps},palettegen=max_colors=256:stats_mode=diff','-frames:v','1',str(palette)],check=True)
-        subprocess.run(['ffmpeg','-v','error','-threads','2','-filter_complex_threads','1','-y','-i',str(video),'-i',str(palette),'-lavfi',f'fps={fps}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle','-loop','0','-gifflags','+transdiff',str(gif)],check=True)
+        subprocess.run(['ffmpeg','-v','error','-threads','2','-filter_threads','1','-y','-i',str(video),'-vf',f'fps={fps},palettegen=max_colors=256:stats_mode=full','-frames:v','1',str(palette)],check=True)
+        subprocess.run(['ffmpeg','-v','error','-threads','2','-filter_complex_threads','1','-y','-i',str(video),'-i',str(palette),'-lavfi',f'fps={fps}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=2:diff_mode=rectangle','-loop','0','-gifflags','+transdiff',str(gif)],check=True)
         if gif.stat().st_size<budget*1_000_000:break
     assert gif.stat().st_size<budget*1_000_000,'GIF exceeds its explicit size budget'
     files={}
     for file in [video,gif,out/'comparison.png']:
         if file.suffix in ['.mp4','.gif']:
-            subprocess.run(['ffmpeg','-v','error','-threads','2','-i',str(file),'-f','null','-'],check=True)
+            subprocess.run(['ffmpeg','-v','error','-threads','2','-i',str(file),'-fps_mode','passthrough','-enc_time_base','1/1000','-f','null','-'],check=True)
         files[file.name]=dict(bytes=file.stat().st_size,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
-    report.update(files=files,gif=dict(fps=fps,palette_colors=256,maximum_megabytes=budget,spatial_downsampling=False))
+    report.update(files=files,gif=dict(fps=fps,palette_colors=256,palette_sampling='All frame pixels',dither='bayer',bayer_scale=2,maximum_megabytes=budget,spatial_downsampling=False))
     (out/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report),flush=True)
 
