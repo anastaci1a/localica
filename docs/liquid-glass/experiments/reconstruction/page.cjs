@@ -46,7 +46,7 @@ fs.mkdirSync(out,{recursive:true});
   }
   await page.locator('#scores').scrollIntoViewIfNeeded();
   await page.screenshot({path:path.join(out,`measurements-${width}.png`)});
-  for(const section of ['apple-music-studies','active-switch--in-progress']){
+  for(const section of ['apple-music-studies','active-switch']){
    await page.locator('#'+section).scrollIntoViewIfNeeded();
    await page.screenshot({path:path.join(out,`${section}-${width}.png`)});
   }

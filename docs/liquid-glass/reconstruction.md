@@ -4,7 +4,7 @@ Primary comparisons open with a centered **Wipe** divider: Apple on the left, re
 
 [Mathematical specification](recreation-models.md) · [Parameters](experiments/reconstruction/recipes.json) · [Scores](#scores) · [Reproduce](#reproduce) · [Material roles](#material-roles) · [Guide](README.md)
 
-[Playback](#clear-playback-control) · [Toolbar](#archive-and-plus-toolbar) · [Slider](#active-slider) · [Light/dark](#light-and-dark-surfaces) · [Apple Music](#apple-music-studies) · [Switch in progress](#active-switch--in-progress)
+[Playback](#clear-playback-control) · [Toolbar](#archive-and-plus-toolbar) · [Slider](#active-slider) · [Light/dark](#light-and-dark-surfaces) · [Apple Music](#apple-music-studies) · [Switch](#active-switch)
 
 ## Clear playback control
 
@@ -96,7 +96,7 @@ These test tone, broad lighting and rim. Nearly uniform backdrops cannot identif
 
 ## Apple Music studies
 
-References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Click a comparison for its full-size image.
+References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Use **Full image** for the original full-size pair.
 
 ### Expanded mini-player
 
@@ -253,17 +253,17 @@ Frames A/B: 2.5/2.0 seconds. The foreground has been replaced with a clean symme
 
 </details>
 
-## Active switch — in progress
+## Active switch
 
-Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× snapshots** show 24 initial experiments and paired pass 24, not a completed study. Both use one signed image map and material, with the measured pose/size of each thumb.
+Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). The shared calibration includes 24 initial and 24 paired experiments. These **4× comparisons** use one signed image map and material, with the measured pose/size of each thumb.
 
-[![Switch progress, green track: Apple left, reconstruction right](assets/study-active-switch-progress-a.png)](assets/study-active-switch-progress-a.png)
+[![Switch, green track: Apple left, reconstruction right](assets/study-active-switch-paired-a.png)](assets/study-active-switch-paired-a.png)
 
-[![Switch progress, gray track: Apple left, reconstruction right](assets/study-active-switch-progress-b.png)](assets/study-active-switch-progress-b.png)
+[![Switch, gray track: Apple left, reconstruction right](assets/study-active-switch-paired-b.png)](assets/study-active-switch-paired-b.png)
 
 - The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
 - A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Directional channel separation reproduces part of the inner fringe; upper-rim color and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 24 paired passes. Green-track motion shows pass24; gray-track motion still shows pass22 while its updated capture renders.
+- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 24 paired passes. Both motion captures show pass24. The 4× masters are four seconds at 30 fps; GIF previews are half-size at 15 fps and under 10 MB.
 
 <details>
 <summary>Motion — green track</summary>
@@ -308,7 +308,7 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
 | Home | 55.738 / 114.298 | 6.956 / 9.731 | 22 / 20 | Boundary correction required |
-| Active switch, pass 24 | 232.758 / 276.129 | 12.061 / 14.677 | 24 / 24 | In progress |
+| Active switch, pass 24 | 232.758 / 276.129 | 12.061 / 14.677 | 24 / 24 | Paired calibration |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Home's missing single-to-paired boundary check is explicitly flagged above.
 - These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.

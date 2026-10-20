@@ -3,14 +3,14 @@
     1570,
     1140
   ],
-  "frames": 90,
-  "duration_ms": 5990,
+  "frames": 60,
+  "duration_ms": 3990,
   "minimum_duration_ms": 60,
   "maximum_duration_ms": 70,
   "first_gif_frame_rgb_rmse_to_video_frames_0_1_2": [
-    1.497012734413147,
-    2.1272315979003906,
-    3.071533679962158
+    1.5261752605438232,
+    2.624319076538086,
+    4.0011467933654785
   ],
   "nearest_video_frame": 0,
   "limits": "Palette/encode diagnostic, separate from native glass score. Nearest early video frame accounts for GIF frame-rate resampling phase."
