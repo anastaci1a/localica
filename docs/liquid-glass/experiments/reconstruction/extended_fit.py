@@ -30,14 +30,17 @@ STAGES = {
  15: ('Continuous tangential-falloff curvature', ['tangent_exponent','tangent','tangent_band']),
  16: ('Outline-orientation normal and tangential power', ['cap_normal_gain','cap_tangent_fade','sigma']),
  17: ('Coupled cap and normal-profile refinement', [*[f'c{i}' for i in range(7)],'cap_normal_gain','cap_tangent_fade']),
+ 18: ('C2 cap-to-body curvature join', ['cap_join_width']),
+ 19: ('Smooth-cap optical settlement', [*[f'c{i}' for i in range(7)],'sigma','blur_transition','cap_normal_gain']),
 }
 BOUNDS = dict(sigma=(0,32), amplitude=(0,2), band=(.03,1), power=(1.2,5),
               tangent=(0,.45), tangent_band=(.03,1), core_x=(0,.025),core_y=(0,.18),
               post_sigma=(0,3), coupling=(0,1),gamma=(.65,1.55),
               rim_width=(.008,.30), thin_width=(.003,.05),
               shape_dx=(-.05,.05),shape_dy=(-.05,.05),half_x_delta=(-.05,.05),half_y_delta=(-.05,.05),radius_delta=(-.05,.05),
-              blur_transition=(0,1),tangent_exponent=(2,8),
+              blur_transition=(0,1),tangent_exponent=(3,8),
               cap_normal_gain=(-.8,1.8),cap_tangent_fade=(0,1),
+              cap_join_width=(0,.35),
               **{f'c{i}':(0,2.5) for i in range(7)})
 
 
@@ -121,6 +124,20 @@ class Study:
         x=x-p.get('shape_dx',0);y=y-p.get('shape_dy',0)
         half=self.half+[p.get('half_x_delta',0),p.get('half_y_delta',0)]
         radius=min(self.radius+p.get('radius_delta',0),min(half))
+        join=p.get('cap_join_width',0)
+        if join>1e-8 and abs(half[0]-half[1])>join:
+            from curvature import capsule_offset
+            # An explicit C2 implicit footprint, with its analytic normal.
+            # Its radial residual is a boundary coordinate, NOT an exact
+            # Euclidean signed distance within the small smoothed join.
+            horizontal=half[0]>half[1]
+            major,minor=(x,y) if horizontal else (y,x)
+            R=min(half);a=max(half)-R
+            q,qd=capsule_offset(np.abs(major)-a,join)
+            r=np.hypot(q,minor)
+            na=q*qd*np.sign(major);nb=minor;size=np.maximum(np.hypot(na,nb),1e-12)
+            nx,ny=(na/size,nb/size) if horizontal else (nb/size,na/size)
+            return x,y,half,R,(r-R,nx,ny)
         return x,y,half,radius,geometry(x,y,half,radius)
 
     def field(self,x,y,p):
@@ -252,6 +269,10 @@ def main():
         candidate=copy.deepcopy(start);candidate.update(dict(zip(keys,map(float,v))))
         loss,co=study.fit(candidate);evaluations+=1
         if loss<best[0]:best[:]=[loss,candidate,co]
+        if evaluations%250==0:
+            partial=dict(pass_number=args.number,evaluations=evaluations,training_loss=best[0],parameters=best[1],material=best[2].tolist(),seconds=time.time()-t0)
+            (args.folder/f'running-{args.number:02}.json').write_text(json.dumps(partial,indent=2)+'\n')
+            print(json.dumps({k:partial[k] for k in ['pass_number','evaluations','training_loss','seconds']}),flush=True)
         return loss
     x=np.array([start.get(k,4. if k=='tangent_exponent' else 0.) for k in keys]);bounds=[BOUNDS[k] for k in keys]
     # Powell handles the explicit finite bilinear-sampling resolution without
