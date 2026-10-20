@@ -1,0 +1,18 @@
+{
+  "glass_pixels": 15289,
+  "source_observed_fraction": 1.0,
+  "gaussian_3sigma_observed_fraction": 1.0,
+  "source_gaussian_radius_native_px": 20,
+  "source_coordinate_range": [
+    [
+      352.1595458984375,
+      616.9739990234375
+    ],
+    [
+      463.7815856933594,
+      728.5907592773438
+    ]
+  ],
+  "inverted_local_mapping_fraction": 0.7222839950291059,
+  "limits": "Native-grid finite-difference diagnostics. A negative lookup Jacobian indicates local orientation reversal; a fold is a singular locus. Neither establishes a physical caustic. Source-known pixels may retain video/recovery error;3sigma omits a Gaussian tail and output scattering is not propagated."
+}

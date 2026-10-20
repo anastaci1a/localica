@@ -1,0 +1,51 @@
+{
+  "paired_passes": 6,
+  "scores": [
+    {
+      "glass": {
+        "pixels": 15221,
+        "rmse": 7.119659423828125
+      },
+      "rim": {
+        "pixels": 8296,
+        "rmse": 8.607177734375
+      },
+      "held": {
+        "pixels": 2797,
+        "rmse": 8.366684913635254
+      },
+      "interior": {
+        "pixels": 6925,
+        "rmse": 4.760683059692383
+      },
+      "ssim": 0.9707398414611816,
+      "loss": 57.70773778324946
+    },
+    {
+      "glass": {
+        "pixels": 15289,
+        "rmse": 10.036589622497559
+      },
+      "rim": {
+        "pixels": 8364,
+        "rmse": 13.029637336730957
+      },
+      "held": {
+        "pixels": 2804,
+        "rmse": 13.613531112670898
+      },
+      "interior": {
+        "pixels": 6925,
+        "rmse": 4.165192604064941
+      },
+      "ssim": 0.967451274394989,
+      "loss": 121.444626613318
+    }
+  ],
+  "foreground_mse": [
+    34.345084548867064,
+    22.789262087605223
+  ],
+  "gate": "Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.",
+  "scope": "Same video, different observed backdrops. Does not establish generality across devices, apps or lighting."
+}
