@@ -153,14 +153,14 @@ Frames A/B: 2.5/2.0 seconds. The foreground has been replaced with a clean symme
 
 ## Active switch — in progress
 
-Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× snapshots** show 24 initial experiments and paired pass 20, not a completed study. Both use one signed image map and material, with the measured pose/size of each thumb.
+Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× snapshots** show 24 initial experiments and paired pass 21, not a completed study. Both use one signed image map and material, with the measured pose/size of each thumb.
 
 [![Switch progress, green track: Apple left, reconstruction right](assets/study-active-switch-progress-a.png)](assets/study-active-switch-progress-a.png)
 
 [![Switch progress, gray track: Apple left, reconstruction right](assets/study-active-switch-progress-b.png)](assets/study-active-switch-progress-b.png)
 
 - The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
-- The gray-track rendering retains excess green in its rim. Colored reflection and edge shape remain incomplete; there is no claim of a recovered Apple solid.
+- A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Colored reflection and edge shape remain incomplete; there is no claim of a recovered Apple solid.
 - [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). Final paired verification and motion captures are pending.
 
 ### Colored switch rim
@@ -183,7 +183,7 @@ Each crop below places Apple on the left and snapshot 6 on the right. The gray-t
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
 | Home | 55.738 / 114.298 | 6.956 / 9.731 | 22 / 20 | Boundary correction required |
-| Active switch, pass 20 | 254.741 / 456.624 | 12.615 / 17.912 | 24 / 20 | In progress |
+| Active switch, pass 21 | 254.741 / 329.425 | 12.615 / 15.767 | 24 / 21 | In progress |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Home's missing single-to-paired boundary check is explicitly flagged above.
 - These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.
