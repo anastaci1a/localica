@@ -1,0 +1,18 @@
+{
+  "glass_pixels": 14904,
+  "source_observed_fraction": 1.0,
+  "gaussian_3sigma_observed_fraction": 1.0,
+  "source_gaussian_radius_native_px": 19,
+  "source_coordinate_range": [
+    [
+      1454.7886962890625,
+      616.6420288085938
+    ],
+    [
+      1567.2626953125,
+      729.1145629882812
+    ]
+  ],
+  "inverted_local_mapping_fraction": 0.8259527643585615,
+  "limits": "Native-grid diagnostics. A fold is a negative2D lookup Jacobian, not proof of a physical caustic. Source-known pixels may retain video/recovery error;3sigma omits a Gaussian tail and output scattering is not propagated."
+}
