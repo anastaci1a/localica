@@ -1,10 +1,10 @@
 {
   "status": "In progress, not a final paired study",
-  "rendering_code_commit": "df54bb97c70cbba22f4e3a54108d7621da56ea09",
+  "rendering_code_commit": "32fe42524eef451a5b3e5670c413cb77b9f52fc7",
   "gallery_script_sha256": "000265a42d4acb834feaeeee3abde14d9a29295c82fa5db6f030edeaf72d2894",
-  "state_record_sha256": "5bcbda07d3b43149033555bd51196220a06cf1c8ba31e3b53053bdb767b2d4b5",
+  "state_record_sha256": "37e6e304874b26f2901da2202807ad1e9dabc1ee9b497935bd4fc899fc2d7a5a",
   "single_passes": 10,
-  "paired_passes": 19,
+  "paired_passes": 20,
   "output_scale": 4,
   "recipe": {
     "parameters": {
@@ -139,8 +139,8 @@
     ],
     "foreground_scores": {
       "before_mse": [
-        8.949958834763377,
-        11.653005991392844
+        8.949767290185129,
+        11.652942301008027
       ],
       "after_mse": [
         8.949767290185129,
