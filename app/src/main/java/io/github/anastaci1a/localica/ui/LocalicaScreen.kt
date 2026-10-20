@@ -55,6 +55,7 @@ fun LocalicaScreen(
     onScanAll: () -> Unit = { library.snapshot.folders.forEach { onRescan(it.uri) } },
     scannerRequest: Int = 0,
     onRetryPlayback: () -> Unit = onToggle,
+    onSeekRequest: ((Long, String?) -> Long)? = null,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val session: SessionSelection = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -338,7 +339,7 @@ fun LocalicaScreen(
             onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
-            artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
+            onSeekRequest = onSeekRequest, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"

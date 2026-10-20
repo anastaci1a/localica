@@ -562,6 +562,74 @@ class PlaybackIntentTest {
         } }
     }
 
+    @Test fun seekReceiptFollowsNativeApplicationBeforeItsSlowPersistence() = fixture {
+        awaitMain { player.duration > 0 }
+        val visit = withContext(Dispatchers.Main) { player.currentMediaItem?.queueVisit }
+        val held = dao.gateNextSave()
+        queues.rename(first.id, "Hold pending seek")
+        held.entered.await()
+        val receipt = CompletableDeferred<Pair<Boolean, QueuePlaybackSample?>>()
+        withContext(Dispatchers.Main) {
+            queues.requestSeek(1_500, visit) { applied, sample -> receipt.complete(applied to sample) }
+        }
+        assertFalse("Enqueue is not acknowledgement", receipt.isCompleted)
+        held.release.complete(Unit)
+        val result = receipt.await()
+        assertTrue(result.first)
+        assertEquals(1_500L, result.second!!.positionMs)
+        assertEquals(visit, result.second!!.playbackVisit)
+        barrier()
+        val persistence = dao.gateNextSave()
+        val second = CompletableDeferred<Boolean>()
+        withContext(Dispatchers.Main) {
+            queues.requestSeek(500, visit) { applied, sample ->
+                assertEquals(500L, sample!!.positionMs)
+                second.complete(applied)
+            }
+        }
+        assertTrue(second.await())
+        persistence.entered.await()
+        assertFalse("Receipt does not wait for queue persistence", persistence.release.isCompleted)
+        persistence.release.complete(Unit)
+    }
+
+    @Test fun seekQueuedBeforeServiceReplacementCannotApplyToTheReplacement() = fixture {
+        awaitMain { player.duration > 0 }
+        val visit = withContext(Dispatchers.Main) { player.currentMediaItem?.queueVisit }
+        val held = dao.gateNextSave()
+        queues.rename(first.id, "Hold replacement")
+        held.entered.await()
+        val replacement = newPlayer()
+        val receipt = CompletableDeferred<Boolean>()
+        withContext(Dispatchers.Main) {
+            queues.requestSeek(1_500, visit) { applied, _ -> receipt.complete(applied) }
+            queues.detach(player)
+            queues.attach(replacement)
+        }
+        held.release.complete(Unit)
+        assertFalse("Captured native generation must still own the request", receipt.await())
+        barrier()
+    }
+
+    @Test fun failedUnavailableAndClosedSeekCommandsCompleteAsRejected() = fixture {
+        awaitMain { player.duration > 0 }
+        val visit = withContext(Dispatchers.Main) { player.currentMediaItem?.queueVisit }
+        suspend fun rejected() {
+            val receipt = CompletableDeferred<Boolean>()
+            withContext(Dispatchers.Main) {
+                queues.requestSeek(1_500, visit) { applied, _ -> receipt.complete(applied) }
+            }
+            assertFalse(receipt.await())
+        }
+        withContext(Dispatchers.Main) { player.durationOverride = 0 }
+        rejected()
+        withContext(Dispatchers.Main) { player.durationOverride = null; player.rejectSeek = true }
+        rejected()
+        withContext(Dispatchers.Main) { player.rejectSeek = false }
+        actor.coroutineContext[Job]!!.cancelAndJoin()
+        rejected()
+    }
+
     private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false, test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -591,7 +659,7 @@ class PlaybackIntentTest {
         }
         val native = player()
         val attached = if (rawPlayer) native.engine else native
-        val fixture = Fixture(this, queues, dao, store, native, QueueTransportPlayer(attached, queues), first, second, track, file, readers, library, ::player)
+        val fixture = Fixture(this, actor, queues, dao, store, native, QueueTransportPlayer(attached, queues), first, second, track, file, readers, library, ::player)
         var primaryFailure: Throwable? = null
         try {
             if (!blockRestore) fixture.awaitMain { !queues.state.value.loading }
@@ -627,7 +695,7 @@ class PlaybackIntentTest {
         } }
     }
 
-    private class Fixture(scope: CoroutineScope, val queues: QueueController, val dao: IntentDao, val store: IntentStore,
+    private class Fixture(scope: CoroutineScope, val actor: CoroutineScope, val queues: QueueController, val dao: IntentDao, val store: IntentStore,
         val player: RecordingPlayer, val controls: QueueTransportPlayer, val first: ListeningQueue, val second: ListeningQueue,
         val track: Track, val file: File, val readers: NativeReaders, val library: LibraryRepository, val newPlayer: suspend () -> RecordingPlayer) : CoroutineScope by scope {
         suspend fun withHeldEdit(trackId: String, action: suspend () -> Unit) {
@@ -656,6 +724,13 @@ class PlaybackIntentTest {
 
     private class RecordingPlayer(val engine: ExoPlayer) : ForwardingPlayer(engine) {
         var stateOverride: Int? = null
+        var durationOverride: Long? = null
+        var rejectSeek = false
+        override fun getDuration() = durationOverride ?: super.getDuration()
+        override fun seekTo(positionMs: Long) {
+            check(!rejectSeek) { "Controlled native seek failure" }
+            super.seekTo(positionMs)
+        }
         var suppression: Int? = null
         var error: PlaybackException? = null
         private val requested = CopyOnWriteArrayList<Boolean>()
