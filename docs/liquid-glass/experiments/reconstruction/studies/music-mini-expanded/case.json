@@ -1,0 +1,130 @@
+{
+  "id": "music-mini-expanded",
+  "category": "Persistent playback control",
+  "center": [
+    961,
+    414.5
+  ],
+  "half": [
+    640,
+    88.5
+  ],
+  "radius": 88.5,
+  "crop": [
+    280,
+    290,
+    1640,
+    540
+  ],
+  "foreground": [
+    [
+      374,
+      354,
+      491,
+      475
+    ],
+    [
+      515,
+      358,
+      805,
+      467
+    ],
+    [
+      1270,
+      375,
+      1347,
+      456
+    ],
+    [
+      1415,
+      375,
+      1535,
+      456
+    ]
+  ],
+  "reference": {
+    "video": "music",
+    "seconds": 0,
+    "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+  },
+  "foreground_method": "Reference-derived sharp coverage; black/gray calculated fills; artwork retained as content. No rectangular reference-glass restoration.",
+  "background": "Masked temporal translation mosaic; sample confidence fixed before pass01.",
+  "source_sha256": {
+    "source.png": "38dd774b3b87ab4acaa9bb9588b63995df18d7da7ac89fb77697da6e1a1d3830",
+    "target.png": "f1eae5af7870bdc4088000595045187b31d26f4401a79fd61d0a2634e7529d0d",
+    "known.png": "89104ca1981763478097dd344e6a433002e8a14445226f238a07433301fd4412"
+  },
+  "foreground_layers": [
+    {
+      "mode": "artwork",
+      "box": [
+        376,
+        356,
+        491,
+        474
+      ],
+      "radius": 17
+    },
+    {
+      "mode": "mask",
+      "box": [
+        515,
+        360,
+        805,
+        413
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.16
+    },
+    {
+      "mode": "mask",
+      "box": [
+        515,
+        421,
+        666,
+        465
+      ],
+      "color": [
+        0.38,
+        0.38,
+        0.39
+      ],
+      "threshold": 0.46,
+      "neutral_only": true
+    },
+    {
+      "mode": "mask",
+      "box": [
+        1270,
+        375,
+        1347,
+        456
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.18
+    },
+    {
+      "mode": "mask",
+      "box": [
+        1415,
+        375,
+        1535,
+        456
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.18
+    }
+  ]
+}
