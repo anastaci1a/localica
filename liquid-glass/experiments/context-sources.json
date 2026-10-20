@@ -1,0 +1,32 @@
+{
+  "reviewDate": "2026-10-19",
+  "scope": "Visual context review; not geometric calibration. Files are acquired privately and never bundled in Pages.",
+  "sources": [
+    {
+      "id": "music",
+      "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4",
+      "sha256": "6b86a90b7166736c458c5c17ff55d8ac35d5b19d29ad889cc34afaa9fa4ce20b",
+      "context": "Apple June 2025 announcement; exact OS build and settings unknown",
+      "reviewedSeconds": [[0, 7]],
+      "sampling": "1 second contact sheet; album-card and text crossings under mini player and navigation"
+    },
+    {
+      "id": "details",
+      "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4",
+      "sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+      "context": "Apple June 2025 announcement montage; component roles and scales differ",
+      "reviewedSeconds": [[0, 19]],
+      "sampling": "1 second contact sheets; focused comparison of 6–16 seconds"
+    },
+    {
+      "id": "macrumors",
+      "url": "https://www.youtube.com/watch?v=gCov2x7oo6Y",
+      "sha256": "6b3c32c0234f19fbe43ccd39e65a7769e7272775a873a85f5643162b3e018c85",
+      "context": "MacRumors original hands-on, June 2025 early beta; handheld footage, not a raw screen capture",
+      "acquisition": "yt-dlp format 398, MP4 video only, 720p; hash is for that encoding",
+      "reviewedSeconds": [[0, 360], [47, 67], [236, 250], [337, 353]],
+      "sampling": "15 second overview, then 2 second contact sheets for the three focused intervals",
+      "exclusions": "Advertisements, presenter footage and reused Apple Music inserts are not independent device evidence. No quantitative optical fitting."
+    }
+  ]
+}

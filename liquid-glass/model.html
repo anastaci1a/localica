@@ -1,0 +1,252 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · model</title><link rel="stylesheet" href="lab.css?v=8cc6da3c98d8"><link rel="stylesheet" href="guide.css?v=8cc6da3c98d8"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="portable-optical-and-motion-equations">Portable optical and motion equations</h1>
+<p><a href="index.html">Guide</a> · <a href="optics.html">Observed Apple evidence</a> · <a href="lab.html">Lab</a> · <a href="model.js?v=8cc6da3c98d8">Executable reference</a></p>
+<p><strong>Status:</strong> mathematically specified Localica hypotheses, not recovered Apple formulas. These equations define a candidate for future rendering, not the current Android renderer. The small reference has no browser, GPU or framework dependency. The <a href="experiments/model-fixtures.json">portable fixtures</a> provide boundary, core and corner coordinates/normals/derivatives for later backend comparisons. Use the same units and conventions when porting it; do not copy a shader&#39;s constants without its domains.</p>
+<p>The frozen reference recreations have their own <a href="recreation-models.html">dimensionless recipes</a>. This page also describes experimental models preserved on <code>research/glass-lab-preserved-222</code>; mentions of their lab controls do not describe the deployed lab. Its executable reference is separate from the deployed renderer.</p>
+<h2 id="coordinates-and-validity">Coordinates and validity</h2>
+<ul>
+<li>Shape-local position <code>p=(x,y)</code>, positive X right, positive Y down; positive Z toward the viewer. All lengths use one logical coordinate system. Convert device pixels only at rasterization/sampling boundaries.</li>
+<li>Rounded rectangle half-size <code>h=(hx,hy)&gt;0</code>; <code>0&lt;r≤min(h)</code>. Circle and capsule are special cases. Zero radius is outside this model&#39;s domain.</li>
+<li>Rays propagate <strong>toward</strong> the interface. This differs from conventions that store a vector pointing back toward the ray origin.</li>
+<li><code>F(p)</code> is an <strong>inverse image map</strong>: output position <code>p</code> samples source position <code>F(p)</code>. Source-feature movement has the opposite interpretation. Add the surface&#39;s backdrop-space origin after evaluating this local map.</li>
+<li>Material/optical state, source transform, clip, foreground and shadow must use the same frame and geometry. Optical mapping does not include foreground text.</li>
+<li>Valid finite input is a caller precondition. The reference is an oracle, not an untrusted-input API. Production adapters must reject invalid dimensions, nonfinite values and unsupported optical ranges.</li>
+</ul>
+<p>For component-wise absolute value and maximum:</p>
+<pre><code class="language-text">q = abs(p) − h + r
+sd(p) = length(max(q,0)) + min(max(qx,qy),0) − r
+d = −sd(p)                         // positive inside
+b = min(r, min(h) × band)          // 0 &lt; band ≤ 1
+u = clamp(d/b, 0, 1)
+n = gradient(sd)                  // unit outward normal where differentiable
+S(u) = 6u⁵ − 15u⁴ + 10u³
+</code></pre>
+<p>Inside the active band, straight sides have constant <code>n</code>; circular corner contours have curvature <code>κd=1/(r−d)</code>. <strong>Straight segments have zero curvature even when one component of <code>max(q,0)</code> is positive.</strong> The medial axis has no unique normal; the edge contribution and its first derivative vanish before or at that axis. The signed-distance outline is C1 at straight/arc joins, not globally C2. One-sided derivatives are appropriate there.</p>
+<h2 id="boundary-field-displacement-is-not-compression">Boundary field: displacement is not compression</h2>
+<p>This is a designed image warp, not an optical solid. It allows separate core magnification, edge strength, band width and outline displacement.</p>
+<pre><code class="language-text">R(u) = (1−u)³(1+3u)
+H(u) = (256/27) u(1−u)³
+P(u) = ρ R(u) + (1−ρ) H(u)        // 0 ≤ ρ ≤ 1
+c = core × power
+a(d) = b × edge × power × P(u)
+F(p) = (1 − c S(u)) p − a(d) n
+</code></pre>
+<ul>
+<li><code>P(0)=ρ</code>, so a positive <code>ρ</code>, edge and power retain displacement at the outline. <code>P′(0)=(1−ρ)256/27</code>, so the map also has a rising compression band when <code>ρ&lt;1</code>.</li>
+<li><code>P(1)=P′(1)=P″(1)=0</code>: no artificial inner shoulder join. <code>0≤P≤1</code>; the maximum edge contribution is bounded by <code>b×edge×power</code>.</li>
+<li>In the core, <code>F=(1−c)p</code>; displayed magnification is <code>1/(1−c)</code>, provided <code>c&lt;1</code>. The slider named optical power is dimensionless gain, <strong>not geometric thickness</strong>.</li>
+<li>The older <code>16u²(1−u)²</code> profile forces displacement and its derivative to zero at the outline. It explains an apparently inactive outer strip. The alternative <code>R</code> retains outline displacement but has a negative inward derivative: much of that band magnifies rather than compresses. Both remain explicitly labeled comparisons.</li>
+<li>None of these outline continuations is calibrated to Apple&#39;s outermost rim. A physical interface can have a source-coordinate discontinuity at its silhouette; that is different from an unwanted seam inside the material.</li>
+</ul>
+<p><img src="assets/edge-profile.svg?v=8cc6da3c98d8" alt="Inverse displacement and normal derivative across the edge band"></p>
+<h3 id="jacobian-and-folds">Jacobian and folds</h3>
+<p>Let <code>t=(-ny,nx)</code>, <code>S_d′=30u²(1−u)²/b</code> within the band, and <code>a_d′=edge×power×P′(u)</code>. On a differentiable boundary segment:</p>
+<pre><code class="language-text">J = ∂F/∂p = (1−cS)I + c S_d′ p⊗n + a_d′ n⊗n − a κd t⊗t
+Jnn = 1−cS + c S_d′(p·n) + a_d′
+Jtt = 1−cS − a κd
+Jtn = c S_d′(p·t); Jnt = 0
+ det(J) = Jnn × Jtt
+</code></pre>
+<ul>
+<li>A straight-edge normal derivative above 1 compresses source detail in the output; between 0 and 1 magnifies it. A large constant lookup offset is translation, not compression.</li>
+<li>Singular values of <code>J</code> describe general local directional scale; their reciprocals describe displayed feature scale. Determinant alone cannot establish isotropic compression. Zero determinant is a local collapse; a sign reversal indicates a fold.</li>
+<li>For nonnegative core, edge and power, the following <strong>sufficient local nonfolding bounds</strong> follow from <code>p·n≥0</code> and <code>b/(r−bu)≤1/(1−u)</code>:</li>
+</ul>
+<pre><code class="language-text">power × (core + edge × D) &lt; 1
+power × (core + edge × T) &lt; 1
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th align="right">Upper bound D on −P′</th>
+<th align="right">Upper bound T on P/(1−u)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Old shoulder</td>
+<td align="right"><code>16√3/9</code></td>
+<td align="right"><code>64/27</code></td>
+</tr>
+<tr>
+<td>Rim-only R</td>
+<td align="right"><code>16/9</code></td>
+<td align="right"><code>256/243</code></td>
+</tr>
+<tr>
+<td>Finite rim + compression</td>
+<td align="right"><code>ρ16/9+(1−ρ)64/27</code></td>
+<td align="right"><code>ρ256/243+(1−ρ)1024/729</code></td>
+</tr>
+</tbody></table>
+<p>These are conservative: failing a bound means <strong>uncertified</strong>, not necessarily folded. They certify local orientation, not global one-to-one mapping. Motion changes effective power, so repeat the bound with its maximum depth multiplier. Extreme controls intentionally permit folds for inspection; do not silently ship those ranges as safe defaults.</p>
+<h2 id="refracting-cap-comparator">Refracting cap comparator</h2>
+<p>A second model relates a surface normal, thickness and backdrop distance through geometric optics. Its assumed solid has a rounded top and a flat exit plane; the camera is orthographic. Apple does not document this geometry. Generic transmission and reflection are distinct parts of the <a href="https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission">Snell/Fresnel model</a>.</p>
+<h3 id="height-and-analytic-normal">Height and analytic normal</h3>
+<pre><code class="language-text">v = 1−u; f² = 1−v³; f = sqrt(f²)
+C(p) = 1 − 0.036[(x/hx)² + (y/hy)²]
+hcap(p) = H f C(p)
+grad(C) = (−0.072x/hx², −0.072y/hy²)
+N = normalize( H[1.5v² C n/b − f² grad(C)], f )
+</code></pre>
+<ul>
+<li>The last expression is <code>(-grad(hcap),1)</code> multiplied by <code>f</code>. It evaluates the <strong>vertical limiting rim normal</strong> without a finite-difference stencil or division by zero. For <code>H&gt;0</code>, <code>Nz→0</code> as <code>d→0+</code>.</li>
+<li>At <code>u=1</code>, <code>f</code> joins the weak curved crown with zero first and second shoulder derivatives. The crown coefficient is an adjustable-model choice fixed here at 0.036; it is not an Apple measurement.</li>
+<li>The former quintic-height ramp made the normal vertical in Z at the outline, flattening the rim and suppressing its refraction. Increasing height alone could not correct that boundary condition.</li>
+<li><code>H</code> is geometric height; <code>G≥0</code> is the separate distance from the exit plane to the backdrop. The lab uses <code>H=L×thickness×power×dynamicDepth</code>, <code>G=L×gap</code>, with <code>L</code> the shorter <strong>unstrained</strong> half-size. No fixed 14/5-pixel geometry remains.</li>
+</ul>
+<h3 id="two-interface-ray">Two-interface ray</h3>
+<p>For unit incident propagation vector <code>I</code>, unit normal <code>N</code> opposing it, and index ratio <code>η=nIncident/nTransmitted</code>:</p>
+<pre><code class="language-text">c = −dot(I,N)
+k = 1 − η²(1−c²)
+k &lt; 0: no transmitted ray (total internal reflection)
+T = ηI + (ηc − sqrt(k))N
+</code></pre>
+<p>For this comparator:</p>
+<pre><code class="language-text">I = (0,0,−1)
+Tinside = refract(I, N, 1/ior)
+Q = p + Tinside.xy × hcap(p)/(−Tinside.z)
+Tout = refract(Tinside, (0,0,1), ior)
+F(p) = Q + Tout.xy × G/(−Tout.z)
+</code></pre>
+<ul>
+<li>Restrict <code>1≤ior≤1.4&lt;√2</code> here. With orthographic incident rays, the first transmitted ray has <code>−Tinside.z≥1/ior</code>; at exit <code>−Tout.z≥sqrt(2−ior²)&gt;0</code>. This avoids TIR and grazing denominators in this specific construction. It is <strong>not</strong> a general guarantee for tilted cameras or other shapes.</li>
+<li>Never replace a failed refraction with a zero vector or clamp a ray denominator to an arbitrary positive constant: both silently change the model. A more general renderer must handle reflection/visibility explicitly.</li>
+<li>The reference rejects exits outside the projected body. Tests sample ray segments beneath the top surface; they do not prove global solid-path validity for every future shape/parameter. Treat unvalidated geometries as unsupported.</li>
+<li>At the outline, thickness is zero but a nonzero gap can still yield a finite limiting offset. With <code>G=0</code>, outline displacement vanishes for a legitimate geometric reason. A physically correct grazing interface also reflects strongly; finite lookup displacement alone does not imply visible transmitted detail there.</li>
+<li><code>H=0</code> or <code>ior=1</code> explicitly gives the identity map. The <code>H→0</code> limit is not uniform at an exactly vertical rim when <code>G&gt;0</code>; this comparator is unsuitable as a fade-to-zero-opacity formula. Fade material coverage independently.</li>
+<li>Full Fresnel-weighted energy, internal reflections, absorption, dispersion, caustics and multiple scattering are absent. The lab adds an independent synthetic highlight (the field model uses a fixed 0.3-reference-height cap for that lighting only), so calling its complete output a physically accurate renderer would be incorrect.</li>
+</ul>
+<h2 id="reconstruction-comparators">Reconstruction comparators</h2>
+<p>The <a href="reconstruction.html">HD study</a> tests offline hypotheses beyond the portable lab&#39;s circle/capsule equations:</p>
+<ul>
+<li><strong>Superellipse control:</strong> <code>|x/hx|^n+|y/hy|^n=1</code>. The earlier slider used visually selected <code>n=2.5</code>. Measuring the dark upper contour exposed its error; it remains a shape/control test, not the final slider outline.</li>
+<li><strong>Measured smooth oval:</strong> <code>u=x/hx</code>, <code>v=y/hy</code>, <code>Q(u)=1+a u²+b u⁴</code>, <code>T=u²+[v/Q(u)]²=1</code>. The <a href="experiments/reconstruction/contour.json">contour fit</a> gives <code>a≈0.49940</code>, <code>b≈−0.23031</code> and half-extents 118.5 × 56.5. Thus <code>Tx=[2u−2v²Q′/Q³]/hx</code>, <code>Ty=2v/(hy Q²)</code>. Nearest-boundary distance and implicit-gradient normals use the same curve. Its sampled minimum curvature radius is about 43.39 pixels; the optical band is limited to 43.38. A measured dark ridge is still a silhouette proxy, not proof of Apple&#39;s equation. Bottom/right symmetry is assumed; numeric convexity sampling is not a proof for arbitrary coefficients.</li>
+<li><strong>Flexible inverse-map profile:</strong> <code>a(d)=min(hx,hy) Σ ci Bi(clamp(d/r,0,1))</code>, with cubic B-splines on knots <code>[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]</code>. Seven coefficients are fitted and the final three are zero. Therefore <code>a</code>, <code>a′</code> and <code>a″</code> vanish at the inner join. The map is <code>F=(x(1−cxS), y(1−cyS))−a n</code>, with quintic <code>S</code> evaluated at <code>d/r</code>. This allows independently fitted central X/Y scale and a flexible folded rim, without a fitted displacement image. It is an empirical comparator, not a physical surface reconstruction or a nonfolding guarantee.</li>
+</ul>
+<h3 id="radial-transition-and-foreground-color-controls">Radial transition and foreground-color controls</h3>
+<p>For the circular playback study, a radial inverse map isolates the rim-to-center transition from silhouette and lighting. With <code>r=|v|</code>, inward depth <code>d=R−r</code>, and displacement <code>a(d)</code>, use <code>F(v)=(1−a/r)v</code>; the center is identity when the displacement support ends before <code>R</code>. The initial profile is <code>a0=A clamp(1−d/b,0,1)^p</code>, <code>p&gt;2</code>. An exponent barely above two is mathematically C2 at its inner endpoint but its second derivative approaches zero very slowly. C2 continuity alone does not ensure a perceptually gradual transition at pixel scale.</p>
+<p>The following splice preserves the outer map and independently varies the inner tail. Define <code>da=b/4</code>, <code>ds=b/2</code>, <code>w0=b/2</code>, width factor <code>k≥1</code>, shoulder gain <code>g&gt;0</code>, and inner-end exponent <code>q&gt;2</code>:</p>
+<pre><code class="language-text">for d≤ds:
+  a = a0(d) [1+(g−1) S5(clamp((d−da)/(ds−da),0,1))]
+for ds&lt;d&lt;ds+k w0:
+  t = (d−ds)/(k w0)
+  a = g A 2^(−p) (1−t)^q
+      × exp[(q−pk)t + (q−pk²)t²/2]
+after that: a = 0
+S5(u) = 10u³−15u⁴+6u⁵
+</code></pre>
+<ul>
+<li>At <code>ds</code>, value, first and second derivative match <code>g a0</code>; the gain ramp also joins C2. <code>q&gt;3</code> makes the <strong>inner endpoint</strong> C3; it does not make the entire splice C3. <code>k=g=1, q=p</code> recovers the original profile exactly.</li>
+<li>Require <code>ds+k w0&lt;R</code> for a quiet center. The outermost <code>b/4</code> is unchanged. Tail support grows with <code>k</code>, but visible transition width need not grow proportionally: matching the entry derivatives constrains the tail. Neither <code>g</code> nor <code>q</code> is a measured physical surface curvature.</li>
+<li>The radial/tangential Jacobian eigenvalues are <code>1+a′(d)</code> and <code>1−a/r</code>. A sign change can invert source detail. Test supported parameters for additional folds; smoothness and gradient-potential integrability do not establish a valid refracting solid or Apple fidelity.</li>
+</ul>
+<p>Foreground color is a separate control. Independent RGB power responses can fit one pose yet reverse warm hues when moved over a different part of the source. A shared monotone scalar response <code>C=(f(BR),f(BG),f(BB))</code> preserves channel ordering and neutral grays, with a white plateau if <code>f(u)=1</code> above a threshold. One compact approximation uses monotone PCHIP through input knots <code>t[0,.3,.55,.8,1]</code> followed by <code>1</code>, with increasing output values from a configurable floor to <code>1</code>, followed by <code>1</code>. Positive normalized output increments enforce ordering. This interpolation is C1, not generally C2. It may fit the measured icon less closely than independent channels; retain that accuracy/generalization tradeoff. These are empirical encoded-RGB shading controls, not identified Apple lighting equations.</p>
+<p>A highlight-reduction alternative retains the existing response and applies <code>f(c)=c−k u³(1−c)</code>, <code>u=clamp((c−t)/(1−t),0,1)</code>, independently to each component. For <code>0≤k≤4</code> it is monotone: within the shoulder, <code>f′=1−k u²(3−4u)≥1−k/4</code>. It leaves values below <code>t</code> unchanged, joins them C2, preserves the black/white endpoints and introduces no white plateau. Increasing <code>k</code> delays near-white output. This operator preserves existing channel ordering; it does not repair hue inversions already produced by a preceding independent-channel shader.</p>
+<p>Express blur and lighting lengths in the same geometry units as the element, then convert at rasterization. For these circular controls, <code>D=min(width,height)</code> and <code>σ=ratio×D</code>. The selected playback-study calibration uses width factor 4.5, gain 1, glass post-blur <code>1.5D/490</code>, dark saturation 0.2, highlight taper 0.5 and final icon-color blur <code>3D/490</code>, retaining the pass04 independent-channel response. These are visual-study choices, not Apple constants or native-app defaults. Normalize every lighting length too, including thin-rim terms. Source-space filtering, filtering after refraction/shading, and filtering only the calculated icon-color field are distinct operations. Icon-color blur is the last color operation before sharp coverage/compositing; do not blur the symbol silhouette or silently exchange filtering stages.</p>
+<h3 id="tangential-curvature-and-smooth-crowns">Tangential curvature and smooth crowns</h3>
+<p>A scalar normal offset cannot explain all two-dimensional distortion. On the toolbar&#39;s straight horizontal edge, <code>n=(0,±1)</code>: <code>F=p−a(d)n</code> changes Y while leaving X unchanged. A displaced strip is not necessarily a widened strip. The following alternatives expose that restriction rather than increasing one depth gain.</p>
+<p><strong>Tensor field.</strong> Let <code>t=(-ny,nx)</code>, <code>bT=r×tangentBand</code>, <code>v=1−clamp(d/bT,0,1)</code>, and <code>B=v⁴(5−4v)</code>. With the same spline <code>a(d)</code>:</p>
+<pre><code class="language-text">F(p) = (I−diag(cx,cy))p − a(d)n − τB(d)(p·t)t
+</code></pre>
+<p><code>0≤τ≤0.8</code>, <code>0.05≤tangentBand≤1</code>, <code>cx∈[0,0.3]</code>, <code>cy∈[0,0.65]</code>. On a straight horizontal edge, <code>∂Fx/∂x=1−cx−τB</code>; its reciprocal is displayed horizontal scale. The central scale is retained while tangential stretch grows toward the silhouette. <code>B</code>, <code>B′</code> and <code>B″</code> vanish at its inner join. Normals/tangents rotate around curved ends, so the deformation follows the outline instead of fixed screen axes. A circle has <code>p·t=0</code>, providing a useful zero-effect control. This is a designed image field, not a recovered solid or a nonfolding guarantee.</p>
+<p><strong>Gradient-potential control.</strong> A competing, more restrictive hypothesis uses <code>Ψ=V(d)+K(d)x²/2+cy y²/2</code>, with <code>V′=−a</code>, <code>K=cx+τB</code> and <code>F=p−∇Ψ</code>:</p>
+<pre><code class="language-text">F = ((1−K)x, (1−cy)y) + [−a + K′x²/2]n
+K′ = −20τu(1−u)³/bT, u=clamp(d/bT,0,1)
+</code></pre>
+<p>The extra normal term is required by this potential; dropping it would break equality of mixed derivatives. This control tests integrability, not exact thick-lens optics. It did not improve the toolbar fit. The better tensor fit cannot therefore be relabeled as a verified phase surface.</p>
+<p><strong>Smooth height surface.</strong> A continuous crown removes the old cap&#39;s explicit inner shoulder join. Define the footprint field <code>T</code> and height:</p>
+<pre><code class="language-text">circle / oval: T = |x/hx|ⁿ + |y/hy|ⁿ
+measured oval: T = u² + [v/Q(u)]²
+capsule:       T = [max(|x|−(hx−r),0)² + y²]/r²
+s = 1−Tᵐ
+A = cx(x/hx)²+cy(y/hy)²; W = (1−k)+kT; C = 1−AW
+z(p) = H sᵝ C                    // inside T&lt;1
+N ∝ ( H[βmTᵐ⁻¹Tx C − s Cx],
+      H[βmTᵐ⁻¹Ty C − s Cy], s¹⁻ᵝ )
+</code></pre>
+<p>Domains: <code>H=min(h)×height</code>, <code>height∈[0.01,1.8]</code>, <code>m∈[1,40]</code>, <code>β∈[0.2,0.95]</code>; <code>n=2</code> for the circle, or the fitted polynomial field for the measured oval. Earlier broad-crown trials use <code>cx=cy=c/2</code>, <code>c∈[0,0.7]</code>, <code>k=0</code>. Independent X/Y crowns and <code>k∈[0,1]</code> vary how cross-sections change with depth; require <code>C&gt;0</code>. Increasing <code>m</code> concentrates curvature near the boundary. At <code>m=1, β=1/2, cx=cy=0</code>, a circle/ellipse has an ellipsoidal meridian. Height, central curvature and rim curvature are distinct parameters.</p>
+<p>The capsule formula uses its long-axis frame, <code>hx≥hy=r</code>; rotate coordinates for a vertical capsule. It is not a general rounded-rectangle height field. Those additional footprints need their own validated implicit geometry before reuse.</p>
+<p>The exponential alternative substitutes <code>s=[1−exp(−m(1−T))]/[1−exp(−m)]</code>, with <code>−ds/dT=m exp(−m(1−T))/[1−exp(−m)]</code>. It provides another smooth crown without an inner join; use <code>expm1</code> near small arguments. Both families use the same two-interface Snell construction, <code>G=min(h)×gap</code>, <code>gap∈[0,1.5]</code> and reference IOR 1.33.</p>
+<p>The outline does not identify <code>H,m,β,c</code> uniquely. For a height graph, principal curvatures are eigenvalues of <code>I⁻¹II</code>, where <code>I=Id+∇z⊗∇z</code> and <code>II=Hess(z)/sqrt(1+|∇z|²)</code> (sign depends on chosen orientation). Height alone is not a curvature radius. The current checks establish analytic-normal/scale/mirror limits; full path-validity and temporal calibration remain open.</p>
+<p><strong>Independent transverse curvature.</strong> A preferred longitudinal section need not produce the desired optical onset across Y. For a separable footprint <code>T=U(x)+V(x,y)</code>, set <code>S=1−U</code>, <code>W=V/S</code> inside the body and use:</p>
+<pre><code class="language-text">T* = U + S Wᵖ, p≥1
+T*x = Ux[1+(p−1)Wᵖ] + pWᵖ⁻¹Vx
+T*y = pWᵖ⁻¹Vy
+</code></pre>
+<p>Use <code>T*</code> consistently in the height, crown and analytic normal. At <code>p=1</code> it recovers the original field. It preserves the silhouette (<code>W=1</code>) and longitudinal Y=0 section (<code>W=0</code>), while larger <code>p</code> reduces central transverse curvature. The implementation&#39;s <code>cross_section_power</code> controls <code>p</code>; exterior occupancy retains the original field to avoid singular perspective extrapolation at <code>U=1</code>. This is a geometric hypothesis for a quiet interior and strong near-rim refraction, not a measured Apple parameter. Preserve coverage and validate convexity/path behavior before using a new combination.</p>
+<h3 id="cap-joins-and-closed-body-tracing">Cap joins and closed-body tracing</h3>
+<p>The capsule&#39;s <code>q=max(|x|−a,0)</code>, <code>a=hx−r</code>, gives a C1 surface with a jump in second derivatives at the straight/circular join. A continuous normal does not ensure continuous curvature or optical magnification. The optional geometric transition uses <code>s=|x|−a</code>, width <code>0&lt;w&lt;a</code>, and:</p>
+<pre><code class="language-text">u = clamp((s/w+1)/2, 0, 1)
+q = 0                     for s≤−w
+q = w(2u³−u⁴)            for −w&lt;s&lt;w
+q = s                     for s≥w
+q′ = 3u²−2u³             within the transition
+</code></pre>
+<p>Value, first and second derivative match both adjoining pieces. Use this <code>q</code> in the footprint and its derivatives; <code>cap_join=w/r</code> controls the width. The silhouette changes slightly, so coverage must follow the modified footprint too. This is not a promise of C2 smoothness for arbitrary footprints or a reconstruction of Apple&#39;s shape.</p>
+<p>The offline <a href="experiments/reconstruction/solid.py">closed-body comparator</a> replaces the flat exit with <code>−rear×z(x,y)≤Z≤z(x,y)</code>, inside <code>T≤1</code>. Front and rear normals come from the same height gradient. Changing <code>cx,cy,k</code> therefore changes the actual body and all traced interfaces, rather than directly widening a sampled image.</p>
+<p>For unit incident direction <code>I</code>, an opposing unit normal <code>N</code>, index ratio <code>η=ni/nt</code>, <code>ci=−I·N</code> and <code>K=1−η²(1−ci²)</code>:</p>
+<pre><code class="language-text">reflected   = I + 2ci N
+transmitted = ηI + (ηci−sqrt(K))N       when K≥0
+</code></pre>
+<p>Unpolarized dielectric Fresnel weights split each path. At total internal reflection (<code>K&lt;0</code>) there is no transmitted direction; its entire weight continues along reflection. Subsequent transmissions hit the background plane or the environment. A finite path series reports remaining untraced energy; it must not silently become fabricated background detail. A local first-path Jacobian does not describe this entire multi-path image.</p>
+<ul>
+<li>Intersection bisection requires a convex supported body. The general parameter family is <strong>not certified convex</strong>; new combinations need geometry/path checks before interpretation. Body continuity alone is insufficient.</li>
+<li>The <a href="experiments/reconstruction/solid_material.py">material fit</a> still uses encoded-RGB nuisance lighting, including signed coefficients. Correct Snell paths do not make that fitted lighting radiometrically physical.</li>
+<li><a href="experiments/reconstruction/verify-solid.py">Independent controls</a> compare intersections with an analytic ellipsoid, check Snell/Fresnel, explicit TIR, energy accounting, scale/mirror limits, analytic cross-coupled normals and C2 join derivatives. Example horizontal stretch emerges from geometry, but these checks do not calibrate it to Apple.</li>
+<li>This comparator is separate from the interactive lab&#39;s existing field/flat-exit models. No Apple-shader or live-lab parity claim follows from the offline experiment.</li>
+</ul>
+<h3 id="reflection-versus-color-separation">Reflection versus color separation</h3>
+<p>For a view direction along +Z, the reflected lookup direction is <code>R=(2NzNx,2NzNy,2Nz²−1)</code>. The surface comparator fits a low-order environment evaluated at <strong>that direction</strong>, weighted by unpolarized dielectric Fresnel reflectance. It replaces independently positioned Gaussian highlight bands; changing the surface changes reflection and transmission together. The first-order RGB environment uses <code>E(R)=e0+exRx+eyRy+ezRz</code>; the quadratic alternative adds <code>RxRy,RxRz,RyRz,Rx²−Ry²,3Rz²−1</code> per channel. Neither paints a particular edge. The environment is inferred nuisance lighting, not a measured Apple light rig; signed polynomial coefficients do not enforce a nonnegative physical environment. Encoded-RGB fitting is not energy-conserving radiometry.</p>
+<p><a href="https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission">Dispersion</a> means wavelength-dependent refraction; a colored rim alone does not identify it. Two explicit controls are tested:</p>
+<ul>
+<li><strong>Snell RGB proxy:</strong> <code>n(λ)=1.33+B(λ⁻²−0.55⁻²)</code>, <code>λ={0.65,0.55,0.45} μm</code>, <code>B∈[0,0.025] μm²</code>. Trace one ray per channel and evaluate wavelength-dependent entry Fresnel factors. Transmission is scaled relative to the reference wavelength by <code>(1−Fλ)/(1−FG)</code>; reflected-environment terms use <code>Fλ</code>. At <code>B=0</code> both recover the common-IOR comparator. All indices stay below <code>√2</code>, preserving its flat-exit TIR bound. This is not spectral-to-RGB integration or complete internal/exit-reflection transport.</li>
+<li><strong>Image-map sensitivity:</strong> <code>Fλ=p+[1+D(λ⁻²−0.55⁻²)](F0−p)</code>, <code>D∈[0,0.2] μm²</code>. This tests channel separation on the better-fitting flexible map; it is not equivalent to changing a physical IOR. <code>D=0</code> recovers the common lookup exactly.</li>
+</ul>
+<p><a href="experiments/reconstruction/curvature.py">curvature.py</a> implements these hypotheses. <a href="experiments/reconstruction/verify.py">verify.py</a> checks finite-differenced height normals, scale/mirror/Snell/Fresnel limits, potential mixed derivatives, tangential scale and integrated material regression. The 30 older fixtures still cover only the original field/cap. Image scores and color evidence belong to the <a href="reconstruction.html">comparison study</a>, not mathematical proof of Apple&#39;s renderer.</p>
+<h2 id="sampling-coverage-and-color">Sampling, coverage and color</h2>
+<ul>
+<li>Optical coordinates extend to the boundary. Apply antialiasing to final <strong>coverage</strong>, not by multiplying displacement by a several-pixel edge ramp. The lab uses a one-framebuffer-pixel coverage band; filtering can still soften the first visible pixel.</li>
+<li>Capture enough backdrop beyond the body: a conservative field padding is <code>b×edge×power + core×power×max|p| + blurFootprint</code>. Cap padding must cover its validated ray offsets. Clamping to the capture boundary can mimic an inactive edge; repeating the last texel is not extra optical information.</li>
+<li>Scale all geometric lengths, backdrop coordinates and source padding together. Coverage width depends on raster density. The optical band has no fixed two-pixel floor. Shadows/highlight widths are separate artistic lengths, not optical invariants.</li>
+<li>The lab interpolates and blurs <strong>encoded sRGB channels</strong>, then tints, illuminates and applies its tone curve. This is an intentional image-space approximation, not radiometric scattering. A physical-light implementation must decode, filter in linear light and re-encode, including alpha/compositing conventions. <a href="https://www.w3.org/TR/css-color-4/#color-conversion-code">W3C&#39;s conversion definitions</a> distinguish those spaces.</li>
+<li>Nine blur taps have nonnegative weights summing to one: center 1/4, four axial taps 1/8 each, four diagonals 1/16 each. Radius is an offset, not Gaussian sigma. At large compression, production sampling needs source-footprint filtering; nine taps do not guarantee alias-free reconstruction.</li>
+</ul>
+<p>For an encoded channel <code>x∈[0,1]</code>, trim <code>τ∈[0,0.5]</code> and exponent <code>γ∈[1,2]</code>:</p>
+<pre><code class="language-text">light foreground: f(x) = x − τx^γ
+ dark foreground: g(x) = 1−f(1−x) = x + τ(1−x)^γ
+f′(x) = 1−τγx^(γ−1) ≥ 0
+</code></pre>
+<p>Endpoints are <code>[0,1−τ]</code> and <code>[τ,1]</code>; darker inputs cannot wrap above brighter ones. This is a channel bound, not a physical-luminance curve or a guarantee of a WCAG contrast ratio. Applying it after synthetic illumination preserves the chosen material endpoint. Foreground ink is outside the operation.</p>
+<h2 id="pressure-and-dynamics">Pressure and dynamics</h2>
+<p>Normal finger contact and a side-wall reaction act along different axes. Strictly, pressure is scalar; the boundary traction (force per area) has direction, and a stress tensor describes the general internal state. The lab models prescribed deformation, not a stress solution. A homogeneous, approximately incompressible deformation has principal stretches with product one; it does not require one specific redistribution law.</p>
+<pre><code class="language-text">sx = exp(q − z/2)
+sy = exp(−q − z/2 − f p)
+sz = exp(z + f p)
+sx sy sz = 1
+</code></pre>
+<p><code>q</code> is in-plane strain including the wall contribution, <code>z</code> is normal strain (negative while held), <code>p</code> is positive wall-compression magnitude, and <code>f∈[0,1]</code> apportions wall compensation into depth. During recovery <code>p</code> is a signed spring state. At fixed <code>z</code>, increasing <code>p</code> increases depth when <code>f&gt;0</code>; simultaneous normal pressure can still leave total depth below rest. This answers the pressure-direction question without assuming Apple uses a volume law.</p>
+<ul>
+<li>This determinant-one construction conserves an affine volume <strong>only if the entire original body is transformed</strong>. Rebuilding corner radius and the height function is not that transformation. The lab&#39;s scale product is a proxy, not exact integrated volume.</li>
+<li>For exact conservation of a reconstructed cap, compute <code>V=H∫D fC dA</code> and choose <code>H=Vtarget/∫D fC dA</code>. The lab does not enforce that integral. An exact-volume model must also resolve constraints when maximum depth is reached.</li>
+<li>Pin the contacting edge by setting center to <code>wallPosition ± deformedHalfWidth</code>; do not compress about the old center. Changing footprint, optical band and depth must use the same strain state.</li>
+<li>Held normal pressure uses a critically damped approach; release retains velocity and uses configurable damping. Critical damping prevents oscillatory eigenmodes, not every overshoot from arbitrary initial velocity. A strict monotonic-contact rule requires a separate velocity/force constraint; abruptly clamping velocity sacrifices derivative continuity. This remains an interaction design tradeoff, not an automatic property of the spring. A retargeted spring does not reset its velocity. Constant area, constant perimeter and constant volume are different constraints; none is interchangeable.</li>
+</ul>
+<p>For each spring coordinate with mass <code>m&gt;0</code>, stiffness <code>k&gt;0</code>, damping <code>c≥0</code>, constant target <code>x*</code> over a step, let <code>y=x−x*</code>, <code>a=c/(2m)</code> and <code>w0²=k/m</code>:</p>
+<pre><code class="language-text">y″ + 2a y′ + w0² y = 0
+underdamped: w=sqrt(w0²−a²)
+y(t)=exp(−at)[ y(0) cos(wt) + (v(0)+a y(0)) sin(wt)/w ]
+critical: y(t)=exp(−at)[ y(0) + (v(0)+a y(0))t ]
+overdamped: y(t)=A exp(r1 t)+B exp(r2 t)
+r1,2=−a±sqrt(a²−w0²); A=(v(0)−r2 y(0))/(r1−r2); B=y(0)−A
+</code></pre>
+<p>The reference returns both position and the derivative of these expressions. Fixed-target energy <code>½mv²+½ky²</code> cannot grow. Exact steps compose independently of frame partition; changing targets/forces and contact constraints still require event-time sampling. The lab retains bounded substeps for those inputs, with analytic spring updates. Its braking impulse, strain clamps and frame-delta cap are interaction approximations, not a solved fluid/stress system. Test pauses, interruptions and boundary ownership separately.</p>
+<h2 id="verification-and-remaining-gates">Verification and remaining gates</h2>
+<p>Run <code>node experiments/equations-test.cjs</code> without browser dependencies, with no browser required. Seeded tests cover limits, independently differenced Jacobians, both ray interfaces, pressure and exact spring evolution. Random coverage is evidence, not proof of untested domains. Experimental browser-oracle work remains on the preserved lab branch; it is not part of this publication. GPU/software agreement alone could reproduce the same bug.</p>
+<p>Required before native adoption:</p>
+<ol>
+<li>Freeze supported parameter domains; reject or clearly distinguish folding/unsupported cases. Retain a shared source-coordinate and color-space contract across backends.</li>
+<li>Port reference fixtures, scale/mirror tests, endpoint and interruption cases to both native adapters. Measure device frame times separately from functional correctness.</li>
+<li>Calibrate on exposed-source Apple scenes with known state/settings, then hold out independent scenes. The <a href="reconstruction.html">HD reconstruction study</a> now measures three conditional still-image fits, with explicit source/foreground exclusions. Independent-scene and temporal validation remain open.</li>
+<li>Keep the measured evidence, artistic choices and mathematical guarantees separate. Neither the finite-rim profile nor the cap has established Apple rendering parity.</li>
+</ol>
+</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/8cc6da3c98d8eb885b706614a37aaa09eded2e0f/docs/liquid-glass">8cc6da3c</a> · Original studies; no claim of iOS parity.</footer></body></html>

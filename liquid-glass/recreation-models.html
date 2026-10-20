@@ -1,0 +1,128 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · recreation-models</title><link rel="stylesheet" href="lab.css?v=8cc6da3c98d8"><link rel="stylesheet" href="guide.css?v=8cc6da3c98d8"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="mathematical-models-for-the-reference-recreations">Mathematical models for the reference recreations</h1>
+<p>These are <strong>rendering-method-independent inverse image maps and material functions</strong>. They can be evaluated by a shader, a mesh with sufficient sampling, a CPU renderer or another implementation. The Python replay is a reference implementation, not the specification&#39;s coordinate system or required rendering technology.</p>
+<p><a href="reconstruction.html">Comparisons and scores</a> · <a href="experiments/reconstruction/recipes.json">Exact parameter records</a> · <a href="model.html">General optical models</a> · <a href="reconstruction.html#reproduce">Replay</a></p>
+<p>The circular playback control is the <strong>current most-polished calibration</strong>, selected after visual review. The toolbar, slider and uniform light/dark surfaces have independent frozen recipes. A recipe reproduces a particular study; it does not identify Apple&#39;s private shader, imply physical correctness or establish defaults for every background.</p>
+<h2 id="common-contract">Common contract</h2>
+<ul>
+<li>Let the element&#39;s shorter dimension be <code>D</code>; use <code>L=D/2</code> as the length unit. Local output coordinates are <code>v=(p−center)/L</code>. Every spatial parameter in <code>recipes.json</code> is dimensionless in these units, including blur, rim lighting and shape dimensions. Multiply by <code>L</code> only when sampling the backdrop or rasterizing. <code>reference_length</code> records the source-image scale; it is not an extra model parameter.</li>
+<li><code>F(v)</code> is the <strong>inverse map</strong>: the backdrop sample is <code>B(center+L F(v))</code>. It describes where to read pixels, not the direction in which the visible feature moves. Independent foreground content is composited afterward.</li>
+<li>The examples operate on <strong>encoded RGB values in [0,1]</strong>. This is a calibrated image-space approximation; changing to linear-light processing changes the output. Coordinates increase rightward/downward, and the camera is frontal.</li>
+<li>Let <code>s(v)</code> be signed distance to the outline, negative inside, <code>n=∇s</code> the outward unit normal and <code>d=max(−s,0)</code>. Shape coverage is independent of material color. Evaluate the equations continuously before coverage/raster filtering.</li>
+<li>Gaussian <code>σ</code> is standard deviation, not kernel diameter. Source blur, glass blur after refraction/shading, and foreground-color blur are different operations. The foreground&#39;s coverage remains sharp.</li>
+<li>Parameters and operation order are fixed for replay. Re-optimizing coefficients produces a new calibration, not an exact reproduction of this one. Source registration, the estimated hidden backdrop, video decoding and raster conventions are additional inputs.</li>
+</ul>
+<h2 id="playback-radial-map-and-smooth-inner-transition">Playback: radial map and smooth inner transition</h2>
+<p>For the circle, <code>r=|v|</code>, <code>d=1−r</code>, and <code>F(v)=(1−a(d)/r)v</code>. At the center set <code>F(0)=0</code>; the displacement has already reached zero there. Use the following constants:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th align="right">Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Outer displacement <code>A</code></td>
+<td align="right">0.6338092221139378</td>
+</tr>
+<tr>
+<td>Initial transition width <code>b</code></td>
+<td align="right">0.09445809156460266</td>
+</tr>
+<tr>
+<td>Initial exponent <code>p</code></td>
+<td align="right">2.10022237760162</td>
+</tr>
+<tr>
+<td>Inner-tail width multiplier <code>k</code></td>
+<td align="right">4.5</td>
+</tr>
+<tr>
+<td>Inner endpoint exponent <code>q</code></td>
+<td align="right">4</td>
+</tr>
+<tr>
+<td>Displacement gain</td>
+<td align="right">1</td>
+</tr>
+<tr>
+<td>Source Gaussian σ / L</td>
+<td align="right">0.0020408163265306124</td>
+</tr>
+<tr>
+<td>Glass post-refraction σ / L</td>
+<td align="right">0.006122448979591836</td>
+</tr>
+<tr>
+<td>Final foreground-color σ / L</td>
+<td align="right">0.012244897959183673</td>
+</tr>
+</tbody></table>
+<p>For <code>d≤b/2</code>, use <code>a=A clamp(1−d/b,0,1)^p</code>. For <code>b/2&lt;d&lt;(1+k)b/2</code>, define <code>t=(d−b/2)/(kb/2)</code> and use:</p>
+<pre><code class="language-text">a = A 2^(−p) exp[q ln(1−t) + (q−pk)t + (q−pk²)t²/2]
+</code></pre>
+<p>For larger <code>d</code>, use <code>a=0</code>. The join matches value, first and second derivatives; the inner endpoint has zero derivatives through order three. This controls the transition from the strongly refracted rim to the quiet center without inserting a discontinuous shoulder. It does <strong>not</strong> prescribe a 3D height or thickness. The map has a fold in its supported calibration; reversed rim details are intentional in this still-image fit.</p>
+<h3 id="glass-and-play-symbol-processing">Glass and play-symbol processing</h3>
+<ol>
+<li>Blur the backdrop with the source σ, sample it through <code>F</code>, and apply the common material function below.</li>
+<li>Blur that calculated glass color with the glass σ. This is after refraction and shading.</li>
+<li>Calculate the foreground color <code>C0=1−strength×(1−glass)^gamma</code>, componentwise. Use the exact three-channel coefficients from the recipe:</li>
+</ol>
+<pre><code class="language-text">strength = [0.9999999999999285, 0.9999999999999999, 0.4829334270156419]
+gamma    = [11.731766541351298, 8.166089277320348, 5.294455609674747]
+</code></pre>
+<ol start="4">
+<li>Let <code>Y=dot(C0,[.2126,.7152,.0722])</code> and <code>w=clamp((1−Y)/.15,0,1)²</code>. Increase dark-region saturation: <code>C1=clamp(Y+(1+.2w)(C0−Y),0,1)</code>.</li>
+<li>Componentwise, set <code>u=clamp((C1−.9)/.1,0,1)</code> and <code>C2=C1−.5u³(1−C1)</code>. This reduces near-white highlights without creating an early white plateau. For a general strength <code>h</code>, the function is monotone for <code>0≤h≤4</code>; <code>.5</code> is the selected value.</li>
+<li>Gaussian-blur <strong>C2</strong>, with the final foreground-color σ. This is the last color operation. Composite it through the sharp triangular coverage: <code>output=(1−α)glass+αCblurred</code>.</li>
+</ol>
+<p>The included <a href="experiments/reconstruction/playback-mask.png?v=8cc6da3c98d8">playback coverage mask</a> is a reference-derived triangle silhouette with its antialias fringe, not copied Apple icon colors. Its box is stored in normalized coordinates. There is no stroked icon outline. The foreground response was fitted on this photograph and can produce unsuitable hues elsewhere; this is not a universal contrast algorithm. A light icon also needs a different treatment over a white backdrop.</p>
+<h2 id="toolbar-normal-displacement-and-tangential-compression">Toolbar: normal displacement and tangential compression</h2>
+<p>The outline is a rounded rectangle with normalized half-extents <code>[392/170,1]</code> and corner radius <code>1</code>. Its fitted map allows normal displacement and tangential scaling to vary separately. With tangent <code>t=(−n_y,n_x)</code>:</p>
+<pre><code class="language-text">a(d) = Σ c_i N_i(d/ρ), i=0…6
+u = clamp(d/(ρ band),0,1)
+W = (1−u)^4 (1+4u)
+F(v) = diag(1−core_x,1−core_y) v − a(d)n − tangent W (t·v)t
+</code></pre>
+<p>Here <code>ρ</code> is the normalized corner radius. The cubic B-spline basis has knots <code>[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]</code>; append three zero coefficients after the seven stored coefficients. Clamp the basis argument to <code>[0,1]</code>. Displacement is in <code>L</code> units. The complete coefficients, core terms and tangential strength are in the <code>regular</code> recipe.</p>
+<p>This is a tensor image field, <strong>not a recovered solid or a proved gradient-potential lens</strong>. Along straight top/bottom segments, <code>∂F_x/∂x=1−core_x−tangent W</code>: a smaller positive source derivative makes displayed text wider. Both directions follow the outline near its ends, rather than applying one arbitrary global horizontal stretch.</p>
+<p>For the toolbar only, blend unblurred and source-blurred samples using <code>H=6u⁵−15u⁴+10u³</code>, with <code>u=clamp(d/blur_transition,0,1)</code>. Use the recipe&#39;s source σ <code>11/170</code>; it supersedes the older study&#39;s eight-pixel search ceiling. No glass post-blur is selected here. Apply the common material function afterward. Exact archive/plus symbols are retained from the source frame for comparison and excluded from glass scoring; their own rendering has not been reconstructed.</p>
+<h2 id="active-slider-oval-outline-and-channel-separated-map">Active slider: oval outline and channel-separated map</h2>
+<p>The outline is <strong>not a capsule</strong>. Set <code>h_x=118.5/56.5</code>, <code>h_y=1</code>, <code>U=x/h_x</code>, <code>V=y/h_y</code>, and <code>Q(U)=1+aU²+bU⁴</code>, where:</p>
+<pre><code class="language-text">a = 0.4994011732582939
+b = −0.23031415352591186
+T(U,V) = U² + [V/Q(U)]²
+</code></pre>
+<p>The boundary is <code>T=1</code>. Use Euclidean distance to this curve for <code>s</code>, and its normalized implicit gradient for <code>n</code>. The radius parameter <code>ρ=43.38/56.5</code> controls the spline&#39;s distance scale; it is not a claim that the whole outline has constant radius. The top dark ridge constrains the measured outline; bottom/right symmetry remains an assumption.</p>
+<p>Use the same tensor map as the toolbar with the <strong>slider&#39;s</strong> independent recipe. For channel wavelengths <code>λ=[.650,.550,.450]</code> in micrometers, use:</p>
+<pre><code class="language-text">f_λ = 1 + dispersion (λ^−2 − .550^−2)
+F_λ(v) = v + f_λ [F(v)−v]
+</code></pre>
+<p>Read the red, green and blue channels at their respective <code>F_λ</code>, then apply the common material. No Gaussian blur is selected. This is an RGB dispersion proxy; it does not prove that Apple&#39;s colored rim comes from physical dispersion. It is not a wavelength-resolved radiometric model.</p>
+<p>The recovered background includes an antialiased track of height <code>20/56.5</code> in normalized units, centered <code>(.9295089030362/56.5)</code> below the lens center. Its hidden blue endpoint is estimated. The replay fixes this input explicitly; source reconstruction uncertainty remains part of the comparison.</p>
+<p>The measured narrow exterior-shadow ratios are width <code>1963/1896</code>, height <code>929/906</code>, centered horizontally and bottom-aligned. Those measurements are retained for subsequent shadow modeling; the current comparison retains exterior context and <strong>does not claim to reconstruct that shadow or the broader blue halo</strong>.</p>
+<h2 id="uniform-light-and-dark-surfaces">Uniform light and dark surfaces</h2>
+<p>These use a rounded rectangle with half-extents <code>[245/106.5,1]</code> and radius <code>1</code>. Let <code>u=clamp(d/(ρ band),0,1)</code>, <code>v=1−u</code>, <code>S=6u⁵−15u⁴+10u³</code>, and:</p>
+<pre><code class="language-text">P = rim v³(1+3u) + (1−rim)(256/27)u v³
+a = ρ band edge P
+F(x,y) = ((1−core S)x, (1−core S)y) − a n
+</code></pre>
+<p>The <code>regular-light</code> and <code>regular-dark</code> recipes independently specify field parameters and material coefficients. Neither uses Gaussian blur. Their nearly uniform backdrops cannot identify an optical model; high scores here validate tone/rim approximation, <strong>not refraction</strong>.</p>
+<h2 id="common-material-function">Common material function</h2>
+<p>All five frozen recipes have 23 coefficients. Define <code>X=x/h_x</code>, <code>Y=y/h_y</code>, <code>thin=exp[−(d/thin_rim)²]</code>, <code>e=exp[−(d/rim_width)²]</code>, <code>f=exp[−(d/(4 rim_width))²]</code>. Let <code>z=clamp(d/.30,0,1)</code> and <code>c=6z⁵−15z⁴+10z³</code>. The 14 lighting basis values, in order, are:</p>
+<pre><code class="language-text">J = [thin, thin n_x, thin n_y,
+     e, e n_x, e n_y, f, f n_x, f n_y,
+     X, Y, X², Y², XY]
+gain = (1−c) coefficients[0:3] + c coefficients[20:23]
+glass = clamp(sample × gain + coefficients[3:6]
+              + dot(J,coefficients[6:20]), 0, 1)
+</code></pre>
+<p>The scalar lighting term is added to all RGB channels. This is a bounded fitted basis, not a Fresnel/environment reconstruction. In particular, the white inner band in some earlier fits can arise from these terms independently of refraction. Do not interpret a fit coefficient as physical radiance or encode it as an extra painted outline.</p>
+<h2 id="reproducing-and-transferring-a-model">Reproducing and transferring a model</h2>
+<ul>
+<li>Preserve equations, operation order, color space, shape and all normalized parameters when changing renderer. The source image&#39;s registration and the glyph coverage are separate inputs. Use the <a href="reconstruction.html#reproduce">frozen replay command</a>; optimization commands are for research only.</li>
+<li>The reference implementation uses bilinear lookup, four samples per output axis for still materials, separate shape coverage and reflected-border Gaussian filtering. These sampling choices affect exact raster pixels; they are not physical model constants. Higher sampling must converge to the same continuous map.</li>
+<li>Compare native-resolution glass, rim, interior and foreground separately. Use identical source/mask definitions for cross-renderer scores. PNG rounding changes the reported errors slightly; record whether measurements precede or follow quantization.</li>
+<li>Transfer the light circular playback recipe first to other Clear circular media controls. Preserve <code>σ/L</code>, not the reference pixel σ. Toolbar and active-slider geometry require their own mappings; a circular model should not be stretched into either shape without verification.</li>
+<li>Do not score an unrecovered or moving backdrop as though it were known. Other media controls and Music toolbar footage are useful next references, but require their original glyphs and independent backdrop recovery. They remain candidates, not additional calibrated successes.</li>
+</ul>
+</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/8cc6da3c98d8eb885b706614a37aaa09eded2e0f/docs/liquid-glass">8cc6da3c</a> · Original studies; no claim of iOS parity.</footer></body></html>

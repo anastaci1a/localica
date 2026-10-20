@@ -1,0 +1,258 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · reconstruction</title><link rel="stylesheet" href="lab.css?v=8cc6da3c98d8"><link rel="stylesheet" href="guide.css?v=8cc6da3c98d8"></head><body class="guide"><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="apple-reference-recreations">Apple reference recreations</h1>
+<p><strong>Apple is on the left; our rendering is on the right.</strong> Five native-HD studies have frozen, dimensionless mathematical recipes and a deterministic replay command. The clear playback control is the <strong>current most-polished model</strong>. These offline results are separate from the live lab and Android app.</p>
+<p><a href="recreation-models.html">Mathematical specification</a> · <a href="experiments/reconstruction/recipes.json">Parameters</a> · <a href="#scores">Scores</a> · <a href="#reproduce">Reproduce</a> · <a href="#material-roles">Material roles</a> · <a href="index.html">Guide</a></p>
+<h2 id="clear-playback-control">Clear playback control</h2>
+<p>Apple, <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=190">Meet Liquid Glass, 3:10</a>; uncovered photograph at 3:00. The selected radial map has a quiet center, stronger rim refraction and slight filtering after refraction. The play symbol&#39;s calculated color is blurred internally before sharp triangular coverage is applied.</p>
+<p><img src="assets/match-media.png?v=8cc6da3c98d8" alt="Apple playback control and settled reconstruction"></p>
+<ul>
+<li><strong>Most polished:</strong> width multiplier 4.5; gain 1; source/glass/icon blur σ respectively <code>0.5/490</code>, <code>1.5/490</code>, <code>3/490</code> times the shorter dimension. Dark saturation 0.2; highlight taper 0.5. All lengths, including lighting, scale with the element.</li>
+<li><a href="recreation-models.html#playback-radial-map-and-smooth-inner-transition">Complete equations and operation order</a>. This is an empirical refraction map, not an identified Apple solid.</li>
+<li>The reference-derived triangle silhouette is reused; its <strong>color is independently calculated</strong>. It has no stroked outline. The response is photograph-specific, not a universal contrast algorithm.</li>
+<li>Distant exterior is retained; the contact band is estimated. Exterior shadows are not scored.</li>
+</ul>
+<details>
+<summary>Full-resolution playback comparison</summary>
+
+<p><a href="assets/match-media-full.png?v=8cc6da3c98d8"><img src="assets/match-media-full.png?v=8cc6da3c98d8" alt="Full HD playback comparison"></a></p>
+<p>Each half retains 1920 × 1080 pixels.</p>
+</details>
+
+<details>
+<summary>Motion preview — full-size GIF and video</summary>
+
+<p><img src="assets/playback-settled.gif?v=8cc6da3c98d8" alt="Settled playback model translated over the recovered photograph"></p>
+<p><a href="assets/playback-settled.mp4?v=8cc6da3c98d8">Full-HD video</a>. GIF: 7,960,291 bytes, 1920 × 1080, six seconds, 15 fps; video: 30 fps. Translation uses the same recipe without exterior shadow. These are offline renders, not device-performance measurements or a matched Apple motion clip.</p>
+</details>
+
+<h2 id="archive-and-plus-toolbar">Archive and plus toolbar</h2>
+<p>Apple, <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=710">Meet Liquid Glass, 11:50</a>; uncovered text at 12:00. A rounded-rectangle tensor map combines normal displacement with tangential compression, widening text near top/bottom without changing central registration.</p>
+<p><img src="assets/match-regular.png?v=8cc6da3c98d8" alt="Apple archive/plus toolbar and frozen tensor reconstruction"></p>
+<p><img src="assets/match-regular-rim.png?v=8cc6da3c98d8" alt="Upper-rim comparison with Apple on the left"></p>
+<ul>
+<li><a href="recreation-models.html#toolbar-normal-displacement-and-tangential-compression">Equations</a>; exact coefficients in the <code>regular</code> recipe.</li>
+<li>Source blur and its distance-dependent blend are independent of optical strength. The selected σ is <code>11/340</code> times the shorter dimension, superseding the older eight-pixel search ceiling.</li>
+<li>Exact archive/plus reference symbols are retained on both sides and excluded from glass scores; their foreground rendering is <strong>not</strong> independently recreated.</li>
+<li>Remaining differences include compressed-text blur, the final <code>d</code> stroke&#39;s curvature and inner lighting. This image field is not a verified physical lens.</li>
+</ul>
+<details>
+<summary>Full-resolution toolbar comparison</summary>
+
+<p><a href="assets/match-regular-full.png?v=8cc6da3c98d8"><img src="assets/match-regular-full.png?v=8cc6da3c98d8" alt="Full HD toolbar comparison"></a></p>
+</details>
+
+<h2 id="active-slider">Active slider</h2>
+<p>Apple, <a href="https://developer.apple.com/videos/play/wwdc2025/284/?time=1092">Build a UIKit app with the new design, 18:12</a>; resting page at 18:10.5. The thumb uses a measured polynomial-oval outline and channel-separated tensor refraction. <strong>No Gaussian blur is applied.</strong></p>
+<p><img src="assets/match-slider.png?v=8cc6da3c98d8" alt="Apple active slider and reconstructed lens"></p>
+<ul>
+<li><a href="recreation-models.html#active-slider-oval-outline-and-channel-separated-map">Equations</a>; exact coefficients in the <code>slider</code> recipe. This retains the stronger empirical map; the closed-body trial remains experimental.</li>
+<li>The recovered track has a 20-pixel reference height; its hidden blue endpoint is estimated. The upper dark ridge constrains the outline, with 54 fitted and 27 withheld columns. Bottom/right symmetry remains assumed.</li>
+<li>Colored rim detail supports testing channel-separated lookups, but does not prove dispersion: lighting, adaptive processing and video chroma subsampling are confounds.</li>
+<li>Remaining work: blue-track stretching onset, narrow shadow and broader blue-halo color/extent. The exterior shown is retained/estimated context, <strong>not a recreated shadow</strong>.</li>
+</ul>
+<details>
+<summary>Full-resolution slider comparison</summary>
+
+<p><a href="assets/match-slider-full.png?v=8cc6da3c98d8"><img src="assets/match-slider-full.png?v=8cc6da3c98d8" alt="Full HD slider comparison"></a></p>
+</details>
+
+<h2 id="light-and-dark-surfaces">Light and dark surfaces</h2>
+<p>Apple, <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=915">legibility demonstration, 15:15–15:20</a>. Each appearance has an independent material recipe over the same shape. <a href="recreation-models.html#uniform-light-and-dark-surfaces">Equations</a>.</p>
+<p><img src="assets/match-regular-light.png?v=8cc6da3c98d8" alt="Apple light appearance and reconstruction"></p>
+<p><img src="assets/match-regular-dark.png?v=8cc6da3c98d8" alt="Apple dark appearance and reconstruction"></p>
+<p>These test tone, broad lighting and rim. Nearly uniform backdrops cannot identify refraction: high similarity here does not validate an optical model. Neither recipe uses Gaussian blur.</p>
+<details>
+<summary>Full-resolution light and dark comparisons</summary>
+
+<p><a href="assets/match-regular-light-full.png?v=8cc6da3c98d8"><img src="assets/match-regular-light-full.png?v=8cc6da3c98d8" alt="Full HD light comparison"></a></p>
+<p><a href="assets/match-regular-dark-full.png?v=8cc6da3c98d8"><img src="assets/match-regular-dark-full.png?v=8cc6da3c98d8" alt="Full HD dark comparison"></a></p>
+</details>
+
+<h2 id="scores">Scores</h2>
+<table>
+<thead>
+<tr>
+<th>Scene</th>
+<th align="right">Glass RMSE</th>
+<th align="right">Rim RMSE</th>
+<th align="right">Interior RMSE</th>
+<th align="right">Withheld-block RMSE</th>
+<th align="right">SSIM</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Playback — most polished</td>
+<td align="right">8.077</td>
+<td align="right">11.148</td>
+<td align="right">2.626</td>
+<td align="right">8.368</td>
+<td align="right">0.9727</td>
+</tr>
+<tr>
+<td>Archive / plus</td>
+<td align="right">6.124</td>
+<td align="right">8.984</td>
+<td align="right">4.091</td>
+<td align="right">5.978</td>
+<td align="right">0.9805</td>
+</tr>
+<tr>
+<td>Active slider</td>
+<td align="right">7.227</td>
+<td align="right">8.850</td>
+<td align="right">6.566</td>
+<td align="right">7.445</td>
+<td align="right">0.9718</td>
+</tr>
+<tr>
+<td>Regular light</td>
+<td align="right">1.532</td>
+<td align="right">2.894</td>
+<td align="right">0.578</td>
+<td align="right">1.544</td>
+<td align="right">0.9991</td>
+</tr>
+<tr>
+<td>Regular dark</td>
+<td align="right">0.871</td>
+<td align="right">1.664</td>
+<td align="right">0.298</td>
+<td align="right">0.886</td>
+<td align="right">0.9997</td>
+</tr>
+</tbody></table>
+<p>Playback icon-color RMSE: 3.228. Toolbar symbols are retained reference pixels and are not given foreground scores.</p>
+<ul>
+<li>Encoded RGB errors use a 0–255 scale. Lower RMSE is better; higher SSIM is better. <strong>SSIM is not a fidelity percentage.</strong> Scores use unquantized calculated glass; PNG rounding changes them slightly. Full metrics, counts and registration evidence: <a href="experiments/reconstruction/settled-scores.json">settled-scores.json</a>.</li>
+<li>Glass excludes the first 0.75 native pixel inward from the silhouette and symbol boxes. Rim means the first 20% of the shorter half-extent. Exterior shadows are excluded. Only playback has a separately scored, independently calculated foreground color.</li>
+<li>Omitted 32-pixel spatial blocks share the same frame, source estimate and manually chosen outline. They were inspected during calibration and are <strong>not independent-scene validation</strong>. Replay performs no optimization.</li>
+<li>SSIM uses mean encoded RGB, an 11 × 11 Gaussian window and an eroded mask. Registration uncertainty, inferred backdrops and different material freedoms limit cross-scene comparisons.</li>
+</ul>
+<details>
+<summary>Playback progression, including earlier PR commits</summary>
+
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th align="right">Glass RMSE</th>
+<th align="right">Rim RMSE</th>
+<th align="right">SSIM</th>
+<th align="right">Icon RMSE</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>First published HD fit (7a8061b)</td>
+<td align="right">10.182</td>
+<td align="right">11.956</td>
+<td align="right">0.9577</td>
+<td align="right">—</td>
+</tr>
+<tr>
+<td>Corrected published HD fit (b1636bb)</td>
+<td align="right">8.617</td>
+<td align="right">11.692</td>
+<td align="right">0.9434</td>
+<td align="right">—</td>
+</tr>
+<tr>
+<td>Pass 01</td>
+<td align="right">8.690</td>
+<td align="right">11.792</td>
+<td align="right">0.9477</td>
+<td align="right">—</td>
+</tr>
+<tr>
+<td>Pass 02</td>
+<td align="right">8.690</td>
+<td align="right">11.792</td>
+<td align="right">0.9477</td>
+<td align="right">3.497</td>
+</tr>
+<tr>
+<td>Pass 03</td>
+<td align="right">8.690</td>
+<td align="right">11.792</td>
+<td align="right">0.9477</td>
+<td align="right">3.497</td>
+</tr>
+<tr>
+<td>Pass 04</td>
+<td align="right">8.676</td>
+<td align="right">11.853</td>
+<td align="right">0.9456</td>
+<td align="right">3.081</td>
+</tr>
+<tr>
+<td>Pass 05</td>
+<td align="right">8.058</td>
+<td align="right">11.115</td>
+<td align="right">0.9738</td>
+<td align="right">3.195</td>
+</tr>
+<tr>
+<td>Pass 06</td>
+<td align="right">8.070</td>
+<td align="right">11.138</td>
+<td align="right">0.9730</td>
+<td align="right">3.243</td>
+</tr>
+<tr>
+<td>Settled final</td>
+<td align="right">8.082</td>
+<td align="right">11.152</td>
+<td align="right">0.9724</td>
+<td align="right">3.244</td>
+</tr>
+</tbody></table>
+<p>Rows re-score archived <strong>8-bit outputs</strong> using the same glass/rim masks. This differs slightly from the unquantized replay table. Earlier copied icons are unscored. Source/filter/material changes prevent attributing the entire improvement to optics. <a href="experiments/reconstruction/progression.json">Full values and provenance</a>.</p>
+</details>
+
+<h2 id="material-roles">Material roles</h2>
+<table>
+<thead>
+<tr>
+<th>Context</th>
+<th>Evidence and calibration rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Media controls over photos/video</td>
+<td>Clear preserves detail. Transfer the circular model first to other circular Clear controls; retain proportional filtering and validate foreground contrast.</td>
+</tr>
+<tr>
+<td>Navigation/toolbars/text</td>
+<td>Regular adapts blur/brightness. Fit displacement and scattering separately; uniform blur can conceal inverted rim detail.</td>
+</tr>
+<tr>
+<td>Larger menus</td>
+<td>Size/context can alter appearance; button coefficients need not remain fixed as it becomes a panel.</td>
+</tr>
+<tr>
+<td>Active slider/switch thumb</td>
+<td>Manipulation temporarily reveals a clear lens. This contact state is separate from page material choice.</td>
+</tr>
+<tr>
+<td>Scroll-edge treatment</td>
+<td>Additional effects beneath floating controls may belong to scrolling content rather than glass.</td>
+</tr>
+<tr>
+<td>Appearance/accessibility</td>
+<td>Record settings when known. An unlabeled screenshot does not establish universal defaults.</td>
+</tr>
+</tbody></table>
+<p>Primary sources: <a href="https://developer.apple.com/design/human-interface-guidelines/materials">Materials HIG</a>, <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=828">variants/legibility</a>, <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=250">active controls</a>, <a href="https://developer.apple.com/videos/play/wwdc2025/219/?time=360">size adaptation</a>. <a href="specification.html#surface-roles">Localica material policy</a> owns app implementation decisions.</p>
+<h2 id="reproduce">Reproduce</h2>
+<p>Use Python 3.11+ and the <a href="experiments/reconstruction/requirements.txt">pinned dependencies</a> in a private virtual environment. Linux DejaVu Sans affects captions only. Download original HD videos privately as <code>219-hd.mp4</code> and <code>284-hd.mp4</code> using <a href="experiments/reconstruction/sources.json">sources.json</a>; replay checks hashes and decoded dimensions.</p>
+<p>From the repository root:</p>
+<pre><code class="language-sh">python3 docs/liquid-glass/experiments/reconstruction/verify-recipes.py
+python3 docs/liquid-glass/experiments/reconstruction/settled.py /private/videos /private/replay
+python3 docs/liquid-glass/experiments/reconstruction/motion.py /private/replay /private/motion
+</code></pre>
+<p>The second command renders <strong>all five frozen recipes</strong>, native-resolution outputs and scores. Add <code>--assets docs/liquid-glass/assets</code> to update public comparison figures. The third recreates the playback translation video/GIF and requires ffmpeg. Neither refits or modifies the live lab; no GPU is needed. The portable specification is the <a href="recreation-models.html">equations</a> and <a href="experiments/reconstruction/recipes.json">dimensionless parameters</a>; commands fix one sampling implementation. Codec/library versions can change encoded media bytes.</p>
+<p>Background recovery uses SIFT/RANSAC registration for dune/text scenes and smooth uncovered-page fits elsewhere. Inputs are quantized to eight-bit intermediate images to match calibration. Hidden text/track endpoints remain estimates. Still materials integrate four samples per axis; sampling is bilinear, filter boundaries reflect, and coverage is separate.</p>
+<p>The play mask contains coverage only. Toolbar glyph colors and distant exterior remain shared Apple imagery. A ten-pixel contact band uses the recovered source plus a normalized low-frequency exterior residual; it is unscored. Motion uses the playback recipe at two samples per axis and omits shadows. Archived MP4/GIF encoding is separate from numerical still replay.</p>
+<p>Historical search tools and <a href="experiments/reconstruction/results.json">results.json</a> retain alternative models; they are <strong>not the selected recipes/current scores</strong>. Search again only in a separate directory. Tool consistency, Apple similarity and Android performance require different checks.</p>
+<h2 id="attribution-and-limits">Attribution and limits</h2>
+<p>Apple excerpts © Apple Inc., reproduced for attributed rendering analysis. Original videos are 1920 × 1080 at 30000/1001 fps; URLs/hashes are recorded. Source videos, Apple fonts and private user feedback are not bundled.</p>
+<p>Remaining validation: independent scenes, multiple sizes/contact states, temporal stability, reconstructed exterior shadows and device performance. Further lab work is preserved separately; these frozen studies do not replace the deployed lab or native renderer.</p>
+</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/8cc6da3c98d8eb885b706614a37aaa09eded2e0f/docs/liquid-glass">8cc6da3c</a> · Original studies; no claim of iOS parity.</footer></body></html>
