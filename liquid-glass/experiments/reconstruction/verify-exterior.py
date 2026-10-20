@@ -35,4 +35,9 @@ frame=np.array(Image.open(a.out/'final/frame-000.png'))[:H,:W]
 expected=np.rint(np.clip(C*(1-opacity[...,None]),0,1)*255).astype(np.uint8)
 assert np.max(abs(frame[mask].astype(int)-expected[mask].astype(int)))<=1,'Motion does not use the declared exterior'
 assert s.scores(native)==other.scores(other.render(p,co))
-print('PASS default/identical PNG identity, independent exterior composition, native/HQ glass identity and encoded-motion exterior')
+from extended_shadow import refit_fixed_region
+q1,e1=refit_fixed_region(other,p,p)
+other.source[:]=[1.,0.,1.];other.cache.clear()
+q2,e2=refit_fixed_region(other,p,p)
+assert q1==q2 and e1==e2,'Exterior shadow fit depends on the incident content'
+print('PASS default/identical PNG identity, independent exterior composition, native/HQ glass identity, encoded-motion exterior and incident-independent shadow fitting')
