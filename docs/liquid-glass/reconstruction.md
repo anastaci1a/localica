@@ -161,7 +161,7 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 - The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
 - The gray-track rendering retains excess green in its rim. Colored reflection and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Frozen pass/model evidence at c81a238](https://github.com/anastaci1a/localica/tree/c81a238e4e4afdc13074f6c8809d14f1fce5dada/docs/liquid-glass/experiments/reconstruction/studies/active-switch) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). Final paired verification and motion captures are pending.
+- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Ongoing PR #425](https://github.com/anastaci1a/localica/pull/425). Final paired verification and motion captures are pending.
 
 ## Scores
 
