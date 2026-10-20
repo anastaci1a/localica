@@ -176,8 +176,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     private fun submit(revision: Long = intents.accept(), command: suspend () -> Unit) {
-        commands.trySend { commandRevision = revision; command() }
+        enqueue(revision, command)
     }
+    private fun enqueue(revision: Long = intents.accept(), command: suspend () -> Unit): Boolean =
+        commands.trySend { commandRevision = revision; command() }.isSuccess
     fun attach(attached: Player) {
         val expected = ++generation
         submit {
@@ -538,6 +540,39 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         player?.let { if (it.duration != C.TIME_UNSET && it.duration > 0) it.seekTo(positionMs.coerceIn(0, it.duration)) }
         capture()
     }
+    /** Main-thread snapshot of the service-owned player; no command or persistence work. */
+    internal fun playbackSample(): QueuePlaybackSample? = player?.let { attached ->
+        attached.currentMediaItem?.let { item ->
+            QueuePlaybackSample(attached.currentPosition.coerceAtLeast(0), item.queueVisit)
+        }
+    }
+
+    /** UI handoff needs an applied receipt, bound to the player/visit at dispatch. */
+    internal fun requestSeek(positionMs: Long, expectedVisit: String?, complete: (Boolean, QueuePlaybackSample?) -> Unit) {
+        val expected = player
+        val expectedGeneration = generation
+        val accepted = enqueue {
+            val attached = player
+            if (attached == null || attached !== expected || generation != expectedGeneration ||
+                attached.currentMediaItem?.queueVisit != expectedVisit ||
+                attached.duration == C.TIME_UNSET || attached.duration <= 0) {
+                complete(false, playbackSample())
+                return@enqueue
+            }
+            try {
+                attached.seekTo(positionMs.coerceIn(0, attached.duration))
+            } catch (failure: Exception) {
+                complete(false, playbackSample())
+                throw failure
+            }
+            // Native position masking has taken effect now. A slow storage capture
+            // cannot delay the receipt or turn command enqueueing into acceptance.
+            complete(true, playbackSample())
+            capture()
+        }
+        if (!accepted) complete(false, playbackSample())
+    }
+
     /** Artwork and decoder preparation follow the same durable visit sequence. */
     fun artworkNeighbors(): List<String?> {
         val queue = state.value.library.active ?: return emptyList()
@@ -965,3 +1000,6 @@ internal fun queueMediaItem(entryId: String, track: Track, sourcePlaylistId: Str
         .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist)
             .setAlbumTitle(track.album).setAlbumArtist(track.albumArtist).setExtras(extras).build()).build()
 }
+
+/** Atomic native position/visit sample used by the UI connection on Main. */
+internal data class QueuePlaybackSample(val positionMs: Long, val playbackVisit: String?)
