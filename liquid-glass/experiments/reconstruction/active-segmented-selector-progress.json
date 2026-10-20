@@ -1,36 +1,36 @@
 {
   "status": "Single-reference progress; paired verification and final motion pending",
   "study": "active-segmented-selector",
-  "pass_number": 2,
-  "rendering_code_commit": "d25b4ba98cc7bfa86fa7e0cb6799ac60ae069bfc",
+  "pass_number": 1,
+  "rendering_code_commit": "310d8f0b2c88805007e271456ca5f6a727a6bd70",
   "script_sha256": "31b6253899ac78f5f7c4037ec0e51ff485b2ad0b70f823aea6ea74e5624af247",
   "output_scale": 4,
   "native": {
     "glass": {
       "pixels": 186310,
-      "rmse": 17.250041961669922
+      "rmse": 24.928483963012695
     },
     "rim": {
       "pixels": 46479,
-      "rmse": 17.430387496948242
+      "rmse": 22.528841018676758
     },
     "held": {
       "pixels": 45815,
-      "rmse": 16.860471725463867
+      "rmse": 25.98711395263672
     },
     "interior": {
       "pixels": 139831,
-      "rmse": 17.18967628479004
+      "rmse": 25.676496505737305
     },
-    "ssim": 0.9302115440368652,
-    "loss": 299.44028586369205
+    "ssim": 0.9075173735618591,
+    "loss": 587.2651221793706
   },
   "recipe": {
     "parameters": {
-      "sigma": 0.017141451958116168,
-      "amplitude": 0.5102947636556144,
-      "band": 0.9999868348716114,
-      "power": 3.9728673285431575,
+      "sigma": 0.1100439121525272,
+      "amplitude": 0.0,
+      "band": 0.35,
+      "power": 2.2,
       "tangent": 0.0,
       "tangent_band": 0.4,
       "core_x": 0.0,
@@ -55,49 +55,49 @@
       "c6": 0.0
     },
     "material": [
-      0.3078601075971529,
-      1.2033981344875087,
-      1.2131097659440786,
-      0.7261941465319515,
-      -0.06374377393445219,
-      -0.07175775873808746,
-      0.009138118190295384,
-      -0.0350212768688382,
-      -0.017197283157478104,
-      0.0008231058380128443,
-      -0.01260654561271197,
-      -0.009256701529021158,
-      -0.048101047430136254,
-      -0.008084047319073242,
-      -0.012864786885068149,
-      -0.00014382091120400698,
-      0.032017737907322985,
-      -0.005735054879410391,
-      0.037104344903525696,
-      0.0015050794087196927,
-      0.27264920236904333,
-      1.1737096624449466,
-      1.1834233937303411
+      0.2587907157414839,
+      1.4668705476983894,
+      1.4704862412035749,
+      0.8,
+      -0.3559492381744943,
+      -0.35853765471390264,
+      -0.004250513051082212,
+      -0.03576306123023854,
+      -0.009517418809551509,
+      0.014440798645007188,
+      -0.020641837890677188,
+      -0.012215368847290381,
+      -0.12597047998989983,
+      0.03407855200953357,
+      -0.014512745106672342,
+      -0.0053206277131032445,
+      0.03176946557338699,
+      0.028912663270575012,
+      0.059601158120658325,
+      0.008436404202033978,
+      0.18522015206815293,
+      1.5,
+      1.5
     ],
     "scores": {
       "glass": {
         "pixels": 186310,
-        "rmse": 17.250041961669922
+        "rmse": 24.928483963012695
       },
       "rim": {
         "pixels": 46479,
-        "rmse": 17.430387496948242
+        "rmse": 22.528841018676758
       },
       "held": {
         "pixels": 45815,
-        "rmse": 16.860471725463867
+        "rmse": 25.98711395263672
       },
       "interior": {
         "pixels": 139831,
-        "rmse": 17.18967628479004
+        "rmse": 25.676496505737305
       },
-      "ssim": 0.9302115440368652,
-      "loss": 299.44028586369205
+      "ssim": 0.9075173735618591,
+      "loss": 587.2651221793706
     }
   },
   "source_support": {
@@ -105,16 +105,21 @@
     "gaussian_3sigma_defined_fraction": 1.0,
     "source_observed_fraction": 0.0,
     "gaussian_3sigma_observed_fraction": 0.0,
-    "source_gaussian_radius_native_px": 8
+    "source_gaussian_radius_native_px": 48
   },
   "presentation_completion_delta": {
     "rmse": 0.0,
     "max_abs_rgb": 0.0
   },
   "background_estimate": {
-    "method": "Symmetric capsule from both exposed end contours, excluding a0.6L neighborhood of the lens to avoid its shadow; solid SF font outlines and sampled color. Incident text is selected red; a separate exterior retains gray text. No photographed lens pixels enter either modeled label.",
-    "limits": "Hidden track, text recoloring before refraction, font family/weight and layout transfer are estimates. Optical scores are conditional on these inputs, not proof of Apple geometry or compositing.",
+    "method": "Symmetric capsule from both exposed end contours, excluding a0.6L lens neighborhood. Caption geometry fits only unoccluded labels: Week/Year14.6s and Month17.0s, registered by the common Week outline. Solid SF outlines are recolored for the incident layer; a separate exterior retains gray text.",
+    "limits": "Hidden track, pre-refraction recoloring, unchanged selected/unselected glyph geometry and layout transfer are assumptions. Nominal selected RGB is a fixed input convention; fitted photometric response is not an independently recovered Apple ink color. Scores remain conditional on these inputs, not proof of Apple geometry or compositing.",
     "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+    "selected_rgb": [
+      1,
+      0.35,
+      0.4
+    ],
     "track_exclusion_over_L": 0.6,
     "track_pose": [
       957.4502833178284,
@@ -492,41 +497,46 @@
               "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
             }
           }
-        ]
+        ],
+        "source_reference": {
+          "video": "details",
+          "seconds": 14.6,
+          "lens_occlusion": false
+        }
       },
       {
         "text": "Month",
         "selected": {
-          "loss": 67.55996032152325,
+          "loss": 5.073292536690133,
           "color": [
-            0.9745506644248962,
-            0.3754057288169861,
-            0.3914034366607666
+            0.6143820881843567,
+            0.6142544150352478,
+            0.6143244504928589
           ],
           "layer": {
             "box": [
-              780,
-              495,
-              1120,
-              595
+              818,
+              508,
+              1080,
+              582
             ],
-            "vector_asset": "Month-Text-Semibold.svg",
-            "vector_sha256": "7ca40502e9b704d8e72f07018f3ee39dcdce85fa906135abbfb81ca931418e75",
+            "vector_asset": "Month-Text-Medium.svg",
+            "vector_sha256": "8b730836021c8ed3367c7e0b12d1a2eaad183e21a2595003ce9ba2dec0f9ffbb",
             "vector_box": [
-              803.6101175812724,
-              506.87475582571165,
-              1095.544907926305,
-              583.0531928041066
+              821.8463826765549,
+              511.4395663231789,
+              1076.1424769651437,
+              578.9553114815452
             ]
           },
           "pose": [
-            949.5775127537887,
-            544.9639743149091,
-            76.178436978395
+            948.9944298208493,
+            545.197438902362,
+            67.51574515836627
           ],
           "provenance": {
-            "font_file": "SF-Pro-Text-Semibold.otf",
-            "font_sha256": "7fb222bb56b80c7329f657cb58a504370e4873f3d33255939e33e50a4a4148ac",
+            "font_file": "SF-Pro-Text-Medium.otf",
+            "font_sha256": "6647a7ed74c6722f4bac674e0783b944f3d468c85aeb40a133a81797eb56294c",
             "glyph": null,
             "text": "Month",
             "glyphs": [
@@ -537,12 +547,12 @@
               "h"
             ],
             "bounds": [
-              178,
-              -22,
-              6072,
-              1516
+              181,
+              -21,
+              5955,
+              1512
             ],
-            "advance": 6167,
+            "advance": 6054,
             "size_pt": 17,
             "tracking_font_units": -47,
             "units_per_em": 2048,
@@ -551,32 +561,32 @@
         },
         "trials": [
           {
-            "loss": 891.9468591688201,
+            "loss": 97.19478090992197,
             "color": [
-              0.9804376363754272,
-              0.3765582740306854,
-              0.3925178647041321
+              0.6093200445175171,
+              0.609184980392456,
+              0.6092731356620789
             ],
             "layer": {
               "box": [
-                780,
-                495,
-                1120,
-                595
+                820,
+                500,
+                1090,
+                590
               ],
               "vector_asset": "Month-Text-Regular.svg",
               "vector_sha256": "13cdb9819ca5b49116166120136fb421d0ac02bc845f5a047a31ec8d039b0e4d",
               "vector_box": [
-                803.3988097995838,
-                505.25905859771046,
-                1093.2860989890767,
-                583.9206450770657
+                837.433169001541,
+                513.7556652156013,
+                1062.3003789185054,
+                574.7739027820373
               ]
             },
             "pose": [
-              948.3424543943302,
-              544.5898518373881,
-              78.66158647935526
+              949.8667739600232,
+              544.2647839988193,
+              61.01823756643608
             ],
             "provenance": {
               "font_file": "SF-Pro-Text-Regular.otf",
@@ -604,32 +614,32 @@
             }
           },
           {
-            "loss": 306.45424275426194,
+            "loss": 5.073292536690133,
             "color": [
-              0.9791905283927917,
-              0.3683492839336395,
-              0.3845342695713043
+              0.6143820881843567,
+              0.6142544150352478,
+              0.6143244504928589
             ],
             "layer": {
               "box": [
-                780,
-                495,
-                1120,
-                595
+                818,
+                508,
+                1080,
+                582
               ],
               "vector_asset": "Month-Text-Medium.svg",
               "vector_sha256": "8b730836021c8ed3367c7e0b12d1a2eaad183e21a2595003ce9ba2dec0f9ffbb",
               "vector_box": [
-                803.4715636915979,
-                506.16231052916726,
-                1094.6948039383165,
-                583.4822321256721
+                821.8463826765549,
+                511.4395663231789,
+                1076.1424769651437,
+                578.9553114815452
               ]
             },
             "pose": [
-              949.0831838149571,
-              544.8222713274197,
-              77.31992159650491
+              948.9944298208493,
+              545.197438902362,
+              67.51574515836627
             ],
             "provenance": {
               "font_file": "SF-Pro-Text-Medium.otf",
@@ -657,32 +667,32 @@
             }
           },
           {
-            "loss": 67.55996032152325,
+            "loss": 56.614523036114406,
             "color": [
-              0.9745506644248962,
-              0.3754057288169861,
-              0.3914034366607666
+              0.6328881978988647,
+              0.6327760219573975,
+              0.6328277587890625
             ],
             "layer": {
               "box": [
-                780,
-                495,
-                1120,
-                595
+                820,
+                500,
+                1090,
+                590
               ],
               "vector_asset": "Month-Text-Semibold.svg",
               "vector_sha256": "7ca40502e9b704d8e72f07018f3ee39dcdce85fa906135abbfb81ca931418e75",
               "vector_box": [
-                803.6101175812724,
-                506.87475582571165,
-                1095.544907926305,
-                583.0531928041066
+                837.4303584555703,
+                515.0492969353061,
+                1063.9350924749526,
+                574.1541969899056
               ]
             },
             "pose": [
-              949.5775127537887,
-              544.9639743149091,
-              76.178436978395
+              950.6827254652615,
+              544.6017469626058,
+              59.10490005459959
             ],
             "provenance": {
               "font_file": "SF-Pro-Text-Semibold.otf",
@@ -710,32 +720,32 @@
             }
           },
           {
-            "loss": 959.6474380698055,
+            "loss": 115.69395896221977,
             "color": [
-              0.9800173044204712,
-              0.38878679275512695,
-              0.4045146703720093
+              0.6154983043670654,
+              0.6153512001037598,
+              0.6154487133026123
             ],
             "layer": {
               "box": [
-                780,
-                495,
-                1120,
-                595
+                820,
+                500,
+                1090,
+                590
               ],
               "vector_asset": "Month-Display-Regular.svg",
               "vector_sha256": "5162e970e39e8798f9a852fb4c5bad092340b5e492af4785264d080dc80a3675",
               "vector_box": [
-                801.9843879744292,
-                506.3837820166982,
-                1094.0424822339078,
-                583.7757385284926
+                836.2932975350291,
+                514.6429908252718,
+                1062.727176428176,
+                574.6453028739357
               ]
             },
             "pose": [
-              948.0134351041685,
-              545.0797602725954,
-              77.39195651179448
+              949.5102369816026,
+              544.6441468496038,
+              60.002312048664045
             ],
             "provenance": {
               "font_file": "SF-Pro-Display-Regular.otf",
@@ -763,32 +773,32 @@
             }
           },
           {
-            "loss": 390.863633598201,
+            "loss": 27.550168694142485,
             "color": [
-              0.9792847633361816,
-              0.37874358892440796,
-              0.39477139711380005
+              0.6185653209686279,
+              0.6184335947036743,
+              0.618518054485321
             ],
             "layer": {
               "box": [
-                780,
-                495,
-                1120,
-                595
+                820,
+                500,
+                1090,
+                590
               ],
               "vector_asset": "Month-Display-Medium.svg",
               "vector_sha256": "43fc658e5a6b40a5fb25e38b024e5c7a462468b81d1909d7e3c543295669e104",
               "vector_box": [
-                802.3009445333614,
-                507.86416808350737,
-                1095.016050017416,
-                583.0985280604484
+                836.8135978093301,
+                515.8461831528255,
+                1063.323840104059,
+                574.0644055403752
               ]
             },
             "pose": [
-              948.6584972753888,
-              545.4813480719779,
-              75.234359976941
+              950.0687189566945,
+              544.9552943466003,
+              58.218222387549716
             ],
             "provenance": {
               "font_file": "SF-Pro-Display-Medium.otf",
@@ -816,32 +826,32 @@
             }
           },
           {
-            "loss": 187.875127553707,
+            "loss": 67.99135414185002,
             "color": [
-              0.9759308099746704,
-              0.38771960139274597,
-              0.4034782648086548
+              0.6354056596755981,
+              0.6352903246879578,
+              0.6353598237037659
             ],
             "layer": {
               "box": [
-                780,
-                495,
-                1120,
-                595
+                820,
+                500,
+                1090,
+                590
               ],
               "vector_asset": "Month-Display-Semibold.svg",
               "vector_sha256": "f47754ddd46b237a3b8f05debff5cf4e3b3da392f92a97da7875c8413f05ec8c",
               "vector_box": [
-                802.6354394024277,
-                508.9629077081119,
-                1095.394476909522,
-                582.4664630005808
+                836.8838003848541,
+                516.811517030993,
+                1063.858218279592,
+                573.7984056946693
               ]
             },
             "pose": [
-              949.0149581559748,
-              545.7146853543463,
-              73.50355529246887
+              950.371009332223,
+              545.3049613628311,
+              56.98688866367627
             ],
             "provenance": {
               "font_file": "SF-Pro-Display-Semibold.otf",
@@ -868,7 +878,26 @@
               "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
             }
           }
-        ]
+        ],
+        "source_reference": {
+          "video": "details",
+          "seconds": 17,
+          "lens_occlusion": false
+        },
+        "reference_normalization": {
+          "method": "Isotropic camera scale/translation from the same unoccluded Week outline in14.6/17.0s; no lensed label is used for source size/pose.",
+          "scale": 1.1256752317120302,
+          "from_week": [
+            483.21460874876715,
+            544.7305778770509,
+            58.29534463316063
+          ],
+          "to_week": [
+            423.11521683192217,
+            545.4806874318988,
+            65.62162557766575
+          ]
+        }
       },
       {
         "text": "Year",
@@ -1237,9 +1266,15 @@
               "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution"
             }
           }
-        ]
+        ],
+        "source_reference": {
+          "video": "details",
+          "seconds": 14.6,
+          "lens_occlusion": false
+        }
       }
-    ]
+    ],
+    "preparation_script_sha256": "e712fbc7cf911e8f35b8ba2657c1cf35a6c2aac9b983ce09ecf02c1cd6616c8f"
   },
   "limits": "Native masks and input hashes stay frozen. Higher output resolution creates no additional photographic evidence; input reconstruction assumptions remain separate from rendering accuracy."
 }
