@@ -1,0 +1,294 @@
+{
+  "id": "music-mini-compact-vector-a",
+  "category": "Compact persistent playback control",
+  "center": [
+    961,
+    672.5
+  ],
+  "half": [
+    434,
+    88.5
+  ],
+  "radius": 88.5,
+  "crop": [
+    500,
+    550,
+    1420,
+    790
+  ],
+  "foreground": [
+    [
+      580,
+      614,
+      702,
+      734
+    ],
+    [
+      720,
+      618,
+      1004,
+      726
+    ],
+    [
+      1064,
+      632,
+      1138,
+      714
+    ],
+    [
+      1204,
+      631,
+      1326,
+      715
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "artwork",
+      "box": [
+        585,
+        617,
+        700,
+        734
+      ],
+      "radius": 17,
+      "artwork_asset": "jupiter.jpg",
+      "artwork_sha256": "5df8cd3fd2dd4cb5da35a41744bfe32aa8005e9ba44ae0676571aa8973089a09",
+      "source_url": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/27/9e/3e/279e3e69-867d-5296-8166-c094c20591be/196872583670.jpg/1200x1200bb.jpg"
+    },
+    {
+      "mode": "solid",
+      "box": [
+        721,
+        620,
+        1004,
+        671
+      ],
+      "color": [
+        0.05420712009072304,
+        0.056381165981292725,
+        0.0697610080242157
+      ],
+      "vector_asset": "title.svg",
+      "vector_sha256": "315646b31db3d6dc0f68211cf5f7afa64d8e5c2cdb2bd194546fde30235f3805",
+      "vector_provenance": {
+        "font_sha256": "7f7f04a544f980c2182d6cf232512d80d636146fd5e697ad71df7a48fddb16d3",
+        "glyphs": [
+          "A",
+          "l",
+          "l",
+          "space",
+          "O",
+          "f",
+          "space",
+          "M",
+          "e"
+        ],
+        "bounds": [
+          72,
+          -37,
+          8831,
+          1533
+        ],
+        "advance": 8876,
+        "size_pt": 17,
+        "tracking_font_units": -47,
+        "units_per_em": 2048,
+        "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
+        "font_file": "SF-Pro-Text-Bold.otf",
+        "glyph": null,
+        "text": "All Of Me",
+        "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
+        "variant_status": "Original font outlines; app symbol/weight assignment inferred by contour comparison, not read from Apple source code."
+      },
+      "opacity": 1,
+      "vector_box": [
+        727.7185610943901,
+        625.8600710051332,
+        941.6689491870901,
+        664.2094384335542
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        720,
+        679,
+        873,
+        726
+      ],
+      "color": [
+        0.3303128182888031,
+        0.3342094123363495,
+        0.4401363730430603
+      ],
+      "vector_asset": "artist.svg",
+      "vector_sha256": "d9053598a02e959d995573a27b2d12abf9d8442d3904a183ff14d1cab7c84803",
+      "vector_provenance": {
+        "font_sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+        "glyphs": [
+          "N",
+          "a",
+          "o"
+        ],
+        "bounds": [
+          184,
+          -19,
+          3688,
+          1443
+        ],
+        "advance": 3764,
+        "size_pt": 15,
+        "tracking_font_units": -32,
+        "units_per_em": 2048,
+        "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
+        "font_file": "SF-Pro-Text-Regular.otf",
+        "glyph": null,
+        "text": "Nao",
+        "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
+        "variant_status": "Original font outlines; app symbol/weight assignment inferred by contour comparison, not read from Apple source code."
+      },
+      "opacity": 1,
+      "vector_box": [
+        730.3768266091996,
+        685.425823335896,
+        807.8321432645004,
+        717.7430815978964
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        1064,
+        632,
+        1138,
+        714
+      ],
+      "color": [
+        0.0012950501404702663,
+        0.0029494077898561954,
+        0.004039715975522995
+      ],
+      "vector_asset": "play.svg",
+      "vector_sha256": "e2ff010b70a623cd1c7da1f04c4189504aeb95da79afdf1e2b70896988181584",
+      "vector_provenance": {
+        "font_sha256": "ef94ac2356af4938fc96c35af41cc9e5788b9f2ff9b16561a800a4d6875c2cff",
+        "glyphs": [
+          "play.tag.color"
+        ],
+        "bounds": [
+          100,
+          416.95868975618896,
+          636.0062488430746,
+          1027.017582583371
+        ],
+        "advance": 736,
+        "size_pt": null,
+        "tracking_font_units": 0,
+        "units_per_em": 2048,
+        "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
+        "font_file": "SF-Pro-Display-Semibold.otf",
+        "glyph": "play.tag.color",
+        "text": null,
+        "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
+        "variant_status": "Original font outlines; app symbol/weight assignment inferred by contour comparison, not read from Apple source code."
+      },
+      "opacity": 1,
+      "vector_box": [
+        1068.847742725024,
+        638.8544388773489,
+        1130.216527605553,
+        708.7017084552185
+      ]
+    },
+    {
+      "mode": "solid",
+      "box": [
+        1204,
+        631,
+        1326,
+        715
+      ],
+      "color": [
+        0.004439862910658121,
+        0.0005509453476406634,
+        0.0024995908606797457
+      ],
+      "vector_asset": "forward.svg",
+      "vector_sha256": "ca91b5ca526207178ffe09c948fb19151278eb1b43c5501f2a5f85bc734f0f6d",
+      "vector_provenance": {
+        "font_sha256": "fa201942bfbbad09b0be750686a747d490901b3bc4618ecdfc30382cf28d4704",
+        "glyphs": [
+          "forward.tag.color"
+        ],
+        "bounds": [
+          100,
+          435,
+          1105,
+          1007
+        ],
+        "advance": 1205,
+        "size_pt": null,
+        "tracking_font_units": 0,
+        "units_per_em": 2048,
+        "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
+        "font_file": "SF-Pro-Display-Regular.otf",
+        "glyph": "forward.tag.color",
+        "text": null,
+        "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
+        "variant_status": "Original font outlines; app symbol/weight assignment inferred by contour comparison, not read from Apple source code."
+      },
+      "opacity": 1,
+      "vector_box": [
+        1211.6821800372725,
+        641.0642404289682,
+        1321.2155126913296,
+        703.4055999096853
+      ]
+    }
+  ],
+  "reference": {
+    "video": "music",
+    "seconds": 2.5,
+    "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+  },
+  "foreground_method": "Same solid vector font/icon outlines as expanded mini-player, separately measured placement/color, original high-resolution catalogue artwork; original glass exclusion mask is unchanged.",
+  "background": "Masked temporal translation mosaic with fixed observed-pixel confidence; top and lower disjoint strips.",
+  "input_names": {
+    "source.png": "source-2.5.png",
+    "target.png": "target-2.5.png",
+    "known.png": "known-2.5.png"
+  },
+  "exterior_exclusions": [
+    [
+      0,
+      0,
+      510,
+      1080
+    ],
+    [
+      1410,
+      0,
+      1920,
+      1080
+    ]
+  ],
+  "source_sha256": {
+    "source.png": "84da0d24f30dc1f4080b568756d79044a9ac6568ecbff9595d02a38cd3239fb1",
+    "target.png": "efffc64b8a6ee5b84f0bfc295369aad38db8531e4686674861074592fbee54de",
+    "known.png": "03433579b8ddf8771df2bacf7aa1566e84b71bc81df71da1cd64069c00ff2413"
+  },
+  "continuation": {
+    "baseline": "music-mini-compact",
+    "additional_single_pass_minimum": 10,
+    "paired_pass_minimum": 20
+  },
+  "exterior_reference_shape": {
+    "shape_dx": -0.011450159975193283,
+    "shape_dy": 0.0024344086886602372,
+    "half_x_delta": 0.004608235835338523,
+    "half_y_delta": 0.00017512742414114445,
+    "radius_delta": 0.012043263143639913,
+    "cap_join_width": 0
+  }
+}
