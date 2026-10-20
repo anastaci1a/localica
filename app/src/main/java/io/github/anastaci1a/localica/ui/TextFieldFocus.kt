@@ -45,21 +45,31 @@ private val LocalRestingTextFocus = staticCompositionLocalOf<FocusRequester> { e
     var sawKeyboard by remember { mutableStateOf(false) }
     val keyboardVisible = WindowInsets.isImeVisible
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val keyboardSettled = WindowInsets.imeAnimationSource.getBottom(density) == WindowInsets.imeAnimationTarget.getBottom(density)
+    val keyboardSource = WindowInsets.imeAnimationSource.getBottom(density)
+    val keyboardTarget = WindowInsets.imeAnimationTarget.getBottom(density)
+    val keyboardSettled = keyboardSource == keyboardTarget
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     // Keep native window focus, but move Compose focus out of the editor. Clearing
     // the window owner can immediately focus its first editor again in key mode.
     val restingFocus = LocalRestingTextFocus.current
     val keyboard = LocalSoftwareKeyboardController.current
     val emptySearchBack by rememberUpdatedState(LocalEmptySearchBack.current)
-    fun endEditing() { restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke() }
+    val beginSearchReturn by rememberUpdatedState(LocalSearchReturnStart.current)
+    fun endEditing() {
+        if (emptySearchBack != null) beginSearchReturn?.invoke()
+        restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
+    }
     BackHandler(focused) { endEditing() }
-    LaunchedEffect(focused, keyboardVisible, keyboardSettled, windowFocused) {
+    LaunchedEffect(focused, keyboardVisible, keyboardSettled, keyboardTarget, windowFocused) {
         if (!focused || !windowFocused) sawKeyboard = false
         // A newly focused popup may inherit the previous window's closing IME.
         // Only a settled keyboard belongs to this editing session.
         else if (keyboardVisible && keyboardSettled) sawKeyboard = true
-        else if (!keyboardVisible && sawKeyboard) { sawKeyboard = false; endEditing() }
+        else if (sawKeyboard && (!keyboardVisible || (emptySearchBack != null && keyboardTarget == 0))) {
+            // IME-owned Back announces its zero target before its last visible
+            // frame. Empty search returns home immediately, independently of it.
+            sawKeyboard = false; endEditing()
+        }
     }
     return onFocusChanged { focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
         if (focused && event.key == Key.Back) {
