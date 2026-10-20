@@ -1,8 +1,8 @@
 {
-  "state_sha256": "d276283d00dcd9f47a459966d74d6d81aa154035cacdfa59014f832464e13d21",
+  "state_sha256": "6406d3bf50f84d38cabeab2b70d6013a8c1128bb1e9b84fa957f7e41b6c23b01",
   "render_files": {
-    "motion.mp4": "ec06b4320b586dd07fd91020c5b4c2a6c3c3370f853c2c45c598ba80b157d54f",
-    "comparison.png": "a2b7588a5156b5ba64627d17fbbe56cc6c7d75d474413ff693861c0bb1d9fe52"
+    "motion.mp4": "185797c758f226fb0692f03958bb8045912bf83b980ff097f26aa42d0cf61478",
+    "comparison.png": "471fe217c3858d461cb5239d27b7507413173aff0d9c1bfac64d7b7408b45b5a"
   },
   "native_size": [
     825,
@@ -13,28 +13,28 @@
     2360
   ],
   "output_scale": 4,
-  "frames": 180,
+  "frames": 120,
   "fps": 30,
   "travel_over_L": 0.20785219399538107,
   "scores": {
     "glass": {
       "pixels": 240456,
-      "rmse": 12.614958763122559
+      "rmse": 12.061294555664062
     },
     "rim": {
       "pixels": 70466,
-      "rmse": 21.859037399291992
+      "rmse": 20.890653610229492
     },
     "held": {
       "pixels": 61420,
-      "rmse": 13.881340026855469
+      "rmse": 13.097060203552246
     },
     "interior": {
       "pixels": 169990,
-      "rmse": 5.199476718902588
+      "rmse": 4.986932277679443
     },
-    "ssim": 0.9590278267860413,
-    "loss": 254.74128402379165
+    "ssim": 0.9613863229751587,
+    "loss": 232.75820092972242
   },
   "motion_support": {
     "requested_native_px": 45,
@@ -44,7 +44,15 @@
     "minimum_scored_lookup_3sigma_observed_fraction": 0.0,
     "minimum_whole_shape_lookup_observed_fraction": 0.0,
     "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
-    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates."
+    "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates.",
+    "reflection_environment_3sigma_defined_min": 1.0,
+    "reflection_environment_3sigma_observed_min": 0.0,
+    "reflection_environment_full_defined_min": 1.0,
+    "reflection_environment_full_observed_min": 0.0,
+    "chromatic_source_3sigma_defined_min": 1.0,
+    "chromatic_source_3sigma_observed_min": 0.0,
+    "chromatic_source_full_defined_min": 1.0,
+    "chromatic_source_full_observed_min": 0.0
   },
   "presentation_completion_native_delta": {
     "max_abs_rgb": 0.0,
@@ -54,16 +62,16 @@
   "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.",
   "files": {
     "motion.mp4": {
-      "bytes": 1038553,
-      "sha256": "ec06b4320b586dd07fd91020c5b4c2a6c3c3370f853c2c45c598ba80b157d54f"
+      "bytes": 913769,
+      "sha256": "185797c758f226fb0692f03958bb8045912bf83b980ff097f26aa42d0cf61478"
     },
     "motion.gif": {
-      "bytes": 9182104,
-      "sha256": "b113a679bc7a760d292ca65b44054587657832d4178ad4b03b85c658d1b29f3e"
+      "bytes": 7396115,
+      "sha256": "66cef3046a5cd18c74b9e59b52f531eb5cfe2bb68b7d929fc8543e4d14517a5c"
     },
     "comparison.png": {
-      "bytes": 1909437,
-      "sha256": "a2b7588a5156b5ba64627d17fbbe56cc6c7d75d474413ff693861c0bb1d9fe52"
+      "bytes": 1924684,
+      "sha256": "471fe217c3858d461cb5239d27b7507413173aff0d9c1bfac64d7b7408b45b5a"
     }
   },
   "gif": {
@@ -76,7 +84,7 @@
     "palette_colors": 256,
     "palette_sampling": "All frame pixels",
     "dither": "sierra2_4a",
-    "maximum_megabytes": 90,
+    "maximum_megabytes": 10.0,
     "spatial_downsampling": true
   },
   "video_color": {

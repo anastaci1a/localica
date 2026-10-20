@@ -5,6 +5,16 @@
   "source_observed_fraction": 0.0,
   "gaussian_3sigma_observed_fraction": 0.0,
   "source_gaussian_radius_native_px": 13,
+  "reflection_source_defined_fraction": 1.0,
+  "reflection_gaussian_3sigma_defined_fraction": 1.0,
+  "reflection_source_observed_fraction": 0.0,
+  "reflection_gaussian_3sigma_observed_fraction": 0.0,
+  "reflection_source_gaussian_radius_native_px": 5,
+  "chromatic_source_defined_fraction": 1.0,
+  "chromatic_gaussian_3sigma_defined_fraction": 1.0,
+  "chromatic_source_observed_fraction": 0.0,
+  "chromatic_gaussian_3sigma_observed_fraction": 0.0,
+  "chromatic_source_gaussian_radius_native_px": 13,
   "source_coordinate_range": [
     [
       578.0621948242188,
