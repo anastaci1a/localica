@@ -81,6 +81,10 @@ class Study:
             else:
                 fill=np.asarray(layer['color'])
                 seed=(T.max(2)<layer['threshold'])
+                if layer.get('local_contrast'):
+                    lum=T.mean(2).astype(np.float32)
+                    closed=cv2.morphologyEx(lum,cv2.MORPH_CLOSE,np.ones((11,11),np.uint8))
+                    seed&=(closed-lum>layer['local_contrast'])
                 if layer.get('neutral_only'):
                     seed&=(T.max(2)-T.min(2)<.035)
                 stencil=cv2.dilate(seed.astype(np.uint8),np.ones((3,3),np.uint8))

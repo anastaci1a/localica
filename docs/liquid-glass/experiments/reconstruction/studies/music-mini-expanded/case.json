@@ -94,7 +94,8 @@
         0
       ],
       "threshold": 0.55,
-      "neutral_only": false
+      "neutral_only": false,
+      "local_contrast": 0.035
     },
     {
       "mode": "mask",
