@@ -86,7 +86,7 @@ internal fun Modifier.listTopFade() = composed {
 @Composable
 internal fun ListSearchWindow(visible: Boolean, anchor: GlassAnchor, hasQuery: Boolean, onDismiss: () -> Unit,
     onBack: (() -> Unit)? = null, content: @Composable () -> Unit) {
-    GlassMorphPopup(visible, anchor, onDismiss, GlassPlacement.Search) {
+    GlassMorphPopup(visible, anchor, onDismiss, GlassPlacement.Search, searchDismissOnImeBack = !hasQuery) {
         // Register before the editor so ending text input remains the first Back action.
         BackHandler(visible && onBack != null) { onBack?.invoke() }
         BoxWithConstraints(Modifier.fillMaxWidth()) {

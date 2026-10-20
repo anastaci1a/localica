@@ -123,10 +123,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
     }
     val panelReady = LocalGlassPanelReady.current
+    val reportSearchOpening = LocalSearchOpeningReady.current
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     val keyboardClosing = WindowInsets.ime.getBottom(density) > 0 && WindowInsets.imeAnimationTarget.getBottom(density) == 0
     var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
-    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing) {
+    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing, reportSearchOpening, scopedEditor?.focused) {
         // Dialog attachment and IME focus happen outside Compose's animation clock.
         // Do not consume an autofocus request while the returning window still owns input.
         if (!panelReady || !windowFocused || keyboardClosing) return@LaunchedEffect
@@ -135,6 +136,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
             restoreResultsFocus = false
+            reportSearchOpening?.invoke(true)
         } else if (restoreResultsFocus && !playerOpen) {
             // Replacing a focused field can transfer focus to the restored field even without
             // requestFocus. Back restores results, so explicitly end that input session.
@@ -142,7 +144,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
             resultsFocus.requestFocus(); keyboard?.hide()
             restoreResultsFocus = false
-        }
+            reportSearchOpening?.invoke(false)
+        } else if (route.search && !playerOpen) reportSearchOpening?.invoke(scopedEditor?.focused == true)
     }
     LaunchedEffect(libraryFilters.visible, route.key, route.filter, selectionVisible) {
         if (selectionVisible && route.tab == MainTab.Library && route.collection == null && !route.globalSearch && route.filter != null && filters.none { it.kind == route.filter }) {
