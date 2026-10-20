@@ -58,6 +58,17 @@ def main():
     assert next_row==48 and sample_count==1400*12*4**2*4
     print('PASS wide export strips bound working samples without gaps or coordinate changes')
 
+    layered=Study.__new__(Study);layered.crop=[0,0,8,8]
+    parent=[0,0,8,8];child=[2,2,6,6]
+    layered.foreground_layers=[(parent,np.full((8,8),.2),np.full((8,8,3),.1)),(child,np.full((4,4),.75),np.full((4,4,3),.9))]
+    layered.vector_layers={};layered.artwork_layers={};layered.transmission_layers=[];layered.case={}
+    source=np.linspace(0,1,8*8*3).reshape(8,8,3)
+    background=source*.8+.1*.2
+    assert np.max(abs(layered.apply_foreground(source.copy(),stop_before=child)-background))<1e-12
+    expected=background.copy();expected[2:6,2:6]=expected[2:6,2:6]*.25+.9*.75
+    assert np.max(abs(layered.apply_foreground(source.copy())-expected))<1e-12
+    print('PASS foreground calibration sees the fixed backing before a nested symbol')
+
     # Radial lookup must commute with a quarter-turn. Material lighting is
     # deliberately excluded: an environment may have a preferred direction.
     obj.half=np.ones(2);obj.radius=1.;obj.case['radial']=True

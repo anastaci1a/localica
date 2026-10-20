@@ -64,7 +64,7 @@ def main():
         for s in studies:
             pred=s.render(p,np.array(state['material']));composite=s.apply_foreground(pred.copy());x0,y0,_,_=s.crop
             for layer in s.case['foreground_layers']:
-                if 'vector_asset' in layer and layer['mode']!='transmission':
+                if 'vector_asset' in layer and layer['mode']!='transmission' and layer.get('fit_style',True):
                     a,b,c,d=layer['box'];actual.append(float(np.mean((composite[b-y0:d-y0,a-x0:c-x0]-s.target[b:d,a:c])**2))*255**2)
         assert np.max(abs(np.array(actual)-state['foreground_style_scores']['after_mse']))<1e-3,'Static foreground replay mismatch'
     report=dict(paired_passes=valid_count,record_count=len(rows),excluded_passes=[r['pass_number'] for r in rows if not r.get('valid_experiment',True)],scores=metrics,foreground_mse=errors,foreground_style_scores=state.get('foreground_style_scores'),

@@ -343,9 +343,10 @@ class Study:
         labels=('Apple source','Reconstruction (4x)') if scale==4 else ('Apple','Reconstruction')
         pair(original,np.uint8(np.rint(np.clip(out,0,1)*255)),labels,font_size=16*scale).save(dest)
 
-    def apply_foreground(self,out,scale=1):
+    def apply_foreground(self,out,scale=1,stop_before=None):
         x0,y0,_,_=self.crop
         for box,alpha,color in self.foreground_layers:
+            if stop_before is not None and tuple(box)==tuple(stop_before):return out
             a,b,c,d=box
             region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
             vector=self.vector_layers.get(tuple(box))
