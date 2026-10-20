@@ -41,15 +41,23 @@ def coverage_report(study,p,X=None,Y=None):
     if X is None or Y is None:X,Y=coordinates(study,p)
     defined,observed=masks(study)
     safe,radius=kernel_safe(defined,study,p);direct_safe,_=kernel_safe(observed,study,p)
-    return dict(source_defined_fraction=fraction(defined,X,Y,study.valid),
+    report=dict(source_defined_fraction=fraction(defined,X,Y,study.valid),
                 gaussian_3sigma_defined_fraction=fraction(safe,X,Y,study.valid),
                 source_observed_fraction=fraction(observed,X,Y,study.valid),
                 gaussian_3sigma_observed_fraction=fraction(direct_safe,X,Y,study.valid),
                 source_gaussian_radius_native_px=radius)
+    if 'grazing_reflection' in p:
+        from grazing_reflection import support
+        report.update(support(study,p,defined,observed))
+    return report
 
 
 def supported(study,report):
     keys=['source_defined_fraction','gaussian_3sigma_defined_fraction']
     if not study.case.get('allow_estimated_background'):
         keys+=['source_observed_fraction','gaussian_3sigma_observed_fraction']
+    if 'reflection_source_defined_fraction' in report:
+        keys+=['reflection_source_defined_fraction','reflection_gaussian_3sigma_defined_fraction']
+        if not study.case.get('allow_estimated_background'):
+            keys+=['reflection_source_observed_fraction','reflection_gaussian_3sigma_observed_fraction']
     return all(report[k]>=.999 for k in keys)

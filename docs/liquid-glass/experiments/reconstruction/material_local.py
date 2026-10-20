@@ -28,6 +28,10 @@ def statistics(cache,co):
         F=F@transform
         sigma=s.kernel_sigma(cache.p,'post_sigma')
         if sigma>.001:F=cv2.GaussianBlur(F,(0,0),sigma)
+        if "grazing_reflection" in cache.p:
+            from grazing_reflection import layers
+            weight,_=layers(s,cache.p)
+            F*=1-weight[...,None]
         for name,mask in [('glass',s.valid),('rim',s.rim)]:
             X=F[mask];e=residual[...,channel][mask];factor=255**2/(3*mask.sum())
             forms[name][0]+=(X.T@X)*factor

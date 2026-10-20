@@ -313,7 +313,8 @@ class Study:
             C,J=self.field(x,y,p);C=shade(C,J,co)
             result[row:bottom]=C.reshape(bottom-row,2,W,2,3).mean((1,3))
         if self.kernel_sigma(p,'post_sigma')>.001:result=cv2.GaussianBlur(result,(0,0),self.kernel_sigma(p,'post_sigma')*scale)
-        return result
+        from grazing_reflection import apply
+        return apply(self,p,result,scale)
 
     def shape_coverage(self,p,scale=1):
         x0,y0,x1,y1=self.crop

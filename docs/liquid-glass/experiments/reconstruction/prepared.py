@@ -40,4 +40,5 @@ class Prepared:
             C=np.clip(C*gain+co[3:6]+light[...,None],0,1)
             out[row:bottom]=C.reshape(bottom-row,2,W,2,3).mean((1,3))
         if s.kernel_sigma(p,'post_sigma')>.001:out=cv2.GaussianBlur(out,(0,0),s.kernel_sigma(p,'post_sigma')*self.scale)
-        return out
+        from grazing_reflection import apply
+        return apply(s,p,out,self.scale)

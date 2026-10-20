@@ -10,6 +10,7 @@ from extended_fit import Study
 from paired_fit import permitted,foreground_errors
 from paired_fit import Cached
 from vector_foreground import copy_assets
+from source_support import supported
 
 
 def verify_boundary(root,first):
@@ -69,6 +70,7 @@ def main():
         s.comparison(pred,folder/'comparison.png',p);metrics.append(score);studies.append(s)
         subprocess.run([sys.executable,str(Path(__file__).with_name('extended_diagnostics.py')),str(folder)],check=True)
         diagnostic=json.loads((folder/'diagnostics.json').read_text())
+        assert supported(s,diagnostic),'Undefined/unobserved transmission or reflection source footprint'
         assert diagnostic['source_defined_fraction']>=.999,'Undefined source under a scored lookup'
         assert diagnostic['gaussian_3sigma_defined_fraction']>=.999,'Source-scattering footprint crosses an undefined gap'
         if not case.get('allow_estimated_background'):

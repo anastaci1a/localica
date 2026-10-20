@@ -169,6 +169,22 @@ Apply `A` to the rim gain, offset and core gain triplets before the common mater
 - Use the same `k,f` and 23 base coefficients on both backgrounds; recompute `μ` when the backdrop or footprint moves. The reference implementation uses native-center area quadrature, independent of target/foreground/scoring masks.
 - An absent context option means `A=I`, preserving earlier recipes. The current switch selects `k=10,f=0`; it still misses colored rim detail. This empirical adaptation is not an identified Apple formula.
 
+### Directional grazing reflection
+
+The switch follow-up separates a reflected field from the transmission's output blur. With normalized inward distance `d`, outward normal `n`, unit lighting direction `l`, `0≤a≤1`, width `w>0`, angular exponent `p>0`, and quintic smoothstep `S`:
+
+```text
+u = clamp(d/w,0,1)
+F = a [1−S(u)] max(n·l,0)^p
+E = Gaussian(unrefracted source, σ_environment/L)
+C_final = (1−F) C_transmission_after_output_blur + F E
+```
+
+- The reflection width and source kernel scale with each pose's `L`. Sample `E` at the unrefracted surface position; update its source offset during motion. Keep shape coverage, exterior shadow and foreground separate.
+- Reflection and transmission have independent filtering. Applying the transmission blur again after this mixture changes the model. Material derivatives therefore acquire `(1−F)` **after** their output filter.
+- This bounded mixture approximates the incident field from the available backdrop. It is not a recovered environment, a Fresnel law, or Apple's shader; the directional lobe does not explain the observed rainbow. No target RGB is used as its input.
+- An absent option preserves the earlier calculation exactly. Source coverage includes the environment kernel separately. Frozen native gates remain unchanged; the excluded outer-contour band needs an additional visual/error check.
+
 ## Solid-vector foreground responses
 
 Foreground coverage `α` comes from solid geometry, independently of material color. Its input `B` includes preceding layers, such as a fixed selection backing. Affine styles use `F(B)=(1−o)B+oC`; response styles use the shared per-channel function:
