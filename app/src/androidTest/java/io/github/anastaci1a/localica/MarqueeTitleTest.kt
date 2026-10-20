@@ -26,6 +26,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
@@ -171,6 +172,7 @@ class MarqueeTitleTest {
     @Test fun pausedRtlTextKeepsItsRightLeadingEdgeUnfaded() {
         val title = "فنان البداية ثم كلمات طويلة تنتهي بموسيقى"
         val style = TextStyle(fontSize = 24.sp, fontFamily = FontFamily.Monospace, color = Color.Black)
+        var actualReferenceLayout: TextLayoutResult? = null
         compose.mainClock.autoAdvance = false
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -182,7 +184,8 @@ class MarqueeTitleTest {
                     Box(Modifier.width(120.dp).clipToBounds().testTag("reference")) {
                         Text(title, Modifier.fillMaxWidth()
                             .wrapContentWidth(AbsoluteAlignment.Right, unbounded = true)
-                            .testTag("reference-text"), maxLines = 1, softWrap = false, style = style)
+                            .testTag("reference-text"), maxLines = 1, softWrap = false, style = style,
+                            onTextLayout = { actualReferenceLayout = it })
                     }
                 }
             }
@@ -191,10 +194,11 @@ class MarqueeTitleTest {
         recordRtlEvidence("paused-rtl", listOf("title", "reference"))
         val actual = compose.onNodeWithTag("title").captureToImage().toPixelMap()
         val reference = compose.onNodeWithTag("reference").captureToImage().toPixelMap()
-        val results = mutableListOf<TextLayoutResult>()
-        compose.onNodeWithTag("reference-text", useUnmergedTree = true)
-            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
-        val referenceLayout = results.single()
+        // Read the actual layout callback: the optimized String Text semantics
+        // reconstruction uses an infinite paragraph on API26 despite drawing correctly.
+        val referenceLayout = compose.runOnUiThread { requireNotNull(actualReferenceLayout) }
+        assertEquals("Reference paragraph matches its finite measured width",
+            referenceLayout.size.width.toFloat(), referenceLayout.multiParagraph.width, .01f)
         assertTrue("Reference measures the entire overflowing paragraph", referenceLayout.size.width > reference.width)
         val firstGlyph = referenceLayout.getBoundingBox(0)
         assertTrue("Reference's first glyph lies in the right-leading viewport",
@@ -217,29 +221,31 @@ class MarqueeTitleTest {
 
     @Test fun rtlUiKeepsBothLatinAndArabicArtistPrefixesVisibleWithHiddenAlbums() {
         val style = TextStyle(fontSize = 24.sp, fontFamily = FontFamily.Monospace, color = Color.Black)
-        val artists = listOf("Artist", "فنان")
+        val artists = listOf("Artist", "فنان", " · Artist", " · فنان")
         compose.mainClock.autoAdvance = false
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Column(Modifier.background(Color.White)) {
                     artists.forEachIndexed { index, artist ->
+                        val width = if (index < 2) 120.dp else 180.dp
                         val text = buildAnnotatedString {
                             append(artist)
                             withStyle(SpanStyle(color = Color.Transparent)) { append(" · A very long hidden album name") }
                         }
                         RecordMeasuredLayout("artist-$index-full", text, style)
                         RecordMeasuredLayout("artist-$index-prefix", AnnotatedString(artist), style)
-                        MarqueeTitle(text, false, Modifier.width(120.dp).testTag("artist-$index"), style,
+                        MarqueeTitle(text, false, Modifier.width(width).testTag("artist-$index"), style,
                             visiblePrefixLength = artist.length, suffixVisibility = 0f)
                         // Paragraph-leading alignment is independent of the UI direction.
-                        Text(artist, Modifier.width(120.dp).testTag("reference-$index"), maxLines = 1,
-                            textAlign = if (index == 0) TextAlign.Left else TextAlign.Right, style = style)
+                        Text(artist, Modifier.width(width).testTag("reference-$index"), maxLines = 1,
+                            textAlign = if (index % 2 == 0) TextAlign.Left else TextAlign.Right,
+                            style = style.copy(textDirection = TextDirection.Content))
                     }
                 }
             }
         } }
         compose.mainClock.advanceTimeBy(4000)
-        recordRtlEvidence("hidden-prefixes", listOf("artist-0", "reference-0", "artist-1", "reference-1"))
+        recordRtlEvidence("hidden-prefixes", artists.indices.flatMap { listOf("artist-$it", "reference-$it") })
         artists.indices.forEach { index ->
             val actual = compose.onNodeWithTag("artist-$index").captureToImage().toPixelMap()
             val reference = compose.onNodeWithTag("reference-$index").captureToImage().toPixelMap()
@@ -253,7 +259,11 @@ class MarqueeTitleTest {
 
     @Composable private fun RecordMeasuredLayout(label: String, text: AnnotatedString, style: TextStyle) {
         val layout = rememberTextMeasurer().measure(text, style, maxLines = 1, softWrap = false)
-        SideEffect { measuredLayouts[label] = layout }
+        val resolved = rememberTextMeasurer().measure(text, marqueeTextStyle(style), maxLines = 1, softWrap = false)
+        SideEffect {
+            measuredLayouts[label] = layout
+            measuredLayouts["$label-content"] = resolved
+        }
     }
 
     private fun recordRtlEvidence(scene: String, tags: List<String>) {
