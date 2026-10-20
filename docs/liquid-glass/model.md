@@ -126,12 +126,57 @@ F(p) = Q + Tout.xy × G/(−Tout.z)
 
 ## Reconstruction comparators
 
-The [HD study](reconstruction.md) adds two offline hypotheses beyond the portable lab's circle/capsule equations:
+The [HD study](reconstruction.md) tests offline hypotheses beyond the portable lab's circle/capsule equations:
 
 - **Continuous oval:** `|x/hx|^n+|y/hy|^n=1`. The slider uses `n=2.5`, a visually selected outline hypothesis. Distance is the signed Euclidean distance to the numerically nearest boundary point; the outward normal follows the implicit gradient there. This is not a capsule or a recovered Apple shape formula. The sampled minimum curvature radius is about 35.66 native pixels for half-extents 118.5 × 56.5; the optical band is limited to 35.65. Numeric curvature checks do not constitute a proof for all possible exponents.
 - **Flexible inverse-map profile:** `a(d)=min(hx,hy) Σ ci Bi(clamp(d/r,0,1))`, with cubic B-splines on knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]`. Seven coefficients are fitted and the final three are zero. Therefore `a`, `a′` and `a″` vanish at the inner join. The map is `F=(x(1−cxS), y(1−cyS))−a n`, with quintic `S` evaluated at `d/r`. This allows independently fitted central X/Y scale and a flexible folded rim, without a fitted displacement image. It is an empirical comparator, not a physical surface reconstruction or a nonfolding guarantee.
 
-[shapes.py](experiments/reconstruction/shapes.py) and [render.py](experiments/reconstruction/render.py) implement these extensions. Their tests cover circle limits, normals, the oval boundary, zero power and spline endpoint derivatives. The 30 older portability fixtures continue to cover the original field/cap; they do not validate the extra hypotheses or establish Apple fidelity. Material/scattering fits and their domains are specified only in the [comparison method](reconstruction.md#method).
+### Tangential curvature and smooth crowns
+
+A scalar normal offset cannot explain all two-dimensional distortion. On the toolbar's straight horizontal edge, `n=(0,±1)`: `F=p−a(d)n` changes Y while leaving X unchanged. A displaced strip is not necessarily a widened strip. The following alternatives expose that restriction rather than increasing one depth gain.
+
+**Tensor field.** Let `t=(-ny,nx)`, `bT=r×tangentBand`, `v=1−clamp(d/bT,0,1)`, and `B=v⁴(5−4v)`. With the same spline `a(d)`:
+
+```text
+F(p) = (I−diag(cx,cy))p − a(d)n − τB(d)(p·t)t
+```
+
+`0≤τ≤0.8`, `0.05≤tangentBand≤1`, `cx∈[0,0.3]`, `cy∈[0,0.65]`. On a straight horizontal edge, `∂Fx/∂x=1−cx−τB`; its reciprocal is displayed horizontal scale. The central scale is retained while tangential stretch grows toward the silhouette. `B`, `B′` and `B″` vanish at its inner join. Normals/tangents rotate around curved ends, so the deformation follows the outline instead of fixed screen axes. A circle has `p·t=0`, providing a useful zero-effect control. This is a designed image field, not a recovered solid or a nonfolding guarantee.
+
+**Gradient-potential control.** A competing, more restrictive hypothesis uses `Ψ=V(d)+K(d)x²/2+cy y²/2`, with `V′=−a`, `K=cx+τB` and `F=p−∇Ψ`:
+
+```text
+F = ((1−K)x, (1−cy)y) + [−a + K′x²/2]n
+K′ = −20τu(1−u)³/bT, u=clamp(d/bT,0,1)
+```
+
+The extra normal term is required by this potential; dropping it would break equality of mixed derivatives. This control tests integrability, not exact thick-lens optics. It did not improve the toolbar fit. The better tensor fit cannot therefore be relabeled as a verified phase surface.
+
+**Smooth height surface.** A continuous crown removes the old cap's explicit inner shoulder join. Define the footprint field `T` and height:
+
+```text
+circle / oval: T = |x/hx|ⁿ + |y/hy|ⁿ
+capsule:       T = [max(|x|−(hx−r),0)² + y²]/r²
+s = 1−Tᵐ; C = 1−(c/2)[(x/hx)²+(y/hy)²]
+z(p) = H sᵝ C                    // inside T<1
+N ∝ ( H[βmTᵐ⁻¹Tx C − s Cx],
+      H[βmTᵐ⁻¹Ty C − s Cy], s¹⁻ᵝ )
+```
+
+Domains: `H=min(h)×height`, `height∈[0.01,1.8]`, `m∈[1,40]`, `β∈[0.2,0.95]`, `c∈[0,0.7]`; `n=2` for the circle and `2.5` for the study's oval. Increasing `m` concentrates curvature near the boundary while preserving a smooth central crown. At `m=1, β=1/2, c=0`, a circle/ellipse has an ellipsoidal meridian. Neither uniform curvature nor a planar center is assumed. The capsule retains its footprint's straight/arc curvature join; the circle and oval have no distance-band shoulder.
+
+The same two-interface Snell construction above uses this normal and height. The outline constrains the silhouette, not `H,m,β,c` uniquely. For a height graph, principal curvatures are eigenvalues of `I⁻¹II`, where `I=Id+∇z⊗∇z` and `II=Hess(z)/sqrt(1+|∇z|²)` (sign depends on chosen orientation). Height alone is not a curvature radius. The current checks establish analytic-normal/scale/mirror limits; full path-validity and temporal calibration remain open.
+
+### Reflection versus color separation
+
+For a view direction along +Z, the reflected lookup direction is `R=(2NzNx,2NzNy,2Nz²−1)`. The surface comparator fits a low-order environment evaluated at **that direction**, weighted by unpolarized dielectric Fresnel reflectance. It replaces independently positioned Gaussian highlight bands; changing the surface changes reflection and transmission together. The RGB-environment alternative has four coefficients per channel for `E(R)=e0+exRx+eyRy+ezRz`, plus smooth body terms. The environment is inferred nuisance lighting, not a measured Apple light rig. Encoded-RGB fitting is not energy-conserving radiometry.
+
+[Dispersion](https://www.pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission) means wavelength-dependent refraction; a colored rim alone does not identify it. Two explicit controls are tested:
+
+- **Snell RGB proxy:** `n(λ)=1.33+B(λ⁻²−0.55⁻²)`, `λ={0.65,0.55,0.45} μm`, `B∈[0,0.025] μm²`. Trace one ray per representative RGB channel. All indices remain below `√2`, preserving this comparator's flat-exit TIR bound. This is a three-sample approximation, not spectral-to-RGB integration.
+- **Image-map sensitivity:** `Fλ=p+[1+D(λ⁻²−0.55⁻²)](F0−p)`, `D∈[0,0.2] μm²`. This tests channel separation on the better-fitting flexible map; it is not equivalent to changing a physical IOR. `D=0` recovers the common lookup exactly.
+
+[curvature.py](experiments/reconstruction/curvature.py) implements these hypotheses. [verify.py](experiments/reconstruction/verify.py) checks finite-differenced height normals, scale/mirror/Snell/Fresnel limits, potential mixed derivatives, tangential scale and integrated material regression. The 30 older fixtures still cover only the original field/cap. Image scores and color evidence belong to the [comparison study](reconstruction.md), not mathematical proof of Apple's renderer.
 
 ## Sampling, coverage and color
 

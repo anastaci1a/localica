@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import numpy as np
 from render import lookup,illumination,shade
-from reproduce import masks,points,scores,parameters
+from reproduce import masks,points,scores,parameters,training_samples,sample_backdrop
 from background import paper
 from shapes import superellipse,minimum_radius
 from scipy.interpolate import BSpline
@@ -72,6 +72,68 @@ co[-3:]=.5
 expected=sample*(1-.5*light[:,-1,None])
 assert np.max(np.abs(shade(sample,light,co)-expected))<1e-12
 print('PASS recovered background field without a color patch; identity/core-contrast material controls')
+
+from curvature import surface,snell_map,fresnel
+from render import geometry,fit_material
+# Independent height differences validate the analytic normal, including crown
+# and the continuous center-to-rim shoulder. Stay away from the silhouette.
+for exponent,half in [(0,[60,60]),(2.5,[120,60])]:
+    p=dict(height=.7,gap=.4,beta=.55,crown=.12,shoulder=5,ior=1.33)
+    x=np.array([3.,21.,45.]);y=np.array([5.,15.,20.]);eps=1e-4
+    z,nx,ny,nz=surface(x,y,half,60,p,exponent)
+    dx=(surface(x+eps,y,half,60,p,exponent)[0]-surface(x-eps,y,half,60,p,exponent)[0])/(2*eps)
+    dy=(surface(x,y+eps,half,60,p,exponent)[0]-surface(x,y-eps,half,60,p,exponent)[0])/(2*eps)
+    assert np.max(np.abs(dx+nx/nz))<1e-6 and np.max(np.abs(dy+ny/nz))<1e-6
+    assert np.max(np.abs(nx*nx+ny*ny+nz*nz-1))<1e-12
+    # Geometric scale covariance and mirror symmetry, not image-specific checks.
+    a=np.array(snell_map(x,y,z,nx,ny,nz,1.33,24))
+    z2,*N2=surface(3*x,3*y,np.array(half)*3,180,p,exponent)
+    assert np.max(np.abs(np.array(snell_map(3*x,3*y,z2,*N2,1.33,72))-3*a))<1e-9
+    zm,*Nm=surface(-x,y,half,60,p,exponent)
+    am=np.array(snell_map(-x,y,zm,*Nm,1.33,24))
+    assert np.max(np.abs(am-a*np.array([[-1],[1]])))<1e-9
+    assert np.max(np.abs(np.array(snell_map(x,y,z,nx,ny,nz,1,24))-[x,y]))<1e-9
+assert abs(fresnel(np.array([1.]),1.33)[0]-((1.33-1)/(1.33+1))**2)<1e-12
+assert abs(fresnel(np.array([0.]),1.33)[0]-1)<1e-12
+
+p=dict(coefficients=[.2,.4,.5,.4,.3,.2,.1],core_x=.01,core_y=.02,tangent=.4,tangent_band=.5)
+x=np.array([12.,70.]);y=np.array([-51.,-43.]);h=[120,60];r=60;eps=1e-4
+def mapped(a,b):return np.array(lookup(a,b,h,r,p,'potential'))
+dx=(mapped(x+eps,y)-mapped(x-eps,y))/(2*eps)
+dy=(mapped(x,y+eps)-mapped(x,y-eps))/(2*eps)
+assert np.max(np.abs(dx[1]-dy[0]))<1e-6,'Potential mixed derivatives must agree'
+p['tensor']=True
+a=np.array(lookup(x,y,h,r,p,'tensor'));u=np.clip((60-np.abs(y))/30,0,1)
+# First point is on a straight side, so tangential derivative is explicit.
+dx=(np.array(lookup(x+eps,y,h,r,p,'tensor'))-np.array(lookup(x-eps,y,h,r,p,'tensor')))/(2*eps)
+assert abs(dx[0,0]-(1-p['core_x']-p['tangent']*(1-u[0])**4*(1+4*u[0])))<1e-8
+
+# Subpixel regression must average products, not multiply average quantities.
+sample=rng.uniform(.1,.8,(100,4,3));light=rng.uniform(-.2,.2,(100,4,15));light[...,-1]=rng.uniform(0,1,(100,4))
+co=np.zeros(23);co[:3]=.6;co[-3:]=1.1;co[3:6]=.02;co[6:10]=.01
+expected=shade(sample,light,co).mean(1)
+fitted,_=fit_material(sample,light,expected,np.ones(100))
+assert np.sqrt(np.mean((shade(sample,light,fitted).mean(1)-expected)**2))<1e-5
+print('PASS smooth-surface analytic normals, scale/mirror/Snell/Fresnel limits, potential derivatives, tensor scale and integrated material regression')
+
+xs,ys,x,y,indices,weights=training_samples(case)
+assert set(zip((xs.flat[indices]%2).astype(int),(ys.flat[indices]%2).astype(int)))=={(0,0),(0,1),(1,0),(1,1)}
+odd=target.copy();odd[1::2]+=.05
+assert scores(odd,target,case)['selection_loss']>0,'Native subset must see odd-row detail'
+from curvature import colored_reflection_basis
+normals=surface(np.array([3.,10.]),np.array([5.,12.]),[19,19],19,dict(height=.5,beta=.5,crown=0,shoulder=2))[1:]
+light=colored_reflection_basis(np.array([3.,10.]),np.array([5.,12.]),[19,19],dict(ior=1.33),normals,(np.array([-10.,-8.]),None,None))
+co=np.zeros(26);co[:3]=co[-3:]=1
+sample=np.array([[.2,.3,.4],[.3,.4,.5]])
+assert np.max(np.abs(shade(sample,light,co)-sample))<1e-12
+testcase=dict(center=[40,40],half=[19,19],radius=19)
+x=np.array([2.,5.]);y=np.array([3.,6.]);boundary=geometry(x,y,[19,19],19)
+source=np.full((80,80,3),.4,np.float32)
+p=dict(height=.5,gap=.4,beta=.5,crown=0,shoulder=2,ior=1.33,dispersion=0)
+f=dict(model='spectral',parameters=p)
+samples=sample_backdrop(source,source,testcase,f,x,y,boundary)
+assert np.max(np.abs(samples-.4))<1e-6
+print('PASS native subset includes every pixel parity; RGB reflection identity and constant-source spectral control')
 
 if __name__=='__main__':
     import argparse

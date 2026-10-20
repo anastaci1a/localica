@@ -33,6 +33,14 @@ def geometry(x, y, half, radius):
 def lookup(x,y,half,radius,parameters,model='field',boundary=None,exponent=0):
     sd,nx,ny=geometry(x,y,half,radius) if boundary is None else boundary
     if model=='identity':return x.copy(),y.copy()
+    if model in ('potential','tensor','chromatic'):
+        from curvature import potential
+        return potential(x,y,half,radius,parameters,(sd,nx,ny))
+    if model in ('surface','reflection','spectral','colored'):
+        from curvature import surface,snell_map
+        z,Nx,Ny,Nz=surface(x,y,half,radius,parameters,exponent)
+        X,Y=snell_map(x,y,z,Nx,Ny,Nz,parameters.get('ior',1.33),min(half)*parameters['gap'])
+        return np.where(sd<=0,X,x),np.where(sd<=0,Y,y)
     b=min(radius,min(half)*parameters.get('band',1))
     u=np.clip(-sd/b,0,1);v=1-u;S=u**3*(u*(6*u-15)+10)
     if model=='spline':
@@ -82,10 +90,15 @@ def fit_material(sample,light,target,weights):
     """3 rim gains + 3 offsets + 14 light coefficients + 3 core gains.
     Same nuisance freedom for identity, default optics and every fitted model.
     """
-    n=len(sample);count=6+light.shape[-1]-1+3;A=np.zeros((n,3,count),np.float64)
-    for c in range(3):A[:,c,c]=sample[:,c]*(1-light[:,-1]);A[:,c,c+3]=1
-    A[:,:,6:-3]=light[:,None,:-1]
-    for c in range(3):A[:,c,-3+c]=sample[:,c]*light[:,-1]
+    n=len(sample);count=6+light.shape[-1]-1+3;A=np.zeros((*sample.shape,count),np.float64)
+    colored=light.ndim==sample.ndim+1
+    core=light[...,0,-1] if colored else light[...,-1]
+    for c in range(3):A[...,c,c]=sample[...,c]*(1-core);A[...,c,c+3]=1
+    A[...,6:-3]=light[...,:-1] if colored else light[...,None,:-1]
+    for c in range(3):A[...,c,-3+c]=sample[...,c]*core
+    # Integrate the linear material design, not independently averaged RGB and
+    # lighting (their product is not the product of their averages).
+    if sample.ndim==3:A=A.mean(axis=1)
     a=A.reshape(-1,count)*np.repeat(weights,3)[:,None];y=target.reshape(-1)*np.repeat(weights,3)
     # Bounded least squares, not an unconstrained answer followed by an arbitrary
     # optical-loss penalty. Reduce to a small Cholesky system; a weak ridge keeps
@@ -105,5 +118,9 @@ def fit_material(sample,light,target,weights):
 
 
 def shade(sample,light,co):
-    gain=(1-light[...,-1,None])*co[:3]+light[...,-1,None]*co[-3:]
-    return np.clip(sample*gain+co[3:6]+(light[...,:-1]@co[6:-3])[...,None],0,1)
+    colored=light.ndim==sample.ndim+1
+    core=light[...,0,-1] if colored else light[...,-1]
+    gain=(1-core[...,None])*co[:3]+core[...,None]*co[-3:]
+    lighting=light[...,:-1]@co[6:-3]
+    if not colored:lighting=lighting[...,None]
+    return np.clip(sample*gain+co[3:6]+lighting,0,1)

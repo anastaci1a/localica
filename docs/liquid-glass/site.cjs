@@ -38,7 +38,7 @@ const {execFileSync}=require('node:child_process');
   write('liquid-glass/experiments/reference_patch.py',fs.readFileSync(path.join(root,'experiments/reference_patch.py')));
   write('liquid-glass/experiments/context-sources.json',fs.readFileSync(path.join(root,'experiments/context-sources.json')));
   write('liquid-glass/experiments/model-fixtures.json',fs.readFileSync(path.join(root,'experiments/model-fixtures.json')));
-  for(const name of ['render.py','reproduce.py','verify.py','publish.py','sensitivity.py','background.py','shapes.py','sources.json','results.json','sensitivity.json']){
+  for(const name of ['render.py','reproduce.py','verify.py','publish.py','sensitivity.py','background.py','shapes.py','curvature.py','refine.py','sources.json','results.json','sensitivity.json']){
     const file='experiments/reconstruction/'+name;
     write('liquid-glass/'+file,fs.readFileSync(path.join(root,file)));
   }

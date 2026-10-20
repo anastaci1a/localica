@@ -14,6 +14,7 @@ from render import case_geometry,lookup,illumination,fit_material,shade,spline_b
 from background import page_source,slider_source,paper
 
 ROOT=Path(__file__).resolve().parent
+CURVATURE_MODELS=['potential','tensor','chromatic','surface','reflection','spectral','colored']
 CASES={
  'media':dict(video='219',time=190,source_time=180,center=[960,542],half=[245,245],radius=245,crop=[620,220,1300,875],foreground=[[870,425,1088,666]],sigma_max=.5),
  'regular':dict(video='219',time=710,source_time=720,center=[960,542],half=[392,170],radius=170,crop=[475,285,1445,845],foreground=[[695,462,872,628],[1068,470,1215,618]],sigma_max=8,blur_transition=30),
@@ -90,6 +91,15 @@ def masks(case,xs,ys,x,y):
     return sd,valid&~held,held,valid
 
 
+def training_samples(case):
+    """Native-pixel subset; a fixed every-second-pixel lattice misses thin rims."""
+    xs,ys,x,y=points(case);sd,train,_,_=masks(case,xs,ys,x,y)
+    indices=np.flatnonzero(train);np.random.default_rng(222).shuffle(indices);indices=indices[:6500]
+    distance=-sd.flat[indices]
+    weights=np.where(distance<4,2.5,np.where(distance<min(case['half'])*.20,1.3,1.))
+    return xs,ys,x,y,indices,weights
+
+
 def parameters(v,model):
     if model=='spline':return dict(coefficients=list(v[:7]),core_x=v[7],core_y=v[8]),v[9],v[10]
     if model=='cap':return dict(height=v[0],gap=v[1],band=v[2],ior=1.33),v[3],v[4]
@@ -101,13 +111,11 @@ def parameters(v,model):
 
 
 def fit(source,target,case,model,seed,initial=None):
-    xs,ys,x,y=points(case,2);sd,train,held,valid=masks(case,xs,ys,x,y)
-    rng=np.random.default_rng(222);indices=np.flatnonzero(train);rng.shuffle(indices);indices=indices[:6500]
+    xs,ys,x,y,indices,weights=training_samples(case)
     px,py=x.flat[indices],y.flat[indices];tx,ty=xs.flat[indices],ys.flat[indices]
     boundary=case_geometry(case,px,py)
     basis=spline_basis(-boundary[0],case['radius']) if model=='spline' else None
     expected=target[ty.astype(int),tx.astype(int)]
-    distance=-sd.flat[indices];weights=np.where(distance<min(case['half'])*.20,1.3,1.)
     # Native sampling during fitting too: downsampling itself softened the clear
     # media texture and made a low-blur fit impossible to inspect correctly.
     blurs={}
@@ -155,14 +163,51 @@ def render_grid(source,blur,case,fit,x,y):
     p=fit['parameters'];model=fit['model']
     boundary=case_geometry(case,x,y)
     lx,ly=lookup(x,y,case['half'],case['radius'],p,'identity' if model=='identity' else 'field' if model in ('default','bounded') else model,boundary,case.get('exponent',0))
-    sample=cv2.remap(blur,(lx+case['center'][0]).astype(np.float32),(ly+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR)
-    if case.get('blur_transition'):
-        clear=cv2.remap(source,(lx+case['center'][0]).astype(np.float32),(ly+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR)
-        blend=np.clip(-boundary[0]/fit.get('blur_transition',case['blur_transition']),0,1);blend=blend**3*(blend*(6*blend-15)+10)
-        sample=clear+(sample-clear)*blend[...,None]
-    light=illumination(x,y,case['half'],case['radius'],fit['rim_width'],boundary)
+    sample=sample_backdrop(source,blur,case,fit,x,y,boundary,lx,ly)
+    light=model_light(x,y,case,fit,boundary)
     output=shade(sample,light,np.array(fit['material']))
     return output,boundary[0]<=0
+
+
+def sample_backdrop(source,blur,case,fit,x,y,boundary,lx=None,ly=None):
+    p=fit['parameters'];model=fit['model']
+    if lx is None:
+        lx,ly=lookup(x,y,case['half'],case['radius'],p,model,boundary,case.get('exponent',0))
+    def at(image,X,Y):
+        return cv2.remap(image,(X+case['center'][0]).astype(np.float32),(Y+case['center'][1]).astype(np.float32),cv2.INTER_LINEAR)
+    if model=='chromatic':
+        samples=[]
+        for channel,wavelength in enumerate([.650,.550,.450]):
+            factor=1+p['dispersion']*(wavelength**-2-.550**-2)
+            samples.append(at(blur,x+(lx-x)*factor,y+(ly-y)*factor)[...,channel])
+        sample=np.stack(samples,axis=-1)
+    elif model=='spectral':
+        from curvature import surface,snell_map
+        z,Nx,Ny,Nz=surface(x,y,case['half'],case['radius'],p,case.get('exponent',0))
+        # Three representative wavelengths, first-order Cauchy-law RGB proxy.
+        # Not a spectral/colorimetric renderer. B=0 recovers monochromatic rays.
+        samples=[]
+        for channel,wavelength in enumerate([.650,.550,.450]):
+            ior=p.get('ior',1.33)+p['dispersion']*(wavelength**-2-.550**-2)
+            X,Y=snell_map(x,y,z,Nx,Ny,Nz,ior,min(case['half'])*p['gap'])
+            X=np.where(boundary[0]<=0,X,x);Y=np.where(boundary[0]<=0,Y,y)
+            samples.append(at(blur,X,Y)[...,channel])
+        sample=np.stack(samples,axis=-1)
+    else:sample=at(blur,lx,ly)
+    if case.get('blur_transition'):
+        clear=at(source,lx,ly)
+        blend=np.clip(-boundary[0]/fit.get('blur_transition',case['blur_transition']),0,1);blend=blend**3*(blend*(6*blend-15)+10)
+        sample=clear+(sample-clear)*blend[...,None]
+    return sample
+
+
+def model_light(x,y,case,fit,boundary):
+    if fit['model'] in ('reflection','spectral','colored'):
+        from curvature import surface,reflection_basis,colored_reflection_basis
+        _,nx,ny,nz=surface(x,y,case['half'],case['radius'],fit['parameters'],case.get('exponent',0))
+        basis=colored_reflection_basis if fit['model']=='colored' else reflection_basis
+        return basis(x,y,case['half'],fit['parameters'],(nx,ny,nz),boundary)
+    return illumination(x,y,case['half'],case['radius'],fit['rim_width'],boundary)
 
 
 def render(source,case,fit,samples=4):
@@ -202,11 +247,16 @@ def scores(pred,target,case):
     result['ssim']=float(ssim[safe].mean())
     ga=np.hypot(cv2.Sobel(A,cv2.CV_32F,1,0),cv2.Sobel(A,cv2.CV_32F,0,1));gb=np.hypot(cv2.Sobel(B,cv2.CV_32F,1,0),cv2.Sobel(B,cv2.CV_32F,0,1))
     result['gradient_mae']=float(np.abs(ga-gb)[safe].mean())
+    # One final-render training objective for all models, including searches
+    # with different subpixel counts. Never compare their search losses directly.
+    _,_,_,_,indices,weights=training_samples(case)
+    diff=(pred-target).reshape(-1,3)[indices]
+    result['selection_loss']=float(np.mean((diff*weights[:,None])**2))
     return result
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('sources',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--fit',action='store_true');ap.add_argument('--case',choices=CASES);ap.add_argument('--model',choices=['identity','default','field','cap','bounded','spline']);args=ap.parse_args();args.out.mkdir(parents=True,exist_ok=True)
+    ap=argparse.ArgumentParser();ap.add_argument('sources',type=Path);ap.add_argument('out',type=Path);ap.add_argument('--fit',action='store_true');ap.add_argument('--case',choices=CASES);ap.add_argument('--model',choices=['identity','default','field','cap','bounded','spline']+CURVATURE_MODELS);args=ap.parse_args();args.out.mkdir(parents=True,exist_ok=True)
     manifest=json.loads((ROOT/'sources.json').read_text())
     videos={case['video'] for name,case in CASES.items() if not args.case or name==args.case}
     for video in videos:
@@ -219,10 +269,16 @@ def main():
         x0,y0,x1,y1=case['crop'];crop=target[y0:y1,x0:x1]
         cv2.imwrite(str(args.out/f'{name}-source.png'),np.uint8(np.clip(source,0,1)*255)[:,:,::-1]);cv2.imwrite(str(args.out/f'{name}-target.png'),np.uint8(target*255)[:,:,::-1])
         fits={}
-        for i,model in enumerate(case.get('models',['identity','default','field','cap','bounded','spline'])):
+        local=json.loads((args.out/f'{name}-report.json').read_text()) if (args.out/f'{name}-report.json').exists() else {}
+        models=list(dict.fromkeys(case.get('models',['identity','default','field','cap','bounded','spline'])+list(saved.get(name,{}).get('models',{}))+list(local.get('models',{}))))
+        for i,model in enumerate(models):
             dest=args.out/f'{name}-{model}.json'
             if (args.fit and (not args.model or args.model==model)) or (not dest.exists() and model not in saved.get(name,{}).get('models',{})):
-                print('Fitting',name,model,flush=True);f=fit(source,target,case,model,222+i,saved.get(name,{}).get('models',{}).get(model));dest.write_text(json.dumps(f,indent=2))
+                print('Fitting',name,model,flush=True)
+                fitter=fit
+                if model in CURVATURE_MODELS:
+                    from refine import fit as fitter
+                f=fitter(source,target,case,model,222+i,saved.get(name,{}).get('models',{}).get(model));dest.write_text(json.dumps(f,indent=2))
             elif dest.exists():f=json.loads(dest.read_text())
             else:f=saved[name]['models'][model];dest.write_text(json.dumps(f,indent=2))
             output=render(source,case,f).astype(np.float32);f['scores']=scores(output,crop,case);fits[model]=f

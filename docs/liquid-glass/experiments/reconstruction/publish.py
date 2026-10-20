@@ -88,10 +88,10 @@ def main():
     reports={}
     for name,case in CASES.items():
         report=json.loads((args.fits/f'{name}-report.json').read_text())
-        report['rendering']={'source_sampling':'native bilinear','final_subpixels_per_axis':4,'material_coefficients':23,'color_space':'encoded RGB','estimated_context_band_px':10,'shared_foreground':'tight reference-symbol masks, excluded from scores'}
+        report['rendering']={'source_sampling':'native bilinear','final_subpixels_per_axis':4,'color_space':'encoded RGB','estimated_context_band_px':10,'shared_foreground':'tight reference-symbol masks, excluded from scores','selection':'fixed 6500-pixel training subset after final subpixel integration'}
         # Training objective selects the model; never select using held blocks.
-        candidates=[m for m in ['field','cap','bounded','spline'] if m in report['models']]
-        winner=min(candidates,key=lambda m:report['models'][m]['fit_loss']) if candidates else 'default'
+        candidates=[m for m in report['models'] if m not in ('identity','default')]
+        winner=min(candidates,key=lambda m:report['models'][m]['scores']['selection_loss']) if candidates else 'default'
         report['displayed_model']=winner;reports[name]=report
         target=read(args.fits/f'{name}-target.png');material=read(args.fits/f'{name}-{winner}.png')
         full=compose(name,case,target,material,args.fits)
