@@ -128,6 +128,21 @@ glass = clamp(sample × gain + coefficients[3:6]
 
 The scalar lighting term is added to all RGB channels. This is a bounded fitted basis, not a Fresnel/environment reconstruction. In particular, the white inner band in some earlier fits can arise from these terms independently of refraction. Do not interpret a fit coefficient as physical radiance or encode it as an extra painted outline.
 
+### Source-context color response
+
+The active-switch study optionally contracts the **material's** RGB bias on neutral backgrounds. Let `μ` be the area mean of the unrefracted, encoded-RGB backdrop over the current footprint, and `χ=max(μ)−min(μ)`. With shared sensitivity `k≥0`, floor `f∈[0,1]`, and encoded-luma weights `w=(.2126,.7152,.0722)`:
+
+```text
+t = f + (1−f) clamp(kχ,0,1)
+A = t I + (1−t) 1 wᵀ
+effective_triplet = A × shared_triplet
+```
+
+Apply `A` to the rim gain, offset and core gain triplets before the common material calculation. Leave the 14 scalar lighting coefficients and sampled RGB ray colors unchanged. Thus `wᵀA=wᵀ`: contraction preserves each coefficient triplet's encoded-luma response, while reducing its color bias. This is not desaturation of the final image or a radiometric conservation law.
+
+- Use the same `k,f` and23 base coefficients on both backgrounds; recompute `μ` when the backdrop or footprint moves. The reference implementation uses native-center area quadrature, independent of target/foreground/scoring masks.
+- An absent context option means `A=I`, preserving earlier recipes. The current switch selects `k=10,f=0`; it still misses colored rim detail. This empirical adaptation is not an identified Apple formula.
+
 ## Solid-vector foreground responses
 
 Foreground coverage `α` comes from solid geometry, independently of material color. Its input `B` includes preceding layers, such as a fixed selection backing. Affine styles use `F(B)=(1−o)B+oC`; response styles use the shared per-channel function:
@@ -142,7 +157,7 @@ For `t,s∈[0,1]` and `γ>0`, the function stays bounded and monotone. The affin
 ## Reproducing and transferring a model
 
 - Preserve equations, operation order, color space, shape and all normalized parameters when changing renderer. The source image's registration and the glyph coverage are separate inputs. Use the [frozen replay command](reconstruction.md#reproduce); optimization commands are for research only.
-- The reference implementation uses bilinear lookup, four samples per output axis for still materials, separate shape coverage and reflected-border Gaussian filtering. These sampling choices affect exact raster pixels; they are not physical model constants. Higher sampling must converge to the same continuous map.
+- The reference implementation uses bilinear lookup, separate shape coverage and reflected-border Gaussian filtering. Earlier HD recipes use four samples per output axis; the newer Music/switch studies use two. Preserve each study's native protocol when replaying its scores. These sampling choices affect exact raster pixels; they are not physical model constants.
 - Compare native-resolution glass, rim, interior and foreground separately. Use identical source/mask definitions for cross-renderer scores. PNG rounding changes the reported errors slightly; record whether measurements precede or follow quantization.
 - Transfer the light circular playback recipe first to other Clear circular media controls. Preserve `σ/L`, not the reference pixel σ. Toolbar and active-slider geometry require their own mappings; a circular model should not be stretched into either shape without verification.
 - Do not score an unrecovered or moving backdrop as though it were known. Other media controls and Music toolbar footage are useful next references, but require their original glyphs and independent backdrop recovery. They remain candidates, not additional calibrated successes.
