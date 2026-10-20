@@ -169,6 +169,21 @@ Apply `A` to the rim gain, offset and core gain triplets before the common mater
 - Use the same `k,f` and 23 base coefficients on both backgrounds; recompute `μ` when the backdrop or footprint moves. The reference implementation uses native-center area quadrature, independent of target/foreground/scoring masks.
 - An absent context option means `A=I`, preserving earlier recipes. The current switch selects `k=10,f=0`; it still misses colored rim detail. This empirical adaptation is not an identified Apple formula.
 
+### Source-brightness response of neutral rim lighting
+
+An optional three-value response adjusts neutral thin/broad rim terms using the unrefracted source mean `μ`. Its sampling footprint may be inset by a declared distance `iL`; Home uses `i=.08` to avoid an unrecovered boundary strip. Let `y=μ·(.2126,.7152,.0722)`, shared responses `r₀,r₁,r₂` and existing radial lighting bases `thin,e,f`:
+
+```text
+additional_light(x) = (y−1/2) [r₀ thin(x) + r₁ e(x) + r₂ f(x)]
+effective_material = A material + b(y)
+b₆=(y−1/2)r₀, b₉=(y−1/2)r₁, b₁₂=(y−1/2)r₂; other b entries=0
+```
+
+- The added light is identical in all three RGB channels; it cannot assign independent RGB materials to each background. It changes lighting, not the ray map or the sampled transmission colors. `A` is the preceding optional color-contraction matrix, otherwise identity.
+- Recompute the source mean when the backdrop moves. Source confidence must cover the mean's entire footprint separately from scored refracted rays. Material derivatives use `A`; the offset still affects clipping and therefore the active derivative regions.
+- A declared calibration range `[l,h]` optionally replaces `y` with `l+(h−l)S(clamp((y−l)/(h−l),0,1))`. This bounded, C2 interpolation preserves the measured endpoints and prevents uncontrolled extrapolation.
+- This is an empirical encoded-brightness response, not radiometric illumination or an Apple formula. Home tests a narrow range of approximately 0.413–0.436; outside behavior is bounded but unvalidated. Zero response preserves the prior material.
+
 ### Directional grazing reflection
 
 The switch follow-up separates a reflected field from the transmission's output blur. With normalized inward distance `d`, outward normal `n`, unit lighting direction `l`, `0≤a≤1`, width `w>0`, angular exponent `p>0`, and quintic smoothstep `S`:

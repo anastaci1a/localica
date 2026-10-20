@@ -13,6 +13,13 @@ def prepare(study,p,known,cov,requested):
     known,observed=masks(study,known);safe,_=kernel_safe(known,study,p);observed_safe,_=kernel_safe(observed,study,p)
     from chromatic_transmission import support_rays
     chromatic=support_rays(study,p)
+    context=None
+    if 'ambient_rim_response' in p or 'material_chroma_sensitivity' in p:
+        from material_context import footprint
+        context=footprint(study,p)
+    def context_fraction(confidence,travel):
+        X,Y,inside=context
+        return min(fraction(confidence,X,Y,inside,s) for s in np.linspace(-travel,travel,33))
     def chromatic_fraction(confidence,scope,travel):
         return min((fraction(confidence,RX.astype(np.float32),RY.astype(np.float32),active&(study.valid if scope=='scored' else cov>0),s)
                     for RX,RY,active in chromatic for s in np.linspace(-travel,travel,33)
@@ -34,6 +41,7 @@ def prepare(study,p,known,cov,requested):
         minimum=min(fraction(safe,X,Y,study.valid,s) for s in np.linspace(-actual,actual,33))
         if reflection is not None:minimum=min(minimum,reflected_fraction(reflection[4],'scored',actual))
         if chromatic:minimum=min(minimum,chromatic_fraction(safe,'scored',actual))
+        if context is not None:minimum=min(minimum,context_fraction(known,actual))
         if minimum>=.999:break
     full=min(fraction(known,X,Y,cov>0,s) for s in np.linspace(-actual,actual,33))
     missing=known<.999
@@ -61,4 +69,7 @@ def prepare(study,p,known,cov,requested):
                       chromatic_source_3sigma_observed_min=chromatic_fraction(observed_safe,'scored',actual),
                       chromatic_source_full_defined_min=chromatic_fraction(known,'whole',actual),
                       chromatic_source_full_observed_min=chromatic_fraction(observed,'whole',actual))
+    if context is not None:
+        report.update(context_mean_source_defined_min=context_fraction(known,actual),
+                      context_mean_source_observed_min=context_fraction(observed,actual))
     return source,actual,report

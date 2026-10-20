@@ -54,6 +54,9 @@ def coverage_report(study,p,X=None,Y=None):
     if 'directional_transmission' in p:
         from chromatic_transmission import support
         report.update(support(study,p,defined,observed))
+    if 'ambient_rim_response' in p or 'material_chroma_sensitivity' in p:
+        from material_context import support
+        report.update(support(study,p,defined,observed))
     return report
 
 
@@ -69,4 +72,7 @@ def supported(study,report):
         keys+=['chromatic_source_defined_fraction','chromatic_gaussian_3sigma_defined_fraction']
         if not study.case.get('allow_estimated_background'):
             keys+=['chromatic_source_observed_fraction','chromatic_gaussian_3sigma_observed_fraction']
+    if 'context_mean_source_defined_fraction' in report:
+        keys+=['context_mean_source_defined_fraction']
+        if not study.case.get('allow_estimated_background'):keys+=['context_mean_source_observed_fraction']
     return all(report[k]>=.999 for k in keys)
