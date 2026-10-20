@@ -329,13 +329,17 @@ class Study:
         for box,alpha,color in self.foreground_layers:
             a,b,c,d=box
             region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
+            vector=self.vector_layers.get(tuple(box))
+            style=self.case.get('foreground_styles',{}).get(vector['vector_asset'],{}) if vector else {}
+            if 'color' in style:color=np.broadcast_to(np.asarray(style['color'],np.float32),(*alpha.shape,3))
             if scale>1:
                 size=((c-a)*scale,(d-b)*scale)
                 if tuple(box) not in self.vector_layers:alpha=np.clip(cv2.resize(alpha,size,interpolation=cv2.INTER_CUBIC),0,1)
                 color=np.clip(cv2.resize(np.asarray(color,dtype=np.float32),size,interpolation=cv2.INTER_CUBIC),0,1)
             if tuple(box) in self.vector_layers:
                 from vector_foreground import coverage
-                alpha=coverage(self.folder,self.vector_layers[tuple(box)],scale)
+                vector=self.vector_layers[tuple(box)]
+                alpha=coverage(self.folder,vector,scale)*style.get('opacity',vector.get('opacity',1.))
             region[:]=region*(1-alpha[...,None])+color*alpha[...,None]
         for layer in self.transmission_layers:
             from foreground_response import calibrate,response
@@ -408,14 +412,17 @@ def main():
     pred=study.render(candidate,co);candidate_scores=study.scores(pred)
     if 'exterior' in old['scores'] and args.number!=11:
         candidate_scores['exterior']=old['scores']['exterior']
-    if 'shadow' in candidate and args.number==18:
+    changes_outline=bool(set(keys)&{'shape_dx','shape_dy','half_x_delta','half_y_delta','radius_delta','cap_join_width'})
+    exterior_check='shadow' in candidate and (args.number==18 or changes_outline)
+    if exterior_check and 'exterior' in old['scores']:
         from extended_shadow import refit_fixed_region
-        reference=json.loads((args.folder/'pass-12'/'record.json').read_text())['current']['parameters']
+        reference=study.case.get('exterior_reference_shape')
+        if reference is None:reference=json.loads((args.folder/'pass-12'/'record.json').read_text())['current']['parameters']
         candidate,exterior=refit_fixed_region(study,candidate,reference)
         candidate_scores['exterior']=exterior
     advance=(candidate_scores['loss']<=old['scores']['loss']+1e-9 and
              candidate_scores['glass']['rmse']<=old['scores']['glass']['rmse']+1e-9)
-    if args.number==18 and 'exterior' in old['scores']:
+    if exterior_check and 'exterior' in old['scores']:
         advance=advance and candidate_scores['exterior']['rmse']<=old['scores']['exterior']['rmse']+1e-8
     current=dict(parameters=candidate,material=co.tolist(),scores=candidate_scores) if advance else old
     record=dict(pass_number=args.number,experiment=stage,keys=keys,evaluations=evaluations,

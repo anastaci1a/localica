@@ -1,0 +1,62 @@
+{
+  "paired_passes": 21,
+  "record_count": 21,
+  "excluded_passes": [],
+  "scores": [
+    {
+      "glass": {
+        "pixels": 14904,
+        "rmse": 6.794039249420166
+      },
+      "rim": {
+        "pixels": 8364,
+        "rmse": 8.159344673156738
+      },
+      "held": {
+        "pixels": 4763,
+        "rmse": 6.712042331695557
+      },
+      "interior": {
+        "pixels": 6540,
+        "rmse": 4.4776177406311035
+      },
+      "ssim": 0.9536681175231934,
+      "loss": 52.28375017447458
+    },
+    {
+      "glass": {
+        "pixels": 14904,
+        "rmse": 6.5921311378479
+      },
+      "rim": {
+        "pixels": 8364,
+        "rmse": 8.232823371887207
+      },
+      "held": {
+        "pixels": 4763,
+        "rmse": 5.967041492462158
+      },
+      "interior": {
+        "pixels": 6540,
+        "rmse": 3.5141570568084717
+      },
+      "ssim": 0.9758468866348267,
+      "loss": 50.753149258816364
+    }
+  ],
+  "foreground_mse": null,
+  "foreground_style_scores": {
+    "before_mse": [
+      71.87020154873579,
+      64.53411002169112
+    ],
+    "after_mse": [
+      60.53534276319427,
+      58.78391947916729
+    ],
+    "optimizer_evaluations": 52,
+    "formula": "P=(1-a)B+a(t*B+q); t=1-opacity, q=opacity*color; one shared color/opacity"
+  },
+  "gate": "Both references retain non-increasing native overall loss and whole-glass RMSE; exact shared normalized recipe replay.",
+  "scope": "Same video, different observed backdrops. Does not establish generality across devices, apps or lighting."
+}
