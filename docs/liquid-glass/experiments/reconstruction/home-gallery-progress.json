@@ -1,10 +1,10 @@
 {
   "status": "In progress, not a final paired study",
-  "rendering_code_commit": "c9fbd30df4733e363c30bb651cb7388623212007",
+  "rendering_code_commit": "a1649de7b15893bc52eb09529177c86169b274b8",
   "gallery_script_sha256": "000265a42d4acb834feaeeee3abde14d9a29295c82fa5db6f030edeaf72d2894",
-  "state_record_sha256": "a267e6e19bc343c35770582fc110c26ddb110d39cf1d9c655d700de0deab44e7",
+  "state_record_sha256": "d20bc8014dafeffce4d17e7d731b4eca39fa752973acf8811ee62d3bb902a798",
   "single_passes": 10,
-  "paired_passes": 13,
+  "paired_passes": 14,
   "output_scale": 4,
   "recipe": {
     "parameters": {
@@ -183,7 +183,9 @@
         "gaussian_3sigma_observed_fraction": 1.0,
         "source_gaussian_radius_native_px": 21,
         "context_mean_source_defined_fraction": 1.0,
-        "context_mean_source_observed_fraction": 1.0
+        "context_mean_source_observed_fraction": 1.0,
+        "context_mean_minimum_defined_confidence": 1.0,
+        "context_mean_minimum_observed_confidence": 1.0
       },
       "presentation_completion": {
         "max_abs_rgb": 6.9241557121276855,
@@ -225,7 +227,9 @@
         "gaussian_3sigma_observed_fraction": 1.0,
         "source_gaussian_radius_native_px": 21,
         "context_mean_source_defined_fraction": 1.0,
-        "context_mean_source_observed_fraction": 1.0
+        "context_mean_source_observed_fraction": 1.0,
+        "context_mean_minimum_defined_confidence": 1.0,
+        "context_mean_minimum_observed_confidence": 1.0
       },
       "presentation_completion": {
         "max_abs_rgb": 1.519918441772461e-05,
