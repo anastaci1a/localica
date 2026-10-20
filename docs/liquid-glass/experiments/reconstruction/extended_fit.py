@@ -159,8 +159,9 @@ class Study:
         tangent_pos=-ny*x+nx*y
         X=(1-p['core_x'])*x-a*nx+p['tangent']*W*tangent_pos*ny
         Y=(1-p['core_y'])*y-a*ny-p['tangent']*W*tangent_pos*nx
-        # Compare the tangent image field with the corresponding gradient-
-        # potential coupling. This is an empirical blend, not a thick solid.
+        # A normal-coupling comparator inspired by a gradient potential. The
+        # full tensor field (especially with orientation weights) is empirical;
+        # adding this term does not prove integrability or a physical solid.
         coupling=.5*p['coupling']*p['tangent']*Wd*x*x
         X-=coupling*nx;Y-=coupling*ny
         X+=p.get('shape_dx',0);Y+=p.get('shape_dy',0)
@@ -283,8 +284,15 @@ def main():
     pred=study.render(candidate,co);candidate_scores=study.scores(pred)
     if 'exterior' in old['scores'] and args.number!=11:
         candidate_scores['exterior']=old['scores']['exterior']
+    if 'shadow' in candidate and args.number==18:
+        from extended_shadow import refit_fixed_region
+        reference=json.loads((args.folder/'pass-12'/'record.json').read_text())['current']['parameters']
+        candidate,exterior=refit_fixed_region(study,candidate,reference)
+        candidate_scores['exterior']=exterior
     advance=(candidate_scores['loss']<=old['scores']['loss']+1e-9 and
              candidate_scores['glass']['rmse']<=old['scores']['glass']['rmse']+1e-9)
+    if args.number==18 and 'exterior' in old['scores']:
+        advance=advance and candidate_scores['exterior']['rmse']<=old['scores']['exterior']['rmse']+1e-8
     current=dict(parameters=candidate,material=co.tolist(),scores=candidate_scores) if advance else old
     record=dict(pass_number=args.number,experiment=stage,keys=keys,evaluations=evaluations,
         seconds=time.time()-t0,candidate=dict(parameters=candidate,material=co.tolist(),scores=candidate_scores),
