@@ -1,6 +1,10 @@
 package io.github.anastaci1a.localica
 
 import android.content.Intent
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.Timeline
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
@@ -11,7 +15,50 @@ import org.junit.Test
 import java.io.File
 
 /** Exercise the actual in-process UI command -> actor -> native player -> atomic connection receipt path. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class SeekAcknowledgementPlaybackTest {
+    @Test fun nativeEndpointMaskUsesTheLastMicrosecondOfThePeriod() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val audio = File(context.cacheDir, "seek-endpoint-tone.mp3")
+        instrumentation.context.assets.open("queue-tone.mp3").use { input -> audio.outputStream().use(input::copyTo) }
+        var player: ExoPlayer? = null
+        try {
+            instrumentation.runOnMainSync {
+                player = ExoPlayer.Builder(context).build().apply {
+                    setMediaItem(MediaItem.fromUri(audio.toURI().toString()))
+                    prepare()
+                }
+            }
+            await {
+                var ready = false
+                instrumentation.runOnMainSync { ready = player!!.playbackState == Player.STATE_READY }
+                ready
+            }
+            instrumentation.runOnMainSync {
+                val native = player!!
+                val timeline = native.currentTimeline
+                val window = timeline.getWindow(native.currentMediaItemIndex, Timeline.Window())
+                val period = timeline.getPeriod(native.currentPeriodIndex, Timeline.Period())
+                assertEquals("Fixture must contain one period", window.firstPeriodIndex, window.lastPeriodIndex)
+                assertEquals(0L, period.positionInWindowUs)
+                assertTrue(period.durationUs > 0)
+                val durationMs = native.duration
+                // Media3 1.10.1 Timeline.getPeriodPositionUs clamps below durationUs;
+                // ExoPlayer's synchronous seek mask then truncates microseconds to milliseconds.
+                val expectedMs = minOf(durationMs * 1_000, period.durationUs - 1) / 1_000
+                native.seekTo(durationMs)
+                assertEquals("Native endpoint: durationMs=$durationMs, periodUs=${period.durationUs}",
+                    expectedMs, native.currentPosition)
+                assertTrue(durationMs - native.currentPosition in 0L..1L)
+                assertFalse(native.playWhenReady)
+            }
+        } finally {
+            instrumentation.runOnMainSync { player?.release() }
+            audio.delete()
+        }
+    }
+
     @Test fun queuedSeeksPublishReceiptAndPositionTogetherAndDoNotLeakAcrossDuplicateVisits() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -62,8 +109,17 @@ class SeekAcknowledgementPlaybackTest {
                 val beforeClamp = playback.state.value.seekAcknowledgement!!.requestId
                 instrumentation.runOnMainSync { playback.requestSeek(Long.MAX_VALUE, visit) }
                 await { playback.state.value.seekAcknowledgement?.requestId?.let { it > beforeClamp } == true }
-                assertEquals(playback.state.value.durationMs, playback.state.value.positionMs)
-                assertTrue(playback.state.value.seekAcknowledgement!!.applied)
+                val endpoint = playback.state.value
+                val receipt = endpoint.seekAcknowledgement!!
+                assertTrue(receipt.applied)
+                assertEquals(visit, receipt.playbackVisit)
+                assertEquals(visit, endpoint.playbackVisit)
+                assertEquals("Clamped receipt and position must be one publication", receipt.positionMs, endpoint.positionMs)
+                // Media3 clamps to durationUs - 1, then floors to milliseconds. Depending
+                // on the period's microsecond remainder, that is durationMs or durationMs - 1.
+                assertTrue("Native endpoint must remain within its final millisecond: $endpoint",
+                    endpoint.durationMs!! - endpoint.positionMs in 0L..1L)
+                assertFalse(endpoint.playWhenReady)
                 instrumentation.runOnMainSync { playback.next() }
                 await { playback.state.value.playbackVisit != visit && playback.state.value.trackId == track.id }
                 val next = playback.state.value
