@@ -54,6 +54,33 @@ class PopupShadowContinuityTest {
     @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = false)
     @Test fun nestedShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = true)
 
+    @Test fun capsuleReferenceKeepsItsZeroWidthCenterRangeOrdered() {
+        // Reproduce the API36 64dp capsule at density 1.75 and its outermost ring.
+        val height = 112f
+        val radius = height / 2f
+        val shift = 3.5f
+        val expansion = (4f + .6f * 28f) * 1.75f
+        val expandedRadius = radius + expansion
+        val oldMinimum = -expansion + shift + expandedRadius
+        val oldMaximum = height + expansion + shift - expandedRadius
+        assertTrue("Independent expansion cancellation inverted the capsule range", oldMinimum > oldMaximum)
+        for (coordinate in listOf(-100f, 0f, radius, radius + shift, height, 200f)) {
+            assertEquals("A horizontal capsule has one vertical center", radius + shift,
+                shadowAxisCenter(coordinate, height, radius, shift), 0f)
+            assertEquals("A vertical capsule has one horizontal center", radius,
+                shadowAxisCenter(coordinate, height, radius, 0f), 0f)
+        }
+        assertEquals(20f, shadowAxisCenter(-10f, 100f, 20f, 0f), 0f)
+        assertEquals(50f, shadowAxisCenter(50f, 100f, 20f, 0f), 0f)
+        assertEquals(80f, shadowAxisCenter(110f, 100f, 20f, 0f), 0f)
+    }
+
+    private fun shadowAxisCenter(coordinate: Float, extent: Float, radius: Float, shift: Float): Float =
+        // Expanding both the rect and corner leaves the corner centers unchanged.
+        // Cancel algebraically before Float arithmetic: a capsule's equal endpoints
+        // otherwise round in opposite directions and make coerceIn reject the range.
+        coordinate.coerceIn(radius + shift, (extent - radius) + shift)
+
     private fun verify(nested: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
@@ -244,8 +271,8 @@ class PopupShadowContinuityTest {
                     val t = ring / 16f
                     val expansion = (4f + .6f * 28f) * d * t
                     val corner = radius + expansion
-                    val cx = localX.coerceIn(-expansion + corner, bounds.width + expansion - corner)
-                    val cy = localY.coerceIn(-expansion + 2f*d + corner, bounds.height + expansion + 2f*d - corner)
+                    val cx = shadowAxisCenter(localX, bounds.width, radius, 0f)
+                    val cy = shadowAxisCenter(localY, bounds.height, radius, 2f*d)
                     if ((localX - cx)*(localX - cx) + (localY - cy)*(localY - cy) < corner*corner)
                         transmittance *= 1f - .8f * .07f * (1f - t)*(1f - t)
                 }
