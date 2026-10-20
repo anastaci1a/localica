@@ -7,7 +7,7 @@ import androidx.compose.ui.unit.constrainHeight
 import kotlin.math.roundToInt
 
 /** Keep glyphs at their full-size font metrics; animate the layer, not the font rasterization.
- * Measure enough unscaled width to preserve the same visible ellipsis/marquee boundary. */
+ * Measure enough unscaled width to preserve the same visible clipping/marquee boundary. */
 internal fun Modifier.scalePlayerText(scale: Float): Modifier = layout { measurable, constraints ->
     val width = (constraints.maxWidth / scale).roundToInt()
     val text = measurable.measure(constraints.copy(minWidth = width, maxWidth = width, minHeight = 0))
