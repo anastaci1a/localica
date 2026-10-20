@@ -2,7 +2,7 @@
 
 Research notes and implementation requirements for Localica’s glass rendering and interaction system, with links to primary Apple sources.
 
-[Apple evidence](sources.md) · [Optical findings](optics.md) · [Localica specification](specification.md) · [Interactive controls](controls.md) · [Live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) · [Project docs](../README.md)
+[Apple evidence](sources.md) · [Recreations and scores](reconstruction.md) · [Mathematical recipes](recreation-models.md) · [Localica specification](specification.md) · [Live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) · [Project docs](../README.md)
 
 ![The current dark lab showing a refracting lens over a gradient with vertical lines](assets/lab-desktop.png)
 
@@ -16,6 +16,8 @@ Research notes and implementation requirements for Localica’s glass rendering 
 | Settings, sliders, switches and buttons | [Control roles, states and review exercises](controls.md) |
 | Interactive rendering model | [Live WebGL lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) — runs in your browser |
 | Measurements and model limitations | [Optical findings and reproducible experiments](optics.md) |
+| Calibrated reference studies | [Apple/reconstruction comparisons, scores and replay](reconstruction.md) |
+| Portable reproduction contract | [Equations and dimensionless recipes for all five scenes](recreation-models.md) |
 | Recorded demonstrations | Expand the demonstrations below |
 | App behavior | [Current interface contract](../interface.md) |
 
@@ -53,6 +55,6 @@ The contacted edge stays fixed while the lens compresses and recovers. Compare w
 
 The specification defines the shared system and its acceptance checks. Physical-device performance still needs review; optical materialization remains deferred. Current selection lenses intentionally appear immediately; their entrance motion awaits [#107](https://github.com/anastaci1a/localica/issues/107). Requested glass-on-content and nested controls remain explicit departures from Apple's usual layer guidance.
 
-Update evidence and specification together when guidance or owner decisions change; source review dates live in the [atlas](sources.md). Keep release history in Git and Releases. The lab and its captures are original project assets; no Apple video frames or font files are included.
+Update evidence and specification together when guidance or owner decisions change; source review dates live in the [atlas](sources.md). Keep release history in Git and Releases. The lab and its captures are original project assets. The separate recreation study includes attributed Apple excerpts; source videos and font files are not bundled.
 
 [Main repository](../../README.md) · [Evidence atlas](sources.md) · [Acceptance checks](specification.md#acceptance-checks)
