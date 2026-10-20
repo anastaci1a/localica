@@ -78,9 +78,9 @@
         746
       ],
       "color": [
-        0.0,
-        0.0,
-        0.0
+        0,
+        0,
+        0
       ],
       "opacity": 0.14,
       "fit_style": false,
@@ -101,7 +101,7 @@
       "vector_provenance": {
         "method": "Existing clean symmetric Home trace, reused without geometry changes."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         428.0730128842447,
         579.7607116885195,
@@ -138,18 +138,18 @@
         "bounds": [
           184,
           -19,
-          5538.0,
+          5538,
           1443
         ],
-        "advance": 5634.0,
+        "advance": 5634,
         "size_pt": 13,
-        "tracking_font_units": -12.0,
+        "tracking_font_units": -12,
         "units_per_em": 2048,
         "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
         "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
         "method": "Original font outlines and normal AAT tracking at13pt; intended app typeface/point size inferred, not read from Apple source."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         424.6441437080965,
         690.0607181090483,
@@ -175,7 +175,7 @@
       "vector_provenance": {
         "method": "Clean symmetric four-rounded-square trace; no screenshot alpha."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         669.4781560053071,
         584.6056029701557,
@@ -211,18 +211,18 @@
         "bounds": [
           184,
           -19,
-          4184.0,
+          4184,
           1443
         ],
-        "advance": 4240.0,
+        "advance": 4240,
         "size_pt": 13,
-        "tracking_font_units": -12.0,
+        "tracking_font_units": -12,
         "units_per_em": 2048,
         "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
         "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
         "method": "Original font outlines and normal AAT tracking at13pt; intended app typeface/point size inferred, not read from Apple source."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         668.9589194154887,
         689.9299423166617,
@@ -251,7 +251,7 @@
         "source_sha256": "e46e1204efacbe3d1be2af40e06c98bf53203e790d636d6813adc8afc41d1e56",
         "license": "Apache-2.0; Compose Cupertino project,2023"
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         889.42555871379,
         586.9247781570002,
@@ -289,18 +289,18 @@
         "bounds": [
           184,
           -19,
-          5286.0,
+          5286,
           1526
         ],
-        "advance": 5382.0,
+        "advance": 5382,
         "size_pt": 13,
-        "tracking_font_units": -12.0,
+        "tracking_font_units": -12,
         "units_per_em": 2048,
         "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
         "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
         "method": "Original font outlines and normal AAT tracking at13pt; intended app typeface/point size inferred, not read from Apple source."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         896.132712108992,
         688.319332503194,
@@ -326,7 +326,7 @@
       "vector_provenance": {
         "method": "Clean symmetric stacked-frame trace with a smooth beamed-note cutout; no screenshot alpha. Not claimed to be Apple original geometry."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         1155.317669278217,
         575.1318520490993,
@@ -366,18 +366,18 @@
         "bounds": [
           184,
           -378,
-          6589.0,
+          6589,
           1526
         ],
-        "advance": 6645.0,
+        "advance": 6645,
         "size_pt": 13,
-        "tracking_font_units": -12.0,
+        "tracking_font_units": -12,
         "units_per_em": 2048,
         "layout": "Nominal advances plus normal AAT trak interpolation when size supplied; no pair kerning or optical-size substitution",
         "source_url": "https://devimages-cdn.apple.com/design/resources/download/SF-Symbols-7.dmg",
         "method": "Original font outlines and normal AAT tracking at13pt; intended app typeface/point size inferred, not read from Apple source."
       },
-      "opacity": 1.0,
+      "opacity": 1,
       "vector_box": [
         1133.965482423829,
         687.8872583106768,
@@ -393,7 +393,7 @@
   ],
   "reference": {
     "video": "music",
-    "seconds": 0.0,
+    "seconds": 0,
     "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
   },
   "input_names": {
