@@ -17,6 +17,7 @@ STAGES={
  3:('Shared normal profile and scattering',[]),
  4:('Shared foreground color response',[]),
  5:('Joint shared-material settlement',list(range(23))),
+ 6:('Foreground-aware shared-material settlement',list(range(23))),
 }
 
 
@@ -56,19 +57,31 @@ def foreground_errors(studies,p,co,params):
 def material_trial(caches,old,keys):
     co=np.array(old['material']);baseline=old['scores'];scale=max(1,np.mean([s['loss'] for s in baseline]))
     if not keys:return co,baseline,0
-    memo={};calls=0
+    memo={};calls=0;foreground_memo=[]
     def evaluate(v):
         nonlocal calls
         key=np.asarray(v).tobytes()
         if key not in memo:
             current=co.copy();current[keys]=v
-            memo.clear();memo[key]=scores(caches,current);calls+=1
+            metrics=[];foreground_memo.clear()
+            for cache in caches:
+                pred=cache.render(current);metrics.append(cache.study.scores(pred))
+                if 'foreground_response' in old:
+                    from foreground_response import response
+                    s=cache.study;x0,y0,_,_=s.crop
+                    for layer in s.transmission_layers:
+                        a,b,c,d=layer['box'];B=pred[b-y0:d-y0,a-x0:c-x0]
+                        inside=cv2.erode(layer['seed'].astype(np.uint8),np.ones((3,3),np.uint8))>0
+                        foreground_memo.append(float(np.mean((response(B,old['foreground_response'])-layer['target'])[inside]**2))*255**2)
+            memo.clear();memo[key]=metrics;calls+=1
         return memo[key]
     def objective(v):return np.mean([s['loss'] for s in evaluate(v)])/scale
     def constraints(v):
         out=[]
         for trial,base in zip(evaluate(v),baseline):
             out.extend([(base['loss']-trial['loss'])/scale,(base['glass']['rmse']**2-trial['glass']['rmse']**2)/scale])
+        if 'foreground_response' in old:
+            out.extend((b-a)/scale for a,b in zip(foreground_memo,old['foreground_scores']['after_mse']))
         return np.array(out)
     def bound(k):return (.05,1.5) if k<3 or k>=20 else (-.8,.8) if k<6 else (-4,4)
     result=minimize(objective,co[keys],method='SLSQP',bounds=[bound(k) for k in keys],
@@ -102,7 +115,7 @@ def main():
         (folder/'baseline.json').write_text(json.dumps(old,indent=2)+'\n')
         saved.write_text(json.dumps(old,indent=2)+'\n')
     current=copy.deepcopy(old);p=current['parameters'];caches=[Cached(s,p) for s in studies];trials=[];evaluations=0
-    if args.number in [1,2,5]:
+    if args.number in [1,2,5,6]:
         co,metric,evaluations=material_trial(caches,old,keys)
         current.update(material=co.tolist(),scores=metric)
         trials.append(dict(kind='Constrained shared material',scores=metric,evaluations=evaluations))
