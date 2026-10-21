@@ -16,6 +16,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
@@ -74,35 +75,49 @@ class BrowsePinchLayersTest {
     }
 
     @Test fun selectedRowKeepsCrossingArtworkInItsSharpForegroundAndBelowItsRim() {
+        verifySelectedArtworkLayering()
+    }
+
+    @Test fun selectedArtworkLayeringUsesTheSamePixelOriginAtFractionalDensity() {
+        verifySelectedArtworkLayering(Density(2.625f))
+    }
+
+    private fun verifySelectedArtworkLayering(density: Density? = null) {
         val motion = BrowsePinchMotion()
         compose.setContent { LocalicaTheme {
-            Column {
-                for (global in listOf(false, true)) key(global) {
-                    val grid = rememberLazyGridState()
-                    val shift = with(LocalDensity.current) { 100.dp.toPx() }
-                    val stripes: @Composable (Modifier) -> Unit = { modifier ->
-                        Canvas(modifier) {
-                            drawRect(Color.Green)
-                            for (x in 0..18) if (x % 2 == 0) drawRect(Color.Black,
-                                topLeft = androidx.compose.ui.geometry.Offset(x * 10.dp.toPx(), 0f),
-                                size = androidx.compose.ui.geometry.Size(5.dp.toPx(), size.height))
-                        }
-                    }
-                    SelectionViewport(Modifier.size(180.dp, 120.dp).testTag(if (global) "selected-global" else "selected-reference"),
-                        contentDrawing = if (global) Modifier.pinchRetainedOverlay(motion, grid, listOf("art", "text")) else Modifier) {
-                        LazyVerticalGrid(GridCells.Fixed(1), state = grid, modifier = Modifier.fillMaxSize()) {
-                            item(key = "art") {
-                                if (global) stripes(Modifier.height(100.dp).retainPinchArtwork("art", motion))
-                                else Spacer(Modifier.height(100.dp))
+            CompositionLocalProvider(LocalDensity provides (density ?: LocalDensity.current)) {
+                Column {
+                    for (global in listOf(false, true)) key(global) {
+                        val grid = rememberLazyGridState()
+                        val stripes: @Composable (Modifier) -> Unit = { modifier ->
+                            Canvas(modifier) {
+                                drawRect(Color.Green)
+                                for (x in 0..18) if (x % 2 == 0) drawRect(Color.Black,
+                                    topLeft = androidx.compose.ui.geometry.Offset(x * 10.dp.toPx(), 0f),
+                                    size = androidx.compose.ui.geometry.Size(5.dp.toPx(), size.height))
                             }
-                            item(key = "text") {
-                                Box(Modifier.height(100.dp).graphicsLayer { translationY = -shift }
-                                    .selectionLens(true, false)
-                                    .then(if (global) Modifier.retainPinchText("text", motion) else Modifier)
-                                    .background(Color.Red)) {
-                                    // Reference paints the same foreground directly inside the
-                                    // selected row. The global version crosses it from its neighbor.
-                                    if (!global) stripes(Modifier.fillMaxSize())
+                        }
+                        SelectionViewport(Modifier.size(180.dp, 120.dp).testTag(if (global) "selected-global" else "selected-reference"),
+                            contentDrawing = if (global) Modifier.pinchRetainedOverlay(motion, grid, listOf("art", "text")) else Modifier) {
+                            LazyVerticalGrid(GridCells.Fixed(1), state = grid, modifier = Modifier.fillMaxSize()) {
+                                item(key = "art") {
+                                    if (global) stripes(Modifier.height(100.dp).testTag("global-art").retainPinchArtwork("art", motion))
+                                    else Spacer(Modifier.height(100.dp))
+                                }
+                                item(key = "text") {
+                                    Box(Modifier.height(100.dp).graphicsLayer {
+                                        // Use laid-out pitch, not raw dp pixels: at 2.625 density
+                                        // the 100 dp preceding row is 263 px, not 262.5 px.
+                                        translationY = -(grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "art" }
+                                            ?.size?.height ?: 0).toFloat()
+                                    }
+                                        .selectionLens(true, false)
+                                        .then(if (global) Modifier.retainPinchText("text", motion) else Modifier)
+                                        .background(Color.Red)) {
+                                        // Reference paints the same foreground directly inside the
+                                        // selected row. The global version crosses it from its neighbor.
+                                        if (!global) stripes(Modifier.fillMaxSize().testTag("reference-art"))
+                                    }
                                 }
                             }
                         }
@@ -112,6 +127,11 @@ class BrowsePinchLayersTest {
         } }
         fun verify() {
             compose.waitForIdle()
+            for (type in listOf("reference", "global")) {
+                val viewport = compose.onNodeWithTag("selected-$type").fetchSemanticsNode().boundsInRoot
+                val artwork = compose.onNodeWithTag("$type-art").fetchSemanticsNode().boundsInRoot
+                assertEquals("$type artwork must start at the same pixel origin as its viewport", viewport.top, artwork.top, .01f)
+            }
             val reference = compose.onNodeWithTag("selected-reference").captureToImage().toPixelMap()
             val actual = compose.onNodeWithTag("selected-global").captureToImage().toPixelMap()
             var different = 0; var green = 0
