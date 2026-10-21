@@ -350,18 +350,20 @@ Historical experiment counts below include rejected proposals, ties and improvem
 
 ### Music and switch studies
 
+Earlier calibration checkpoints are listed below; current guarded revisions are linked in each section above. Experiment totals include rejected trials and are not verified improvement counts.
+
 | Study | Weighted loss A / B | Glass RMSE A / B | Initial / paired experiments | Status |
 | --- | ---: | ---: | ---: | --- |
 | Expanded mini-player | 29.031 / 9.723 | 4.366 / 2.571 | 22 / 21 | Completed study |
 | Compact mini-player | 24.899 / 23.369 | 4.370 / 4.325 | 29 / 21 | Completed study |
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
-| Home | 40.187 / 103.246 | 5.861 / 9.223 | 22 / 21 | Corrected boundary verified |
+| Home | 40.187 / 103.246 | 5.861 / 9.223 | 22 / 21 | Historical paired bridge; incident domain incomplete |
 | Active switch, review 6 | 198.132 / 234.623 | 11.156 / 13.641 | 24 / 24 historical | Shared two-reference revision |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Independent replay also checks that the first paired baseline protects the retained single-background result.
 - These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.
-- Both references come from the same video, not independent device validation. Native calibration uses the scored pixels; its checkerboard subset is not an independent holdout. Higher-resolution presentation does not create new source detail or change native scoring. GIFs may have lower resolution/frame rate than the 4× PNG/video masters; their encoding diagnostics are recorded with each study.
+- Both references come from the same video, not independent device validation. Native calibration uses the scored pixels; its checkerboard subset is not an independent holdout. Higher-resolution presentation does not create new source detail or change native scoring. Export dimensions and frame rates vary; consult each linked media record.
 
 ### Earlier HD studies
 
