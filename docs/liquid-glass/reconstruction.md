@@ -57,7 +57,7 @@ Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc20
 
 ![Underside comparison with Apple on the left](assets/toolbar-underside-current.png)
 
-These fixed-position crops use the current 4× render. Visible-composite RMSE within the glass mask decreases from 8.964 to 8.892 in the upper rim and from 3.110 to 2.895 around the `d`. The underside worsens from **5.062 to 5.471**; its reflections remain too distinct. These [local diagnostics](experiments/reconstruction/studies/archive-plus/review-round/pass-03-crops.json) remain advisory and do not imply every region improved.
+These fixed-position crops use the current 4× render. The upper-rim crop now extends downward by half its original height; the letter-refraction crop starts at its bottom edge. With these boundaries, visible-composite RMSE within the glass mask decreases from 7.403 to 7.303 in the upper rim and from 3.368 to 3.096 around the `d`. The underside worsens from **5.062 to 5.471**; its reflections remain too distinct. The [reframed diagnostics](experiments/reconstruction/studies/archive-plus/review-round/pass-03-crops-reframed.json) and [original boundaries/scores](experiments/reconstruction/studies/archive-plus/review-round/pass-03-crops.json) remain advisory and do not imply every region improved.
 
 </details>
 
