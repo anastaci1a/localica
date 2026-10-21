@@ -104,33 +104,37 @@ internal fun GlassChoiceFace(label: String, icon: Int? = null, tab: Boolean = fa
 
 /** Pure equal-cell geometry without selector/input owners. */
 @Composable
-internal fun GlassChoicesMeasurement(labels: List<String>, icons: List<Int>? = null, tab: Boolean = false) {
+internal fun GlassChoicesMeasurement(labels: List<String>, icons: List<Int>? = null, tab: Boolean = false,
+    horizontal: Boolean = true) {
     if (labels.isEmpty()) return
     val height = glassChoiceCellHeight()
     androidx.compose.ui.layout.Layout(modifier = Modifier.padding(vertical = ChoiceOuterVerticalInset).padding(ChoiceInnerInset),
         content = { labels.forEachIndexed { index, label -> GlassChoiceFace(label, icons?.getOrNull(index), tab) } },
         measurePolicy = object : androidx.compose.ui.layout.MeasurePolicy {
             override fun androidx.compose.ui.layout.IntrinsicMeasureScope.maxIntrinsicHeight(
-                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, width: Int): Int = height.roundToPx()
+                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, width: Int): Int =
+                height.roundToPx() * (if (horizontal) 1 else children.size)
 
             override fun androidx.compose.ui.layout.IntrinsicMeasureScope.minIntrinsicHeight(
-                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, width: Int): Int = height.roundToPx()
+                children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, width: Int): Int =
+                height.roundToPx() * (if (horizontal) 1 else children.size)
 
             override fun androidx.compose.ui.layout.IntrinsicMeasureScope.maxIntrinsicWidth(
                 children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, height: Int): Int =
-                (children.maxOfOrNull { it.maxIntrinsicWidth(height) } ?: 0) * children.size
+                (children.maxOfOrNull { it.maxIntrinsicWidth(height) } ?: 0) * (if (horizontal) children.size else 1)
 
             override fun androidx.compose.ui.layout.IntrinsicMeasureScope.minIntrinsicWidth(
                 children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, height: Int): Int =
-                (children.maxOfOrNull { it.minIntrinsicWidth(height) } ?: 0) * children.size
+                (children.maxOfOrNull { it.minIntrinsicWidth(height) } ?: 0) * (if (horizontal) children.size else 1)
 
             override fun androidx.compose.ui.layout.MeasureScope.measure(children: List<androidx.compose.ui.layout.Measurable>, constraints: androidx.compose.ui.unit.Constraints): androidx.compose.ui.layout.MeasureResult {
                 require(constraints.hasBoundedWidth)
                 val width = constraints.maxWidth
-                val cellHeight = constraints.constrainHeight(height.roundToPx())
-                val cell = (width / children.size.coerceAtLeast(1)).coerceAtLeast(0)
-                children.forEach { it.measure(androidx.compose.ui.unit.Constraints.fixed(cell, cellHeight)) }
-                return layout(width, cellHeight) { }
+                val cellHeight = if (horizontal) constraints.constrainHeight(height.roundToPx()) else height.roundToPx()
+                val cellWidth = if (horizontal) width / children.size else width
+                val totalHeight = constraints.constrainHeight(cellHeight * (if (horizontal) 1 else children.size))
+                children.forEach { it.measure(androidx.compose.ui.unit.Constraints.fixed(cellWidth, cellHeight)) }
+                return layout(width, totalHeight) { }
             }
 
         })
