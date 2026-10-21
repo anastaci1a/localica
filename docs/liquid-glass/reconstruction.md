@@ -167,6 +167,10 @@ Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback c
 
 ### Detached Search control
 
+Current round: **3/3** verified passes. Shared material updates: native E A7.230750→7.227650 and B7.124124→7.120881. Glass and foreground improve on both; exterior shadow stays fixed. Unknown exterior is completed from nearest defined source RGB for presentation only; scored pixels are unchanged. Motion below uses this third-pass recipe:6seconds at15fps,1080px wide. GIFs preserve full dimensions below10MB (A10fps/96colors; B6fps/256colors). [Motion verification](experiments/reconstruction/studies/music-search-vector/review-round/motion.json).
+
+[Current recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-03.json) · [Independent verification](experiments/reconstruction/studies/music-search-vector/review-round/pass-03-verification.json).
+
 Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; color and opacity are fitted separately. The icon geometry does not contain video compression artifacts.
 
 [![Search control, background A: Apple left, reconstruction right](assets/study-music-search-vector-paired-a.png)](assets/study-music-search-vector-paired-a.png)
@@ -177,9 +181,9 @@ Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; co
 <details>
 <summary>Motion — background A</summary>
 
-<video controls preload="none" playsinline width="960" height="940" aria-label="Search control, background A motion"><source src="assets/study-music-search-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-search-vector-paired-a.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="1058" aria-label="Search control, background A motion"><source src="assets/study-music-search-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-search-vector-paired-a.mp4">Open video</a></video>
 
-<img src="assets/study-music-search-vector-paired-a.gif" alt="Search control motion on background A" width="960" height="940" loading="lazy" decoding="async">
+<img src="assets/study-music-search-vector-paired-a.gif" alt="Search control motion on background A" width="1080" height="1058" loading="lazy" decoding="async">
 
 [Video](assets/study-music-search-vector-paired-a.mp4) · [GIF](assets/study-music-search-vector-paired-a.gif)
 
@@ -188,9 +192,9 @@ Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; co
 <details>
 <summary>Motion — background B</summary>
 
-<video controls preload="none" playsinline width="960" height="940" aria-label="Search control, background B motion"><source src="assets/study-music-search-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-search-vector-paired-b.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="1058" aria-label="Search control, background B motion"><source src="assets/study-music-search-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-search-vector-paired-b.mp4">Open video</a></video>
 
-<img src="assets/study-music-search-vector-paired-b.gif" alt="Search control motion on background B" width="960" height="940" loading="lazy" decoding="async">
+<img src="assets/study-music-search-vector-paired-b.gif" alt="Search control motion on background B" width="1080" height="1058" loading="lazy" decoding="async">
 
 [Video](assets/study-music-search-vector-paired-b.mp4) · [GIF](assets/study-music-search-vector-paired-b.gif)
 
