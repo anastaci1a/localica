@@ -7,14 +7,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
@@ -247,6 +250,36 @@ class BrowseLoadingRevealTest {
         }
     }
 
+    @Test fun skeletonCoverageIncludesNormalCellPaddingAtTheViewportEdge() {
+        val style = BrowseStyle(listSize = ListSize.Small)
+        var height by mutableIntStateOf(110)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides true, LocalDensity provides Density(1f)) {
+                // Small rows allocate 48dp content + 8dp card padding. Exercise bottom
+                // padding, an exact row boundary, next-row top padding, then its content.
+                BoxWithConstraints(Modifier.size(320.dp, height.dp)) {
+                    BrowseLoadingViewport(style, BrowseCellGeometry(1),
+                        constraints.maxWidth, constraints.maxHeight, 0.dp, showInformation = true)
+                }
+            }
+        } }
+        for (boundary in listOf(110, 112, 114, 118)) {
+            compose.runOnIdle { height = boundary }
+            val viewport = compose.onNodeWithTag("browse-loading").fetchSemanticsNode().boundsInRoot
+            assertEquals("The fixture exercises its requested viewport boundary", boundary.toFloat(), viewport.height, 0f)
+            val rows = compose.onAllNodesWithTag("browse-skeleton-item", useUnmergedTree = true)
+                .fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.height > 0f }.sortedBy { it.top }
+            assertTrue("The viewport must contain complete allocated row bounds at $boundary", rows.isNotEmpty())
+            assertEquals("Small row allocation includes both card insets", 56f, rows.first().height, 1f)
+            assertEquals("The first row starts at the viewport edge", viewport.top, rows.first().top, 1f)
+            rows.zipWithNext().forEach { (above, below) ->
+                assertEquals("Allocated loading rows tile without unfilled gaps", above.bottom, below.top, 1f)
+            }
+            assertTrue("Normal card padding remains part of viewport coverage at $boundary",
+                rows.last().bottom >= viewport.bottom - 1f)
+        }
+    }
+
     @Test fun artistOnlySkeletonIsCircularWhileMixedCatalogSkeletonIsRounded() {
         val style = BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 2)
         compose.setContent { LocalicaTheme {
@@ -300,25 +333,40 @@ class BrowseLoadingRevealTest {
     }
 
     @Test fun newlyMountedSkeletonUsesTheAlreadyRunningSharedShimmerClock() {
+        // The test policy cancels infinite animations if they start while autoAdvance is true.
+        compose.mainClock.autoAdvance = false
         var showSecond by mutableStateOf(false)
+        var displaySecond by mutableStateOf(false)
+        var phase: State<Float>? = null
         compose.setContent { LocalicaTheme {
             val shimmer = rememberBrowseLoadingShimmer(active = true, reducedMotion = false)
+            SideEffect { phase = shimmer }
             CompositionLocalProvider(LocalLoadingShimmer provides shimmer) {
-                Row {
-                    BrowseLoadingShape(Modifier.size(100.dp).testTag("first-shimmer"), { 0f })
-                    if (showSecond) BrowseLoadingShape(Modifier.size(100.dp).testTag("second-shimmer"), { 0f })
+                Box(Modifier.size(100.dp).testTag("shimmer-slot")) {
+                    BrowseLoadingShape(Modifier.fillMaxSize().graphicsLayer { alpha = if (displaySecond) 0f else 1f }, { 0f })
+                    if (showSecond) BrowseLoadingShape(
+                        Modifier.fillMaxSize().graphicsLayer { alpha = if (displaySecond) 1f else 0f }, { 0f })
                 }
             }
         } }
-        compose.mainClock.autoAdvance = false
         compose.mainClock.advanceTimeBy(380)
+        val clock = requireNotNull(phase)
+        assertNotEquals("The shared clock must be running before mounting another skeleton", -1f, clock.value)
+        val phaseBeforeMount = clock.value
         compose.runOnIdle { showSecond = true }
         repeat(2) { compose.mainClock.advanceTimeByFrame() }
-        val first = compose.onNodeWithTag("first-shimmer").captureToImage().toPixelMap()
-        val second = compose.onNodeWithTag("second-shimmer").captureToImage().toPixelMap()
+        assertSame("Mounting another skeleton cannot replace the common clock", clock, phase)
+        assertTrue("Mounting another skeleton cannot restart the common phase", clock.value > phaseBeforeMount)
+        val atCapture = clock.value
+        // Compare both instances at exactly the same screen coordinates. Side-by-side
+        // gradients can differ by one quantization step from screen-space rasterization.
+        val first = compose.onNodeWithTag("shimmer-slot").captureToImage().toPixelMap()
+        compose.runOnIdle { displaySecond = true } // Draw-only visibility; neither instance is unmounted.
+        val second = compose.onNodeWithTag("shimmer-slot").captureToImage().toPixelMap()
+        assertEquals("Capture does not advance either instance's phase", atCapture, clock.value, 0f)
         assertPixelsEqual("Late-mounted skeletons share the viewport phase", first, second)
         compose.mainClock.advanceTimeBy(400)
-        val later = compose.onNodeWithTag("first-shimmer").captureToImage().toPixelMap()
+        val later = compose.onNodeWithTag("shimmer-slot").captureToImage().toPixelMap()
         assertTrue("The common shimmer must still be animated",
             (0 until first.height).any { y -> (0 until first.width).any { x -> first[x, y] != later[x, y] } })
     }
@@ -453,6 +501,8 @@ class BrowseLoadingRevealTest {
     }
 
     @Test fun pendingArtworkKeepsOneSharedClockAliveAfterCatalogRevealThenReleasesIt() {
+        // Disable the test runner's infinite-animation cancellation before composition.
+        compose.mainClock.autoAdvance = false
         val activity = LoadingShimmerActivity()
         var loading by mutableStateOf(true)
         var phase: State<Float>? = null
@@ -466,15 +516,14 @@ class BrowseLoadingRevealTest {
                 }
             }
         } }
+        compose.mainClock.advanceTimeBy(380)
         compose.runOnIdle {
             assertEquals(2, activity.count)
             assertNotNull("Pending visible covers retain the common clock", phase)
         }
-        compose.mainClock.autoAdvance = false
-        compose.mainClock.advanceTimeBy(380)
         val previous = requireNotNull(phase).value
         compose.mainClock.advanceTimeBy(120)
-        assertNotEquals(previous, requireNotNull(phase).value)
+        assertNotEquals("The retained common clock keeps advancing", previous, requireNotNull(phase).value)
         compose.mainClock.autoAdvance = true
         compose.runOnIdle { loading = false }
         compose.runOnIdle {
