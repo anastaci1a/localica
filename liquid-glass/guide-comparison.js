@@ -27,7 +27,7 @@
    tools.append(full);figure.prepend(tools);
    let reset=()=>{},sync=()=>{};
    if(image.hasAttribute('data-comparison-top')){
-    const W=(image.naturalWidth-2)/2,top=+image.dataset.comparisonTop,bottom=+(image.dataset.comparisonBottom||0),H=image.naturalHeight-top-bottom;
+    const gutter=+(image.dataset.comparisonGutter??2),W=(image.naturalWidth-gutter)/2,top=+image.dataset.comparisonTop,bottom=+(image.dataset.comparisonBottom||0),H=image.naturalHeight-top-bottom;
     if(!Number.isInteger(W)||W<1||H<1)throw Error('Invalid comparison dimensions');
     const modes=document.createElement('div');modes.className='comparison-modes';modes.setAttribute('role','group');modes.setAttribute('aria-label','Comparison view');
     const wipe=document.createElement('button'),side=document.createElement('button');
