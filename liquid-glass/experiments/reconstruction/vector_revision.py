@@ -1,4 +1,4 @@
-"""Clean glass/shadow compositing for studies with declared SVG foregrounds.
+"""Clean glass/shadow compositing for studies with declared SVGs and separately hashed artwork.
 
 Unlike the historical context compositor, this never retains a reference shadow
 or screenshot-derived foreground. Material/ray evaluation remains Study.render.
@@ -11,7 +11,7 @@ def composite(study,p,material,scale=1,background_source=None):
         params=np.asarray(study.case.get('foreground_response',[]),float)
         assert params.shape==(3,3) and np.isfinite(params).all(),'Freeze nonlinear foreground response explicitly'
         assert np.all((params[:,:2]>=0)&(params[:,:2]<=1)) and np.all(params[:,2]>0)
-    assert all('vector_asset' in layer and layer['mode']!='artwork' for layer in study.case.get('foreground_layers',[])),'Only declared vector glyphs are supported'
+    assert all(('vector_asset' in layer and layer['mode']!='artwork') or (layer['mode']=='artwork' and 'artwork_asset' in layer and 'artwork_sha256' in layer) for layer in study.case.get('foreground_layers',[])),'Require declared vector glyphs or independently hashed artwork'
     a,b,c,d=study.crop;H,W=material.shape[:2]
     assert (H,W)==((d-b)*scale,(c-a)*scale)
     yy,xx=np.mgrid[:H,:W].astype(np.float32);X=a-.5+(xx+.5)/scale;Y=b-.5+(yy+.5)/scale
@@ -59,6 +59,9 @@ def replay(folder,record,observation,output,high_quality=False):
     assert fingerprint==record['case_sha256'][observation], 'Frozen case mismatch'
     for name,digest in record['vector_sha256'][observation].items():
         assert hashlib.sha256((Path(folder)/name).read_bytes()).hexdigest()==digest
+    if 'foreground_response' in record:
+        assert study.transmission_layers,'Response override requires declared transmission vectors'
+        study.case={**study.case,'foreground_response':record['foreground_response']}
     p=record['parameters'];material=np.asarray(record['material'])
     x0,y0,x1,y1=study.crop
     w,h=dimensions(x1-x0,y1-y0,large=record.get('large',False),high_quality=high_quality)
