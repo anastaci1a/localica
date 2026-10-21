@@ -130,15 +130,17 @@
     "gutter": 0
   },
   "assets/match-slider.png": {
-    "width": 1440,
+    "width": 1442,
     "height": 468,
     "top": 64,
-    "bottom": 0
+    "bottom": 0,
+    "gutter": 2
   },
   "assets/match-slider-full.png": {
-    "width": 2160,
+    "width": 2162,
     "height": 671,
     "top": 64,
-    "bottom": 0
+    "bottom": 0,
+    "gutter": 2
   }
 }
