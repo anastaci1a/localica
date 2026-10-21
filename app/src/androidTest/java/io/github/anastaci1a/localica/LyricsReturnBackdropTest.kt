@@ -17,6 +17,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PixelMap
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.graphicsLayer
@@ -28,6 +31,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.sp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -56,7 +60,8 @@ class LyricsReturnBackdropTest {
     private var sampledScene by mutableStateOf<LyricsBackdropScene?>(null)
     private var sampleOrigin by mutableStateOf(Offset.Zero)
     private var lastSnapshot: ImageBitmap? = null
-    private var lastLens: ImageBitmap? = null
+    private lateinit var fixtureState: Scene
+    private val sourceFrameIds = mutableMapOf<Any, Int>()
 
     private data class ViewportPose(val surfaceTop: Float, val titleTop: Float) {
         val viewport get() = playerLyricsViewport(surfaceTop, titleTop, metadataTarget = 348f, topInset = 24f)
@@ -237,13 +242,17 @@ class LyricsReturnBackdropTest {
     }
 
     @Test fun interruptedPanelSourcesAndSongsReopenWithFreshSamplingAndWorkingReturn() {
-        val state = Scene()
+        val sparse = document('|', dense = true)
+        val state = Scene().apply { document = sparse }
         mount(state, panel = true)
         alignCurrentLine(state.document)
-        capture("panel-before-crossfade")
+        // A clean mount is the expected optical result. Average chroma alone cannot
+        // order W and | coverage inside this small refracted, arrow-excluded ring.
+        val cleanSparse = capture("clean-sparse-panel")
+        val cleanGeometry = panelGeometry(state.document)
         compose.mainClock.autoAdvance = false
         try {
-            compose.runOnIdle { state.source++; state.document = document('|', dense = true) }
+            compose.runOnIdle { state.source++; state.document = document('M', dense = true) }
             compose.mainClock.advanceTimeBy(80)
             compose.onAllNodesWithTag("lyric-lines").assertCountEquals(2)
             // Interrupt a real panel Crossfade with a different song/source.
@@ -257,17 +266,20 @@ class LyricsReturnBackdropTest {
         alignCurrentLine(state.document)
         val replacement = capture("replacement-song")
         assertTrue("The replacement song has fresh sampled glyphs", green(replacement, returnBounds()) > .02f)
+        assertTrue("The clean sparse baseline must distinguish a stale dense W source",
+            interiorDifference(cleanSparse, replacement, returnBounds()) > .025f)
         compose.runOnIdle { state.shown = false }
         compose.onNodeWithContentDescription(ReturnLabel).assertDoesNotExist()
         compose.runOnIdle {
-            state.song++; state.source++; state.document = document('|', dense = true); state.shown = true
+            state.song++; state.source++; state.document = sparse; state.shown = true
         }
         compose.waitForIdle()
         alignCurrentLine(state.document)
         val reopened = capture("reopened-song")
         assertTrue("The reopened scene samples the new document", green(reopened, returnBounds()) > .01f)
-        assertTrue("The sparse new glyphs cannot retain the previous dense W source",
-            green(reopened, returnBounds()) < green(replacement, returnBounds()) * .7f)
+        assertEquals("The clean and reopened samples need identical viewport, row and lens placement",
+            cleanGeometry, panelGeometry(state.document))
+        assertSameInterior("Reopening must reproduce the clean new-document source", cleanSparse, reopened, returnBounds())
         assertTrue("Reopening must replace the sampled glyph pattern, not reuse a previous bitmap",
             interiorDifference(replacement, reopened, returnBounds()) > .025f)
         compose.onNodeWithContentDescription(ReturnLabel).performClick()
@@ -315,6 +327,7 @@ class LyricsReturnBackdropTest {
     }
 
     private fun mount(state: Scene, panel: Boolean = false) {
+        fixtureState = state
         compose.setContent { LocalicaTheme {
             view = LocalView.current
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.Green, onSurfaceVariant = Color.Red),
@@ -354,7 +367,7 @@ class LyricsReturnBackdropTest {
                                                     LyricsLines(incoming, state.position, true, {}, Modifier.fillMaxSize(), sourceAlpha = { .5f })
                                                 }
                                             }
-
+                                            SourceFrameMarker(scene)
                                         }
                                     }
                                 }
@@ -423,19 +436,83 @@ class LyricsReturnBackdropTest {
         compose.waitForIdle()
     }
 
+    private data class SourceFrame(val id: Int, val marker: Color, val sampled: Color)
+
+    private fun sourceFrame(scene: LyricsBackdropScene): SourceFrame {
+        val key = listOf(fixtureState.art, fixtureState.alpha, scene.layers.filter { it.contentKey() !== SourceMarkerKey }.map { layer ->
+            listOf(layer.source.recorded, layer.source.size, layer.source.location.placement,
+                layer.alpha(), layer.contentKey())
+        })
+        val id = sourceFrameIds.getOrPut(key) { sourceFrameIds.size + 1 }
+        check(id < 4096)
+        val marker = Color((id and 15) * 17, (id shr 4 and 15) * 17, (id shr 8 and 15) * 17)
+        return SourceFrame(id, marker, marker.copy(alpha = fixtureState.alpha).compositeOver(fixtureState.art))
+    }
+
+    @Composable private fun SourceFrameMarker(scene: LyricsBackdropScene) {
+        val recording = rememberGraphicsLayer()
+        val source = remember(recording) { FrostedBackdrop(recording, false).apply { size = IntSize(8, 8) } }
+        val layer = remember(source) { LyricsBackdropLayer(source, { 1f }, { SourceMarkerKey }) }
+        DisposableEffect(scene, layer) {
+            scene.layers.add(layer)
+            onDispose { scene.layers.remove(layer) }
+        }
+        // Record only, outside every tested return footprint. This marker has no
+        // onPlaced/onSizeChanged observer: its key, alpha, size and placement counter
+        // stay constant, so it cannot request refresh in place of real lyric changes.
+        Canvas(Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).size(8.dp)) {
+            scene.source.location.placement
+            source.location.coordinates = scene.source.location.coordinates
+            source.location.windowOffset = scene.source.location.windowOffset
+            source.layer.record(size = source.size) { drawRect(sourceFrame(scene).marker) }
+            source.recorded = true
+        }
+    }
+
+    private fun awaitLegacySample(scene: LyricsBackdropScene, previous: ImageBitmap?, requireFresh: Boolean) {
+        var requested = 0
+        var observed = Color.Transparent
+        try {
+            compose.waitUntil(10_000) {
+                compose.mainClock.advanceTimeByFrame()
+                val frame = compose.runOnUiThread { sourceFrame(scene) }
+                val source = scene.source
+                val snapshot = source.snapshot
+                requested = frame.id
+                val marker = scene.layers.single { it.contentKey() === SourceMarkerKey }.source
+                assertEquals("Diagnostic recording size is fixed", IntSize(8, 8), marker.size)
+                assertEquals("Diagnostic placement must never request a source refresh", 0, marker.location.placement)
+                val markerBounds = Rect(marker.origin, androidx.compose.ui.geometry.Size(8f, 8f))
+                val button = returnBounds()
+                assertFalse("Frame marker must remain beyond the return lens's sampling neighborhood",
+                    markerBounds.overlaps(Rect(sampleOrigin, androidx.compose.ui.geometry.Size(button.width, button.height)).inflate(button.width)))
+                val offset = marker.origin - source.origin + Offset(4f, 4f)
+                val x = (offset.x * (snapshot?.width ?: 0) / source.size.width.coerceAtLeast(1)).toInt()
+                val y = (offset.y * (snapshot?.height ?: 0) / source.size.height.coerceAtLeast(1)).toInt()
+                // Zero blur/tint means preparation publishes the very same image.
+                // Its marker identifies the real layer's requested content/placement,
+                // not merely a different but still pre-alignment bitmap.
+                if (snapshot == null || source.lensSnapshot !== snapshot ||
+                    requireFresh && snapshot === previous || x !in 0 until snapshot.width || y !in 0 until snapshot.height) false
+                else {
+                    observed = snapshot.toPixelMap(startX = x, startY = y, width = 1, height = 1)[0, 0]
+                    maxChannelDifference(observed.toArgb(), frame.sampled.toArgb()) <= 1
+                }
+            }
+        } catch (failure: Throwable) {
+            throw AssertionError("Legacy source-frame preparation: requested=$requested observed=$observed " +
+                "sourceRevision=${scene.source.revision} samePreparedImage=${scene.source.lensSnapshot === scene.source.snapshot}", failure)
+        }
+    }
+
     private fun capture(label: String, settle: Boolean = true, expectFresh: Boolean = false): PixelMap {
         if (settle) {
             compose.mainClock.advanceTimeBy(800)
             compose.waitForIdle()
             // Wait for prepared-snapshot identity, never for the optical result.
             // This also fails if settled scrolling/emphasis stops requesting a refresh.
-            sampledScene?.source?.takeIf { Build.VERSION.SDK_INT < 33 && it.consumers > 0 }?.let { source ->
-                compose.waitUntil(10_000) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.runOnUiThread { }
-                    source.snapshot != null && source.lensSnapshot != null &&
-                        (!expectFresh || (source.snapshot !== lastSnapshot && source.lensSnapshot !== lastLens))
-                }
+            sampledScene?.takeIf { Build.VERSION.SDK_INT < 33 && it.source.consumers > 0 }?.let { scene ->
+                awaitLegacySample(scene, lastSnapshot, requireFresh = expectFresh)
             }
             if (Build.VERSION.SDK_INT < 33 && sampledScene == null) {
                 // LyricsPanel owns its source privately. Give its debounce, settled
@@ -459,12 +536,29 @@ class LyricsReturnBackdropTest {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
                 ?: requireNotNull(context.getExternalFilesDir(null))
-            output.mkdirs()
-            File(output, "lyrics-return-${Build.VERSION.SDK_INT}-$label.png").outputStream().use {
+            val directory = File(output, "player-expansion-motion/lyrics-return-backdrop")
+            check(directory.isDirectory || directory.mkdirs())
+            File(directory, "lyrics-return-${Build.VERSION.SDK_INT}-$label.png").outputStream().use {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
+            val button = returnBounds()
+            val source = sampledScene?.source
+            File(directory, "lyrics-return-${Build.VERSION.SDK_INT}-$label.txt").writeText(buildString {
+                appendLine("capture=${pixels.width}x${pixels.height} button=$button")
+                appendLine("returnGreen=${green(pixels, button)} returnRed=${red(pixels, button)}")
+                appendLine("artworkOnlyGreen=${green(pixels, referenceBounds())}")
+                if (source != null) {
+                    appendLine("sourceOrigin=${source.origin} sourceSize=${source.size} revision=${source.revision} consumers=${source.consumers}")
+                    appendLine("snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)}")
+                    appendLine("sourceFrame=${compose.runOnUiThread { sourceFrame(requireNotNull(sampledScene)) }}")
+                    appendLine("probeGreen=${green(pixels, localBounds(compose.onNodeWithTag(ProbeTag)))}")
+                    sampledScene?.layers?.forEachIndexed { index, layer ->
+                        appendLine("layer=$index recorded=${layer.source.recorded} origin=${layer.source.origin} size=${layer.source.size} alpha=${layer.alpha()}")
+                    }
+                }
+            })
         } finally { bitmap.recycle() }
-        sampledScene?.source?.let { lastSnapshot = it.snapshot; lastLens = it.lensSnapshot }
+        sampledScene?.source?.let { lastSnapshot = it.snapshot }
         return pixels
     }
 
@@ -472,6 +566,29 @@ class LyricsReturnBackdropTest {
         -compose.onNodeWithTag(SceneTag).fetchSemanticsNode().boundsInRoot.topLeft)
     private fun returnBounds() = localBounds(compose.onNodeWithContentDescription(ReturnLabel))
     private fun referenceBounds() = localBounds(compose.onNodeWithContentDescription(ReferenceLabel))
+
+    private fun panelGeometry(document: ParsedLyrics) = listOf(returnBounds(),
+        localBounds(compose.onNodeWithTag("lyrics-panel")),
+        localBounds(compose.onNodeWithTag("lyric-lines")),
+        localBounds(compose.onNodeWithText(document.lines[30].text)))
+
+    private fun assertSameInterior(message: String, expected: PixelMap, actual: PixelMap, bounds: Rect) {
+        assertEquals(expected.width, actual.width)
+        assertEquals(expected.height, actual.height)
+        var greatestChannelDelta = 0
+        for (point in interior(expected, bounds)) {
+            val before = expected[point.x.toInt(), point.y.toInt()].toArgb()
+            val after = actual[point.x.toInt(), point.y.toInt()].toArgb()
+            greatestChannelDelta = max(greatestChannelDelta, maxChannelDifference(before, after))
+        }
+        // Compare each encoded channel, not average ink coverage. At most one
+        // 8-bit quantization level is allowed; no spatial/pattern error is hidden.
+        assertTrue("$message: largest 8-bit channel difference=$greatestChannelDelta", greatestChannelDelta <= 1)
+    }
+
+    private fun maxChannelDifference(a: Int, b: Int) = listOf(0, 8, 16, 24).maxOf { shift ->
+        abs((a ushr shift and 255) - (b ushr shift and 255))
+    }
 
     private fun interior(pixels: PixelMap, bounds: Rect): List<Offset> {
         assertTrue("Capture must contain the entire button", bounds.left >= 0 && bounds.top >= 0 && bounds.right <= pixels.width && bounds.bottom <= pixels.height)
@@ -525,6 +642,7 @@ class LyricsReturnBackdropTest {
     }.average().toFloat()
 
     private companion object {
+        val SourceMarkerKey = Any()
         const val ProbeTag = "actual-return-source-footprint"
         const val SceneTag = "lyrics-sampling-scene"
         const val ReturnLabel = "Return to current line"

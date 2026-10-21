@@ -168,6 +168,10 @@ class ModalGestureTakeoverTest {
                 }
             }
         } }
+        // GlassDialog registers with its host before its unanchored page is mounted.
+        // Drive that deferred composition/frame work before fetching the native window;
+        // focus readiness cannot fetch a node from a window that does not exist yet.
+        awaitNode("artwork-viewer-viewport")
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("artwork-viewer-viewport"))
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false

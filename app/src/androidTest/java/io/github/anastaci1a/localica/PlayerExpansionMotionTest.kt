@@ -110,11 +110,15 @@ class PlayerExpansionMotionTest {
                 }
 
                 val fullContent = compose.onNodeWithTag(contentTag, true).getUnclippedBoundsInRoot()
+                // DpRect.height subtracts two independently converted Float coordinates.
+                // Compare the actual integer-pixel measurement, which must stay identical.
+                val fullContentSize = compose.onNodeWithTag(contentTag, true).fetchSemanticsNode().size
                 compose.onRoot().performTouchInput { moveBy(Offset(0f, mini.top * .14f), delayMillis = 160) }
                 compose.mainClock.advanceTimeByFrame()
                 compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
                 val movingContent = compose.onNodeWithTag(contentTag, true).getUnclippedBoundsInRoot()
-                assertEquals("Inner lyric geometry does not reflow during held collapse", fullContent.height, movingContent.height)
+                assertEquals("Inner lyric geometry does not reflow during held collapse", fullContentSize,
+                    compose.onNodeWithTag(contentTag, true).fetchSemanticsNode().size)
                 val contentTravel = (movingContent.top - fullContent.top).value
                 val playerTravel = (compose.onNodeWithTag("player-surface", true).getUnclippedBoundsInRoot().top -
                     compose.onRoot().getUnclippedBoundsInRoot().top).value
