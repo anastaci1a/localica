@@ -276,6 +276,43 @@ class BrowseOrderViewportTest {
         assertCurrentAtInset(fixture)
         compose.onNodeWithText("Revert").assertDoesNotExist()
         assertEquals(opening, fixture.queue)
+        action("Close")
+        compose.onNodeWithContentDescription("Current song").assertIsDisplayed()
+        val detached = position()
+        fixture.queues!!.selectEntry("occurrence-9")
+        compose.waitUntil(5000) { fixture.queue.currentEntryId == "occurrence-9" }
+        compose.waitForIdle()
+        assertEquals("Reverse must preserve an intentionally detached viewport", detached, position(), 0f)
+        compose.onNodeWithContentDescription("Current song").performClick()
+        assertCurrentAtInset(fixture, "occurrence-9")
+    }
+
+    @Test fun reverseAndRevertPreserveAttachedFollowingAcrossTheNewPhysicalOrder() = fixture { fixture ->
+        val opening = fixture.queue
+        // No manual scroll: this route remains attached while the order popup owns input.
+        openSort(); action("Reverse")
+        compose.waitUntil(5000) { fixture.queue.entries == opening.entries.reversed() }
+        assertCurrentAtInset(fixture)
+        action("Close")
+        compose.onNodeWithContentDescription("Current song").assertDoesNotExist()
+        fixture.queues!!.selectEntry("occurrence-40")
+        compose.waitUntil(5000) { fixture.queue.currentEntryId == "occurrence-40" }
+        assertCurrentAtInset(fixture, "occurrence-40")
+
+        // Both occurrences share a track. Revert must preserve attachment and
+        // subsequent transport must still resolve the exact occurrence, not its song.
+        openSort(); action("Reverse")
+        compose.waitUntil(5000) { fixture.queue.entries == opening.entries }
+        assertCurrentAtInset(fixture, "occurrence-40")
+        action("Revert")
+        compose.waitUntil(5000) { fixture.queue.entries == opening.entries.reversed() }
+        assertCurrentAtInset(fixture, "occurrence-40")
+        action("Close")
+        compose.onNodeWithContentDescription("Current song").assertDoesNotExist()
+        fixture.queues.selectEntry(currentId)
+        compose.waitUntil(5000) { fixture.queue.currentEntryId == currentId }
+        assertCurrentAtInset(fixture)
+        assertEquals(opening.entries.reversed(), fixture.queue.entries)
     }
 
     @Test fun inactiveQueueReverseReturnsToTopWithoutSwitchingPlayback() = fixture(active = false) { fixture ->
