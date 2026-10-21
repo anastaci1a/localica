@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import io.github.anastaci1a.localica.ui.GlassAlertDialog
@@ -66,12 +67,52 @@ class GlassReturnCheckTest {
         }
     }
 
+    @Test fun returnNearTheAnimationDeadlineUsesBoundedNativeBatches() {
+        lateinit var anchor: GlassAnchor
+        var returning by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            anchor = rememberGlassAnchor()
+            LaunchedEffect(returning) {
+                if (returning) {
+                    val start = withFrameNanos { it }
+                    while (withFrameNanos { it } - start < 4_800_000_000L) { }
+                    anchor.hidden = false
+                    anchor.modalPresent = false
+                }
+            }
+        } }
+        compose.runOnIdle { anchor.hidden = true; anchor.modalPresent = true }
+        compose.mainClock.autoAdvance = false
+        var nativeTurns = 0
+        val pumpRule = object : ComposeContentTestRule by compose {
+            override fun <T> runOnUiThread(action: () -> T): T {
+                nativeTurns++
+                val before = mainClock.currentTime
+                return compose.runOnUiThread(action).also {
+                    assertTrue("Native work gets a turn at least every eight frames",
+                        mainClock.currentTime - before <= 128)
+                }
+            }
+        }
+        try {
+            compose.runOnUiThread { Snapshot.withMutableSnapshot { returning = true } }
+            val start = compose.mainClock.currentTime
+            awaitGlassReturn(pumpRule, anchor) { "returning=$returning nativeTurns=$nativeTurns" }
+            val elapsed = compose.mainClock.currentTime - start
+            assertTrue("Deliver the near-deadline animation without extra time: $elapsed", elapsed in 4800..4992)
+            assertTrue("Batch frames instead of pacing each one through native rendering: $nativeTurns",
+                nativeTurns in 2..40)
+            assertFalse(anchor.hidden)
+            assertFalse(anchor.modalPresent)
+            assertFalse(compose.mainClock.autoAdvance)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun unresolvedReturnStillFailsAtTheOriginalAnimationTimeBound() {
         lateinit var anchor: GlassAnchor
         compose.setContent { LocalicaTheme { anchor = rememberGlassAnchor() } }
         compose.runOnIdle { anchor.hidden = true; anchor.modalPresent = true }
         val start = compose.mainClock.currentTime
-        val wallStart = android.os.SystemClock.uptimeMillis()
         var diagnostics = 0
         var failure: ComposeTimeoutException? = null
         try {
@@ -81,10 +122,7 @@ class GlassReturnCheckTest {
         }
         assertNotNull("A stuck return must still fail", failure)
         val elapsed = compose.mainClock.currentTime - start
-        val wallElapsed = android.os.SystemClock.uptimeMillis() - wallStart
-        assertTrue("Five-second animation bound with at most one rounded frame: $elapsed", elapsed <= 5032)
-        assertTrue("A timeout reaches the animation or wall bound: virtual=$elapsed wall=$wallElapsed",
-            elapsed >= 5000 || wallElapsed >= 5000)
+        assertTrue("Five-second bound with at most one rounded frame: $elapsed", elapsed in 5000..5032)
         assertEquals("Failure state is captured exactly once", 1, diagnostics)
         assertTrue("Failure restores the caller's automatic clock", compose.mainClock.autoAdvance)
         assertTrue(anchor.hidden)
