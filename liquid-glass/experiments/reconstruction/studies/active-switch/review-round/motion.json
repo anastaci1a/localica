@@ -1,0 +1,1072 @@
+{
+  "exports": [
+    {
+      "reference": "a",
+      "mp4": {
+        "file": "motion.mp4",
+        "bytes": 167651,
+        "sha256": "7e0d82fb86af6e2f7367f1c26e0f0c9dfedb8e30699fe77601b771e18c3289c3",
+        "probe": {
+          "programs": [],
+          "streams": [
+            {
+              "width": 1080,
+              "height": 772,
+              "r_frame_rate": "15/1",
+              "nb_frames": "90"
+            }
+          ],
+          "format": {
+            "duration": "6.000000"
+          }
+        },
+        "decode": "Approved helper full decode+hash passed; preserved"
+      },
+      "gif": {
+        "file": "motion-6s.gif",
+        "bytes": 6005183,
+        "sha256": "545e9f1f7501a46fda0338e0b93c92793ed3df201ec75b08fb9d41b5bad928ff",
+        "output_size": [
+          1080,
+          772
+        ],
+        "frames": 90,
+        "duration_ms": 6000,
+        "average_fps": 15,
+        "palette_colors": 256,
+        "dither": "sierra2_4a",
+        "timing_source": "/evidence/extended/helper-toolbar-work/active-slider-round/active-slider-final-1080/a/final/motion.gif",
+        "all90decoded_RGBAframes_identical_to_timing_source": true,
+        "frame_hashes": [
+          {
+            "duration_ms": 70,
+            "sha256": "c0d217e24770680056946636b858021f98cbdc473294a6eda76c1ac56fdd9c0b"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "2573510269c0e1da508d711e600a8bbd73461a2582587fabebf5179d55124020"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "50729c982cce15f0440da19048f2ba67649157ef95c73d7ea3e9bf3efbbecfb5"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "e0b16149808de9e93bd120fdf77c5b1ac19c2b4e5d0b9e853e2f443d995338e0"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "4a3f96c99bb2b22b8a0b1af19bee5c184a3c12180f0ec7e0e9baa93d4646f9f6"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "38bfb2be6b941c070b53b2be5cd152d1ad4da6aa1829fd599633294d1d82acc9"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "a474bb12213dbdfdb07ea98c2040022aa4446ef87815718990db1d11017a0718"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "80af48f8a3bd4e454ee41d3113f1cdca20263f06646ae248e3bfb7f8a7c948e3"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "9a431d351d9bbe63edc6b93db02ca105289413cee0fba7efb755bc3499f2027b"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "7da4f70bdb7e27e529bfc7f08d6582cc0b7c5cc06a24976e19a63b5bd5b11bf2"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "0965c737692658a348b34d7383ae52da7ba0ecba3a0859f154f391b76c6f7db2"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "0e81ec1cb1c3142a954e5a4283e3b3290ff32982a8569f31068568222c532241"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "af68d665344760b9d78fcd1e801a21d846bc0ee7e6f1a6112c4593e55e6aa874"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "0b6d94360ed488b46a884b2fa8df53459224624f99110193e6bf1b733ba71eae"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "edf60ff91043899bb90088417be19699848254d485a4e438365c6f6414355dcc"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "2e6288489dad1acf6b443241b41f09b248f4f5e862ee49364a151f4c7755fa92"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "57e55dad0ec2de4f115f85527bf7f724ebfa843c1194d0354adfb5a6e53551bf"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "46325f3dcc6b1ec4f9fa0ff0542b69d73540b24efdab2d73f16b54cda4679ab4"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "1f0b02f2f3080e46673d0213cc66ea008a48b0bbd7a8a0246e8ebed4d56291b8"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "380b6e5ae4bdf5fef1fbdea78b60eba7b2b01a35230d89b239656cdc79651f61"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3dfa597bf66f19b30c2ee32943b0ae73ec8b9e1950f429b29dcec2f1526f8b5b"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "bbb7629c1752e04df1377bbdbe2a5b8af04744d5338faefbd390c739c2e471b5"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "8dbadeeb0bdbcb64617159ea162861dfceef5f063ea3abafd3632244b84c69bb"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "97b126096769b73a18df3ce41c912c7b7cae4f267d244fbdfc2f28cc3d816456"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "d83f5b09d6bcba3bb4d4e3076e21012eb2b31e8f2c36996846a3e6d59a5f8e28"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "e488f6920a71dc21fd9336b676df521c4d3137caa8f9d3a317858565464c5c38"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "19d3cfbbd9ef9fcd91c7bc348f19f8287fe1e7165769c32e7108ab1956a4dec6"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "c2305c16a6f1a206f3f2bc0c21e96cbde5166c0f1ede1af4f6feaacb31a1d204"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "ca83768e94d518576d6676a9427742f17d42c49d1b58968502ccb4893e2f0f92"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "2fd2e3afce12bbd1625f0bcce9402a5bb19ce0d49cdc0b6a9e645772ed4e89ff"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "ef5f6432bb228b1cd9cf8b23a7cd49a0dca92c32b20ef637eff99fb945335386"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "8a7443b361bfd90d454fe267cbc55b1d847c82b5303d47ba754b22c74bfeac12"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "cd243a01bbed5e5fd9c35664302e896bced5fb6c2b5aac23f3916512b6b03417"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "ee0c434f195f07d2302754a9056a74763a162ff007c7887ad82e536a045632bb"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "49ec87342aef6de05e510407a8b87d5709b9cc84644a17276bc34908c09d6ae2"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3148998fea80bec2016b0ff529014ea48c661e7d397b9564f430124afaf6e076"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3823f47da3d07cf49e0556184dcddd920052582369c335dd56ceb323d8ff077f"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "cf697dbfe28a0094a4598b88cf6b260244f92f64a730fa3adb481e73c8cfdfe9"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "14d2c698d3ca167276cf46479752db7d194b8754bdfe903c8719dec9898d9d9e"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "0ebb554ec232bfb30cb1d546be4b77055d39f5c707f50e662f920f99e758a6cb"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "d138dec9613ef4c968d2568e5722d1ef91da0d0049efc88fcdf4056b56b99b3a"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "e525a4521a595948f99129b4b2d97fede3d87b6ec4a6b16cbd9aecaa6898c035"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3fbfd0b03a7337d5494e13e301ced9b2ebb4db50d598e542599e54c487f833fa"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "d8ba5eff99fb64eff29627a9e999a660d3881d91212f778c91bb4e808b86dd3b"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "ef8ce46852026a5bcadc4b517821f18d8b411e281adcf28fb577dea56b7c49f8"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "86deb5b365611169f1cd27c5f98987d0d1d65705ebd7a11d50866a2be8246079"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "ecd15ee3d98908d605950bbe1e6e3181c287dd73d885de1873ccb5824f8d0287"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "03287ec830be6a9c177d8d6a0b4d8f1be6e3f9f68f3c0d939d7e79596ab06aa4"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "49c0ed54049ad0a272d3536e58a34425964edbe8518fcb7e3eeb616e63fd407e"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "5c445673670a78db7ca31d310ed416a55d819acceca7a8853180dc6150e82848"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "74aaf682ee007e74f4baf2493d631efcae3995dfd5a6a9f0dffc8e68f8360bfd"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "ecf9715e1317be73e7962f247a18d0b62e16ca6d11c89e0d0953b2b86a66022c"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "39cb2157d4e9989f7562cc970370446b63dfb9b3db49c9f443f7bb75cf9e3ba5"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "67c7625e7dd9417c282dcfa2e5ed48968d6b41cef8f0aa81eb5ca512b7b1da24"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "7123bffe9e9e2d6c628df35a73938bbb8f6252cd89c9a897fe6e4ec137fe0298"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "6670ca62c6fa38b25d9408c9a78100fdb7ded73869be9b4135a0d34d7a500783"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "ccca278ef0af45e8ff645938e73b3a58c412a4052029f66b633118ce8304bf07"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "81b74d14f8319dc2db22a5fc16d3d2fc90b8c30ae2f397fae8ffc242def2c14a"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "2072497424319eaf6b115fde4484f7520c5428094de103d888528c93cb31dd05"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "fbf8601e7b244a54b34c6dae67c94fa130bdb2f74d34221e4a76fed03fedb8a7"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "f69b292d01ad8a85539c24b891496d8f71538a6911ff78e697f9d6729745d9cc"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "bf739e2f2b709e1cf8f6d5d376e5fcd900c2d57490010e06a15707cf42daefc5"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "d520fd79006c2a4b49276da72d6307c3c07dfde850a253552d1ea0a87513349f"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "2f663c27079646fd70ced34a17f256186a5db4cf06f99b66aa350edd17ccdc09"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "08e256fe3f5a45810f06b71c9865498043b2416c07234b99a5b201a9687ead10"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "a9e202980db0e8e6319afe00e8e1626d69e5f3815ad88a04ec824cb21a74a8bf"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "c9ce3314e3c55eed9e377498eafb98f3e923f423e695c55876c51960bbd3a916"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "49dbc5ee6f0d8858b70b1512cae7be5d46154a92601c844f92dc85afa480aee4"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "d1e915d9a282cd06473e2901fcb1529e737980dd38560e179f70a9fdd522efa8"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "7a8dc01d3dca52d9124f102e0d7a9b26f6ccefb11ff2e334e7e047e10272c3bb"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "c3103e91d085fc758259d577027272465e6b1e8cc01ad794d5680dcc2ac2da5f"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "365097ebf1fcc960ffd459e1434ba57f3af97133187969ec7df9fe30e41d0b7c"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "bc1487f261088ff1c6f8eacfed42ba3e2560b673603563c4701cace876e1dc9c"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "e23218fb5384af2de2a79bfc831e117f2ef6297ab6b50cda8013ddc93ea5ecf8"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "e59134d982f5e8a99e9126ad91ab16b32e77440ff2310b0a2a23f1aa46f576b4"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "b7bbce96fea644ae044e9578a8625c4081f961903b5da71f268470f58f47523c"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "abdb97f8acf6509faaaeca74562fa59440bc8f6bf814252145c5629c9e76db7b"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "39667befb34bae02f9ca9b49d5099b9fc2ca68a71115c58893c97c659f44afbf"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "359028aab320812f07b35311c63574a84fb865cb6e8aba115ff0ed1699c5e874"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "19c326deef03206308936ae15231bf6c3bd1ef58d8b1fe4522acfa4773510f24"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "67891aec90ae454926393a77afc022adaf1604864e69dfd75477270dda37886f"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "13df23fca15070f9b593ef0a1f12363439908908110a68d66f0e62e6a91a2a76"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "ebbd8d66b907d6454ff5896c43973123c16d428a8b8db6daeac7fbd987d405a4"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "12376d79d6657a8e15620a27e7202455b5f8bb34f59d9c1d5edd2135f428b25d"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "fa08737bfb123e7a0a40858d4f029ceb8ad8f429f674769b6a9bdbe984502e49"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "d120cbcc6efed36471c739b3d3715293134fb4e01b29e1d6d77a39bbab2e7b51"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "40f483e4e762b7a930808ded9775f4d5e91704ecbdc63a21346ce1d5da5d650a"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "7e04a9e8b58285f9a53b0f418f9c0875d5ceec0a8b528621af8a2f0666a1a962"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "02cca271452d66e9a65626b1a74f4fb67467361f565ce2a7be5e906f59747c98"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "1c2d1563d60d86cc025028772ff7af2998a073cc5733cf381fa8aa2723d164fd"
+          }
+        ]
+      },
+      "commands": [
+        [
+          "ffmpeg",
+          "-v",
+          "error",
+          "-threads",
+          "2",
+          "-y",
+          "-i",
+          "/evidence/extended/helper-toolbar-work/active-slider-round/active-slider-final-1080/a/final/motion.gif",
+          "-c:v",
+          "copy",
+          "-loop",
+          "0",
+          "-final_delay",
+          "7",
+          "/evidence/extended/helper-toolbar-work/active-slider-round/active-slider-final-1080/a/final/motion-6s.gif"
+        ]
+      ],
+      "source_estimate_limits": "Existingmodeledsource/observed0, cappeddefinedsource-margin evidence notphotographicrecovery. Source mean effective material reevaluates eachmovingframe fromfixedglobalcoefficients, Astaticinvariantnotclaimedinmotion.",
+      "helper_verification": {
+        "state_sha256": "2e661b219aaefe0140687a54aec342eb8912770ee047f9c3cb34557111db706e",
+        "render_files": {
+          "motion.mp4": "7e0d82fb86af6e2f7367f1c26e0f0c9dfedb8e30699fe77601b771e18c3289c3",
+          "comparison.png": "4b17b372894df993c303a3210dde7c2d768a7d1679005b488116ac02282f3603"
+        },
+        "native_size": [
+          825,
+          590
+        ],
+        "output_size": [
+          1080,
+          772
+        ],
+        "output_scale": 2,
+        "render_size": [
+          1650,
+          1180
+        ],
+        "requested_export_width": 1080,
+        "frames": 90,
+        "fps": 15,
+        "travel_over_L": 0.20785219399538107,
+        "scores": {
+          "glass": {
+            "pixels": 240456,
+            "rmse": 11.155485153198242
+          },
+          "rim": {
+            "pixels": 70466,
+            "rmse": 19.237165451049805
+          },
+          "held": {
+            "pixels": 61420,
+            "rmse": 12.67819595336914
+          },
+          "interior": {
+            "pixels": 169990,
+            "rmse": 4.756721496582031
+          },
+          "ssim": 0.9646053910255432,
+          "loss": 198.13195467957775
+        },
+        "motion_support": {
+          "requested_native_px": 45,
+          "actual_native_px": 45,
+          "axis": "y",
+          "minimum_scored_lookup_3sigma_defined_fraction": 1,
+          "minimum_whole_shape_lookup_defined_fraction": 1,
+          "minimum_scored_lookup_3sigma_observed_fraction": 0,
+          "minimum_whole_shape_lookup_observed_fraction": 0,
+          "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+          "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates.",
+          "reflection_environment_3sigma_defined_min": 1,
+          "reflection_environment_3sigma_observed_min": 0,
+          "reflection_environment_full_defined_min": 1,
+          "reflection_environment_full_observed_min": 0,
+          "chromatic_source_3sigma_defined_min": 1,
+          "chromatic_source_3sigma_observed_min": 0,
+          "chromatic_source_full_defined_min": 1,
+          "chromatic_source_full_observed_min": 0,
+          "context_mean_source_defined_min": 1,
+          "context_mean_source_observed_min": 0,
+          "context_mean_minimum_defined_confidence": 1,
+          "context_mean_minimum_observed_confidence": 0,
+          "exterior_context": "Exterior and refracted glass use one translating coordinate system, with completed incident RGB and any separately declared exterior layer. Missing context remains an estimate; no fixed reference strip is spliced into the moving background."
+        },
+        "presentation_completion_native_delta": {
+          "max_abs_rgb": 0,
+          "rmse": 0
+        },
+        "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+        "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.",
+        "files": {
+          "motion.mp4": {
+            "bytes": 167651,
+            "sha256": "7e0d82fb86af6e2f7367f1c26e0f0c9dfedb8e30699fe77601b771e18c3289c3"
+          },
+          "motion.gif": {
+            "bytes": 6005183,
+            "sha256": "4d3634ef485a46007f197c19dc49cdf6bd025feb88c712e7620e13deb7016001"
+          },
+          "comparison.png": {
+            "bytes": 691397,
+            "sha256": "4b17b372894df993c303a3210dde7c2d768a7d1679005b488116ac02282f3603"
+          }
+        },
+        "gif": {
+          "fps": 15,
+          "output_size": [
+            1080,
+            772
+          ],
+          "master_relative_scale": 1,
+          "palette_colors": 256,
+          "palette_sampling": "All frame pixels",
+          "dither": "sierra2_4a",
+          "maximum_megabytes": 10,
+          "spatial_downsampling": false
+        },
+        "video_color": {
+          "metadata": {
+            "codec_name": "h264",
+            "color_range": "tv",
+            "color_space": "smpte170m"
+          },
+          "limits": "Encoded RGB export metadata; no measured display/transfer-function calibration."
+        }
+      },
+      "frozen_inputs_unchanged": true,
+      "limits": "Definedsource-margin-capped illustrative animation on frozenMODELEDhiddenRGB/observed0. Native sourceproof notcontinuous/fullmovinghighresconfidence proof. Existingfixedglobalmaterial/source-mean law reevaluated eachframe, no new coefficients/source repair or scoreepoch."
+    },
+    {
+      "reference": "b",
+      "mp4": {
+        "file": "motion.mp4",
+        "bytes": 118852,
+        "sha256": "ec33a6b1e646cb81d17d61aa00dabd7abda690cdd5efb62e48d6d0dbf7696a5a",
+        "probe": {
+          "programs": [],
+          "streams": [
+            {
+              "width": 1080,
+              "height": 784,
+              "r_frame_rate": "15/1",
+              "nb_frames": "90"
+            }
+          ],
+          "format": {
+            "duration": "6.000000"
+          }
+        },
+        "decode": "Approved helper full decode+hash passed; preserved"
+      },
+      "gif": {
+        "file": "motion-6s.gif",
+        "bytes": 3089528,
+        "sha256": "2014a213d044c563358e8c5a0383d87bcfb4c432e19af06915c5cf752a8bd389",
+        "output_size": [
+          1080,
+          784
+        ],
+        "frames": 90,
+        "duration_ms": 6000,
+        "average_fps": 15,
+        "palette_colors": 256,
+        "dither": "sierra2_4a",
+        "timing_source": "/evidence/extended/helper-toolbar-work/active-slider-round/active-slider-final-1080/b/final/motion.gif",
+        "all90decoded_RGBAframes_identical_to_timing_source": true,
+        "frame_hashes": [
+          {
+            "duration_ms": 70,
+            "sha256": "545ba53bea8a5802ff02d88b17971286de6ee79506b334ca6d9a5bf063bd2c45"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "c934f07861759f19260cf13aa517337e716e615f1cef255a809d64a95cd2156c"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "645bbdba6eea6e971e8699a86ea81df917e4afd3a3e417c7915cbbabe2c30bfb"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "8e255ffeb5a456c78845db94c33aefcf1517564f6c1d4fc84d2af37acdc57419"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "7c00b6d1d86fe4ecdd32e31faf49730233412ba7454ebd0576e111178850ba3d"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "af6f0b9896584f5eca5a13a43a771aa3f28620257c8177f2b143b3da0b6f3759"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "4b9141b22ebba24de2f54d08c2903bbaa2a38b4fd89811eb65753faaeffa55ac"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "a1b4ee3c46968bf609ada597e47418f660248ca491499e90173cda48919e4a86"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "d1169b1c66b87096dea40d96dc6f19e46084f080dd5288a899b06e5760944c4d"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "a22e44f0b179a4dcc6a20a64034d2b2c0dc859e1a9d7effdf8793479dd7e5c0f"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "850e8309ea6192e6e91dc470e574ed6e411685356ffd1cb65a47e40a58edf402"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3016881e35ffb508e8a1015197847ac1f16b7a20799964754721add3eb7a8b75"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3fd598fa6c911043b81367f658df214e85253c17f6ad3e896c971d876c869d5d"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "9a98a0a2f639a907955c8ed6d69ffde899805a76dbe770a53ec84eb6de49732d"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3ed430293a2336ca4d7e661a990bba0114c8e63e570b3031a06d18bf04cd9df6"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "467404723bf4872c5614b52782c40ea7f70739afee86ab4638b692b046b642a7"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "bd733afacaf0086788a6dcb982978f874a6c59ed9254e463e4a142aefa5674d9"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "128bf35c87e9a4ca078195961a592991776915aec67344e48665be23356fc10c"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "4e968771e45a087d5c7fef9925d388feeb0e2be750333c8758934641f1981b24"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "8e28b9860597a1181d639d30452f25fbc27f96c293a0c7deccaa6fb7c4343a3d"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "bfcf03a7c02fdae681a8094fa2bc2715893dc053a21c1a39e1a127aadced0a5a"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "2da6b696f5e5540ba77d4a95415fe4da53c5da7b72cbed10be7e0facefbb6231"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "809e3bcc90086490b3883e800191272a7164c5a992c27c85c2c4e398953fe7fa"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "c152d81d8dedab2f4399e11b32fa4ebd3e1378d2ff6901f21acf43dfc103c8fb"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "7debc2ff65ff5a49ded1b2d01e93aad54811f75bc47639f68f705d9ed42a5bce"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "ee8b04400e8d84350df44bb6d1af6609921f51eae64aaf4c1cc7dbcb3cee3e90"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "521787974e519f58607958b316e86256facdfe544c545995654c58b0b140b211"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "21b6b346743a15ac83f90977645ad27fae6de6cda228ac12c0761ff63d5b5452"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "b7e1ea9698cc5cc5348c35ce558fee3c2819a0042dcd08f9e173dda423e63092"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "b84cbd3aacef4c0bb5bc43d5f676ccdd9adb397c2b53cb71383f6a12556c9d09"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "39dd814827e73c8bb79d2698bb55709f748a5688bd88a23be638ba648079ad65"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "d8f90c85c937c352687cd10d042ac40338d3bce8886c181f2c619c53268deaa6"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "836f7da64c32df582b9764e57dd550f18aa993279edfbc906d655330ceb035c5"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "153acddd3c75ed6366b07556c4ef0daf9f772e3241cce2f41661c35455ca24c4"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "bdcfc66c84c72ec4c32659b27b01471d51d5f74405ae5db27776e404e237c7af"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "440e07971178a286292a2d6a2ab46412def92418ff361be61a76f9fbed85332e"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3bca8e0db3f831c8417a6f6b2202430db1ee12769c2ebcb87bb8fd3d654b787f"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "e69a3809b37235419af3c363cb1ac55c9a8842aef87dcb0ed549bdc535e19865"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "0172007fdc2e12289bfa3d3099331d036bfa31624eacfa36eda845a8d7441024"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "ded40d31262bd5cb2171e79db2a334dd12c5c5123beaa66d772c049f9fdd72a1"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "6f7521bcf7538ce575c9b682b57d6d7220d2e5db608e70c9c8417c31107f122e"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "c45bdf0011d90fc8d626b4254d10a11c92b406e4a1c396a97f5666b0f17be3de"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "44f1e83526468658d2332b64513b2f7d52ed39b287cd9524766a36b049f215a1"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "58438c2d09d6ccbdfe3f02d9c37611d4e26ce4a8dcf8191b08f8445fc4b5e87f"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "c3783986317e26d372d93877c109720688c73dde77534d817c014772b08cfe4c"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "7b08ffbeccee744d1b12f582c0b630cede2fd4fc4773227fbb52fc41fc6dbe9b"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "e74f0ba17a3a970e15916d8d252f8c3f6c8aeed47f0aab02fcc9940a3f8f4f1b"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3b3a963161e1717658e7055b353658d650530c6fcbc3483acb8b58fc8a8c5834"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "6692386e611d3fb575f8963f6c9cc09d8dfa4b9cdfb8c6bed4f24a1c71365ded"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "783a3e7d42036b6a876b3b2f6e984d49d9ddc3a0c5564b59e13a5e4885489903"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "17fd7ca9bd4303d6fb14814940d3b451fa0d4b7d2f62b1e76e1454b3badf7744"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "6e83f3121973ba72618e8b0e40b7e1ae1e559def3f4a62e039099b4a4a81b21e"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "8503edaaf0db36e4f829397d8cbedef5f0c1c625287463c12af727fd07702267"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "b5c850e3154acb980ff0082df5d2c4b887e322b8edb0fc6e09376db0f6605846"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "64cf84e630f8b8361afd10be5796cbcdece2af13ce0da0d7fba1fefaf60af8a2"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "4f43b0bbd74f80900b73a4b1dd7f0ab7a3e4b019dd308dc312eb13e49c285df1"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "3f0fc97ee9d95573544d7e65bbc8bfc475b68650459340e405dd6205a3579c1d"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "20a11ce0767a9588d065281dad4e50ba4e1a317648c7b5a0dac647eaf1e632c5"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "30104cc35b8a0c70724e1e95d9413f5858c626914f620b704c84057218c8b764"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "1d6a167f9b000410ecd1ca99d1f53f29827945c1f1c54e5e406765ddef304a34"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "fe4f1975a699e50b14a0c8df76fce70bc65ccfba6484022d2cf16ad974aadaa6"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "33adac35ff03ec30e1013a2e8b70c76635b3721bcc71e61ae6aa48378faf20ac"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "e6e93388bc8249c765cebab1740dad11223e24b81aa0fe44f4bef9dd31edb4ee"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "8adce3b132285d91582154994fb1805d4f354ba012ceba6df3a28cde0a64b6a6"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "e04dc9b7696c40dae3081fcd81dd12815775d7c4cf7b1fae73ec0ded07a56edc"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "bf381574f8d65e7c35b42de952d9567e73c56d4156641e5f21bfc89a00828cfb"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "239bf328eecaeaec7b511d3ce9237f4832c23b1b8115be1248f9654ea3ae4bde"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "4c2a389121d584166b24773ba85a376b667b16d983534b2a0d5c3802eacfaba2"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "e3ae7cb7a2d008bfe3fb222b8a027f8c2e87ad1c0e314a76ecc79a771aa4e01f"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "95c8222e92225794aea06f326590296fb6f0177dc080e387ae5a79d0b38effb4"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "743696372c0c47a5b72f11bcd51c7a3671f28a3eb3a608b77b60146cb14e6e3a"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "b0c213b12535cee66f8f267eda3770be9b3342b7206a564ac4b42b954d977701"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "ec3c4b3fa1fe700685c2c18d17c44b08ce09b9a6768af2e8c27664cee7c498d9"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "b30ea4a7e86140e14baf48798ad7cfbef2b3061664a5581fcffec9cf495ed922"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "b5970bd8079f1b19feac4f3ad9e4c47def4fd9cc52049710b0e989e873a74361"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "d637c7f8de0cf9e7ab3f079a5f93db915ddc33de9aada452c245ff3090a33075"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "391892d624a09a6f25c2541043d5e6d3b90d3071b16823ec6114a34ecbf96ca3"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "9ea0ea7f0ccf66a500839af406c48c3d1672c2b6f4bf4ec61e10001d48693c32"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "ef8121e55b4c575929c1f12f44f39a8bde155dc1022a1200ed1eb0c6855fd94d"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "d853f1f44385894610a807d2f37978020966a309675cd103c111332d1652f15c"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "d4457068c9c5cbb009d3dd44540e004320826100af13d7ed6c6880999587dfcb"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "d0ccbc8fcab44831433f76c24c7ac1a6275e266d9ef0d2b74a5ea2f43ee9bf03"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "4cb64e3846a0fb4ce9a3bccb62c70c32a512800cfd4f7e1e0c134c09063d27cc"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "e1f5e1b6637344e624108a66ba6b50edfbfd2384c7b3803d4136f3ce33261b42"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "c8980233190a142b935cdb9befcb4e7519f5cbfbe0d1d918bac702a194e0e602"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "ee2dcaccdad3db85c9af7aeb537941b9f518f4a07cecd1fa2a6ca32913e4278d"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "c4b814edba83a5830d5079722dca1396bbea8d3d1c82c7cd6d28d25accbade9b"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "be021b4d805b5e2d74b0478d776df9e4b30c018cec1f22c731069b16c7638c08"
+          },
+          {
+            "duration_ms": 60,
+            "sha256": "15ceb9b76c5c654971fac997983fc91cdf8427cd83b2198297b211cf0e2460a1"
+          },
+          {
+            "duration_ms": 70,
+            "sha256": "be8bb486ab64f86b6ed0eb33f984bf4a9ce78ac2296107444725ea1ff870520b"
+          }
+        ]
+      },
+      "commands": [
+        [
+          "ffmpeg",
+          "-v",
+          "error",
+          "-threads",
+          "2",
+          "-y",
+          "-i",
+          "/evidence/extended/helper-toolbar-work/active-slider-round/active-slider-final-1080/b/final/motion.gif",
+          "-c:v",
+          "copy",
+          "-loop",
+          "0",
+          "-final_delay",
+          "7",
+          "/evidence/extended/helper-toolbar-work/active-slider-round/active-slider-final-1080/b/final/motion-6s.gif"
+        ]
+      ],
+      "source_estimate_limits": "Existingmodeledsource/observed0, cappeddefinedsource-margin evidence notphotographicrecovery. Source mean effective material reevaluates eachmovingframe fromfixedglobalcoefficients, Astaticinvariantnotclaimedinmotion.",
+      "helper_verification": {
+        "state_sha256": "380336d1f8363c79439c38a8d0541eeea14a3b3b9fc8fbceaa0286e7addd2514",
+        "render_files": {
+          "motion.mp4": "ec33a6b1e646cb81d17d61aa00dabd7abda690cdd5efb62e48d6d0dbf7696a5a",
+          "comparison.png": "e7a69ac0c398166182168a4d193088d45679b9b4c57403d190943744570ed7ed"
+        },
+        "native_size": [
+          785,
+          570
+        ],
+        "output_size": [
+          1080,
+          784
+        ],
+        "output_scale": 2,
+        "render_size": [
+          1570,
+          1140
+        ],
+        "requested_export_width": 1080,
+        "frames": 90,
+        "fps": 15,
+        "travel_over_L": 0.225,
+        "scores": {
+          "glass": {
+            "pixels": 208969,
+            "rmse": 13.641179084777832
+          },
+          "rim": {
+            "pixels": 60968,
+            "rmse": 18.650779724121094
+          },
+          "held": {
+            "pixels": 53183,
+            "rmse": 13.763595581054688
+          },
+          "interior": {
+            "pixels": 148001,
+            "rmse": 10.92894458770752
+          },
+          "ssim": 0.9325289726257324,
+          "loss": 234.61271207139205
+        },
+        "motion_support": {
+          "requested_native_px": 45,
+          "actual_native_px": 45,
+          "axis": "y",
+          "minimum_scored_lookup_3sigma_defined_fraction": 1,
+          "minimum_whole_shape_lookup_defined_fraction": 1,
+          "minimum_scored_lookup_3sigma_observed_fraction": 0,
+          "minimum_whole_shape_lookup_observed_fraction": 0,
+          "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+          "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates.",
+          "reflection_environment_3sigma_defined_min": 1,
+          "reflection_environment_3sigma_observed_min": 0,
+          "reflection_environment_full_defined_min": 1,
+          "reflection_environment_full_observed_min": 0,
+          "chromatic_source_3sigma_defined_min": 1,
+          "chromatic_source_3sigma_observed_min": 0,
+          "chromatic_source_full_defined_min": 1,
+          "chromatic_source_full_observed_min": 0,
+          "context_mean_source_defined_min": 1,
+          "context_mean_source_observed_min": 0,
+          "context_mean_minimum_defined_confidence": 1,
+          "context_mean_minimum_observed_confidence": 0,
+          "exterior_context": "Exterior and refracted glass use one translating coordinate system, with completed incident RGB and any separately declared exterior layer. Missing context remains an estimate; no fixed reference strip is spliced into the moving background."
+        },
+        "presentation_completion_native_delta": {
+          "max_abs_rgb": 0,
+          "rmse": 0
+        },
+        "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+        "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.",
+        "files": {
+          "motion.mp4": {
+            "bytes": 118852,
+            "sha256": "ec33a6b1e646cb81d17d61aa00dabd7abda690cdd5efb62e48d6d0dbf7696a5a"
+          },
+          "motion.gif": {
+            "bytes": 3089528,
+            "sha256": "39efc466dc2e3333b6c33e949b5a69f68bad9c7ab035fbe4bb1528655e94f00f"
+          },
+          "comparison.png": {
+            "bytes": 451915,
+            "sha256": "e7a69ac0c398166182168a4d193088d45679b9b4c57403d190943744570ed7ed"
+          }
+        },
+        "gif": {
+          "fps": 15,
+          "output_size": [
+            1080,
+            784
+          ],
+          "master_relative_scale": 1,
+          "palette_colors": 256,
+          "palette_sampling": "All frame pixels",
+          "dither": "sierra2_4a",
+          "maximum_megabytes": 10,
+          "spatial_downsampling": false
+        },
+        "video_color": {
+          "metadata": {
+            "codec_name": "h264",
+            "color_range": "tv",
+            "color_space": "smpte170m"
+          },
+          "limits": "Encoded RGB export metadata; no measured display/transfer-function calibration."
+        }
+      },
+      "frozen_inputs_unchanged": true,
+      "limits": "Definedsource-margin-capped illustrative animation on frozenMODELEDhiddenRGB/observed0. Native sourceproof notcontinuous/fullmovinghighresconfidence proof. Existingfixedglobalmaterial/source-mean law reevaluated eachframe, no new coefficients/source repair or scoreepoch."
+    }
+  ],
+  "accepted_round_count": 3,
+  "frozen_code_and_inputs_unchanged": true,
+  "preferred": "a/b final/motion.mp4 + motion-6s.gif",
+  "source_epoch_unchanged": true
+}
