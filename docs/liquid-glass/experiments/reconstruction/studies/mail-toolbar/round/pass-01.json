@@ -1,0 +1,88 @@
+{
+  "parameters": {
+    "sigma": 0,
+    "amplitude": 0.9485436659122595,
+    "band": 0.5384386598035512,
+    "power": 4.999993778470106,
+    "tangent": 0.049540608261214134,
+    "tangent_band": 0.15141185593083903,
+    "core_x": 0.0015,
+    "core_y": 0,
+    "post_sigma": 0,
+    "coupling": 0,
+    "gamma": 1,
+    "rim_width": 0.01629272149005208,
+    "thin_width": 0.03220754078699499,
+    "spline": true,
+    "shape_dx": 0,
+    "shape_dy": 0,
+    "half_x_delta": 0,
+    "half_y_delta": 0,
+    "radius_delta": 0,
+    "c0": 1.0536777789726517,
+    "c1": 1.874739256691883,
+    "c2": 1.5222394688063374,
+    "c3": 0.5872764606184443,
+    "c4": 0.24013625700885335,
+    "c5": 0.00015522768827389423,
+    "c6": 0.0033404538128187318,
+    "shadow": {
+      "opacity": 0,
+      "sigma": 0.18084277464749535,
+      "offset": [
+        0.04999998700595407,
+        -0.09511814633686944
+      ]
+    },
+    "blur_transition": 0,
+    "cap_normal_gain": -0.023805316594622924,
+    "cap_tangent_fade": 0,
+    "crown_softness": 0.1
+  },
+  "material": [
+    0.95,
+    0.95,
+    0.95,
+    0.050000000000000044,
+    0.050000000000000044,
+    0.050000000000000044,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0.95,
+    0.95,
+    0.95
+  ],
+  "model": "neutral transmission C=tau*S+(1-tau)*1 in encodedRGB; baseline tau1",
+  "tau": 0.95,
+  "stage": "ACCEPTED_CONDITIONAL_NEUTRAL_MATERIAL_PASS1",
+  "geometry_seed": {
+    "file": "studies/music-navigation/review-round/pass-03.json",
+    "sha256": "8ab8bf5733e26eaa4ecf071497debb192fac0a905727f59cefdac1056f3bcbbd",
+    "scope": "Reused dimensionless Study geometry-field coefficients only; source/post blur, gamma, old lighting/material and shadow discarded. Source cannot identify map/blur; prior not calibrated to this Mail image."
+  },
+  "case_sha256": {
+    "a-canonical": "c6efc755428012ea2409b373b4288090f784683b22748aea73ae201c0a522fdb"
+  },
+  "vector_sha256": {
+    "a-canonical": {
+      "trash-outline.svg": "cf6556346a59a56a864328e7aa969c817e32f550632ed6879162c1835ee4c4d2",
+      "folder-clean-trace.svg": "48faf392bc6f9069aae15de0136fb11a23a7e1e6cb4989eb993cb89ee8407664",
+      "reply-outline.svg": "6e3055e58c78245d1dfe4975a20e511f149b483541b0e8ffae67d08ab1561477"
+    }
+  },
+  "large": true,
+  "private_proposal_sha256": "ff10809a1eba0b0dc7b009ee7ed80953a20d69fa9ee03b7ecb2462023cb1ddd2",
+  "publication_note": "Only acceptance/presentation/provenance metadata differs; operative tau,material,parameters and frozen input/vector fingerprints are unchanged."
+}

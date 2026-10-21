@@ -112,6 +112,20 @@ Both contain 90frames at 15fps, exactly 6 seconds; GIF: 6,185,889 bytes. Rays, o
 
 [Equations](recreation-models.md#safari-circular-controls-conditional-material-transfer) · [Fixed recipes and fingerprints](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) · [Native replay](experiments/reconstruction/safari_transfer.py). Inputs remain private. Native sampling is Study2×2; previews are resized from those saved native arrays. This study is separate from the more polished clear playback control and does not replace it.
 
+## Mail three-action toolbar
+
+Apple, [Meet Liquid Glass,1:40](https://developer.apple.com/videos/play/wwdc2025/219/?time=100). This preliminary study isolates a neutral material response over a smooth estimated panel; it does not identify the lens from that background.
+
+![Mail toolbar and neutral material reconstruction](assets/mail-toolbar-current.png)
+
+- **1/3 verified material passes:** transmission τ1→.95, with one value shared across RGB. E **26.249→20.982**, glass/rim **25.298/28.345→19.928/23.255**. Every icon, glass/interior/held region, near/full exterior and SSIM check passes. [Recipe](experiments/reconstruction/studies/mail-toolbar/round/pass-01.json) · [Scores](experiments/reconstruction/studies/mail-toolbar/round/pass-01-scores.json) · [Independent replay](experiments/reconstruction/studies/mail-toolbar/round/pass-01-verification.json).
+- The affine incident field is estimated only from uncovered controls. Held error2.132 levels; independent upper/lower1.905/2.235. A quadratic failed the predefined independent-lower improvement test and is not used. Hidden RGB is modeled, not recovered.
+- The continuous crown uses the existing shared footprint with softness.1 as a prior. Image contour evidence cannot distinguish its softness reliably; it is not an identified Apple solid. The fixed empirical ray prior is unchanged during material trials. Ordinary blur is fixed at0 because this source cannot constrain it, not because Apple blur was disproven.
+- Trash/reply reuse pinned solid SF-export outlines. Folder is a clean connected-rail trace after the available vectors failed to match that detail. Its input correction is separate from material progress; exact original weights remain unproven. All three glyph boxes are guarded individually. [Frozen case](experiments/reconstruction/studies/mail-toolbar/case.json).
+- Reflections/highlights, body tone, foreground geometry and parent-panel context remain incomplete. This component study is separate from the most-polished clear playback control.
+
+[Material equation and replay](recreation-models.md#neutral-material-response) · [Native replay helper](experiments/reconstruction/neutral_material.py).
+
 ## Active slider
 
 Apple, [Build a UIKit app with the new design, 18:12](https://developer.apple.com/videos/play/wwdc2025/284/?time=1092); resting page at 18:10.5. The thumb uses a measured polynomial-oval outline and channel-separated tensor refraction. **No Gaussian blur is applied.**
@@ -516,7 +530,7 @@ python3 docs/liquid-glass/experiments/reconstruction/motion.py /private/replay /
 
 The second command renders **the five historical frozen recipes**, native-resolution outputs and scores; current toolbar/switch commands are linked in their model sections. Add `--assets docs/liquid-glass/assets` to update public comparison figures. The third recreates the playback translation video/GIF and requires ffmpeg. Neither refits or modifies the live lab; no GPU is needed. The portable specification is the [equations](recreation-models.md) and [dimensionless parameters](experiments/reconstruction/recipes.json); commands fix one sampling implementation. Codec/library versions can change encoded media bytes.
 
-Background recovery uses SIFT/RANSAC registration for dune/text scenes and smooth uncovered-page fits elsewhere. Inputs are quantized to eight-bit intermediate images to match calibration. Hidden text/track endpoints remain estimates. Still materials integrate four samples per axis; sampling is bilinear, filter boundaries reflect, and coverage is separate.
+Background recovery uses SIFT/RANSAC registration for dune/text scenes and smooth uncovered-page fits elsewhere. Inputs are quantized to eight-bit intermediate images to match calibration. Hidden text/track endpoints remain estimates. The historical settled stills use four samples per axis; current studies declare their native sampling in their records. Sampling is bilinear, filter boundaries reflect, and coverage is separate.
 
 The play mask contains coverage only. In that historical toolbar replay, glyph colors and distant exterior remain shared Apple imagery; the current revision uses independent vectors and a generated shadow. A ten-pixel contact band uses the recovered source plus a normalized low-frequency exterior residual; it is unscored. Motion uses the playback recipe at two samples per axis and omits shadows. Archived MP4/GIF encoding is separate from numerical still replay.
 
