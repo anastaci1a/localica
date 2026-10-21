@@ -54,7 +54,10 @@ internal class ModalGestureScope(
     private val parent: ModalGestureScope?,
     private val coroutineScope: CoroutineScope,
 ) {
-    var blocked = false
+    // Availability is observable so a list mounted behind an existing modal can
+    // receive its first navigation admission after dismissal. Epoch checks still
+    // reject work captured before a takeover, including between compositions.
+    var blocked by mutableStateOf(false)
         private set
     var generation = 0L
         private set

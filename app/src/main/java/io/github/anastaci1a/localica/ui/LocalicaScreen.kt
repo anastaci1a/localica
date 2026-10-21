@@ -273,7 +273,8 @@ fun LocalicaScreen(
             // a different grid or text field through SaveableStateProvider's ReusableContent.
             key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides artworkStore.scope(route.key)) { holder.SaveableStateProvider(route.key) {
                 if (route.tab == MainTab.Queues && !route.search && (route.collection == null || route.collection.kind == MediaKind.Queue)) QueueScreen(queues, queueController, library,
-                    playlist, playlistController, playback.connected, pins, ::pin, listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage, isPlaying = playback.isPlaying, onOpen = ::openCollection)
+                    playlist, playlistController, playback.connected, pins, ::pin, listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage && !queueVisible, isPlaying = playback.isPlaying,
+                    onOpen = ::openCollection, playerOpen = expanded || playerVisible)
                 else if (route.tab == MainTab.Home && !route.search && route.collection == null) {
                     PinnedHome(library, playlist, pins, { settingsCategory = "Folders to scan"; settingsOpen = true },
                         { navigation = navigation.open(BrowseRoute(MainTab.Home, globalSearch = true, search = true)) },
@@ -359,7 +360,8 @@ fun LocalicaScreen(
         PlayerClippedOverlay({ progress.value }, bottomChrome) {
         QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value }) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
-                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false }) } }
+                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
+                selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded) } }
             SelectionPanelVisibility(session.panelVisible && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)

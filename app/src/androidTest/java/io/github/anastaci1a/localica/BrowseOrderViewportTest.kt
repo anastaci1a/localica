@@ -143,7 +143,10 @@ class BrowseOrderViewportTest {
                         sortOrigin = anchor, reducedMotion = reducedMotion, queryDispatcher = queries)
                 }
             } }
-            compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${rows.first().id}").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
+            // Active queues begin attached to the exact current occurrence. Ordering
+            // below is still an independent, one-shot navigation after manual detachment.
+            if (queue && active) assertCurrentAtInset(fixture)
             test(fixture)
         } finally {
             compose.mainClock.autoAdvance = true
@@ -246,6 +249,16 @@ class BrowseOrderViewportTest {
         assertCurrentAtInset(fixture)
         assertEquals(1234L, fixture.queue.positionMs)
         compose.onNodeWithText("Revert").assertDoesNotExist()
+        action("Close")
+        // Ordering navigates once; it must not replace the user's detached intent.
+        compose.onNodeWithContentDescription("Current song").assertIsDisplayed()
+        val detached = position()
+        fixture.queues!!.selectEntry("occurrence-9")
+        compose.waitUntil(5000) { fixture.queue.currentEntryId == "occurrence-9" }
+        compose.waitForIdle()
+        assertEquals("A completed order action must not silently enable playback following", detached, position(), 0f)
+        compose.onNodeWithContentDescription("Current song").performClick()
+        assertCurrentAtInset(fixture, "occurrence-9")
     }
 
     @Test fun activeQueueReverseUsesCommittedOccurrenceAndTwoReversalsHideRevert() = fixture { fixture ->

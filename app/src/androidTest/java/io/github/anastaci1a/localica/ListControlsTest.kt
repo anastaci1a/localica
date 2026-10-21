@@ -41,10 +41,14 @@ class ListControlsTest {
     @Test fun queueCurrentSongButtonReturnsToTheOccurrenceAndHandlesTheEnd() {
         val queue = QueueEdits.create(tracks, 4, "Queue")
         var current by mutableStateOf(queue.entries[4].id)
+        val library = LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false)
+        val playlists = PlaylistState(loading = false)
+        val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id))
+        val queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
         compose.setContent { LocalicaTheme { BrowserScreen(
-            LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaylistState(loading = false),
-            BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id)), {}, {}, {}, { _, _, _ -> }, null, null, true, false,
-            queueState = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false), playingEntryId = current) } }
+            library, playlists, route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+            queueState = queues, playingEntryId = current) } }
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("media-$current").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Z song 070"))
         compose.onNodeWithContentDescription("Current song").assertIsDisplayed()
         compose.onNodeWithText("Z song 070").performTouchInput { longClick() }
@@ -56,7 +60,7 @@ class ListControlsTest {
         compose.onNodeWithText("Z song 004").assertIsDisplayed()
         compose.onNodeWithContentDescription("Current song").assertDoesNotExist()
         compose.runOnIdle { current = queue.entries.last().id }
-        compose.onNodeWithContentDescription("Current song").assertIsDisplayed().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${queue.entries.last().id}").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Z song 099").assertIsDisplayed()
         compose.onNodeWithContentDescription("Current song").assertDoesNotExist()
     }

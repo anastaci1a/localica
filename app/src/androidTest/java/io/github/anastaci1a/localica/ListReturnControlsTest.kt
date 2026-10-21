@@ -58,11 +58,12 @@ class ListReturnControlsTest {
         queues: QueueUiState = QueueUiState(loading = false), playing: String? = null,
         inset: Dp = 0.dp, reducedMotion: Boolean = true): Fixture {
         val fixture = Fixture(route, playing, queues)
+        val library = LibraryUiState(LibrarySnapshot(tracks = songs), loading = false)
         compose.setContent { LocalicaTheme {
             fixture.insetPx = with(LocalDensity.current) { inset.toPx() }
             CompositionLocalProvider(LocalSessionSelection provides fixture.selection, LocalBrowseObscuredInset provides inset) {
                 Box(Modifier.fillMaxSize().testTag("return-host")) {
-                    key(fixture.route.key) { BrowserScreen(LibraryUiState(LibrarySnapshot(tracks = songs), loading = false), playlists,
+                    key(fixture.route.key) { BrowserScreen(library, playlists,
                         fixture.route, { fixture.routeChanges++; fixture.route = it }, {}, {}, { _, _, _ -> fixture.playCalls++ }, null, null,
                         true, fixture.playerOpen, queueState = fixture.queues, playingEntryId = fixture.playing,
                         selectionVisible = fixture.active, reducedMotion = reducedMotion) }
@@ -115,12 +116,13 @@ class ListReturnControlsTest {
             entries = tracks.mapIndexed { index, track -> QueueEntry("return-entry-$index", if (index in listOf(4, 50, 90)) repeated else track) })
     }
 
-    @Test fun activeQueueReturnsToTheExactDuplicateAndNeverSubstitutesTopForAVisibleCurrent() {
+    @Test fun activeQueueReturnReattachesToTheExactDuplicateAndLaterChangesFollow() {
         val queue = repeatedQueue()
         val fixture = fixture(BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id)),
             songs = queue.entries.map { it.track }.distinctBy { it.id },
             queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false), playing = queue.currentEntryId)
-        awaitRow(queue.entries.first().id)
+        awaitRow(queue.currentEntryId!!)
+        row(queue.currentEntryId!!).assertIsDisplayed()
         list.performScrollToIndex(30)
         compose.onNodeWithContentDescription("Current song")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Scroll down")).performClick()
@@ -131,8 +133,7 @@ class ListReturnControlsTest {
         compose.onNodeWithContentDescription("Current song").assertDoesNotExist()
         compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
         compose.runOnIdle { fixture.playing = "return-entry-4" }
-        compose.onNodeWithContentDescription("Current song")
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Scroll up")).performClick()
+        awaitRow("return-entry-4")
         row("return-entry-4").assertIsDisplayed()
         compose.onNodeWithContentDescription("Current song").assertDoesNotExist()
     }
@@ -183,7 +184,8 @@ class ListReturnControlsTest {
             fixture.route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id))
             fixture.playing = queue.entries[90].id
         }
-        awaitRow(queue.entries.first().id)
+        awaitRow(queue.entries[90].id)
+        list.performScrollToIndex(30)
         val current = compose.onNodeWithContentDescription("Current song").fetchSemanticsNode().boundsInRoot
         assertEquals(utility.center.y, current.center.y, 1f)
         assertEquals(host.bottom - fixture.insetPx, current.bottom, 1f)
@@ -202,7 +204,7 @@ class ListReturnControlsTest {
         val fixture = fixture(route, songs = queue.entries.map { it.track }.distinctBy { it.id },
             queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false),
             playing = queue.currentEntryId, reducedMotion = false)
-        awaitRow(if (currentOccurrence) queue.entries.first().id else tracks.first().id)
+        awaitRow(if (currentOccurrence) queue.currentEntryId!! else tracks.first().id)
         list.performScrollToIndex(if (currentOccurrence) 30 else 75)
         val before = position()
         val label = if (currentOccurrence) "Current song" else "Return to top"
@@ -241,7 +243,8 @@ class ListReturnControlsTest {
             songs = queue.entries.map { it.track }.distinctBy { it.id },
             queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false),
             playing = queue.currentEntryId, reducedMotion = false)
-        awaitRow(queue.entries.first().id)
+        awaitRow(queue.currentEntryId!!)
+        row(queue.currentEntryId!!).assertIsDisplayed()
         list.performScrollToIndex(30)
         val before = position()
         compose.mainClock.autoAdvance = false

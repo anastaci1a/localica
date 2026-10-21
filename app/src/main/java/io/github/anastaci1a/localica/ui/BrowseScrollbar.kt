@@ -25,12 +25,14 @@ import kotlin.math.roundToInt
 
 /** Direct manipulation follows the finger; programmatic navigation uses ListMotion. */
 @Composable
-internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sort: TrackSort, modifier: Modifier = Modifier) {
+internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sort: TrackSort, modifier: Modifier = Modifier, onUserScroll: () -> Unit = {}) {
     if (items.size < 40 || (!state.canScrollForward && !state.canScrollBackward)) return
     val owner = LocalModalGestures.current
+    val userScroll by rememberUpdatedState(onUserScroll)
     val requests = remember { Channel<Pair<Int, Long?>>(Channel.CONFLATED) }
     fun request(index: Int): Boolean {
         if (owner?.blocked == true) return false
+        userScroll()
         return requests.trySend(index to owner?.generation).isSuccess
     }
     LaunchedEffect(state, owner) {
