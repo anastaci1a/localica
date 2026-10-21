@@ -2,6 +2,8 @@
 const fs=require('node:fs'),path=require('node:path');
 function prepareMedia(html,root,{comparisons=false}={}){
  const sections=[];
+ const metadataFile=path.join(root,'comparison-panels.json');
+ const panels=fs.existsSync(metadataFile)?JSON.parse(fs.readFileSync(metadataFile,'utf8')):{};
  return html.replace(/<!--[\s\S]*?-->|<\/?[a-z][^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/gi,tag=>{
   if(/^<!--/.test(tag))return tag;
   if(/^<\/details\b/i.test(tag)){sections.pop();return tag;}
@@ -22,15 +24,19 @@ function prepareMedia(html,root,{comparisons=false}={}){
     else if(/^GIF8[79]a$/.test(header.toString('ascii',0,6)))size=[header.readUInt16LE(6),header.readUInt16LE(8)];
     if(size)tag=tag.replace(/>$/,` width="${size[0]}" height="${size[1]}">`);
    }
-   if(comparisons&&src&&/\/(?:match-(?:media|regular|slider|regular-light|regular-dark)|study-[a-z0-9-]+-(?:paired|progress)-[ab])(?:-full|-rim)?\.png$/.test(src[1])){
+   if(comparisons&&src&&(panels[src[1]]||/\/(?:match-(?:media|regular|slider|regular-light|regular-dark)|study-[a-z0-9-]+-(?:paired|progress)-[ab])(?:-full|-rim)?\.png$/.test(src[1]))){
     const width=+(tag.match(/\swidth="(\d+)"/)||[])[1],height=+(tag.match(/\sheight="(\d+)"/)||[])[1];
     if(width>2&&(width-2)%2===0){
      // Existing pair() assets contain equal panels, a2px separator and a
      // caption strip. Crop only in the viewer; source files stay unchanged.
      const panel=(width-2)/2,font=src[1].includes('/study-')?64:16;
      const full=/match-[a-z-]+-full\.png$/.test(src[1]);
-     const top=full?48:Math.max(36,2*Math.max(font,Math.round(panel*.03)));
-     const bottom=full?48:0;
+     const declared=panels[src[1]];
+     let top=full?48:Math.max(36,2*Math.max(font,Math.round(panel*.03))),bottom=full?48:0;
+     if(declared){
+      if(declared.width!==width||declared.height!==height||!Number.isInteger(declared.top)||!Number.isInteger(declared.bottom)||declared.top<0||declared.bottom<0||declared.top+declared.bottom>=height)throw Error('Stale comparison-panel metadata: '+src[1]);
+      top=declared.top;bottom=declared.bottom;
+     }
      if(top<height)tag=tag.replace(/>$/,` data-comparison-top="${top}" data-comparison-bottom="${bottom}">`);
     }
    }
