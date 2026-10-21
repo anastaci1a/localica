@@ -1,5 +1,5 @@
 {
-  "status": "Previous blur-dependent fit visually rejected by owner; sharp-only geometry investigation in progress.",
+  "status": "Previous blur-dependent fit visually rejected by owner; continuous-crown geometry and separate dispersion investigation in progress.",
   "retained_single": {
     "glass": {
       "pixels": 186310,
@@ -71,8 +71,8 @@
     }
   ],
   "owner_feedback": {
-    "observation": "No visible blur in original segmented selector; refraction is incorrect.",
-    "constraint": "Source and output blur fixed to zero for the next geometry investigation.",
-    "blur_dependent_private_diagnostics": "Stopped; score gains not promoted or counted as new public passes."
+    "observation": "Refraction and pill shape are incorrect. Later clarification permits extremely slight dispersion blur, notably around the o in Month, rather than asserting absolutely no blur.",
+    "constraint": "Keep ordinary Gaussian blur separate from chromatic spreading; no broad blur to hide geometry errors. Test a continuous slight pill crown, with localized advisory measurements and cross-reference validation.",
+    "blur_dependent_private_diagnostics": "Stopped; no old blurred fit or sharp private trial has been promoted as a new verified pass."
   }
 }

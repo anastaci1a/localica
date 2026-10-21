@@ -200,6 +200,9 @@ class Study:
         half=self.half+[p.get('half_x_delta',0),dy]
         radius=min(self.radius+p.get('radius_delta',0),min(half))
         if radial:radius=min(half)
+        if p.get('crown_softness',0)>0 and not radial:
+            from crowned_footprint import boundary
+            return x,y,half,min(half),boundary(x,y,half,p['crown_softness'])
         join=p.get('cap_join_width',0)
         if join>1e-8 and abs(half[0]-half[1])>join:
             from curvature import capsule_offset
