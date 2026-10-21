@@ -262,15 +262,15 @@ Frames A/B: 2.5/2.0 seconds. The corrected study has 22 initial/refinement and 2
 
 ## Active switch
 
-Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× comparisons** show review-round revision 5: one shared material with neutral rim lighting derived from the source’s mean brightness. Geometry, blur, dispersion and shadow are unchanged from revision 4. Weighted RMS falls **1.38% / 1.46%** on the two backgrounds; whole-glass, rim and exterior guards pass. Independent replay checks 50.9 million high-resolution transmission rays against defined source support. The 24 initial/24 paired historical experiments remain archived; their counts are not certification under the new improvement gate.
+Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× comparisons** show review-round revision 6: joint refinement of the existing normal/cap profiles, center scaling, intensity response and shared material. Shape, source, blur, dispersion and shadow remain fixed. Weighted RMS falls **0.54% / 0.85%** on the two backgrounds; whole-glass, rim and exterior errors improve. Independent replay checks 50.9 million high-resolution transmission rays against defined source support. The 16-update fit ends at its budget, with gamma at the declared upper bound; it does not establish a global optimum. The 24 initial/24 paired historical experiments remain archived; their counts are not certification under the new improvement gate.
 
 [![Switch, green track: Apple left, reconstruction right](assets/study-active-switch-paired-a.png)](assets/study-active-switch-paired-a.png)
 
 [![Switch, gray track: Apple left, reconstruction right](assets/study-active-switch-paired-b.png)](assets/study-active-switch-paired-b.png)
 
-- The hidden track is a symmetric, uniform-color estimate; scores are conditional on it. A [source-color sensitivity check](experiments/reconstruction/studies/active-switch/review-round/pass-05-source-sensitivity.json) gives E ranges **14.152–14.181 / 15.357–15.719** within the recorded exposed-color bounds. These are stress tests, not statistical confidence intervals. Frozen scoring inputs stay unchanged; source changes never count as optical gains.
+- The hidden track is a symmetric, uniform-color estimate; scores are conditional on it. A [source-color sensitivity check](experiments/reconstruction/studies/active-switch/review-round/pass-06-source-sensitivity.json) gives E ranges **14.075–14.093 / 15.165–15.699** within the recorded exposed-color bounds. These are stress tests, not statistical confidence intervals. Frozen scoring inputs stay unchanged; source changes never count as optical gains.
 - A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Directional channel separation reproduces part of the inner fringe; upper-rim color and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current normalized recipe basis](experiments/reconstruction/studies/active-switch/review-round/pass-05.json) · [Independent verification](experiments/reconstruction/studies/active-switch/review-round/pass-05-verification.json) · [Historical recipe](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) reproduces the 24 historical paired checkpoints under their original nonregression gate. Both motion captures below show **historical pass24**, not the revised stills. The 4× masters are four seconds at 30 fps; GIF previews are half-size at 15 fps and under 10 MB.
+- [Current normalized recipe basis](experiments/reconstruction/studies/active-switch/review-round/pass-06.json) · [Independent verification](experiments/reconstruction/studies/active-switch/review-round/pass-06-verification.json) · [Historical recipe](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) reproduces the 24 historical paired checkpoints under their original nonregression gate. Both motion captures below show **historical pass24**, not the revised stills. The 4× masters are four seconds at 30 fps; GIF previews are half-size at 15 fps and under 10 MB.
 
 <details>
 <summary>Motion — green track</summary>
@@ -297,11 +297,11 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 <details>
 <summary>Colored rim — localized crops and measurements</summary>
 
-Current crops place Apple on the left and review-round revision 5 on the right. Both upper-left crops improve; B lower-left/right and both center crops regress by at most 2%. These local measurements remain advisory. The dark inner contour, excess softness and colored fringes remain unresolved.
+Current crops place Apple on the left and review-round revision 6 on the right. All four gray-background crops improve. Green-background upper-left and right-rim errors increase by 0.85% and 0.32%; its lower-left and center improve. These local measurements remain advisory. The dark inner contour, excess softness and colored fringes remain unresolved.
 
 [![Current switch rim crops](assets/switch-round-crops.png)](assets/switch-round-crops.png)
 
-[Before/after crop scores](experiments/reconstruction/studies/active-switch/review-round/pass-05-crops.json) · [Exterior bands](experiments/reconstruction/studies/active-switch/review-round/pass-05-shadow-tails.json). The older crop sheet below retains snapshot 24 for comparison. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
+[Before/after crop scores](experiments/reconstruction/studies/active-switch/review-round/pass-06-crops.json) · [Exterior bands](experiments/reconstruction/studies/active-switch/review-round/pass-06-shadow-tails.json). The older crop sheet below retains snapshot 24 for comparison. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
 
 [![Switch rim details: Apple and reconstruction across six cropped regions](assets/switch-rim-detail.png)](assets/switch-rim-detail.png)
 
@@ -346,7 +346,7 @@ Historical experiment counts below include rejected proposals, ties and improvem
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
 | Home | 40.187 / 103.246 | 5.861 / 9.223 | 22 / 21 | Corrected boundary verified |
-| Active switch, review 5 | 200.292 / 238.654 | 11.221 / 13.641 | 24 / 24 historical | Shared two-reference revision |
+| Active switch, review 6 | 198.132 / 234.623 | 11.156 / 13.641 | 24 / 24 historical | Shared two-reference revision |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Independent replay also checks that the first paired baseline protects the retained single-background result.
 - These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.
