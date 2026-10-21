@@ -312,6 +312,19 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 - The incident texture uses solid SF font outlines with selected red text; the exterior retains gray text. Hidden track geometry, font choice, recoloring before refraction and layout transfer are explicit estimates, not photographic recovery or a claim about Apple's rendering pipeline.
 - [Current native measurements and source limits](experiments/reconstruction/active-segmented-selector-progress.json) · [Recipe and pass records](experiments/reconstruction/studies/active-segmented-selector/accepted.json). The reconstruction panel is evaluated at 4×; native scoring remains fixed.
 
+<details>
+<summary>Shape investigation — capsule, continuous crown and superellipse</summary>
+
+The blue curves compare three geometric footprints against the same Apple rim. Columns are capsule, continuous crown and superellipse. These are contour diagnostics, not accepted new optical renders. The crown has lower held-out white-ridge error in both frames; the clear refraction trials still fail the retained image-score gate.
+
+![Selector silhouette hypotheses on background A](assets/selector-contour-hypotheses-a.png)
+
+![Selector silhouette hypotheses on background B](assets/selector-contour-hypotheses-b.png)
+
+[Equations and limits](recreation-models.md#continuous-pill-footprint-candidate) · [Measurements](experiments/reconstruction/studies/active-segmented-selector/crown-diagnostics.json)
+
+</details>
+
 ## Scores
 
 ### Music and switch studies

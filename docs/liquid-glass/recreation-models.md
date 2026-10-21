@@ -39,6 +39,24 @@ The legacy records below predate this stricter protocol. Preserve their experime
 - Keep twenty qualifying single-background passes before multi-background calibration, then twenty qualifying multi-background passes for completion. A working round adds fifteen qualifying passes and rotates; it may end mid-stage. Add a third reference as a documented new stage while retaining all older scores.
 - [Local crop diagnostics](experiments/reconstruction/crop_diagnostics.py) are advisory: fixed masks/positions, RGB and channel-edge errors, contour/refraction landmarks, and shadow/highlight profiles. Do not realign or recolor crops independently. Their purpose is to expose local defects hidden by the global average.
 
+## Continuous pill footprint candidate
+
+This optional footprint replaces the capsule's exactly straight central interval. It is a **2D geometry hypothesis**, not a recovered Apple solid or a successful optical calibration. The existing recipes retain their original footprint unless `crown_softness` is enabled.
+
+For major/minor half-extents `a ≥ b > 0`, softness `0 < w ≤ 1`, and `e=wb`, define `sp(t)=ln(1+exp(t))` and:
+
+```text
+c = sp((e − (a−b))/e)
+D = sp((sqrt(a²+e²) − (a−b))/e) − c
+q(x) = b [sp((sqrt(x²+e²) − (a−b))/e) − c] / D
+T(x,y) = [q(x)² + y²] / b²
+```
+
+- The boundary is `T=1`. `q(0)=0`, `q(a)=b`, and `q` is even, smooth and convex. Hence the top/bottom have a unique maximum extent at the center and no exactly straight interval. This does not require an abrupt cap/body join.
+- Use `∇T/|∇T|` for the boundary normal. The reference image-map coordinate `b(sqrt(T)−1)` has the correct boundary/sign but is **not Euclidean signed distance**; do not substitute it into a distance-based physical derivation without accounting for its gradient.
+- [Implementation](experiments/reconstruction/crowned_footprint.py) evaluates normalized geometry and analytic derivatives. The same `T` could define a 3D height field, but that height, camera and IOR must be specified and tested separately.
+- Independent fits to the two selector silhouettes suggest softness about0.185. This is a calibration candidate, not a default for all pills. [Contour measurements](experiments/reconstruction/studies/active-segmented-selector/crown-diagnostics.json) describe the fixed white-ridge sample and its limits. The initial clear optical trials did not pass the improvement gate.
+
 ## Playback: radial map and smooth inner transition
 
 For the circle, `r=|v|`, `d=1−r`, and `F(v)=(1−a(d)/r)v`. At the center set `F(0)=0`; the displacement has already reached zero there. Use the following constants:
