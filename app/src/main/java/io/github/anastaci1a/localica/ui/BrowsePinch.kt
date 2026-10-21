@@ -13,6 +13,8 @@ import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.runtime.*
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -112,6 +114,20 @@ internal class BrowsePinchMotion {
         return androidx.compose.ui.geometry.Size(sourceWidth + (target.width - sourceWidth) * p,
             sourceHeight + (target.height - sourceHeight) * p)
     }
+    /** Resolve ownership in the layer phase, not when composition installed the modifier.
+     * Retirement can invalidate an attached layer before recomposition removes it. */
+    fun contentTranslation(key: Any, index: Int, targetPosition: IntOffset, targetWidth: Int,
+        targetStyle: BrowseStyle, targetGeometry: BrowseCellGeometry, density: Float): Offset {
+        val source = visualSource ?: return Offset.Zero
+        val old = sourceBounds(key, index)
+        val p = progress.value.coerceIn(0f, 1f)
+        val alignment = if (rightToLeft) old.width - targetWidth else 0f
+        val gridInset = (targetGeometry.gridInset * density).roundToInt()
+        val sourceInset = (BrowseCellGeometry(sourceColumns).cardVerticalInset(source) * density).roundToInt()
+        val targetInset = (targetGeometry.cardVerticalInset(targetStyle) * density).roundToInt()
+        return Offset((old.left - targetPosition.x - gridInset + alignment) * (1f - p),
+            pinchContentTranslation(old.top, targetPosition.y.toFloat(), sourceInset, targetInset, p))
+    }
     fun sourceContentWidth(key: Any, index: Int = 0): Int {
         val geometry = BrowseCellGeometry(sourceColumns)
         val cellWidth = bounds[key]?.width?.toInt() ?: geometry.cellWidth(viewportWidth.toInt(), pixelDensity, index % sourceColumns)
@@ -128,6 +144,17 @@ internal class BrowsePinchMotion {
             left + width,
             anchorTop + ((index / sourceColumns) - (anchorIndex / sourceColumns) + 1) * rowHeight)
     }
+}
+
+/** A retired/capturing transaction leaves the live layout at its ordinary placement. */
+internal fun Modifier.pinchItemPlacement(motion: BrowsePinchMotion, grid: LazyGridState, key: Any,
+    index: Int, style: BrowseStyle, geometry: BrowseCellGeometry): Modifier = graphicsLayer {
+    val placed = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }
+    val translation = placed?.let {
+        motion.contentTranslation(key, index, it.offset, it.size.width, style, geometry, density)
+    } ?: Offset.Zero
+    translationX = translation.x
+    translationY = translation.y
 }
 
 /** The live cell is already laid out with target padding; restore source padding at p=0. */

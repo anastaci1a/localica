@@ -792,20 +792,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         Column(Modifier.then(if (pinchMotion.visualSource == null) Modifier.animateBounds(this@LookaheadScope,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder || loadingCell != null) 0 else 350) })
-                            else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp).graphicsLayer {
-                                val placed = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.key }
-                                if (placed != null) {
-                                    val position = placed.offset
-                                    val old = pinchMotion.sourceBounds(item.key, itemIndex)
-                                    val alignment = if (pinchMotion.rightToLeft) old.width - placed.size.width else 0f
-                                    translationX = (old.left - position.x - cellGeometry.gridInset.dp.roundToPx() + alignment) * (1f - pinchMotion.progress.value)
-                                    val sourceInset = BrowseCellGeometry(pinchMotion.sourceColumns)
-                                        .cardVerticalInset(requireNotNull(pinchMotion.visualSource)).dp.roundToPx()
-                                    val targetInset = cellGeometry.cardVerticalInset(displayedStyle).dp.roundToPx()
-                                    translationY = pinchContentTranslation(old.top, position.y.toFloat(), sourceInset,
-                                        targetInset, pinchMotion.progress.value)
-                                }
-                            }).onGloballyPositioned {
+                            else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp)
+                                .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry)).onGloballyPositioned {
                                 reorder.itemCoordinates[item.key] = it
                                 val origin = it.positionInRoot() - reorder.viewportOrigin
                                 loadingCell?.place(origin.x / density.density,
