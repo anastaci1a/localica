@@ -1,0 +1,449 @@
+{
+  "previous": {
+    "epoch": "60004319569df35f2dcdea7e9418685a27de61728813c3b9a68091337853835c",
+    "observations": {
+      "A": {
+        "glass": {
+          "pixels": 240456,
+          "rmse": 12.061294555664062
+        },
+        "rim": {
+          "pixels": 70466,
+          "rmse": 20.890653610229492
+        },
+        "held": {
+          "pixels": 61420,
+          "rmse": 13.097060203552246
+        },
+        "interior": {
+          "pixels": 169990,
+          "rmse": 4.986932277679443
+        },
+        "ssim": 0.9613863229751587,
+        "loss": 232.75820092972242,
+        "shadow": {
+          "rmse": 7.060789108276367,
+          "pixels": 152521
+        }
+      },
+      "B": {
+        "glass": {
+          "pixels": 208969,
+          "rmse": 14.676543235778809
+        },
+        "rim": {
+          "pixels": 60968,
+          "rmse": 20.440834045410156
+        },
+        "held": {
+          "pixels": 53183,
+          "rmse": 14.931571960449219
+        },
+        "interior": {
+          "pixels": 148001,
+          "rmse": 11.489672660827637
+        },
+        "ssim": 0.9317532181739807,
+        "loss": 276.12895388777895,
+        "shadow": {
+          "rmse": 4.806075096130371,
+          "pixels": 132594
+        }
+      }
+    }
+  },
+  "candidate": {
+    "epoch": "60004319569df35f2dcdea7e9418685a27de61728813c3b9a68091337853835c",
+    "observations": {
+      "A": {
+        "glass": {
+          "pixels": 240456,
+          "rmse": 11.889751434326172
+        },
+        "rim": {
+          "pixels": 70466,
+          "rmse": 20.53911018371582
+        },
+        "held": {
+          "pixels": 61420,
+          "rmse": 13.245462417602539
+        },
+        "interior": {
+          "pixels": 169990,
+          "rmse": 5.009500026702881
+        },
+        "ssim": 0.96150803565979,
+        "loss": 225.51284656068856,
+        "shadow": {
+          "rmse": 6.9922003746032715,
+          "pixels": 152521
+        }
+      },
+      "B": {
+        "glass": {
+          "pixels": 208969,
+          "rmse": 14.493210792541504
+        },
+        "rim": {
+          "pixels": 60968,
+          "rmse": 20.177967071533203
+        },
+        "held": {
+          "pixels": 53183,
+          "rmse": 14.759431838989258
+        },
+        "interior": {
+          "pixels": 148001,
+          "rmse": 11.351666450500488
+        },
+        "ssim": 0.9304684996604919,
+        "loss": 269.18231789589254,
+        "shadow": {
+          "rmse": 4.788003444671631,
+          "pixels": 132594
+        }
+      }
+    }
+  },
+  "protocol": {
+    "cases": [
+      {
+        "id": "active-switch-a",
+        "category": "Clear active switch thumb over two observed track states",
+        "center": [
+          1040,
+          536.5
+        ],
+        "half": [
+          326,
+          216.5
+        ],
+        "radius": 216.5,
+        "parameter_length_reference": 216.5,
+        "crop": [
+          625,
+          250,
+          1450,
+          840
+        ],
+        "foreground": [],
+        "foreground_layers": [],
+        "reference": {
+          "video": "details",
+          "seconds": 9.4,
+          "frame_index": 564,
+          "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4"
+        },
+        "input_names": {
+          "source.png": "source-9.400.png",
+          "target.png": "target-9.400.png",
+          "known.png": "known-9.400.png",
+          "observed.png": "observed-9.400.png"
+        },
+        "source_sha256": {
+          "source.png": "bbd52a46c6c0e5008d4d9e746c9ea5c17acad781e1c2391607b8b7b5f6c64002",
+          "target.png": "76a17ebdea7a2cc8f6187faa461bfecc164e78e371cf8b234d47cd0b1cc1c780",
+          "known.png": "a2f32becc8c9f3b819da2f3a7c67eff1606bdce63ed1f5704a4883ad08dfd8e3",
+          "observed.png": "43ef8e3a5ca09a655bfcf1f86d56ff7c6c933bedf693ab63d8ba137b38264c50"
+        },
+        "source_observation_mask": "observed.png",
+        "allow_estimated_background": true,
+        "background_estimate": {
+          "method": "Symmetric vector capsule fitted from resting-track outer contours; active-frame color measured from exposed track. Distant unoccluded RGB is copied; hidden/halo-adjacent input is modeled.",
+          "limits": "Track symmetry, hidden color uniformity and separation from the thumb shadow are assumptions. Conditional rendering scores are not proof of complete photographic background recovery or proprietary Apple optics.",
+          "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+          "resting_track_fits": [
+            {
+              "parameters": [
+                965.213279678726,
+                541.3490350099561,
+                349.4216127615785,
+                155.03863989516324
+              ],
+              "contour_pixels": 1842,
+              "contour_rmse": 1.091545056774528,
+              "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+            },
+            {
+              "parameters": [
+                964.414372256658,
+                541.3525153680196,
+                338.98417484505813,
+                150.02600432441
+              ],
+              "contour_pixels": 1606,
+              "contour_rmse": 0.8637752919035037,
+              "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+            }
+          ],
+          "track_center_over_L": [
+            -0.3454351977887942,
+            0.022114126991076496
+          ],
+          "track_half_over_L": [
+            1.5966264521853915,
+            0.6976502849792373
+          ],
+          "track_color": [
+            0.4745098039215686,
+            0.7529411764705882,
+            0.5176470588235295
+          ],
+          "track_color_5_95": [
+            [
+              0.47058823529411764,
+              0.7450980392156863,
+              0.5176470588235295
+            ],
+            [
+              0.47843137254901963,
+              0.7568627450980392,
+              0.5215686274509804
+            ]
+          ],
+          "background_color": [
+            0.9294117647058824,
+            0.9294117647058824,
+            0.9294117647058824
+          ],
+          "exposed_track_fit": {
+            "circle": [
+              770.5849394785937,
+              541.2877084935681,
+              151.04128669800488
+            ],
+            "visible_contour_pixels": 480,
+            "contour_rmse": 0.6725363469285401,
+            "method": "Active-frame exposed end-cap circle; hidden end mirrored about the measured resting track center."
+          }
+        },
+        "background": "Direct distant source pixels plus explicit symmetric-capsule track estimate from exposed geometry/color. No complete photographic recovery claim.",
+        "identifiability": "Two actual on/off transition frames; observed size/pose differs. Shared normalized optics/material are tested after single-frame fitting. Hidden track symmetry, color uniformity and dynamic contact-state equivalence remain assumptions.",
+        "signed_normal_profile": true,
+        "allow_center_reduction": true
+      },
+      {
+        "id": "active-switch-b",
+        "category": "Clear active switch thumb over two observed track states",
+        "center": [
+          864,
+          536
+        ],
+        "half": [
+          306,
+          200
+        ],
+        "radius": 200,
+        "parameter_length_reference": 216.5,
+        "crop": [
+          470,
+          255,
+          1255,
+          825
+        ],
+        "foreground": [],
+        "foreground_layers": [],
+        "reference": {
+          "video": "details",
+          "seconds": 10.5,
+          "frame_index": 630,
+          "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4"
+        },
+        "input_names": {
+          "source.png": "source-10.500.png",
+          "target.png": "target-10.500.png",
+          "known.png": "known-10.500.png",
+          "observed.png": "observed-10.500.png"
+        },
+        "source_sha256": {
+          "source.png": "8d4176c394424213d60d7fdbc9d3236c03a726407731f93e87bd0cfccb1e892b",
+          "target.png": "3fa84e404edc62aeadd9934619252b337a7767bccf5ffc211f251f1454200599",
+          "known.png": "a2f32becc8c9f3b819da2f3a7c67eff1606bdce63ed1f5704a4883ad08dfd8e3",
+          "observed.png": "17ee433888006f32b7b9cd1a1fb9bf1c70a8b5f4f225a85b9802652fe32ed363"
+        },
+        "source_observation_mask": "observed.png",
+        "allow_estimated_background": true,
+        "background_estimate": {
+          "method": "Symmetric vector capsule fitted from resting-track outer contours; active-frame color measured from exposed track. Distant unoccluded RGB is copied; hidden/halo-adjacent input is modeled.",
+          "limits": "Track symmetry, hidden color uniformity and separation from the thumb shadow are assumptions. Conditional rendering scores are not proof of complete photographic background recovery or proprietary Apple optics.",
+          "video_sha256": "5b5ad18c8f0ff74d6fd28e5340c2dca04214c8a370744066c017e8487ce900db",
+          "resting_track_fits": [
+            {
+              "parameters": [
+                965.213279678726,
+                541.3490350099561,
+                349.4216127615785,
+                155.03863989516324
+              ],
+              "contour_pixels": 1842,
+              "contour_rmse": 1.091545056774528,
+              "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+            },
+            {
+              "parameters": [
+                964.414372256658,
+                541.3525153680196,
+                338.98417484505813,
+                150.02600432441
+              ],
+              "contour_pixels": 1606,
+              "contour_rmse": 0.8637752919035037,
+              "method": "Outer half-contrast contour of the resting track; fit symmetric capsule, four pose/size parameters."
+            }
+          ],
+          "track_center_over_L": [
+            0.50207186128329,
+            0.026686163674783644
+          ],
+          "track_half_over_L": [
+            1.669253738869852,
+            0.7319072570633979
+          ],
+          "track_color": [
+            0.7450980392156863,
+            0.7647058823529411,
+            0.7411764705882353
+          ],
+          "track_color_5_95": [
+            [
+              0.7372549019607844,
+              0.7568627450980392,
+              0.7333333333333333
+            ],
+            [
+              0.7490196078431373,
+              0.7686274509803922,
+              0.7450980392156863
+            ]
+          ],
+          "background_color": [
+            0.9294117647058824,
+            0.9294117647058824,
+            0.9294117647058824
+          ],
+          "exposed_track_fit": {
+            "circle": [
+              1151.8836686179488,
+              541.3372327349567,
+              146.38145141267958
+            ],
+            "visible_contour_pixels": 466,
+            "contour_rmse": 0.7597337191579999,
+            "method": "Active-frame exposed end-cap circle; hidden end mirrored about the measured resting track center."
+          }
+        },
+        "background": "Direct distant source pixels plus explicit symmetric-capsule track estimate from exposed geometry/color. No complete photographic recovery claim.",
+        "identifiability": "Two actual on/off transition frames; observed size/pose differs. Shared normalized optics/material are tested after single-frame fitting. Hidden track symmetry, color uniformity and dynamic contact-state equivalence remain assumptions.",
+        "signed_normal_profile": true,
+        "allow_center_reduction": true
+      }
+    ],
+    "metric": "E\u00b2=.7glassRMSE\u00b2+.3rimRMSE\u00b2; original native2x2 glass/rim masks. New exterior0<originalsd<.35L, complete clean source composite."
+  },
+  "support": [
+    {
+      "observation": "A",
+      "center": {
+        "source_defined_fraction": 1.0,
+        "gaussian_3sigma_defined_fraction": 1.0,
+        "source_observed_fraction": 0.0,
+        "gaussian_3sigma_observed_fraction": 0.0,
+        "source_gaussian_radius_native_px": 13,
+        "reflection_source_defined_fraction": 1.0,
+        "reflection_gaussian_3sigma_defined_fraction": 1.0,
+        "reflection_source_observed_fraction": 0.0,
+        "reflection_gaussian_3sigma_observed_fraction": 0.0,
+        "reflection_source_gaussian_radius_native_px": 5,
+        "chromatic_source_defined_fraction": 1.0,
+        "chromatic_gaussian_3sigma_defined_fraction": 1.0,
+        "chromatic_source_observed_fraction": 0.0,
+        "chromatic_gaussian_3sigma_observed_fraction": 0.0,
+        "chromatic_source_gaussian_radius_native_px": 13,
+        "context_mean_source_defined_fraction": 1.0,
+        "context_mean_source_observed_fraction": 0.0,
+        "context_mean_minimum_defined_confidence": 1.0,
+        "context_mean_minimum_observed_confidence": 0.0
+      },
+      "subpixels": {
+        "scale": 4,
+        "emitted_transmission_rays": 27220312,
+        "minimum_defined_confidence": 1.0,
+        "gaussian_radius_native_px": 13,
+        "passed": true
+      },
+      "passed": true,
+      "transmission_signature": "777e4df14a04b3fc08e65be4979a9b4aa89bd4e07eb993b58692967846f08d83"
+    },
+    {
+      "observation": "B",
+      "center": {
+        "source_defined_fraction": 1.0,
+        "gaussian_3sigma_defined_fraction": 1.0,
+        "source_observed_fraction": 0.0,
+        "gaussian_3sigma_observed_fraction": 0.0,
+        "source_gaussian_radius_native_px": 12,
+        "reflection_source_defined_fraction": 1.0,
+        "reflection_gaussian_3sigma_defined_fraction": 1.0,
+        "reflection_source_observed_fraction": 0.0,
+        "reflection_gaussian_3sigma_observed_fraction": 0.0,
+        "reflection_source_gaussian_radius_native_px": 5,
+        "chromatic_source_defined_fraction": 1.0,
+        "chromatic_gaussian_3sigma_defined_fraction": 1.0,
+        "chromatic_source_observed_fraction": 0.0,
+        "chromatic_gaussian_3sigma_observed_fraction": 0.0,
+        "chromatic_source_gaussian_radius_native_px": 12,
+        "context_mean_source_defined_fraction": 1.0,
+        "context_mean_source_observed_fraction": 0.0,
+        "context_mean_minimum_defined_confidence": 1.0,
+        "context_mean_minimum_observed_confidence": 0.0
+      },
+      "subpixels": {
+        "scale": 4,
+        "emitted_transmission_rays": 23679543,
+        "minimum_defined_confidence": 1.0,
+        "gaussian_radius_native_px": 12,
+        "passed": true
+      },
+      "passed": true,
+      "transmission_signature": "a7dc6c34c912401687170d9bb453df8a44887278f1ae1cba70a8a6170d6266a2"
+    }
+  ],
+  "gate": {
+    "accepted": false,
+    "epoch": "60004319569df35f2dcdea7e9418685a27de61728813c3b9a68091337853835c",
+    "error_ratio": 0.995,
+    "observations": {
+      "A": {
+        "previous_error": 15.256415074640648,
+        "candidate_error": 15.01708515527193,
+        "required_error_max": 15.180132999267444,
+        "relative_reduction": 0.015687166231242222,
+        "milestone_passed": true,
+        "nonregression": {
+          "glass": true,
+          "shadow": true
+        },
+        "passed": true
+      },
+      "B": {
+        "previous_error": 16.617128328558426,
+        "candidate_error": 16.406776584566895,
+        "required_error_max": 16.534042686915633,
+        "relative_reduction": 0.012658730186852929,
+        "milestone_passed": true,
+        "nonregression": {
+          "glass": true,
+          "shadow": true
+        },
+        "passed": true
+      }
+    },
+    "evidence": {
+      "visual_review": false,
+      "independent_replay": true,
+      "source_support": true
+    }
+  },
+  "limits": "Independent emitted-ray replay; human visual review is not inferred from a score. Estimated backgrounds and archived material approximations remain explicitly conditional.",
+  "proof_signature_note": "Signature added to the already completed original emitted-ray run; excludes only lighting widths, no optical/source/grid change."
+}
