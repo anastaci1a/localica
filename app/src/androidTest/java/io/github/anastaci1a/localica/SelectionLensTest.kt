@@ -48,7 +48,10 @@ class SelectionLensTest {
         } }
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val before = compose.onNodeWithTag("independent-lenses").captureToImage().toPixelMap()
+        compose.mainClock.autoAdvance = false
         compose.runOnIdle { second = true }
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(48)
         val after = compose.onNodeWithTag("independent-lenses").captureToImage().toPixelMap()
         val density = before.width / 280f
         var difference = 0f; var count = 0
@@ -56,7 +59,8 @@ class SelectionLensTest {
             for (x in (20 * density).toInt() until (260 * density).toInt() step 2) {
                 difference += kotlin.math.abs(before[x, y].red - after[x, y].red); count++
             }
-        assertTrue("A disconnected lens cannot change the existing body: ${difference / count}", difference / count < .01f)
+        assertTrue("A disconnected arriving lens cannot fade the existing body: ${difference / count}", difference / count < .01f)
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun selectionRefractsItsBackingOnBothRenderers() {

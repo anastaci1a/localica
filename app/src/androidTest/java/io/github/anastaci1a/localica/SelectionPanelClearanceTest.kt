@@ -27,7 +27,7 @@ class SelectionPanelClearanceTest {
             panel = rememberFloatingSelectionPanel(visible, reducedMotion)
             // Independent clock oracle: unlike the panel this has no measurement/occupancy state.
             referenceProgress = animateFloatAsState(if (visible) 1f else 0f,
-                tween(if (reducedMotion) 0 else 220), label = "Reference panel motion")
+                tween(if (reducedMotion) 0 else 220, easing = androidx.compose.animation.core.LinearOutSlowInEasing), label = "Reference panel motion")
             CompositionLocalProvider(LocalBrowseObscuredInset provides (chrome.dp + panel.clearance)) {
                 Box(Modifier.size(320.dp, 480.dp).testTag("viewport")) {
                     if (inline) Column(Modifier.fillMaxSize()) {

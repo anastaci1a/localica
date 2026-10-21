@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,7 +38,7 @@ internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boo
     val visibility = rememberUpdatedState(visible)
     // Start only after measurement, so the first reveal cannot lift controls a frame late.
     val progress = animateFloatAsState(if (visible && height.value > 0.dp) 1f else 0f,
-        tween(if (reducedMotion) 0 else 220), label = "Selection panel occupancy")
+        selectionMotionSpec(reducedMotion, 220), label = "Selection panel occupancy")
     return remember { FloatingSelectionPanelState(height, progress, visibility) }
 }
 
