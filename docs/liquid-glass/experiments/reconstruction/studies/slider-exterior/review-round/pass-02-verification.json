@@ -1,0 +1,78 @@
+{
+  "accepted": true,
+  "round_pass": 2,
+  "scope": "Single-background generated-exterior reconstruction, not optical improvement; gray profiles withheld/advisory only",
+  "original_scores_exact": true,
+  "independent_complete_exact": true,
+  "all_exterior_guards": {
+    "near_exterior": {
+      "before": 12.079826419069695,
+      "after": 11.843641917359621,
+      "nonregression": true
+    },
+    "full_visible_exterior": {
+      "before": 6.356437539123562,
+      "after": 6.215359087364846,
+      "nonregression": true
+    },
+    "near_exterior_train": {
+      "before": 11.605476192211068,
+      "after": 11.328078339206051,
+      "nonregression": true
+    },
+    "near_exterior_held": {
+      "before": 13.828018414176098,
+      "after": 13.727033683790902,
+      "nonregression": true
+    },
+    "full_visible_exterior_train": {
+      "before": 6.084460151717121,
+      "after": 5.927370006575032,
+      "nonregression": true
+    },
+    "full_visible_exterior_held": {
+      "before": 7.119363111143447,
+      "after": 7.018266936462267,
+      "nonregression": true
+    }
+  },
+  "source_proof": {
+    "kind": "Conservative analytic all-RGB native/whole+ALL-scored domain bound; not observed-source evidence",
+    "inside_rgb_xy_bounds": [
+      [
+        582.3311328240356,
+        944.6688671759644
+      ],
+      [
+        388.3674949434942,
+        708.7734872504334
+      ]
+    ],
+    "outside_identity_xy_bounds": [
+      [
+        539.625,
+        984.375
+      ],
+      [
+        439.625,
+        689.375
+      ]
+    ],
+    "bilinear_margin_px": 1,
+    "source_sigma": 0,
+    "basis_bound": "Nonnegative partition-of-unity B-splines => |a|<=max|co|; B(u) in[0,1]; unit normal and |tangent_position|<=hypot(hx,hy_bound). Include core and all RGB factors.",
+    "source_size": [
+      1920,
+      1080
+    ],
+    "covered": true,
+    "limits": "Incident hidden blue endpoint/paper remain modeled; finite-domain proof does not establish photographic recovery or physical optics."
+  },
+  "visual_review": true,
+  "limits": "Native source/optical body unchanged, original conditional source ambiguity retained. Contact opacity uses owner samples on assumed white (not verified acquisition/color calibration). UI-accent halo is empirical, not identified lighting/Apple algorithm; no B source or matched interaction state established. Copied old exterior context is absent but removal earns no credit. All original optical scores are unchanged; this is exterior-only reconstruction.",
+  "gray_profile_transfer": {
+    "previous_rmse": 3.626371402643852,
+    "current_rmse": 3.5728582609275525,
+    "scope": "Withheld exterior profiles only, not a native paired optical benchmark"
+  }
+}

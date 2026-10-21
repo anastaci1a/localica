@@ -1,0 +1,214 @@
+{
+  "scope": "Single-background generated-exterior reconstruction; original optics unchanged",
+  "parameters": {
+    "contact_opacity": 0.17375816993464055,
+    "halo_opacity": 0.09639485214612539,
+    "halo_sigma_L": 0.7051111669310818,
+    "halo_tint_scale": 0.9999999999999999,
+    "accent_rgb": [
+      0.003921568859368563,
+      0.4313725531101227,
+      0.9882352948188782
+    ]
+  },
+  "contact_geometry": {
+    "width_ratio": 1.035337552742616,
+    "height_ratio": 1.0253863134657837,
+    "offset_y_over_L": -0.025386313465783683,
+    "rule": "Measured wider/taller original-shape affine footprint, horizontally centered and bottom aligned; native4x4 coverage, neutral shadow"
+  },
+  "halo_law": "C0=B*(1-contact_opacity*contact_coverage); halo=a*exp(-.5*(max(sd,0)/(sigma*L))^2); Bout=(1-halo)*C0+halo*beta*accent; complete=body*coverage+Bout*(1-coverage)",
+  "original_scores_exact": true,
+  "original_scores": {
+    "train": {
+      "pixels": 16850,
+      "rmse": 7.150761604309082,
+      "mae": 3.3918347358703613,
+      "opponent_chroma_rmse": 6.010931015014648
+    },
+    "held_blocks": {
+      "pixels": 5796,
+      "rmse": 7.4453325271606445,
+      "mae": 3.3725502490997314,
+      "opponent_chroma_rmse": 5.592805862426758
+    },
+    "all_glass": {
+      "pixels": 22646,
+      "rmse": 7.227296829223633,
+      "mae": 3.38689923286438,
+      "opponent_chroma_rmse": 5.906735420227051
+    },
+    "rim": {
+      "pixels": 5866,
+      "rmse": 8.849506378173828,
+      "mae": 4.750197410583496,
+      "opponent_chroma_rmse": 6.590148448944092
+    },
+    "outer_rim": {
+      "pixels": 1922,
+      "rmse": 11.733153343200684,
+      "mae": 6.6013593673706055,
+      "opponent_chroma_rmse": 8.059432029724121
+    },
+    "interior": {
+      "pixels": 16780,
+      "rmse": 6.56633186340332,
+      "mae": 2.910313606262207,
+      "opponent_chroma_rmse": 5.648353576660156
+    },
+    "ssim": 0.9718229174613953,
+    "gradient_mae": 7.53652811050415,
+    "selection_loss": 0.0015737158198407591
+  },
+  "A_guards": {
+    "near_exterior": {
+      "before": 12.079826419069695,
+      "after": 11.843641917359621,
+      "nonregression": true
+    },
+    "full_visible_exterior": {
+      "before": 6.356437539123562,
+      "after": 6.215359087364846,
+      "nonregression": true
+    },
+    "near_exterior_train": {
+      "before": 11.605476192211068,
+      "after": 11.328078339206051,
+      "nonregression": true
+    },
+    "near_exterior_held": {
+      "before": 13.828018414176098,
+      "after": 13.727033683790902,
+      "nonregression": true
+    },
+    "full_visible_exterior_train": {
+      "before": 6.084460151717121,
+      "after": 5.927370006575032,
+      "nonregression": true
+    },
+    "full_visible_exterior_held": {
+      "before": 7.119363111143447,
+      "after": 7.018266936462267,
+      "nonregression": true
+    }
+  },
+  "gray_profile_transfer": {
+    "previous_rmse": 3.626371402643852,
+    "current_rmse": 3.5728582609275525,
+    "scope": "Withheld exterior profiles only, not a native paired optical benchmark"
+  },
+  "profile_fit": {
+    "evaluations": 9,
+    "success": true,
+    "message": "`gtol` termination condition is satisfied.",
+    "trained": "Nine predeclared A exterior profile patches only; B withheld",
+    "ordinary_blur": false,
+    "dispersion": false
+  },
+  "inputs": {
+    "slider-source.png": "040f98dd6211c74d27f89fa4ce095afd237a8d17f2895cefd8f040a39d475a71",
+    "slider-target.png": "16cb006d4f7f743b929419165cd6bb16567d77fd266b1a6472638bca070846cf"
+  },
+  "limits": "Native source/optical body unchanged, original conditional source ambiguity retained. Contact opacity uses owner samples on assumed white (not verified acquisition/color calibration). UI-accent halo is empirical, not identified lighting/Apple algorithm; no B source or matched interaction state established. Copied old exterior context is absent but removal earns no credit. All original optical scores are unchanged; this is exterior-only reconstruction.",
+  "round_pass": 2,
+  "accepted": true,
+  "body_recipe": {
+    "model": "chromatic",
+    "shape": {
+      "half": [
+        2.0973451327433628,
+        1
+      ],
+      "radius": 0.7677876106194691,
+      "oval": [
+        0.4994011732582939,
+        -0.23031415352591186
+      ]
+    },
+    "parameters": {
+      "coefficients": [
+        0.9940397824224306,
+        0.2775358077604282,
+        0.6382431434144584,
+        0.5036596684979797,
+        0.28836644901499464,
+        0.10671701655995491,
+        0.0016093742056153548
+      ],
+      "core_x": 0.00282416152392867,
+      "core_y": 0.0014982902279738197,
+      "tangent": 0.02645548847678575,
+      "tangent_band": 0.3756170920148811,
+      "tensor": true,
+      "dispersion": 0.021315490096644046
+    },
+    "source_sigma": 0,
+    "rim_width": 0.12855556802811752,
+    "thin_rim": 0.024778761061946902,
+    "blur_transition": null,
+    "material": [
+      0.7708872059639724,
+      0.7285948293470375,
+      0.5816278673014713,
+      0.0554589934700105,
+      0.1133327066186507,
+      0.24978513272324565,
+      -0.1776857411107662,
+      0.01343344447328158,
+      0.13539904758006532,
+      0.16153772321216314,
+      0.06200173113915218,
+      0.047162043086198625,
+      0.07784935781463985,
+      -0.012286903489017793,
+      0.07137014667694692,
+      -0.0019651041907472228,
+      -0.055054485426887484,
+      -0.0629723227225546,
+      -0.09790823196531545,
+      0.010019391573706567,
+      0.9422138231379977,
+      0.8772253832853595,
+      0.7400363941172399
+    ],
+    "reference_length": 56.5
+  },
+  "native_material_sha256": "b36e5c006311dc827a24b5a822c9f4593b36eaebabcf5ed150ac08fffc305415",
+  "case": {
+    "video": "284",
+    "time": 1092,
+    "source_time": null,
+    "center": [
+      763.5,
+      548.5704910969638
+    ],
+    "half": [
+      118.5,
+      56.5
+    ],
+    "oval": [
+      0.4994011732582939,
+      -0.23031415352591186
+    ],
+    "radius": 43.38,
+    "crop": [
+      540,
+      440,
+      985,
+      690
+    ],
+    "foreground": [],
+    "sigma_max": 0
+  },
+  "previous_pass": "pass-01.json",
+  "refinement": {
+    "family": "One bounded common-parameter direction from six fixed exterior MSE guards",
+    "step": 0.5,
+    "parameters_changed": [
+      "contact_opacity",
+      "halo_opacity",
+      "halo_sigma_L"
+    ],
+    "negative_trial": "Lowering only contact opacity to .16 regressed both held metrics and was rejected; joint direction retains every guard."
+  }
+}
