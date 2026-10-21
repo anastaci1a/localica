@@ -246,6 +246,15 @@ class Study:
         coupling=.5*p['coupling']*p['tangent']*Wd*x*x
         X-=coupling*nx;Y-=coupling*ny
         X+=p.get('shape_dx',0);Y+=p.get('shape_dy',0)
+        profile=p.get('cap_edge_profile')
+        if profile is not None:
+            coefficients=np.asarray(profile,dtype=float)
+            if not p['spline'] or coefficients.ndim!=1 or not 1<=len(coefficients)<=7 or not np.isfinite(coefficients).all():
+                raise ValueError('Cap-depth profile needs one to seven finite spline coefficients')
+            # Shape-relative depth/orientation expansion of the normal map.
+            # It does not identify a physical solid or alter the silhouette.
+            extra=cap_weight*(basis[...,:len(coefficients)]@coefficients)
+            X-=extra*nx;Y-=extra*ny
         thin=np.exp(-(d/p['thin_width'])**2)
         e=np.exp(-(d/p['rim_width'])**2);f=np.exp(-(d/(4*p['rim_width']))**2)
         xx=x/half[0];yy=y/half[1];z=np.clip(d/.3,0,1);core=z**3*(z*(6*z-15)+10)

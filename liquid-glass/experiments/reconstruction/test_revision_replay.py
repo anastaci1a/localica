@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import numpy as np
 from revision_replay import clean_composite, transmission_signature
 
@@ -41,6 +42,13 @@ class CleanCompositeTests(unittest.TestCase):
         self.assertNotEqual(first,transmission_signature(s,p,2))
         s.case={**s.case,'source_sha256':{'source.png':'changed'}}
         self.assertNotEqual(first,transmission_signature(s,p,4))
+
+
+    def test_changed_ray_implementation_invalidates_proof(self):
+        s=self.study();p={'sigma':2,'core_x':.1}
+        original=transmission_signature(s,p,4)
+        with patch('revision_replay.ray_implementation_digest',return_value='different implementation'):
+            self.assertNotEqual(original,transmission_signature(s,p,4))
 
 
 if __name__=='__main__':unittest.main()
