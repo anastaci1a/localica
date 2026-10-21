@@ -299,8 +299,8 @@ For `t,s∈[0,1]` and `γ>0`, the function stays bounded and monotone. The affin
 
 ### Current vector-control revisions
 
-The [Search recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-03.json) refines the shared affine material with map, blur, SVG geometry and generated shadow fixed. It freezes native pixel blur widths, normalized map coefficients, case fingerprints and vector hashes. Scale pixel widths with the source short half-size L.
+The [Search recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-03.json) refines the shared affine material with map, blur, SVG geometry and generated shadow fixed. The [Navigation recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-03.json) adjusts its existing empirical outer-normal profile. Both freeze native pixel blur widths, normalized map coefficients, case fingerprints and vector hashes. Scale pixel widths with the source short half-size L.
 
-Replay: `python vector_revision.py INPUTS studies/music-search-vector/review-round/pass-03.json OUTPUT`. INPUTS contains the original private a/b source, target, known masks and SVGs. The command checks case, source and vector hashes. Unknown exterior uses nearest defined RGB for presentation only; no photographed shadow or foreground is copied.
+Replay: `python vector_revision.py INPUTS RECORD OUTPUT` with either linked recipe and the original private a/b source, target, known masks and SVGs. The command checks case, source and vector hashes. Unknown exterior uses nearest defined RGB for presentation only; no photographed shadow or foreground is copied.
 
 For final figures add `--high-quality` (1080px per side). Moving exports accept `extended_media.py INPUT --width 1080`; sampling uses a binary integer scale above the requested size before downsampling. Original native scoring and default media commands are unchanged.

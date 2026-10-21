@@ -202,19 +202,21 @@ Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; co
 
 ### Navigation control
 
+Current round: **3/3** verified passes. Native E: A1.979013→1.975144; B7.434360→7.429451. All16 foreground and exterior measurements are unchanged. Shared outer-normal and rim-lighting width adjustments improve both references; advisory interior error slightly increases in passes2–3. Unknown exterior context uses nearest defined source RGB for presentation only; measured pixels are unchanged. Motion below uses the third-pass recipe:6seconds at15fps,1080px wide, with full-size GIFs below10MB. One bottom row is codec padding. [Motion verification](experiments/reconstruction/studies/music-navigation/review-round/motion.json).
+
 Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray selection backing, symbols and text. Original font outlines are used for labels; unresolved symbols use clean traces or a documented public vector. **The upper rim on B remains too dark.** The mostly white background A weakly constrains refraction.
 
 [![Navigation control, background A: Apple left, reconstruction right](assets/study-music-navigation-paired-a.png)](assets/study-music-navigation-paired-a.png)
 
 [![Navigation control, background B: Apple left, reconstruction right](assets/study-music-navigation-paired-b.png)](assets/study-music-navigation-paired-b.png)
 
-- [Shared recipe](experiments/reconstruction/studies/music-navigation/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-navigation/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-navigation/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-navigation/paired/b/diagnostics.json).
+- [Current recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-03.json) · [Independent verification](experiments/reconstruction/studies/music-navigation/review-round/pass-03-verification.json) · [Historical calibration](experiments/reconstruction/studies/music-navigation/paired/accepted.json) · [A diagnostics](experiments/reconstruction/studies/music-navigation/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-navigation/paired/b/diagnostics.json).
 <details>
 <summary>Motion — background A</summary>
 
-<video controls preload="none" playsinline width="4320" height="1340" aria-label="Navigation control, background A motion"><source src="assets/study-music-navigation-paired-a.mp4" type="video/mp4"><a href="assets/study-music-navigation-paired-a.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="336" aria-label="Navigation control, background A motion"><source src="assets/study-music-navigation-paired-a.mp4" type="video/mp4"><a href="assets/study-music-navigation-paired-a.mp4">Open video</a></video>
 
-<img src="assets/study-music-navigation-paired-a.gif" alt="Navigation control motion on background A" width="2160" height="670" loading="lazy" decoding="async">
+<img src="assets/study-music-navigation-paired-a.gif" alt="Navigation control motion on background A" width="1080" height="336" loading="lazy" decoding="async">
 
 [Video](assets/study-music-navigation-paired-a.mp4) · [GIF](assets/study-music-navigation-paired-a.gif)
 
@@ -223,9 +225,9 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 <details>
 <summary>Motion — background B</summary>
 
-<video controls preload="none" playsinline width="4320" height="1340" aria-label="Navigation control, background B motion"><source src="assets/study-music-navigation-paired-b.mp4" type="video/mp4"><a href="assets/study-music-navigation-paired-b.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="336" aria-label="Navigation control, background B motion"><source src="assets/study-music-navigation-paired-b.mp4" type="video/mp4"><a href="assets/study-music-navigation-paired-b.mp4">Open video</a></video>
 
-<img src="assets/study-music-navigation-paired-b.gif" alt="Navigation control motion on background B" width="2160" height="670" loading="lazy" decoding="async">
+<img src="assets/study-music-navigation-paired-b.gif" alt="Navigation control motion on background B" width="1080" height="336" loading="lazy" decoding="async">
 
 [Video](assets/study-music-navigation-paired-b.mp4) · [GIF](assets/study-music-navigation-paired-b.gif)
 
