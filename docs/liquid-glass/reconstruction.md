@@ -39,21 +39,23 @@ Each half retains 1920 × 1080 pixels.
 
 ## Archive and plus toolbar
 
-Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710); uncovered text at 12:00. A rounded-rectangle tensor map combines normal displacement with tangential compression, widening text near top/bottom without changing central registration.
+Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710); uncovered text at 12:00. Review revision 1 uses a continuous crowned footprint, normal displacement and tangential compression. Weighted RMS error decreases **1.48%** against the frozen earlier calibration.
 
-![Apple archive/plus toolbar and frozen tensor reconstruction](assets/match-regular.png)
+![Apple archive/plus toolbar and current reconstruction](assets/match-regular.png)
+
+- One clean background feeds the lens and exterior; the hidden paper region is estimated. A generated neutral Gaussian shadow replaces the earlier copied exterior context. Its width reaches the chosen bound, so the shadow tail remains provisional.
+- The plus uses an original SF Symbols vector. The archive is a symmetric rounded outline trace, an approximation to the original symbol. Both are independently rendered; no screenshot glyph pixels are pasted. Glass scoring still excludes their fixed boxes, and foreground errors are reported separately.
+- [Model and equations](recreation-models.md#toolbar-normal-displacement-and-tangential-compression) · [Recipe](experiments/reconstruction/studies/archive-plus/review-round/pass-01.json) · [Independent replay](experiments/reconstruction/studies/archive-plus/review-round/pass-01-verification.json) · [Native scores](experiments/reconstruction/studies/archive-plus/review-round/pass-01-scores.json).
+- The final `d` stroke remains too straight, and underside reflections/lighting still differ. This empirical image field is not an identified physical lens or Apple shader. No second observed background is verified yet.
+
+<details>
+<summary>Upper rim and refracted lettering</summary>
 
 ![Upper-rim comparison with Apple on the left](assets/match-regular-rim.png)
 
-- [Equations](recreation-models.md#toolbar-normal-displacement-and-tangential-compression); exact coefficients in the `regular` recipe.
-- Source blur and its distance-dependent blend are independent of optical strength. The selected σ is `11/340` times the shorter dimension, superseding the older eight-pixel search ceiling.
-- Exact archive/plus reference symbols are retained on both sides and excluded from glass scores; their foreground rendering is **not** independently recreated.
-- Remaining differences include compressed-text blur, the final `d` stroke's curvature and inner lighting. This image field is not a verified physical lens.
+![Refracted d-stroke comparison with Apple on the left](assets/toolbar-d-stroke-current.png)
 
-<details>
-<summary>Full-resolution toolbar comparison</summary>
-
-[![Full HD toolbar comparison](assets/match-regular-full.png)](assets/match-regular-full.png)
+These fixed-position crops use the current 4× render. Their local differences remain visible even when the overall metric improves.
 
 </details>
 
@@ -353,15 +355,15 @@ Historical experiment counts below include rejected proposals, ties and improvem
 | Scene | Glass RMSE | Rim RMSE | Interior RMSE | Withheld-block RMSE | SSIM |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Playback — most polished | 8.077 | 11.148 | 2.626 | 8.368 | 0.9727 |
-| Archive / plus | 6.124 | 8.984 | 4.091 | 5.978 | 0.9805 |
+| Archive / plus, review 1 | 6.045 | 8.832 | 4.076 | 5.936 | 0.9812 |
 | Active slider | 7.227 | 8.850 | 6.566 | 7.445 | 0.9718 |
 | Regular light | 1.532 | 2.894 | 0.578 | 1.544 | 0.9991 |
 | Regular dark | 0.871 | 1.664 | 0.298 | 0.886 | 0.9997 |
 
-Playback icon-color RMSE: 3.228. Toolbar symbols are retained reference pixels and are not given foreground scores.
+Playback icon-color RMSE: 3.228. Toolbar foreground errors are reported independently in its current native score record; the earlier calibration copied those glyphs and did not score them.
 
 - Encoded RGB errors use a 0–255 scale. Lower RMSE is better; higher SSIM is better. **SSIM is not a fidelity percentage.** Scores use unquantized calculated glass; PNG rounding changes them slightly. Full metrics, counts and registration evidence: [settled-scores.json](experiments/reconstruction/settled-scores.json).
-- Glass excludes the first 0.75 native pixel inward from the silhouette and symbol boxes. Rim means the first 20% of the shorter half-extent. Exterior shadows are excluded. Only playback has a separately scored, independently calculated foreground color.
+- Glass excludes the first 0.75 native pixel inward from the silhouette and symbol boxes. Rim means the first 20% of the shorter half-extent. Exterior shadows are excluded. Playback and the current toolbar revision report separately rendered foreground errors.
 - Omitted 32-pixel spatial blocks share the same frame, source estimate and manually chosen outline. They were inspected during calibration and are **not independent-scene validation**. Replay performs no optimization.
 - SSIM uses mean encoded RGB, an 11 × 11 Gaussian window and an eroded mask. Registration uncertainty, inferred backdrops and different material freedoms limit cross-scene comparisons.
 
@@ -409,11 +411,11 @@ python3 docs/liquid-glass/experiments/reconstruction/settled.py /private/videos 
 python3 docs/liquid-glass/experiments/reconstruction/motion.py /private/replay /private/motion
 ```
 
-The second command renders **all five frozen recipes**, native-resolution outputs and scores. Add `--assets docs/liquid-glass/assets` to update public comparison figures. The third recreates the playback translation video/GIF and requires ffmpeg. Neither refits or modifies the live lab; no GPU is needed. The portable specification is the [equations](recreation-models.md) and [dimensionless parameters](experiments/reconstruction/recipes.json); commands fix one sampling implementation. Codec/library versions can change encoded media bytes.
+The second command renders **the five historical frozen recipes**, native-resolution outputs and scores; current toolbar/switch commands are linked in their model sections. Add `--assets docs/liquid-glass/assets` to update public comparison figures. The third recreates the playback translation video/GIF and requires ffmpeg. Neither refits or modifies the live lab; no GPU is needed. The portable specification is the [equations](recreation-models.md) and [dimensionless parameters](experiments/reconstruction/recipes.json); commands fix one sampling implementation. Codec/library versions can change encoded media bytes.
 
 Background recovery uses SIFT/RANSAC registration for dune/text scenes and smooth uncovered-page fits elsewhere. Inputs are quantized to eight-bit intermediate images to match calibration. Hidden text/track endpoints remain estimates. Still materials integrate four samples per axis; sampling is bilinear, filter boundaries reflect, and coverage is separate.
 
-The play mask contains coverage only. Toolbar glyph colors and distant exterior remain shared Apple imagery. A ten-pixel contact band uses the recovered source plus a normalized low-frequency exterior residual; it is unscored. Motion uses the playback recipe at two samples per axis and omits shadows. Archived MP4/GIF encoding is separate from numerical still replay.
+The play mask contains coverage only. In that historical toolbar replay, glyph colors and distant exterior remain shared Apple imagery; the current revision uses independent vectors and a generated shadow. A ten-pixel contact band uses the recovered source plus a normalized low-frequency exterior residual; it is unscored. Motion uses the playback recipe at two samples per axis and omits shadows. Archived MP4/GIF encoding is separate from numerical still replay.
 
 Historical search tools and [results.json](experiments/reconstruction/results.json) retain alternative models; they are **not the selected recipes/current scores**. Search again only in a separate directory. Tool consistency, Apple similarity and Android performance require different checks.
 

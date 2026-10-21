@@ -102,7 +102,7 @@ The included [playback coverage mask](experiments/reconstruction/playback-mask.p
 
 ## Toolbar: normal displacement and tangential compression
 
-The outline is a rounded rectangle with normalized half-extents `[392/170,1]` and corner radius `1`. Its fitted map allows normal displacement and tangential scaling to vary separately. With tangent `t=(−n_y,n_x)`:
+The current footprint uses the continuous crown above, half-extents `[392/170,1]` and softness `0.10`. The inherited normal-profile length basis is `ρ=1`; its boundary coordinate is not Euclidean distance. The fitted map allows normal displacement and tangential scaling to vary separately. With tangent `t=(−n_y,n_x)`:
 
 ```text
 a(d) = Σ c_i N_i(d/ρ), i=0…6
@@ -111,11 +111,15 @@ W = (1−u)^4 (1+4u)
 F(v) = diag(1−core_x,1−core_y) v − a(d)n − tangent W (t·v)t
 ```
 
-Here `ρ` is the normalized corner radius. The cubic B-spline basis has knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]`; append three zero coefficients after the seven stored coefficients. Clamp the basis argument to `[0,1]`. Displacement is in `L` units. The complete coefficients, core terms and tangential strength are in the `regular` recipe.
+The cubic B-spline basis has knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]`; append three zero coefficients after the seven stored coefficients. Clamp the basis argument to `[0,1]`. Displacement is in `L` units. The complete coefficients, core terms and tangential strength are in the [current recipe](experiments/reconstruction/studies/archive-plus/review-round/pass-01.json).
 
 This is a tensor image field, **not a recovered solid or a proved gradient-potential lens**. Along straight top/bottom segments, `∂F_x/∂x=1−core_x−tangent W`: a smaller positive source derivative makes displayed text wider. Both directions follow the outline near its ends, rather than applying one arbitrary global horizontal stretch.
 
-For the toolbar only, blend unblurred and source-blurred samples using `H=6u⁵−15u⁴+10u³`, with `u=clamp(d/blur_transition,0,1)`. Use the recipe's source σ `11/170`; it supersedes the older study's eight-pixel search ceiling. No glass post-blur is selected here. Apply the common material function afterward. Exact archive/plus symbols are retained from the source frame for comparison and excluded from glass scoring; their own rendering has not been reconstructed.
+For the toolbar only, blend unblurred and source-blurred samples using `H=6u⁵−15u⁴+10u³`, with `u=clamp(d/blur_transition,0,1)`. Use the recipe's source σ `11/170`. After the common material, apply ordinary color blur with `σ=1.25/170` in normalized units. This is distinct from dispersion (none added in this revision). For conditional glass color `C` and coverage `α`, use `C′=Gσ(Cα)/max(Gσ(α),ε)`, then retain the original sharp coverage for composition. Filtering zero-padded RGB directly would create an unsupported dark edge.
+
+The neutral exterior shadow is `A_s=o·G_s(α)(x−δ)`: opacity `o=0.21968065`, width `s=0.29999995 L`, offset `δ=[−0.002930886,0.007772859] L`. Generate the whole shape with at least four-sigma padding before cropping. Composite `C′α + B(1−A_s)(1−α)`; no reference shadow is retained. The fitted width reaches its declared bound, so these are provisional appearance parameters, not a recovered lighting rig.
+
+Finally apply solid SVG coverage with constant foreground color. The plus comes from the original font; the archive is a symmetric geometric trace. Font/vector provenance and pose are independent of optics. Native source and SVG hashes are frozen in the recipe. Reproduce from private inputs with `python tensor_replay.py INPUTS studies/archive-plus/review-round/pass-01.json OUTPUT --scale 4` from `experiments/reconstruction/`. The command verifies hashes and renders fresh high-resolution geometry, glass, shadow and icons without fitting.
 
 ## Active slider: oval outline and channel-separated map
 
