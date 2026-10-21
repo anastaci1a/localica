@@ -8,9 +8,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -122,6 +126,59 @@ class SelectionMotionRenderingTest {
             compose.runOnIdle { chosen = false; shown = false }
             compose.mainClock.advanceTimeByFrame()
             compose.runOnIdle { assertTrue("Detached rows cannot leave stale lens entries", scene.regions.isEmpty()) }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun selectionRecordingsKeepDensityAndSharpContentDuringInterruptedFrames() {
+        var chosen by mutableStateOf(false)
+        var density by mutableStateOf(Density(1.5f, 1.25f))
+        var direction by mutableStateOf(LayoutDirection.Ltr)
+        lateinit var scene: SelectionScene
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalDensity provides density, LocalLayoutDirection provides direction) {
+                ConnectedSelectionHost(Modifier.size(180.dp, 120.dp).background(Color.Green).testTag("recorded-selection")) {
+                    scene = checkNotNull(LocalSelectionScene.current)
+                    Canvas(Modifier.padding(20.dp).size(140.dp, 80.dp).selectionLens(chosen, false)) {
+                        drawRect(Color.Blue)
+                        drawRect(Color.Red, topLeft = androidx.compose.ui.geometry.Offset(40.dp.toPx(), 20.dp.toPx()),
+                            size = androidx.compose.ui.geometry.Size(60.dp.toPx(), 40.dp.toPx()))
+                    }
+                }
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        fun verifyFrame() {
+            val pixels = compose.onNodeWithTag("recorded-selection").captureToImage().toPixelMap()
+            assertEquals("Recording keeps the current density", (180 * density.density).toInt(), pixels.width)
+            val center = pixels[pixels.width / 2, pixels.height / 2]
+            assertTrue("Selected foreground remains sharp in the recorded scene: $center", center.red > .95f && center.blue < .05f)
+            assertEquals("The selection mask leaves the surrounding viewport alone", Color.Green, pixels[2, 2])
+        }
+        try {
+            for (changed in listOf(false, true)) {
+                compose.runOnIdle {
+                    if (changed) { density = Density(2f, 1.5f); direction = LayoutDirection.Rtl }
+                    chosen = true
+                }
+                compose.mainClock.advanceTimeByFrame()
+                compose.mainClock.advanceTimeBy(48)
+                assertTrue("Exercise the procedural transition recording, not only settled drawing",
+                    scene.regions.values.single().visibility() in 0.01f..0.99f)
+                verifyFrame()
+                compose.runOnIdle { chosen = false }
+                compose.mainClock.advanceTimeByFrame()
+                compose.mainClock.advanceTimeBy(32)
+                assertTrue("The departing scene is still recorded", scene.regions.values.single().visibility() > 0f)
+                verifyFrame()
+                compose.runOnIdle { chosen = true }
+                compose.mainClock.advanceTimeBy(220)
+                assertEquals(1f, scene.regions.values.single().visibility(), 0f)
+                verifyFrame()
+                compose.runOnIdle { chosen = false }
+                compose.mainClock.advanceTimeBy(220)
+                assertEquals(0f, scene.regions.values.single().visibility(), 0f)
+                verifyFrame()
+            }
         } finally { compose.mainClock.autoAdvance = true }
     }
 

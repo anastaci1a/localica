@@ -164,7 +164,7 @@ class SelectionLensTest {
         assertEquals("Partial groups must not retain a lens", 0, residual)
     }
 
-    @Test fun selectionAppearsImmediatelyAndDisappearsWithoutAnExitAnimation() {
+    @Test fun selectionEasesInAndOutAndCanReverseBeforeSettling() {
         var chosen by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
             ConnectedSelectionHost(Modifier.size(200.dp).testTag("animated-lens")) {
@@ -182,16 +182,28 @@ class SelectionLensTest {
             return total
         }
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { chosen = true }
-        compose.mainClock.advanceTimeBy(32)
-        val early = energy()
-        compose.mainClock.advanceTimeBy(128)
-        val middle = energy()
-        assertTrue("Selection is visible immediately", early > 5f)
-        assertEquals("There is no entrance animation", early, middle, 1f)
-        compose.runOnIdle { chosen = false }
-        compose.mainClock.advanceTimeBy(32)
-        assertTrue("Deselecting removes the lens immediately", energy() < 1f)
+        try {
+            compose.runOnIdle { chosen = true }
+            compose.mainClock.advanceTimeBy(32)
+            val early = energy()
+            compose.mainClock.advanceTimeBy(220)
+            val settled = energy()
+            assertTrue("Selection starts visibly without an onset delay", early > 5f)
+            assertTrue("The lens eases into its complete appearance", settled > early + 1f)
+            compose.runOnIdle { chosen = false }
+            compose.mainClock.advanceTimeBy(48)
+            val departing = energy()
+            assertTrue("Deselecting retains a fading lens", departing > 1f && departing < settled)
+            compose.runOnIdle { chosen = true }
+            compose.mainClock.advanceTimeBy(32)
+            val reversed = energy()
+            assertTrue("Re-selection reverses from the displayed lens, not from zero", reversed > departing)
+            compose.mainClock.advanceTimeBy(220)
+            assertEquals("Reversal restores the same settled material", settled, energy(), 1f)
+            compose.runOnIdle { chosen = false }
+            compose.mainClock.advanceTimeBy(220)
+            assertTrue("The completed exit leaves no stale lens", energy() < 1f)
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     @Test fun lensLeavesForegroundDetailInPlaceOnBothRenderers() {

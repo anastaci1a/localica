@@ -17,9 +17,11 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.toIntSize
 import kotlin.math.*
 
 internal data class SelectionRegion(val bounds: Rect)
@@ -67,6 +69,8 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     val geometry = remember { SelectionPathCache() }
     val grouping = remember { SelectionComponentCache() }
     val depth = LocalGlassAppearance.current.depth
+    val recordingDensity = LocalDensity.current
+    val recordingDirection = LocalLayoutDirection.current
     CompositionLocalProvider(LocalSelectionScene provides scene) {
         Box(modifier.onPlaced { coordinates = it }.drawWithContent {
             // Pager placement also moves unselected rows. Do not subscribe their
@@ -138,7 +142,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                         val output = renderer.output
                         output.renderEffect = requireNotNull(renderer.optics).effect(groupRegions, groupPath, MediaSelectionGap.toPx(), absolute - at, depth, atlas)
                         output.clip = true
-                        output.record(size = glassLayerExtent(extent)) {
+                        output.record(recordingDensity, recordingDirection, glassLayerExtent(extent)) {
                             clipRect(left = 1f, top = 1f, right = backdropSize.width + 1f, bottom = backdropSize.height + 1f) {
                                 if (source != null) translate(1f - sampleOrigin.x, 1f - sampleOrigin.y) { drawLayer(source.layer) }
                             }
@@ -178,8 +182,11 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 }
             }
             if (!transitioning) selectedScene() else {
-                transitionLayer.record { selectedScene() }
-                visibilityLayer.record {
+                // DrawScope.record in Compose 1.8 redirects the node scope to itself
+                // as Density. Procedural dp/mesh reads then recurse; these recordings
+                // need their own scope with the immutable composition density instead.
+                transitionLayer.record(recordingDensity, recordingDirection, size.toIntSize()) { selectedScene() }
+                visibilityLayer.record(recordingDensity, recordingDirection, size.toIntSize()) {
                     drawSelectionVisibilityMask(visibleEntries.map { it.first.bounds to it.second }, MediaSelectionGap.toPx())
                 }
                 drawSelectionTransition(contentLayer, transitionLayer, visibilityLayer)
