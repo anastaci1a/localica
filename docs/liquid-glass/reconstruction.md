@@ -197,13 +197,15 @@ Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; co
 
 ### Navigation control
 
+Current round: **1/3** verified passes. Native E: A1.979013→1.978978; B7.434360→7.434263. All16 foreground and exterior measurements are unchanged. The small gain comes from a shared outer-normal adjustment. Unknown exterior context uses nearest defined source RGB for presentation only; measured pixels are unchanged. Motion below remains the earlier calibration until this round finishes.
+
 Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray selection backing, symbols and text. Original font outlines are used for labels; unresolved symbols use clean traces or a documented public vector. **The upper rim on B remains too dark.** The mostly white background A weakly constrains refraction.
 
 [![Navigation control, background A: Apple left, reconstruction right](assets/study-music-navigation-paired-a.png)](assets/study-music-navigation-paired-a.png)
 
 [![Navigation control, background B: Apple left, reconstruction right](assets/study-music-navigation-paired-b.png)](assets/study-music-navigation-paired-b.png)
 
-- [Shared recipe](experiments/reconstruction/studies/music-navigation/paired/accepted.json) · [Verification](experiments/reconstruction/studies/music-navigation/paired/verification.json) · [A diagnostics](experiments/reconstruction/studies/music-navigation/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-navigation/paired/b/diagnostics.json).
+- [Current recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-01.json) · [Independent verification](experiments/reconstruction/studies/music-navigation/review-round/pass-01-verification.json) · [Historical calibration](experiments/reconstruction/studies/music-navigation/paired/accepted.json) · [A diagnostics](experiments/reconstruction/studies/music-navigation/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-navigation/paired/b/diagnostics.json).
 <details>
 <summary>Motion — background A</summary>
 
