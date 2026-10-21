@@ -60,9 +60,9 @@
     "bottom": 0
   },
   "assets/playback-round-current.png": {
-    "width": 5442,
-    "height": 2784,
-    "top": 164,
+    "width": 2162,
+    "height": 1104,
+    "top": 64,
     "bottom": 0
   },
   "assets/match-regular.png": {
@@ -105,25 +105,29 @@
     "width": 1440,
     "height": 455,
     "top": 64,
-    "bottom": 0
+    "bottom": 0,
+    "gutter": 0
   },
   "assets/match-regular-dark-full.png": {
     "width": 2160,
     "height": 650,
     "top": 64,
-    "bottom": 0
+    "bottom": 0,
+    "gutter": 0
   },
   "assets/match-regular-light.png": {
     "width": 1440,
     "height": 455,
     "top": 64,
-    "bottom": 0
+    "bottom": 0,
+    "gutter": 0
   },
   "assets/match-regular-light-full.png": {
     "width": 2160,
     "height": 650,
     "top": 64,
-    "bottom": 0
+    "bottom": 0,
+    "gutter": 0
   },
   "assets/match-slider.png": {
     "width": 1440,

@@ -62,12 +62,14 @@ const panels=JSON.parse(fs.readFileSync(path.join(root,'comparison-panels.json')
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
   assert.equal(await touchPage.getByRole('slider').first().getAttribute('aria-valuenow'),'70','Touch drag follows the divider');await mobile.close();
   // Synthetic colors make an incorrect half/gutter/header crop unambiguous.
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="22" height="10"><path fill="black" d="M0 0h22v10H0z"/><path fill="red" d="M0 2h10v8H0z"/><path fill="blue" d="M12 2h10v8H12z"/></svg>';
-  await page.setContent(`<style>${fs.readFileSync(path.join(root,'guide.css'),'utf8')} .comparison{width:200px}</style><img data-comparison-top="2" alt="Crop fixture" src="data:image/svg+xml,${encodeURIComponent(svg)}">`);
+  for(const gutter of [0,2]){
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+(20+gutter)+'" height="10"><path fill="black" d="M0 0h'+(20+gutter)+'v10H0z"/><path fill="red" d="M0 2h10v8H0z"/><path fill="blue" d="M'+(10+gutter)+' 2h10v8H'+(10+gutter)+'z"/></svg>';
+  await page.setContent(`<style>${fs.readFileSync(path.join(root,'guide.css'),'utf8')} .comparison{width:200px}</style><img data-comparison-top="2" data-comparison-gutter="${gutter}" alt="Crop fixture" src="data:image/svg+xml,${encodeURIComponent(svg)}">`);
   await page.locator('img').evaluate(i=>i.decode());await page.addScriptTag({content:fs.readFileSync(path.join(root,'guide-comparison.js'),'utf8')});
-  const fixture=page.locator('.comparison-frame'),png=await fixture.screenshot();
+  const fixture=page.locator('.comparison-frame');assert.equal(await fixture.evaluate(e=>e.style.aspectRatio),'10 / 8','Retain each complete panel with or without a separator');const png=await fixture.screenshot();
   const colors=JSON.parse(execFileSync('python3',['-c','import sys,json,io;from PIL import Image;im=Image.open(io.BytesIO(sys.stdin.buffer.read())).convert("RGB");print(json.dumps([im.getpixel((int(im.width*x),int(im.height*.25))) for x in [.2,.8]]))'],{input:png,env:{...process.env,PYTHONPATH:'/tmp/optics-deps'}}));
   assert.deepEqual(colors,[[255,0,0],[0,0,255]],'Crop caption/gutter and align corresponding source halves');
+  }
   const noJS=await browser.newContext({javaScriptEnabled:false}),plain=await noJS.newPage();await plain.goto(url);
   assert.equal(await plain.locator('.comparison').count(),0);assert(await plain.locator('img').first().isVisible(),'No-JS thumbnail remains available');await plain.locator('#clear-playback-control>summary').click();assert(await plain.getByRole('link',{name:'Open image',exact:true}).first().isVisible(),'No-JS source image link remains available');await noJS.close();
  assert.deepEqual(errors,[]);console.log('PASS comparison desktop/phone, drag bounds, keyboard, fullscreen/focus/reset, exact half/header/gutter crop and no-JS thumbnail navigation');
