@@ -10,12 +10,13 @@ Open a study to load its comparisons. **Wipe** shows Apple on the left and the r
 
 Apple, [Meet Liquid Glass, 3:10](https://developer.apple.com/videos/play/wwdc2025/219/?time=190); uncovered photograph at 3:00. The selected radial map has a quiet center, stronger rim refraction and slight filtering after refraction. The play symbol's calculated color is blurred internally before sharp triangular coverage is applied.
 
-![Apple playback control and settled reconstruction](assets/match-media.png)
+![Apple playback control and current reconstruction](assets/playback-round-current.png)
 
-- **Most polished:** width multiplier 4.5; gain 1; source/glass/icon blur σ respectively `0.5/490`, `1.5/490`, `3/490` times the shorter dimension. Dark saturation 0.2; highlight taper 0.5. All lengths, including lighting, scale with the element.
+- **Most polished:** width multiplier 4.5; gain 1; source/glass/icon blur σ respectively `0.5/490`, `1.6/490`, `3/490` times the shorter dimension. Dark saturation 0.2; highlight taper 0.48. All lengths, including lighting, scale with the element.
 - [Complete equations and operation order](recreation-models.md#playback-radial-map-and-smooth-inner-transition). This is an empirical refraction map, not an identified Apple solid.
 - The reference-derived triangle silhouette is reused; its **color is independently calculated**. It has no stroked outline. The response is photograph-specific, not a universal contrast algorithm.
-- Distant exterior is retained; the contact band is estimated. Exterior shadows are not scored.
+- Short round, **3/3 verified passes**: shared material exposure ×1.005; post-refraction blur 1.6 native-reference pixels; highlight taper .48; radial edge-displacement amplitude ×1.001. Weighted RMS error decreases **9.10758 → 9.07967 → 9.06493 → 9.06475**. Current glass/icon errors are **8.04005/3.21105**; neither regresses in any pass. The third gain is small (0.002%). [Final recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json) · [Independent replay/domain/visual checks](experiments/reconstruction/studies/playback/review-round/pass-03-verification.json).
+- The current 4× comparison uses the registered clean photograph outside the lens; no photographed shadow is copied. Exterior shadow modeling remains incomplete. The older full-frame comparison below is historical; motion uses the final short-round recipe.
 
 <details>
 <summary>Full-resolution playback comparison</summary>
@@ -33,7 +34,7 @@ Each half retains 1920 × 1080 pixels.
 
 <img src="assets/playback-settled.gif" alt="Settled playback model translated over the recovered photograph" width="1920" height="1080" loading="lazy" decoding="async">
 
-[Full-HD video](assets/playback-settled.mp4). GIF: 7,960,291 bytes, 1920 × 1080, six seconds, 15 fps; video: 30 fps. Translation uses the same recipe without exterior shadow. These are offline renders, not device-performance measurements or a matched Apple motion clip.
+[Full-HD video](assets/playback-settled.mp4). GIF: 7,740,942 bytes, 1920 × 1080, about six seconds (5.99 s), 15 fps; video: six seconds at 30 fps. Both use the [final short-round recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json), with no exterior shadow. Motion integrates 2×2 samples per output pixel, versus 4×4 for still verification. [Media hashes and encoding](experiments/reconstruction/studies/playback/review-round/motion.json). These are offline renders, not device-performance measurements or a matched Apple motion clip.
 
 </details>
 
@@ -356,13 +357,13 @@ Historical experiment counts below include rejected proposals, ties and improvem
 
 | Scene | Glass RMSE | Rim RMSE | Interior RMSE | Withheld-block RMSE | SSIM |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Playback — most polished | 8.077 | 11.148 | 2.626 | 8.368 | 0.9727 |
+| Playback — review 3 | 8.040 | 11.094 | 2.632 | 8.301 | 0.9733 |
 | Archive / plus, review 3 | 5.796 | 8.678 | 3.683 | 5.526 | 0.9818 |
 | Active slider | 7.227 | 8.850 | 6.566 | 7.445 | 0.9718 |
 | Regular light | 1.532 | 2.894 | 0.578 | 1.544 | 0.9991 |
 | Regular dark | 0.871 | 1.664 | 0.298 | 0.886 | 0.9997 |
 
-Playback icon-color RMSE: 3.228. Toolbar foreground errors are reported independently in its current native score record; the earlier calibration copied those glyphs and did not score them.
+Playback icon-color RMSE: **3.211** ([current review](experiments/reconstruction/studies/playback/review-round/pass-03-verification.json)); the historical settled score file below retains the original 3.228 calibration. Toolbar foreground errors are reported independently in its current native score record; the earlier calibration copied those glyphs and did not score them.
 
 - Encoded RGB errors use a 0–255 scale. Lower RMSE is better; higher SSIM is better. **SSIM is not a fidelity percentage.** Scores use unquantized calculated glass; PNG rounding changes them slightly. Full metrics, counts and registration evidence: [settled-scores.json](experiments/reconstruction/settled-scores.json).
 - Glass excludes the first 0.75 native pixel inward from the silhouette and symbol boxes. Rim means the first 20% of the shorter half-extent. Exterior shadows are excluded. Playback and the current toolbar revision report separately rendered foreground errors.

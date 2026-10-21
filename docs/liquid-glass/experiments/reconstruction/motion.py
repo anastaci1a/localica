@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 from settled import ROOT, RECIPES, mapping, lighting, icon_color
 from render import shade
+from video_color import ENCODING_COLOR_ARGS, probe
 
 
 def main():
@@ -17,10 +18,16 @@ def main():
     ap.add_argument('replay', type=Path)
     ap.add_argument('out', type=Path)
     ap.add_argument('--frames', type=int, default=180)
+    ap.add_argument('--record', type=Path, help='Hashed playback refinement record; default retains the original preset')
     args = ap.parse_args()
     assert args.frames > 0
     args.out.mkdir(parents=True, exist_ok=True)
     p = RECIPES['media']
+    if args.record:
+        record = json.loads(args.record.read_text())
+        for name, digest in record['input_sha256'].items():
+            assert hashlib.sha256((args.replay/name).read_bytes()).hexdigest() == digest, 'Changed motion input'
+        p = record['recipe']
     L = p['reference_length']
     source = np.asarray(Image.open(args.replay/'media-source.png').convert('RGB'))/255
     source_blur = cv2.GaussianBlur(source, (0, 0), p['source_sigma']*L)
@@ -40,7 +47,7 @@ def main():
     proc = subprocess.Popen(['ffmpeg', '-hide_banner', '-loglevel', 'warning', '-y',
         '-f', 'rawvideo', '-pixel_format', 'rgb24', '-video_size', '1920x1080',
         '-framerate', '30', '-i', 'pipe:0', '-an', '-c:v', 'libx264', '-preset', 'fast',
-        '-crf', '17', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', str(video)],
+        '-crf', '17', '-threads', '2', '-filter_threads', '1', '-pix_fmt', 'yuv420p', *ENCODING_COLOR_ARGS, '-movflags', '+faststart', str(video)],
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log)
     try:
         for i in range(args.frames):
@@ -63,7 +70,7 @@ def main():
     gif = args.out/'playback-final.gif'
     for fps, colors in [(15, 128), (12, 96), (10, 64), (6, 48)]:
         palette = args.out/'palette.png'
-        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(video), '-vf',
+        subprocess.run(['ffmpeg', '-v', 'error', '-threads', '2', '-filter_threads', '1', '-filter_complex_threads', '1', '-y', '-i', str(video), '-vf',
             f'fps={fps},palettegen=max_colors={colors}:stats_mode=diff', '-frames:v', '1', str(palette)], check=True)
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(video), '-i', str(palette),
             '-lavfi', f'fps={fps}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle',
@@ -73,8 +80,10 @@ def main():
     assert gif.stat().st_size < 10_000_000
     report = {}
     for file in [video, gif]:
-        subprocess.run(['ffmpeg', '-v', 'error', '-i', str(file), '-f', 'null', '-'], check=True)
+        subprocess.run(['ffmpeg', '-v', 'error', '-threads', '2', '-i', str(file), '-f', 'null', '-'], check=True)
         report[file.name] = dict(bytes=file.stat().st_size, sha256=hashlib.sha256(file.read_bytes()).hexdigest())
+    if args.record:
+        report['_recipe'] = dict(sha256=hashlib.sha256(args.record.read_bytes()).hexdigest(), frames=args.frames, fps=30, output_size=[1920,1080], video_color=probe(video), sampling='Two subpixels per output axis; same normalized map/material, lower integration rate than still verification')
     (args.out/'media.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report), flush=True)
 

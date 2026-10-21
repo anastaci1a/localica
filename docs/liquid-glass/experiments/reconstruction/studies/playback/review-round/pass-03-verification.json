@@ -1,0 +1,33 @@
+{
+  "candidate": {
+    "glass": 8.040046691894531,
+    "rim": 11.093541145324707,
+    "foreground": 3.2110546834767844,
+    "E": 9.06474721701574
+  },
+  "previous": {
+    "E": 9.064932474314984,
+    "glass": 8.040206909179688,
+    "foreground": 3.2110546834767844
+  },
+  "native_pixel_max_difference": 0,
+  "source_hashes_verified": true,
+  "domain": {
+    "method": "Fresh analytic full-crop radial enclosure: 0<=a<=A and |r-a|<=max(r,A), with monotone tail checked for current parameters.",
+    "minimum_frame_margin_px": 61.08351572991296,
+    "source_kernel_3sigma_px": 2,
+    "passed": true
+  },
+  "native_replay": true,
+  "visual_review": {
+    "accepted": true,
+    "scope": "Fresh 4x full Apple/reconstruction comparison reviewed; small rim correction does not introduce a seam, extra mirroring or changed icon color.",
+    "remaining": [
+      "Unmodeled exterior shadow",
+      "Single reference; no Apple generalization claim",
+      "Empirical map and photograph-specific icon grading"
+    ]
+  },
+  "accepted": true,
+  "qualification": "Third verified short-round pass; radial displacement amplitude multiplied by 1.001, with all other stages fixed. Small measured gain, not an inflated accuracy claim."
+}

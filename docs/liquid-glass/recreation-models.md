@@ -68,14 +68,14 @@ For the circle, `r=|v|`, `d=1−r`, and `F(v)=(1−a(d)/r)v`. At the center set 
 
 | Parameter | Value |
 | --- | ---: |
-| Outer displacement `A` | 0.6338092221139378 |
+| Outer displacement `A` | 0.6344430313360516 |
 | Initial transition width `b` | 0.09445809156460266 |
 | Initial exponent `p` | 2.10022237760162 |
 | Inner-tail width multiplier `k` | 4.5 |
 | Inner endpoint exponent `q` | 4 |
 | Displacement gain | 1 |
 | Source Gaussian σ / L | 0.0020408163265306124 |
-| Glass post-refraction σ / L | 0.006122448979591836 |
+| Glass post-refraction σ / L | 0.006530612244897959 |
 | Final foreground-color σ / L | 0.012244897959183673 |
 
 For `d≤b/2`, use `a=A clamp(1−d/b,0,1)^p`. For `b/2<d<(1+k)b/2`, define `t=(d−b/2)/(kb/2)` and use:
@@ -88,6 +88,8 @@ For larger `d`, use `a=0`. The join matches value, first and second derivatives;
 
 ### Glass and play-symbol processing
 
+The [current playback recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json) multiplies all original material coefficients by 1.005 before clipping/shading integration. The original coefficients remain archived in `recipes.json`; the round record contains the exact resulting vector. Replay the frozen inputs with `python playback_replay.py INPUTS studies/playback/review-round/pass-03.json OUTPUT --scale 4`; add `--record` with the same file to `motion.py` for the moving preview.
+
 1. Blur the backdrop with the source σ, sample it through `F`, and apply the common material function below.
 2. Blur that calculated glass color with the glass σ. This is after refraction and shading.
 3. Calculate the foreground color `C0=1−strength×(1−glass)^gamma`, componentwise. Use the exact three-channel coefficients from the recipe:
@@ -98,7 +100,7 @@ gamma    = [11.731766541351298, 8.166089277320348, 5.294455609674747]
 ```
 
 4. Let `Y=dot(C0,[.2126,.7152,.0722])` and `w=clamp((1−Y)/.15,0,1)²`. Increase dark-region saturation: `C1=clamp(Y+(1+.2w)(C0−Y),0,1)`.
-5. Componentwise, set `u=clamp((C1−.9)/.1,0,1)` and `C2=C1−.5u³(1−C1)`. This reduces near-white highlights without creating an early white plateau. For a general strength `h`, the function is monotone for `0≤h≤4`; `.5` is the selected value.
+5. Componentwise, set `u=clamp((C1−.9)/.1,0,1)` and `C2=C1−.48u³(1−C1)`. This reduces near-white highlights without creating an early white plateau. For a general strength `h`, the function is monotone for `0≤h≤4`; `.48` is the current value.
 6. Gaussian-blur **C2**, with the final foreground-color σ. This is the last color operation. Composite it through the sharp triangular coverage: `output=(1−α)glass+αCblurred`.
 
 The included [playback coverage mask](experiments/reconstruction/playback-mask.png) is a reference-derived triangle silhouette with its antialias fringe, not copied Apple icon colors. Its box is stored in normalized coordinates. There is no stroked icon outline. The foreground response was fitted on this photograph and can produce unsuitable hues elsewhere; this is not a universal contrast algorithm. A light icon also needs a different treatment over a white backdrop.
