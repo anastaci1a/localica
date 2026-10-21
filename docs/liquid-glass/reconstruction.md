@@ -239,26 +239,26 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 
 ### Home control
 
-Current boundary-approximation round: **2/3** verified passes. This is a new input epoch, not a claimed gain over the historical backdrop. Nearest-defined RGB estimates missing incident content while preserving every originally observed pixel and target scoring mask. About0.44%/0.30% of full emitted rays still depend on unobserved content; this is a boundary assumption, not recovered Apple imagery. Within that fixed epoch, native E improves A6.342535→6.342153/B10.160994→10.160405. A shared bounded icon-color response reduces foreground RMSE A11.1165→11.0619/B11.8255→11.6845. **The overly dark outer rim and foreground mismatch remain unresolved.**
+Current boundary-approximation round: **3/3** verified passes. This is a new input epoch, not a claimed gain over the historical backdrop. Nearest-defined RGB estimates missing incident content while preserving every originally observed pixel and target scoring mask. About 0.44%/0.30% of full emitted rays still depend on unobserved content; this is a boundary assumption, not recovered Apple imagery. Within that fixed epoch, native E improves A 6.342535→6.342152/B 10.160994→10.160404. A shared bounded icon-color response reduces foreground RMSE A 11.1165→11.0619/B 11.8255→11.6845. **The overly dark outer rim and foreground mismatch remain unresolved.**
 
-[Current recipe](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-02.json) · [Independent verification and source limits](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-02-verification.json). Motion below remains the historical calibration until this round finishes.
+[Current recipe](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-03.json) · [Independent verification and source limits](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-03-verification.json). Motion below uses the final recipe: 1080px wide, 6seconds at15fps; GIFs use10fps/128colors and stay below10MB each. The moving boundary includes estimated content (minimum original scored-kernel support 92.7% on A,100% on B); it is an illustration, not an observed Apple animation. [Media verification](experiments/reconstruction/studies/music-home-vector/boundary-round/motion.json).
 
-Frames A/B: 2.5/2.0 seconds. The corrected study has 22 initial/refinement and 21 paired experiments, with one sparse source-brightness response and a clean Home vector. Both references pass the frozen native loss, whole-glass and foreground gates. The earlier pairing regressed the first-background result; its unchanged archived records do not count as current acceptance.
+Reference frames A/B: 2.5/2.0 seconds. The source-brightness response, white incident-field approximation and clean Home vector retain their earlier two-background calibration; this does not establish behavior outside those observations.
 
 [![Home correction, background A: Apple left, reconstruction right](assets/study-music-home-vector-progress-a.png)](assets/study-music-home-vector-progress-a.png)
 
 [![Home correction, background B: Apple left, reconstruction right](assets/study-music-home-vector-progress-b.png)](assets/study-music-home-vector-progress-b.png)
 
-- [Recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Single-to-paired boundary](experiments/reconstruction/studies/music-home-vector/paired/bridge.json) · [Independent native replay](experiments/reconstruction/studies/music-home-vector/paired/verification.json) · [Archived invalid chain](experiments/reconstruction/studies/music-home-vector/paired-invalid-boundary/status.json).
+- [Historical paired21 recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Single-to-paired boundary](experiments/reconstruction/studies/music-home-vector/paired/bridge.json) · [Independent native replay](experiments/reconstruction/studies/music-home-vector/paired/verification.json) · [Archived invalid chain](experiments/reconstruction/studies/music-home-vector/paired-invalid-boundary/status.json).
 - A 0.08L inset keeps the source-color calculation on defined pixels. A narrow uniform-white incident field improves the outer contour; it is an empirical lighting assumption, and a dark upper-rim mismatch remains. The source-brightness law is tested only over these two backgrounds.
-- The current stills show the new boundary round; historical motion retains paired21. Missing background pixels are extended with nearby defined RGB for presentation, with [measured benchmark differences](experiments/reconstruction/home-gallery-progress.json). Motion uses the same completed, translated source inside and outside the lens; the extension is not photographic recovery. Four-second videos run at 30 fps; full-size GIFs stay below 10 MB by reducing frame rate.
+- Final stills reuse lossless zero-shift movie frames; no extra high-resolution optical render. [Prior capture diagnostics](experiments/reconstruction/home-gallery-progress.json) remain historical. The [target-independent edge-lighting probe](experiments/reconstruction/studies/music-home-vector/boundary-round/edge-lighting-diagnostic.json) records negative pre-clamp values in the signed rim model; no pixel correction is applied.
 
 <details>
 <summary>Motion — background A</summary>
 
-<video controls preload="none" playsinline width="940" height="960" aria-label="Home correction, background A motion"><source src="assets/study-music-home-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-a.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="1104" aria-label="Home correction, background A motion"><source src="assets/study-music-home-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-a.mp4">Open video</a></video>
 
-<img src="assets/study-music-home-vector-paired-a.gif" alt="Home correction motion on background A" width="940" height="960" loading="lazy" decoding="async">
+<img src="assets/study-music-home-vector-paired-a.gif" alt="Home correction motion on background A" width="1080" height="1104" loading="lazy" decoding="async">
 
 [Video](assets/study-music-home-vector-paired-a.mp4) · [GIF](assets/study-music-home-vector-paired-a.gif)
 
@@ -267,9 +267,9 @@ Frames A/B: 2.5/2.0 seconds. The corrected study has 22 initial/refinement and 2
 <details>
 <summary>Motion — background B</summary>
 
-<video controls preload="none" playsinline width="940" height="960" aria-label="Home correction, background B motion"><source src="assets/study-music-home-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-b.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="1104" aria-label="Home correction, background B motion"><source src="assets/study-music-home-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-b.mp4">Open video</a></video>
 
-<img src="assets/study-music-home-vector-paired-b.gif" alt="Home correction motion on background B" width="940" height="960" loading="lazy" decoding="async">
+<img src="assets/study-music-home-vector-paired-b.gif" alt="Home correction motion on background B" width="1080" height="1104" loading="lazy" decoding="async">
 
 [Video](assets/study-music-home-vector-paired-b.mp4) · [GIF](assets/study-music-home-vector-paired-b.gif)
 
@@ -354,18 +354,20 @@ Historical experiment counts below include rejected proposals, ties and improvem
 
 ### Music and switch studies
 
+Earlier calibration checkpoints are listed below; current guarded revisions are linked in each section above. Experiment totals include rejected trials and are not verified improvement counts.
+
 | Study | Weighted loss A / B | Glass RMSE A / B | Initial / paired experiments | Status |
 | --- | ---: | ---: | ---: | --- |
 | Expanded mini-player | 29.031 / 9.723 | 4.366 / 2.571 | 22 / 21 | Completed study |
 | Compact mini-player | 24.899 / 23.369 | 4.370 / 4.325 | 29 / 21 | Completed study |
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
-| Home | 40.187 / 103.246 | 5.861 / 9.223 | 22 / 21 | Corrected boundary verified |
+| Home | 40.187 / 103.246 | 5.861 / 9.223 | 22 / 21 | Historical paired bridge; incident domain incomplete |
 | Active switch, review 6 | 198.132 / 234.623 | 11.156 / 13.641 | 24 / 24 historical | Shared two-reference revision |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Independent replay also checks that the first paired baseline protects the retained single-background result.
 - These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.
-- Both references come from the same video, not independent device validation. Native calibration uses the scored pixels; its checkerboard subset is not an independent holdout. Higher-resolution presentation does not create new source detail or change native scoring. GIFs may have lower resolution/frame rate than the 4× PNG/video masters; their encoding diagnostics are recorded with each study.
+- Both references come from the same video, not independent device validation. Native calibration uses the scored pixels; its checkerboard subset is not an independent holdout. Higher-resolution presentation does not create new source detail or change native scoring. Export dimensions and frame rates vary; consult each linked media record.
 
 ### Earlier HD studies
 
