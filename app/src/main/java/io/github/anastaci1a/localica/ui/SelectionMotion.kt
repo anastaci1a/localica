@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 
@@ -36,6 +37,10 @@ internal fun DrawScope.drawSelectionVisibilityMask(entries: List<Pair<Rect, Floa
  * All extra recordings are used only while an entry is arriving/departing.
  */
 internal fun DrawScope.drawSelectionTransition(base: GraphicsLayer, selected: GraphicsLayer, mask: GraphicsLayer) {
+    // DstIn must sample transparent pixels too. Legacy display-list playback can
+    // discard an empty/transparent mask instead of clearing the selected scene;
+    // materialize its full bounds before using it in either blend pass.
+    mask.compositingStrategy = CompositingStrategy.Offscreen
     val canvas = drawContext.canvas
     val bounds = Rect(Offset.Zero, size)
     canvas.saveLayer(bounds, Paint())

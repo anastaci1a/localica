@@ -184,6 +184,9 @@ class SelectionLensTest {
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { chosen = true }
+            // First deliver the target to composition. The following two frames
+            // establish the animation epoch and render its first nonzero value.
+            compose.mainClock.advanceTimeByFrame()
             compose.mainClock.advanceTimeBy(32)
             val early = energy()
             compose.mainClock.advanceTimeBy(220)
@@ -191,13 +194,19 @@ class SelectionLensTest {
             assertTrue("Selection starts visibly without an onset delay", early > 5f)
             assertTrue("The lens eases into its complete appearance", settled > early + 1f)
             compose.runOnIdle { chosen = false }
+            compose.mainClock.advanceTimeByFrame()
             compose.mainClock.advanceTimeBy(48)
             val departing = energy()
             assertTrue("Deselecting retains a fading lens", departing > 1f && departing < settled)
             compose.runOnIdle { chosen = true }
+            compose.mainClock.advanceTimeByFrame()
+            // Existing animations advance before recomposition accepts reversal.
+            // Compare against that displayed handoff, not the previous exit frame.
+            val handoff = energy()
+            assertTrue("Re-selection retains the displayed lens", handoff > 1f && handoff < settled)
             compose.mainClock.advanceTimeBy(32)
             val reversed = energy()
-            assertTrue("Re-selection reverses from the displayed lens, not from zero", reversed > departing)
+            assertTrue("Re-selection reverses from the displayed lens, not from zero", reversed > handoff)
             compose.mainClock.advanceTimeBy(220)
             assertEquals("Reversal restores the same settled material", settled, energy(), 1f)
             compose.runOnIdle { chosen = false }

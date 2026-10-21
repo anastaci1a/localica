@@ -35,23 +35,28 @@ class SelectionMotionRenderingTest {
                 Canvas(Modifier.size(64.dp).testTag("mixed")) {
                     base.record { drawRect(foreground) }
                     selected.record { drawRect(foreground) }
-                    mask.record { drawRect(Color.White.copy(alpha = fraction)) }
+                    // Include both painted and transparent mask bounds. Even a
+                    // fully empty mask must clear the selected scene on API 26.
+                    mask.record { drawRect(Color.White.copy(alpha = fraction),
+                        size = androidx.compose.ui.geometry.Size(size.width / 2, size.height)) }
                     drawSelectionTransition(base, selected, mask)
                 }
                 Canvas(Modifier.size(64.dp).testTag("reference")) { drawRect(foreground) }
             }
         } }
         for (color in listOf(Color.Blue.copy(alpha = .4f), Color.Red.copy(alpha = .7f))) {
-            for (p in listOf(0f, .2f, .5f, .8f, 1f)) {
+            for (p in listOf(0f, .2f, .5f, .8f, 1f, .5f, 0f)) {
                 compose.runOnIdle { fraction = p; foreground = color }
                 val actual = compose.onNodeWithTag("mixed").captureToImage().toPixelMap()
                 val expected = compose.onNodeWithTag("reference").captureToImage().toPixelMap()
-                val a = actual[actual.width / 2, actual.height / 2]
-                val b = expected[expected.width / 2, expected.height / 2]
-                assertEquals("Red at $p", b.red, a.red, 2f / 255)
-                assertEquals("Green at $p", b.green, a.green, 2f / 255)
-                assertEquals("Blue at $p", b.blue, a.blue, 2f / 255)
-                assertEquals("Alpha at $p", b.alpha, a.alpha, 2f / 255)
+                for (xFraction in listOf(.25f, .75f)) {
+                    val a = actual[(actual.width * xFraction).toInt(), actual.height / 2]
+                    val b = expected[(expected.width * xFraction).toInt(), expected.height / 2]
+                    assertEquals("Red at $p / $xFraction", b.red, a.red, 2f / 255)
+                    assertEquals("Green at $p / $xFraction", b.green, a.green, 2f / 255)
+                    assertEquals("Blue at $p / $xFraction", b.blue, a.blue, 2f / 255)
+                    assertEquals("Alpha at $p / $xFraction", b.alpha, a.alpha, 2f / 255)
+                }
             }
         }
     }
@@ -108,19 +113,32 @@ class SelectionMotionRenderingTest {
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { chosen = true }
-            compose.onNodeWithTag("row").assertIsSelected()
+            // A paused clock must deliver the state mutation to composition before
+            // querying semantics. This frame precedes any reveal animation time.
             compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithTag("row").assertIsSelected()
+            assertTrue(scene.regions.values.single().selected)
+            assertEquals("Membership changes before the lens starts moving", 0f,
+                scene.regions.values.single().visibility(), 0f)
             compose.mainClock.advanceTimeBy(48)
             val incoming = scene.regions.values.single().visibility()
             assertTrue("Reveal is neither absent nor snapped", incoming > 0f && incoming < 1f)
             compose.runOnIdle { chosen = false }
-            compose.onNodeWithTag("row").assertIsNotSelected()
             compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithTag("row").assertIsNotSelected()
+            assertFalse(scene.regions.values.single().selected)
             val departing = scene.regions.values.single().visibility()
             assertTrue("Deselect retains the visible lens", departing > 0f)
             compose.mainClock.advanceTimeBy(48)
             assertTrue(scene.regions.values.single().visibility() < departing)
             compose.runOnIdle { chosen = true }
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithTag("row").assertIsSelected()
+            val reversal = scene.regions.values.single().visibility()
+            assertTrue("Reversal keeps the departing lens", reversal > 0f && reversal < 1f)
+            compose.mainClock.advanceTimeBy(48)
+            assertTrue("Reversal moves from the actual target-delivery frame",
+                scene.regions.values.single().visibility() > reversal)
             compose.mainClock.advanceTimeBy(220)
             assertEquals(1f, scene.regions.values.single().visibility(), 0f)
             compose.runOnIdle { chosen = false; shown = false }
@@ -202,9 +220,11 @@ class SelectionMotionRenderingTest {
     }
     @Test fun currentPositionCircleScalesWithItsExistingEaseAndRevokesInputOnExit() {
         var visible by mutableStateOf(false)
+        var clicks = 0
         compose.setContent { LocalicaTheme {
-            Box(Modifier.size(200.dp)) {
-                FloatingReturnToPositionButton(true, "Current position", visible, false) { }
+            Box(Modifier.size(200.dp).testTag("return-scene")) {
+                FloatingReturnToPositionButton(true, "Current position", visible, false,
+                    Modifier.testTag("return-control")) { clicks++ }
             }
         } }
         compose.mainClock.autoAdvance = false
@@ -214,14 +234,26 @@ class SelectionMotionRenderingTest {
             compose.mainClock.advanceTimeBy(48)
             val entering = compose.onNodeWithContentDescription("Current position").fetchSemanticsNode().boundsInRoot.width
             compose.mainClock.advanceTimeBy(500)
-            val settled = compose.onNodeWithContentDescription("Current position").fetchSemanticsNode().boundsInRoot.width
+            val settledBounds = compose.onNodeWithContentDescription("Current position").fetchSemanticsNode().boundsInRoot
+            val settled = settledBounds.width
             assertTrue("Appearing lens scales towards its ordinary size", entering > settled * .92f && entering < settled)
+            compose.onNodeWithContentDescription("Current position").performClick()
+            assertEquals(1, clicks)
             compose.runOnIdle { visible = false }
+            compose.mainClock.advanceTimeByFrame()
             compose.onNodeWithContentDescription("Current position").assertDoesNotExist()
+            compose.onNodeWithTag("return-control").assertExists()
+            val sceneOrigin = compose.onNodeWithTag("return-scene").fetchSemanticsNode().boundsInRoot.topLeft
+            compose.onNodeWithTag("return-scene").performTouchInput { click(settledBounds.center - sceneOrigin) }
+            assertEquals("Retained exit drawing cannot activate the return action", 1, clicks)
             compose.mainClock.advanceTimeBy(48)
+            compose.onNodeWithTag("return-control").assertExists()
             compose.runOnIdle { visible = true }
             compose.mainClock.advanceTimeBy(500)
             assertEquals(settled, compose.onNodeWithContentDescription("Current position").fetchSemanticsNode().boundsInRoot.width, .5f)
+            compose.runOnIdle { visible = false }
+            compose.mainClock.advanceTimeBy(500)
+            compose.onNodeWithTag("return-control").assertDoesNotExist()
         } finally { compose.mainClock.autoAdvance = true }
     }
 
