@@ -180,7 +180,7 @@ B(p,H) = (I + H Dw)^T b / (1 − w·b)
 ∂x B_y − ∂y B_x + B_x ∂H B_y − B_y ∂H B_x = 0
 ```
 
-Partial x/y derivatives include the prescribed F(p), holding H fixed. The expanded condition includes H's unknown derivatives through the last two terms; raw image-map curl alone remains insufficient. Require 0<H<G, N_z<0, n(t·v)>1 and 1−w·b>0 on this transmitted local branch. Do not clamp failures into rays. Boundary conditions, first-hit/sidewall paths and global height consistency remain separate checks.
+Partial x/y derivatives include the prescribed F(p), holding H fixed. The expanded condition includes H's unknown derivatives through the last two terms; raw image-map curl alone remains insufficient. Require 0<H<G, N_z<0, n(t·v)>1 and 1−w·b>0 on this transmitted local branch. Do not clamp failures into rays. Call the scalar compatibility residual Q(p,H). A pointwise depth root also requires ∇p Q + Q_H B=0 along the surface; independently choosing a root at each pixel is insufficient. Boundary conditions, first-hit/sidewall paths and global height consistency remain separate checks.
 
 [Executable inverse equation](experiments/reconstruction/perspective_back_surface.py) and [independent forward controls](experiments/reconstruction/verify-perspective-back-surface.py) recover known quadratic surfaces from vector Snell paths. Tests cover height derivatives, the expanded condition, unit scaling, wrong-branch rejection and the orthographic limit. Run `python verify-perspective-back-surface.py`. These validate the stated equations, not a finite-camera realization of Apple's images or of the current fitted switch map.
 

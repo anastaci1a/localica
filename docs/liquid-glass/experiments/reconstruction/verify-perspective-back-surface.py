@@ -33,8 +33,23 @@ for c,g,n,K,h0 in [(3.,2.,1.5,np.array([[.08,.02],[.02,.04]]),.4),(8.,3.,1.15,np
     kh=(projected_height_gradient(p,H+step,F,c,g,n)-projected_height_gradient(p,H-step,F,c,g,n))/(2*step)
     kg=state['projected_gradient'];residual=partial[0][...,1]-partial[1][...,0]+kg[...,0]*kh[...,1]-kg[...,1]*kh[...,0]
     integrability=float(abs(residual).max());assert integrability<1e-8
+    # A pointwise zero of the first condition also needs its derivative along
+    # the candidate height surface to vanish; independent depth roots cannot
+    # replace this compatibility check.
+    def first_condition(points,height):
+        eps=1e-4
+        def grad(q,h):return projected_height_gradient(q,h,forward(q,c,g,n,K,h0)[0],c,g,n)
+        B=grad(points,height);dp=[]
+        for axis in np.eye(2):dp.append((grad(points+eps*axis,height)-grad(points-eps*axis,height))/(2*eps))
+        dh=(grad(points,height+eps)-grad(points,height-eps))/(2*eps)
+        return dp[0][...,1]-dp[1][...,0]+B[...,0]*dh[...,1]-B[...,1]*dh[...,0]
+    outer=.001
+    dc=np.stack([(first_condition(p+outer*axis,H)-first_condition(p-outer*axis,H))/(2*outer) for axis in np.eye(2)],-1)
+    dh=(first_condition(p,H+outer)-first_condition(p,H-outer))/(2*outer)
+    second=float(np.linalg.norm(dc+dh[...,None]*state['projected_gradient'],axis=-1).max())
+    assert second<2e-7,second
     scaled=inverse_state(p*3,H*3,F*3,c*3,g*3,n);assert abs(scaled['projected_gradient']-kg).max()<1e-12
-    rows.append(dict(camera=c,index=n,known_surface_slope_error=error,projected_gradient_fd_error=gerror,expanded_integrability_max=integrability,image_map_curl_max=float(abs(map_derivatives[0][...,1]-map_derivatives[1][...,0]).max())))
+    rows.append(dict(camera=c,index=n,known_surface_slope_error=error,projected_gradient_fd_error=gerror,expanded_integrability_max=integrability,height_root_consistency_max=second,image_map_curl_max=float(abs(map_derivatives[0][...,1]-map_derivatives[1][...,0]).max())))
 # Independent orthographic reduction, not a new image-map compatibility claim.
 v=np.stack([.02+.01*x,.03+.02*y],-1);H=np.full(x.shape,.4);G=2.;n=1.5;C=1e10
 expected=inverse_gradient(v,G-H,n);actual=projected_height_gradient(p,H,p+v,C,G,n)
