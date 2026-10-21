@@ -195,8 +195,8 @@ class PlayerExpansionMotionTest {
             compose.runOnIdle { scope.launch { progress.snapTo(1f) } }
             val full = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
             val fullTitle = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
-            val backgroundHeight = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot().height
-            val rawHeight = if (artworkLayout == ArtworkLayout.FullBackground) full.width / aspect else full.height
+            val backgroundHeight = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot().height.value
+            val rawHeight = if (artworkLayout == ArtworkLayout.FullBackground) full.width.value / aspect else full.height.value
             val compatible = full.top.value + rawHeight <= fullTitle.top.value
             val snapshots = mutableMapOf<Float, androidx.compose.ui.unit.DpRect>()
             for (p in listOf(0f, .02f, .05f, .08f, .12f, .16f, .2f, .3f, .5f, .8f, 1f,
@@ -206,15 +206,15 @@ class PlayerExpansionMotionTest {
                 val title = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
                 if (compatible) {
                     if (art.top + 32.dp > title.top + 1.dp) {
-                        assertEquals("Retain mini width before clearing title", 32f, art.width, .5f)
-                        assertEquals("Retain mini height before clearing title", 32f, art.height, .5f)
-                    } else if (art.height > 33f) {
+                        assertEquals("Retain mini width before clearing title", 32f, art.width.value, .5f)
+                        assertEquals("Retain mini height before clearing title", 32f, art.height.value, .5f)
+                    } else if (art.height > 33.dp) {
                         assertTrue("Growing cover stays above the actual presented title", art.bottom <= title.top + 1.dp)
                     }
                 } else {
                     val usual = p * (.58f + .42f * p)
-                    assertEquals("Constrained layout keeps existing width motion", 32f + (full.width - 32f) * usual, art.width, 1f)
-                    assertEquals("Constrained layout keeps existing height motion", minOf(backgroundHeight, 32f + (rawHeight - 32f) * usual), art.height, 1f)
+                    assertEquals("Constrained layout keeps existing width motion", 32f + (full.width.value - 32f) * usual, art.width.value, 1f)
+                    assertEquals("Constrained layout keeps existing height motion", minOf(backgroundHeight, 32f + (rawHeight - 32f) * usual), art.height.value, 1f)
                 }
                 snapshots[p]?.let { assertEquals("Held reversal must retrace artwork bounds", it, art) }
                 snapshots[p] = art

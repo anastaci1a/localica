@@ -28,6 +28,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.sp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
