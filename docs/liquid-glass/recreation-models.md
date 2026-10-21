@@ -304,3 +304,9 @@ The [Search recipe](experiments/reconstruction/studies/music-search-vector/revie
 Replay: `python vector_revision.py INPUTS RECORD OUTPUT` with either linked recipe and the original private a/b source, target, known masks and SVGs. The command checks case, source and vector hashes. Unknown exterior uses nearest defined RGB for presentation only; no photographed shadow or foreground is copied.
 
 For final figures add `--high-quality` (1080px per side). Moving exports accept `extended_media.py INPUT --width 1080`; sampling uses a binary integer scale above the requested size before downsampling. Original native scoring and default media commands are unchanged.
+
+### Home finite-incident-domain epoch
+
+The [current Home record](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-01.json) preserves the previous model and SVG response while explicitly extending the recovered mosaic by nearest defined RGB. This is a conditional boundary approximation; no pixels are promoted to observed content. The independent `target_observation_mask` retains every original scoring/train/held mask. Old paired21 and its incomplete incident domain remain historical, and source changes receive no optical credit.
+
+Replay with `python vector_revision.py INPUTS studies/music-home-vector/boundary-round/pass-01.json OUTPUT`, using the frozen new-epoch inputs. Fixed nonlinear SVG response uses the declared coefficients directly, with independently rasterized coverage; it does not fit a matte or color from target pixels. Estimated-source coverage and the remaining black-rim discrepancy are reported separately from material-fit gains.

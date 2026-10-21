@@ -235,6 +235,10 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 
 ### Home control
 
+Current boundary-approximation round: **1/3** verified passes. This is a new input epoch, not a claimed gain over the historical backdrop. Nearest-defined RGB estimates missing incident content while preserving every originally observed pixel and target scoring mask. About0.44%/0.30% of full emitted rays still depend on unobserved content; this is a boundary assumption, not recovered Apple imagery. Within that fixed epoch, native E improves A6.342535→6.342162/B10.160994→10.160419. **The overly dark outer rim and foreground mismatch remain unresolved.**
+
+[Current recipe](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-01.json) · [Independent verification and source limits](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-01-verification.json). Motion below remains the historical calibration until this round finishes.
+
 Frames A/B: 2.5/2.0 seconds. The corrected study has 22 initial/refinement and 21 paired experiments, with one sparse source-brightness response and a clean Home vector. Both references pass the frozen native loss, whole-glass and foreground gates. The earlier pairing regressed the first-background result; its unchanged archived records do not count as current acceptance.
 
 [![Home correction, background A: Apple left, reconstruction right](assets/study-music-home-vector-progress-a.png)](assets/study-music-home-vector-progress-a.png)
@@ -243,7 +247,7 @@ Frames A/B: 2.5/2.0 seconds. The corrected study has 22 initial/refinement and 2
 
 - [Recipe](experiments/reconstruction/studies/music-home-vector/paired/accepted.json) · [Single-to-paired boundary](experiments/reconstruction/studies/music-home-vector/paired/bridge.json) · [Independent native replay](experiments/reconstruction/studies/music-home-vector/paired/verification.json) · [Archived invalid chain](experiments/reconstruction/studies/music-home-vector/paired-invalid-boundary/status.json).
 - A 0.08L inset keeps the source-color calculation on defined pixels. A narrow uniform-white incident field improves the outer contour; it is an empirical lighting assumption, and a dark upper-rim mismatch remains. The source-brightness law is tested only over these two backgrounds.
-- These 4× captures show pass21. Missing background pixels are extended with nearby defined RGB for presentation, with [measured benchmark differences](experiments/reconstruction/home-gallery-progress.json). Motion uses the same completed, translated source inside and outside the lens; the extension is not photographic recovery. Four-second videos run at 30 fps; full-size GIFs stay below 10 MB by reducing frame rate.
+- The current stills show the new boundary round; historical motion retains paired21. Missing background pixels are extended with nearby defined RGB for presentation, with [measured benchmark differences](experiments/reconstruction/home-gallery-progress.json). Motion uses the same completed, translated source inside and outside the lens; the extension is not photographic recovery. Four-second videos run at 30 fps; full-size GIFs stay below 10 MB by reducing frame rate.
 
 <details>
 <summary>Motion — background A</summary>
