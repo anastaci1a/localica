@@ -57,10 +57,21 @@ def subpixel_support(study,p,scale):
                 gaussian_radius_native_px=radius,passed=minimum>=.999)
 
 
+def transmission_signature(study,p,scale):
+    # These two parameters occur only in the lighting basis, never in the
+    # footprint, normal/tangential map, reflection or chromatic source rays.
+    optical={k:v for k,v in p.items() if k not in {'rim_width','thin_width'}}
+    payload=dict(case=study.case,parameters=optical,scale=scale)
+    return hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for name in ['inputs','previous','candidate','out']:ap.add_argument(name,type=Path)
-    ap.add_argument('--scale',type=int,default=4);args=ap.parse_args()
+    ap.add_argument('--scale',type=int,default=4)
+    ap.add_argument('--reuse-transmission-proof',type=Path,
+                    help='Prior replay JSON with identical cases, optical parameters and emitted grid')
+    args=ap.parse_args()
     assert 1<=args.scale<=4
     cv2.setNumThreads(1);args.out.mkdir(parents=True,exist_ok=True)
     models=[json.loads(path.read_text()) for path in [args.previous,args.candidate]]
@@ -69,6 +80,7 @@ def main():
     protocol=dict(cases=[s.case for s in studies],metric='E²=.7glassRMSE²+.3rimRMSE²; original native2x2 glass/rim masks. New exterior0<originalsd<.35L, complete clean source composite.')
     epoch=hashlib.sha256(json.dumps(protocol,sort_keys=True).encode()).hexdigest()
     states=[dict(epoch=epoch,observations={}) for _ in models];supports=[]
+    prior=json.loads(args.reuse_transmission_proof.read_text()) if args.reuse_transmission_proof else None
     for s in studies:
         label=s.folder.name.upper();ext=(s.sd>0)&(s.sd<.35)
         for state,model in zip(states,models):
@@ -77,8 +89,13 @@ def main():
             score['shadow']=dict(rmse=float(np.sqrt(np.mean(((whole-s.target_crop)[ext]*255)**2))),pixels=int(ext.sum()))
             state['observations'][label]=score
         p=models[1]['parameters'];support=coverage_report(s,p)
-        sub=subpixel_support(s,p,args.scale)
-        supports.append(dict(observation=label,center=support,subpixels=sub,passed=supported(s,support) and sub['passed']))
+        signature=transmission_signature(s,p,args.scale)
+        if prior:
+            proof=next(r for r in prior['support'] if r['observation']==label)
+            assert proof['transmission_signature']==signature and proof['subpixels']['passed'],'Changed ray/source/grid: rerun emitted-ray verification'
+            sub={**proof['subpixels'],'reused_from_sha256':hashlib.sha256(args.reuse_transmission_proof.read_bytes()).hexdigest()}
+        else:sub=subpixel_support(s,p,args.scale)
+        supports.append(dict(observation=label,center=support,subpixels=sub,transmission_signature=signature,passed=supported(s,support) and sub['passed']))
         hi=s.render(p,np.asarray(models[1]['material']),args.scale)
         whole=clean_composite(s,p,hi,args.scale)
         rgb=np.uint8(np.rint(np.clip(whole,0,1)*255))

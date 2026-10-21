@@ -1,0 +1,48 @@
+{
+  "case": {
+    "video": "219",
+    "time": 710,
+    "source_time": 720,
+    "center": [
+      960,
+      542
+    ],
+    "half": [
+      392,
+      170
+    ],
+    "radius": 170,
+    "crop": [
+      475,
+      285,
+      1445,
+      845
+    ],
+    "foreground": [
+      [
+        695,
+        462,
+        872,
+        628
+      ],
+      [
+        1068,
+        470,
+        1215,
+        618
+      ]
+    ],
+    "sigma_max": 8,
+    "blur_transition": 30
+  },
+  "native_size": [
+    1920,
+    1080
+  ],
+  "subpixels_per_axis": 4,
+  "color": "encoded RGB",
+  "quantization": "8-bit PNG source, unquantized float32 output, original target PNG /255",
+  "mask_rule": "frozen original masks: sd<-.75, foreground boxes excluded, rim inward<34",
+  "exterior": "fixed original 0<sd<35 band; guard is full-composite RMSE against target, original source composited outside generated shape, no copied shadow; not a claim of a solved shadow",
+  "foreground": "copied symbols in legacy display unscored; this trial exports glass and clean backdrop, no pasted symbols"
+}

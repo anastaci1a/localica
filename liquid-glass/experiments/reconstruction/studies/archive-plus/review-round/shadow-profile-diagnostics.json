@@ -1,0 +1,50 @@
+{
+  "far_bands_advisory_not_acceptance_masks": true,
+  "bands": [
+    {
+      "band_native_px": [
+        0,
+        10
+      ],
+      "pixels": 19860,
+      "source_rmse": 18.91398148282344,
+      "shadow_composite_rmse": 14.856234417577221
+    },
+    {
+      "band_native_px": [
+        10,
+        20
+      ],
+      "pixels": 20484,
+      "source_rmse": 18.794697509129755,
+      "shadow_composite_rmse": 8.615009486454058
+    },
+    {
+      "band_native_px": [
+        20,
+        35
+      ],
+      "pixels": 31964,
+      "source_rmse": 19.79116939212204,
+      "shadow_composite_rmse": 10.680273642782291
+    },
+    {
+      "band_native_px": [
+        35,
+        55
+      ],
+      "pixels": 44780,
+      "source_rmse": 21.627097362800143,
+      "shadow_composite_rmse": 15.765414121129087
+    },
+    {
+      "band_native_px": [
+        55,
+        80
+      ],
+      "pixels": 59488,
+      "source_rmse": 21.45354068251774,
+      "shadow_composite_rmse": 18.271628137786394
+    }
+  ]
+}

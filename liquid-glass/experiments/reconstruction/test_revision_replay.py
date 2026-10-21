@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from revision_replay import clean_composite
+from revision_replay import clean_composite, transmission_signature
 
 
 class CleanCompositeTests(unittest.TestCase):
@@ -31,6 +31,16 @@ class CleanCompositeTests(unittest.TestCase):
     def test_photographic_foreground_is_rejected(self):
         s=self.study();s.foreground_layers=[object()]
         with self.assertRaises(AssertionError):clean_composite(s,{},s.source)
+
+    def test_ray_proof_is_invalidated_by_optical_source_or_grid_change(self):
+        s=self.study();p={'rim_width':.1,'thin_width':.02,'sigma':2,'core_x':.1}
+        first=transmission_signature(s,p,4)
+        self.assertEqual(first,transmission_signature(s,{**p,'rim_width':.2},4))
+        self.assertNotEqual(first,transmission_signature(s,{**p,'sigma':3},4))
+        self.assertNotEqual(first,transmission_signature(s,{**p,'core_x':.2},4))
+        self.assertNotEqual(first,transmission_signature(s,p,2))
+        s.case={**s.case,'source_sha256':{'source.png':'changed'}}
+        self.assertNotEqual(first,transmission_signature(s,p,4))
 
 
 if __name__=='__main__':unittest.main()
