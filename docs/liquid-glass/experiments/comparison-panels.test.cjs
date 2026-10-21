@@ -16,6 +16,11 @@ try{
  metadata['assets/new-comparison.png']={width:2162,height:346,top:64,bottom:0};
  fs.writeFileSync(path.join(root,'comparison-panels.json'),JSON.stringify(metadata));
  assert.match(prepareMedia('<img src="assets/new-comparison.png">',root,{comparisons:true}),/data-comparison-top="64"/,'Declared figures do not depend on historical filenames');
+ metadata[file].gutter=0;fs.writeFileSync(path.join(root,'comparison-panels.json'),JSON.stringify(metadata));
+ assert.match(prepareMedia(html,root,{comparisons:true}),/data-comparison-gutter="0"/,'Zero separator width must not fall back to two');
+ metadata[file].gutter=1;fs.writeFileSync(path.join(root,'comparison-panels.json'),JSON.stringify(metadata));
+ assert.throws(()=>prepareMedia(html,root,{comparisons:true}),/Invalid comparison-panel gutter/);
+ metadata[file].gutter=2;
  metadata[file].height=400;fs.writeFileSync(path.join(root,'comparison-panels.json'),JSON.stringify(metadata));
  assert.throws(()=>prepareMedia(html,root,{comparisons:true}),/Stale comparison-panel metadata/);
  console.log('PASS declared caption bounds, legacy compatibility, deferred loading and stale metadata rejection');
