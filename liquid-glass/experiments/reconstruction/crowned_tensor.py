@@ -12,6 +12,19 @@ from settled import mapping as incumbent_mapping,lighting as incumbent_lighting
 
 KNOTS=[0]*4+[.015,.04,.09,.2,.45,.75]+[1]*4
 
+def intensity_response(color, p):
+    """Shared encoded-RGB response after source filtering, before material.
+
+    This optional empirical curve does not change geometry or dispersion.
+    Positive material gains are additionally needed for monotone final color.
+    """
+    response=p.get('intensity_response')
+    if response is None:return color
+    if response.get('kind')!='power':raise ValueError('Unknown intensity response')
+    gamma=float(response['gamma'])
+    if not np.isfinite(gamma) or gamma<=0:raise ValueError('Positive finite gamma required')
+    return color if gamma==1 else np.maximum(color,0.)**gamma
+
 def boundary(x,y,p):
     if p.get('footprint_softness'):
         return crown_boundary(x,y,p['shape']['half'],p['footprint_softness'])
@@ -50,7 +63,7 @@ def render(source,case,p,samples=4,scale=1):
         C=at(blur)
         if p.get('blur_transition'):
             sd,*_=boundary(x,y,p);u=np.clip(-sd/p['blur_transition'],0,1);w=u**3*(u*(6*u-15)+10);clear=at(source);C=clear+(C-clear)*w[...,None]
-        C=shade(C,lighting(x,y,p),np.asarray(p['material']));sd,*_=boundary(x,y,p);inside=(sd<=0).astype(float)
+        C=shade(intensity_response(C,p),lighting(x,y,p),np.asarray(p['material']));sd,*_=boundary(x,y,p);inside=(sd<=0).astype(float)
         shape=(bot-top,samples,W,samples);weight=inside.reshape(shape).sum((1,3))
         result[top:bot]=(C*inside[...,None]).reshape((*shape,3)).sum((1,3))/np.maximum(weight,1)[...,None]
         coverage[top:bot]=weight/(samples*samples)
