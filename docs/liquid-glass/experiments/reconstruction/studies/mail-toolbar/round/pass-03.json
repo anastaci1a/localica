@@ -68,7 +68,7 @@
   "tau": 0.85,
   "stage": "ACCEPTED_PRIMARY_MATERIAL_ONLY",
   "geometry_seed": {
-    "file": "docs/liquid-glass/experiments/reconstruction/studies/navigation/round/pass-03.json",
+    "file": "studies/music-navigation/review-round/pass-03.json",
     "sha256": "8ab8bf5733e26eaa4ecf071497debb192fac0a905727f59cefdac1056f3bcbbd",
     "scope": "Reused dimensionless Study geometry-field coefficients only; source/post blur, gamma, old lighting/material and shadow discarded. Source cannot identify map/blur; prior not calibrated to this Mail image."
   },

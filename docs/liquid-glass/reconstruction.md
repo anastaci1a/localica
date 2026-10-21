@@ -126,6 +126,19 @@ Apple, [Meet Liquid Glass,1:40](https://developer.apple.com/videos/play/wwdc2025
 
 [Material equation and replay](recreation-models.md#neutral-material-response) · [Native replay helper](experiments/reconstruction/neutral_material.py).
 
+<details>
+<summary>1080px motion and export details</summary>
+
+<video controls preload="none" playsinline poster="assets/mail-toolbar-current.png" src="assets/mail-toolbar-motion.mp4"></video>
+
+![Illustrative Mail toolbar translation](assets/mail-toolbar-motion.gif)
+
+- Four seconds, 60 frames, 1080×360; GIF 0.88MB. This is an illustrative translation over the estimated affine panel, without the parent panel boundary. Each pose reevaluates the fixed field and solid glyphs; no reference shadow is retained.
+- The still evaluates 1360×450 at two subpixels per output axis and downsamples to1080px per side. The Apple crop is resized directly from its native source. Native pass scores remain unchanged.
+- Every emitted rectangular-crop query, including partial edge pixels, stays in the frozen defined source domain. Hidden RGB remains modeled, not observed. [Motion record](experiments/reconstruction/studies/mail-toolbar/round/final-motion.json) · [HQ record](experiments/reconstruction/studies/mail-toolbar/round/final-hq.json).
+
+</details>
+
 ## Active slider
 
 Apple, [Build a UIKit app with the new design, 18:12](https://developer.apple.com/videos/play/wwdc2025/284/?time=1092); resting page at 18:10.5. The thumb uses a measured polynomial-oval outline and channel-separated tensor refraction. **No Gaussian blur is applied.**
