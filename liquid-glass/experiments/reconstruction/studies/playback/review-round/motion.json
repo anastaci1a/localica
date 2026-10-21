@@ -53,7 +53,11 @@
     },
     "new_optical_still_renders": 0,
     "still_resampling_only": true,
-    "source_and_icon_pipeline": "Existing public playback_replay.composite, registered clean photograph and independently calculated icon color; reference-derived triangular coverage retained, no new glyph or copied colored target"
+    "source_and_icon_pipeline": "Existing public playback_replay.composite, registered clean photograph and independently calculated icon color; reference-derived triangular coverage retained, no new glyph or copied colored target",
+    "current_comparison_sha256": "f4ee6115b75e6ac02c69dd71ba764ae704e94ac0434ee1fa349ea4d1ed48d4c2",
+    "current_reference_sampling": "Single Lanczos resize from frozen native reference, not a second resize of the older4x enlargement",
+    "reference_target_sha256": "f47fba56384d84de3c106812e8b153fe7a826cfbd0dc082a75f62bc4e2df6bb9",
+    "reconstruction_and_caption_unchanged_in_reference_format_fix": true
   },
   "motion": {
     "files": [
