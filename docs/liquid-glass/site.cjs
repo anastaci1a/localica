@@ -35,7 +35,7 @@ const {prepareStudies}=require('./guide-studies.cjs');
     write('liquid-glass/'+(name==='README.md'?'index.html':name.replace('.md','.html')),
       `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · ${name==='README.md'?'Liquid Glass':name.replace('.md','')}</title><link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="guide.css"></head><body class="guide"><script src="guide-media.js" defer></script><script src="guide-comparison.js" defer></script><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main>${content}</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/${source}/docs/liquid-glass">${source.slice(0,8)}</a> · Original studies; no claim of iOS parity.</footer></body></html>`);
   }
-  for(const name of ['lab.html','lab.js','software.js','model.js','lab.css','guide.css','guide-media.js','guide-comparison.js'])write('liquid-glass/'+name,fs.readFileSync(path.join(root,name)));
+  for(const name of ['lab.html','lab.js','software.js','model.js','lab.css','guide.css','guide-media.js','guide-comparison.js','comparison-panels.json'])write('liquid-glass/'+name,fs.readFileSync(path.join(root,name)));
   for(const name of fs.readdirSync(path.join(root,'assets')))if(/\.(png|gif|svg|mp4)$/.test(name))write('liquid-glass/assets/'+name,fs.readFileSync(path.join(root,'assets',name)));
   write('liquid-glass/experiments/reference_patch.py',fs.readFileSync(path.join(root,'experiments/reference_patch.py')));
   // Study recipes/diagnostics are nested. Export tracked public inputs only;

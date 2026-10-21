@@ -88,5 +88,17 @@
     "height": 452,
     "top": 148,
     "bottom": 0
+  },
+  "assets/study-active-switch-paired-a.png": {
+    "width": 2162,
+    "height": 836,
+    "top": 64,
+    "bottom": 0
+  },
+  "assets/study-active-switch-paired-b.png": {
+    "width": 2162,
+    "height": 848,
+    "top": 64,
+    "bottom": 0
   }
 }
