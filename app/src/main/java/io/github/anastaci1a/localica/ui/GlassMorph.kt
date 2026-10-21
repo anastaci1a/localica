@@ -356,7 +356,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val p = progress.value.coerceIn(0f, 1f)
-        val geometry = if (anchor.quiet) ((p - .14f) / .86f).coerceIn(0f, 1f) else p
+        val geometry = glassMorphGeometryProgress(p, anchor.quiet)
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
             .pointerInput(visible) { detectTapGestures { if (visible) dismissNow() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
@@ -436,7 +436,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val startWidth = start.width.takeIf { it > 0f } ?: targetWidth.toFloat()
                 val startHeight = start.height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
                 val homeRadius = anchor.cornerRadius ?: with(density) { (startHeight / 2).toDp() }
-                val radius = if (page) 0.dp else if (detached) 28.dp else homeRadius * (1f - p) + 28.dp * p
+                val radius = if (page) 0.dp else if (detached) 28.dp else homeRadius * (1f - geometry) + 28.dp * geometry
                 SideEffect { anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
                 val dark = panelDark
                 val material = rememberFrostedBackdrop(listOf(source?.fallback, p == 1f, LocalGlassAppearance.current), dark = dark)

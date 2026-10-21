@@ -633,9 +633,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             .selectionPanelRelease(session, route.key,
                 enabled && !queryPending && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) { position ->
                 val item = reorder.hit(position)
-                val bounds = item?.let { reorder.bounds()[it.key] }
-                item?.row != null && bounds != null &&
-                    (displayedStyle.presentation != Presentation.List || position.x <= bounds.right - with(density) { 48.dp.toPx() })
+                // Dots and the row share selection-on-hold. Both retain the new
+                // action panel until this pointer releases.
+                item?.row != null
             }
             .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion,
                 displayedStyle.presentation == Presentation.List, acquisitionReady = !queryPending,
@@ -767,9 +767,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         DisposableEffect(item.key, reorder) { onDispose { reorder.itemCoordinates.remove(item.key) } }
                         val menuAnchor = rememberGlassAnchor()
                         SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
+                        val mutableSong = item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)
+                        val holdLabel = if (mutableSong) "Select song" else if (item.row != null) "Song actions" else "Collection actions"
+                        val onHold = {
+                            if (mutableSong) session.select(route.collection, listOf(requireNotNull(item.row)))
+                            else contextMenu = item.key
+                        }
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
-                                if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor, quiet = true) { contextMenu = item.key }
+                                if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor,
+                                    quiet = true, onLongClickLabel = holdLabel,
+                                    onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { contextMenu = item.key }
                                 CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
                                     onInformation = { info = it }, containingSource = route.collection, selection = session,
                                     onRemove = if (item.row == null) null else when (route.collection?.kind) {
@@ -814,13 +822,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
                                 else if (session.active) session.toggle(route.collection, item.row)
                                 else { onSearchCommit(); onPlay(result.rows, result.rows.indexOfFirst { it.id == item.row.id }, result.scope) }
-                            }, onLongClickLabel = if (item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) "Select song" else if (item.row != null) "Song actions" else "Collection actions",
-                            onLongClick = {
-                                // Mutable songs reserve holds for selection; dots retain context actions.
-                                if (item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) {
-                                    session.select(route.collection, listOf(item.row))
-                                } else contextMenu = item.key
-                            }
+                            }, onLongClickLabel = holdLabel, onLongClick = onHold
                         )) {
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
                                 showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,
