@@ -182,7 +182,7 @@
     "slider-source.png": "040f98dd6211c74d27f89fa4ce095afd237a8d17f2895cefd8f040a39d475a71",
     "slider-target.png": "16cb006d4f7f743b929419165cd6bb16567d77fd266b1a6472638bca070846cf"
   },
-  "limits": "Native source/optical body unchanged, original conditional source ambiguity retained. Contact opacity uses owner samples on assumed white (not verified acquisition/color calibration). UI-accent halo is empirical, not identified lighting/Apple algorithm; no B source or matched interaction state established. Copied old exterior context is absent but removal earns no credit. Do not count until independent source/native/visual acceptance.",
+  "limits": "Native source/optical body unchanged, original conditional source ambiguity retained. Contact opacity uses owner samples on assumed white (not verified acquisition/color calibration). UI-accent halo is empirical, not identified lighting/Apple algorithm; no B source or matched interaction state established. Copied old exterior context is absent but removal earns no credit. Accepted after independent cached replay, source-domain/guard and visual checks; original optics remain unchanged.",
   "round_pass": 1,
   "accepted": true,
   "body_recipe": {
