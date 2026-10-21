@@ -41,7 +41,7 @@ The legacy records below predate this stricter protocol. Preserve their experime
 
 ## Continuous pill footprint candidate
 
-This optional footprint replaces the capsule's exactly straight central interval. It is a **2D geometry hypothesis**, not a recovered Apple solid or a successful optical calibration. The existing recipes retain their original footprint unless `crown_softness` is enabled.
+This optional footprint replaces the capsule's exactly straight central interval. It is a **2D geometry hypothesis**, not a recovered Apple solid. Optical calibration must be evaluated separately. The existing recipes retain their original footprint unless `crown_softness` is enabled.
 
 For major/minor half-extents `a ≥ b > 0`, softness `0 < w ≤ 1`, and `e=wb`, define `sp(t)=ln(1+exp(t))` and:
 
@@ -54,6 +54,8 @@ T(x,y) = [q(x)² + y²] / b²
 
 - The boundary is `T=1`. `q(0)=0`, `q(a)=b`, and `q` is even, smooth and convex. Hence the top/bottom have a unique maximum extent at the center and no exactly straight interval. This does not require an abrupt cap/body join.
 - Use `∇T/|∇T|` for the boundary normal. The reference image-map coordinate `b(sqrt(T)−1)` has the correct boundary/sign but is **not Euclidean signed distance**; do not substitute it into a distance-based physical derivation without accounting for its gradient.
+- Switch review revision 1 uses softness `0.08`, one material across both observations and generated exterior shadows. [Recipe](experiments/reconstruction/studies/active-switch/review-round/pass-01.json) records the kernel length basis; the dimensionless source/output blur widths are `sigma/216.5` and `post_sigma/216.5`. This incremental image-score improvement does not validate the inherited empirical displacement field as a physical solid.
+- Reproduce the revision from private frozen `a/` and `b/` study inputs: `python revision_replay.py INPUTS studies/active-switch/review-round/previous.json studies/active-switch/review-round/pass-01.json OUTPUT --scale 4` from `experiments/reconstruction/`. The script independently replays both states and all emitted transmission rays; human visual approval remains separate.
 - [Implementation](experiments/reconstruction/crowned_footprint.py) evaluates normalized geometry and analytic derivatives. The same `T` could define a 3D height field, but that height, camera and IOR must be specified and tested separately.
 - Independent fits to the two selector silhouettes suggest softness about0.185. This is a calibration candidate, not a default for all pills. [Contour measurements](experiments/reconstruction/studies/active-segmented-selector/crown-diagnostics.json) describe the fixed white-ridge sample and its limits. The initial clear optical trials did not pass the improvement gate.
 
