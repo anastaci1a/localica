@@ -167,6 +167,10 @@ Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback c
 
 ### Detached Search control
 
+Current round: **1/3** verified passes. Shared material update: native E A7.230750→7.228838 and B7.124124→7.122050. Glass and foreground improve on both; exterior shadow stays fixed. Unknown exterior is completed from nearest defined source RGB for presentation only; scored pixels are unchanged. Motion below remains the previous calibration.
+
+[Current recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-01.json) · [Independent verification](experiments/reconstruction/studies/music-search-vector/review-round/pass-01-verification.json).
+
 Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; color and opacity are fitted separately. The icon geometry does not contain video compression artifacts.
 
 [![Search control, background A: Apple left, reconstruction right](assets/study-music-search-vector-paired-a.png)](assets/study-music-search-vector-paired-a.png)
