@@ -402,11 +402,13 @@ python safari_transfer.py --search-input /private/proposed-a --plus-input /priva
 
 Input hashes include the source PNG, target visibility, source-defined/observed masks and foreground vector. The replay refuses a different case fingerprint or existing output directory. The retained large cyan/brightness error on the darker plus control demonstrates a material-transfer limitation; low-frequency gray panels cannot determine a refraction field or dispersion.
 
-Final plus exports use the three-pass shadow recipe (opacity0.05622886993343976), with all optical/material coefficients unchanged. Reproduce the1080px comparison and motion from the reconstruction directory:
+Final plus exports use the three-pass shadow recipe (opacity 0.05622886993343976), with all optical/material coefficients unchanged. Reproduce the 1080px comparison and motion from the reconstruction directory:
 
 ```sh
 python vector_revision.py /private/safari-inputs studies/safari-circles/plus-round/pass-03.json /private/still --high-quality
 python circular_motion.py /private/safari-inputs/b-proposed studies/safari-circles/plus-round/pass-03.json /private/motion
 ```
 
-The motion retains90frames/15fps,1080×720, a fixed circle and actual moving source queries. Its coordinate viewport is360×240 reference units at3× output scale. The parent-panel boundary is omitted; the entire source field is an estimate. A continuous radial-map bound includes the actual finite automatic Gaussian support (conservative4σ+1pixel radius) and bilinear taps for every pose. This is stronger than the earlier separately labeled3σ diagnostic; it does not establish observed RGB or physical lens accuracy. Cache identity excludes only shadow: changing source, geometry, material or filters invalidates it.
+The motion retains 90 frames at 15fps,1080×720, a fixed circle and actual moving source queries. Its coordinate viewport is 360×240 reference units at 3× output scale. The parent-panel boundary is omitted; the entire source field is an estimate. A continuous radial-map bound includes the actual finite automatic Gaussian support (conservative 4σ+1 pixel radius) and bilinear taps for every pose. This is stronger than the earlier separately labeled 3σ diagnostic; it does not establish observed RGB or physical lens accuracy. Cache identity excludes only shadow: changing source, geometry, material or filters invalidates it.
+
+Frozen recipe stage labels retain their original input/transfer-proposal status; accepted exterior passes are recorded separately in their linked verification files. They do not certify the failed shared-material transfer.
