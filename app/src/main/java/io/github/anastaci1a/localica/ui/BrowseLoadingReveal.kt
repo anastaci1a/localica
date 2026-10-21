@@ -147,7 +147,7 @@ internal fun BrowseLoadingItem(style: BrowseStyle, geometry: BrowseCellGeometry,
         if (style.presentation == Presentation.List) 1 else 2
     val infoLine = with(density) { MaterialTheme.typography.bodySmall.lineHeight.roundToPx() }
     val infoHeight = if (showInformation) infoLine * if (style.presentation == Presentation.List) 1 else 2 else 0
-    Layout(modifier = Modifier.fillMaxWidth().padding(geometry.cardInset.dp).testTag("browse-skeleton-item"), content = {
+    Layout(modifier = Modifier.fillMaxWidth().testTag("browse-skeleton-item").padding(geometry.cardInset.dp), content = {
         Box(Modifier.graphicsLayer {
             shape = if (artistOnly) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(corner.floatValue)
             clip = true
