@@ -1,0 +1,32 @@
+{
+  "playback-final.mp4": {
+    "bytes": 918826,
+    "sha256": "acd94ec9fddd019ecb7784f7b54b048209960c04454aa499999b594c112fbe8f"
+  },
+  "playback-final.gif": {
+    "bytes": 7740942,
+    "sha256": "5b2a554f8474d78d5a8b451e8e72d5ee8ac6e815e4ae51a77eff909ec592423e"
+  },
+  "_recipe": {
+    "sha256": "dbaa02cfacde54069297092b6f26251d549600c80b92a00e923e6678599b9e31",
+    "frames": 180,
+    "fps": 30,
+    "output_size": [
+      1920,
+      1080
+    ],
+    "video_color": {
+      "codec_name": "h264",
+      "color_range": "tv",
+      "color_space": "smpte170m"
+    },
+    "sampling": "Two subpixels per output axis; same normalized map/material, lower integration rate than still verification"
+  },
+  "_gif_timing": {
+    "frames": 90,
+    "duration_ms": 5990,
+    "nominal_duration_ms": 6000,
+    "limit_ms": 20,
+    "reason": "GIF centisecond timing; initial exact-6000ms assertion was too strict, preserved in execution log. No video/GIF rerender."
+  }
+}
