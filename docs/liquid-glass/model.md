@@ -126,6 +126,32 @@ F(p) = Q + Tout.xy × G/(−Tout.z)
 - `H=0` or `ior=1` explicitly gives the identity map. The `H→0` limit is not uniform at an exactly vertical rim when `G>0`; this comparator is unsuitable as a fade-to-zero-opacity formula. Fade material coverage independently.
 - Full Fresnel-weighted energy, internal reflections, absorption, dispersion, caustics and multiple scattering are absent. The lab adds an independent synthetic highlight (the field model uses a fixed 0.3-reference-height cap for that lighting only), so calling its complete output a physically accurate renderer would be incorrect.
 
+## Flat-front inverse-map compatibility
+
+This separate comparator has an orthographic camera looking along −z, a flat front at z=0, one back surface z=−h(x,y), index n>1, and background plane z=−G. All lengths use the same normalized unit; h>0 and s=G−h>0. It is a test of a specified geometry, not an identified Apple lens.
+
+For a proposed inverse image map F, let v=F−(x,y). Normal entry leaves the internal ray vertical. Snell's law requires:
+
+```text
+M = dot(v,v), R = sqrt(M+s²), D = nR−s
+∇h = v/D
+transmitted branch: s > sqrt(M/(n²−1))
+```
+
+- h is one unknown surface; s cannot be fitted independently at each pixel. The branch inequality rejects the wrong-side solution and critical/grazing rays. Do not clamp them into validity.
+- Define c=∂x(vy)−∂y(vx) and K=vy·dot(v,∂xv)−vx·dot(v,∂yv). Equality of the surface's mixed derivatives gives **Dc−nK/R=0**. Terms containing ∇s cancel because ∇s=−v/D. A valid surface may therefore have nonzero image-map curl.
+- For reliably nonzero c, set ρ=K/c. The transmitted branch requires **ρ>M**. Its necessary clearance is:
+
+```text
+s² = [2n²(ρ−M)+M+sqrt(M²+4n²ρ(ρ−M))] / [2(n²−1)]
+```
+
+- This root still must satisfy −∇s=v/D, compatible boundary conditions, positive thickness and valid complete ray paths. It does not establish a surface by itself. Near-zero curl, derivative noise and footprint-crossing differences require separate treatment; do not turn them into impossibility claims.
+- The inequality follows from ρ=DR/n=M+s²−s·sqrt(M+s²)/n, which increases from M on the strictly transmitted branch. Failure rules out an **exact** map in this stated family; it supplies no lower bound on image error from an approximate surface or a different camera/front surface.
+- [Executable equations](experiments/reconstruction/surface_compatibility.py) and [independent controls](experiments/reconstruction/verify-surface-compatibility.py) check scalar versus vector Snell refraction, a known quadratic surface with nonzero map curl, inverse recovery, scale invariance and invalid branches. Run `python verify-surface-compatibility.py` in the reconstruction directory. These require NumPy, not private images.
+
+The equations above use the stated propagation convention. [Bösel and Gross](https://arxiv.org/html/1510.01129) discuss the broader coupling between surface integrability and ray maps, including the limits of small-angle constructions. Physical radiometry, dispersion, reflection, side-wall visibility and source recovery remain separate requirements.
+
 ## Reconstruction comparators
 
 The [HD study](reconstruction.md) tests offline hypotheses beyond the portable lab's circle/capsule equations:
