@@ -71,10 +71,11 @@ Apple, [Build a UIKit app with the new design, 18:12](https://developer.apple.co
 - [Equations](recreation-models.md#active-slider-oval-outline-and-channel-separated-map); exact coefficients in the `slider` recipe. This retains the stronger empirical map; the closed-body trial remains experimental.
 - The recovered track has a 20-pixel reference height; its hidden blue endpoint is estimated. The upper dark ridge constrains the outline, with 54 fitted and 27 withheld columns. Bottom/right symmetry remains assumed.
 - Colored rim detail supports testing channel-separated lookups, but does not prove dispersion: lighting, adaptive processing and video chroma subsampling are confounds.
-- Remaining work: blue-track stretching onset, narrow shadow and broader blue-halo color/extent. The exterior shown is retained/estimated context, **not a recreated shadow**.
+- Current exterior round: **1/3**, single-background reconstruction. A generated neutral contact follows the measured width/height ratios; a broad tinted halo uses the exposed track accent. Original optics and every native optical score are unchanged. Near-exterior RMSE falls 19.299789 → 12.079826 and full-visible exterior 9.391866 → 6.356438, including held blocks. The replacement of copied context itself gets no credit. [Recipe](experiments/reconstruction/studies/slider-exterior/review-round/pass-01.json) · [Independent replay/domain check](experiments/reconstruction/studies/slider-exterior/review-round/pass-01-verification.json).
+- A gray-track minimum-state reference gives a withheld nine-patch halo-profile error of 11.109 → 3.626. Its shape/track also deform under edge compression; this is component transfer evidence, **not a verified second-background optical benchmark**. Halo hue and blue-track stretching onset remain unresolved. The current 720/1080-per-side exports resample the frozen native 4×4 body; final high-resolution geometry export is pending.
 
 <details>
-<summary>Full-resolution slider comparison</summary>
+<summary>1080px-per-side slider comparison</summary>
 
 [![Full HD slider comparison](assets/match-slider-full.png)](assets/match-slider-full.png)
 

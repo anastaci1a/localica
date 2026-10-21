@@ -1,0 +1,73 @@
+{
+  "accepted": true,
+  "round_pass": 1,
+  "scope": "Single-background generated-exterior reconstruction, not optical improvement; gray profiles withheld/advisory only",
+  "original_scores_exact": true,
+  "independent_complete_exact": true,
+  "all_exterior_guards": {
+    "near_exterior": {
+      "before": 19.29978871110425,
+      "after": 12.079826419069695,
+      "pixels": 12870
+    },
+    "full_visible_exterior": {
+      "before": 9.391865626345782,
+      "after": 6.356437539123562,
+      "pixels": 88224
+    },
+    "near_exterior_train": {
+      "before": 18.039537901277097,
+      "after": 11.605476192211068,
+      "pixels": 10312
+    },
+    "near_exterior_held": {
+      "before": 23.710360374579476,
+      "after": 13.828018414176098,
+      "pixels": 2558
+    },
+    "full_visible_exterior_train": {
+      "before": 9.052548458963864,
+      "after": 6.084460151717121,
+      "pixels": 66378
+    },
+    "full_visible_exterior_held": {
+      "before": 10.354868644197758,
+      "after": 7.119363111143447,
+      "pixels": 21846
+    }
+  },
+  "source_proof": {
+    "kind": "Conservative analytic all-RGB native/whole+ALL-scored domain bound; not observed-source evidence",
+    "inside_rgb_xy_bounds": [
+      [
+        582.3311328240356,
+        944.6688671759644
+      ],
+      [
+        388.3674949434942,
+        708.7734872504334
+      ]
+    ],
+    "outside_identity_xy_bounds": [
+      [
+        539.625,
+        984.375
+      ],
+      [
+        439.625,
+        689.375
+      ]
+    ],
+    "bilinear_margin_px": 1,
+    "source_sigma": 0,
+    "basis_bound": "Nonnegative partition-of-unity B-splines => |a|<=max|co|; B(u) in[0,1]; unit normal and |tangent_position|<=hypot(hx,hy_bound). Include core and all RGB factors.",
+    "source_size": [
+      1920,
+      1080
+    ],
+    "covered": true,
+    "limits": "Incident hidden blue endpoint/paper remain modeled; finite-domain proof does not establish photographic recovery or physical optics."
+  },
+  "visual_review": true,
+  "limits": "Native source/optical body unchanged, original conditional source ambiguity retained. Contact opacity uses owner samples on assumed white (not verified acquisition/color calibration). UI-accent halo is empirical, not identified lighting/Apple algorithm; no B source or matched interaction state established. Copied old exterior context is absent but removal earns no credit. Do not count until independent source/native/visual acceptance."
+}

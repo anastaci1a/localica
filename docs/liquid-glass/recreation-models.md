@@ -152,7 +152,24 @@ Read the red, green and blue channels at their respective `F_λ`, then apply the
 
 The recovered background includes an antialiased track of height `20/56.5` in normalized units, centered `(.9295089030362/56.5)` below the lens center. Its hidden blue endpoint is estimated. The replay fixes this input explicitly; source reconstruction uncertainty remains part of the comparison.
 
-The measured narrow exterior-shadow ratios are width `1963/1896`, height `929/906`, centered horizontally and bottom-aligned. Those measurements are retained for subsequent shadow modeling; the current comparison retains exterior context and **does not claim to reconstruct that shadow or the broader blue halo**.
+The generated contact shadow uses the same footprint, scaled by `s_x=1963/1896`, `s_y=929/906`, with normalized vertical offset `δ_y=−(s_y−1)`. It stays horizontally centered and bottom-aligned. Let `α_c` be its independently rasterized coverage, `s` the original signed distance divided by L, and `B` the frozen incident input:
+
+```text
+C0 = B (1−q α_c)
+h = a exp(−.5 [max(s,0)/σ]²)
+B_out = (1−h) C0 + h β accent
+complete = body coverage_4x4 + B_out (1−coverage_4x4)
+```
+
+Current q=.17875816993464055, a=.0988948521461254, σ=.7251111669310818 and β=.9999999999999999. The recipe freezes the accent from an exposed blue-track patch. Contact opacity comes from the owner's nominal-white samples and remains photometrically uncertain. Halo coefficients use nine fixed exterior profile patches; no reference shadow/residual is pasted. This empirical accent response is not identified Apple lighting or image blur/dispersion. Fixed coefficients preserve a nondecreasing response to B; scales are proportional to L.
+
+All original optical/body coefficients, inputs and native scores stay fixed. Near/full-visible exterior and their spatial train/held blocks are protected separately. Gray-track profile transfer is advisory; its hidden input and compressed interaction geometry are not a calibrated optical pair. [Current recipe](experiments/reconstruction/studies/slider-exterior/review-round/pass-01.json) freezes the original body and contact/halo parameters. From `experiments/reconstruction/`, run:
+
+```sh
+python slider_exterior.py INPUTS OUTPUT --recipe studies/slider-exterior/review-round/pass-01.json
+```
+
+INPUTS contains the frozen slider-source.png and slider-target.png. The target is read only for scoring and the comparison; it never enters the generated exterior. Optional `--material-cache` verifies the original array hash and avoids repeating an unchanged body render. Preview exports resample native4×4 output; native scoring and the analytic all-RGB source-domain bound remain separate from output size.
 
 ## Uniform light and dark surfaces
 
