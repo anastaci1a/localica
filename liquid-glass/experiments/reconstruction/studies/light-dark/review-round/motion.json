@@ -1,0 +1,162 @@
+{
+  "recipe_sha256": "8c83056c1ee875622b9ff7e87f562fe9bb333ce75b1f7fb39062b8f3ecd7e726",
+  "scope": "Illustrative motion over modeled near-uniform sources, NOT optical validation or captured Apple motion",
+  "frames": 90,
+  "fps": 15,
+  "duration_seconds": 6,
+  "output_width": 1080,
+  "source_inputs_unchanged": true,
+  "no_target_context": true,
+  "observations": [
+    {
+      "theme": "regular-light",
+      "source_sha256": "de11242e22d7d4bb6365a3c1c1dd7f717d69a9e7354c3098a3f9d870fb12216f",
+      "zero_native_exact": true,
+      "source_unchanged_after": true,
+      "body_samples_per_axis": 4,
+      "travel": "30sin(2pi*i/90) horizontal nativepx, fixed original output window",
+      "source_support": {
+        "kind": "analytic conservative finite-domain bound, not observation evidence",
+        "body_source_xy_bounds": [
+          [
+            661.57,
+            1258.43
+          ],
+          [
+            411.07,
+            670.93
+          ]
+        ],
+        "all_crop_subrays_identity_bounds": [
+          [
+            609.625,
+            1309.375
+          ],
+          [
+            349.625,
+            729.375
+          ]
+        ],
+        "underlay_xy_bounds": [
+          [
+            610,
+            1309
+          ],
+          [
+            350,
+            729
+          ]
+        ],
+        "image_size": [
+          1920,
+          1080
+        ],
+        "whole_and_ALL_scored_included": true,
+        "bilinear_source_sigma_native": 0,
+        "light_splice_y739_not_reached": true,
+        "dark_copied_top_through_y348_not_reached": true,
+        "limits": "Estimated/assumed sources; no observed confidence. Finite source-domain proof, not physical optical identification or light-transport reconstruction."
+      },
+      "limits": "Incident sources remain estimated: light polynomial paper and dark source0 underbody. No refraction/lighting identification; no source adoption. K sigma .7L bound, local far-upper light regressions and dark glow tail retained. Old copied-context removal gets no credit.",
+      "files": [
+        {
+          "asset": "assets/regular-light-final.mp4",
+          "bytes": 175325,
+          "sha256": "d96ded3f99e689d5bf4fa360f2a1e5f3a9e12b9c3853c715458dbacf394b6493",
+          "frames": 90,
+          "width": 1080,
+          "height": 586,
+          "duration_seconds": 6,
+          "caption_height": 0,
+          "comparison": false
+        },
+        {
+          "asset": "assets/regular-light-final.gif",
+          "bytes": 6777901,
+          "sha256": "98e16eb0c708c9fc99b837b67b14a99883390ebebe8db53b472fb6dc689a876a",
+          "frames": 90,
+          "width": 1080,
+          "height": 586,
+          "duration_seconds": 6,
+          "caption_height": 0,
+          "comparison": false
+        }
+      ]
+    },
+    {
+      "theme": "regular-dark",
+      "source_sha256": "97f9f289b2ecac128a12a1eab86dc6036c03b31de2ed75a0e3e77129dbbd1812",
+      "zero_native_exact": true,
+      "source_unchanged_after": true,
+      "body_samples_per_axis": 4,
+      "travel": "30sin(2pi*i/90) horizontal nativepx, fixed original output window",
+      "source_support": {
+        "kind": "analytic conservative finite-domain bound, not observation evidence",
+        "body_source_xy_bounds": [
+          [
+            661.57,
+            1258.43
+          ],
+          [
+            411.07,
+            670.93
+          ]
+        ],
+        "all_crop_subrays_identity_bounds": [
+          [
+            609.625,
+            1309.375
+          ],
+          [
+            349.625,
+            729.375
+          ]
+        ],
+        "underlay_xy_bounds": [
+          [
+            610,
+            1309
+          ],
+          [
+            350,
+            729
+          ]
+        ],
+        "image_size": [
+          1920,
+          1080
+        ],
+        "whole_and_ALL_scored_included": true,
+        "bilinear_source_sigma_native": 0,
+        "light_splice_y739_not_reached": true,
+        "dark_copied_top_through_y348_not_reached": true,
+        "limits": "Estimated/assumed sources; no observed confidence. Finite source-domain proof, not physical optical identification or light-transport reconstruction."
+      },
+      "limits": "Incident sources remain estimated: light polynomial paper and dark source0 underbody. No refraction/lighting identification; no source adoption. K sigma .7L bound, local far-upper light regressions and dark glow tail retained. Old copied-context removal gets no credit.",
+      "files": [
+        {
+          "asset": "assets/regular-dark-final.mp4",
+          "bytes": 38021,
+          "sha256": "add9b0acae7c8fe443779aaf2f9d3da65e681495fd7353ac4c32e8591ffda2e6",
+          "frames": 90,
+          "width": 1080,
+          "height": 586,
+          "duration_seconds": 6,
+          "caption_height": 0,
+          "comparison": false
+        },
+        {
+          "asset": "assets/regular-dark-final.gif",
+          "bytes": 1475447,
+          "sha256": "650c914f51c81ba91f8a0ec7c87bcfcf0a3fefb37f0f18d88f3c9ac44eaec8d0",
+          "frames": 90,
+          "width": 1080,
+          "height": 586,
+          "duration_seconds": 6,
+          "caption_height": 0,
+          "comparison": false
+        }
+      ]
+    }
+  ]
+}
