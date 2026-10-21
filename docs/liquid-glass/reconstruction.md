@@ -280,7 +280,7 @@ Reference frames A/B: 2.5/2.0 seconds. The source-brightness response, white inc
 
 ## Active switch
 
-Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× comparisons** show review-round revision 6: joint refinement of the existing normal/cap profiles, center scaling, intensity response and shared material. Shape, source, blur, dispersion and shadow remain fixed. Weighted RMS falls **0.54% / 0.85%** on the two backgrounds; whole-glass, rim and exterior errors improve. Independent replay checks 50.9 million high-resolution transmission rays against defined source support. The 16-update fit ends at its budget, with gamma at the declared upper bound; it does not establish a global optimum. The 24 initial/24 paired historical experiments remain archived; their counts are not certification under the new improvement gate.
+Current short round: **3/3** verified passes (revision9). Native E A 14.075943→14.075935 / B 15.317416→15.317073. Shared directional-separation/output-blur and source-luminance lighting updates preserve both whole-glass and fixed-exterior guards; standalone rim error on A worsens and remains an advisory metric. Geometry, ordinary source blur, kernel direction/length/fade and generated shadow are fixed; the final step changes only the existing ambient response and common neutral thin-lighting coefficient. A is bit-exact unchanged in that final step; B improves. Original native transmission, RGB-split, reflection and material-context source checks pass against the **defined estimate**, with observed-source minimum0; this is not photographic recovery. Frames A/B are9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4).
 
 [![Switch, green track: Apple left, reconstruction right](assets/study-active-switch-paired-a.png)](assets/study-active-switch-paired-a.png)
 
@@ -288,44 +288,46 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 - The hidden track is a symmetric, uniform-color estimate; scores are conditional on it. A [source-color sensitivity check](experiments/reconstruction/studies/active-switch/review-round/pass-06-source-sensitivity.json) gives E ranges **14.075–14.093 / 15.165–15.699** within the recorded exposed-color bounds. These are stress tests, not statistical confidence intervals. Frozen scoring inputs stay unchanged; source changes never count as optical gains.
 - A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Directional channel separation reproduces part of the inner fringe; upper-rim color and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current normalized recipe basis](experiments/reconstruction/studies/active-switch/review-round/pass-06.json) · [Independent verification](experiments/reconstruction/studies/active-switch/review-round/pass-06-verification.json) · [Historical recipe](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) reproduces the 24 historical paired checkpoints under their original nonregression gate. Both motion captures below show **historical pass24**, not the revised stills. The 4× masters are four seconds at 30 fps; GIF previews are half-size at 15 fps and under 10 MB.
+- [Current native recipe](experiments/reconstruction/studies/active-switch/review-round/pass-09.json) · [Independent verification](experiments/reconstruction/studies/active-switch/review-round/pass-09-verification.json) · [Finite source proof](experiments/reconstruction/studies/active-switch/review-round/pass-09-source-proof.json) · [Historical recipe](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) reproduces the 24 historical paired checkpoints under their original nonregression gate. Final motion uses revision9: 1080px wide, 90frames at15fps, full-size256-color GIFs below10MB (A6.01MB/B3.09MB). [Motion verification](experiments/reconstruction/studies/active-switch/review-round/motion.json). The moving input remains the declared modeled track; this is illustrative motion, not captured Apple animation or Android performance.
 
 <details>
 <summary>Motion — green track</summary>
 
-<video controls preload="none" playsinline width="3300" height="2360" aria-label="Active switch on green track motion"><source src="assets/study-active-switch-paired-a.mp4" type="video/mp4"><a href="assets/study-active-switch-paired-a.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="772" aria-label="Active switch on green track motion"><source src="assets/study-active-switch-paired-a.mp4" type="video/mp4"><a href="assets/study-active-switch-paired-a.mp4">Open video</a></video>
 
-<img src="assets/study-active-switch-paired-a.gif" alt="Active switch over a moving green track" width="1650" height="1180" loading="lazy" decoding="async">
+<img src="assets/study-active-switch-paired-a.gif" alt="Active switch over a moving green track" width="1080" height="772" loading="lazy" decoding="async">
 
-[Video](assets/study-active-switch-paired-a.mp4) · [GIF](assets/study-active-switch-paired-a.gif) · [Encoding checks](experiments/reconstruction/studies/active-switch/paired/a/media.json) · [GIF checks](experiments/reconstruction/studies/active-switch/paired/a/gif-qa.json). Video is evaluated at 4×; the GIF uses half-size frames. This illustrates backdrop movement, not measured Apple interaction timing.
+[Video](assets/study-active-switch-paired-a.mp4) · [GIF](assets/study-active-switch-paired-a.gif) · [Final motion checks](experiments/reconstruction/studies/active-switch/review-round/motion.json). The video and GIF are both1080px wide; this illustrates backdrop movement, not measured Apple interaction timing.
 
 </details>
 
 <details>
 <summary>Motion — gray track</summary>
 
-<video controls preload="none" playsinline width="3140" height="2280" aria-label="Active switch on gray track motion"><source src="assets/study-active-switch-paired-b.mp4" type="video/mp4"><a href="assets/study-active-switch-paired-b.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="784" aria-label="Active switch on gray track motion"><source src="assets/study-active-switch-paired-b.mp4" type="video/mp4"><a href="assets/study-active-switch-paired-b.mp4">Open video</a></video>
 
-<img src="assets/study-active-switch-paired-b.gif" alt="Active switch over a moving gray track" width="1570" height="1140" loading="lazy" decoding="async">
+<img src="assets/study-active-switch-paired-b.gif" alt="Active switch over a moving gray track" width="1080" height="784" loading="lazy" decoding="async">
 
-[Video](assets/study-active-switch-paired-b.mp4) · [GIF](assets/study-active-switch-paired-b.gif) · [Encoding checks](experiments/reconstruction/studies/active-switch/paired/b/media.json) · [GIF checks](experiments/reconstruction/studies/active-switch/paired/b/gif-qa.json). Same shared model and normalized travel as the green-track capture.
+[Video](assets/study-active-switch-paired-b.mp4) · [GIF](assets/study-active-switch-paired-b.gif) · [Final motion checks](experiments/reconstruction/studies/active-switch/review-round/motion.json). Same shared model and normalized travel as the green-track capture.
 
 </details>
 
 <details>
-<summary>Colored rim — localized crops and measurements</summary>
+<summary>Colored rim — final review09 crops and measurements</summary>
 
-Current crops place Apple on the left and review-round revision 6 on the right. All four gray-background crops improve. Green-background upper-left and right-rim errors increase by 0.85% and 0.32%; its lower-left and center improve. These local measurements remain advisory. The dark inner contour, excess softness and colored fringes remain unresolved.
+The current sheet shows Apple, accepted review06, and final accepted review09 in three columns. It reuses the exact historical normalized/native crop rectangles and saved native composites; no optical rerender, recentering, or color matching. Local RGB error increases at A/B lower-left and B center. A right-rim chroma and B right-rim luma also worsen; all changes remain in the advisory metrics. The tiny global gains do not resolve the heavy inner contour, excess softness, or colored fringes.
 
-[![Current switch rim crops](assets/switch-round-crops.png)](assets/switch-round-crops.png)
+[![Final09 switch rim crops: Apple, accepted06 and final09](assets/switch-round09-crops.png)](assets/switch-round09-crops.png)
 
-[Before/after crop scores](experiments/reconstruction/studies/active-switch/review-round/pass-06-crops.json) · [Exterior bands](experiments/reconstruction/studies/active-switch/review-round/pass-06-shadow-tails.json). The older crop sheet below retains snapshot 24 for comparison. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
+[Accepted06 → final09 native crop metrics](experiments/reconstruction/studies/active-switch/review-round/pass-09-crops.json). Both states are recomputed from saved native arrays; do not concatenate these numbers with historical HQ-derived crop scores. Native scoring masks and gates are unchanged.
 
-[![Switch rim details: Apple and reconstruction across six cropped regions](assets/switch-rim-detail.png)](assets/switch-rim-detail.png)
+Historical evidence: [review05 → 06 crop scores](experiments/reconstruction/studies/active-switch/review-round/pass-06-crops.json) · [review06 exterior bands](experiments/reconstruction/studies/active-switch/review-round/pass-06-shadow-tails.json). The older sheet below retains snapshot24. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim, while the estimated track is near `(190,195,189)`. The modeled hidden input and these hue discrepancies remain uncertain.
 
-- A source-derived directional reflection reduces the unsupported dark inner contour at A/B lower left, independently of the exterior shadow. The supplementary lower-contour MSE falls from7511/10205 to1124/1688; native masks stay fixed. Thin inner colored bands at A lower left and B right remain calibration targets.
-- [Rim measurements](experiments/reconstruction/switch-rim-analysis.json) include native RGB samples, resting controls and source assumptions. [Competing color models](experiments/reconstruction/switch-color-hypotheses.json) test channel-separated rays and directional chromatic lighting. Some improve native scores slightly; none reproduces the broad colored bands, and none is adopted. Their frozen baselines differ and are recorded separately.
-- Apple describes separate [geometry-dependent highlights and ambient color spill](https://developer.apple.com/videos/play/wwdc2025/219/?time=631). Colored transmission, lighting/tint, video processing and source-estimation error remain possible contributors; these pixels do not identify physical dispersion or an exact Apple shader.
+[![Historical snapshot24 switch rim details](assets/switch-rim-detail.png)](assets/switch-rim-detail.png)
+
+- Earlier source-derived reflection reduced the unsupported lower dark contour independently of exterior shadow; its historical lower-contour MSE1124/1688 is not a new final09 measurement. Thin inner colored bands remain calibration targets.
+- [Historical rim measurements](experiments/reconstruction/switch-rim-analysis.json) and [competing color models](experiments/reconstruction/switch-color-hypotheses.json) retain their own frozen baselines. The present tiny changes do not establish a physical dispersion model or Apple parity.
+- Geometry-dependent highlights, ambient color, chromatic transmission, video processing, and source-estimation error remain possible contributors. Defined source support does not establish observed hidden RGB.
 
 </details>
 
