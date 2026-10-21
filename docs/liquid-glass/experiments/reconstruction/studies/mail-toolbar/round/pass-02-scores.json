@@ -1,0 +1,53 @@
+{
+  "scope": "Conditional one-channel-shared neutral material only, not refraction/blur calibration",
+  "tau": 0.9,
+  "old_E": 20.981512685430793,
+  "scores": {
+    "glass": {
+      "pixels": 66774,
+      "rmse": 14.793000221252441
+    },
+    "rim": {
+      "pixels": 20736,
+      "rmse": 18.517332077026367
+    },
+    "held": {
+      "pixels": 16634,
+      "rmse": 14.499368667602539
+    },
+    "interior": {
+      "pixels": 46038,
+      "rmse": 12.765403747558594
+    },
+    "ssim": 0.9918528199195862,
+    "loss": 256.05047505744324,
+    "E": 16.001577267802173
+  },
+  "guards": {
+    "glyph_trash": 25.3612003326416,
+    "glyph_folder": 30.6407470703125,
+    "glyph_reply": 19.710838317871094,
+    "combined_glyph": 25.439001083374023,
+    "near_exterior": 3.7975542545318604,
+    "full_exterior": 4.400100231170654
+  },
+  "checks": {
+    "glass": true,
+    "rim": true,
+    "held": true,
+    "interior": true,
+    "E": true,
+    "SSIM": true,
+    "glyph_trash": true,
+    "glyph_folder": true,
+    "glyph_reply": true,
+    "combined_glyph": true,
+    "near_exterior": true,
+    "full_exterior": true,
+    "measurable": true
+  },
+  "numerical_qualifier": true,
+  "accepted": true,
+  "source_ray_footprint": "Unchanged frozeninput/map/geometry/SVG/AA/blur, original source proof reused",
+  "actual_new_native_renders": 1
+}

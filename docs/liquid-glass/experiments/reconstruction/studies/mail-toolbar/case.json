@@ -1,0 +1,295 @@
+{
+  "id": "mail-three-action-single-a",
+  "category": "Mail three-action toolbar, conditional material study",
+  "radial": false,
+  "center": [
+    652.9220171987499,
+    700.1753397027143
+  ],
+  "half": [
+    302.0479125038769,
+    81.99263339081979
+  ],
+  "radius": 81.99263339081979,
+  "crop": [
+    315,
+    590,
+    995,
+    815
+  ],
+  "foreground": [
+    [
+      404,
+      648,
+      492,
+      749
+    ],
+    [
+      605,
+      659,
+      698,
+      739
+    ],
+    [
+      805,
+      654,
+      901,
+      740
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "mask",
+      "box": [
+        404,
+        648,
+        492,
+        749
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.3,
+      "vector_asset": "trash-outline.svg",
+      "vector_box": [
+        410.5,
+        655.4418897271308,
+        484.5,
+        740.5581102728692
+      ],
+      "vector_sha256": "cf6556346a59a56a864328e7aa969c817e32f550632ed6879162c1835ee4c4d2",
+      "opacity": 1.0
+    },
+    {
+      "mode": "mask",
+      "box": [
+        605,
+        659,
+        698,
+        739
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.3,
+      "vector_asset": "folder-clean-trace.svg",
+      "vector_box": [
+        611.5,
+        665.5,
+        690.5,
+        731.5
+      ],
+      "vector_sha256": "48faf392bc6f9069aae15de0136fb11a23a7e1e6cb4989eb993cb89ee8407664",
+      "opacity": 1.0
+    },
+    {
+      "mode": "mask",
+      "box": [
+        805,
+        654,
+        901,
+        740
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.3,
+      "vector_asset": "reply-outline.svg",
+      "vector_box": [
+        811.5,
+        661.6222512467348,
+        893.5,
+        731.3777487532652
+      ],
+      "vector_sha256": "6e3055e58c78245d1dfe4975a20e511f149b483541b0e8ffae67d08ab1561477",
+      "opacity": 1.0
+    }
+  ],
+  "source_observation_mask": "observed.png",
+  "target_observation_mask": "target-visible.png",
+  "allow_estimated_background": true,
+  "background_estimate": {
+    "kind": "Affine RGB field from fixed uncovered upper/right/lower bands; quadratic failed predeclared independent-lower requirement",
+    "basis": [
+      "1",
+      "(x-653.5)/300",
+      "(y-701.5)/82.5"
+    ],
+    "coefficient_rgb": [
+      [
+        0.5422191763148277,
+        0.5520139898921226,
+        0.5730372225442674
+      ],
+      [
+        0.014843391932870596,
+        0.01183136697536515,
+        0.013347721983687682
+      ],
+      [
+        0.05359268227117019,
+        0.05136017763551134,
+        0.05006438493848748
+      ]
+    ],
+    "source_defined_domain": [
+      250,
+      420,
+      1311,
+      891
+    ],
+    "controls": [
+      {
+        "name": "held_all",
+        "pixels": 31030,
+        "rmse": 2.13212569608911,
+        "signed_rgb": [
+          0.0036485825785214027,
+          0.0069379931086051665,
+          -0.0009187744510790598
+        ],
+        "p95": 4.287390197816145
+      },
+      {
+        "name": "held_upper",
+        "pixels": 15608,
+        "rmse": 1.5595902098542995,
+        "signed_rgb": [
+          0.5788778585599857,
+          0.4086243493264269,
+          0.5670018684223418
+        ],
+        "p95": 2.8867301689928455
+      },
+      {
+        "name": "held_right",
+        "pixels": 13584,
+        "rmse": 2.128387221234367,
+        "signed_rgb": [
+          -1.2795775287201816,
+          -1.0505973140463933,
+          -1.263178003143656
+        ],
+        "p95": 3.972618768626633
+      },
+      {
+        "name": "held_lower",
+        "pixels": 1838,
+        "rmse": 4.7552448281985535,
+        "signed_rgb": [
+          4.602759004973988,
+          4.4117470053750685,
+          4.505296660038396
+        ],
+        "p95": 6.424921063755346
+      },
+      {
+        "name": "independent_near_upper",
+        "pixels": 5071,
+        "rmse": 1.9045102167049561,
+        "signed_rgb": [
+          -1.920414170103778,
+          -1.254260236525051,
+          -1.8360414331141468
+        ],
+        "p95": 2.9482437300473796
+      },
+      {
+        "name": "independent_near_lower",
+        "pixels": 3861,
+        "rmse": 2.235396224874202,
+        "signed_rgb": [
+          1.6775017033325008,
+          2.0720089386433345,
+          1.8171320008347225
+        ],
+        "p95": 4.603026916866517
+      }
+    ],
+    "observed_hidden_fraction": 0,
+    "uncertainty": "Parent-panel curvature/shadow/extrapolation unresolved. Rectangle is modeled domain, not panel segmentation. No texture recovery or optical identifiability from smooth field."
+  },
+  "pose_provenance": {
+    "method": "Fixed.1 shared crowned prior; image gradient normal-projection pose fit",
+    "softness_not_identified": "Capsuleheld.469px vsfreecrown.429px, improvement.041px below.1px decision margin",
+    "free_crown": {
+      "parameters": [
+        652.9226208023614,
+        700.1750930751396,
+        302.0927161724947,
+        82.04749695263396,
+        0.13515989911537613
+      ],
+      "held_normal_rmse": 0.42881783002940776
+    }
+  },
+  "reference": {
+    "video": "219",
+    "seconds": 100
+  },
+  "foreground_provenance": [
+    {
+      "name": "trash",
+      "source_url": "https://raw.githubusercontent.com/bradleyhodges/sfsymbols/2a0100e93e11a22ea0ff5e0530efd10e2cf0d243/dist/module/sfTrash.js",
+      "blob_sha1": "b78e88c31780b25c2dba4b6dc8272481fe4fc149",
+      "module_sha256": "68aca972faf9b9a5f1c5a96ec6642a57d7306d52b307a4be1595f6d41f1eee68",
+      "svg_sha256": "cf6556346a59a56a864328e7aa969c817e32f550632ed6879162c1835ee4c4d2",
+      "raw_bounds": [
+        8.215650382226158e-17,
+        0.0,
+        18.899006437152494,
+        21.738
+      ],
+      "placement": [
+        410.5,
+        655.4418897271308,
+        484.5,
+        740.5581102728692
+      ],
+      "shape": "Original literal path, ink bounding trim, no aspect deformation, no target-matte pixels",
+      "opacity": "Fixed black1, independent of package .85 style",
+      "limits": "Identity to pinned SF export verified; official Apple origin and exact UI weight not independently proven; no weight/pose fit"
+    },
+    {
+      "name": "folder",
+      "kind": "Clean outlined trace; originalfont/pinned candidate did not match the connected inner rail",
+      "geometry": "Uniform6px wall/bar, outer/inner corner radii8/2, folded tab; standard filled evenodd vector. No screenshot alpha/pixel residual edits. Exact originalfont identity not claimed",
+      "svg_sha256": "48faf392bc6f9069aae15de0136fb11a23a7e1e6cb4989eb993cb89ee8407664"
+    },
+    {
+      "name": "reply",
+      "source_url": "https://raw.githubusercontent.com/bradleyhodges/sfsymbols/2a0100e93e11a22ea0ff5e0530efd10e2cf0d243/dist/module/sfArrowshapeTurnUpBackward.js",
+      "blob_sha1": "a2427d4db56e1a00f61ba2638587171477ba0a94",
+      "module_sha256": "2ea6678be916f007a0e8fc1e4fe02b597a779152ea14639af074442e7bf38833",
+      "svg_sha256": "6e3055e58c78245d1dfe4975a20e511f149b483541b0e8ffae67d08ab1561477",
+      "raw_bounds": [
+        0.0,
+        0.0,
+        21.055,
+        17.911
+      ],
+      "placement": [
+        811.5,
+        661.6222512467348,
+        893.5,
+        731.3777487532652
+      ],
+      "shape": "Original literal path, ink bounding trim, no aspect deformation, no target-matte pixels",
+      "opacity": "Fixed black1, independent of package .85 style",
+      "limits": "Identity to pinned SF export verified; official Apple origin and exact UI weight not independently proven; no weight/pose fit"
+    }
+  ],
+  "source_sha256": {
+    "source.png": "b5b3aeaf375e0f78f4274b45b82248638a64ba6730af3157af43248f1e52a9e4",
+    "target.png": "7393a4f6659ca4c00cf61b707de6880ab85b3a38d319caf78e19a491f65fb288",
+    "known.png": "e657293714a8aba6780f94e78d4ccdf75370f0ee9cd7040061a70c8b907e57c2",
+    "observed.png": "06da5431a575e89e972435a0219b390d3dbb32e73ad342de409a935744365f76",
+    "target-visible.png": "6ae2cfa8276a1bd642b45a5401579b8a93bc9506299ae41171573adff763f9f6"
+  }
+}

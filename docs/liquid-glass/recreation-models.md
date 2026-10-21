@@ -412,3 +412,27 @@ python circular_motion.py /private/safari-inputs/b-proposed studies/safari-circl
 The motion retains 90 frames at 15fps,1080×720, a fixed circle and actual moving source queries. Its coordinate viewport is 360×240 reference units at 3× output scale. The parent-panel boundary is omitted; the entire source field is an estimate. A continuous radial-map bound includes the actual finite automatic Gaussian support (conservative 4σ+1 pixel radius) and bilinear taps for every pose. This is stronger than the earlier separately labeled 3σ diagnostic; it does not establish observed RGB or physical lens accuracy. Cache identity excludes only shadow: changing source, geometry, material or filters invalidates it.
 
 Frozen recipe stage labels retain their original input/transfer-proposal status; accepted exterior passes are recorded separately in their linked verification files. They do not certify the failed shared-material transfer.
+
+## Neutral material response
+
+For the [Mail component study](reconstruction.md#mail-three-action-toolbar), sample the frozen incident field through the declared empirical ray map, then apply one encoded-RGB interpolation:
+
+```text
+C = τ S + (1−τ) (1,1,1), 0≤τ≤1
+∂C_i/∂S_i = τ
+```
+
+- This is a neutral material term, not the adaptive-contrast setting or a physical radiance law. It introduces no independently fitted RGB gains, hue offsets, directional lighting or per-pixel corrections. It preserves channel order and cannot reverse brightness. Reflections are not modeled by this term.
+- The current implementation applies it per subpixel before averaging. Source and post blur are0 in this conditional experiment. Native measurement stays Study2×2; larger comparisons do not change scores.
+- It is exactly expressible in the existing 23-coefficient shader: rim/core RGB gains all τ, RGB offsets all 1−τ, all 14 light coefficients0. The [helper](experiments/reconstruction/neutral_material.py) rejects a record with extra context or reflection terms. No native app or live lab code changes.
+- The [frozen case](experiments/reconstruction/studies/mail-toolbar/case.json) records the affine source, pose, masks, glyph placement/provenance and unresolved source/shape assumptions. Source corrections are not accepted material passes. The underlying ray profile is a prior and is not calibrated by this smooth background.
+
+From the reconstruction directory, replay a frozen input directory without fitting:
+
+```sh
+python neutral_material.py /private/mail/a-canonical studies/mail-toolbar/round/pass-01.json /private/replay
+```
+
+Use `--high-quality` for a 1080px-wide export. Canonical vectors: [trash](experiments/reconstruction/studies/mail-toolbar/foreground/trash-outline.svg), [folder trace](experiments/reconstruction/studies/mail-toolbar/foreground/folder-clean-trace.svg), [reply](experiments/reconstruction/studies/mail-toolbar/foreground/reply-outline.svg). The trace uses cubic rounded-corner extents, not exact circular arcs; it is an approximation. Full source/target frames remain private and hash-checked.
+
+Motion and HQ export for the frozen Mail inputs: `python neutral_motion.py INPUTS RECORD NEW_OUTPUT`. The helper requires the recorded Mail case, matching solid-vector hashes, zero filters and the shared neutral response. It checks every rectangular-crop source query at the HQ grid and each moving pose; no refraction or blur calibration follows from these smooth-source checks.
