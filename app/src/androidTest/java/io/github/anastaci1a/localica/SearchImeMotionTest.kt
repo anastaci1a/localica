@@ -386,8 +386,16 @@ class SearchImeMotionTest {
             opened()
             awaitDockedKeyboard()
             opened()
-            val frames = compose.runOnUiThread { samples.filter { it.opening && it.ime > 0 && it.imeTarget > 0 } }
+            val opening = compose.runOnUiThread { samples.filter { it.opening } }
+            opening.filter { it.surfaceOpacity == 0f }.forEach {
+                assertEquals("Window preparation cannot advance the visible shape", 0f, it.progress, 0f)
+            }
+            // Native window origin measurement precedes the prepared surface handoff.
+            // Its hidden setup layouts are not rendered keyboard-anchor frames.
+            val frames = opening.filter { it.surfaceOpacity > 0f && it.ime > 0 && it.imeTarget > 0 }
             assertTrue("Observe real keyboard arrival with bounded tall content", frames.isNotEmpty())
+            assertTrue("Observe visible intermediate shape frames at the keyboard anchor",
+                frames.any { it.progress in .001f.. .99f })
             val finalAnchor = frames.last().destination.bottom + frames.last().imeTarget
             frames.forEach {
                 assertEquals("Target bottom cannot inherit oversized intermediate foreground height: $it",

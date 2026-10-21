@@ -81,5 +81,7 @@ internal data class SearchMorphSample(
     val placementBottom: Float? = null,
     val openingShapeDestination: Rect? = null,
     val openingHeightLimit: Float = Float.POSITIVE_INFINITY,
+    /** Exact draw-gate opacity sampled at placement, not a rendered-pixel observation. */
+    val surfaceOpacity: Float = 1f,
 )
 internal val LocalSearchMorphObserver = staticCompositionLocalOf<((SearchMorphSample) -> Unit)?> { null }

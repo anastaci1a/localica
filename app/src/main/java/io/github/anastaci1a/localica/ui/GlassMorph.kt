@@ -501,6 +501,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }
                     ?: searchMotion.rendered.takeIf { holdImeBack && it.width > 0f }
                     ?: searchPlacement.value.takeIf { placement == GlassPlacement.Search && it.width > 0f })?.translate(-windowOrigin)
+                fun surfaceOpacity() = if (detached) p else
+                    if (present && window != null && readyWindow === window) 1f else 0f
                 Box(Modifier.fillMaxSize().onGloballyPositioned { windowOrigin = it.backdropPosition(view) }) {
                     Layout(modifier = Modifier.glassShadowOffset {
                         val rightAligned = start.center.x > availableWidth / 2f
@@ -530,7 +532,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             searchMotion.lastIme = imeHeight
                             searchMotion.observer?.invoke(SearchMorphSample(p, visible, bounds,
                                 flight, if (visible) searchTarget else anchor.bounds,
-                                imeHeight, imeSource, imeTarget, openingBottom, searchOpeningShape.value.takeIf { flight?.opening == true }, availableHeight.toFloat()))
+                                imeHeight, imeSource, imeTarget, openingBottom, searchOpeningShape.value.takeIf { flight?.opening == true }, availableHeight.toFloat(),
+                                surfaceOpacity = surfaceOpacity()))
                         }
                     }.drawWithContent {
                         // Match the trigger's draw-space deformation. A layout-layer
@@ -545,7 +548,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             // Keep this window's padded shadow in the same draw pass.
                             // A tight alpha graphics layer clips the moving field on
                             // legacy Android and changes it when the trigger takes over.
-                            if (detached) p else if (present && window != null && readyWindow === window) 1f else 0f
+                            surfaceOpacity()
                         }
                         .clearGlassShadow(LocalGlassAppearance.current.shadowStrength *
                             (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else if (detached) p else 1f),
