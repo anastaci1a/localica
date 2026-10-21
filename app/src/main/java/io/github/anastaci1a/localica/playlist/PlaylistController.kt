@@ -93,7 +93,12 @@ class PlaylistController(private val dao: PlaylistDao,
             PlaylistEdits.sort(it, method, ascending, snapshot)
         }
     fun randomize(id: String, complete: (Boolean) -> Unit = {}) = randomizeOrder(id) { complete(it != null) }
-    internal fun randomizeOrder(id: String, complete: (OrderCommit?) -> Unit) {
+    internal fun randomizeOrder(id: String, complete: (OrderCommit?) -> Unit) =
+        editOrder(id, complete) { PlaylistEdits.randomize(it) }
+    fun reverse(id: String, complete: (Boolean) -> Unit = {}) = reverseOrder(id) { complete(it != null) }
+    internal fun reverseOrder(id: String, complete: (OrderCommit?) -> Unit) =
+        editOrder(id, complete) { PlaylistEdits.reverse(it) }
+    private fun editOrder(id: String, complete: (OrderCommit?) -> Unit, change: suspend (ManualPlaylist) -> ManualPlaylist) {
         var before: ManualPlaylist? = null
         edit(id, complete = { success ->
             val after = state.value.playlists.firstOrNull { it.id == id }
@@ -106,7 +111,7 @@ class PlaylistController(private val dao: PlaylistDao,
                         previous.entries[it].id != after.entries[it].id
                     }),
             ) else null)
-        }) { current -> before = current; PlaylistEdits.randomize(current) }
+        }) { current -> before = current; change(current) }
     }
     fun revertOrder(id: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (Boolean) -> Unit = {}) =
         edit(id, complete) { PlaylistEdits.revertOrder(it, checkpoint) }

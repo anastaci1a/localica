@@ -48,7 +48,7 @@ private fun ChoiceMeasurement(title: String, labels: List<String>, popup: Boolea
 
 @Composable
 internal fun BrowseOptionsMeasurement(route: BrowseRoute, sortFields: List<TrackSort>, mutable: Boolean,
-    randomize: Boolean, overridden: Boolean, shadowInset: Dp) {
+    randomize: Boolean, overridden: Boolean, shadowInset: Dp, reverse: Boolean = false) {
     @Composable fun ScopeMeasurement() {
         HorizontalDivider()
         BooleanPreferenceFrame("Save only for this list") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }
@@ -63,6 +63,9 @@ internal fun BrowseOptionsMeasurement(route: BrowseRoute, sortFields: List<Track
                 GlassActionRowMeasurement {
                     GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
                     GlassActionButtonFace(R.drawable.ic_revert, "Revert", Modifier.heightIn(min = CompactControlSize))
+                }
+                if (reverse) GlassActionRowMeasurement {
+                    GlassActionButtonFace(R.drawable.ic_reverse, "Reverse", Modifier.heightIn(min = CompactControlSize))
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
@@ -100,10 +103,10 @@ internal fun BrowseOptionsActionsMeasurement() {
 /** Entire supported envelope, including chrome; independent of the current draft/tab. */
 @Composable
 internal fun BrowseOptionsWidthMeasurement(route: BrowseRoute, fields: List<TrackSort>, mutable: Boolean,
-    randomize: Boolean, overridden: Boolean, shadowInset: Dp) {
+    randomize: Boolean, overridden: Boolean, shadowInset: Dp, reverse: Boolean = false) {
     Column(Modifier.padding(24.dp)) {
         GlassChoicesMeasurement(listOf("Sort", "View"), listOf(R.drawable.ic_sort, R.drawable.ic_eye), tab = true)
-        BrowseOptionsMeasurement(route, fields, mutable, randomize, overridden, shadowInset)
+        BrowseOptionsMeasurement(route, fields, mutable, randomize, overridden, shadowInset, reverse)
         if (!mutable && (route.collection != null || route.search)) {
             BooleanPreferenceFrame("Save only for this list") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }
             if (overridden) TextButtonMeasurement("Use list-type defaults")

@@ -33,6 +33,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     orderSnapshot: LibrarySnapshot? = null,
     mutableOrderIds: List<String>? = null,
     onRevertOrder: ((OrderCheckpoint, (Boolean) -> Unit) -> Unit)? = null,
+    onReverseOrder: (((SavedOrder?) -> Unit) -> Unit)? = null,
     onApplySort: ((TrackSort, Boolean, (Boolean) -> Unit) -> Unit)? = null) {
     var tab by remember { mutableIntStateOf(if (presentationOnly) 1 else 0) }
     val shadowInset = glassShadowInset().coerceAtLeast(12.dp)
@@ -45,7 +46,9 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     val checkpoint = remember {
         if (mutableOrder != null && mutableOrderIds != null) OrderCheckpoint.capture(mutableOrderIds, mutableOrder) else null
     }
-    var canRevert by remember { mutableStateOf(false) }
+    val canRevert = remember(checkpoint, mutableOrderIds) {
+        checkpoint != null && mutableOrderIds != null && checkpoint.differsFrom(mutableOrderIds)
+    }
     var busy by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf(false) }
     val applying = mutableOrder != null && tab == 0
@@ -83,7 +86,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     }, text = {
         val pageProgress by animateFloatAsState(tab.toFloat(), tween(if (LocalReducedMotion.current) 0 else 140), label = "Browse options page")
         StablePopupBody(Modifier.testTag("browse-options-body"), measurement = {
-            BrowseOptionsMeasurement(route, fields, mutableOrder != null, onRandomize != null, overridden, shadowInset)
+            BrowseOptionsMeasurement(route, fields, mutableOrder != null, onRandomize != null, overridden, shadowInset, onReverseOrder != null)
         }) {
         Layout(modifier = Modifier.fillMaxWidth(), content = {
         repeat(2) { page ->
@@ -104,7 +107,6 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                                 onRandomize { ok -> busy = false; failure = !ok
                                     if (ok) {
                                         edited = edited.copy(sort = TrackSort.Manual, ascending = true)
-                                        canRevert = true
                                     }
                                 }
                             })
@@ -114,11 +116,20 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                                     onRevertOrder(checkpoint) { ok -> busy = false; failure = !ok
                                         if (ok) {
                                             edited = edited.copy(sort = checkpoint.saved.sort, ascending = checkpoint.saved.ascending)
-                                            canRevert = false
                                         }
                                     }
                                 })
                             }
+                        }
+                        if (onReverseOrder != null) GlassActionRow {
+                            GlassActionButton(R.drawable.ic_reverse, "Reverse",
+                                enabled = !busy && (mutableOrderIds?.size ?: 0) > 1, onClick = {
+                                    busy = true; failure = false
+                                    onReverseOrder { committed ->
+                                        busy = false; failure = committed == null
+                                        if (committed != null) edited = edited.copy(sort = committed.sort, ascending = committed.ascending)
+                                    }
+                                })
                         }
                         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = LocalContentColor.current.copy(alpha = .12f))
                     }
@@ -152,7 +163,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     }, dismissButton = { ActionTextButton(enabled = !busy, onClick = onDismiss) { Text(if (applying) "Close" else "Cancel") } },
         actionsMeasurement = if (mutableOrder != null) ({ BrowseOptionsActionsMeasurement() }) else null,
         widthMeasurement = {
-            BrowseOptionsWidthMeasurement(route, fields, mutableOrder != null, onRandomize != null, overridden, shadowInset)
+            BrowseOptionsWidthMeasurement(route, fields, mutableOrder != null, onRandomize != null, overridden, shadowInset, onReverseOrder != null)
         })
 }
 
