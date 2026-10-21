@@ -299,6 +299,6 @@ For `t,s∈[0,1]` and `γ>0`, the function stays bounded and monotone. The affin
 
 ### Current vector-control revisions
 
-The [Search recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-01.json) refines the shared affine material with map, blur, SVG geometry and generated shadow fixed. It freezes native pixel blur widths, normalized map coefficients, case fingerprints and vector hashes. Scale pixel widths with the source short half-size L.
+The [Search recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-02.json) refines the shared affine material with map, blur, SVG geometry and generated shadow fixed. It freezes native pixel blur widths, normalized map coefficients, case fingerprints and vector hashes. Scale pixel widths with the source short half-size L.
 
-Replay: `python vector_revision.py INPUTS studies/music-search-vector/review-round/pass-01.json OUTPUT`. INPUTS contains the original private a/b source, target, known masks and SVGs. The command checks case, source and vector hashes. Unknown exterior uses nearest defined RGB for presentation only; no photographed shadow or foreground is copied.
+Replay: `python vector_revision.py INPUTS studies/music-search-vector/review-round/pass-02.json OUTPUT`. INPUTS contains the original private a/b source, target, known masks and SVGs. The command checks case, source and vector hashes. Unknown exterior uses nearest defined RGB for presentation only; no photographed shadow or foreground is copied.
