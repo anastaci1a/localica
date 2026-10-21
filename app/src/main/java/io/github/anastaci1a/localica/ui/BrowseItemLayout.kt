@@ -130,10 +130,12 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         val actions = children[3].measure(Constraints.fixed(metrics.menu, placement.menuHeight))
         val blankArt = children.getOrNull(4)?.measure(Constraints.fixed(metrics.art, metrics.art))
         val blankInfoWidth = metrics.loadingInformationWidth(loadingInformation)
-        val blankTitle = children.getOrNull(5)?.measure(Constraints.fixed(metrics.titleWidth(blankInfoWidth), reservedTitle))
+        val blankTitleHeight = if (gallery) metrics.titleLine.sp.roundToPx() else reservedTitle
+        val blankTitle = children.getOrNull(5)?.measure(Constraints.fixed(metrics.titleWidth(blankInfoWidth), blankTitleHeight))
         val blankInfo = children.getOrNull(6)?.measure(Constraints.fixed(blankInfoWidth, if (loadingInformation) infoLine.roundToPx() else 0))
-        val blankPlacement = metrics.place(retained(text.height, reservedTitle), blankInfoWidth,
-            retained(information.height, reservedInfo))
+        val blankPlacement = if (gallery) metrics.place(blankTitleHeight, blankInfoWidth,
+            if (loadingInformation) infoLine.roundToPx() else 0) else
+            metrics.place(retained(text.height, reservedTitle), blankInfoWidth, retained(information.height, reservedInfo))
         layout(constraints.maxWidth, placement.height) {
             blankArt?.placeRelative(placement.artX, placement.artY)
             blankTitle?.placeRelative(placement.titleX, placement.titleY)

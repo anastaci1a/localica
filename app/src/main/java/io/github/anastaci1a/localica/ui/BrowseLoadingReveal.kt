@@ -162,11 +162,15 @@ internal fun BrowseLoadingItem(style: BrowseStyle, geometry: BrowseCellGeometry,
         corner.floatValue = metrics.artCorner
         val infoWidth = metrics.loadingInformationWidth(showInformation)
         val titleWidth = metrics.titleWidth(infoWidth)
-        val placement = metrics.place(titleHeight, infoWidth, infoHeight)
+        // Gallery's visual placeholders describe one text line; keep the existing
+        // two-line row reservation separate so real multiline content is never clipped.
+        val blankTitleHeight = if (metrics.gallery) titleHeight / metrics.lines else titleHeight
+        val placement = metrics.place(blankTitleHeight, infoWidth, if (metrics.gallery) infoLine.takeIf { showInformation } ?: 0 else infoHeight)
+        val reservedHeight = metrics.place(titleHeight, infoWidth, infoHeight).height
         val art = children[0].measure(Constraints.fixed(metrics.art, metrics.art))
-        val title = children[1].measure(Constraints.fixed(titleWidth, titleHeight))
+        val title = children[1].measure(Constraints.fixed(titleWidth, blankTitleHeight))
         val info = children[2].measure(Constraints.fixed(infoWidth, if (showInformation) infoLine else 0))
-        layout(constraints.maxWidth, placement.height) {
+        layout(constraints.maxWidth, reservedHeight) {
             art.placeRelative(placement.artX, placement.artY)
             title.placeRelative(placement.titleX, placement.titleY)
             info.placeRelative(placement.infoX, placement.infoY)
