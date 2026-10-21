@@ -72,7 +72,7 @@ The main comparison and wide rim/underside crops are1080px per side, resized fro
 
 ## Safari circular controls
 
-Apple, [Meet Liquid Glass, 5:00](https://developer.apple.com/videos/play/wwdc2025/219/?time=300). Search and plus controls occupy differently shaded parts of the same gray panel. **Plus exterior round:2/3 verified passes. The shared material transfer still fails.**
+Apple, [Meet Liquid Glass, 5:00](https://developer.apple.com/videos/play/wwdc2025/219/?time=300). Search and plus controls occupy differently shaded parts of the same gray panel. **Plus exterior round:3/3 verified passes. The shared material transfer still fails.**
 
 ![Safari search control and frozen vector baseline](assets/safari-search-baseline.png)
 
@@ -86,7 +86,7 @@ Apple, [Meet Liquid Glass, 5:00](https://developer.apple.com/videos/play/wwdc202
 
 The plus uses the same dimensionless ray/material/shadow parameters, a separate solid plus vector and independently measured pose. Ordinary source/output kernel widths scale only by the radius ratio **74.224/72.894**. No material is fitted to this second image.
 
-The transfer is visibly too bright and cyan: E **23.87081**, glass/rim **23.71619/24.22775**. The second [generated-shadow pass](experiments/reconstruction/studies/safari-circles/plus-round/pass-02-verification.json) reduces near/full exterior RMSE **5.809/5.357 → 5.030/4.987** with every scored optical/icon pixel unchanged; this is exterior-only progress on the plus single observation. The search image is an additional unchanged-material guard, not a paired-optics stage. This retained failure limits claims that the inherited material generalizes; the two scores are not comparable estimates of achievable fidelity. The plus background is another affine estimate (held **0.705**, independent right/lower **1.525/5.622** levels). It omits the curved parent-panel edge visible in the crop. Neither background establishes a refraction or dispersion map from such low-frequency content.
+The transfer is visibly too bright and cyan: E **23.87081**, glass/rim **23.71619/24.22775**. The final [generated-shadow pass](experiments/reconstruction/studies/safari-circles/plus-round/pass-03-verification.json) reduces near/full exterior RMSE **5.809/5.357 → 4.674/4.829** with every scored optical/icon pixel unchanged; this is exterior-only progress on the plus single observation. The search image is an additional unchanged-material guard, not a paired-optics stage. Its near/full exterior checks improve, but the third step slightly worsens its far-only advisory aggregate (6.42472 → 6.42805); parent-boundary and pointwise errors remain. The magnifier has no qualifying material pass after eight rejected native trials. This retained failure limits claims that the inherited material generalizes; the two scores are not comparable estimates of achievable fidelity. The plus background is another affine estimate (held **0.705**, independent right/lower **1.525/5.622** levels). It omits the curved parent-panel edge visible in the crop. Neither background establishes a refraction or dispersion map from such low-frequency content.
 
 </details>
 
