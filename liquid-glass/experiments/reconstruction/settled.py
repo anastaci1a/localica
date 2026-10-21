@@ -26,19 +26,19 @@ def radial(d, p):
     return np.where(d <= b/2, initial, np.where(d < (1+k)*b/2, tail, 0.))
 
 
-def mapping(x, y, preset):
+def mapping(x, y, preset, boundary=None):
     s, p = preset['shape'], preset['parameters']
     if preset['model'] != 'radial-tail':
-        return lookup(x, y, s['half'], s['radius'], p, preset['model'], oval=s.get('oval'))
+        return lookup(x, y, s['half'], s['radius'], p, preset['model'], boundary=boundary, oval=s.get('oval'))
     r = np.hypot(x, y)
     a = radial(1-r, p)
     scale = np.divide(r-a, r, out=np.ones_like(r), where=r > 1e-12)
     return x*scale, y*scale
 
 
-def lighting(x, y, preset):
+def lighting(x, y, preset, boundary=None):
     s = preset['shape']
-    d, nx, ny = case_geometry(s, x, y)
+    d, nx, ny = case_geometry(s, x, y) if boundary is None else boundary
     d = np.maximum(-d, 0)
     thin = np.exp(-(d/preset['thin_rim'])**2)
     e = np.exp(-(d/preset['rim_width'])**2)
