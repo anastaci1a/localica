@@ -164,5 +164,12 @@
     "top": 64,
     "bottom": 0,
     "gutter": 2
+  },
+  "assets/mail-toolbar-current.png": {
+    "width": 2162,
+    "height": 421,
+    "top": 64,
+    "bottom": 0,
+    "gutter": 2
   }
 }

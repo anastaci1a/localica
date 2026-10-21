@@ -1,9 +1,10 @@
 // Present existing Markdown studies as a compact index. Source figures stay intact.
-const fs=require('node:fs'),path=require('node:path'),sharp=require('sharp');
+const fs=require('node:fs'),path=require('node:path');
 const studies={
  'clear-playback-control':['Playback','Circular control · most polished'],
  'archive-and-plus-toolbar':['Toolbar','Archive and plus · text backdrop'],
  'safari-circular-controls':['Safari','Circular controls · transfer under review'],
+ 'mail-three-action-toolbar':['Mail','Three-action toolbar · material study'],
  'active-slider':['Settings','Active slider · blue track'],
  'light-and-dark-surfaces':['Surfaces','Light and dark material responses'],
  'expanded-mini-player':['Apple Music','Expanded mini-player'],
@@ -15,6 +16,7 @@ const studies={
  'active-segmented-selector':['Settings','Segmented selector · under review']
 };
 async function prepareStudies(html,root,write){
+ const sharp=require('sharp');
  const headings=[...html.matchAll(/<h([23]) id="([^"]+)">([\s\S]*?)<\/h\1>/g)];
  const replacements=[];
  for(let i=0;i<headings.length;i++){
@@ -35,4 +37,4 @@ async function prepareStudies(html,root,write){
  for(const r of replacements.reverse())html=html.slice(0,r.start)+r.html+html.slice(r.end);
  return html;
 }
-module.exports={prepareStudies};
+module.exports={prepareStudies,studyIds:Object.keys(studies)};
