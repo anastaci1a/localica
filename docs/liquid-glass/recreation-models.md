@@ -434,3 +434,5 @@ python neutral_material.py /private/mail/a-canonical studies/mail-toolbar/round/
 ```
 
 Use `--high-quality` for a 1080px-wide export. Canonical vectors: [trash](experiments/reconstruction/studies/mail-toolbar/foreground/trash-outline.svg), [folder trace](experiments/reconstruction/studies/mail-toolbar/foreground/folder-clean-trace.svg), [reply](experiments/reconstruction/studies/mail-toolbar/foreground/reply-outline.svg). The trace uses cubic rounded-corner extents, not exact circular arcs; it is an approximation. Full source/target frames remain private and hash-checked.
+
+Motion and HQ export for the frozen Mail inputs: `python neutral_motion.py INPUTS RECORD NEW_OUTPUT`. The helper requires the recorded Mail case, matching solid-vector hashes, zero filters and the shared neutral response. It checks every rectangular-crop source query at the HQ grid and each moving pose; no refraction or blur calibration follows from these smooth-source checks.
