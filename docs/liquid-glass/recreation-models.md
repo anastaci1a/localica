@@ -370,7 +370,7 @@ The [current Expanded recipe](experiments/reconstruction/studies/music-mini-expa
 
 ## Safari circular controls: conditional material transfer
 
-The [Safari comparison](reconstruction.md#safari-circular-controls) retains a failed cross-background transfer. It is a source-limited material study, not a new refraction model. Both controls reuse the detached Music Search map and material; the magnifier and plus are separate solid vectors. The complete [coefficient records](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) fix each private case fingerprint.
+The [Safari comparison](reconstruction.md#safari-circular-controls) retains a failed cross-background transfer. It is a source-limited material study, not a new refraction model. Both controls reuse the detached Music Search map and material; the magnifier and plus are separate solid vectors. The complete [coefficient records](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) fix each private case fingerprint; [input construction](experiments/reconstruction/studies/safari-circles/input-construction.json) records normalized affine coefficients, pose and solid-vector placement.
 
 For reference center c and radius L, define normalized coordinates u=(p−c)/L. The footprint is |u|≤1. Fit the incident affine RGB field only on uncovered panel controls, then freeze it:
 
@@ -401,3 +401,12 @@ python safari_transfer.py --search-input /private/proposed-a --plus-input /priva
 ```
 
 Input hashes include the source PNG, target visibility, source-defined/observed masks and foreground vector. The replay refuses a different case fingerprint or existing output directory. The retained large cyan/brightness error on the darker plus control demonstrates a material-transfer limitation; low-frequency gray panels cannot determine a refraction field or dispersion.
+
+Final plus exports use the three-pass shadow recipe (opacity0.05622886993343976), with all optical/material coefficients unchanged. Reproduce the1080px comparison and motion from the reconstruction directory:
+
+```sh
+python vector_revision.py /private/safari-inputs studies/safari-circles/plus-round/pass-03.json /private/still --high-quality
+python circular_motion.py /private/safari-inputs/b-proposed studies/safari-circles/plus-round/pass-03.json /private/motion
+```
+
+The motion retains90frames/15fps,1080×720, a fixed circle and actual moving source queries. Its coordinate viewport is360×240 reference units at3× output scale. The parent-panel boundary is omitted; the entire source field is an estimate. A continuous radial-map bound includes the actual finite automatic Gaussian support (conservative4σ+1pixel radius) and bilinear taps for every pose. This is stronger than the earlier separately labeled3σ diagnostic; it does not establish observed RGB or physical lens accuracy. Cache identity excludes only shadow: changing source, geometry, material or filters invalidates it.

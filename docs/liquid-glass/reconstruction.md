@@ -34,7 +34,7 @@ Each half retains 1920 × 1080 pixels.
 
 <img src="assets/playback-settled.gif" alt="Settled playback model translated over the recovered photograph" width="1080" height="608" loading="lazy" decoding="async">
 
-[Video](assets/playback-settled.mp4). GIF: 3,072,914 bytes,1080×608; both exports contain90frames at15fps, exactly6seconds. They retain the [final short-round recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json), original motion path and registered clean-source exterior, with no copied target context/shadow. Motion retains its original2×2 integration; native4×4 scoring/material are unchanged. The compact still reuses lossless final frames; no optical model was refitted or counted again. [Media hashes, source support and format verification](experiments/reconstruction/studies/playback/review-round/motion.json). These are offline renders, not device-performance measurements or a matched Apple motion clip.
+[Video](assets/playback-settled.mp4). GIF: 3,072,914 bytes,1080×608; both exports contain 90frames at 15fps, exactly 6 seconds. They retain the [final short-round recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json), original motion path and registered clean-source exterior, with no copied target context/shadow. Motion retains its original2×2 integration; native4×4 scoring/material are unchanged. The compact still reuses lossless final frames; no optical model was refitted or counted again. [Media hashes, source support and format verification](experiments/reconstruction/studies/playback/review-round/motion.json). These are offline renders, not device-performance measurements or a matched Apple motion clip.
 
 Reproduce the current motion format from the reconstruction directory using the frozen input PNGs and accepted record:
 
@@ -42,7 +42,7 @@ Reproduce the current motion format from the reconstruction directory using the 
 python motion.py INPUTS OUTPUT --record studies/playback/review-round/pass-03.json --frames 90 --fps 15 --width 1080
 ```
 
-Width/fps defaults remain1920/30. The export keeps the original path and2×2 motion integration; native4×4 still scoring is unchanged. GIFs use Bayer128 first, preserve the selected GIF rate (at most15fps) during palette-only size fallback, and use centisecond delays totaling exactly6seconds for this command.
+Width/fps defaults remain1920/30. The export keeps the original path and2×2 motion integration; native4×4 still scoring is unchanged. GIFs use Bayer128 first, preserve the selected GIF rate (at most15fps) during palette-only size fallback, and use centisecond delays totaling exactly 6 seconds for this command.
 
 </details>
 
@@ -72,7 +72,7 @@ The main comparison and wide rim/underside crops are1080px per side, resized fro
 
 ## Safari circular controls
 
-Apple, [Meet Liquid Glass, 5:00](https://developer.apple.com/videos/play/wwdc2025/219/?time=300). Search and plus controls occupy differently shaded parts of the same gray panel. **Plus exterior round:3/3 verified passes. The shared material transfer still fails.**
+Apple, [Meet Liquid Glass, 5:00](https://developer.apple.com/videos/play/wwdc2025/219/?time=300). Search and plus controls occupy differently shaded parts of the same gray panel. **Plus exterior round: 3/3 verified passes. The shared material transfer still fails.**
 
 ![Safari search control and frozen vector baseline](assets/safari-search-baseline.png)
 
@@ -90,7 +90,27 @@ The transfer is visibly too bright and cyan: E **23.87081**, glass/rim **23.7161
 
 </details>
 
-[Fixed recipes and fingerprints](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) · [Native replay](experiments/reconstruction/safari_transfer.py). Inputs remain private. Native sampling is Study2×2; previews are resized from those saved native arrays. This study is separate from the more polished clear playback control and does not replace it.
+<details>
+<summary>Full-resolution plus comparison</summary>
+
+![Safari plus,1080px per side](assets/safari-plus-full.png)
+
+The reconstruction is evaluated at 1800×1760 with two samples per output axis, then resized to 1080px per side. Apple is resized directly from its native reference crop. [Sampling, format and source-domain record](experiments/reconstruction/studies/safari-circles/plus-round/format.json). These presentation samples do not replace native scoring.
+
+</details>
+
+<details>
+<summary>Illustrative plus motion — video and GIF</summary>
+
+<video controls preload="none" playsinline width="1080" height="720" aria-label="Safari plus model translation"><source src="assets/safari-plus-motion.mp4" type="video/mp4"><a href="assets/safari-plus-motion.mp4">Open video</a></video>
+
+<img src="assets/safari-plus-motion.gif" alt="Constant-shape Safari plus model translated over its estimated gray panel" width="1080" height="720" loading="lazy" decoding="async">
+
+Both contain 90frames at 15fps, exactly 6 seconds; GIF: 6,185,889 bytes. Rays, ordinary source/output filtering, vector coverage and generated shadow are evaluated at the moving poses, with two samples per output axis. Only identical pose/material results are cached. The omitted parent outline and incorrect body color remain explicit. This is illustrative motion, not an Apple recording or Android benchmark. [Media hashes and conservative finite-kernel source enclosure](experiments/reconstruction/studies/safari-circles/plus-round/motion.json).
+
+</details>
+
+[Equations](recreation-models.md#safari-circular-controls-conditional-material-transfer) · [Fixed recipes and fingerprints](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) · [Native replay](experiments/reconstruction/safari_transfer.py). Inputs remain private. Native sampling is Study2×2; previews are resized from those saved native arrays. This study is separate from the more polished clear playback control and does not replace it.
 
 ## Active slider
 
@@ -118,7 +138,7 @@ Apple, [Build a UIKit app with the new design, 18:12](https://developer.apple.co
 
 <img src="assets/slider-final.gif" alt="Fixed-shape slider lens translated over the inferred track" width="1080" height="608" loading="lazy" decoding="async">
 
-1080px wide,90frames at15fps,6seconds; GIF9,887,212bytes. Geometry/material are fixed; source sampling, contact and halo follow each position. The track fill stays fixed. One bottom row pads the607px raster for video encoding. This is illustrative motion, not captured Apple interaction or Android performance. [Media/source verification](experiments/reconstruction/studies/slider-exterior/review-round/motion.json) · [Cache equivalence](experiments/reconstruction/studies/slider-exterior/review-round/cache-equivalence.json).
+1080px wide,90frames at 15fps,6 seconds; GIF9,887,212bytes. Geometry/material are fixed; source sampling, contact and halo follow each position. The track fill stays fixed. One bottom row pads the607px raster for video encoding. This is illustrative motion, not captured Apple interaction or Android performance. [Media/source verification](experiments/reconstruction/studies/slider-exterior/review-round/motion.json) · [Cache equivalence](experiments/reconstruction/studies/slider-exterior/review-round/cache-equivalence.json).
 
 </details>
 
@@ -146,7 +166,7 @@ Current round: **3/3 verified reconstruction passes**, exterior-only, with all o
 <details>
 <summary>Generated light/dark motion from the final reconstruction</summary>
 
-The generated control moves horizontally over the frozen source estimates: 1080px wide, 90frames at15fps,6seconds. Both GIFs are below10MB. Every frame reevaluates the original4×4 body sampling/coverage and the shared generated exterior; no reference residual or copied context. Near-uniform sources do not validate refraction or identify lighting. This is illustrative generated motion, not captured Apple animation. [Motion/source verification](experiments/reconstruction/studies/light-dark/review-round/motion.json).
+The generated control moves horizontally over the frozen source estimates: 1080px wide, 90frames at 15fps,6 seconds. Both GIFs are below10MB. Every frame reevaluates the original4×4 body sampling/coverage and the shared generated exterior; no reference residual or copied context. Near-uniform sources do not validate refraction or identify lighting. This is illustrative generated motion, not captured Apple animation. [Motion/source verification](experiments/reconstruction/studies/light-dark/review-round/motion.json).
 
 [Light video](assets/regular-light-final.mp4) · [Dark video](assets/regular-dark-final.mp4)
 
@@ -231,7 +251,7 @@ Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback c
 
 ### Detached Search control
 
-Current round: **3/3** verified passes. Shared material updates: native E A7.230750→7.227650 and B7.124124→7.120881. Glass and foreground improve on both; exterior shadow stays fixed. Unknown exterior is completed from nearest defined source RGB for presentation only; scored pixels are unchanged. Motion below uses this third-pass recipe:6seconds at15fps,1080px wide. GIFs preserve full dimensions below10MB (A10fps/96colors; B6fps/256colors). [Motion verification](experiments/reconstruction/studies/music-search-vector/review-round/motion.json).
+Current round: **3/3** verified passes. Shared material updates: native E A7.230750→7.227650 and B7.124124→7.120881. Glass and foreground improve on both; exterior shadow stays fixed. Unknown exterior is completed from nearest defined source RGB for presentation only; scored pixels are unchanged. Motion below uses this third-pass recipe:6 seconds at 15fps,1080px wide. GIFs preserve full dimensions below10MB (A10fps/96colors; B6fps/256colors). [Motion verification](experiments/reconstruction/studies/music-search-vector/review-round/motion.json).
 
 [Current recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-03.json) · [Independent verification](experiments/reconstruction/studies/music-search-vector/review-round/pass-03-verification.json).
 
@@ -266,7 +286,7 @@ Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; co
 
 ### Navigation control
 
-Current round: **3/3** verified passes. Native E: A1.979013→1.975144; B7.434360→7.429451. All16 foreground and exterior measurements are unchanged. Shared outer-normal and rim-lighting width adjustments improve both references; advisory interior error slightly increases in passes2–3. Unknown exterior context uses nearest defined source RGB for presentation only; measured pixels are unchanged. Motion below uses the third-pass recipe:6seconds at15fps,1080px wide, with full-size GIFs below10MB. One bottom row is codec padding. [Motion verification](experiments/reconstruction/studies/music-navigation/review-round/motion.json).
+Current round: **3/3** verified passes. Native E: A1.979013→1.975144; B7.434360→7.429451. All16 foreground and exterior measurements are unchanged. Shared outer-normal and rim-lighting width adjustments improve both references; advisory interior error slightly increases in passes2–3. Unknown exterior context uses nearest defined source RGB for presentation only; measured pixels are unchanged. Motion below uses the third-pass recipe:6 seconds at 15fps,1080px wide, with full-size GIFs below10MB. One bottom row is codec padding. [Motion verification](experiments/reconstruction/studies/music-navigation/review-round/motion.json).
 
 Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray selection backing, symbols and text. Original font outlines are used for labels; unresolved symbols use clean traces or a documented public vector. **The upper rim on B remains too dark.** The mostly white background A weakly constrains refraction.
 
@@ -301,7 +321,7 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 
 Current boundary-approximation round: **3/3** verified passes. This is a new input epoch, not a claimed gain over the historical backdrop. Nearest-defined RGB estimates missing incident content while preserving every originally observed pixel and target scoring mask. About 0.44%/0.30% of full emitted rays still depend on unobserved content; this is a boundary assumption, not recovered Apple imagery. Within that fixed epoch, native E improves A 6.342535→6.342152/B 10.160994→10.160404. A shared bounded icon-color response reduces foreground RMSE A 11.1165→11.0619/B 11.8255→11.6845. **The overly dark outer rim and foreground mismatch remain unresolved.**
 
-[Current recipe](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-03.json) · [Independent verification and source limits](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-03-verification.json). Motion below uses the final recipe: 1080px wide, 6seconds at15fps; GIFs use10fps/128colors and stay below10MB each. The moving boundary includes estimated content (minimum original scored-kernel support 92.7% on A,100% on B); it is an illustration, not an observed Apple animation. [Media verification](experiments/reconstruction/studies/music-home-vector/boundary-round/motion.json).
+[Current recipe](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-03.json) · [Independent verification and source limits](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-03-verification.json). Motion below uses the final recipe: 1080px wide, 6 seconds at 15fps; GIFs use10fps/128colors and stay below10MB each. The moving boundary includes estimated content (minimum original scored-kernel support 92.7% on A,100% on B); it is an illustration, not an observed Apple animation. [Media verification](experiments/reconstruction/studies/music-home-vector/boundary-round/motion.json).
 
 Reference frames A/B: 2.5/2.0 seconds. The source-brightness response, white incident-field approximation and clean Home vector retain their earlier two-background calibration; this does not establish behavior outside those observations.
 
@@ -345,7 +365,7 @@ Current short round: **3/3** verified passes (revision9). Native E A 14.075943�
 
 - The hidden track is a symmetric, uniform-color estimate; scores are conditional on it. A [source-color sensitivity check](experiments/reconstruction/studies/active-switch/review-round/pass-06-source-sensitivity.json) gives E ranges **14.075–14.093 / 15.165–15.699** within the recorded exposed-color bounds. These are stress tests, not statistical confidence intervals. Frozen scoring inputs stay unchanged; source changes never count as optical gains.
 - A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Directional channel separation reproduces part of the inner fringe; upper-rim color and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current native recipe](experiments/reconstruction/studies/active-switch/review-round/pass-09.json) · [Independent verification](experiments/reconstruction/studies/active-switch/review-round/pass-09-verification.json) · [Finite source proof](experiments/reconstruction/studies/active-switch/review-round/pass-09-source-proof.json) · [Historical recipe](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) reproduces the 24 historical paired checkpoints under their original nonregression gate. Final motion uses revision9: 1080px wide, 90frames at15fps, full-size256-color GIFs below10MB (A6.01MB/B3.09MB). [Motion verification](experiments/reconstruction/studies/active-switch/review-round/motion.json). The moving input remains the declared modeled track; this is illustrative motion, not captured Apple animation or Android performance.
+- [Current native recipe](experiments/reconstruction/studies/active-switch/review-round/pass-09.json) · [Independent verification](experiments/reconstruction/studies/active-switch/review-round/pass-09-verification.json) · [Finite source proof](experiments/reconstruction/studies/active-switch/review-round/pass-09-source-proof.json) · [Historical recipe](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) reproduces the 24 historical paired checkpoints under their original nonregression gate. Final motion uses revision9: 1080px wide, 90frames at 15fps, full-size256-color GIFs below10MB (A6.01MB/B3.09MB). [Motion verification](experiments/reconstruction/studies/active-switch/review-round/motion.json). The moving input remains the declared modeled track; this is illustrative motion, not captured Apple animation or Android performance.
 
 <details>
 <summary>Motion — green track</summary>

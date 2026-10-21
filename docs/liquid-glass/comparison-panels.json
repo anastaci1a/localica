@@ -157,5 +157,12 @@
     "height": 488,
     "top": 48,
     "bottom": 0
+  },
+  "assets/safari-plus-full.png": {
+    "width": 2162,
+    "height": 1120,
+    "top": 64,
+    "bottom": 0,
+    "gutter": 2
   }
 }
