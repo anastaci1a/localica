@@ -1,5 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · model</title><link rel="stylesheet" href="lab.css?v=60a8bc26b664"><link rel="stylesheet" href="guide.css?v=60a8bc26b664"></head><body class="guide"><script src="guide-media.js?v=60a8bc26b664" defer></script><script src="guide-comparison.js?v=60a8bc26b664" defer></script><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="portable-optical-and-motion-equations">Portable optical and motion equations</h1>
-<p><a href="index.html">Guide</a> · <a href="optics.html">Observed Apple evidence</a> · <a href="lab.html">Lab</a> · <a href="model.js?v=60a8bc26b664">Executable reference</a></p>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Localica · model</title><link rel="stylesheet" href="lab.css?v=12fcc926cf27"><link rel="stylesheet" href="guide.css?v=12fcc926cf27"></head><body class="guide"><script src="guide-media.js?v=12fcc926cf27" defer></script><script src="guide-comparison.js?v=12fcc926cf27" defer></script><nav><a href="index.html">Field guide</a><a href="lab.html">Live lab</a><a href="optics.html">Optical evidence</a></nav><main><h1 id="portable-optical-and-motion-equations">Portable optical and motion equations</h1>
+<p><a href="index.html">Guide</a> · <a href="optics.html">Observed Apple evidence</a> · <a href="lab.html">Lab</a> · <a href="model.js?v=12fcc926cf27">Executable reference</a></p>
 <p><strong>Status:</strong> mathematically specified Localica hypotheses, not recovered Apple formulas. These equations define a candidate for future rendering, not the current Android renderer. The small reference has no browser, GPU or framework dependency. The <a href="experiments/model-fixtures.json">portable fixtures</a> provide boundary, core and corner coordinates/normals/derivatives for later backend comparisons. Use the same units and conventions when porting it; do not copy a shader&#39;s constants without its domains.</p>
 <p>The frozen reference recreations have their own <a href="recreation-models.html">dimensionless recipes</a>. This page also describes experimental models preserved on <code>research/glass-lab-preserved-222</code>; mentions of their lab controls do not describe the deployed lab. Its executable reference is separate from the deployed renderer.</p>
 <h2 id="coordinates-and-validity">Coordinates and validity</h2>
@@ -37,7 +37,7 @@ F(p) = (1 − c S(u)) p − a(d) n
 <li>The older <code>16u²(1−u)²</code> profile forces displacement and its derivative to zero at the outline. It explains an apparently inactive outer strip. The alternative <code>R</code> retains outline displacement but has a negative inward derivative: much of that band magnifies rather than compresses. Both remain explicitly labeled comparisons.</li>
 <li>None of these outline continuations is calibrated to Apple&#39;s outermost rim. A physical interface can have a source-coordinate discontinuity at its silhouette; that is different from an unwanted seam inside the material.</li>
 </ul>
-<p><img src="assets/edge-profile.svg?v=60a8bc26b664" alt="Inverse displacement and normal derivative across the edge band" loading="lazy" decoding="async"></p>
+<p><img src="assets/edge-profile.svg?v=12fcc926cf27" alt="Inverse displacement and normal derivative across the edge band" loading="lazy" decoding="async"></p>
 <h3 id="jacobian-and-folds">Jacobian and folds</h3>
 <p>Let <code>t=(-ny,nx)</code>, <code>S_d′=30u²(1−u)²/b</code> within the band, and <code>a_d′=edge×power×P′(u)</code>. On a differentiable boundary segment:</p>
 <pre><code class="language-text">J = ∂F/∂p = (1−cS)I + c S_d′ p⊗n + a_d′ n⊗n − a κd t⊗t
@@ -116,6 +116,26 @@ F(p) = Q + Tout.xy × G/(−Tout.z)
 <li><code>H=0</code> or <code>ior=1</code> explicitly gives the identity map. The <code>H→0</code> limit is not uniform at an exactly vertical rim when <code>G&gt;0</code>; this comparator is unsuitable as a fade-to-zero-opacity formula. Fade material coverage independently.</li>
 <li>Full Fresnel-weighted energy, internal reflections, absorption, dispersion, caustics and multiple scattering are absent. The lab adds an independent synthetic highlight (the field model uses a fixed 0.3-reference-height cap for that lighting only), so calling its complete output a physically accurate renderer would be incorrect.</li>
 </ul>
+<h2 id="flat-front-inverse-map-compatibility">Flat-front inverse-map compatibility</h2>
+<p>This separate comparator has an orthographic camera looking along −z, a flat front at z=0, one back surface z=−h(x,y), index n&gt;1, and background plane z=−G. All lengths use the same normalized unit; h&gt;0 and s=G−h&gt;0. It is a test of a specified geometry, not an identified Apple lens.</p>
+<p>For a proposed inverse image map F, let v=F−(x,y). Normal entry leaves the internal ray vertical. Snell&#39;s law requires:</p>
+<pre><code class="language-text">M = dot(v,v), R = sqrt(M+s²), D = nR−s
+∇h = v/D
+transmitted branch: s &gt; sqrt(M/(n²−1))
+</code></pre>
+<ul>
+<li>h is one unknown surface; s cannot be fitted independently at each pixel. The branch inequality rejects the wrong-side solution and critical/grazing rays. Do not clamp them into validity.</li>
+<li>Define c=∂x(vy)−∂y(vx) and K=vy·dot(v,∂xv)−vx·dot(v,∂yv). Equality of the surface&#39;s mixed derivatives gives <strong>Dc−nK/R=0</strong>. Terms containing ∇s cancel because ∇s=−v/D. A valid surface may therefore have nonzero image-map curl.</li>
+<li>For reliably nonzero c, set ρ=K/c. The transmitted branch requires <strong>ρ&gt;M</strong>. Its necessary clearance is:</li>
+</ul>
+<pre><code class="language-text">s² = [2n²(ρ−M)+M+sqrt(M²+4n²ρ(ρ−M))] / [2(n²−1)]
+</code></pre>
+<ul>
+<li>This root still must satisfy −∇s=v/D, compatible boundary conditions, positive thickness and valid complete ray paths. It does not establish a surface by itself. Near-zero curl, derivative noise and footprint-crossing differences require separate treatment; do not turn them into impossibility claims.</li>
+<li>The inequality follows from ρ=DR/n=M+s²−s·sqrt(M+s²)/n, which increases from M on the strictly transmitted branch. Failure rules out an <strong>exact</strong> map in this stated family; it supplies no lower bound on image error from an approximate surface or a different camera/front surface.</li>
+<li><a href="experiments/reconstruction/surface_compatibility.py">Executable equations</a> and <a href="experiments/reconstruction/verify-surface-compatibility.py">independent controls</a> check scalar versus vector Snell refraction, a known quadratic surface with nonzero map curl, inverse recovery, scale invariance and invalid branches. Run <code>python verify-surface-compatibility.py</code> in the reconstruction directory. These require NumPy, not private images.</li>
+</ul>
+<p>The equations above use the stated propagation convention. <a href="https://arxiv.org/html/1510.01129">Bösel and Gross</a> discuss the broader coupling between surface integrability and ray maps, including the limits of small-angle constructions. Physical radiometry, dispersion, reflection, side-wall visibility and source recovery remain separate requirements.</p>
 <h2 id="reconstruction-comparators">Reconstruction comparators</h2>
 <p>The <a href="reconstruction.html">HD study</a> tests offline hypotheses beyond the portable lab&#39;s circle/capsule equations:</p>
 <ul>
@@ -249,4 +269,4 @@ r1,2=−a±sqrt(a²−w0²); A=(v(0)−r2 y(0))/(r1−r2); B=y(0)−A
 <li>Calibrate on exposed-source Apple scenes with known state/settings, then hold out independent scenes. The <a href="reconstruction.html">HD reconstruction study</a> now measures three conditional still-image fits, with explicit source/foreground exclusions. Independent-scene and temporal validation remain open.</li>
 <li>Keep the measured evidence, artistic choices and mathematical guarantees separate. Neither the finite-rim profile nor the cap has established Apple rendering parity.</li>
 </ol>
-</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/60a8bc26b6640ffc9a2d291909858f77b846537b/docs/liquid-glass">60a8bc26</a> · Original studies; no claim of iOS parity.</footer></body></html>
+</main><footer>Source <a href="https://github.com/anastaci1a/localica/tree/12fcc926cf270a3cf1a0b5815ef10bbb11a7ac16/docs/liquid-glass">12fcc926</a> · Original studies; no claim of iOS parity.</footer></body></html>
