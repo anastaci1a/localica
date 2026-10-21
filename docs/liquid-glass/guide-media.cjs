@@ -26,18 +26,19 @@ function prepareMedia(html,root,{comparisons=false}={}){
    }
    if(comparisons&&src&&(panels[src[1]]||/\/(?:match-(?:media|regular|slider|regular-light|regular-dark)|study-[a-z0-9-]+-(?:paired|progress)-[ab])(?:-full|-rim)?\.png$/.test(src[1]))){
     const width=+(tag.match(/\swidth="(\d+)"/)||[])[1],height=+(tag.match(/\sheight="(\d+)"/)||[])[1];
-    if(width>2&&(width-2)%2===0){
-     // Existing pair() assets contain equal panels, a2px separator and a
-     // caption strip. Crop only in the viewer; source files stay unchanged.
-     const panel=(width-2)/2,font=src[1].includes('/study-')?64:16;
+    const declared=panels[src[1]],gutter=declared?.gutter??2;
+    if(declared&&(!Number.isInteger(gutter)||gutter<0||gutter>=width||(width-gutter)%2))throw Error('Invalid comparison-panel gutter: '+src[1]);
+    if(width>gutter&&(width-gutter)%2===0){
+     // Historical pairs use a2px separator; declared figures may have none.
+     // Crop caption/separator only in the viewer; source pixels stay unchanged.
+     const panel=(width-gutter)/2,font=src[1].includes('/study-')?64:16;
      const full=/match-[a-z-]+-full\.png$/.test(src[1]);
-     const declared=panels[src[1]];
      let top=full?48:Math.max(36,2*Math.max(font,Math.round(panel*.03))),bottom=full?48:0;
      if(declared){
       if(declared.width!==width||declared.height!==height||!Number.isInteger(declared.top)||!Number.isInteger(declared.bottom)||declared.top<0||declared.bottom<0||declared.top+declared.bottom>=height)throw Error('Stale comparison-panel metadata: '+src[1]);
       top=declared.top;bottom=declared.bottom;
      }
-     if(top<height)tag=tag.replace(/>$/,` data-comparison-top="${top}" data-comparison-bottom="${bottom}">`);
+     if(top<height)tag=tag.replace(/>$/,` data-comparison-top="${top}" data-comparison-bottom="${bottom}" data-comparison-gutter="${gutter}">`);
     }
    }
   }
