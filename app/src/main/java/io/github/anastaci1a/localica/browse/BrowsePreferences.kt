@@ -106,7 +106,7 @@ class BrowsePreferences(context: Context) {
             store.getBoolean("$key.quick-search", true),
             sorts.grouping(route),
             store.getInt("$key.columns", 0).takeIf { it in 1..5 },
-            store.enumValue<ListSize>("$key.list-size") ?: route.defaultListSize())
+            route.resolveListSize(store.enumValue<ListSize>("$key.list-size")))
     }
     /** Reuse the artwork resolver and one immutable read for every row type. */
     fun informationStyles(): Map<MediaKind, BrowseStyle> {
@@ -171,6 +171,9 @@ internal fun BrowseRoute.informationChoices(): List<ExtraInfo> =
 internal fun BrowseRoute.supportsTracklist() = collection?.kind in setOf(MediaKind.Album, MediaKind.Playlist, MediaKind.Queue)
 internal fun BrowseRoute.listSizes() = ListSize.densityOrder.filter { it != ListSize.Tracklist || supportsTracklist() }
 internal fun BrowseRoute.defaultListSize() = if (collection?.kind == MediaKind.Album && !search) ListSize.Tracklist else ListSize.Normal
+// Scoped and global search share a template, but numbered collection rows must not leak into catalogs.
+internal fun BrowseRoute.resolveListSize(value: ListSize?) =
+    value?.takeUnless { it == ListSize.Tracklist && !supportsTracklist() } ?: defaultListSize()
 
 /** Album dense rows retain their numbers; Normal is ordinary cover/subtitle presentation everywhere. */
 internal fun BrowseStyle.trackNumberLabel(albumNumber: String?, index: Int): String? = when {

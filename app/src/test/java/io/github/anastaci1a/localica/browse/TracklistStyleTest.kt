@@ -17,6 +17,15 @@ class TracklistStyleTest {
         assertEquals(ListSize.Normal, BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "q")).defaultListSize())
     }
 
+    @Test fun sharedSearchTemplateCannotGiveGlobalResultsNumberedCollectionRows() {
+        val scoped = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "album"), search = true)
+        val global = BrowseRoute(MainTab.Library, search = true, globalSearch = true)
+        assertEquals(ListSize.Tracklist, scoped.resolveListSize(ListSize.Tracklist))
+        assertEquals(ListSize.Normal, global.resolveListSize(ListSize.Tracklist))
+        assertEquals(ListSize.Large, global.resolveListSize(ListSize.Large))
+        assertEquals(ListSize.Normal, global.resolveListSize(null))
+    }
+
     @Test fun numberedTracklistUsesAlbumNumberOrDisplayedOccurrenceNotOrdinaryNormal() {
         val numbered = BrowseStyle(listSize = ListSize.Tracklist)
         assertEquals("12", numbered.trackNumberLabel("12", 2))
