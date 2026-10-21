@@ -1,0 +1,63 @@
+{
+  "crops": [
+    {
+      "name": "upper rim",
+      "box_native": [
+        650,
+        369,
+        1270,
+        435
+      ],
+      "visible_rmse": [
+        13.221246477103344,
+        13.147958064801532
+      ],
+      "glass_rmse": [
+        8.964385932339098,
+        8.892461926205073
+      ],
+      "glass_pixels": 37001
+    },
+    {
+      "name": "d-stroke",
+      "box_native": [
+        960,
+        450,
+        1120,
+        550
+      ],
+      "visible_rmse": [
+        3.396195445307033,
+        3.2436292826457938
+      ],
+      "glass_rmse": [
+        3.1104335155646172,
+        2.89472294409925
+      ],
+      "glass_pixels": 11840
+    },
+    {
+      "name": "underside",
+      "box_native": [
+        650,
+        650,
+        1270,
+        726
+      ],
+      "visible_rmse": [
+        6.73761766203601,
+        6.975874657028032
+      ],
+      "glass_rmse": [
+        5.0623110664289275,
+        5.47054117062951
+      ],
+      "glass_pixels": 37001
+    }
+  ],
+  "order": [
+    "revision2",
+    "revision3"
+  ],
+  "purpose": "Fixed visible-composite crop diagnostics, advisory; underside error increase is retained."
+}

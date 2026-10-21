@@ -1,0 +1,171 @@
+{
+  "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+  "candidate": {
+    "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+    "observations": {
+      "A": {
+        "glass": {
+          "rmse": 5.796156406402588,
+          "pixels": 188771
+        },
+        "rim": {
+          "rmse": 8.677568435668945,
+          "pixels": 61248
+        },
+        "shadow": 11.466962522841486
+      }
+    }
+  },
+  "gate": {
+    "accepted": true,
+    "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+    "error_ratio": 0.995,
+    "observations": {
+      "A": {
+        "previous_error": 6.870490597949865,
+        "candidate_error": 6.790203130095051,
+        "required_error_max": 6.836138144960116,
+        "relative_reduction": 0.011685842038525074,
+        "milestone_passed": true,
+        "nonregression": {
+          "glass": true,
+          "shadow": true
+        },
+        "passed": true
+      }
+    },
+    "evidence": {
+      "visual_review": true,
+      "independent_replay": true,
+      "source_support": true
+    }
+  },
+  "foreground": {
+    "archivebox": {
+      "before": 13.242044387461515,
+      "after": 13.142080481292576,
+      "passed": true
+    },
+    "plus": {
+      "before": 3.667139623528374,
+      "after": 3.304110822040719,
+      "passed": true
+    }
+  },
+  "source_support": {
+    "all_emitted_subpixel_rays_inside_defined_image": true,
+    "margin_native_px": 34.00000000000001,
+    "bounds": [
+      [
+        474.625,
+        284.625
+      ],
+      [
+        1444.375,
+        844.375
+      ]
+    ],
+    "hidden_background_estimated": true,
+    "high_resolution": {
+      "output_scale": 4,
+      "samples_per_output_axis": 4,
+      "emitted_rays": 139059200,
+      "bounds": [
+        [
+          474.53125000000006,
+          284.53125
+        ],
+        [
+          1444.46875,
+          844.46875
+        ]
+      ],
+      "source_dimensions": [
+        1920,
+        1080
+      ],
+      "source_kernel_margin_native_px": 34.00000000000001,
+      "all_defined": true
+    },
+    "reused_from": "pass-02-verification.json",
+    "reused_file_sha256": "02f7b57d10c6927aca8281b91f36bc52793411319f91d00f50b6c8d561fe85ff",
+    "reason": "Exact geometry, source, Gaussian widths, coverage, output grid and foregrounds unchanged; new operation is a pointwise power after existing source lookups. Public code diff and recipe equality reviewed."
+  },
+  "independent_replay": {
+    "method": "Independent public-renderer replay and material-only ablation; no fitting.",
+    "candidate_sha256": "cd9526503a5b6996279955cfdef2120775239724f0ebbf4b8d7239f783016818",
+    "changes_verified_exact": true,
+    "public_material_max_difference": 0.0,
+    "public_complete_max_difference": 0.0,
+    "coverage_exact": true,
+    "scores": {
+      "glass": 5.796156406402588,
+      "rim": 8.677568435668945,
+      "E": 6.790203130095051,
+      "exterior": 11.466962522841486,
+      "archivebox": 13.142080481292576,
+      "plus": 3.304110822040719
+    },
+    "material_only_ablation": {
+      "glass": 6.203367233276367,
+      "rim": 8.771629333496094,
+      "E": 7.072459251978449,
+      "exterior": 11.46608944126798,
+      "archivebox": 13.167116094813784,
+      "plus": 3.409717605364291
+    },
+    "accepted": false,
+    "limits": "One empirical shared power/common-material proposal; source and illumination response remain confounded. Native replay does not imply visual acceptance or identified Apple physics. No additional fit or optical pass."
+  },
+  "controls": {
+    "passed": true,
+    "uniform_controls": [
+      {
+        "input": 0.0,
+        "scale": 1,
+        "max_error": 0.0
+      },
+      {
+        "input": 0.43,
+        "scale": 1,
+        "max_error": 2.9802322387695312e-08
+      },
+      {
+        "input": 1.0,
+        "scale": 1,
+        "max_error": 0.0
+      },
+      {
+        "input": 0.43,
+        "scale": 2,
+        "max_error": 5.960464477539063e-08
+      }
+    ],
+    "limits": "Positive power with positive gains and fixed additive lighting is nondecreasing. This does not identify an Apple material."
+  },
+  "visual_review": {
+    "reviewer": "primary agent",
+    "artifacts": [
+      "Independent native Apple/incumbent/candidate stack",
+      "Fresh full4x comparison",
+      "Fresh upper/d/underside4x crops"
+    ],
+    "result": "Accept incremental color/contrast improvement; no new geometric seam or displaced glyph. Underside tonal error increases slightly and remains explicitly unresolved, rather than treated as a solved feature.",
+    "remaining": [
+      "Underside reflections remain too distinct and the advisory crop worsens",
+      "d-stroke curvature unchanged",
+      "Estimated hidden source, provisional shadow width and approximate archive glyph remain"
+    ]
+  },
+  "qualification": "Third verified toolbar improvement in this round; one predeclared shared-power/common-material proposal, not additional passes for controls or renders.",
+  "study": {
+    "gamma": 1.0456395525912732,
+    "shared_offsets": [
+      0.006,
+      0.003,
+      0.006
+    ],
+    "material_only_E": 7.072459251978449
+  },
+  "limits": "Empirical encoded-RGB power and affine material calibration. Strong parameter/source ambiguity remains; no identified Apple pipeline, physical geometry or independent-background validation."
+}
