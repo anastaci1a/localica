@@ -305,6 +305,10 @@ Replay: `python vector_revision.py INPUTS RECORD OUTPUT` with either linked reci
 
 For final figures add `--high-quality` (1080px per side). Moving exports accept `extended_media.py INPUT --width 1080`; sampling uses a binary integer scale above the requested size before downsampling. Original native scoring and default media commands are unchanged.
 
+### Compact mini-player revision
+
+The [current Compact recipe](experiments/reconstruction/studies/music-mini-compact-vector/review-round/pass-03.json) refines existing rim lighting, outer-normal refraction and shared material. Blur, SVGs and separate catalogue artwork stay fixed; changed-map source support is checked over all original emitted and scored subrays. Replay with `python vector_revision.py INPUTS studies/music-mini-compact-vector/review-round/pass-03.json OUTPUT`. INPUTS contains the original frozen a/b cases, source/target masks, SVGs and independently hashed artwork. The compositor accepts declared vectors and separately hashed catalogue content; screenshot-derived foregrounds remain excluded.
+
 ### Home finite-incident-domain epoch
 
 The [current Home record](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-03.json) uses fixed SVG geometry and an explicit nearest-defined RGB extension of the recovered mosaic. Shared material and bounded icon response are calibrated on both backgrounds. This is a conditional boundary approximation; no pixels are promoted to observed content. The independent `target_observation_mask` retains every original scoring/train/held mask. Old paired21 and its incomplete incident domain remain historical, and source changes receive no optical credit.
