@@ -124,5 +124,17 @@
     "height": 650,
     "top": 64,
     "bottom": 0
+  },
+  "assets/match-slider.png": {
+    "width": 1440,
+    "height": 468,
+    "top": 64,
+    "bottom": 0
+  },
+  "assets/match-slider-full.png": {
+    "width": 2160,
+    "height": 671,
+    "top": 64,
+    "bottom": 0
   }
 }
