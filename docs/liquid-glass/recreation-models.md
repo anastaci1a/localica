@@ -68,7 +68,7 @@ For the circle, `r=|v|`, `d=1−r`, and `F(v)=(1−a(d)/r)v`. At the center set 
 
 | Parameter | Value |
 | --- | ---: |
-| Outer displacement `A` | 0.6338092221139378 |
+| Outer displacement `A` | 0.6344430313360516 |
 | Initial transition width `b` | 0.09445809156460266 |
 | Initial exponent `p` | 2.10022237760162 |
 | Inner-tail width multiplier `k` | 4.5 |
@@ -88,7 +88,7 @@ For larger `d`, use `a=0`. The join matches value, first and second derivatives;
 
 ### Glass and play-symbol processing
 
-The [current playback recipe](experiments/reconstruction/studies/playback/review-round/pass-02.json) multiplies all original material coefficients by 1.005 before clipping/shading integration. The original coefficients remain archived in `recipes.json`; the round record contains the exact resulting vector.
+The [current playback recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json) multiplies all original material coefficients by 1.005 before clipping/shading integration. The original coefficients remain archived in `recipes.json`; the round record contains the exact resulting vector. Replay the frozen inputs with `python playback_replay.py INPUTS studies/playback/review-round/pass-03.json OUTPUT --scale 4`; add `--record` with the same file to `motion.py` for the moving preview.
 
 1. Blur the backdrop with the source σ, sample it through `F`, and apply the common material function below.
 2. Blur that calculated glass color with the glass σ. This is after refraction and shading.
