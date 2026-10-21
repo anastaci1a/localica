@@ -156,17 +156,18 @@ The generated contact shadow uses the same footprint, scaled by `s_x=1963/1896`,
 
 ```text
 C0 = B (1−q α_c)
-h = a exp(−.5 [max(s,0)/σ]²)
+s_h = signed_distance(original_shape, p−(0,.1)) / L
+h = a exp(−.5 [max(s_h,0)/σ]²)
 B_out = (1−h) C0 + h β accent
 complete = body coverage_4x4 + B_out (1−coverage_4x4)
 ```
 
-Current q=.17375816993464055, a=.09639485214612539, σ=.7051111669310818 and β=.9999999999999999. The recipe freezes the accent from an exposed blue-track patch. Contact opacity comes from the owner's nominal-white samples and remains photometrically uncertain. Halo coefficients use nine fixed exterior profile patches; no reference shadow/residual is pasted. This empirical accent response is not identified Apple lighting or image blur/dispersion. Fixed coefficients preserve a nondecreasing response to B; scales are proportional to L.
+Current q=.17375816993464055, a=.09639485214612539, σ=.7051111669310818 and β=.9999999999999999. The recipe freezes the accent from an exposed blue-track patch. Contact opacity comes from the owner's nominal-white samples and remains photometrically uncertain. Initial halo coefficients use nine fixed exterior profile patches; the final halo footprint is offset downward by .1L. no reference shadow/residual is pasted. This empirical accent response is not identified Apple lighting or image blur/dispersion. Fixed coefficients preserve a nondecreasing response to B; scales are proportional to L.
 
-All original optical/body coefficients, inputs and native scores stay fixed. Near/full-visible exterior and their spatial train/held blocks are protected separately. Gray-track profile transfer is advisory; its hidden input and compressed interaction geometry are not a calibrated optical pair. [Current recipe](experiments/reconstruction/studies/slider-exterior/review-round/pass-02.json) freezes the original body and contact/halo parameters. From `experiments/reconstruction/`, run:
+All original optical/body coefficients, inputs and native scores stay fixed. Near/full-visible exterior and their spatial train/held blocks are protected separately. Gray-track profile transfer is advisory; its hidden input and compressed interaction geometry are not a calibrated optical pair. [Current recipe](experiments/reconstruction/studies/slider-exterior/review-round/pass-03.json) freezes the original body and contact/halo parameters. From `experiments/reconstruction/`, run:
 
 ```sh
-python slider_exterior.py INPUTS OUTPUT --recipe studies/slider-exterior/review-round/pass-02.json
+python slider_exterior.py INPUTS OUTPUT --recipe studies/slider-exterior/review-round/pass-03.json
 ```
 
 INPUTS contains the frozen slider-source.png and slider-target.png. The target is read only for scoring and the comparison; it never enters the generated exterior. Optional `--material-cache` verifies the original array hash and avoids repeating an unchanged body render. Preview exports resample native4×4 output; native scoring and the analytic all-RGB source-domain bound remain separate from output size.
