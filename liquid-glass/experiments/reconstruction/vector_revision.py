@@ -25,7 +25,7 @@ def composite(study,p,material,scale=1,background_source=None):
     return study.apply_foreground(material*alpha[...,None]+background*(1-alpha[...,None]),scale)
 
 
-def replay(folder,record,observation,output):
+def replay(folder,record,observation,output,high_quality=False):
     """Replay frozen inputs; completion affects unscored exterior only."""
     import hashlib,json
     from pathlib import Path
@@ -42,8 +42,8 @@ def replay(folder,record,observation,output):
         assert hashlib.sha256((Path(folder)/name).read_bytes()).hexdigest()==digest
     p=record['parameters'];material=np.asarray(record['material'])
     x0,y0,x1,y1=study.crop
-    w,h=dimensions(x1-x0,y1-y0,large=record.get('large',False))
-    scale=2 if w>x1-x0 else 1
+    w,h=dimensions(x1-x0,y1-y0,large=record.get('large',False),high_quality=high_quality)
+    scale=2**max(0,int(np.ceil(np.log2(w/(x1-x0)))))
     M=study.render(p,material,scale)
     defined,_=masks(study)
     background=complete(study,defined)
@@ -61,7 +61,7 @@ if __name__=='__main__':
     import argparse,json
     from pathlib import Path
     ap=argparse.ArgumentParser(description='Replay solid-vector studies from frozen private inputs.')
-    ap.add_argument('inputs',type=Path);ap.add_argument('record',type=Path);ap.add_argument('output',type=Path)
+    ap.add_argument('--high-quality',action='store_true',help='Export1080px wide, preserving aspect ratio');ap.add_argument('inputs',type=Path);ap.add_argument('record',type=Path);ap.add_argument('output',type=Path)
     args=ap.parse_args();record=json.loads(args.record.read_text())
     for name in record['case_sha256']:
-        replay(args.inputs/name,record,name,args.output)
+        replay(args.inputs/name,record,name,args.output,args.high_quality)

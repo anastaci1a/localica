@@ -1,0 +1,408 @@
+{
+  "previous": {
+    "observations": {
+      "A": {
+        "glass": {
+          "pixels": 14904,
+          "rmse": 6.789487838745117
+        },
+        "rim": {
+          "pixels": 8364,
+          "rmse": 8.159808158874512
+        },
+        "held": {
+          "pixels": 4763,
+          "rmse": 6.728610038757324
+        },
+        "interior": {
+          "pixels": 6540,
+          "rmse": 4.460770130157471
+        },
+        "loss": 52.242742335618004,
+        "E": 7.22791410682349,
+        "shadow": {
+          "rmse": 12.365867008393234
+        },
+        "foreground": {
+          "rmse": 7.766919191574016
+        }
+      },
+      "B": {
+        "glass": {
+          "pixels": 14904,
+          "rmse": 6.588390827178955
+        },
+        "rim": {
+          "pixels": 8364,
+          "rmse": 8.231196403503418
+        },
+        "held": {
+          "pixels": 4763,
+          "rmse": 6.00949764251709
+        },
+        "interior": {
+          "pixels": 6540,
+          "rmse": 3.503025770187378
+        },
+        "loss": 50.71060385407334,
+        "E": 7.121137820185292,
+        "shadow": {
+          "rmse": 10.270258636598328
+        },
+        "foreground": {
+          "rmse": 7.667045640141876
+        }
+      }
+    },
+    "epoch": "7941436123b8ebec59946b4448e20e6bbe4c88aff4e3b44d30b41695ecf61f5c"
+  },
+  "candidate": {
+    "observations": {
+      "A": {
+        "glass": {
+          "pixels": 14904,
+          "rmse": 6.789317607879639
+        },
+        "rim": {
+          "pixels": 8364,
+          "rmse": 8.159358024597168
+        },
+        "held": {
+          "pixels": 4763,
+          "rmse": 6.72931432723999
+        },
+        "interior": {
+          "pixels": 6540,
+          "rmse": 4.461234092712402
+        },
+        "ssim": 0.953636109828949,
+        "loss": 52.23892051853261,
+        "foreground": {
+          "rmse": 7.766714271996933
+        },
+        "shadow": {
+          "rmse": 12.365867008393234
+        }
+      },
+      "B": {
+        "glass": {
+          "pixels": 14904,
+          "rmse": 6.588232517242432
+        },
+        "rim": {
+          "pixels": 8364,
+          "rmse": 8.23075008392334
+        },
+        "held": {
+          "pixels": 4763,
+          "rmse": 6.011124610900879
+        },
+        "interior": {
+          "pixels": 6540,
+          "rmse": 3.5036888122558594
+        },
+        "ssim": 0.9758163690567017,
+        "loss": 50.7069394740766,
+        "foreground": {
+          "rmse": 7.667045640141876
+        },
+        "shadow": {
+          "rmse": 10.270258636598328
+        }
+      }
+    },
+    "epoch": "7941436123b8ebec59946b4448e20e6bbe4c88aff4e3b44d30b41695ecf61f5c"
+  },
+  "support": [
+    {
+      "observation": "A",
+      "center": {
+        "source_defined_fraction": 1.0,
+        "gaussian_3sigma_defined_fraction": 1.0,
+        "source_observed_fraction": 1.0,
+        "gaussian_3sigma_observed_fraction": 1.0,
+        "source_gaussian_radius_native_px": 21
+      },
+      "subpixels": {
+        "scale": 2,
+        "emitted_transmission_rays": 395939,
+        "minimum_defined_confidence": 1.0,
+        "gaussian_radius_native_px": 21,
+        "passed": true
+      },
+      "transmission_signature": "f701fac29cbaec2c5ae2770e7003f0966371eadbce687b03dd7ac6d0093c0c7a",
+      "native_pixel_max_difference": 0.0,
+      "passed": true
+    },
+    {
+      "observation": "B",
+      "center": {
+        "source_defined_fraction": 1.0,
+        "gaussian_3sigma_defined_fraction": 1.0,
+        "source_observed_fraction": 1.0,
+        "gaussian_3sigma_observed_fraction": 1.0,
+        "source_gaussian_radius_native_px": 21
+      },
+      "subpixels": {
+        "scale": 2,
+        "emitted_transmission_rays": 395939,
+        "minimum_defined_confidence": 1.0,
+        "gaussian_radius_native_px": 21,
+        "passed": true
+      },
+      "transmission_signature": "a87c22d0687d3ebbb9ef4d80521f9d28469ae6defcb4cba5d4438f473cb851ce",
+      "native_pixel_max_difference": 0.0,
+      "passed": true
+    }
+  ],
+  "protocol": {
+    "cases": [
+      {
+        "id": "music-search-vector-a",
+        "category": "Detached circular navigation/search control",
+        "radial": true,
+        "center": [
+          1512,
+          673
+        ],
+        "half": [
+          89,
+          89
+        ],
+        "radius": 89,
+        "crop": [
+          1395,
+          560,
+          1635,
+          795
+        ],
+        "foreground": [
+          [
+            1467,
+            626,
+            1563,
+            722
+          ]
+        ],
+        "foreground_layers": [
+          {
+            "mode": "mask",
+            "box": [
+              1467,
+              626,
+              1563,
+              722
+            ],
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "threshold": 0.72,
+            "vector_asset": "search.svg",
+            "vector_box": [
+              1470.9009527995063,
+              630.7918309178898,
+              1554.4080442125164,
+              714.2989223308999
+            ],
+            "vector_sha256": "da95145b096fc39155c93be845ba7a50c27bc97184874970d28df684d754aa49",
+            "opacity": 0.4187133312225342
+          }
+        ],
+        "reference": {
+          "video": "music",
+          "seconds": 2.5,
+          "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+        },
+        "foreground_method": "Solid analytic circular-ring/45-degree capsule SVG, square placement. Black opacity is a separate renderer coefficient; no image-derived matte or baked gray texture.",
+        "background": "Masked temporal translation mosaic, frozen observed-pixel confidence.",
+        "input_names": {
+          "source.png": "source-2.5.png",
+          "target.png": "target-2.5.png",
+          "known.png": "known-2.5.png"
+        },
+        "source_sha256": {
+          "source.png": "84da0d24f30dc1f4080b568756d79044a9ac6568ecbff9595d02a38cd3239fb1",
+          "target.png": "efffc64b8a6ee5b84f0bfc295369aad38db8531e4686674861074592fbee54de",
+          "known.png": "03433579b8ddf8771df2bacf7aa1566e84b71bc81df71da1cd64069c00ff2413"
+        },
+        "foreground_provenance": {
+          "kind": "clean symmetric vector trace",
+          "source": "Official Apple WWDC25 Music video",
+          "original_vector": false,
+          "collection": "Private localica-feedback/liquid-glass-icons/clean/search.svg"
+        },
+        "continuation": {
+          "baseline": "music-search",
+          "additional_single_pass_minimum": 10,
+          "paired_pass_minimum": 20
+        },
+        "exterior_reference_shape": {
+          "shape_dx": -0.01094003499211507,
+          "shape_dy": -0.001400833306792197,
+          "half_x_delta": -0.002787508241754526,
+          "half_y_delta": 0,
+          "radius_delta": 0,
+          "cap_join_width": 0
+        },
+        "foreground_styles": {
+          "search.svg": {
+            "color": [
+              0.23791402964793887,
+              0.2092211291437152,
+              0.2142868270726464
+            ],
+            "opacity": 0.5959399154311875
+          }
+        }
+      },
+      {
+        "id": "music-search-vector-b",
+        "category": "Detached circular navigation/search control",
+        "radial": true,
+        "center": [
+          1512,
+          673
+        ],
+        "half": [
+          89,
+          89
+        ],
+        "radius": 89,
+        "crop": [
+          1395,
+          560,
+          1635,
+          795
+        ],
+        "foreground": [
+          [
+            1467,
+            626,
+            1563,
+            722
+          ]
+        ],
+        "foreground_layers": [
+          {
+            "mode": "mask",
+            "box": [
+              1467,
+              626,
+              1563,
+              722
+            ],
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "threshold": 0.72,
+            "vector_asset": "search.svg",
+            "vector_box": [
+              1470.9009527995063,
+              630.7918309178898,
+              1554.4080442125164,
+              714.2989223308999
+            ],
+            "vector_sha256": "da95145b096fc39155c93be845ba7a50c27bc97184874970d28df684d754aa49",
+            "opacity": 0.4187133312225342
+          }
+        ],
+        "reference": {
+          "video": "music",
+          "seconds": 2,
+          "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+        },
+        "foreground_method": "Solid analytic circular-ring/45-degree capsule SVG, square placement. Black opacity is a separate renderer coefficient; no image-derived matte or baked gray texture.",
+        "background": "Masked temporal translation mosaic, frozen observed-pixel confidence.",
+        "input_names": {
+          "source.png": "source-2.0.png",
+          "target.png": "target-2.0.png",
+          "known.png": "known-2.0.png"
+        },
+        "source_sha256": {
+          "source.png": "9789b4af085d505a23bdfac7615b0688125b0ea81587d1d58e23b68c6608268f",
+          "target.png": "bf0e997fb546edd1c89ade9b227de2b0b13387cb70d249054bf3f8ff7430123d",
+          "known.png": "9d009193ae95ac9818a906fde1995dba531387f15926a5dd32e64ba34d3ff575"
+        },
+        "foreground_provenance": {
+          "kind": "clean symmetric vector trace",
+          "source": "Official Apple WWDC25 Music video",
+          "original_vector": false,
+          "collection": "Private localica-feedback/liquid-glass-icons/clean/search.svg"
+        },
+        "continuation": {
+          "baseline": "music-search",
+          "additional_single_pass_minimum": 10,
+          "paired_pass_minimum": 20
+        },
+        "exterior_reference_shape": {
+          "shape_dx": -0.01094003499211507,
+          "shape_dy": -0.001400833306792197,
+          "half_x_delta": -0.002787508241754526,
+          "half_y_delta": 0,
+          "radius_delta": 0,
+          "cap_join_width": 0
+        },
+        "foreground_styles": {
+          "search.svg": {
+            "color": [
+              0.23791402964793887,
+              0.2092211291437152,
+              0.2142868270726464
+            ],
+            "opacity": 0.5959399154311875
+          }
+        }
+      }
+    ],
+    "metric": "Original native glass/rim masks and actual vector foreground ROI; historical exterior-only shadow mask retained. Previews are 720p-sized, never used as scoring inputs."
+  },
+  "gate": {
+    "accepted": true,
+    "epoch": "7941436123b8ebec59946b4448e20e6bbe4c88aff4e3b44d30b41695ecf61f5c",
+    "policy": "nonregressive",
+    "error_ratio": 1.0,
+    "observations": {
+      "A": {
+        "previous_error": 7.22791410682349,
+        "candidate_error": 7.227649723010421,
+        "required_error_max": 7.22791410682349,
+        "relative_reduction": 3.657816199276187e-05,
+        "milestone_passed": true,
+        "strict_improvement": true,
+        "nonregression": {
+          "glass": true,
+          "foreground": true,
+          "shadow": true
+        },
+        "passed": true
+      },
+      "B": {
+        "previous_error": 7.121137820185292,
+        "candidate_error": 7.120880526597578,
+        "required_error_max": 7.121137820185292,
+        "relative_reduction": 3.613096589494269e-05,
+        "milestone_passed": true,
+        "strict_improvement": true,
+        "nonregression": {
+          "glass": true,
+          "foreground": true,
+          "shadow": true
+        },
+        "passed": true
+      }
+    },
+    "evidence": {
+      "visual_review": true,
+      "independent_replay": true,
+      "source_support": true
+    }
+  },
+  "limits": "Native scores unchanged by preview size. Same two observed backdrops/source/model, not independent device generalization. New figures use source and generated shadow, plus exact reusable SVG shape; no reference shadow copied.",
+  "visual_review": true,
+  "accepted": true,
+  "scope": "Native independent replay pixel exact, emitted-source proof and both 480px visual comparisons reviewed. Shadow proof reused analytically because all exterior terms fixed."
+}
