@@ -1,0 +1,214 @@
+{
+  "parameters": {
+    "sigma": 6.786617200054694,
+    "amplitude": 0.9231180839643462,
+    "band": 0.32948859460351393,
+    "power": 1.2000465842892671,
+    "tangent": 0.004767322296961209,
+    "tangent_band": 0.16569200725662298,
+    "core_x": 0.0003648014936255527,
+    "core_y": 0,
+    "post_sigma": 0.6512763074160691,
+    "coupling": 0,
+    "gamma": 1.0055744384896959,
+    "rim_width": 0.058745855920351996,
+    "thin_width": 0.024808983926545486,
+    "spline": true,
+    "c0": 2.2439163732886884,
+    "c1": 0.9443224614572671,
+    "c2": 0.8303024267547146,
+    "c3": 0.7976462029465191,
+    "c4": 0.6662687979601686,
+    "c5": 0.013291574387395404,
+    "c6": 2.820009850634797e-16,
+    "shape_dx": 0.0023576331850084847,
+    "shape_dy": -0.015315973820280354,
+    "half_x_delta": -0.0066155136887737,
+    "half_y_delta": 0.012503164339156088,
+    "radius_delta": 0.004366304875477263,
+    "shadow": {
+      "opacity": 0.10758152975863192,
+      "sigma": 0.2071459298777112,
+      "offset": [
+        -0.04999997516993123,
+        0.09402143677412972
+      ]
+    }
+  },
+  "material": [
+    0.516973387131243,
+    0.5131114365480894,
+    0.5166297825656025,
+    0.3831283391875246,
+    0.38662813123442974,
+    0.38458983782454653,
+    0.2202538015732774,
+    0.1927934459769722,
+    -0.11700493585108505,
+    0.07119620562004213,
+    0.007419253467763898,
+    0.03541225667049211,
+    -0.020259542385519906,
+    -0.0007253279987201178,
+    -0.011854941818769062,
+    0.0005132630673358737,
+    -0.00021663905295407675,
+    0.004821454093351676,
+    0.0010400092990320848,
+    0.004926566628321339,
+    0.5247288325073651,
+    0.5222471792549633,
+    0.5244551534059233
+  ],
+  "scores": [
+    {
+      "glass": {
+        "pixels": 155428,
+        "rmse": 4.365645408630371
+      },
+      "rim": {
+        "pixels": 45766,
+        "rmse": 7.23183536529541
+      },
+      "held": {
+        "pixels": 38118,
+        "rmse": 4.463679313659668
+      },
+      "interior": {
+        "pixels": 109662,
+        "rmse": 2.277353525161743
+      },
+      "loss": 29.031034708948027,
+      "E": 5.3880455370150715,
+      "foreground_mse": {
+        "jupiter.jpg": 2254.289512708783,
+        "title.svg": 244.49799641151913,
+        "artist.svg": 16.06429308812949,
+        "play.svg": 97.28139577782713,
+        "forward.svg": 140.63028253731318
+      },
+      "exterior": {
+        "pixels": 46409,
+        "rmse": 6.519184480442686
+      }
+    },
+    {
+      "glass": {
+        "pixels": 155428,
+        "rmse": 2.5706961154937744
+      },
+      "rim": {
+        "pixels": 45766,
+        "rmse": 4.119381904602051
+      },
+      "held": {
+        "pixels": 38118,
+        "rmse": 2.627669334411621
+      },
+      "interior": {
+        "pixels": 109662,
+        "rmse": 1.5114632844924927
+      },
+      "loss": 9.716727145539192,
+      "E": 3.117166525153764,
+      "foreground_mse": {
+        "jupiter.jpg": 2798.2244638726115,
+        "title.svg": 580.9656610479578,
+        "artist.svg": 171.14651273586787,
+        "play.svg": 119.06826740596443,
+        "forward.svg": 176.20390657684766
+      },
+      "exterior": {
+        "pixels": 46409,
+        "rmse": 5.929097299870822
+      }
+    }
+  ],
+  "source_proof": [
+    {
+      "scale": 1,
+      "counts": {
+        "whole": 890848,
+        "scored": 621712,
+        "whole_defined_bad": 0,
+        "whole_observed_bad": 0,
+        "scored_defined_bad": 0,
+        "scored_observed_bad": 0
+      },
+      "minimum_confidence": {
+        "whole_defined": 1.0,
+        "whole_observed": 1.0,
+        "scored_defined": 1.0,
+        "scored_observed": 1.0
+      },
+      "gaussian_radius_native_px": 21,
+      "whole_defined_fraction": 1.0,
+      "whole_observed_fraction": 1.0,
+      "passed": true,
+      "unsupported_rows_columns": [
+        "output_x",
+        "output_y",
+        "source_x",
+        "source_y",
+        "defined_confidence",
+        "observed_confidence",
+        "scored_native_pixel"
+      ],
+      "representative_unsupported": [],
+      "limits": "Discrete ORIGINAL native2x2 in-shape emitted rays with original3sigmaGaussian support; no changed masks, source repair, center-only inference or continuous-surface proof."
+    },
+    {
+      "scale": 1,
+      "counts": {
+        "whole": 890848,
+        "scored": 621712,
+        "whole_defined_bad": 0,
+        "whole_observed_bad": 0,
+        "scored_defined_bad": 0,
+        "scored_observed_bad": 0
+      },
+      "minimum_confidence": {
+        "whole_defined": 1.0,
+        "whole_observed": 1.0,
+        "scored_defined": 1.0,
+        "scored_observed": 1.0
+      },
+      "gaussian_radius_native_px": 21,
+      "whole_defined_fraction": 1.0,
+      "whole_observed_fraction": 1.0,
+      "passed": true,
+      "unsupported_rows_columns": [
+        "output_x",
+        "output_y",
+        "source_x",
+        "source_y",
+        "defined_confidence",
+        "observed_confidence",
+        "scored_native_pixel"
+      ],
+      "representative_unsupported": [],
+      "limits": "Discrete ORIGINAL native2x2 in-shape emitted rays with original3sigmaGaussian support; no changed masks, source repair, center-only inference or continuous-surface proof."
+    }
+  ],
+  "large": true,
+  "case_sha256": {
+    "a": "51d55987f53b0266f974a835eb7794c70156bfd91b637c1a594966134dd37f21",
+    "b": "d78bb30b15eb0092a65ec5c2344c0d327fb1eb4350888e1343dedcfae9349bc0"
+  },
+  "vector_sha256": {
+    "a": {
+      "title.svg": "315646b31db3d6dc0f68211cf5f7afa64d8e5c2cdb2bd194546fde30235f3805",
+      "artist.svg": "d9053598a02e959d995573a27b2d12abf9d8442d3904a183ff14d1cab7c84803",
+      "play.svg": "e2ff010b70a623cd1c7da1f04c4189504aeb95da79afdf1e2b70896988181584",
+      "forward.svg": "ca91b5ca526207178ffe09c948fb19151278eb1b43c5501f2a5f85bc734f0f6d"
+    },
+    "b": {
+      "title.svg": "315646b31db3d6dc0f68211cf5f7afa64d8e5c2cdb2bd194546fde30235f3805",
+      "artist.svg": "d9053598a02e959d995573a27b2d12abf9d8442d3904a183ff14d1cab7c84803",
+      "play.svg": "e2ff010b70a623cd1c7da1f04c4189504aeb95da79afdf1e2b70896988181584",
+      "forward.svg": "ca91b5ca526207178ffe09c948fb19151278eb1b43c5501f2a5f85bc734f0f6d"
+    }
+  },
+  "parameter_units": "Native sigma/post_sigma in reference pixels; geometry and map normalized by L. Preserve parameter_length_reference where supplied.",
+  "limits": "Two video observations; empirical map/material, uncertain icon/artwork assignment and recovered source. No proprietary Apple equation or parity claim. Crown replacements failed frozen guards and are not adopted."
+}
