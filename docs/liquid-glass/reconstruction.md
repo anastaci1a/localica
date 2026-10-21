@@ -425,6 +425,8 @@ Primary sources: [Materials HIG](https://developer.apple.com/design/human-interf
 
 Use Python 3.11+ and the [pinned dependencies](experiments/reconstruction/requirements.txt) in a private virtual environment. Linux DejaVu Sans affects captions only. Download original HD videos privately as `219-hd.mp4` and `284-hd.mp4` using [sources.json](experiments/reconstruction/sources.json); replay checks hashes and decoded dimensions.
 
+Comparison figures declare caption bounds in [comparison-panels.json](comparison-panels.json). Update those dimensions with each resized figure so wipe mode preserves the full rendered body.
+
 From the repository root:
 
 ```sh

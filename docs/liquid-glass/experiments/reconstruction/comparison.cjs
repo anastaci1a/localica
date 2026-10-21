@@ -4,6 +4,7 @@ const {execFileSync}=require('node:child_process'),{pathToFileURL}=require('node
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'../..'),url=pathToFileURL(path.join(root,'site/liquid-glass/reconstruction.html')).href;
 const output=process.env.LAB_EVIDENCE;
+const panels=JSON.parse(fs.readFileSync(path.join(root,'comparison-panels.json'),'utf8'));
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||undefined,args:['--no-sandbox']});
  try{
@@ -11,6 +12,17 @@ const output=process.env.LAB_EVIDENCE;
   for(const width of [1280,390]){
    await page.setViewportSize({width,height:950});await page.goto(url);
    assert(await page.locator('img[data-comparison-top]').count()>=24,'Enhance primary and full-size valid pairs');
+   for(const [src,bounds] of Object.entries(panels)){
+    const img=page.locator('img[data-media-src^="'+src+'"],img[src^="'+src+'"]');
+    assert.equal(await img.getAttribute('data-comparison-top'),String(bounds.top),'Use the declared caption height for '+src);
+   }
+   const compact=page.locator('#compact-mini-player');await compact.evaluate(d=>d.open=true);
+   const compactImage=compact.locator('img[data-comparison-top]').first();
+   await compactImage.evaluate(async i=>{while(!i.hasAttribute('src'))await new Promise(requestAnimationFrame);await i.decode();});
+   await compact.locator('.comparison-frame').first().waitFor({state:'visible'});
+   const ratio=await compact.locator('.comparison-frame').first().evaluate(e=>getComputedStyle(e).aspectRatio.split('/').map(Number));
+   assert(Math.abs(ratio[0]/ratio[1]-1080/282)<1e-10,'Preserve the entire current Compact body below its64px caption');
+   await compact.evaluate(d=>d.open=false);
    await page.locator('#clear-playback-control').evaluate(d=>d.open=true);
 
 
@@ -22,7 +34,7 @@ const output=process.env.LAB_EVIDENCE;
    await page.keyboard.press('Home');assert.equal(await handle.getAttribute('aria-valuenow'),'0');
    await page.keyboard.press('End');assert.equal(await handle.getAttribute('aria-valuenow'),'100');
    // Pointer capture continues beyond the frame and clamps at both ends.
-   const box=await frame.boundingBox();await page.mouse.move(box.x+box.width-4,box.y+box.height/2);await page.mouse.down();
+   await frame.scrollIntoViewIfNeeded();const box=await frame.boundingBox();await page.mouse.move(box.x+box.width-4,box.y+box.height/2);await page.mouse.down();
    await page.mouse.move(box.x-30,box.y+box.height/2,{steps:8});assert.equal(await handle.getAttribute('aria-valuenow'),'0');
    await page.mouse.move(box.x+box.width*.75,box.y+box.height/2,{steps:8});await page.mouse.up();assert.equal(await handle.getAttribute('aria-valuenow'),'75');
    await figure.getByRole('button',{name:'Side by side'}).click();assert(await image.isVisible());assert(!(await handle.isVisible()));
