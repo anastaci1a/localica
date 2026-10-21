@@ -462,7 +462,11 @@ class DragReorderTest {
         fun assertUtilityRow() {
             val utility = compose.onNodeWithContentDescription("Playlist actions").fetchSemanticsNode().boundsInRoot
             val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
-            assertEquals("X and the actual collection utility control share one row", utility.center.y, cancel.center.y, 1.1f)
+            val rise = compose.runOnIdle {
+                val source = fixtureDragHost.state!!
+                source.drag!!.cancelMotion!!.offsetY(source.cancelTravel)
+            }
+            assertEquals("X rises into the actual collection utility row", utility.center.y + rise, cancel.center.y, 1.1f)
         }
         assertShown()
         // Existing selection stays active throughout both pointer cancellation and X release.
@@ -485,15 +489,24 @@ class DragReorderTest {
                     compose.onNodeWithTag("cancel-drag").assertExists()
                     assertUtilityRow()
                     var previousBottom = controlBottom()
-                    assertEquals("The first published X uses the same clearance", 0f,
-                        previousBottom - compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom, 1.1f)
+                    val firstRise = compose.runOnIdle {
+                        val source = fixtureDragHost.state!!
+                        source.drag!!.cancelMotion!!.offsetY(source.cancelTravel)
+                    }
+                    assertTrue("The first visible X must still be entering", firstRise > 0f)
+                    assertEquals("The first published X uses the same clearance plus entrance", firstRise,
+                        compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom - previousBottom, 1.1f)
                     var intermediate = false
                     repeat(18) {
                         compose.mainClock.advanceTimeByFrame()
                         assertUtilityRow()
                         val bottom = controlBottom()
                         val cancelBottom = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom
-                        assertEquals("X and other controls share each animation frame", 0f, bottom - cancelBottom, 1.1f)
+                        val rise = compose.runOnIdle {
+                            val source = fixtureDragHost.state!!
+                            source.drag!!.cancelMotion!!.offsetY(source.cancelTravel)
+                        }
+                        assertEquals("X shares the live row plus its entrance on each frame", rise, cancelBottom - bottom, 1.1f)
                         compose.runOnIdle {
                             val source = fixtureDragHost.state!!
                             assertEquals("Hit geometry reads the same published inset without another composition",
@@ -505,6 +518,9 @@ class DragReorderTest {
                         previousBottom = bottom
                     }
                     assertTrue("The open panel must animate to hidden", intermediate)
+                    compose.mainClock.advanceTimeBy(100)
+                    compose.runOnIdle { assertEquals(1f, fixtureDragHost.state!!.drag!!.cancelMotion!!.progress, 0f) }
+                    assertUtilityRow()
                 } finally { compose.mainClock.autoAdvance = true }
                 compose.onNodeWithTag("drag-stack").assertExists()
                 compose.onNodeWithTag("fixture-selection-panel").assertDoesNotExist()

@@ -16,8 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
@@ -89,9 +87,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     var dragging by remember { mutableStateOf(false) }
     var owner by remember { mutableStateOf(VerticalOwner.Undecided) }
     val seekPosition = rememberPlayerSeekPosition(state, artworkVisit)
-    var scrubDragging by remember { mutableStateOf(false) }
+    val scrubCancel = remember { SeekCancelTargetState() }
+    val scrubDragging = scrubCancel.active
     var scrubOverCancel by remember { mutableStateOf(false) }
-    var scrubCancelBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    DisposableEffect(scrubCancel) { onDispose { scrubCancel.update(false) } }
     var sourcesVisible by remember { mutableStateOf(false) }
     val sourcesPreparation = rememberGlassOriginPreparation()
     val lyricsResult = if (lyricsOpen || lyricProgress > 0f) rememberLyrics(track) else null
@@ -125,7 +124,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             } else progress.snapTo((startProgress - movement / distance).coerceIn(0f, 1f))
         }
     }
-    val drag = Modifier.playerVerticalDrag(canStart = { !scrubDragging }, onDelta = { dragState.dispatchRawDelta(it) },
+    val drag = Modifier.playerVerticalDrag(canStart = { !scrubCancel.active }, onDelta = { dragState.dispatchRawDelta(it) },
         onStart = { startExpanded = expanded; startProgress = progress.value; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f
             owner = VerticalOwner.Undecided; dragging = true; progress.stop(); queueProgress?.stop() },
         onStop = { velocity ->
@@ -348,8 +347,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
                 .testTag("player-seek-row").graphicsLayer { alpha = rowMotion.seekAlpha }) {
-                PlayerSeekControls(state, onSeek, artworkVisit, scrubCancelBounds, onSeekRequest = onSeekRequest, position = seekPosition,
-                    onDrag = { active, hovered -> scrubDragging = active; scrubOverCancel = hovered })
+                PlayerSeekControls(state, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,
+                    cancelTarget = { scrubCancel.bounds },
+                    onDrag = { active, hovered -> scrubCancel.update(active); scrubOverCancel = active && hovered })
             }
             if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
                 .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").graphicsLayer { alpha = rowMotion.actionsAlpha }
@@ -370,11 +370,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         }
     }
     if (scrubDragging) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
-        Box(Modifier.fillMaxSize()) {
-            DragCancelTarget(scrubOverCancel, "seek",
-                Modifier.align(Alignment.BottomCenter).padding(bottom = navigationInset + CollapsedQueueHeight + 20.dp)
-                    .onGloballyPositioned { scrubCancelBounds = it.boundsInRoot() }.testTag("cancel-seek"))
-        }
+        SeekCancelTarget(scrubCancel, scrubOverCancel,
+            navigationInset + CollapsedQueueHeight + 20.dp, settings.reducedMotion)
     }
     }
     }

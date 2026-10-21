@@ -339,7 +339,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         } finally { if (zoomAnchor == anchor) zoomAnchor = null }
     }
     val surroundingBackdrop = LocalFrostedBackdrop.current
-    val needsListBackdrop = (showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
+    val hasSongItems = result.items.any { it.row != null }
+    val needsListBackdrop = (hasSongItems || showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
         (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
     val listBackdrop = rememberFrostedBackdrop(presentation to surroundingBackdrop?.fallback,
         needsListBackdrop, dark = if (artDetail) !lightCollection else surroundingBackdrop?.dark == true,
@@ -421,12 +422,26 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (scrolling && followingOrder == null) orderScroll.cancel()
         }
     }
+    val session = LocalSessionSelection.current ?: remember { SessionSelection() }
+    var currentReturnMotion by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    OnModalGestureCancellation { currentReturnMotion?.cancel(); currentReturnMotion = null }
     val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
-    val returnOwner = remember(route, style, library.snapshot, playlists.playlists, queueState.library.queues,
-        libraryFilters, selectedAlbums) { Any() }
+    // Cursor checkpoints replace queue snapshots without changing this list. A return
+    // owns its query/occurrence structure, not unrelated live playback bookkeeping.
+    val returnOwner = remember(route, style, library.snapshot, playlists.playlists,
+        mutableQueue?.entries, mutableQueue?.order, libraryFilters, selectedAlbums) { Any() }
+    var presentedReturnOwner by remember { mutableStateOf<Any?>(null) }
+    SideEffect { if (!queryPending && loadedResult != null) presentedReturnOwner = returnOwner }
+    // A cursor-only refresh need not blink a still-valid control. Genuine query or
+    // occurrence changes hide it until the corresponding list has been presented.
+    val returnListMatches = loadedResult != null && (!queryPending || presentedReturnOwner === returnOwner)
     val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
         (artistDetail && validAlbums.isNotEmpty())
-    ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible,
+    DisposableEffect(returnOwner, selectionVisible, playerOpen, session.active, localSearchOpen) {
+        onDispose { currentReturnMotion?.cancel(); currentReturnMotion = null }
+    }
+    val returnToList = ListReturnActions(scrollToTopRequest, returnOwner,
+        selectionVisible && !playerOpen && !session.active && !localSearchOpen,
         backEnabled = listBackEnabled && !route.search && !localSearchOpen && !playerOpen,
         action = listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter),
         onSubmit = { orderScroll.cancel() },
@@ -445,7 +460,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 ListReturnAction.None -> Unit
             }
         })
-    val session = LocalSessionSelection.current ?: remember { SessionSelection() }
     BackHandler(selectionVisible && session.active && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) {
         session.clear()
     }
@@ -511,6 +525,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 orderScroll.cancel()
+                returnToList.cancel()
+                currentReturnMotion?.cancel(); currentReturnMotion = null
             }
         }.onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
             .selectionPanelRelease(session, route.key,
@@ -719,22 +735,31 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     else -> 0
                 }
             } }
-            val showCurrent = returnDirection != 0
-            androidx.compose.animation.AnimatedVisibility(showCurrent && !session.active && reorder.drag == null, Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + 16.dp),
-                enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)),
-                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) +
-                    androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(if (reducedMotion) 0 else 300)) { it }) {
-                CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
-                    ReturnToPositionButton(up = returnDirection < 0, label = "Current song", visible = showCurrent && !session.active && reorder.drag == null) {
+            // Active queues retain their occurrence return. Other current song lists,
+            // including inactive queues, return to their own top without changing filters.
+            val playbackReturn = route.collection?.kind == MediaKind.Queue && playingEntryId != null
+            val showReturn = selectionVisible && !playerOpen && !localSearchOpen && returnListMatches &&
+                !session.active && reorder.drag == null &&
+                (if (playbackReturn) returnDirection != 0 else hasSongItems && gridState.canScrollBackward)
+            // A drag owns this slot exclusively; retire a half-faded return drawing
+            // instead of overlapping its replacement X during a quick hold-and-move.
+            key(reorder.drag != null) { CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
+                FloatingReturnToPositionButton(up = !playbackReturn || returnDirection < 0,
+                    label = if (playbackReturn) "Current song" else "Return to top",
+                    visible = showReturn, reducedMotion = reducedMotion,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset)) {
+                    if (!playbackReturn) returnToList(ListReturnAction.ScrollTop)
+                    else {
                         orderScroll.cancel()
-                        playingIndex?.let { target -> scrollScope.launch {
+                        currentReturnMotion?.cancel()
+                        currentReturnMotion = playingIndex?.let { target -> scrollScope.launch {
                             artworkTransit.during(!reducedMotion && kotlin.math.abs(target - gridState.firstVisibleItemIndex) > gridState.layoutInfo.visibleItemsInfo.size * 2) {
                                 gridState.easeToItem(target, reducedMotion, visibleTop)
                             }
                         } }
                     }
                 }
-            }
+            } }
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, displayedStyle.sort, Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset))
             if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search) {
                 val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }
