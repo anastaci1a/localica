@@ -1,0 +1,42 @@
+{
+  "recipe_sha256": "2d1d7ecd2c53d37c18e58305d9a6a41493d5dc3d4417a98b91e01836f7244f72",
+  "grid": [
+    181,
+    121
+  ],
+  "steps": [
+    0.0002,
+    0.0001,
+    5e-05
+  ],
+  "observations": [
+    {
+      "observation": "A",
+      "case_sha256": "2f535a9a3c827b1eabb6d9daad4ec27d0a8e57885e598cb2849e15b07ac38fed",
+      "sampled_inside": 18640,
+      "reliable_nonzero_curl": 17488,
+      "necessary_branch_violation": 7179,
+      "necessary_branch_admitted": 10309,
+      "unresolved": 1152,
+      "violation_fraction_of_all_inside": 0.3851394849785408,
+      "negative_map_determinant_fraction": 0.2726931330472103,
+      "max_curl_derivative_step_difference": 0.014169304154449947,
+      "max_Q_derivative_step_difference": 0.005425340696534775
+    },
+    {
+      "observation": "B",
+      "case_sha256": "cdfdbc84b4128303f698c52d34dbe1c2fbdbf2fec35c8eb85ddeb90ac2028f7f",
+      "sampled_inside": 18682,
+      "reliable_nonzero_curl": 17472,
+      "necessary_branch_violation": 7221,
+      "necessary_branch_admitted": 10251,
+      "unresolved": 1210,
+      "violation_fraction_of_all_inside": 0.38652178567605183,
+      "negative_map_determinant_fraction": 0.27133069264532705,
+      "max_curl_derivative_step_difference": 0.014118602283531345,
+      "max_Q_derivative_step_difference": 0.00583828495904104
+    }
+  ],
+  "criterion": "For reliable nonzero curl c, rho=K/c must exceed M; equivalently (K-Mc)*c>0. Necessary for every n>1 on the strictly transmitted branch.",
+  "limits": "Sampled unshifted map only. Finite-step stability is not a rigorous derivative error bound. Admitted means one necessary condition, not a recovered solid. Unresolved is not impossible. Folds are not total internal reflection. Other cameras/front surfaces and approximate image agreement are outside this test."
+}

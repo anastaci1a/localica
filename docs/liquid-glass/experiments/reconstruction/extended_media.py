@@ -87,7 +87,8 @@ def main():
     # Check the prepared renderer on the actual motion input, independently of
     # the frozen native scoring pass; cache speed cannot change the material.
     assert np.max(abs(prepared.render()-study.render(p,co,scale)))<2e-6
-    motion_support['exterior_context']='Exterior and refracted glass sample the same translated, nearest-completed source. Missing context remains an estimate; no fixed reference strip is spliced into the moving background.'
+    exterior=study.source if study.exterior_source is None else study.exterior_source
+    motion_support['exterior_context']='Exterior and refracted glass use one translating coordinate system, with completed incident RGB and any separately declared exterior layer. Missing context remains an estimate; no fixed reference strip is spliced into the moving background.'
     video=out/'motion.mp4';log=(out/'encode.log').open('w')
     # yuv420 requires even dimensions; padding preserves all rendered pixels.
     W=width+width%2;H=height+height%2
@@ -100,7 +101,7 @@ def main():
             sx,sy=(shift,np.float32(0.)) if args.axis=='x' else (np.float32(0.),shift)
             study.backdrop_shift=[float(sx),float(sy)]
             material=prepared.render()
-            base=cv2.remap(study.source,xx+sx,yy+sy,cv2.INTER_LINEAR)
+            base=cv2.remap(exterior,xx+sx,yy+sy,cv2.INTER_LINEAR)
             # A fixed reference strip at the moving confidence boundary causes
             # a visible cut. Translate the completed source consistently on
             # both sides of that boundary; completion is presentation only.

@@ -1,0 +1,139 @@
+{
+  "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+  "candidate": {
+    "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+    "observations": {
+      "A": {
+        "glass": {
+          "pixels": 188771,
+          "rmse": 6.044535160064697,
+          "mae": 4.1359686851501465,
+          "opponent_chroma_rmse": 0.6495842933654785
+        },
+        "rim": {
+          "pixels": 61248,
+          "rmse": 8.83245849609375,
+          "mae": 5.963390827178955,
+          "opponent_chroma_rmse": 0.79960697889328
+        },
+        "shadow": 11.469442019667737
+      }
+    }
+  },
+  "fixed_grid": 4,
+  "diagnostic_grid": 8,
+  "diagnostic_scores": {
+    "train": {
+      "pixels": 141761,
+      "rmse": 6.07757043838501,
+      "mae": 4.0493550300598145,
+      "opponent_chroma_rmse": 0.6567897796630859
+    },
+    "held_blocks": {
+      "pixels": 47010,
+      "rmse": 5.931197643280029,
+      "mae": 4.392881870269775,
+      "opponent_chroma_rmse": 0.627521276473999
+    },
+    "all_glass": {
+      "pixels": 188771,
+      "rmse": 6.041450500488281,
+      "mae": 4.134904384613037,
+      "opponent_chroma_rmse": 0.6496243476867676
+    },
+    "rim": {
+      "pixels": 61248,
+      "rmse": 8.82580852508545,
+      "mae": 5.959881782531738,
+      "opponent_chroma_rmse": 0.7997004389762878
+    },
+    "outer_rim": {
+      "pixels": 6172,
+      "rmse": 19.055788040161133,
+      "mae": 9.83602523803711,
+      "opponent_chroma_rmse": 1.0441781282424927
+    },
+    "interior": {
+      "pixels": 127523,
+      "rmse": 4.076415061950684,
+      "mae": 3.2583861351013184,
+      "opponent_chroma_rmse": 0.5635107755661011
+    },
+    "ssim": 0.9811974763870239,
+    "gradient_mae": 3.4319751262664795,
+    "selection_loss": 0.0015373279177924085
+  },
+  "source_support": {
+    "all_emitted_subpixel_rays_inside_defined_image": true,
+    "margin_native_px": 34.00000000000001,
+    "bounds": [
+      [
+        474.625,
+        284.625
+      ],
+      [
+        1444.375,
+        844.375
+      ]
+    ],
+    "hidden_background_estimated": true
+  },
+  "archived_baseline_max_difference": 0,
+  "gate": {
+    "accepted": true,
+    "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+    "error_ratio": 0.995,
+    "observations": {
+      "A": {
+        "previous_error": 7.103742101595409,
+        "candidate_error": 6.998512744608417,
+        "required_error_max": 7.0682233910874315,
+        "relative_reduction": 0.014813228785904076,
+        "milestone_passed": true,
+        "nonregression": {
+          "glass": true,
+          "shadow": true
+        },
+        "passed": true
+      }
+    },
+    "evidence": {
+      "visual_review": true,
+      "independent_replay": true,
+      "source_support": true
+    }
+  },
+  "limits": "Optical candidate replayed independently without optimization. Generated neutral shadow now independent of target; its fitted width reaches the documented bound. Foreground checked separately; no final acceptance inferred.",
+  "visual_review": {
+    "accepted_increment": true,
+    "scope": "Native and freshly evaluated4x comparisons, corrected d-stroke, upper-rim and underside crops",
+    "remaining": [
+      "d-stroke tangential curvature is still too straight",
+      "Shadow width hits declared0.3L bound; exterior far-tail remains mismatched",
+      "Clean source has an estimated blank region; not direct photographic recovery",
+      "Archive glyph is a clean symmetric approximation, plus comes from original font"
+    ]
+  },
+  "shadow_model": {
+    "kind": "gaussian_coverage",
+    "opacity": 0.2196806498739861,
+    "sigma": 0.2999999477597864,
+    "offset": [
+      -0.0029308863193275945,
+      0.007772858574827156
+    ],
+    "color": "neutral black attenuation",
+    "compositing": "behind independent glass coverage"
+  },
+  "foreground": {
+    "archivebox": {
+      "rmse": 13.29460287617441,
+      "pixels": 29382
+    },
+    "plus": {
+      "rmse": 3.7958007642848055,
+      "pixels": 21756
+    }
+  },
+  "qualification": "One new verified improvement; earlier optical/image histories remain archived, not retroactively certified."
+}

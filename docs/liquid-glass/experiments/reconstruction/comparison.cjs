@@ -10,10 +10,11 @@ const output=process.env.LAB_EVIDENCE;
   const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   for(const width of [1280,390]){
    await page.setViewportSize({width,height:950});await page.goto(url);
-   assert.equal(await page.locator('img[data-comparison-top]').count(),17,'Enhance every primary A/B pair');
-   assert.equal(await page.locator('details img[data-comparison-top]').count(),0,'Do not enhance dropdown media');
-   assert.equal(await page.locator('img[src*="rim"][data-comparison-top]').count(),0,'Leave supplementary crop sheets unchanged');
-   const image=page.locator('img[data-comparison-top]').first();await image.evaluate(i=>i.decode());
+   assert(await page.locator('img[data-comparison-top]').count()>=24,'Enhance primary and full-size valid pairs');
+   await page.locator('#clear-playback-control').evaluate(d=>d.open=true);
+
+
+   const image=page.locator('img[data-comparison-top]').first();await image.evaluate(async i=>{while(!i.hasAttribute('src'))await new Promise(requestAnimationFrame);await i.decode();});
    const figure=page.locator('.comparison').first(),handle=figure.getByRole('slider'),frame=figure.locator('.comparison-frame');
    await handle.waitFor({state:'visible'});assert.equal(await handle.getAttribute('aria-valuenow'),'50');
    await handle.focus();await page.keyboard.press('ArrowRight');assert.equal(await handle.getAttribute('aria-valuenow'),'51');
@@ -25,14 +26,24 @@ const output=process.env.LAB_EVIDENCE;
    await page.mouse.move(box.x-30,box.y+box.height/2,{steps:8});assert.equal(await handle.getAttribute('aria-valuenow'),'0');
    await page.mouse.move(box.x+box.width*.75,box.y+box.height/2,{steps:8});await page.mouse.up();assert.equal(await handle.getAttribute('aria-valuenow'),'75');
    await figure.getByRole('button',{name:'Side by side'}).click();assert(await image.isVisible());assert(!(await handle.isVisible()));
-   await figure.getByRole('button',{name:'Wipe',exact:true}).click();assert.equal(await handle.getAttribute('aria-valuenow'),'75');
+   await figure.getByRole('button',{name:'Wipe',exact:true}).click();assert.equal(await handle.getAttribute('aria-valuenow'),'50');
+   await page.locator('#clear-playback-control>summary').click();
+   await page.waitForFunction(()=>!document.getElementById('clear-playback-control').open);
+   await page.locator('#clear-playback-control>summary').click();
+   await handle.waitFor({state:'visible'});assert.equal(await handle.getAttribute('aria-valuenow'),'50');
+   await figure.getByRole('button',{name:/Fullscreen/}).click();
+   assert(await page.locator('dialog').isVisible());
+   const modal=page.locator('dialog');assert.equal(await modal.getByRole('slider').getAttribute('aria-valuenow'),'50');
+   await modal.getByRole('slider').focus();await page.keyboard.press('End');await page.keyboard.press('Escape');
+   assert.equal(await handle.getAttribute('aria-valuenow'),'50');
+   assert(await figure.getByRole('button',{name:/Fullscreen/}).evaluate(b=>b===document.activeElement));
    await handle.focus();await page.keyboard.press('Home');await page.keyboard.press('Shift+ArrowRight');await page.keyboard.press('Shift+ArrowRight');await page.keyboard.press('Shift+ArrowRight');await page.keyboard.press('Shift+ArrowRight');await page.keyboard.press('Shift+ArrowRight');
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    if(output){fs.mkdirSync(output,{recursive:true});await figure.screenshot({path:path.join(output,`wipe-${width}.png`)});}
-   await page.reload();await page.locator('.comparison').first().waitFor();assert.equal(await page.getByRole('slider').first().getAttribute('aria-valuenow'),'50','Reload defaults to centered Wipe');
+   await page.reload();await page.locator('#clear-playback-control').evaluate(d=>d.open=true);await page.locator('.comparison').first().waitFor();assert.equal(await page.getByRole('slider').first().getAttribute('aria-valuenow'),'50','Reload defaults to centered Wipe');
   }
   const mobile=await browser.newContext({viewport:{width:390,height:950},hasTouch:true,isMobile:true});
-  const touchPage=await mobile.newPage();await touchPage.goto(url);const touchFrame=touchPage.locator('.comparison-frame').first();await touchFrame.scrollIntoViewIfNeeded();
+  const touchPage=await mobile.newPage();await touchPage.goto(url);await touchPage.locator('#clear-playback-control').evaluate(d=>d.open=true);const touchFrame=touchPage.locator('.comparison-frame').first();await touchFrame.scrollIntoViewIfNeeded();
   const rect=await touchFrame.boundingBox(),cdp=await mobile.newCDPSession(touchPage),y=rect.y+rect.height/2;
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:rect.x+rect.width*.5,y}]});
   await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:rect.x+rect.width*.7,y}]});
@@ -46,7 +57,7 @@ const output=process.env.LAB_EVIDENCE;
   const colors=JSON.parse(execFileSync('python3',['-c','import sys,json,io;from PIL import Image;im=Image.open(io.BytesIO(sys.stdin.buffer.read())).convert("RGB");print(json.dumps([im.getpixel((int(im.width*x),int(im.height*.25))) for x in [.2,.8]]))'],{input:png,env:{...process.env,PYTHONPATH:'/tmp/optics-deps'}}));
   assert.deepEqual(colors,[[255,0,0],[0,0,255]],'Crop caption/gutter and align corresponding source halves');
   const noJS=await browser.newContext({javaScriptEnabled:false}),plain=await noJS.newPage();await plain.goto(url);
-  assert.equal(await plain.locator('.comparison').count(),0);assert(await plain.locator('img').first().isVisible(),'No-JS original pair remains available');await noJS.close();
-  assert.deepEqual(errors,[]);console.log('PASS17 primary pairs; desktop/phone, drag bounds, keyboard, reload, exact half/header/gutter crop, dropdown exclusion and no-JS fallback');
+  assert.equal(await plain.locator('.comparison').count(),0);assert(await plain.locator('img').first().isVisible(),'No-JS thumbnail remains available');await plain.locator('#clear-playback-control>summary').click();assert(await plain.getByRole('link',{name:'Open image',exact:true}).first().isVisible(),'No-JS source image link remains available');await noJS.close();
+ assert.deepEqual(errors,[]);console.log('PASS comparison desktop/phone, drag bounds, keyboard, fullscreen/focus/reset, exact half/header/gutter crop and no-JS thumbnail navigation');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});

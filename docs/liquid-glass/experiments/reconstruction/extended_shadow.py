@@ -20,7 +20,8 @@ def refit_fixed_region(study,p,reference):
     """Keep the original exterior scoring pixels when geometry is refined."""
     *_,(sd,_,_)=study.shape(study.x,study.y,reference)
     x0,y0,x1,y1=study.crop
-    B=study.source[y0:y1,x0:x1];T=study.target_crop
+    exterior=study.source if study.exterior_source is None else study.exterior_source
+    B=exterior[y0:y1,x0:x1];T=study.target_crop
     known=cv2.imread(str(study.folder/'known.png'),cv2.IMREAD_GRAYSCALE)[y0:y1,x0:x1]>0
     mask=(sd>1.5/study.L)&(sd<.20)&known
     X=study.x*study.L+study.case['center'][0];Y=study.y*study.L+study.case['center'][1]
@@ -42,7 +43,8 @@ def main():
     study=Study(args.folder);old=json.loads((args.folder/'accepted.json').read_text());p=old['parameters']
     x,y=study.x,study.y;_,_,_,_,(sd,_,_)=study.shape(x,y,p)
     x0,y0,x1,y1=study.crop
-    base=study.source[y0:y1,x0:x1]
+    exterior=study.source if study.exterior_source is None else study.exterior_source
+    base=exterior[y0:y1,x0:x1]
     known=cv2.imread(str(args.folder/'known.png'),cv2.IMREAD_GRAYSCALE)[y0:y1,x0:x1]>0
     mask=(sd>1.5/study.L)&(sd<.20)&known
     # The reference's next neighboring material must not enter the mask.
@@ -63,7 +65,7 @@ def main():
     record=dict(pass_number=12,experiment='Recovered-background exterior contact shadow',keys=['shadow.opacity','shadow.sigma','shadow.offset'],evaluations=int(result.nfev),seconds=time.time()-t0,
         candidate=dict(parameters=candidate,material=old['material'],scores=candidate_scores),accepted=bool(advance),incumbent_scores=old_scores,current=current,
         gate='Glass is unchanged; exterior RGB mismatch cannot increase. No reference shadow is copied.',
-        limits='Only recovered, non-neighbor exterior pixels constrain this neutral Gaussian-distance approximation. Not a measured physical light rig.')
+        limits='Defined, non-neighbor exterior pixels constrain this neutral Gaussian-distance approximation; any input estimate remains conditional as recorded in the case. Not a measured physical light rig.')
     dest=args.folder/'pass-12';dest.mkdir(exist_ok=False)
     (dest/'record.json').write_text(json.dumps(record,indent=2)+'\n');(args.folder/'accepted.json').write_text(json.dumps(current,indent=2)+'\n')
     print(json.dumps(dict(pass_number=12,accepted=bool(advance),before_rmse=float(np.sqrt(before)*255),after_rmse=float(np.sqrt(result.fun)*255),parameters=current['parameters'].get('shadow'),seconds=time.time()-t0)),flush=True)

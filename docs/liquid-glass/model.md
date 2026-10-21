@@ -126,6 +126,64 @@ F(p) = Q + Tout.xy × G/(−Tout.z)
 - `H=0` or `ior=1` explicitly gives the identity map. The `H→0` limit is not uniform at an exactly vertical rim when `G>0`; this comparator is unsuitable as a fade-to-zero-opacity formula. Fade material coverage independently.
 - Full Fresnel-weighted energy, internal reflections, absorption, dispersion, caustics and multiple scattering are absent. The lab adds an independent synthetic highlight (the field model uses a fixed 0.3-reference-height cap for that lighting only), so calling its complete output a physically accurate renderer would be incorrect.
 
+## Flat-front inverse-map compatibility
+
+This separate comparator has an orthographic camera looking along −z, a flat front at z=0, one back surface z=−h(x,y), index n>1, and background plane z=−G. All lengths use the same normalized unit; h>0 and s=G−h>0. It is a test of a specified geometry, not an identified Apple lens.
+
+For a proposed inverse image map F, let v=F−(x,y). Normal entry leaves the internal ray vertical. Snell's law requires:
+
+```text
+M = dot(v,v), R = sqrt(M+s²), D = nR−s
+∇h = v/D
+transmitted branch: s > sqrt(M/(n²−1))
+```
+
+- h is one unknown surface; s cannot be fitted independently at each pixel. The branch inequality rejects the wrong-side solution and critical/grazing rays. Do not clamp them into validity.
+- Define c=∂x(vy)−∂y(vx) and K=vy·dot(v,∂xv)−vx·dot(v,∂yv). Equality of the surface's mixed derivatives gives **Dc−nK/R=0**. Terms containing ∇s cancel because ∇s=−v/D. A valid surface may therefore have nonzero image-map curl.
+- For reliably nonzero c, set ρ=K/c. The transmitted branch requires **ρ>M**. Its necessary clearance is:
+
+```text
+s² = [2n²(ρ−M)+M+sqrt(M²+4n²ρ(ρ−M))] / [2(n²−1)]
+```
+
+- This root still must satisfy −∇s=v/D, compatible boundary conditions, positive thickness and valid complete ray paths. It does not establish a surface by itself. Near-zero curl, derivative noise and footprint-crossing differences require separate treatment; do not turn them into impossibility claims.
+- The inequality follows from ρ=DR/n=M+s²−s·sqrt(M+s²)/n, which increases from M on the strictly transmitted branch. Failure rules out an **exact** map in this stated family; it supplies no lower bound on image error from an approximate surface or a different camera/front surface.
+- [Executable equations](experiments/reconstruction/surface_compatibility.py) and [independent controls](experiments/reconstruction/verify-surface-compatibility.py) check scalar versus vector Snell refraction, a known quadratic surface with nonzero map curl, inverse recovery, scale invariance and invalid branches. Run `python verify-surface-compatibility.py` in the reconstruction directory. These require NumPy, not private images.
+
+The [sampled audit](experiments/reconstruction/map_compatibility_audit.py) applies this necessary condition to an existing inverse map. On the [current switch revision 6](experiments/reconstruction/studies/active-switch/review-round/pass-06-map-compatibility.json), 39.38% / 39.49% of sampled interior points fail it with a large margin over finite-step disagreement; uncertain points remain unresolved. The preceding revision 5 gives [38.51% / 38.65%](experiments/reconstruction/studies/active-switch/review-round/pass-05-map-compatibility.json). Lower image error therefore does not imply a more physically realizable map. This is numerical evidence against an exact flat-front/single-back realization of that map, **not** a bound on approximate image agreement or other surface families. [Controls](experiments/reconstruction/map-compatibility-controls.json) distinguish a known physical surface, a rotational displacement and a zero map; nonfinite inputs are rejected. Run `python verify-map-compatibility-audit.py` for those controls, or the audit's documented command with frozen private study inputs.
+
+The equations above use the stated propagation convention. [Bösel and Gross](https://arxiv.org/html/1510.01129) discuss the broader coupling between surface integrability and ray maps, including the limits of small-angle constructions. Their later [two-surface study](https://arxiv.org/html/1701.03076) also couples refraction, surface continuity and optical path length; adding a second freeform surface does not by itself certify a chosen image map. That paper assumes collimated input/output beams, so its beam-shaping PDE must not be applied unchanged to this camera/backdrop configuration. Physical radiometry, dispersion, reflection, side-wall visibility and source recovery remain separate requirements.
+
+## Finite-camera slab control
+
+Use an infinite plane-parallel slab to check camera calibration before fitting a curved solid. Put the pinhole at (0,0,C), front at z=0, back at z=−h and backdrop at z=−G, with C>0, G>0, 0≤h≤G and n≥1. Let p be the ray's front-plane position. The unlensed backdrop point is (1+G/C)p; divide physical backdrop coordinates by that factor before comparing image maps.
+
+```text
+m = p/C; A = sqrt(n² + (n²−1)|m|²)
+F(p) = p + h [m/A − m] / (1+G/C)
+f = h/(C+G)
+J_tangential = 1 + f(1/A − 1)
+J_radial = 1 + f(n²/A³ − 1)
+```
+
+- Both derivatives are at least 1−f>0: this finite-camera slab cannot fold/reverse its image. Curved surfaces, sidewalls and multiple paths are outside that result. Changing viewpoint alone does not justify adding a mirrored rim.
+- h=0 or n=1 gives identity. C→∞ also gives identity for this parallel slab; a curved surface need not. At the optical axis both derivatives equal 1−h(1−1/n)/(C+G). Central contraction of the source map corresponds to apparent image magnification.
+- [Implementation](experiments/reconstruction/camera_slab.py) and [independent vector-Snell controls](experiments/reconstruction/verify-camera-slab.py) check both interfaces, Jacobian, equal-index/no-slab/far-camera limits and unit scaling. Run `python verify-camera-slab.py`. The NumPy oracle tests bounded floating-point cases; the algebra supplies the stated geometric bound. No Apple camera, curved lens or reconstruction pass is inferred.
+
+### Curved back surface with a finite camera
+
+For the same flat front, let the back be z=−h(q). Its intersection q differs from the front-plane sample p. Define H(p)=h(q(p)), use the slab's internal slope w=m/A and set q=p+Hw. The desired physical backdrop point is U=(1+G/C)F(p). With unit internal/outgoing directions t and v, Snell's normal is N=nt−v. A back graph has gradient b=N_xy/N_z. The chain rule gives:
+
+```text
+B(p,H) = (I + H Dw)^T b / (1 − w·b)
+∇p H = B(p,H)
+∂x B_y − ∂y B_x + B_x ∂H B_y − B_y ∂H B_x = 0
+```
+
+Partial x/y derivatives include the prescribed F(p), holding H fixed. The expanded condition includes H's unknown derivatives through the last two terms; raw image-map curl alone remains insufficient. Require 0<H<G, N_z<0, n(t·v)>1 and 1−w·b>0 on this transmitted local branch. Do not clamp failures into rays. Call the scalar compatibility residual Q(p,H). A pointwise depth root also requires ∇p Q + Q_H B=0 along the surface; independently choosing a root at each pixel is insufficient. Boundary conditions, first-hit/sidewall paths and global height consistency remain separate checks.
+
+[Executable inverse equation](experiments/reconstruction/perspective_back_surface.py) and [independent forward controls](experiments/reconstruction/verify-perspective-back-surface.py) recover known quadratic surfaces from vector Snell paths. Tests cover height derivatives, the expanded condition, unit scaling, wrong-branch rejection and the orthographic limit. Run `python verify-perspective-back-surface.py`. These validate the stated equations, not a finite-camera realization of Apple's images or of the current fitted switch map.
+
 ## Reconstruction comparators
 
 The [HD study](reconstruction.md) tests offline hypotheses beyond the portable lab's circle/capsule equations:

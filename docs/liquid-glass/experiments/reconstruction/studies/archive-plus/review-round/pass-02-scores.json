@@ -1,0 +1,55 @@
+{
+  "glass": {
+    "train": {
+      "pixels": 141761,
+      "rmse": 5.907214641571045,
+      "mae": 3.8068857192993164,
+      "opponent_chroma_rmse": 0.652049720287323
+    },
+    "held_blocks": {
+      "pixels": 47010,
+      "rmse": 5.645480632781982,
+      "mae": 4.057783603668213,
+      "opponent_chroma_rmse": 0.6200292706489563
+    },
+    "all_glass": {
+      "pixels": 188771,
+      "rmse": 5.843130588531494,
+      "mae": 3.8693673610687256,
+      "opponent_chroma_rmse": 0.6442244648933411
+    },
+    "rim": {
+      "pixels": 61248,
+      "rmse": 8.813648223876953,
+      "mae": 5.903055191040039,
+      "opponent_chroma_rmse": 0.7896908521652222
+    },
+    "outer_rim": {
+      "pixels": 6172,
+      "rmse": 19.086576461791992,
+      "mae": 9.87092399597168,
+      "opponent_chroma_rmse": 1.04341721534729
+    },
+    "interior": {
+      "pixels": 127523,
+      "rmse": 3.6374735832214355,
+      "mae": 2.8926072120666504,
+      "opponent_chroma_rmse": 0.5611088871955872
+    },
+    "ssim": 0.9815950989723206,
+    "gradient_mae": 3.395728349685669,
+    "selection_loss": 0.001505887400535287
+  },
+  "foreground": {
+    "archivebox": {
+      "rmse": 13.242044387461515,
+      "pixels": 29382
+    },
+    "plus": {
+      "rmse": 3.667139623528374,
+      "pixels": 21756
+    }
+  },
+  "scale": 4,
+  "limits": "Conditional glass masks remain unchanged; complete composition is separate. Clean estimated source and generated shadow only. No reference glyph or exterior copied."
+}

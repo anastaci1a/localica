@@ -25,7 +25,8 @@ const fixture=prepareMedia('<details open><summary>Outer</summary><img src="asse
   assert(!requests.some(p=>closed.includes(p)),'Closed figure requested media');
   assert(!requests.some(p=>/\.(gif|mp4)$/.test(p)),'Initial animation request');
   const initial={requests:[...requests],png:requests.filter(p=>p.endsWith('.png')).length,bytes:await page.evaluate(()=>performance.getEntriesByType('resource').reduce((n,r)=>n+r.transferSize,0))};
-  const section=page.locator('details').filter({has:page.locator('img[data-media-src*="music-search-vector-paired-a.gif"]')});
+  await page.locator('#detached-search-control').evaluate(d=>d.open=true);
+  const section=page.locator('details:not(.study)').filter({has:page.locator('img[data-media-src*="music-search-vector-paired-a.gif"]')});
   await section.locator('summary').click();
   const gif=section.locator('img');await gif.evaluate(async i=>{while(!i.hasAttribute('src'))await new Promise(requestAnimationFrame);await i.decode();});
   assert.equal(requests.filter(p=>p.endsWith('.gif')).length,1,'Only opened GIF should load');
@@ -33,7 +34,7 @@ const fixture=prepareMedia('<details open><summary>Outer</summary><img src="asse
   const video=section.locator('video');await video.evaluate(async v=>{v.muted=true;await v.play();});
   await page.waitForFunction(()=>document.querySelector('details[open] video').currentTime>0);
   await section.locator('summary').click();
-  await page.waitForFunction(()=>!document.querySelector('details:not([open]) img[src],details:not([open]) source[src]'));
+  await page.waitForFunction(()=>!document.querySelector('details:not([open]) img[src]:not(.study-thumbnail),details:not([open]) source[src]'));
   assert(await video.evaluate(v=>v.paused&&v.readyState===0),'Closed video must be stopped/unloaded');
   await section.locator('summary').click();await gif.evaluate(async i=>{while(!i.hasAttribute('src'))await new Promise(requestAnimationFrame);await i.decode();});await section.locator('summary').click();
   await page.goto(base+'/nested.html',{waitUntil:'networkidle'});

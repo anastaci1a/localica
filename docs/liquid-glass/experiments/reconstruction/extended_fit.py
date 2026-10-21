@@ -106,6 +106,15 @@ class Study:
             with (self.folder/name).open('rb') as f:
                 assert hashlib.file_digest(f,'sha256').hexdigest()==digest, f'Changed frozen input: {name}'
         self.source=cv2.imread(str(self.folder/'source.png'))[:,:,::-1].astype(np.float32)/255
+        # Some selection states recolor the content seen through the lens.
+        # Keep their explicitly modeled incident layer separate from the
+        # ordinary, unrecolored exterior; no difference for existing studies.
+        self.exterior_source=None
+        if 'exterior_source' in self.case:
+            name=self.case['exterior_source']
+            assert Path(name).name==name and name in self.case['source_sha256']
+            self.exterior_source=cv2.imread(str(self.folder/name))[:,:,::-1].astype(np.float32)/255
+            assert self.exterior_source.shape==self.source.shape
         self.target=cv2.imread(str(self.folder/'target.png'))[:,:,::-1].astype(np.float32)/255
         known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)>0
         self.L=min(self.case['half'])
@@ -191,6 +200,9 @@ class Study:
         half=self.half+[p.get('half_x_delta',0),dy]
         radius=min(self.radius+p.get('radius_delta',0),min(half))
         if radial:radius=min(half)
+        if p.get('crown_softness',0)>0 and not radial:
+            from crowned_footprint import boundary
+            return x,y,half,min(half),boundary(x,y,half,p['crown_softness'])
         join=p.get('cap_join_width',0)
         if join>1e-8 and abs(half[0]-half[1])>join:
             from curvature import capsule_offset
@@ -234,6 +246,15 @@ class Study:
         coupling=.5*p['coupling']*p['tangent']*Wd*x*x
         X-=coupling*nx;Y-=coupling*ny
         X+=p.get('shape_dx',0);Y+=p.get('shape_dy',0)
+        profile=p.get('cap_edge_profile')
+        if profile is not None:
+            coefficients=np.asarray(profile,dtype=float)
+            if not p['spline'] or coefficients.ndim!=1 or not 1<=len(coefficients)<=7 or not np.isfinite(coefficients).all():
+                raise ValueError('Cap-depth profile needs one to seven finite spline coefficients')
+            # Shape-relative depth/orientation expansion of the normal map.
+            # It does not identify a physical solid or alter the silhouette.
+            extra=cap_weight*(basis[...,:len(coefficients)]@coefficients)
+            X-=extra*nx;Y-=extra*ny
         thin=np.exp(-(d/p['thin_width'])**2)
         e=np.exp(-(d/p['rim_width'])**2);f=np.exp(-(d/(4*p['rim_width']))**2)
         xx=x/half[0];yy=y/half[1];z=np.clip(d/.3,0,1);core=z**3*(z*(6*z-15)+10)
@@ -357,7 +378,8 @@ class Study:
         if 'shadow' in p:
             q=p['shadow'];*_,(shadow_sd,_,_)=self.shape(x-q['offset'][0],y-q['offset'][1],p)
             opacity=q['opacity']*np.exp(-.5*(np.maximum(shadow_sd,0)/q['sigma'])**2)
-            source=cv2.remap(self.source,px,py,cv2.INTER_LINEAR)*(1-opacity[...,None])
+            exterior=self.source if self.exterior_source is None else self.exterior_source
+            source=cv2.remap(exterior,px,py,cv2.INTER_LINEAR)*(1-opacity[...,None])
             *_,(native_sd,_,_)=self.shape(x,y,p)
             u=np.clip((native_sd-.20)/.15,0,1);blend=u**3*(u*(6*u-15)+10)
             known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)

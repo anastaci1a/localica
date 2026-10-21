@@ -12,11 +12,55 @@ The circular playback control is the **current most-polished calibration**, sele
 - Across differently sized observations, use each pose's `Lᵢ`: `σᵢ=σ̂Lᵢ`. Optimizer records may store `σref` at an explicitly declared `Lref`, giving `σᵢ=σref Lᵢ/Lref`; published normalized lengths remain `σ̂=σref/Lref`. Source and output blur use the same conversion. Raster sampling/quarter-pixel kernel quantization remain implementation approximations.
 - `F(v)` is the **inverse map**: the backdrop sample is `B(center+L F(v))`. It describes where to read pixels, not the direction in which the visible feature moves. Independent foreground content is composited afterward.
 - The examples operate on **encoded RGB values in [0,1]**. This is a calibrated image-space approximation; changing to linear-light processing changes the output. Coordinates increase rightward/downward, and the camera is frontal.
+- Preserve opaque RGB input precision: divide 8-bit code values by 255 and 16-bit values by 65535. A decoded 10-bit video stored as RGB16 must not pass through an 8-bit image reader. [Raster input helpers](experiments/reconstruction/raster_input.py) preserve code values without transfer/ICC/exposure changes; [controls](experiments/reconstruction/verify-raster-input.py) check exact legacy equality and high-bit preservation. Record decoding precision in the input epoch.
+- For uniform raster resizing, integer pixel centers transform as D(p)=s(p+½)−½. Rescale a registration as D_destination composed with T composed with D_source_inverse; simply multiplying translations misses the half-pixel convention. Integer-factor array crop indices scale directly; center/vector positions use D. [Coordinate controls](experiments/reconstruction/verify-raster-coordinates.py) verify both paths without refitting image features.
 - Let `s(v)` be signed distance to the outline, negative inside, `n=∇s` the outward unit normal and `d=max(−s,0)`. Shape coverage is independent of material color. Evaluate the equations continuously before coverage/raster filtering.
 - Gaussian `σ` is standard deviation, not kernel diameter. Source blur, glass blur after refraction/shading, and foreground-color blur are different operations. The foreground's coverage remains sharp.
 - Foreground geometry must use a verified exact vector, or a clean symmetric trace when none is available. Solid coverage is independent of tint, transmission and blur, and is rasterized anew at each output resolution. The Home/Search follow-up uses private SVG inputs with frozen hashes; older photo-derived masks below remain historical calibrations pending replacement. Optical masks/scores stay fixed when foreground measurements change.
 - Parameters and operation order are fixed for replay. Re-optimizing coefficients produces a new calibration, not an exact reproduction of this one. Source registration, the estimated hidden backdrop, video decoding and raster conventions are additional inputs.
 - Missing backdrop pixels may be extended for presentation, with the method and valid-mask numerical effect recorded. Preserve the original recovered inputs and native benchmark; completed pixels are estimates, not new observed evidence.
+
+## Model responsibilities and evidence
+
+- A model owns the footprint, front/back surfaces or explicitly empirical map, thickness, transmission/reflection, dispersion, ordinary blur, foreground response, contrast, highlights and exterior shadows. Each stage has declared normalized parameters and operation order; no renderer-specific tricks are required by the specification.
+- **Ordinary blur and dispersion are separate.** Ordinary blur averages neighboring samples with one spatial kernel shared by the channels. Dispersion changes the sampling/transport by wavelength (or a declared RGB proxy); it can produce colored edge spreading without ordinary blur. Corner color highlights require a separate lighting test before attributing them to dispersion.
+- Geometry-led candidates must state camera, surfaces, IOR, background distance and valid ray branches. Derive normals from one surface and check its [ray-map compatibility](model.md#flat-front-inverse-map-compatibility); zero image-map curl alone neither establishes nor rejects a refracting solid. Empirical maps remain labeled approximations; folds and total internal reflection are distinct phenomena.
+- Pill silhouettes should be tested for smoothly joined shoulders and a minute center crown rather than assumed to be a straight capsule. Curvature is a parameter of the element family, not a pixel correction on one reference.
+- Do not retain the photographed element's shadow in a reconstruction backdrop. Recover an unobstructed frame or reconstruct the incident background, recording uncertainty; generate the modeled shadow separately. Earlier retained-context figures remain historical estimates until corrected.
+- No target-pixel painting, hidden per-image optical coefficients, artifact copying or blur that conceals an incorrect shape. Icons use reusable solid geometry; their material is evaluated separately. Additional brightness or saturation beyond the sampled scene needs an explicit lighting/material hypothesis.
+
+## Verified improvement protocol
+
+The legacy records below predate this stricter protocol. Preserve their experiment counts and inputs; do not relabel them as qualifying improvements without an audit.
+
+- Freeze an input epoch: reference/source hashes, registration, masks, color space, native sampling, quantization and measurement definitions. Changed input evidence requires a separately reported epoch and baseline, not an apparent model improvement.
+- For each observation, measure RGB errors in 0–255 units: `E = sqrt(0.7 glass_RMSE² + 0.3 rim_RMSE²)`. A new qualifying pass requires `E_new ≤ E_previous` **on every active background independently**, at least one measurable improvement beyond known numerical uncertainty, and no whole-glass regression. This prospective nonregression policy replaces the earlier 0.5% minimum; preserve earlier acceptance records unchanged. Retain foreground and exterior-shadow nonregression guards where measured. Ties and rejected trials do not count.
+- A numerical win also requires independent replay, source-footprint validation and visual review against known defects. [Acceptance gate](experiments/reconstruction/progress_gate.py) consumes those separate evidence decisions; it cannot infer them from a low error.
+- There is no promised minimum compound gain. The gate retains `--policy relative` for reproducing historical 0.5% decisions. Prefer short bounded proposals and reuse valid unchanged-stage evidence. Display `100(1−E/E₀)` as **residual reduction from baseline**, never percent Apple accuracy. A zero residual is terminal, not another successful tie.
+- Review assumptions and model deficiencies after every three substantive experiments, including rejected trials. If the milestone stalls, revise the hypothesis or report the limitation; do not reset the baseline or accept known visual regressions to advance a counter.
+- Work on two distinct elements concurrently. Commit and push each verified pass; after three verified non-regressive passes per element, merge and rotate. This replaces the earlier 15/20-pass targets prospectively. Retain all active backgrounds and historical evidence; adding a reference is a documented new stage, not an excuse to drop older scores.
+- [Local crop diagnostics](experiments/reconstruction/crop_diagnostics.py) are advisory: fixed masks/positions, RGB and channel-edge errors, contour/refraction landmarks, and shadow/highlight profiles. Do not realign or recolor crops independently. Their purpose is to expose local defects hidden by the global average.
+
+## Continuous pill footprint candidate
+
+This optional footprint replaces the capsule's exactly straight central interval. It is a **2D geometry hypothesis**, not a recovered Apple solid. Optical calibration must be evaluated separately. The existing recipes retain their original footprint unless `crown_softness` is enabled.
+
+For major/minor half-extents `a ≥ b > 0`, softness `0 < w ≤ 1`, and `e=wb`, define `sp(t)=ln(1+exp(t))` and:
+
+```text
+c = sp((e − (a−b))/e)
+D = sp((sqrt(a²+e²) − (a−b))/e) − c
+q(x) = b [sp((sqrt(x²+e²) − (a−b))/e) − c] / D
+T(x,y) = [q(x)² + y²] / b²
+```
+
+- The boundary is `T=1`. `q(0)=0`, `q(a)=b`, and `q` is even, smooth and convex. Hence the top/bottom have a unique maximum extent at the center and no exactly straight interval. This does not require an abrupt cap/body join.
+- At `a=b`, this softened longitudinal formula does **not** become a circle: X/Y remain inequivalent. Use the separate radial footprint for circles. The current pill study does not establish a continuous pill-to-circle morph.
+- Use `∇T/|∇T|` for the boundary normal. The reference image-map coordinate `b(sqrt(T)−1)` has the correct boundary/sign but is **not Euclidean signed distance**; do not substitute it into a distance-based physical derivation without accounting for its gradient.
+- Switch review revision 6 uses softness `0.08`, one material across both observations and generated exterior shadows. [Recipe](experiments/reconstruction/studies/active-switch/review-round/pass-06.json) records the kernel length basis; the dimensionless source/output blur widths are `sigma/216.5` and `post_sigma/216.5`. This incremental image-score improvement does not validate the inherited empirical displacement field as a physical solid.
+- Reproduce the revision from private frozen `a/` and `b/` study inputs: `python revision_replay.py INPUTS studies/active-switch/review-round/pass-05.json studies/active-switch/review-round/pass-06.json OUTPUT --scale 4` from `experiments/reconstruction/`. The script independently replays both states and all emitted transmission rays; human visual approval remains separate.
+- [Implementation](experiments/reconstruction/crowned_footprint.py) evaluates normalized geometry and analytic derivatives. The same `T` could define a 3D height field, but that height, camera and IOR must be specified and tested separately.
+- Independent fits to the two selector silhouettes suggest softness about0.185. This is a calibration candidate, not a default for all pills. [Contour measurements](experiments/reconstruction/studies/active-segmented-selector/crown-diagnostics.json) describe the fixed white-ridge sample and its limits. The initial clear optical trials did not pass the improvement gate.
 
 ## Playback: radial map and smooth inner transition
 
@@ -61,7 +105,7 @@ The included [playback coverage mask](experiments/reconstruction/playback-mask.p
 
 ## Toolbar: normal displacement and tangential compression
 
-The outline is a rounded rectangle with normalized half-extents `[392/170,1]` and corner radius `1`. Its fitted map allows normal displacement and tangential scaling to vary separately. With tangent `t=(−n_y,n_x)`:
+The current footprint uses the continuous crown above, half-extents `[392/170,1]` and softness `0.10`. The inherited normal-profile length basis is `ρ=1`; its boundary coordinate is not Euclidean distance. The fitted map allows normal displacement and tangential scaling to vary separately. With tangent `t=(−n_y,n_x)`:
 
 ```text
 a(d) = Σ c_i N_i(d/ρ), i=0…6
@@ -70,11 +114,17 @@ W = (1−u)^4 (1+4u)
 F(v) = diag(1−core_x,1−core_y) v − a(d)n − tangent W (t·v)t
 ```
 
-Here `ρ` is the normalized corner radius. The cubic B-spline basis has knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]`; append three zero coefficients after the seven stored coefficients. Clamp the basis argument to `[0,1]`. Displacement is in `L` units. The complete coefficients, core terms and tangential strength are in the `regular` recipe.
+The cubic B-spline basis has knots `[0,0,0,0,.015,.04,.09,.2,.45,.75,1,1,1,1]`; append three zero coefficients after the seven stored coefficients. Clamp the basis argument to `[0,1]`. Displacement is in `L` units. Coefficients 4–6 have supports beginning at `d/r` values `.015`, `.04` and `.09`; value and first two derivatives vanish at their support endpoints. The signed coefficients describe the inverse map, not lens heights. The complete coefficients, core terms and tangential strength are in the [current recipe](experiments/reconstruction/studies/archive-plus/review-round/pass-03.json).
 
-This is a tensor image field, **not a recovered solid or a proved gradient-potential lens**. Along straight top/bottom segments, `∂F_x/∂x=1−core_x−tangent W`: a smaller positive source derivative makes displayed text wider. Both directions follow the outline near its ends, rather than applying one arbitrary global horizontal stretch.
+This is a tensor image field, **not a recovered solid or a proved gradient-potential lens**. In the straight-edge limit, `∂F_x/∂x=1−core_x−tangent W`: a smaller positive source derivative makes displayed text wider. Crowned boundaries add derivatives of the changing normal. Both displacement directions follow the outline.
 
-For the toolbar only, blend unblurred and source-blurred samples using `H=6u⁵−15u⁴+10u³`, with `u=clamp(d/blur_transition,0,1)`. Use the recipe's source σ `11/170`; it supersedes the older study's eight-pixel search ceiling. No glass post-blur is selected here. Apply the common material function afterward. Exact archive/plus symbols are retained from the source frame for comparison and excluded from glass scoring; their own rendering has not been reconstructed.
+For the toolbar only, blend unblurred and source-blurred samples using `H=6u⁵−15u⁴+10u³`, with `u=clamp(d/blur_transition,0,1)`. Use the recipe's source σ `11/170`. Apply `C_input=max(C_blend,0)^γ` componentwise, with one shared `γ=1.0456395525912732`, **before** the common affine material and clipping. The revised material coefficients are stored directly in the recipe. This empirical encoded-RGB curve is strongly confounded with material/source photometry; it does not identify Apple's pipeline. Positive gamma and positive material gains preserve nondecreasing response under fixed lighting and positive filtering.
+
+After the common material, apply ordinary color blur with `σ=1.25/170` in normalized units. This is distinct from dispersion (none added in this revision). For conditional glass color `C` and coverage `α`, use `C′=Gσ(Cα)/max(Gσ(α),ε)`, then retain the original sharp coverage for composition. Filtering zero-padded RGB directly would create an unsupported dark edge.
+
+The neutral exterior shadow is `A_s=o·G_s(α)(x−δ)`: opacity `o=0.21968065`, width `s=0.29999995 L`, offset `δ=[−0.002930886,0.007772859] L`. Generate the whole shape with at least four-sigma padding before cropping. Composite `C′α + B(1−A_s)(1−α)`; no reference shadow is retained. The fitted width reaches its declared bound, so these are provisional appearance parameters, not a recovered lighting rig.
+
+Finally apply solid SVG coverage with constant foreground color. The plus comes from the original font; the archive is a symmetric geometric trace. Font/vector provenance and pose are independent of optics. Native source and SVG hashes are frozen in the recipe. Reproduce from private inputs with `python tensor_replay.py INPUTS studies/archive-plus/review-round/pass-03.json OUTPUT --scale 4` from `experiments/reconstruction/`. The command verifies hashes and renders fresh high-resolution geometry, glass, shadow and icons without fitting.
 
 ## Active slider: oval outline and channel-separated map
 
@@ -123,7 +173,7 @@ For `spline=true`, evaluate a cubic B-spline at `clamp(d/R,0,1)`, with knots `[0
 
 ```text
 q = n_x² (horizontal major axis), or n_y² (vertical major axis)
-a ← a (1 + cap_normal_gain q)
+a ← a (1 + cap_normal_gain q) + q Σᵢ bᵢ Bᵢ(d/R)
 u = clamp(d/tangent_band,0,1)
 W = (1−u)^m (1+mu) (1−cap_tangent_fade q)
 W_d = −m(m+1)u(1−u)^(m−1) / tangent_band
@@ -132,6 +182,8 @@ K = ½ coupling × tangent × W_d × x²
 F_x = (1−core_x)x − a n_x + tangent W τ n_y − K n_x
 F_y = (1−core_y)y − a n_y − tangent W τ n_x − K n_y
 ```
+
+The optional `cap_edge_profile=[b₀,…]` uses the same cubic basis as `a`; missing coefficients are zero. The current switch uses three terms, whose added displacement vanishes with two continuous derivatives at `d/R=.09`. This changes normal refraction near the caps without altering the silhouette or deeper interior. Coefficients are dimensionless source-coordinate displacements, not surface heights.
 
 Here `m=tangent_exponent` (default 4). Restore the shape offset to `F` before backdrop lookup. Missing cap gains/fades are zero. `W_d` is deliberately the base falloff derivative **without** the orientation weight; with these empirical tensor terms, the field is not asserted to be a gradient potential or ray trace through an identified solid.
 
@@ -182,6 +234,7 @@ b₆=(y−1/2)r₀, b₉=(y−1/2)r₁, b₁₂=(y−1/2)r₂; other b entries=0
 - The added light is identical in all three RGB channels; it cannot assign independent RGB materials to each background. It changes lighting, not the ray map or the sampled transmission colors. `A` is the preceding optional color-contraction matrix, otherwise identity.
 - Recompute the source mean when the backdrop moves. Every mean sample must have defined input, including interpolation support; average coverage cannot excuse a missing pixel. Check this footprint separately from scored rays and cap motion along its declared axis. Material derivatives use `A`; the offset still affects clipping and therefore the active derivative regions.
 - A declared calibration range `[l,h]` optionally replaces `y` with `l+(h−l)S(clamp((y−l)/(h−l),0,1))`. This bounded, C2 interpolation preserves the measured endpoints and prevents uncontrolled extrapolation.
+- Switch revision 6 retains shared nonnegative responses `[2.793309,1.311647,~0]` with no inset or luma-range remapping. The two source means are `0.758766` and `0.814351`. Positive grayscale gains, positive gamma and nonnegative radial bases/response imply a nondecreasing uniform-gray output; clipping and positive filtering preserve that order. This limited [response audit](experiments/reconstruction/studies/active-switch/review-round/pass-06-response-audit.json) does not validate arbitrary colored or spatial backgrounds. The context operator itself does not alter geometry; the revision 6 joint fit separately changes existing optical coefficients. Kernels and shadow stay fixed.
 - This is an empirical encoded-brightness response, not radiometric illumination or an Apple formula. Home tests a narrow range of approximately 0.413–0.436; outside behavior is bounded but unvalidated. Zero response preserves the prior material.
 
 ### Directional grazing reflection
@@ -220,6 +273,8 @@ T_c(x) = (1−w) max(B_c(F(x)),0)^γ + w D_c(x)
 - Symmetric RGB offsets are a controllable approximation to lateral chromatic aberration, not measured wavelengths, a dispersion law or Apple's implementation. Direction and left-side fade remain hypotheses calibrated across the two references. An absent option, zero strength or zero separation preserves the prior model.
 
 ## Solid-vector foreground responses
+
+Selection studies may declare separate incident and exterior content layers. The optical map samples the incident layer; uncovered pixels sample the exterior layer in the same coordinate system. This permits testing selected-text recoloring independently of optical displacement. Both inputs require frozen hashes and explicit estimation provenance. With no separate exterior declared, both use the same source, preserving existing studies. Recoloring is a content-state assumption, not an optical property or evidence of Apple's pipeline.
 
 Foreground coverage `α` comes from solid geometry, independently of material color. Its input `B` includes preceding layers, such as a fixed selection backing. Affine styles use `F(B)=(1−o)B+oC`; response styles use the shared per-channel function:
 

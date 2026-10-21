@@ -1,6 +1,6 @@
 # Apple reference recreations
 
-Primary comparisons open with a centered **Wipe** divider: Apple on the left, reconstruction on the right. Drag the divider or use its arrow keys; **Side by side** shows the original pair. Full-size figures and motion remain in the dropdowns. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
+Open a study to load its comparisons. **Wipe** shows Apple on the left and the reconstruction on the right; **Side by side** shows both panels. **Fullscreen** enlarges any image. The divider resets to the center when a view reopens. Motion captures load only when their dropdown is opened. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
 
 [Mathematical specification](recreation-models.md) · [Parameters](experiments/reconstruction/recipes.json) · [Scores](#scores) · [Reproduce](#reproduce) · [Material roles](#material-roles) · [Guide](README.md)
 
@@ -39,21 +39,25 @@ Each half retains 1920 × 1080 pixels.
 
 ## Archive and plus toolbar
 
-Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710); uncovered text at 12:00. A rounded-rectangle tensor map combines normal displacement with tangential compression, widening text near top/bottom without changing central registration.
+Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710); uncovered text at 12:00. Review revision 3 adds a shared intensity curve and common material adjustment; shape and refraction are unchanged. Weighted RMS error decreases **1.17%** from revision 2, with glass, exterior and both foreground checks passing.
 
-![Apple archive/plus toolbar and frozen tensor reconstruction](assets/match-regular.png)
+![Apple archive/plus toolbar and current reconstruction](assets/match-regular.png)
+
+- One clean background feeds the lens and exterior; the hidden paper region is estimated. A generated neutral Gaussian shadow replaces the earlier copied exterior context. Its width reaches the chosen bound, so the shadow tail remains provisional.
+- The plus uses an original SF Symbols vector. The archive is a symmetric rounded outline trace, an approximation to the original symbol. Both are independently rendered; no screenshot glyph pixels are pasted. Glass scoring still excludes their fixed boxes, and foreground errors are reported separately.
+- [Model and equations](recreation-models.md#toolbar-normal-displacement-and-tangential-compression) · [Recipe](experiments/reconstruction/studies/archive-plus/review-round/pass-03.json) · [Independent replay](experiments/reconstruction/studies/archive-plus/review-round/pass-03-verification.json) · [Native scores](experiments/reconstruction/studies/archive-plus/review-round/pass-03-scores.json).
+- The final `d` stroke remains too straight, and underside reflections/lighting still differ. This empirical image field is not an identified physical lens or Apple shader. No second observed background is verified yet.
+
+<details>
+<summary>Upper rim and refracted lettering</summary>
 
 ![Upper-rim comparison with Apple on the left](assets/match-regular-rim.png)
 
-- [Equations](recreation-models.md#toolbar-normal-displacement-and-tangential-compression); exact coefficients in the `regular` recipe.
-- Source blur and its distance-dependent blend are independent of optical strength. The selected σ is `11/340` times the shorter dimension, superseding the older eight-pixel search ceiling.
-- Exact archive/plus reference symbols are retained on both sides and excluded from glass scores; their foreground rendering is **not** independently recreated.
-- Remaining differences include compressed-text blur, the final `d` stroke's curvature and inner lighting. This image field is not a verified physical lens.
+![Refracted d-stroke comparison with Apple on the left](assets/toolbar-d-stroke-current.png)
 
-<details>
-<summary>Full-resolution toolbar comparison</summary>
+![Underside comparison with Apple on the left](assets/toolbar-underside-current.png)
 
-[![Full HD toolbar comparison](assets/match-regular-full.png)](assets/match-regular-full.png)
+These fixed-position crops use the current 4× render. The upper-rim crop now extends downward by half its original height; the letter-refraction crop starts at its bottom edge. With these boundaries, visible-composite RMSE within the glass mask decreases from 7.403 to 7.303 in the upper rim and from 3.368 to 3.096 around the `d`. The underside worsens from **5.062 to 5.471**; its reflections remain too distinct. The [reframed diagnostics](experiments/reconstruction/studies/archive-plus/review-round/pass-03-crops-reframed.json) and [original boundaries/scores](experiments/reconstruction/studies/archive-plus/review-round/pass-03-crops.json) remain advisory and do not imply every region improved.
 
 </details>
 
@@ -96,7 +100,7 @@ These test tone, broad lighting and rim. Nearly uniform backdrops cannot identif
 
 ## Apple Music studies
 
-References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Use **Full image** for the original full-size pair.
+References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Use **Fullscreen** to inspect the full-size pair.
 
 ### Expanded mini-player
 
@@ -258,15 +262,15 @@ Frames A/B: 2.5/2.0 seconds. The corrected study has 22 initial/refinement and 2
 
 ## Active switch
 
-Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). The shared calibration includes 24 initial and 24 paired experiments. These **4× comparisons** use one signed image map and material, with the measured pose/size of each thumb.
+Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-details/large_2x.mp4). These **4× comparisons** show review-round revision 6: joint refinement of the existing normal/cap profiles, center scaling, intensity response and shared material. Shape, source, blur, dispersion and shadow remain fixed. Weighted RMS falls **0.54% / 0.85%** on the two backgrounds; whole-glass, rim and exterior errors improve. Independent replay checks 50.9 million high-resolution transmission rays against defined source support. The 16-update fit ends at its budget, with gamma at the declared upper bound; it does not establish a global optimum. The 24 initial/24 paired historical experiments remain archived; their counts are not certification under the new improvement gate.
 
 [![Switch, green track: Apple left, reconstruction right](assets/study-active-switch-paired-a.png)](assets/study-active-switch-paired-a.png)
 
 [![Switch, gray track: Apple left, reconstruction right](assets/study-active-switch-paired-b.png)](assets/study-active-switch-paired-b.png)
 
-- The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
+- The hidden track is a symmetric, uniform-color estimate; scores are conditional on it. A [source-color sensitivity check](experiments/reconstruction/studies/active-switch/review-round/pass-06-source-sensitivity.json) gives E ranges **14.075–14.093 / 15.165–15.699** within the recorded exposed-color bounds. These are stress tests, not statistical confidence intervals. Frozen scoring inputs stay unchanged; source changes never count as optical gains.
 - A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Directional channel separation reproduces part of the inner fringe; upper-rim color and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 24 paired passes. Both motion captures show pass24. The 4× masters are four seconds at 30 fps; GIF previews are half-size at 15 fps and under 10 MB.
+- [Current normalized recipe basis](experiments/reconstruction/studies/active-switch/review-round/pass-06.json) · [Independent verification](experiments/reconstruction/studies/active-switch/review-round/pass-06-verification.json) · [Historical recipe](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) reproduces the 24 historical paired checkpoints under their original nonregression gate. Both motion captures below show **historical pass24**, not the revised stills. The 4× masters are four seconds at 30 fps; GIF previews are half-size at 15 fps and under 10 MB.
 
 <details>
 <summary>Motion — green track</summary>
@@ -290,9 +294,14 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 </details>
 
-### Colored switch rim
+<details>
+<summary>Colored rim — localized crops and measurements</summary>
 
-Each crop below places Apple on the left and snapshot 24 on the right. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
+Current crops place Apple on the left and review-round revision 6 on the right. All four gray-background crops improve. Green-background upper-left and right-rim errors increase by 0.85% and 0.32%; its lower-left and center improve. These local measurements remain advisory. The dark inner contour, excess softness and colored fringes remain unresolved.
+
+[![Current switch rim crops](assets/switch-round-crops.png)](assets/switch-round-crops.png)
+
+[Before/after crop scores](experiments/reconstruction/studies/active-switch/review-round/pass-06-crops.json) · [Exterior bands](experiments/reconstruction/studies/active-switch/review-round/pass-06-shadow-tails.json). The older crop sheet below retains snapshot 24 for comparison. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
 
 [![Switch rim details: Apple and reconstruction across six cropped regions](assets/switch-rim-detail.png)](assets/switch-rim-detail.png)
 
@@ -300,37 +309,63 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 - [Rim measurements](experiments/reconstruction/switch-rim-analysis.json) include native RGB samples, resting controls and source assumptions. [Competing color models](experiments/reconstruction/switch-color-hypotheses.json) test channel-separated rays and directional chromatic lighting. Some improve native scores slightly; none reproduces the broad colored bands, and none is adopted. Their frozen baselines differ and are recorded separately.
 - Apple describes separate [geometry-dependent highlights and ambient color spill](https://developer.apple.com/videos/play/wwdc2025/219/?time=631). Colored transmission, lighting/tint, video processing and source-estimation error remain possible contributors; these pixels do not identify physical dispersion or an exact Apple shader.
 
+</details>
+
+## Active segmented selector
+
+**Visually rejected calibration.** Single-reference pass 20 has weighted loss308.506 and glass RMSE19.935, but introduces blur absent from the reference and has an incorrect refraction map. It is retained below for audit, not as an accepted reproduction. The next geometry study fixes source/output blur at zero. The source is Apple's Details video at 16.4 seconds. The earlier13 source-biased passes are [archived and excluded](experiments/reconstruction/studies/active-segmented-selector/invalid-track-registration/status.json); the corrected source is constrained by both distant track ends. An [intermediate caption proxy](experiments/reconstruction/studies/active-segmented-selector/invalid-lensed-caption-proxy/status.json) is also excluded; current caption geometry uses only independently unoccluded labels. A second observed position at 16.35 seconds is reserved for paired calibration; it was chosen by silhouette dimensions after the original 16.5s frame showed a different interaction shape. This is a posthoc matched-state test, not blind validation. No paired acceptance is claimed yet.
+
+[![Active segmented selector: Apple left, reconstruction right](assets/study-active-segmented-selector-progress-a.png)](assets/study-active-segmented-selector-progress-a.png)
+
+- The incident texture uses solid SF font outlines with selected red text; the exterior retains gray text. Hidden track geometry, font choice, recoloring before refraction and layout transfer are explicit estimates, not photographic recovery or a claim about Apple's rendering pipeline.
+- [Current native measurements and source limits](experiments/reconstruction/active-segmented-selector-progress.json) · [Recipe and pass records](experiments/reconstruction/studies/active-segmented-selector/accepted.json). The reconstruction panel is evaluated at 4×; native scoring remains fixed.
+
+<details>
+<summary>Shape investigation — capsule, continuous crown and superellipse</summary>
+
+The blue curves compare three geometric footprints against the same Apple rim. Columns are capsule, continuous crown and superellipse. These are contour diagnostics, not accepted new optical renders. The crown has lower held-out white-ridge error in both frames; the clear refraction trials still fail the retained image-score gate.
+
+![Selector silhouette hypotheses on background A](assets/selector-contour-hypotheses-a.png)
+
+![Selector silhouette hypotheses on background B](assets/selector-contour-hypotheses-b.png)
+
+[Equations and limits](recreation-models.md#continuous-pill-footprint-candidate) · [Measurements](experiments/reconstruction/studies/active-segmented-selector/crown-diagnostics.json)
+
+</details>
+
 ## Scores
+
+Historical experiment counts below include rejected proposals, ties and improvements smaller than the current milestone. They are not counts of passes under the [current verification protocol](recreation-models.md#verified-improvement-protocol). New qualifying passes must reduce weighted RMS error by at least0.5% on every active observation, with the additional source, visual and nonregression checks.
 
 ### Music and switch studies
 
-| Study | Weighted loss A / B | Glass RMSE A / B | Initial / paired passes | Status |
+| Study | Weighted loss A / B | Glass RMSE A / B | Initial / paired experiments | Status |
 | --- | ---: | ---: | ---: | --- |
 | Expanded mini-player | 29.031 / 9.723 | 4.366 / 2.571 | 22 / 21 | Completed study |
 | Compact mini-player | 24.899 / 23.369 | 4.370 / 4.325 | 29 / 21 | Completed study |
 | Search | 52.284 / 50.753 | 6.794 / 6.592 | 28 / 21 | Completed study |
 | Navigation | 3.916 / 55.270 | 1.611 / 6.044 | 20 / 24 | Completed study; rim mismatch |
 | Home | 40.187 / 103.246 | 5.861 / 9.223 | 22 / 21 | Corrected boundary verified |
-| Active switch, pass 24 | 232.758 / 276.129 | 12.061 / 14.677 | 24 / 24 | Paired calibration |
+| Active switch, review 6 | 198.132 / 234.623 | 11.156 / 13.641 | 24 / 24 historical | Shared two-reference revision |
 
 - Weighted loss is `0.7 × glass RMSE² + 0.3 × rim RMSE²`; each sample's loss and whole-glass RMSE must hold or improve. Rejected experiments retain the incumbent. Independent replay also checks that the first paired baseline protects the retained single-background result.
 - These studies use two samples per output axis and fixed native-reference masks. They are not directly ranked against the earlier four-sample-per-axis studies below. Foreground errors and source-footprint diagnostics remain separate from glass scores.
-- Both references come from the same video, not independent device validation. Higher-resolution presentation does not create new source detail or change native scoring. GIFs may have lower resolution/frame rate than the 4× PNG/video masters; their encoding diagnostics are recorded with each study.
+- Both references come from the same video, not independent device validation. Native calibration uses the scored pixels; its checkerboard subset is not an independent holdout. Higher-resolution presentation does not create new source detail or change native scoring. GIFs may have lower resolution/frame rate than the 4× PNG/video masters; their encoding diagnostics are recorded with each study.
 
 ### Earlier HD studies
 
 | Scene | Glass RMSE | Rim RMSE | Interior RMSE | Withheld-block RMSE | SSIM |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Playback — most polished | 8.077 | 11.148 | 2.626 | 8.368 | 0.9727 |
-| Archive / plus | 6.124 | 8.984 | 4.091 | 5.978 | 0.9805 |
+| Archive / plus, review 3 | 5.796 | 8.678 | 3.683 | 5.526 | 0.9818 |
 | Active slider | 7.227 | 8.850 | 6.566 | 7.445 | 0.9718 |
 | Regular light | 1.532 | 2.894 | 0.578 | 1.544 | 0.9991 |
 | Regular dark | 0.871 | 1.664 | 0.298 | 0.886 | 0.9997 |
 
-Playback icon-color RMSE: 3.228. Toolbar symbols are retained reference pixels and are not given foreground scores.
+Playback icon-color RMSE: 3.228. Toolbar foreground errors are reported independently in its current native score record; the earlier calibration copied those glyphs and did not score them.
 
 - Encoded RGB errors use a 0–255 scale. Lower RMSE is better; higher SSIM is better. **SSIM is not a fidelity percentage.** Scores use unquantized calculated glass; PNG rounding changes them slightly. Full metrics, counts and registration evidence: [settled-scores.json](experiments/reconstruction/settled-scores.json).
-- Glass excludes the first 0.75 native pixel inward from the silhouette and symbol boxes. Rim means the first 20% of the shorter half-extent. Exterior shadows are excluded. Only playback has a separately scored, independently calculated foreground color.
+- Glass excludes the first 0.75 native pixel inward from the silhouette and symbol boxes. Rim means the first 20% of the shorter half-extent. Exterior shadows are excluded. Playback and the current toolbar revision report separately rendered foreground errors.
 - Omitted 32-pixel spatial blocks share the same frame, source estimate and manually chosen outline. They were inspected during calibration and are **not independent-scene validation**. Replay performs no optimization.
 - SSIM uses mean encoded RGB, an 11 × 11 Gaussian window and an eroded mask. Registration uncertainty, inferred backdrops and different material freedoms limit cross-scene comparisons.
 
@@ -378,11 +413,11 @@ python3 docs/liquid-glass/experiments/reconstruction/settled.py /private/videos 
 python3 docs/liquid-glass/experiments/reconstruction/motion.py /private/replay /private/motion
 ```
 
-The second command renders **all five frozen recipes**, native-resolution outputs and scores. Add `--assets docs/liquid-glass/assets` to update public comparison figures. The third recreates the playback translation video/GIF and requires ffmpeg. Neither refits or modifies the live lab; no GPU is needed. The portable specification is the [equations](recreation-models.md) and [dimensionless parameters](experiments/reconstruction/recipes.json); commands fix one sampling implementation. Codec/library versions can change encoded media bytes.
+The second command renders **the five historical frozen recipes**, native-resolution outputs and scores; current toolbar/switch commands are linked in their model sections. Add `--assets docs/liquid-glass/assets` to update public comparison figures. The third recreates the playback translation video/GIF and requires ffmpeg. Neither refits or modifies the live lab; no GPU is needed. The portable specification is the [equations](recreation-models.md) and [dimensionless parameters](experiments/reconstruction/recipes.json); commands fix one sampling implementation. Codec/library versions can change encoded media bytes.
 
 Background recovery uses SIFT/RANSAC registration for dune/text scenes and smooth uncovered-page fits elsewhere. Inputs are quantized to eight-bit intermediate images to match calibration. Hidden text/track endpoints remain estimates. Still materials integrate four samples per axis; sampling is bilinear, filter boundaries reflect, and coverage is separate.
 
-The play mask contains coverage only. Toolbar glyph colors and distant exterior remain shared Apple imagery. A ten-pixel contact band uses the recovered source plus a normalized low-frequency exterior residual; it is unscored. Motion uses the playback recipe at two samples per axis and omits shadows. Archived MP4/GIF encoding is separate from numerical still replay.
+The play mask contains coverage only. In that historical toolbar replay, glyph colors and distant exterior remain shared Apple imagery; the current revision uses independent vectors and a generated shadow. A ten-pixel contact band uses the recovered source plus a normalized low-frequency exterior residual; it is unscored. Motion uses the playback recipe at two samples per axis and omits shadows. Archived MP4/GIF encoding is separate from numerical still replay.
 
 Historical search tools and [results.json](experiments/reconstruction/results.json) retain alternative models; they are **not the selected recipes/current scores**. Search again only in a separate directory. Tool consistency, Apple similarity and Android performance require different checks.
 
