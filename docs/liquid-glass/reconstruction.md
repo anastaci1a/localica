@@ -290,7 +290,8 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 </details>
 
-### Colored switch rim
+<details>
+<summary>Colored rim — localized crops and measurements</summary>
 
 Each crop below places Apple on the left and snapshot 24 on the right. The gray-track reference contains a warm patch near RGB `(251,236,209)` and a cyan lower rim. The estimated track itself is near `(190,195,189)`. Those hue changes require investigation beyond ordinary shared-channel sampling of that estimate.
 
@@ -299,6 +300,8 @@ Each crop below places Apple on the left and snapshot 24 on the right. The gray-
 - A source-derived directional reflection reduces the unsupported dark inner contour at A/B lower left, independently of the exterior shadow. The supplementary lower-contour MSE falls from7511/10205 to1124/1688; native masks stay fixed. Thin inner colored bands at A lower left and B right remain calibration targets.
 - [Rim measurements](experiments/reconstruction/switch-rim-analysis.json) include native RGB samples, resting controls and source assumptions. [Competing color models](experiments/reconstruction/switch-color-hypotheses.json) test channel-separated rays and directional chromatic lighting. Some improve native scores slightly; none reproduces the broad colored bands, and none is adopted. Their frozen baselines differ and are recorded separately.
 - Apple describes separate [geometry-dependent highlights and ambient color spill](https://developer.apple.com/videos/play/wwdc2025/219/?time=631). Colored transmission, lighting/tint, video processing and source-estimation error remain possible contributors; these pixels do not identify physical dispersion or an exact Apple shader.
+
+</details>
 
 ## Active segmented selector
 
