@@ -100,5 +100,29 @@
     "height": 848,
     "top": 64,
     "bottom": 0
+  },
+  "assets/match-regular-dark.png": {
+    "width": 1440,
+    "height": 455,
+    "top": 64,
+    "bottom": 0
+  },
+  "assets/match-regular-dark-full.png": {
+    "width": 2160,
+    "height": 650,
+    "top": 64,
+    "bottom": 0
+  },
+  "assets/match-regular-light.png": {
+    "width": 1440,
+    "height": 455,
+    "top": 64,
+    "bottom": 0
+  },
+  "assets/match-regular-light-full.png": {
+    "width": 2160,
+    "height": 650,
+    "top": 64,
+    "bottom": 0
   }
 }
