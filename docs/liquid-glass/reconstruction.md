@@ -70,6 +70,28 @@ These fixed-position crops use the current 4× render. The upper-rim crop now ex
 
 </details>
 
+## Safari circular controls
+
+Apple, [Meet Liquid Glass, 5:00](https://developer.apple.com/videos/play/wwdc2025/219/?time=300). Search and plus controls occupy differently shaded parts of the same gray panel. **Frozen inputs and a failed transfer; no verified passes yet.**
+
+![Safari search control and frozen vector baseline](assets/safari-search-baseline.png)
+
+- The magnifier uses an independently rendered pinned vector path, with fixed black fill and placement. Its foreground RMSE improves **27.923 → 27.145** relative to the earlier clean geometric trace; this is an input correction, not optical progress. Exact Safari symbol weight is unverified.
+- Its affine background is estimated from uncovered upper/right controls. Held RGB error is **1.124** levels; independent left/lower checks are **4.648/9.477**. Hidden input is modeled, not observed. Native baseline E **7.69160**, glass/rim **7.27181/8.59170**.
+
+<details>
+<summary>Darker-background transfer — failed, not a verified pair</summary>
+
+![Safari plus control and unchanged-material transfer](assets/safari-plus-unfitted.png)
+
+The plus uses the same dimensionless ray/material/shadow parameters, a separate solid plus vector and independently measured pose. Ordinary source/output kernel widths scale only by the radius ratio **74.224/72.894**. No material is fitted to this second image.
+
+The transfer is visibly too bright and cyan: E **23.87081**, glass/rim **23.71619/24.22775**. This retained failure limits claims that the inherited material generalizes; the two scores are not comparable estimates of achievable fidelity. The plus background is another affine estimate (held **0.705**, independent right/lower **1.525/5.622** levels). It omits the curved parent-panel edge visible in the crop. Neither background establishes a refraction or dispersion map from such low-frequency content.
+
+</details>
+
+[Fixed recipes and fingerprints](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) · [Native replay](experiments/reconstruction/safari_transfer.py). Inputs remain private. Native sampling is Study2×2; previews are resized from those saved native arrays. This study is separate from the more polished clear playback control and does not replace it.
+
 ## Active slider
 
 Apple, [Build a UIKit app with the new design, 18:12](https://developer.apple.com/videos/play/wwdc2025/284/?time=1092); resting page at 18:10.5. The thumb uses a measured polynomial-oval outline and channel-separated tensor refraction. **No Gaussian blur is applied.**

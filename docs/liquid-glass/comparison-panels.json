@@ -142,5 +142,17 @@
     "top": 64,
     "bottom": 0,
     "gutter": 2
+  },
+  "assets/safari-search-baseline.png": {
+    "width": 862,
+    "height": 488,
+    "top": 48,
+    "bottom": 0
+  },
+  "assets/safari-plus-unfitted.png": {
+    "width": 902,
+    "height": 488,
+    "top": 48,
+    "bottom": 0
   }
 }
