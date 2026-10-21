@@ -1,0 +1,103 @@
+{
+  "parameters": {
+    "sigma": 6.769470218349409,
+    "amplitude": 1.2289680366372868,
+    "band": 0.43987339501423806,
+    "power": 2.351669476828825,
+    "tangent": 0,
+    "tangent_band": 0.4,
+    "core_x": 0.009966916126055573,
+    "core_y": 0,
+    "post_sigma": 0.18099456713643639,
+    "coupling": 0,
+    "gamma": 1,
+    "rim_width": 0.030561777593608914,
+    "thin_width": 0.012742241466702995,
+    "spline": true,
+    "shape_dx": -0.00587506468335941,
+    "shape_dy": -0.007886399981648917,
+    "half_x_delta": 0.004142310840469692,
+    "half_y_delta": 0,
+    "radius_delta": 0,
+    "c0": -2.5,
+    "c1": 0.9682518163041112,
+    "c2": 0.6757163045320522,
+    "c3": 0.7989154249496436,
+    "c4": 0.7050863084650834,
+    "c5": 0.026319148293094945,
+    "c6": -0.03254983876128028,
+    "shadow": {
+      "opacity": 0.06397813905839193,
+      "sigma": 0.2381474908903573,
+      "offset": [
+        0.049999833528026554,
+        -0.0999999719363685
+      ]
+    },
+    "material_context_inset": 0.08,
+    "ambient_rim_response": [
+      -7.745393160298575,
+      -0.7282705296949193,
+      0.42730961759319347
+    ],
+    "ambient_rim_luma_range": [
+      0.4128481986763243,
+      0.43633079011162007
+    ],
+    "grazing_reflection": {
+      "strength": 0.5,
+      "width": 0.00675,
+      "angular_power": 0.0,
+      "source_sigma": 0.0,
+      "direction": [
+        0.0,
+        1.0
+      ],
+      "environment_rgb": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  },
+  "material": [
+    0.5979374267361708,
+    0.6123798374563401,
+    0.6155397593052604,
+    0.4008558920572319,
+    0.39439295727196644,
+    0.3868382174121221,
+    -2.0144041358421148,
+    0.6306115281463865,
+    0.3055368329347944,
+    0.389436958560812,
+    0.1019256061005392,
+    0.2883393161724885,
+    0.06999873743687744,
+    -0.01271605492589141,
+    -0.0035899293748128665,
+    0.00223151202770294,
+    0.0006487832906990264,
+    -0.023849780777464188,
+    -0.023613087023200315,
+    0.024769440983285585,
+    0.6100307002228723,
+    0.6212702602798482,
+    0.6326058722665513
+  ],
+  "vector_sha256": {
+    "a": {
+      "home.svg": "59ae42b6317ff70d4e459b5ba183c50795ccdd130f41ab1f8d21fe8657838e40"
+    },
+    "b": {
+      "home.svg": "59ae42b6317ff70d4e459b5ba183c50795ccdd130f41ab1f8d21fe8657838e40"
+    }
+  },
+  "case_sha256": {
+    "a": "b7e9989cbbfd3ec16593ea38541753f50e5ac359ff52926a90fd246b134ea7f9",
+    "b": "a40b6101cf5f41e5adc9a8c467ca92830b79bbcee96658d6ae6c22cff441d8c8"
+  },
+  "large": false,
+  "parameter_units": "sigma/post_sigma in source pixels; all shape/map coefficients normalized by study.L, the source short half-size. Scale pixel widths with L when changing source resolution.",
+  "presentation": "Unknown unscored exterior extended by nearest defined source RGB only. No reference shadow copied, no scoring/input change."
+}

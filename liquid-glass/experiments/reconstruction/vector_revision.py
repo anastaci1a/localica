@@ -1,4 +1,4 @@
-"""Clean glass/shadow compositing for studies with solid SVG foregrounds.
+"""Clean glass/shadow compositing for studies with declared SVG foregrounds.
 
 Unlike the historical context compositor, this never retains a reference shadow
 or screenshot-derived foreground. Material/ray evaluation remains Study.render.
@@ -7,7 +7,10 @@ import cv2,numpy as np
 
 
 def composite(study,p,material,scale=1,background_source=None):
-    assert not study.transmission_layers,'Nonlinear foreground layers need an explicit replay contract'
+    if study.transmission_layers:
+        params=np.asarray(study.case.get('foreground_response',[]),float)
+        assert params.shape==(3,3) and np.isfinite(params).all(),'Freeze nonlinear foreground response explicitly'
+        assert np.all((params[:,:2]>=0)&(params[:,:2]<=1)) and np.all(params[:,2]>0)
     assert all('vector_asset' in layer and layer['mode']!='artwork' for layer in study.case.get('foreground_layers',[])),'Only declared vector glyphs are supported'
     a,b,c,d=study.crop;H,W=material.shape[:2]
     assert (H,W)==((d-b)*scale,(c-a)*scale)
@@ -22,7 +25,23 @@ def composite(study,p,material,scale=1,background_source=None):
         *_,(sd,_,_)=study.shape(x-q['offset'][0],y-q['offset'][1],p)
         background*=1-q['opacity']*np.exp(-.5*(np.maximum(sd,0)/q['sigma'])**2)[...,None]
     alpha=study.shape_coverage(p,scale)
-    return study.apply_foreground(material*alpha[...,None]+background*(1-alpha[...,None]),scale)
+    out=material*alpha[...,None]+background*(1-alpha[...,None])
+    if not study.transmission_layers:return study.apply_foreground(out,scale)
+    # Fixed vector response: no target-based matte or color calibration.
+    layers=study.transmission_layers
+    try:
+        study.transmission_layers=[]
+        out=study.apply_foreground(out,scale)
+    finally:study.transmission_layers=layers
+    from vector_foreground import coverage
+    from foreground_response import response
+    for layer in layers:
+        box=tuple(layer['box']);assert box in study.vector_layers
+        x0,y0,_,_=study.crop;a,b,c,d=box
+        region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
+        A=coverage(study.folder,study.vector_layers[box],scale)
+        region[:]=region*(1-A[...,None])+response(region,params)*A[...,None]
+    return out
 
 
 def replay(folder,record,observation,output,high_quality=False):
