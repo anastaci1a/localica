@@ -1,6 +1,6 @@
 # Apple reference recreations
 
-Primary comparisons open with a centered **Wipe** divider: Apple on the left, reconstruction on the right. Drag the divider or use its arrow keys; **Side by side** shows the original pair. Full-size figures and motion remain in the dropdowns. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
+Open a study to load its comparisons. **Wipe** shows Apple on the left and the reconstruction on the right; **Side by side** shows both panels. **Fullscreen** enlarges any image. The divider resets to the center when a view reopens. Motion captures load only when their dropdown is opened. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
 
 [Mathematical specification](recreation-models.md) · [Parameters](experiments/reconstruction/recipes.json) · [Scores](#scores) · [Reproduce](#reproduce) · [Material roles](#material-roles) · [Guide](README.md)
 
@@ -96,7 +96,7 @@ These test tone, broad lighting and rim. Nearly uniform backdrops cannot identif
 
 ## Apple Music studies
 
-References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Use **Full image** for the original full-size pair.
+References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Use **Fullscreen** to inspect the full-size pair.
 
 ### Expanded mini-player
 
