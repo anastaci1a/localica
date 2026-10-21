@@ -54,8 +54,8 @@ T(x,y) = [q(x)² + y²] / b²
 
 - The boundary is `T=1`. `q(0)=0`, `q(a)=b`, and `q` is even, smooth and convex. Hence the top/bottom have a unique maximum extent at the center and no exactly straight interval. This does not require an abrupt cap/body join.
 - Use `∇T/|∇T|` for the boundary normal. The reference image-map coordinate `b(sqrt(T)−1)` has the correct boundary/sign but is **not Euclidean signed distance**; do not substitute it into a distance-based physical derivation without accounting for its gradient.
-- Switch review revision 3 uses softness `0.08`, one material across both observations and generated exterior shadows. [Recipe](experiments/reconstruction/studies/active-switch/review-round/pass-03.json) records the kernel length basis; the dimensionless source/output blur widths are `sigma/216.5` and `post_sigma/216.5`. This incremental image-score improvement does not validate the inherited empirical displacement field as a physical solid.
-- Reproduce the revision from private frozen `a/` and `b/` study inputs: `python revision_replay.py INPUTS studies/active-switch/review-round/pass-02.json studies/active-switch/review-round/pass-03.json OUTPUT --scale 4` from `experiments/reconstruction/`. The script independently replays both states and all emitted transmission rays; human visual approval remains separate.
+- Switch review revision 4 uses softness `0.08`, one material across both observations and generated exterior shadows. [Recipe](experiments/reconstruction/studies/active-switch/review-round/pass-04.json) records the kernel length basis; the dimensionless source/output blur widths are `sigma/216.5` and `post_sigma/216.5`. This incremental image-score improvement does not validate the inherited empirical displacement field as a physical solid.
+- Reproduce the revision from private frozen `a/` and `b/` study inputs: `python revision_replay.py INPUTS studies/active-switch/review-round/pass-03.json studies/active-switch/review-round/pass-04.json OUTPUT --scale 4` from `experiments/reconstruction/`. The script independently replays both states and all emitted transmission rays; human visual approval remains separate.
 - [Implementation](experiments/reconstruction/crowned_footprint.py) evaluates normalized geometry and analytic derivatives. The same `T` could define a 3D height field, but that height, camera and IOR must be specified and tested separately.
 - Independent fits to the two selector silhouettes suggest softness about0.185. This is a calibration candidate, not a default for all pills. [Contour measurements](experiments/reconstruction/studies/active-segmented-selector/crown-diagnostics.json) describe the fixed white-ridge sample and its limits. The initial clear optical trials did not pass the improvement gate.
 
@@ -168,7 +168,7 @@ For `spline=true`, evaluate a cubic B-spline at `clamp(d/R,0,1)`, with knots `[0
 
 ```text
 q = n_x² (horizontal major axis), or n_y² (vertical major axis)
-a ← a (1 + cap_normal_gain q)
+a ← a (1 + cap_normal_gain q) + q Σᵢ bᵢ Bᵢ(d/R)
 u = clamp(d/tangent_band,0,1)
 W = (1−u)^m (1+mu) (1−cap_tangent_fade q)
 W_d = −m(m+1)u(1−u)^(m−1) / tangent_band
@@ -177,6 +177,8 @@ K = ½ coupling × tangent × W_d × x²
 F_x = (1−core_x)x − a n_x + tangent W τ n_y − K n_x
 F_y = (1−core_y)y − a n_y − tangent W τ n_x − K n_y
 ```
+
+The optional `cap_edge_profile=[b₀,…]` uses the same cubic basis as `a`; missing coefficients are zero. Switch revision 4 uses three terms, whose added displacement vanishes with two continuous derivatives at `d/R=.09`. This changes normal refraction near the caps without altering the silhouette or deeper interior. Coefficients are dimensionless source-coordinate displacements, not surface heights.
 
 Here `m=tangent_exponent` (default 4). Restore the shape offset to `F` before backdrop lookup. Missing cap gains/fades are zero. `W_d` is deliberately the base falloff derivative **without** the orientation weight; with these empirical tensor terms, the field is not asserted to be a gradient potential or ray trace through an identified solid.
 

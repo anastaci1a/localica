@@ -57,11 +57,19 @@ def subpixel_support(study,p,scale):
                 gaussian_radius_native_px=radius,passed=minimum>=.999)
 
 
+def ray_implementation_digest():
+    """Invalidate stored ray proofs when their generator/checker changes."""
+    root=Path(__file__).parent
+    names=['extended_fit.py','render.py','curvature.py','crowned_footprint.py',
+           'chromatic_transmission.py','source_support.py','revision_replay.py']
+    return hashlib.sha256(b''.join(name.encode()+b'\0'+(root/name).read_bytes() for name in names)).hexdigest()
+
+
 def transmission_signature(study,p,scale):
     # These two parameters occur only in the lighting basis, never in the
     # footprint, normal/tangential map, reflection or chromatic source rays.
     optical={k:v for k,v in p.items() if k not in {'rim_width','thin_width'}}
-    payload=dict(case=study.case,parameters=optical,scale=scale)
+    payload=dict(case=study.case,parameters=optical,scale=scale,implementation=ray_implementation_digest())
     return hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
 
 
