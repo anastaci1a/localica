@@ -12,17 +12,21 @@ internal fun awaitGlassReturn(rule: ComposeContentTestRule, anchor: GlassAnchor,
     val autoAdvance = rule.mainClock.autoAdvance
     rule.mainClock.autoAdvance = false
     try {
-        // advanceTimeUntil runs its entire loop in one UI task. That can starve
-        // the native snapshot notification that disposes a conditional dialog.
-        rule.waitUntil(5000) {
-            if (rule.runOnUiThread { !anchor.hidden && !anchor.modalPresent }) true
-            else {
-                rule.mainClock.advanceTimeByFrame()
-                if (rule.mainClock.currentTime - virtualStart > 5000) {
-                    throw ComposeTimeoutException("Glass return did not finish within 5000 ms of animation time")
+        // Yield between short frame batches so native dismissal notifications run.
+        // A wall-paced wait can exhaust its deadline while legacy rendering has
+        // delivered only a fraction of the original animation-time allowance.
+        while (true) {
+            val returned = rule.runOnUiThread {
+                repeat(8) {
+                    if (!anchor.hidden && !anchor.modalPresent) return@runOnUiThread true
+                    rule.mainClock.advanceTimeByFrame()
+                    if (rule.mainClock.currentTime - virtualStart > 5000) {
+                        throw ComposeTimeoutException("Glass return did not finish within 5000 ms of animation time")
+                    }
                 }
-                false
+                !anchor.hidden && !anchor.modalPresent
             }
+            if (returned) break
         }
     } catch (failure: ComposeTimeoutException) {
         // ComposeTimeoutException derives directly from Throwable, not Exception.
