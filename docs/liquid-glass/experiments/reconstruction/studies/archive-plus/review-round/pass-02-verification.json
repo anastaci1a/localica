@@ -1,0 +1,178 @@
+{
+  "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+  "candidate": {
+    "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+    "observations": {
+      "A": {
+        "glass": {
+          "pixels": 188771,
+          "rmse": 5.843130588531494,
+          "mae": 3.8693673610687256,
+          "opponent_chroma_rmse": 0.6442244648933411
+        },
+        "rim": {
+          "pixels": 61248,
+          "rmse": 8.813648223876953,
+          "mae": 5.903055191040039,
+          "opponent_chroma_rmse": 0.7896908521652222
+        },
+        "shadow": 11.46944201723165
+      }
+    }
+  },
+  "fixed_grid": 4,
+  "diagnostic_grid": 8,
+  "diagnostic_scores": {
+    "train": {
+      "pixels": 141761,
+      "rmse": 5.904478073120117,
+      "mae": 3.8059370517730713,
+      "opponent_chroma_rmse": 0.6520757079124451
+    },
+    "held_blocks": {
+      "pixels": 47010,
+      "rmse": 5.64052677154541,
+      "mae": 4.056214332580566,
+      "opponent_chroma_rmse": 0.6201161742210388
+    },
+    "all_glass": {
+      "pixels": 188771,
+      "rmse": 5.8398613929748535,
+      "mae": 3.8682641983032227,
+      "opponent_chroma_rmse": 0.6442650556564331
+    },
+    "rim": {
+      "pixels": 61248,
+      "rmse": 8.806953430175781,
+      "mae": 5.8995232582092285,
+      "opponent_chroma_rmse": 0.7897881269454956
+    },
+    "outer_rim": {
+      "pixels": 6172,
+      "rmse": 19.055770874023438,
+      "mae": 9.83599853515625,
+      "opponent_chroma_rmse": 1.0441839694976807
+    },
+    "interior": {
+      "pixels": 127523,
+      "rmse": 3.6374902725219727,
+      "mae": 2.8926713466644287,
+      "opponent_chroma_rmse": 0.561112105846405
+    },
+    "ssim": 0.9815970659255981,
+    "gradient_mae": 3.395718574523926,
+    "selection_loss": 0.0015020776947126827
+  },
+  "source_support": {
+    "all_emitted_subpixel_rays_inside_defined_image": true,
+    "margin_native_px": 34.00000000000001,
+    "bounds": [
+      [
+        474.625,
+        284.625
+      ],
+      [
+        1444.375,
+        844.375
+      ]
+    ],
+    "hidden_background_estimated": true,
+    "high_resolution": {
+      "output_scale": 4,
+      "samples_per_output_axis": 4,
+      "emitted_rays": 139059200,
+      "bounds": [
+        [
+          474.53125000000006,
+          284.53125
+        ],
+        [
+          1444.46875,
+          844.46875
+        ]
+      ],
+      "source_dimensions": [
+        1920,
+        1080
+      ],
+      "source_kernel_margin_native_px": 34.00000000000001,
+      "all_defined": true
+    }
+  },
+  "archived_baseline_max_difference": 0,
+  "gate": {
+    "accepted": true,
+    "epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+    "error_ratio": 0.995,
+    "observations": {
+      "A": {
+        "previous_error": 6.998512744608417,
+        "candidate_error": 6.870490597949865,
+        "required_error_max": 6.963520180885375,
+        "relative_reduction": 0.018292764667347305,
+        "milestone_passed": true,
+        "nonregression": {
+          "glass": true,
+          "shadow": true
+        },
+        "passed": true
+      }
+    },
+    "evidence": {
+      "visual_review": true,
+      "independent_replay": true,
+      "source_support": true
+    }
+  },
+  "limits": "Independent native replay and 8× convergence diagnostic; source and glyph hashes verified by tensor replay. Existing empirical inverse-map family; no identified thick physical lens or Apple rendering parity.",
+  "foreground": {
+    "archivebox": {
+      "rmse": 13.242044387461515,
+      "pixels": 29382
+    },
+    "plus": {
+      "rmse": 3.667139623528374,
+      "pixels": 21756
+    }
+  },
+  "visual_review": {
+    "reviewer": "primary agent",
+    "artifacts": [
+      "Fresh 4× full comparison",
+      "Fixed upper-rim and d-stroke crops"
+    ],
+    "result": "Accept incremental improvement; both local crop metrics and both foreground boxes improve.",
+    "remaining": [
+      "d-stroke curvature still differs from reference",
+      "Generated shadow width remains provisional",
+      "Estimated hidden source and approximate archive vector remain limitations"
+    ]
+  },
+  "qualification": "Second verified toolbar improvement in this round; two starts and bounded settlement count as one study.",
+  "study": {
+    "changed_indices": [
+      4,
+      5,
+      6
+    ],
+    "previous_coefficients": [
+      0.4878329850763419,
+      0.1286226062453273,
+      0.0011939158137037609
+    ],
+    "new_coefficients": [
+      0.4906890136980095,
+      0.15007838846353588,
+      -0.03588814119199657
+    ],
+    "bounds_on_deltas": [
+      -0.04,
+      0.04
+    ],
+    "initial_starts": 2,
+    "initial_evaluations_per_start": 180,
+    "settlement_evaluations": 37,
+    "settlement_local_convergence": true,
+    "settlement_changed_pixels": false
+  }
+}

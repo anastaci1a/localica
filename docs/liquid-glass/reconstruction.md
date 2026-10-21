@@ -39,13 +39,13 @@ Each half retains 1920 × 1080 pixels.
 
 ## Archive and plus toolbar
 
-Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710); uncovered text at 12:00. Review revision 1 uses a continuous crowned footprint, normal displacement and tangential compression. Weighted RMS error decreases **1.48%** against the frozen earlier calibration.
+Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710); uncovered text at 12:00. Review revision 2 refines three inner normal-profile coefficients in the same crowned-footprint model. Weighted RMS error decreases **1.83%** from revision 1, with glass, exterior and foreground checks passing.
 
 ![Apple archive/plus toolbar and current reconstruction](assets/match-regular.png)
 
 - One clean background feeds the lens and exterior; the hidden paper region is estimated. A generated neutral Gaussian shadow replaces the earlier copied exterior context. Its width reaches the chosen bound, so the shadow tail remains provisional.
 - The plus uses an original SF Symbols vector. The archive is a symmetric rounded outline trace, an approximation to the original symbol. Both are independently rendered; no screenshot glyph pixels are pasted. Glass scoring still excludes their fixed boxes, and foreground errors are reported separately.
-- [Model and equations](recreation-models.md#toolbar-normal-displacement-and-tangential-compression) · [Recipe](experiments/reconstruction/studies/archive-plus/review-round/pass-01.json) · [Independent replay](experiments/reconstruction/studies/archive-plus/review-round/pass-01-verification.json) · [Native scores](experiments/reconstruction/studies/archive-plus/review-round/pass-01-scores.json).
+- [Model and equations](recreation-models.md#toolbar-normal-displacement-and-tangential-compression) · [Recipe](experiments/reconstruction/studies/archive-plus/review-round/pass-02.json) · [Independent replay](experiments/reconstruction/studies/archive-plus/review-round/pass-02-verification.json) · [Native scores](experiments/reconstruction/studies/archive-plus/review-round/pass-02-scores.json).
 - The final `d` stroke remains too straight, and underside reflections/lighting still differ. This empirical image field is not an identified physical lens or Apple shader. No second observed background is verified yet.
 
 <details>
@@ -55,7 +55,7 @@ Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc20
 
 ![Refracted d-stroke comparison with Apple on the left](assets/toolbar-d-stroke-current.png)
 
-These fixed-position crops use the current 4× render. Their local differences remain visible even when the overall metric improves.
+These fixed-position crops use the current 4× render. Glass RMSE decreases from 9.023 to 8.964 in the upper rim and from 3.739 to 3.110 around the `d`; these are [local diagnostics](experiments/reconstruction/studies/archive-plus/review-round/pass-02-crops.json), not additional acceptance gates.
 
 </details>
 
@@ -355,7 +355,7 @@ Historical experiment counts below include rejected proposals, ties and improvem
 | Scene | Glass RMSE | Rim RMSE | Interior RMSE | Withheld-block RMSE | SSIM |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Playback — most polished | 8.077 | 11.148 | 2.626 | 8.368 | 0.9727 |
-| Archive / plus, review 1 | 6.045 | 8.832 | 4.076 | 5.936 | 0.9812 |
+| Archive / plus, review 2 | 5.843 | 8.814 | 3.637 | 5.645 | 0.9816 |
 | Active slider | 7.227 | 8.850 | 6.566 | 7.445 | 0.9718 |
 | Regular light | 1.532 | 2.894 | 0.578 | 1.544 | 0.9991 |
 | Regular dark | 0.871 | 1.664 | 0.298 | 0.886 | 0.9997 |
