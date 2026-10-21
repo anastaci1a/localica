@@ -136,6 +136,10 @@ Frame A: 0 seconds. Frame B: 6.033 seconds. Cover art is a separate high-resolut
 
 ### Compact mini-player
 
+Current round: **1/3** verified passes. A shared rim-width/material update changes native E A4.989875→4.989872 (tiny)/B4.834120→4.833048. All ten glyph/artwork guards hold; artwork and exterior errors are unchanged. Frozen sources fully support the original emitted and scored subrays.
+
+[Current recipe](experiments/reconstruction/studies/music-mini-compact-vector/review-round/pass-01.json) · [Independent verification](experiments/reconstruction/studies/music-mini-compact-vector/review-round/pass-01-verification.json). Motion below remains the prior calibration until this round finishes.
+
 Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback component. The exterior mask remains fixed while the silhouette is refined; it cannot move to conceal shadow error.
 
 [![Compact mini-player, background A: Apple left, reconstruction right](assets/study-music-mini-compact-vector-paired-a.png)](assets/study-music-mini-compact-vector-paired-a.png)

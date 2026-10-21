@@ -304,3 +304,7 @@ The [Search recipe](experiments/reconstruction/studies/music-search-vector/revie
 Replay: `python vector_revision.py INPUTS RECORD OUTPUT` with either linked recipe and the original private a/b source, target, known masks and SVGs. The command checks case, source and vector hashes. Unknown exterior uses nearest defined RGB for presentation only; no photographed shadow or foreground is copied.
 
 For final figures add `--high-quality` (1080px per side). Moving exports accept `extended_media.py INPUT --width 1080`; sampling uses a binary integer scale above the requested size before downsampling. Original native scoring and default media commands are unchanged.
+
+### Compact mini-player revision
+
+The [current Compact recipe](experiments/reconstruction/studies/music-mini-compact-vector/review-round/pass-01.json) refines existing rim lighting and shared material; its map, blur, SVGs and separate catalogue artwork stay fixed. Replay with `python vector_revision.py INPUTS studies/music-mini-compact-vector/review-round/pass-01.json OUTPUT`. INPUTS contains the original frozen a/b cases, source/target masks, SVGs and independently hashed artwork. The compositor accepts declared vectors and separately hashed catalogue content; screenshot-derived foregrounds remain excluded.
