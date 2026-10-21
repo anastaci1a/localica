@@ -360,7 +360,11 @@
     ],
     "metric": "Original native glass/rim masks and actual vector foreground ROI; historical exterior-only shadow mask retained. Previews are 720p-sized, never used as scoring inputs."
   },
-  "gate": {
+  "limits": "Native scores unchanged by preview size. Same two observed backdrops/source/model, not independent device generalization. New figures use source and generated shadow, plus exact reusable SVG shape; no reference shadow copied.",
+  "visual_review": true,
+  "accepted": true,
+  "scope": "Independent pixel-exact replay, emitted-source verification, both 2x visual comparisons inspected. Historical shadow guard reused analytically because shape/shadow/source are fixed; no new shadow render claim.",
+  "pre_visual_gate": {
     "accepted": false,
     "epoch": "7941436123b8ebec59946b4448e20e6bbe4c88aff4e3b44d30b41695ecf61f5c",
     "policy": "nonregressive",
@@ -401,8 +405,45 @@
       "source_support": true
     }
   },
-  "limits": "Native scores unchanged by preview size. Same two observed backdrops/source/model, not independent device generalization. New figures use source and generated shadow, plus exact reusable SVG shape; no reference shadow copied.",
-  "visual_review": true,
-  "accepted": true,
-  "scope": "Independent pixel-exact replay, emitted-source verification, both 2x visual comparisons inspected. Historical shadow guard reused analytically because shape/shadow/source are fixed; no new shadow render claim."
+  "gate": {
+    "accepted": true,
+    "epoch": "7941436123b8ebec59946b4448e20e6bbe4c88aff4e3b44d30b41695ecf61f5c",
+    "policy": "nonregressive",
+    "error_ratio": 1.0,
+    "observations": {
+      "A": {
+        "previous_error": 7.230750318913977,
+        "candidate_error": 7.228837526402458,
+        "required_error_max": 7.230750318913977,
+        "relative_reduction": 0.0002645358264570241,
+        "milestone_passed": true,
+        "strict_improvement": true,
+        "nonregression": {
+          "glass": true,
+          "foreground": true,
+          "shadow": true
+        },
+        "passed": true
+      },
+      "B": {
+        "previous_error": 7.124124455595674,
+        "candidate_error": 7.122049651962506,
+        "required_error_max": 7.124124455595674,
+        "relative_reduction": 0.00029123629803218254,
+        "milestone_passed": true,
+        "strict_improvement": true,
+        "nonregression": {
+          "glass": true,
+          "foreground": true,
+          "shadow": true
+        },
+        "passed": true
+      }
+    },
+    "evidence": {
+      "visual_review": true,
+      "independent_replay": true,
+      "source_support": true
+    }
+  }
 }
