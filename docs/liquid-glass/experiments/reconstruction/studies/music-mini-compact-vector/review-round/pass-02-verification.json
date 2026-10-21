@@ -1,0 +1,144 @@
+{
+  "native_replay": true,
+  "visual_review": true,
+  "accepted": true,
+  "observations": [
+    {
+      "observation": "a",
+      "previous": {
+        "glass": {
+          "pixels": 83012,
+          "rmse": 4.370216369628906
+        },
+        "rim": {
+          "pixels": 31757,
+          "rmse": 6.199373722076416
+        },
+        "held": {
+          "pixels": 21209,
+          "rmse": 4.496880531311035
+        },
+        "interior": {
+          "pixels": 51255,
+          "rmse": 2.6683359146118164
+        },
+        "loss": 24.898824145952197,
+        "E": 4.989872157275395,
+        "foreground_mse": {
+          "jupiter.jpg": 1802.8433133848011,
+          "title.svg": 413.3821669500321,
+          "artist.svg": 13.200667555793189,
+          "play.svg": 64.97493572824169,
+          "forward.svg": 150.10429279063828
+        },
+        "exterior": {
+          "pixels": 31956,
+          "rmse": 4.954218705118386
+        }
+      },
+      "candidate": {
+        "glass": {
+          "pixels": 83012,
+          "rmse": 4.3695149421691895
+        },
+        "rim": {
+          "pixels": 31757,
+          "rmse": 6.197898864746094
+        },
+        "held": {
+          "pixels": 21209,
+          "rmse": 4.49524450302124
+        },
+        "interior": {
+          "pixels": 51255,
+          "rmse": 2.668597459793091
+        },
+        "loss": 24.889047682174144,
+        "E": 4.988892430407189,
+        "foreground_mse": {
+          "jupiter.jpg": 1802.8430711477995,
+          "title.svg": 413.37720109149814,
+          "artist.svg": 13.20065052350401,
+          "play.svg": 64.97489030880388,
+          "forward.svg": 150.09487582719885
+        },
+        "exterior": {
+          "pixels": 31956,
+          "rmse": 4.954218705118386
+        }
+      },
+      "native_max_difference": 0
+    },
+    {
+      "observation": "b",
+      "previous": {
+        "glass": {
+          "pixels": 83012,
+          "rmse": 4.3235859870910645
+        },
+        "rim": {
+          "pixels": 31757,
+          "rmse": 5.851772785186768
+        },
+        "held": {
+          "pixels": 21209,
+          "rmse": 4.281948566436768
+        },
+        "interior": {
+          "pixels": 51255,
+          "rmse": 3.0097992420196533
+        },
+        "loss": 23.3583504702749,
+        "E": 4.833047741361025,
+        "foreground_mse": {
+          "jupiter.jpg": 1901.9035917241126,
+          "title.svg": 362.18246980570257,
+          "artist.svg": 19.895269376866054,
+          "play.svg": 64.94619279401377,
+          "forward.svg": 153.31376652466133
+        },
+        "exterior": {
+          "pixels": 31956,
+          "rmse": 4.243026628824928
+        }
+      },
+      "candidate": {
+        "glass": {
+          "pixels": 83012,
+          "rmse": 4.321903228759766
+        },
+        "rim": {
+          "pixels": 31757,
+          "rmse": 5.849144458770752
+        },
+        "held": {
+          "pixels": 21209,
+          "rmse": 4.279548168182373
+        },
+        "interior": {
+          "pixels": 51255,
+          "rmse": 3.0090506076812744
+        },
+        "loss": 23.338940533005438,
+        "E": 4.831039280838589,
+        "foreground_mse": {
+          "jupiter.jpg": 1901.9035917241126,
+          "title.svg": 362.18240924645215,
+          "artist.svg": 19.89027702366002,
+          "play.svg": 64.94458040397149,
+          "forward.svg": 153.3030778169632
+        },
+        "exterior": {
+          "pixels": 31956,
+          "rmse": 4.243026628824928
+        }
+      },
+      "native_max_difference": 0
+    }
+  ],
+  "source_proof": "Only rim/thin lighting widths and material differ from verified input baseline. Source coordinates, kernels and emitted grid are unchanged; original3sigma whole/all-scored proofs transfer. No repeated ray probe claimed.",
+  "code_note": "Current optional target-observation-mask constructor defaults to original known.png for these unchanged cases; native pixels and every original guard recover EXACTLY despite source-code digest change.",
+  "limits": "A improvement tiny; B measurable. Artwork and source assignments remain approximate observations; no Apple parity claim.",
+  "round_pass": 2,
+  "visual_limits": "Both1080-width candidates inspected; no new artifact. Existing model/source/artwork uncertainties remain."
+}
