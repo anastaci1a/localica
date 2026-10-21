@@ -29,7 +29,12 @@ import io.github.anastaci1a.localica.navigation.BrowseRoute
 
 private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: GraphicsLayer)
 
-internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0)
+internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0) {
+    // LazyGrid places items on integer pixels but retains fractional scroll deltas.
+    // Quantize the absolute target once; feeding its residual back each frame dithers.
+    fun correction(itemTop: Int, itemHeight: Int): Float =
+        (itemTop - (top - itemHeight * fraction).roundToInt()).toFloat()
+}
 
 @Stable
 internal class BrowsePinchMotion {

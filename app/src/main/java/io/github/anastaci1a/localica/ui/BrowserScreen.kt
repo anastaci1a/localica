@@ -333,7 +333,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             else -> layout.visibleItemsInfo.firstOrNull {
                                 it.key == anchor.key && it.index == index + 1 && it.size.height > 0
                             }?.let {
-                                scrollBy(it.offset.y + it.size.height * anchor.fraction - anchor.top)
+                                scrollBy(anchor.correction(it.offset.y, it.size.height))
                             }
                         }
                     }
@@ -550,8 +550,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (unclaimed) latestUserScroll()
         }
     }
-    LaunchedEffect(playbackFollow.request) {
-        val request = playbackFollow.request ?: return@LaunchedEffect
+    // Bind only the request that keyed this effect. The observation SideEffect can
+    // publish the first request before a previously scheduled null-key effect runs.
+    // Letting that effect borrow it would retire the same request on key replacement.
+    val playbackRequest = playbackFollow.request
+    LaunchedEffect(playbackRequest) {
+        val request = playbackRequest ?: return@LaunchedEffect
         if (!playbackFollow.bind(request, kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]!!)) return@LaunchedEffect
         fun owns() = playbackFollow.request === request && latestFollowEligible &&
             request.owner === latestFollowOwner && modalOwner?.blocked != true &&
@@ -629,17 +633,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     } while (event.changes.any { it.pressed })
                 } finally { listContact = false }
             }
-        }.onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width }
-            .selectionPanelRelease(session, route.key,
-                enabled && !queryPending && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) { position ->
-                val item = reorder.hit(position)
-                // Dots and the row share selection-on-hold. Both retain the new
-                // action panel until this pointer releases.
-                item?.row != null
-            }
-            .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion,
-                displayedStyle.presentation == Presentation.List, acquisitionReady = !queryPending,
-                sourceOrder = dragSourceOrder, routeKey = route, commit = moveSongs)) {
+        }.onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged {
+            reorder.viewportHeight = it.height; reorder.viewportWidth = it.width
+        }) {
             val viewportWidth = constraints.maxWidth
             val columns = galleryColumns(displayedStyle.presentation, with(density) { viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val cellGeometry = BrowseCellGeometry(columns)
@@ -666,6 +662,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 viewportWidth, constraints.maxHeight, if (showFilters || showSearchPill) pillSlotHeight else 0.dp,
                 popupDismiss == null && displayedStyle.extraInfo != ExtraInfo.None, artistOnlyLoading)
             else SelectionViewport(Modifier.fillMaxSize()
+                // This host shares the viewport's origin and size, but not the hit
+                // paths of floating Return/Search/utility controls layered above it.
+                // A hold on those controls must never select the obscured song.
+                .selectionPanelRelease(session, route.key,
+                    enabled && !queryPending && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) { position ->
+                    // Dots and rows share selection-on-hold; the panel waits for release.
+                    reorder.hit(position)?.row != null
+                }
+                .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion,
+                    displayedStyle.presentation == Presentation.List, acquisitionReady = !queryPending,
+                    sourceOrder = dragSourceOrder, routeKey = route, commit = moveSongs)
                 // Floating controls sample the finished scrolling scene, including
                 // its fade and selection/overscroll transforms, never the raw grid.
                 .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, if (artDetail) collectionSource else surroundingBackdrop)

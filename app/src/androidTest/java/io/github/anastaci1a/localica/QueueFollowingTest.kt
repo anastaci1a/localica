@@ -9,8 +9,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowsePreferences
 import io.github.anastaci1a.localica.browse.BrowseStyle
@@ -300,6 +302,53 @@ class QueueFollowingTest {
         currentReturn.assertDoesNotExist()
         compose.runOnIdle { fixture.publish(5) }
         awaitCurrent(5)
+        currentReturn.assertDoesNotExist()
+    }
+
+    @Test fun holdingTheCurrentReturnNeverSelectsOrDragsTheObscuredSong() {
+        val fixture = fixture()
+        list.performScrollToIndex(30)
+        val before = position()
+        var held = false
+        try {
+            // Positive control: the same injected hold really acquires a row, so the
+            // floating-control check cannot pass merely because its timeout never ran.
+            row(30).performTouchInput { down(center); held = true; advanceEventTime(700); moveTo(center) }
+            compose.runOnIdle {
+                assertTrue(fixture.selection.active)
+                assertEquals(listOf(entries[30].id), fixture.selection.entries.map { it.row.id })
+                assertNull(fixture.dragHost.state?.drag)
+            }
+            compose.onRoot().performTouchInput { cancel(); held = false }
+            compose.runOnIdle { fixture.selection.clear() }
+            assertEquals(before, position(), 0f)
+
+            val buttonBounds = currentReturn.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val coveredSong = compose.onAllNodes(SemanticsMatcher("Queue occurrence") {
+                it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("media-follow-entry-") == true
+            }).fetchSemanticsNodes().map { it.boundsInRoot.intersect(buttonBounds) }
+                .filter { it.width > 8f && it.height > 8f }.maxByOrNull { it.height }
+            assertNotNull("The hold must exercise a real song behind the floating control", coveredSong)
+            val contact = requireNotNull(coveredSong).center - buttonBounds.topLeft
+            currentReturn.performTouchInput { down(contact); held = true; advanceEventTime(700); moveTo(contact) }
+            compose.runOnIdle {
+                assertFalse("The floating control is not an underlying row hold", fixture.selection.active)
+                assertTrue(fixture.selection.entries.isEmpty())
+                assertNull(fixture.dragHost.state?.drag)
+            }
+            currentReturn.assertIsDisplayed()
+            assertEquals(before, position(), 0f)
+            currentReturn.performTouchInput { moveBy(Offset(0f, -40f)); cancel(); held = false }
+            compose.runOnIdle {
+                assertFalse(fixture.selection.active)
+                assertNull(fixture.dragHost.state?.drag)
+            }
+            assertEquals("A cancelled return-control drag cannot scroll the list", before, position(), 0f)
+        } finally {
+            if (held) compose.onRoot().performTouchInput { cancel() }
+        }
+        pressCurrentReturn()
+        awaitCurrent(45)
         currentReturn.assertDoesNotExist()
     }
 
@@ -597,11 +646,21 @@ class QueueFollowingTest {
     @Test fun anExplicitTopRequestDetachesWithoutChangingTheQueueOrItsQuery() {
         val fixture = fixture()
         compose.runOnIdle { fixture.topRequest++ }
-        compose.waitUntil(5000) { position() == 0f }
+        // With quick search disabled the notice is zero-height. LazyGrid skips that
+        // slot at the top, so its semantic position starts at index 1, not index 0.
+        awaitCurrent(0)
+        val rowInset = with(compose.density) { 4.dp.roundToPx() }
+        fun assertFirstRowAtTop() {
+            assertEquals(list.fetchSemanticsNode().boundsInRoot.top + rowInset,
+                row(0).fetchSemanticsNode().boundsInRoot.top, 0.01f)
+        }
+        assertFirstRowAtTop()
+        val top = position()
         currentReturn.assertIsDisplayed()
         compose.runOnIdle { fixture.publish(95) }
         compose.waitForIdle()
-        assertEquals(0f, position(), 0f)
+        assertEquals(top, position(), 0f)
+        assertFirstRowAtTop()
         compose.runOnIdle { assertEquals(route, fixture.route); assertEquals(0, fixture.routeChanges) }
         currentReturn.performClick()
         awaitCurrent(95)

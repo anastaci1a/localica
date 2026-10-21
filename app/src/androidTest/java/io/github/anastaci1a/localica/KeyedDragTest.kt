@@ -15,6 +15,7 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.roundToInt
 
 /** A non-song caller proves transaction and lifted rendering do not require browser models. */
 class KeyedDragTest {
@@ -147,9 +148,14 @@ class KeyedDragTest {
     @Test fun standaloneCancelRetainsItsBottomMargin() {
         fixture()
         val margin = with(compose.density) { 20.dp.toPx() }
+        val offset = (-margin).roundToInt()
+        val drawn = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
         compose.runOnIdle {
             assertEquals(margin, reorder.cancelBottom, 0.01f)
-            assertEquals(reorder.viewportHeight - margin - reorder.cancelRadius, reorder.cancelCenter.y, 0.01f)
+            // Placement and hit testing share IntOffset, including negative half-pixel ties.
+            assertEquals(offset, reorder.cancelOffsetY)
+            assertEquals(reorder.viewportHeight + offset - reorder.cancelRadius, reorder.cancelCenter.y, 0.01f)
+            assertEquals((reorder.viewportHeight + offset).toFloat(), drawn.bottom, 0.01f)
         }
     }
 
