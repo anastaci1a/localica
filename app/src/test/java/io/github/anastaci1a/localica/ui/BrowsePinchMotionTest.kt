@@ -28,6 +28,51 @@ class BrowsePinchMotionTest {
         assertNull(motion.visualSource)
     }
 
+    @Test fun bitmapLeaseEndsExactlyOnceOnHandoffFailureOrDisposal() {
+        for (finish in listOf<(BrowsePinchMotion) -> Unit>({ it.clearTransaction() }, { it.failCapture() }, { it.dispose() })) {
+            var released = 0
+            val motion = BrowsePinchMotion().apply {
+                source = BrowseStyle(); held = true
+                releaseArtwork = { released++ }
+            }
+            finish(motion)
+            motion.clearTransaction()
+            assertEquals(1, released)
+            assertNull(motion.releaseArtwork)
+        }
+    }
+
+    @Test fun modalRollbackRetiresGenerationButKeepsArtworkThroughTwoFrames() = runBlocking {
+        val clock = androidx.compose.runtime.BroadcastFrameClock()
+        val scope = kotlinx.coroutines.CoroutineScope(coroutineContext + clock)
+        var released = 0
+        val motion = BrowsePinchMotion().apply {
+            source = BrowseStyle(); releaseArtwork = { released++ }
+        }
+        val generation = motion.transaction
+        motion.releaseArtworkAfterHandoff(scope)
+        motion.clearTransaction()
+        assertFalse(motion.owns(generation))
+        assertEquals(0, released)
+        clock.sendFrame(1L); kotlinx.coroutines.yield()
+        assertEquals("Rollback remount still needs the source bitmap on frame one", 0, released)
+        clock.sendFrame(2L); kotlinx.coroutines.yield()
+        assertEquals(1, released)
+        motion.clearTransaction()
+        assertEquals(1, released)
+    }
+
+    @Test fun cancelledRollbackScopeStillReleasesTheDetachedLease() = runBlocking {
+        val owner = Job()
+        val clock = androidx.compose.runtime.BroadcastFrameClock()
+        val scope = kotlinx.coroutines.CoroutineScope(owner + clock)
+        var released = 0
+        val motion = BrowsePinchMotion().apply { releaseArtwork = { released++ } }
+        motion.releaseArtworkAfterHandoff(scope)
+        owner.cancel(); owner.join()
+        assertEquals(1, released)
+    }
+
     @Test fun handoffClearsBothDestinationsAndAnchorState() {
         val motion = BrowsePinchMotion().apply {
             source = BrowseStyle(listSize = ListSize.Compact)

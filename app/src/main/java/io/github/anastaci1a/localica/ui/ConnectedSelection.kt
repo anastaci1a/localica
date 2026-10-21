@@ -38,17 +38,20 @@ internal val LocalSelectionScene = staticCompositionLocalOf<SelectionScene?> { n
 
 /** Scrolling content and its lenses share a single clip, fade and overscroll transform. */
 @Composable
-internal fun SelectionViewport(modifier: Modifier = Modifier, content: @Composable (OverscrollEffect?) -> Unit) {
+internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
+    content: @Composable (OverscrollEffect?) -> Unit) {
     val overscroll = rememberOverscrollEffect()
     val events = remember(overscroll) { overscroll?.withoutVisualEffect() }
-    ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier)) {
+    ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier),
+        contentDrawing = contentDrawing) {
         content(events)
     }
 }
 
 /** Record content once and keep it sharp above the separately refracted backing. */
 @Composable
-internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
+    content: @Composable () -> Unit) {
     val scene = remember { SelectionScene() }
     val contentLayer = rememberGraphicsLayer()
     val transitionLayer = rememberGraphicsLayer()
@@ -182,7 +185,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
                 drawSelectionTransition(contentLayer, transitionLayer, visibilityLayer)
             }
 
-        }) { content() }
+        }.then(contentDrawing)) { content() }
     }
 }
 

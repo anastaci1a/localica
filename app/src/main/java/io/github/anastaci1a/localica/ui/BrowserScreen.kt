@@ -669,8 +669,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, if (artDetail) collectionSource else surroundingBackdrop)
                     .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
                 .graphicsLayer { alpha = if (artDetail || (skeletonReveal && !queryPending)) 1f else browse.reveal.value }
-                .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier)
-                .pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
+                .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier),
+                contentDrawing = Modifier.pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
                 .nestedScroll(userScrollConnection)
@@ -762,6 +762,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             val sweep = if (!artDetail && !route.search) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
                                 .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
                             alpha = sweep * (reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f)
+                            pinchMotion.itemAlpha[item.key] = alpha
                         }) {
                         DisposableEffect(item.key, reorder) { onDispose { reorder.itemCoordinates.remove(item.key) } }
                         val menuAnchor = rememberGlassAnchor()

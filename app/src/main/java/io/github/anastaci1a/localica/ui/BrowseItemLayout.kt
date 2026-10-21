@@ -12,6 +12,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LookaheadScope
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,8 +31,15 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     val gallery = style.presentation != Presentation.List
     val from = pinch?.visualSource
     val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
-    val measureEndpoints = if (from != null) rememberBrowsePinchMeasure(item, from, style, requireNotNull(pinch), geometry,
-        itemIndex, trackNumber, showInformation, inheritedInformation) else null
+    val measureItem = rememberBrowseItemMeasure(item, trackNumber, showInformation, inheritedInformation, itemIndex)
+    val foreground = androidx.compose.material3.LocalContentColor.current
+    val secondary = MaterialTheme.colorScheme.onSurfaceVariant
+    if (pinch != null) {
+        SideEffect { pinch.itemContent[item.key] = BrowsePinchContent(measureItem, foreground, secondary) { loadingReveal?.alpha ?: 1f } }
+        DisposableEffect(pinch, item.key) { onDispose { pinch.itemContent.remove(item.key) } }
+    }
+    val measureEndpoints = if (from != null) rememberBrowsePinchMeasure(measureItem, item.key,
+        from, style, requireNotNull(pinch), geometry, itemIndex) else null
     val titleParagraph = remember { BrowsePinchParagraph() }
     val informationParagraph = remember { BrowsePinchParagraph() }
     // Read by the graphics layer: measuring an endpoint updates its
@@ -50,17 +60,24 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     val titleSize by animateFloatAsState(style.browseTitleSize(geometry.columns).toFloat(), tween(duration), label = "Browse title size")
     val titleLine by animateFloatAsState(style.browseTitleLine(geometry.columns).toFloat(), tween(duration), label = "Browse title line")
     fun numbered(value: BrowseStyle) = value.trackNumberLabel(trackNumber, itemIndex) != null
-    val numberAlpha = if (from == null) { if (numbered(style)) 1f else 0f } else
-        (if (numbered(from)) 1f else 0f) + ((if (numbered(style)) 1f else 0f) - (if (numbered(from)) 1f else 0f)) * progress
+    val numberAlpha = browseViewAlpha(numbered(style), from?.let(::numbered), progress, reducedMotion)
+    fun artwork(value: BrowseStyle) = !numbered(value) && (value.presentation != Presentation.List ||
+        value.listSize !in setOf(ListSize.Small, ListSize.Smallest))
+    val artworkAlpha = browseViewAlpha(artwork(style), from?.let(::artwork), progress, reducedMotion)
+    val menuAlpha = browseViewAlpha(!gallery, from?.let { it.presentation == Presentation.List }, progress, reducedMotion)
+    val incomingAlpha = if (from != null && item.key !in requireNotNull(pinch).bounds)
+        browseViewVisibility(false, true, progress) else 1f
     fun Modifier.morph() = if (from != null) this else animateBounds(lookahead, boundsTransform = { _, _ -> tween(duration) })
-    Layout(modifier = Modifier.fillMaxWidth(), content = {
+    Layout(modifier = Modifier.fillMaxWidth().then(if (pinch != null) Modifier.retainPinchText(item.key, pinch) else Modifier)
+        .graphicsLayer { alpha = incomingAlpha }, content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
             item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).testTag("browse-art-${item.key}")) {
             if (numberAlpha > 0f) Text(style.trackNumberLabel(trackNumber, itemIndex) ?: from?.trackNumberLabel(trackNumber, itemIndex).orEmpty(), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-            if (numberAlpha < 1f)
-                MediaArtwork(item.coverUris, Modifier.fillMaxSize().graphicsLayer {
-                    alpha = (1f - numberAlpha) * (loadingReveal?.alpha ?: 1f)
+            if (artworkAlpha > 0f || artwork(style) || from?.let(::artwork) == true)
+                MediaArtwork(item.coverUris, Modifier.fillMaxSize()
+                    .then(if (pinch != null) Modifier.retainPinchArtwork(item.key, pinch) else Modifier).graphicsLayer {
+                    alpha = artworkAlpha * incomingAlpha * (loadingReveal?.alpha ?: 1f)
                     shape = RoundedCornerShape(browseLoadingArtCorner(artCorner.floatValue, size.minDimension,
                         artist, artistOnlyLoading, loadingReveal?.alpha ?: 1f))
                     clip = true
@@ -80,7 +97,10 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                 color = if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified,
                 style = MaterialTheme.typography.bodySmall, maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis) }
         }
-        Box(Modifier.reveal().testTag("browse-menu-${item.key}")) { menu(!gallery) }
+        Box(Modifier.morph().reveal().graphicsLayer { alpha = menuAlpha }.then(if (gallery)
+            Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
+                awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
+            } else Modifier).testTag("browse-menu-${item.key}")) { menu(!gallery || menuAlpha > 0f) }
         if (loadingReveal != null) {
         Box(Modifier.artShape().testTag("browse-loading-art-${item.key}")) {
             BrowseLoadingShape(Modifier.fillMaxSize(), { 0f }) { 1f - (loadingReveal?.alpha ?: 1f) }

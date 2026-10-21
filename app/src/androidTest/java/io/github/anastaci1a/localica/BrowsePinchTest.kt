@@ -72,8 +72,12 @@ class BrowsePinchTest {
                 // Just beyond recognition, almost none of the visual morph has elapsed.
                 moveTo(0, Offset(x - 57.65f, y)); moveTo(1, Offset(x + 57.65f, y))
             }
+            var onsetFrame = 0
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
+                val frame = art.fetchSemanticsNode().boundsInRoot
+                assertEquals("No recognition-frame jump in the leading edge: ${onsetFrame}", beforeArt.left, frame.left, 3f)
+                assertEquals("No recognition-frame jump in cover scale: ${onsetFrame++}", beforeArt.width, frame.width, 3f)
                 list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == "List, Large"
             }
             compose.mainClock.advanceTimeBy(48)
