@@ -168,6 +168,30 @@ class PopupEnvelopeTest {
         }
     }
 
+    @Test fun verticalChoiceFacesMatchLiveCellsAcrossFontScalesAndFractionalDensity() {
+        var scale by mutableFloatStateOf(1f)
+        var width by mutableStateOf(180.dp)
+        var count by mutableIntStateOf(3)
+        val sizes = mutableMapOf<String, IntSize>()
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalDensity provides Density(2.625f, scale)) {
+                Column(Modifier.width(width).verticalScroll(rememberScrollState())) {
+                    val labels = listOf("Play next song", "Repeat queue", "Repeat song", "Stop here").take(count)
+                    Box(Modifier.fillMaxWidth().onSizeChanged { sizes["live"] = it }) {
+                        GlassChoices(labels, 0, horizontal = false) {}
+                    }
+                    Box(Modifier.fillMaxWidth().onSizeChanged { sizes["measurement"] = it }) {
+                        GlassChoicesMeasurement(labels, horizontal = false)
+                    }
+                }
+            }
+        } }
+        for (font in listOf(1f, 1.5f, 2f)) for (w in listOf(180.dp, 300.dp)) for (n in listOf(3, 4)) {
+            compose.runOnIdle { scale = font; width = w; count = n }
+            compose.runOnIdle { assertEquals("$n vertical cells at $font / $w", sizes["live"], sizes["measurement"]) }
+        }
+    }
+
     @Test fun mainAndQueueEnvelopesStayStableAcrossAllSupportedDraftsAndWindowChanges() {
         val main = io.github.anastaci1a.localica.navigation.BrowseRoute(io.github.anastaci1a.localica.navigation.MainTab.Library)
         val queue = io.github.anastaci1a.localica.navigation.BrowseRoute(
