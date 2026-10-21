@@ -60,6 +60,9 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     val titleSize by animateFloatAsState(style.browseTitleSize(geometry.columns).toFloat(), tween(duration), label = "Browse title size")
     val titleLine by animateFloatAsState(style.browseTitleLine(geometry.columns).toFloat(), tween(duration), label = "Browse title line")
     fun numbered(value: BrowseStyle) = value.trackNumberLabel(trackNumber, itemIndex) != null
+    val numberLabel = style.trackNumberLabel(trackNumber, itemIndex) ?: from?.trackNumberLabel(trackNumber, itemIndex)
+    var retainedNumberLabel by remember(item.key) { mutableStateOf(numberLabel) }
+    SideEffect { if (numberLabel != null) retainedNumberLabel = numberLabel }
     val numberAlpha = browseViewAlpha(numbered(style), from?.let(::numbered), progress, reducedMotion)
     fun artwork(value: BrowseStyle) = !numbered(value) && (value.presentation != Presentation.List ||
         value.listSize !in setOf(ListSize.Small, ListSize.Smallest))
@@ -72,7 +75,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         .graphicsLayer { alpha = incomingAlpha }, content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
             item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).testTag("browse-art-${item.key}")) {
-            if (numberAlpha > 0f) Text(style.trackNumberLabel(trackNumber, itemIndex) ?: from?.trackNumberLabel(trackNumber, itemIndex).orEmpty(), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
+            if (numberAlpha > 0f) Text(numberLabel ?: retainedNumberLabel.orEmpty(), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (artworkAlpha > 0f || artwork(style) || from?.let(::artwork) == true)
                 MediaArtwork(item.coverUris, Modifier.fillMaxSize()
