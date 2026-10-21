@@ -1,0 +1,43 @@
+{
+  "native_pixel_max_difference": 0,
+  "source_hashes_verified": true,
+  "changed_stages": [
+    "one shared exposure multiplier on existing material coefficients"
+  ],
+  "fixed_stages": [
+    "source",
+    "reference",
+    "radial map",
+    "source/output blur",
+    "icon geometry and color function"
+  ],
+  "domain": {
+    "method": "Analytic enclosure of every native/HQ query over entire output crop; 0<=radial displacement<=A, |r-a|<=max(r,A). Output blur reflects only already calculated crop pixels.",
+    "minimum_frame_margin_px": 61.08351572991296,
+    "source_kernel_3sigma_px": 2,
+    "passed": true
+  },
+  "candidate": {
+    "glass": 8.053853034973145,
+    "rim": 11.110833168029785,
+    "foreground": 3.2157627701031943,
+    "E": 9.079667846490835
+  },
+  "previous": {
+    "glass": 8.076703071594238,
+    "E": 9.107579832501536,
+    "foreground": 3.227502116944873
+  },
+  "native_replay": true,
+  "visual_review": {
+    "accepted": true,
+    "scope": "Incremental shared exposure change relative to the approved playback calibration; full 4x Apple/reconstruction comparison inspected.",
+    "remaining": [
+      "Inset outline/highlight and edge geometry still differ",
+      "Single reference only; photographic source registration and icon response remain conditional",
+      "Reference exterior shadow is not copied; this comparison omits an exterior shadow model"
+    ]
+  },
+  "accepted": true,
+  "qualification": "First verified pass in the short playback round, shared material exposure factor 1.005; not a recovered Apple pipeline."
+}
