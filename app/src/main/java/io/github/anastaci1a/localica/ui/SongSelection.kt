@@ -98,7 +98,7 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
     }
     GlassAlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("Add to playlists") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            GlassSearchField(name, { name = it }, "New playlist name", enabled = !saving,
+            GlassSearchField(name, { name = it }, "New playlist name", enabled = !saving, showSearchIcon = false,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }))
             if (duplicate) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
