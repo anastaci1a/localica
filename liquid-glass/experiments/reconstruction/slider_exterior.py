@@ -20,7 +20,9 @@ def generated(case,source,body,record):
    # Membership of the same polynomial oval; no nearest-point solve needed.
    coverage+=(oval_field(np.abs(x+dx).astype(float),np.abs(y+dy).astype(float),case['half'],case['oval'])[0]<=1)/16
    contact+=(oval_field(np.abs((x+dx)/sx).astype(float),np.abs((y+dy-oy)/sy).astype(float),case['half'],case['oval'])[0]<=1)/16
- p=record['parameters'];h=p['halo_opacity']*np.exp(-.5*(np.maximum(sd,0)/(p['halo_sigma_L']*L))**2)
+ p=record['parameters'];offset=p.get('halo_offset_y_L',0)
+ halo_sd=case_geometry(case,x,y-offset*L)[0] if offset else sd
+ h=p['halo_opacity']*np.exp(-.5*(np.maximum(halo_sd,0)/(p['halo_sigma_L']*L))**2)
  x0,y0,x1,y1=case['crop'];B=source[y0:y1,x0:x1];underlay=B*(1-p['contact_opacity']*contact[...,None])
  underlay=(1-h[...,None])*underlay+h[...,None]*(p['halo_tint_scale']*np.array(p['accent_rgb']))
  return body*coverage[...,None]+underlay*(1-coverage[...,None]),coverage,sd
