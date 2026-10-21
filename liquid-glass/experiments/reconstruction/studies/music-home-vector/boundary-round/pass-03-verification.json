@@ -1,0 +1,395 @@
+{
+  "previous": {
+    "observations": {
+      "A": {
+        "glass": {
+          "pixels": 15221,
+          "rmse": 5.862901210784912
+        },
+        "rim": {
+          "pixels": 8296,
+          "rmse": 7.3397040367126465
+        },
+        "held": {
+          "pixels": 2797,
+          "rmse": 6.786576747894287
+        },
+        "interior": {
+          "pixels": 6925,
+          "rmse": 3.319014072418213
+        },
+        "loss": 40.22290402915701,
+        "E": 6.342152949051056,
+        "shadow": {
+          "rmse": 4.125170049714442
+        },
+        "foreground": {
+          "rmse": 11.061939174094931
+        }
+      },
+      "B": {
+        "glass": {
+          "pixels": 15289,
+          "rmse": 9.222253799438477
+        },
+        "rim": {
+          "pixels": 8364,
+          "rmse": 12.069085121154785
+        },
+        "held": {
+          "pixels": 2804,
+          "rmse": 11.422968864440918
+        },
+        "interior": {
+          "pixels": 6925,
+          "rmse": 3.4412059783935547
+        },
+        "loss": 103.23382029738413,
+        "E": 10.160404534140564,
+        "shadow": {
+          "rmse": 4.798199223056427
+        },
+        "foreground": {
+          "rmse": 11.684537119166679
+        }
+      }
+    },
+    "epoch": "12bfd3bc898570fc83c2ce157e371926f984cfeab4fb06a1e63511e0bab0f5fe"
+  },
+  "candidate": {
+    "observations": {
+      "A": {
+        "glass": {
+          "pixels": 15221,
+          "rmse": 5.862900733947754
+        },
+        "rim": {
+          "pixels": 8296,
+          "rmse": 7.339701175689697
+        },
+        "held": {
+          "pixels": 2797,
+          "rmse": 6.7872419357299805
+        },
+        "interior": {
+          "pixels": 6925,
+          "rmse": 3.3190197944641113
+        },
+        "loss": 40.222887515813795,
+        "foreground": {
+          "rmse": 11.061939174094931
+        },
+        "shadow": {
+          "rmse": 4.125170049714442
+        },
+        "E": 6.3421516471788815
+      },
+      "B": {
+        "glass": {
+          "pixels": 15289,
+          "rmse": 9.222246170043945
+        },
+        "rim": {
+          "pixels": 8364,
+          "rmse": 12.069098472595215
+        },
+        "held": {
+          "pixels": 2804,
+          "rmse": 11.425029754638672
+        },
+        "interior": {
+          "pixels": 6925,
+          "rmse": 3.4411025047302246
+        },
+        "loss": 103.23381847698319,
+        "foreground": {
+          "rmse": 11.684537119166679
+        },
+        "shadow": {
+          "rmse": 4.798199223056427
+        },
+        "E": 10.16040444455747
+      }
+    },
+    "epoch": "12bfd3bc898570fc83c2ce157e371926f984cfeab4fb06a1e63511e0bab0f5fe"
+  },
+  "protocol": {
+    "cases": [
+      {
+        "id": "music-home-vector-a",
+        "category": "Detached selected navigation control with tinted foreground",
+        "radial": true,
+        "center": [
+          408,
+          673
+        ],
+        "half": [
+          89,
+          89
+        ],
+        "radius": 89,
+        "crop": [
+          290,
+          555,
+          525,
+          795
+        ],
+        "foreground": [
+          [
+            362,
+            625,
+            455,
+            720
+          ]
+        ],
+        "foreground_layers": [
+          {
+            "mode": "transmission",
+            "box": [
+              362,
+              625,
+              455,
+              720
+            ],
+            "vector_asset": "home.svg",
+            "vector_box": [
+              364.696765408755,
+              627.071705103172,
+              451.76616106500825,
+              716.7602002958461
+            ],
+            "vector_sha256": "59ae42b6317ff70d4e459b5ba183c50795ccdd130f41ab1f8d21fe8657838e40"
+          }
+        ],
+        "reference": {
+          "video": "music",
+          "seconds": 2.5,
+          "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+        },
+        "foreground_method": "Solid clean-traced SVG coverage, independently rasterized at each output resolution. Color/transmission applied separately. Fixed original glass mask is unchanged.",
+        "background": "Masked temporal translation mosaic with frozen observed-pixel confidence.",
+        "input_names": {
+          "source.png": "source-2.5.png",
+          "target.png": "target-2.5.png",
+          "known.png": "known-2.5.png"
+        },
+        "source_sha256": {
+          "source.png": "bc4e27432e64094d6868cc124eb0a41df0b0d455ea67ff763e375dac943b0ea4",
+          "target.png": "efffc64b8a6ee5b84f0bfc295369aad38db8531e4686674861074592fbee54de",
+          "known.png": "a2f32becc8c9f3b819da2f3a7c67eff1606bdce63ed1f5704a4883ad08dfd8e3",
+          "observed.png": "1ba65e1e7047a5ad47ed761cfca712b5dc093ca5e004a791c0da70d2bdf93e11"
+        },
+        "foreground_provenance": {
+          "kind": "clean symmetric vector trace",
+          "source": "Official Apple WWDC25 Music video",
+          "original_vector": false,
+          "collection": "Private localica-feedback/liquid-glass-icons/clean/home.svg"
+        },
+        "foreground_response": [
+          [
+            0.981852780258496,
+            0.5368761771654439,
+            1.026092263616352
+          ],
+          [
+            0.18322434212306798,
+            0.9999999999999986,
+            0.978065523818989
+          ],
+          [
+            0.4117126664496811,
+            0.9902138500957417,
+            1.0499884013005976
+          ]
+        ],
+        "continuation": {
+          "baseline": "music-home",
+          "additional_single_pass_minimum": 10,
+          "paired_pass_minimum": 20
+        },
+        "target_observation_mask": "observed.png",
+        "allow_estimated_background": true,
+        "source_observation_mask": "observed.png",
+        "background_estimate": "Nearest defined incident RGB extends the finite recovered mosaic beyond its observation domain. Original observed pixels remain bit-exact. This boundary assumption is not recovered Apple imagery, not an optical calibration, and may not match offscreen content."
+      },
+      {
+        "id": "music-home-vector-b",
+        "category": "Detached selected navigation control with tinted foreground",
+        "radial": true,
+        "center": [
+          408,
+          673
+        ],
+        "half": [
+          89,
+          89
+        ],
+        "radius": 89,
+        "crop": [
+          290,
+          555,
+          525,
+          795
+        ],
+        "foreground": [
+          [
+            362,
+            625,
+            455,
+            720
+          ]
+        ],
+        "foreground_layers": [
+          {
+            "mode": "transmission",
+            "box": [
+              362,
+              625,
+              455,
+              720
+            ],
+            "vector_asset": "home.svg",
+            "vector_box": [
+              364.696765408755,
+              627.071705103172,
+              451.76616106500825,
+              716.7602002958461
+            ],
+            "vector_sha256": "59ae42b6317ff70d4e459b5ba183c50795ccdd130f41ab1f8d21fe8657838e40"
+          }
+        ],
+        "reference": {
+          "video": "music",
+          "seconds": 2,
+          "url": "https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4"
+        },
+        "foreground_method": "Solid clean-traced SVG coverage, independently rasterized at each output resolution. Color/transmission applied separately. Fixed original glass mask is unchanged.",
+        "background": "Masked temporal translation mosaic with frozen observed-pixel confidence.",
+        "input_names": {
+          "source.png": "source-2.0.png",
+          "target.png": "target-2.0.png",
+          "known.png": "known-2.0.png"
+        },
+        "source_sha256": {
+          "source.png": "3d5bbe9809f082ebbfd34f0a589e1173b7f2d1f7d8d34a4132329db4c70555ed",
+          "target.png": "bf0e997fb546edd1c89ade9b227de2b0b13387cb70d249054bf3f8ff7430123d",
+          "known.png": "a2f32becc8c9f3b819da2f3a7c67eff1606bdce63ed1f5704a4883ad08dfd8e3",
+          "observed.png": "3ea34a68ee0ab03d82e310c4659742557d66d78bbcb38bcb6c8c5d2655ae8a54"
+        },
+        "foreground_provenance": {
+          "kind": "clean symmetric vector trace",
+          "source": "Official Apple WWDC25 Music video",
+          "original_vector": false,
+          "collection": "Private localica-feedback/liquid-glass-icons/clean/home.svg"
+        },
+        "foreground_response": [
+          [
+            0.981852780258496,
+            0.5368761771654439,
+            1.026092263616352
+          ],
+          [
+            0.18322434212306798,
+            0.9999999999999986,
+            0.978065523818989
+          ],
+          [
+            0.4117126664496811,
+            0.9902138500957417,
+            1.0499884013005976
+          ]
+        ],
+        "continuation": {
+          "baseline": "music-home",
+          "additional_single_pass_minimum": 10,
+          "paired_pass_minimum": 20
+        },
+        "target_observation_mask": "observed.png",
+        "allow_estimated_background": true,
+        "source_observation_mask": "observed.png",
+        "background_estimate": "Nearest defined incident RGB extends the finite recovered mosaic beyond its observation domain. Original observed pixels remain bit-exact. This boundary assumption is not recovered Apple imagery, not an optical calibration, and may not match offscreen content."
+      }
+    ],
+    "metric": "Original native glass/rim masks and actual vector foreground ROI; historical exterior-only shadow mask retained. Previews are 720p-sized, never used as scoring inputs."
+  },
+  "replay": [
+    {
+      "observation": "a",
+      "native_max_difference": 0,
+      "source_proof": "Pass1 emitted401451 computationally defined rays reused: input case/assets/geometry/kernel identical, only material and fixed foreground response change.",
+      "estimated_boundary_retained": true
+    },
+    {
+      "observation": "b",
+      "native_max_difference": 0,
+      "source_proof": "Pass1 emitted401451 computationally defined rays reused: input case/assets/geometry/kernel identical, only material and fixed foreground response change.",
+      "estimated_boundary_retained": true
+    }
+  ],
+  "gate": {
+    "accepted": true,
+    "epoch": "12bfd3bc898570fc83c2ce157e371926f984cfeab4fb06a1e63511e0bab0f5fe",
+    "policy": "nonregressive",
+    "error_ratio": 1,
+    "observations": {
+      "A": {
+        "previous_error": 6.342152949051056,
+        "candidate_error": 6.3421516471788815,
+        "required_error_max": 6.342152949051056,
+        "relative_reduction": 2.0527290733873826e-7,
+        "milestone_passed": true,
+        "strict_improvement": true,
+        "nonregression": {
+          "glass": true,
+          "foreground": true,
+          "shadow": true
+        },
+        "passed": true
+      },
+      "B": {
+        "previous_error": 10.160404534140564,
+        "candidate_error": 10.16040444455747,
+        "required_error_max": 10.160404534140564,
+        "relative_reduction": 8.816882668405412e-9,
+        "milestone_passed": true,
+        "strict_improvement": true,
+        "nonregression": {
+          "glass": true,
+          "foreground": true,
+          "shadow": true
+        },
+        "passed": true
+      }
+    },
+    "evidence": {
+      "visual_review": true,
+      "independent_replay": true,
+      "source_support": true
+    }
+  },
+  "visual_review": true,
+  "accepted": true,
+  "limits": "Whole emitted computationally defined support verified; .44%/.30% of original2x rays have unobserved Gaussian-footprint content,16 scoredsubraysA. Boundary content remains estimated. Black outer/upper rim and foreground mismatch remain visible; no Apple parity claim. Ordinary generated shadow fixed; one10percent reduction rejected.",
+  "precision_advisory": {
+    "protocol": "Advisory double-precision reduction of unchanged native float32 arrays; original float32 gate remains authoritative. No raster/sampler/color/source/mask change.",
+    "observations": [
+      {
+        "observation": "a",
+        "previous_float64_reduction_E": 6.3421531001228395,
+        "candidate_float64_reduction_E": 6.342151793675306,
+        "difference": -0.000001306447533266919,
+        "changed_scored_rgb": 45089,
+        "changed_pixel_rms": 0.003153436351567507
+      },
+      {
+        "observation": "b",
+        "previous_float64_reduction_E": 10.160405161770301,
+        "candidate_float64_reduction_E": 10.160403915256058,
+        "difference": -0.000001246514242936314,
+        "changed_scored_rgb": 45486,
+        "changed_pixel_rms": 0.003365814220160246
+      }
+    ]
+  },
+  "meaningfulness": "Tiny gain, explicitly so. Original float32 native gate unchanged; advisory float64 reduction of unchanged native arrays confirms descent on both, with45089/45486 scoredRGB entries changed. No visual parity or substantial curvature improvement claimed."
+}
