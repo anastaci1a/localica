@@ -66,16 +66,18 @@
     "bottom": 0
   },
   "assets/match-regular.png": {
-    "width": 7762,
-    "height": 2472,
-    "top": 232,
-    "bottom": 0
+    "width": 2162,
+    "height": 688,
+    "top": 64,
+    "bottom": 0,
+    "gutter": 2
   },
   "assets/match-regular-rim.png": {
-    "width": 4962,
-    "height": 544,
-    "top": 148,
-    "bottom": 0
+    "width": 2162,
+    "height": 236,
+    "top": 64,
+    "bottom": 0,
+    "gutter": 2
   },
   "assets/toolbar-d-stroke-current.png": {
     "width": 1282,
@@ -84,10 +86,11 @@
     "bottom": 0
   },
   "assets/toolbar-underside-current.png": {
-    "width": 4962,
-    "height": 452,
-    "top": 148,
-    "bottom": 0
+    "width": 2162,
+    "height": 196,
+    "top": 64,
+    "bottom": 0,
+    "gutter": 2
   },
   "assets/study-active-switch-paired-a.png": {
     "width": 2162,
