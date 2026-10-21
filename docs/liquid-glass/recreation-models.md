@@ -18,6 +18,27 @@ The circular playback control is the **current most-polished calibration**, sele
 - Parameters and operation order are fixed for replay. Re-optimizing coefficients produces a new calibration, not an exact reproduction of this one. Source registration, the estimated hidden backdrop, video decoding and raster conventions are additional inputs.
 - Missing backdrop pixels may be extended for presentation, with the method and valid-mask numerical effect recorded. Preserve the original recovered inputs and native benchmark; completed pixels are estimates, not new observed evidence.
 
+## Model responsibilities and evidence
+
+- A model owns the footprint, front/back surfaces or explicitly empirical map, thickness, transmission/reflection, dispersion, ordinary blur, foreground response, contrast, highlights and exterior shadows. Each stage has declared normalized parameters and operation order; no renderer-specific tricks are required by the specification.
+- **Ordinary blur and dispersion are separate.** Ordinary blur averages neighboring samples with one spatial kernel shared by the channels. Dispersion changes the sampling/transport by wavelength (or a declared RGB proxy); it can produce colored edge spreading without ordinary blur. Corner color highlights require a separate lighting test before attributing them to dispersion.
+- Geometry-led candidates must state camera, surfaces, IOR, background distance and valid ray branches. Empirical maps remain permitted approximations when justified across references; they do not imply an integrable surface or recovered Apple solid. A folded image map and total internal reflection are distinct phenomena.
+- Pill silhouettes should be tested for smoothly joined shoulders and a minute center crown rather than assumed to be a straight capsule. Curvature is a parameter of the element family, not a pixel correction on one reference.
+- Do not retain the photographed element's shadow in a reconstruction backdrop. Recover an unobstructed frame or reconstruct the incident background, recording uncertainty; generate the modeled shadow separately. Earlier retained-context figures remain historical estimates until corrected.
+- No target-pixel painting, hidden per-image optical coefficients, artifact copying or blur that conceals an incorrect shape. Icons use reusable solid geometry; their material is evaluated separately. Additional brightness or saturation beyond the sampled scene needs an explicit lighting/material hypothesis.
+
+## Verified improvement protocol
+
+The legacy records below predate this stricter protocol. Preserve their experiment counts and inputs; do not relabel them as qualifying improvements without an audit.
+
+- Freeze an input epoch: reference/source hashes, registration, masks, color space, native sampling, quantization and measurement definitions. Changed input evidence requires a separately reported epoch and baseline, not an apparent model improvement.
+- For each observation, measure RGB errors in 0–255 units: `E = sqrt(0.7 glass_RMSE² + 0.3 rim_RMSE²)`. A new qualifying pass requires `E_new ≤ 0.995 E_previous` **on every active background independently**, with no whole-glass regression. Retain foreground and exterior-shadow nonregression guards where measured. Ties and rejected trials do not count.
+- A numerical win also requires independent replay, source-footprint validation and visual review against known defects. [Acceptance gate](experiments/reconstruction/progress_gate.py) consumes those separate evidence decisions; it cannot infer them from a low error.
+- After `n` qualifying passes, the residual must be at most `0.995ⁿ E₀`: 7.24% lower after 15, 9.54% after 20. Display `100(1−E/E₀)` as **residual reduction from baseline**, never percent Apple accuracy. A zero residual is terminal, not another successful tie.
+- Review assumptions and model deficiencies after every three substantive experiments, including rejected trials. If the milestone stalls, revise the hypothesis or report the limitation; do not reset the baseline or accept known visual regressions to advance a counter.
+- Keep twenty qualifying single-background passes before multi-background calibration, then twenty qualifying multi-background passes for completion. A working round adds fifteen qualifying passes and rotates; it may end mid-stage. Add a third reference as a documented new stage while retaining all older scores.
+- [Local crop diagnostics](experiments/reconstruction/crop_diagnostics.py) are advisory: fixed masks/positions, RGB and channel-edge errors, contour/refraction landmarks, and shadow/highlight profiles. Do not realign or recolor crops independently. Their purpose is to expose local defects hidden by the global average.
+
 ## Playback: radial map and smooth inner transition
 
 For the circle, `r=|v|`, `d=1−r`, and `F(v)=(1−a(d)/r)v`. At the center set `F(0)=0`; the displacement has already reached zero there. Use the following constants:
