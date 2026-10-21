@@ -1,0 +1,45 @@
+{
+  "crops": [
+    {
+      "name": "upper rim",
+      "box_native": [
+        650,
+        369,
+        1270,
+        435
+      ],
+      "visible_rmse": [
+        13.257051647917683,
+        13.22124647321398
+      ],
+      "glass_rmse": [
+        9.022676409789874,
+        8.964385936470073
+      ],
+      "glass_pixels": 37001
+    },
+    {
+      "name": "d-stroke",
+      "box_native": [
+        960,
+        450,
+        1120,
+        550
+      ],
+      "visible_rmse": [
+        3.919011052489835,
+        3.396195445313281
+      ],
+      "glass_rmse": [
+        3.7393078734273035,
+        3.1104335155646172
+      ],
+      "glass_pixels": 11840
+    }
+  ],
+  "order": [
+    "revision1",
+    "revision2"
+  ],
+  "purpose": "Fixed local advisory diagnostics, not additional gates; crop positions unchanged"
+}

@@ -1,0 +1,155 @@
+{
+  "model": "tensor",
+  "shape": {
+    "half": [
+      2.3058823529411763,
+      1
+    ],
+    "radius": 1
+  },
+  "parameters": {
+    "coefficients": [
+      0.9180036027973915,
+      1.5150856266302508,
+      1.085822474823523,
+      0.783477673025246,
+      0.4906890136980095,
+      0.15007838846353588,
+      -0.03588814119199657
+    ],
+    "core_x": 0.0011986333630788215,
+    "core_y": 0.0029007818254599416,
+    "tangent": 0.19928550849212562,
+    "tangent_band": 0.40361651491050377,
+    "tensor": true
+  },
+  "source_sigma": 0.06470588235294118,
+  "rim_width": 0.032056368924832754,
+  "thin_rim": 0.008235294117647058,
+  "blur_transition": 0.017922015591671742,
+  "material": [
+    0.29594431029673285,
+    0.28896638148469694,
+    0.3099884391198181,
+    0.40551985553194003,
+    0.4089050817523047,
+    0.39855919076434054,
+    -0.013231978974221952,
+    -0.039734761940994984,
+    0.04287281802992216,
+    0.05239229687809742,
+    0.059253032680357955,
+    -0.04442713214541931,
+    0.18462719542148856,
+    -0.03367091728900438,
+    0.022965458999240924,
+    0.0025982875460498337,
+    0.06745132318031079,
+    -0.017346049366512118,
+    -0.014966145049336849,
+    0.012531012452486322,
+    0.5671252693277675,
+    0.5615518040168006,
+    0.5783931727092605
+  ],
+  "reference_length": 170,
+  "footprint_softness": 0.1,
+  "post_sigma": 0.007352941176470588,
+  "shadow": {
+    "kind": "gaussian_coverage",
+    "opacity": 0.2196806498739861,
+    "sigma": 0.2999999477597864,
+    "offset": [
+      -0.0029308863193275945,
+      0.007772858574827156
+    ],
+    "color": "neutral black attenuation",
+    "compositing": "behind independent glass coverage"
+  },
+  "source_sha256": {
+    "source.png": "6c68d31ac994001701ae3763d67f494bca91d03fda950789dddf01cbb60ea21b",
+    "target.png": "5bb59714854d0bd019d689b3e8c444dd82b057d6abdc9275ca88a8295692bbf8"
+  },
+  "case": {
+    "shape": "capsule",
+    "half": [
+      392,
+      170
+    ],
+    "radius": 170,
+    "center": [
+      960,
+      542
+    ],
+    "crop": [
+      475,
+      285,
+      1445,
+      845
+    ],
+    "foreground": [
+      [
+        695,
+        462,
+        872,
+        628
+      ],
+      [
+        1068,
+        470,
+        1215,
+        618
+      ]
+    ]
+  },
+  "foreground_layers": [
+    {
+      "name": "archivebox",
+      "asset": "archivebox.svg",
+      "sha256": "0a585750c7ef62d1a337bd4465deb1da651128450183bec9451adff649763cd6",
+      "placement": [
+        703.5300160498647,
+        472.125042063683,
+        860.3315487316048,
+        615.8093616653512
+      ],
+      "box": [
+        695,
+        462,
+        872,
+        628
+      ],
+      "color": [
+        0.08495245458408222,
+        0.08475536099963654,
+        0.08533726109387098
+      ],
+      "provenance": "Symmetric rounded outline trace; original font exposes a mismatched filled base glyph.",
+      "limits": "Three clean vector components; uniform stroke, shared corner radius, horizontal symmetry. Geometry is an independently reconstructed icon, not exact original Apple outline. No screenshot alpha or per-pixel correction."
+    },
+    {
+      "name": "plus",
+      "asset": "plus.svg",
+      "sha256": "846f23109fbb184ad823c1f53029617bcee88f85750e17a97235fe0496762c6e",
+      "placement": [
+        1077.4904823304323,
+        479.9744909369407,
+        1205.764575644857,
+        608.3584444785246
+      ],
+      "box": [
+        1068,
+        470,
+        1215,
+        618
+      ],
+      "color": [
+        0.08454907070447688,
+        0.0841744418736172,
+        0.08529729465842924
+      ],
+      "provenance": "Original SF plus.tag.color.large variable-weight outline",
+      "limits": "Uniform size and placement, one stroke/weight parameter and constant color; no pixel mask or colored source glyph copied."
+    }
+  ]
+}
