@@ -160,10 +160,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val floatingHeight = minOf(floatingArt, floatingArt / palette.aspect)
     val fullArt = floatingWidth + (windowWidth - floatingWidth) * backgroundProgress
     val fullArtHeight = floatingHeight + (windowWidth / palette.aspect - floatingHeight) * backgroundProgress
-    // Leave space for metadata to pass below the growing cover, then catch up smoothly.
-    val artProgress = p * (.58f + .42f * p)
-    val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
-    val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
     val artX = 16.dp + ((windowWidth - fullArt) / 2 - 16.dp) * p * p
     val fullArtY = statusInset + 52.dp + (floatingArt - fullArtHeight) / 2
     val miniArtY = (CompactControlSize - MiniArtworkSize) / 2
@@ -174,7 +170,22 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val ordinarySeekY = (oldMetadataY + (lyricSeekY - oldMetadataY) * .5f)
         .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
     val lyricMetadataY = maxOf(ordinarySeekY, lyricSeekY)
-    val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricProgress
+    // Mode owns the target; expansion has one direct clock rather than multiplying the
+    // lyric displacement into the title/transport motion a second time.
+    val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricVisibility
+    // Geometry may change while held (new aspect/layout/mode). Ease only that gate,
+    // never finger progress, so crossing the fallback boundary cannot pop the cover.
+    val clearanceTarget = if (minOf(fullArt, fullArtHeight) < MiniArtworkSize) 0f else
+        playerArtworkClearance((fullArtY - 24.dp * lyricVisibility).value,
+            fullArtHeight.value, metadataY.value, miniArtY.value, MiniArtworkSize.value)
+    val artClearance by animateFloatAsState(clearanceTarget,
+        tween(settings.motionDuration(300)), label = "Artwork clearance")
+    val artCropRetention by animateFloatAsState(if (clearanceTarget > 0f) 1f else 0f,
+        tween(settings.motionDuration(300)), label = "Artwork crop retention")
+    val artContentScale = playerArtworkContentScale(with(density) { MiniArtworkSize.toPx() }, artCropRetention, p == 0f)
+    val artProgress = playerArtworkSizeProgress(p, artClearance)
+    val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
+    val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricBarCenter = lyricMetadataY + 64.dp + 20.dp
     val shelfTop = virtualHeight - navigationInset - CollapsedQueueHeight
@@ -183,9 +194,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     fun smoothReveal(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
     val titleY = 7.dp + (metadataY - 7.dp) * p
     val subtitleY = 24.dp + (metadataY + 34.dp - 24.dp) * p
-    val transportY = (CompactControlSize - 48.dp) / 2 +
-        (normalTransport + (lyricTransport - normalTransport) * lyricProgress - (CompactControlSize - 48.dp) / 2) * transportMotion
-    val fullTransportY = normalTransport + (lyricTransport - normalTransport) * lyricProgress
+    val fullTransportY = normalTransport + (lyricTransport - normalTransport) * lyricVisibility
+    val transportY = fullTransportY + playerTransportOffset(p, (metadataY - 7.dp).value,
+        (fullTransportY - (CompactControlSize - 48.dp) / 2).value).dp
     val rowMotion = playerRowMotion(p, (titleY - metadataY).value, (transportY - fullTransportY).value, lyricVisibility)
     val seekY = metadataY + 64.dp + rowMotion.seekOffset.dp
     val actionsY = ordinarySeekY + 128.dp + 32.dp * lyricVisibility + rowMotion.actionsOffset.dp
@@ -194,6 +205,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val glassFrost = smoothReveal((p - .08f) / .8f)
     val deviceCorners = rememberDeviceCorners()
     val surfaceFrame = playerSurfaceFrame(maxWidth, maxHeight, navigationInset, bottomChrome, p, deviceCorners)
+    val lyricsViewport = playerLyricsViewport(surfaceFrame.y.value, titleY.value, metadataY.value,
+        (statusInset + 60.dp).value)
     val surfaceWidth = surfaceFrame.width
     val surfaceCorner = surfaceFrame.maximumCorner
     // This feather belongs to the cover, including its final full-background state.
@@ -265,12 +278,12 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     }.then(if (neighbor) Modifier.clearAndSetSemantics {} else Modifier)) {
                     if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,
                         Modifier.fillMaxSize().graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
-                        contentScale = ContentScale.Fit)
+                        contentScale = artContentScale)
                     PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag(if (neighbor) "player-neighbor-artwork" else "player-artwork")
                         .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),
                             edgeBand + (.22f - edgeBand) * swipeFeather, coverBlend).clip(artworkShape),
                         shape = artworkShape,
-                        contentScale = if (p == 0f) ContentScale.Crop else ContentScale.Fit)
+                        contentScale = artContentScale)
                     }
                 }
                 // Soft edges reveal the two blended color continuations in the space between covers.
@@ -310,8 +323,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 }
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, state.positionMs, settings.reducedMotion, onSeek,
-                Modifier.offset(x = contentInset, y = statusInset + 60.dp).width(contentWidth)
-                    .height((lyricMetadataY - statusInset - 64.dp).coerceAtLeast(96.dp))
+                Modifier.offset(x = contentInset, y = lyricsViewport.top.dp).width(contentWidth)
+                    .height(lyricsViewport.height.dp).clipToBounds()
                     .graphicsLayer { alpha = lyricMotion.contentAlpha }
                     // Keep scroll/source identity through a cancelled collapse, but invisible
                     // lyrics must not intercept the next player gesture or accessibility.
@@ -321,7 +334,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                             if (lyricMotion.contentAlpha > 0f) child.place(0, 0)
                         }
                     },
-                contentHeight = (metadataY - statusInset - 64.dp).coerceAtLeast(96.dp), sourcesAnchor = sourcesAnchor,
+                contentHeight = (lyricMetadataY - statusInset - 64.dp).coerceAtLeast(96.dp),
+                contentOffset = lyricsViewport.contentOffset.dp, sourcesAnchor = sourcesAnchor,
                 result = lyricsResult, sourcesVisible = sourcesVisible, onSourcesDismiss = { sourcesVisible = false },
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
                 sampledAtMs = state.sampledAtMs, playing = state.isPlaying, speed = state.playbackSpeed,

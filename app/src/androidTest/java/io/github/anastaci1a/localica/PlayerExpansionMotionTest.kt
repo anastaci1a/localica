@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.unit.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -49,18 +50,19 @@ class PlayerExpansionMotionTest {
         val progress = Animatable(0f)
         var expanded by mutableStateOf(false)
         var layout by mutableStateOf(ArtworkLayout.FullBackground)
+        var reducedMotion by mutableStateOf(false)
         lateinit var scope: CoroutineScope
         var fingerDown = false
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             scope = rememberCoroutineScope()
             PlayerSurface(state.copy(trackId = track.id, trackUri = track.uri), expanded, { expanded = it },
-                InterfaceSettings(artworkLayout = layout), progress, {}, {}, {}, {}, {}, {},
+                InterfaceSettings(artworkLayout = layout, reducedMotion = reducedMotion), progress, {}, {}, {}, {}, {}, {},
                 lyricsOpen = true, track = track, visual = visual) { Text("Album-only action") }
         } } }
         try {
             for (artworkLayout in ArtworkLayout.entries) {
                 compose.mainClock.autoAdvance = true
-                compose.runOnIdle { layout = artworkLayout; expanded = false; scope.launch { progress.snapTo(0f) } }
+                compose.runOnIdle { layout = artworkLayout; reducedMotion = false; expanded = false; scope.launch { progress.snapTo(0f) } }
                 compose.waitForIdle()
                 val mini = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
                 compose.mainClock.autoAdvance = false
@@ -107,9 +109,26 @@ class PlayerExpansionMotionTest {
                     assertTrue("Red cover is gone from the player before release: $color", color.red < color.blue + .1f)
                 }
 
+                val fullContent = compose.onNodeWithTag(contentTag, true).getUnclippedBoundsInRoot()
                 compose.onRoot().performTouchInput { moveBy(Offset(0f, mini.top * .14f), delayMillis = 160) }
                 compose.mainClock.advanceTimeByFrame()
                 compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
+                val movingContent = compose.onNodeWithTag(contentTag, true).getUnclippedBoundsInRoot()
+                assertEquals("Inner lyric geometry does not reflow during held collapse", fullContent.height, movingContent.height)
+                val contentTravel = (movingContent.top - fullContent.top).value
+                val playerTravel = (compose.onNodeWithTag("player-surface", true).getUnclippedBoundsInRoot().top -
+                    compose.onRoot().getUnclippedBoundsInRoot().top).value
+                assertTrue("Content must move slower than its enclosing player: $contentTravel vs $playerTravel",
+                    contentTravel >= 0f && contentTravel < playerTravel * .5f)
+                val heldBounds = listOf("lyrics-panel", "player-title", "player-seek-row").map {
+                    compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot
+                }
+                compose.runOnIdle { reducedMotion = true }
+                compose.mainClock.advanceTimeByFrame()
+                assertEquals("Reduced motion cannot change held direct-manipulation geometry", heldBounds,
+                    listOf("lyrics-panel", "player-title", "player-seek-row").map {
+                        compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot
+                    })
                 compose.onRoot().performTouchInput { moveTo(Offset(start.x, 0f), delayMillis = 160) }
                 compose.mainClock.advanceTimeByFrame()
                 assertEquals("Held reversal restores the exact seek target", seek,
@@ -132,12 +151,74 @@ class PlayerExpansionMotionTest {
                     compose.onNodeWithTag("player-actions-row", true).assertDoesNotExist()
                     compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
                     if (p <= .78f) compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).assertIsNotDisplayed()
-                    else compose.onNodeWithTag(contentTag, true).assertExists()
+                    else {
+                        compose.onNodeWithTag(contentTag, true).assertExists()
+                        val movingPanel = compose.onNodeWithTag("lyrics-panel", true).fetchSemanticsNode().boundsInRoot
+                        val movingTitle = compose.onNodeWithTag("player-title", true).fetchSemanticsNode().boundsInRoot
+                        val movingPlayer = compose.onNodeWithTag("player-surface", true).fetchSemanticsNode().boundsInRoot
+                        assertEquals("The upper clip no longer rides down with the whole player",
+                            maxOf(panel.top, movingPlayer.top), movingPanel.top, 1.5f)
+                        assertEquals("The bottom clip follows the presented title with its normal gap",
+                            title.top - panel.bottom, movingTitle.top - movingPanel.bottom, 1.5f)
+                        assertEquals("Real and missing lyrics share the same visible clip", movingPanel,
+                            compose.onNodeWithTag("lyrics-viewport", true).fetchSemanticsNode().boundsInRoot)
+                    }
                 }
             }
         } finally {
             if (fingerDown) runCatching { compose.onRoot().performTouchInput { cancel() } }
             compose.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test fun artworkWaitsForPresentedTitleClearanceAndCollapseRetracesCompatibleSizing() {
+        val progress = Animatable(0f)
+        var layout by mutableStateOf(ArtworkLayout.Floating)
+        var selectedVisual by mutableStateOf(visual)
+        var reduced by mutableStateOf(false)
+        lateinit var scope: CoroutineScope
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            scope = rememberCoroutineScope()
+            PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout, reducedMotion = reduced),
+                progress, {}, {}, {}, {}, {}, {}, visual = selectedVisual)
+        } } }
+        for (reduce in listOf(false, true)) for (artworkLayout in ArtworkLayout.entries) for (aspect in listOf(1f / 3f, 1f, 3f)) {
+            compose.runOnIdle {
+                reduced = reduce
+                layout = artworkLayout
+                selectedVisual = visual.copy(artwork = Bitmap.createBitmap(if (aspect > 1f) 96 else 32,
+                    if (aspect < 1f) 96 else 32, Bitmap.Config.ARGB_8888).apply {
+                    eraseColor(android.graphics.Color.RED)
+                }.asImageBitmap(), palette = visual.palette.copy(aspect = aspect))
+            }
+            compose.waitForIdle()
+            compose.runOnIdle { scope.launch { progress.snapTo(1f) } }
+            val full = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
+            val fullTitle = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
+            val backgroundHeight = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot().height
+            val rawHeight = if (artworkLayout == ArtworkLayout.FullBackground) full.width / aspect else full.height
+            val compatible = full.top.value + rawHeight <= fullTitle.top.value
+            val snapshots = mutableMapOf<Float, androidx.compose.ui.unit.DpRect>()
+            for (p in listOf(0f, .02f, .05f, .08f, .12f, .16f, .2f, .3f, .5f, .8f, 1f,
+                .8f, .5f, .3f, .2f, .16f, .12f, .08f, .05f, .02f, 0f)) {
+                compose.runOnIdle { scope.launch { progress.snapTo(p) } }
+                val art = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
+                val title = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
+                if (compatible) {
+                    if (art.top + 32.dp > title.top + 1.dp) {
+                        assertEquals("Retain mini width before clearing title", 32f, art.width, .5f)
+                        assertEquals("Retain mini height before clearing title", 32f, art.height, .5f)
+                    } else if (art.height > 33f) {
+                        assertTrue("Growing cover stays above the actual presented title", art.bottom <= title.top + 1.dp)
+                    }
+                } else {
+                    val usual = p * (.58f + .42f * p)
+                    assertEquals("Constrained layout keeps existing width motion", 32f + (full.width - 32f) * usual, art.width, 1f)
+                    assertEquals("Constrained layout keeps existing height motion", minOf(backgroundHeight, 32f + (rawHeight - 32f) * usual), art.height, 1f)
+                }
+                snapshots[p]?.let { assertEquals("Held reversal must retrace artwork bounds", it, art) }
+                snapshots[p] = art
+            }
         }
     }
 
@@ -152,29 +233,52 @@ class PlayerExpansionMotionTest {
             "MERGED\n${compose.onRoot().printToString()}\nUNMERGED\n${compose.onRoot(useUnmergedTree = true).printToString()}")
     }
 
-    @Test fun artworkSeekAndActionsHaveSeparateScreenSpaceMotionBetweenTitleAndTransport() {
+    @Test fun artworkSeekAndActionsHaveSeparateScreenSpaceMotionBetweenTitleAndTransport() = exerciseRowMotion(false)
+
+    @Test fun selectedLyricsKeepLinearSeekAndTransportMotionInBothDirections() = exerciseRowMotion(true)
+
+    private fun exerciseRowMotion(lyrics: Boolean) {
         val progress = Animatable(0f)
         lateinit var scope: CoroutineScope
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             scope = rememberCoroutineScope()
-            PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = visual) {
+            PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {},
+                lyricsOpen = lyrics, visual = visual) {
                 Text("Album-only action")
             }
         } } }
-        val tags = listOf("player-title", "player-seek-row", "player-actions-row")
+        val tags = listOf("player-title", "player-seek-row") + if (lyrics) emptyList() else listOf("player-actions-row")
         fun tops() = tags.map { compose.onNodeWithTag(it, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top } +
             compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot.top
         compose.runOnIdle { scope.launch { progress.snapTo(1f) } }
         val full = tops()
         val samples = mutableMapOf<Float, List<Float>>()
-        for (p in listOf(.98f, .95f, .9f, .85f, .9f, .95f, .98f, 1f)) {
+        val increments = mutableListOf<List<Float>>()
+        var previous = full
+        for (p in listOf(.97f, .94f, .91f, .88f, .85f, .88f, .91f, .94f, .97f, 1f)) {
             compose.runOnIdle { scope.launch { progress.snapTo(p) } }
             val current = tops()
             if (p < 1f) {
                 val movement = current.zip(full) { now, target -> now - target }
                 assertTrue("Title < seek < actions < transport at $p: $movement",
                     movement.zipWithNext().all { (slower, faster) -> slower < faster })
+                val separation = movement.zipWithNext { slower, faster -> faster - slower }
+                separation.forEachIndexed { index, gap ->
+                    val steps = if (lyrics && index == 1) 2 else 1
+                    assertEquals("Uniform presented speed ladder at $p", separation.first() * steps, gap, 2f)
+                }
             } else assertEquals(full, current)
+            if (p >= .85f && samples[p] == null && p < 1f) {
+                val step = current.zip(previous) { now, before -> now - before }
+                increments.firstOrNull()?.let { initial ->
+                    step.zip(initial).forEach { (actual, expected) ->
+                        // Each independently rounded Surface/row offset can contribute one pixel.
+                        assertEquals("No screen-space deceleration while fading at $p", expected, actual, 2f)
+                    }
+                }
+                increments += step
+            }
+            previous = current
             samples[p]?.let { assertEquals("Reversal uses the same displayed trajectory at $p", it, current) }
             samples[p] = current
         }

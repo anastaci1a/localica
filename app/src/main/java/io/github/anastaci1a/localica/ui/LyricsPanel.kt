@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -61,7 +62,7 @@ private sealed interface LyricsPresentation {
 internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null,
     sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null,
-    contentHeight: Dp? = null, result: LyricsResult? = rememberLyrics(track),
+    contentHeight: Dp? = null, contentOffset: Dp = 0.dp, result: LyricsResult? = rememberLyrics(track),
     sourcesVisible: Boolean? = null, onSourcesDismiss: (() -> Unit)? = null,
     originPreparation: GlassOriginPreparation? = null, contentAlpha: () -> Float = { 1f }) {
     val lyricClock by produceState(positionMs, positionMs, sampledAtMs, playing, speed, delayMs, durationMs) {
@@ -121,7 +122,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
             }
         }
     }
-    // The empty decoration uses the stable background viewport. Only actual lyrics resize with metadata.
+    // Documents and the empty decoration retain their content geometry inside one moving, faded viewport.
     LyricsBackdrop(presentation, modifier.testTag("lyrics-panel"), contentAlpha) {
         Column {
             val transition = updateTransition(presentation, label = "Song lyrics")
@@ -134,18 +135,25 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                 val ink = LocalContentColor.current
                 when (shown) {
                     LyricsPresentation.Loading, LyricsPresentation.Unavailable -> Box(Modifier.fillMaxSize())
-                    LyricsPresentation.Missing -> Box(Modifier.fillMaxSize()
-                        .recordLyricsLayer(scene, { sourceAlpha }) { presentation to ink }, contentAlignment = Alignment.Center) {
-                        // A prior song's empty state is no longer authoritative once another read starts.
-                        if (presentation == LyricsPresentation.Missing) Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_lyrics),
-                            "No local lyrics", Modifier.size(56.dp).testTag("empty-lyrics"), tint = LocalContentColor.current.copy(alpha = .22f))
+                    LyricsPresentation.Missing -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val stableHeight = contentHeight ?: maxHeight
+                        Box(Modifier.fillMaxSize().testTag("lyrics-viewport")
+                            .recordLyricsLayer(scene, { sourceAlpha }) { listOf(presentation, ink, stableHeight, contentOffset) }
+                            .lyricsViewportMask()) {
+                            Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
+                                .height(stableHeight).offset(y = contentOffset), contentAlignment = Alignment.Center) {
+                                // A prior song's empty state is no longer authoritative once another read starts.
+                                if (presentation == LyricsPresentation.Missing) Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_lyrics),
+                                    "No local lyrics", Modifier.size(56.dp).testTag("empty-lyrics"), tint = ink.copy(alpha = .22f))
+                            }
+                        }
                     }
                     is LyricsPresentation.Available -> key(shown.source.id, shown.source.document) {
                         var shownPosition by remember { mutableLongStateOf(lyricClock) }
                         SideEffect { if (shown == presentation) shownPosition = lyricClock }
                         LyricsLines(shown.source.document, shownPosition, reducedMotion, onSeek,
-                            Modifier.fillMaxWidth().then(contentHeight?.let { Modifier.height(it) } ?: Modifier.fillMaxHeight()),
-                            sourceAlpha = { sourceAlpha })
+                            Modifier.fillMaxSize(), sourceAlpha = { sourceAlpha },
+                            contentHeight = contentHeight, contentOffset = contentOffset)
                     }
                 }
             }
@@ -155,11 +163,12 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
 
 @Composable
 internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier, sourceAlpha: () -> Float = { 1f }) {
+    modifier: Modifier = Modifier, sourceAlpha: () -> Float = { 1f },
+    contentHeight: Dp? = null, contentOffset: Dp = 0.dp) {
     val scene = LocalLyricsBackdropScene.current
     if (scene == null) {
         LyricsBackdrop(document, modifier) {
-            LyricsLines(document, positionMs, reducedMotion, onSeek, Modifier.fillMaxSize(), sourceAlpha)
+            LyricsLines(document, positionMs, reducedMotion, onSeek, Modifier.fillMaxSize(), sourceAlpha, contentHeight, contentOffset)
         }
         return
     }
@@ -182,45 +191,56 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
             list.easeToItem(active, reducedMotion)
         }
     }
-    Column(modifier) {
-        document.warning?.let { Text(it, Modifier.recordLyricsLayer(scene, sourceAlpha) { Triple(it, warningInk, warningStyle) },
-            style = warningStyle) }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("lyric-lines")
-                .controlScrollParent(list, ControlScrollAxis.Vertical)
-                .recordLyricsLayer(scene, sourceAlpha) {
-                    listOf(document, active, selectedInk, inactiveInk, lyricStyle,
-                        list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset, list.isScrollInProgress)
-                }
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
-                        0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-                }, contentPadding = PaddingValues(top = maxHeight / 3, bottom = maxHeight / 2)) {
-                itemsIndexed(document.lines) { index, line ->
-                    val selected = !document.synced || index == active
-                    val color by animateColorAsState(if (selected) selectedInk else inactiveInk,
-                        tween(if (reducedMotion) 0 else 350), label = "Lyric emphasis")
-                    Text(line.text.ifEmpty { "♪" }, color = color,
-                        style = lyricStyle, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        modifier = Modifier.fillMaxWidth().semantics { this.selected = document.synced && index == active }
-                            .then(if (line.timeMs != null) Modifier.clickable(interactionSource = null, indication = null,
-                                onClickLabel = "Seek to lyric") { onSeek(line.timeMs); following = true } else Modifier)
-                            .padding(vertical = 12.dp, horizontal = 4.dp))
+    BoxWithConstraints(modifier) {
+        val stableHeight = contentHeight ?: maxHeight
+        Box(Modifier.fillMaxSize().testTag("lyrics-viewport")
+            .recordLyricsLayer(scene, sourceAlpha) {
+                listOf(document, active, selectedInk, inactiveInk, lyricStyle, warningInk, warningStyle,
+                    stableHeight, contentOffset, list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset,
+                    list.isScrollInProgress)
+            }.lyricsViewportMask()) {
+            Column(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
+                .height(stableHeight).offset(y = contentOffset)) {
+                document.warning?.let { Text(it, style = warningStyle) }
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("lyric-lines")
+                        .controlScrollParent(list, ControlScrollAxis.Vertical),
+                        contentPadding = PaddingValues(top = maxHeight / 3, bottom = maxHeight / 2)) {
+                        itemsIndexed(document.lines) { index, line ->
+                            val selected = !document.synced || index == active
+                            val color by animateColorAsState(if (selected) selectedInk else inactiveInk,
+                                tween(if (reducedMotion) 0 else 350), label = "Lyric emphasis")
+                            Text(line.text.ifEmpty { "♪" }, color = color,
+                                style = lyricStyle, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                modifier = Modifier.fillMaxWidth().semantics { this.selected = document.synced && index == active }
+                                    .then(if (line.timeMs != null) Modifier.clickable(interactionSource = null, indication = null,
+                                        onClickLabel = "Seek to lyric") { onSeek(line.timeMs); following = true } else Modifier)
+                                    .padding(vertical = 12.dp, horizontal = 4.dp))
+                        }
+                    }
                 }
             }
-            androidx.compose.animation.AnimatedVisibility(!following && document.synced && active >= 0,
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
-                enter = androidx.compose.animation.fadeIn(tween(if (reducedMotion) 0 else 300)),
-                exit = androidx.compose.animation.fadeOut(tween(if (reducedMotion) 0 else 300)) +
-                    androidx.compose.animation.slideOutVertically(tween(if (reducedMotion) 0 else 300)) { it }) {
-                val current = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == active }
-                CompositionLocalProvider(LocalFrostedBackdrop provides scene.source) {
-                    ReturnToPositionButton(up = current?.let { it.offset < 0 } ?: (active < list.firstVisibleItemIndex),
-                        label = "Return to current line", visible = !following) { following = true }
-                }
+        }
+        androidx.compose.animation.AnimatedVisibility(!following && document.synced && active >= 0,
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
+            enter = androidx.compose.animation.fadeIn(tween(if (reducedMotion) 0 else 300)),
+            exit = androidx.compose.animation.fadeOut(tween(if (reducedMotion) 0 else 300)) +
+                androidx.compose.animation.slideOutVertically(tween(if (reducedMotion) 0 else 300)) { it }) {
+            val current = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == active }
+            CompositionLocalProvider(LocalFrostedBackdrop provides scene.source) {
+                ReturnToPositionButton(up = current?.let { it.offset < 0 } ?: (active < list.firstVisibleItemIndex),
+                    label = "Return to current line", visible = !following) { following = true }
             }
         }
     }
 }
+
+/** Record this final clipped/faded viewport for #383 as well as displaying it. Moving the child
+ * inside the mask must never move the mask itself or expose glyphs to the return lens outside it. */
+private fun Modifier.lyricsViewportMask(): Modifier = clipToBounds()
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
+            0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+    }
