@@ -1,0 +1,196 @@
+{
+  "a": {
+    "state_sha256": "68b5a4e492e0bebca7d4cd66822aed83cd566477444e017cecd21f81197b2ee8",
+    "render_files": {
+      "motion.mp4": "6e1d64e2d5565288c0cd41cbe261050b6b52bb1fbbe789ca7364f0d0e1836b45",
+      "comparison.png": "fd8b604231bb7ce14b8165812bb63d961532427bac3e0bd1af6c3d12650377c4"
+    },
+    "native_size": [
+      240,
+      235
+    ],
+    "output_size": [
+      1080,
+      1058
+    ],
+    "output_scale": 8,
+    "render_size": [
+      1920,
+      1880
+    ],
+    "requested_export_width": 1080,
+    "frames": 90,
+    "fps": 15,
+    "travel_over_L": 0.2247191011235955,
+    "scores": {
+      "glass": {
+        "pixels": 14904,
+        "rmse": 6.789317607879639
+      },
+      "rim": {
+        "pixels": 8364,
+        "rmse": 8.159358024597168
+      },
+      "held": {
+        "pixels": 4763,
+        "rmse": 6.72931432723999
+      },
+      "interior": {
+        "pixels": 6540,
+        "rmse": 4.461234092712402
+      },
+      "ssim": 0.953636109828949,
+      "loss": 52.23892051853261
+    },
+    "motion_support": {
+      "requested_native_px": 20,
+      "actual_native_px": 20,
+      "axis": "y",
+      "minimum_scored_lookup_3sigma_defined_fraction": 1,
+      "minimum_whole_shape_lookup_defined_fraction": 1,
+      "minimum_scored_lookup_3sigma_observed_fraction": 1,
+      "minimum_whole_shape_lookup_observed_fraction": 1,
+      "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+      "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates.",
+      "exterior_context": "Exterior and refracted glass use one translating coordinate system, with completed incident RGB and any separately declared exterior layer. Missing context remains an estimate; no fixed reference strip is spliced into the moving background."
+    },
+    "presentation_completion_native_delta": {
+      "max_abs_rgb": 0,
+      "rmse": 0
+    },
+    "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+    "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.",
+    "files": {
+      "motion.mp4": {
+        "bytes": 883739,
+        "sha256": "6e1d64e2d5565288c0cd41cbe261050b6b52bb1fbbe789ca7364f0d0e1836b45"
+      },
+      "motion.gif": {
+        "bytes": 9312318,
+        "sha256": "c3540b4d411dec6469e4bdc1305f629328a485d1eaed2235af04fa125f9786f6"
+      },
+      "comparison.png": {
+        "bytes": 2261763,
+        "sha256": "fd8b604231bb7ce14b8165812bb63d961532427bac3e0bd1af6c3d12650377c4"
+      }
+    },
+    "gif": {
+      "fps": 10,
+      "output_size": [
+        1080,
+        1058
+      ],
+      "master_relative_scale": 1,
+      "palette_colors": 96,
+      "palette_sampling": "All frame pixels",
+      "dither": "none",
+      "maximum_megabytes": 10,
+      "spatial_downsampling": false
+    },
+    "video_color": {
+      "metadata": {
+        "codec_name": "h264",
+        "color_range": "tv",
+        "color_space": "smpte170m"
+      },
+      "limits": "Encoded RGB export metadata; no measured display/transfer-function calibration."
+    }
+  },
+  "b": {
+    "state_sha256": "cbd5d2f6630be30046fdbe6dc7e81cd64b066641fe1a79b010ac02eae13a02ea",
+    "render_files": {
+      "motion.mp4": "514c2081202be782490f4b072e0ef74adca02f65b4797ed6a69e5f94b5b8a7da",
+      "comparison.png": "3dd5c001ad522693d517b00e47bb9840054272e880f44e64887c222e1faa2bf0"
+    },
+    "native_size": [
+      240,
+      235
+    ],
+    "output_size": [
+      1080,
+      1058
+    ],
+    "output_scale": 8,
+    "render_size": [
+      1920,
+      1880
+    ],
+    "requested_export_width": 1080,
+    "frames": 90,
+    "fps": 15,
+    "travel_over_L": 0.2247191011235955,
+    "scores": {
+      "glass": {
+        "pixels": 14904,
+        "rmse": 6.588232517242432
+      },
+      "rim": {
+        "pixels": 8364,
+        "rmse": 8.23075008392334
+      },
+      "held": {
+        "pixels": 4763,
+        "rmse": 6.011124610900879
+      },
+      "interior": {
+        "pixels": 6540,
+        "rmse": 3.5036888122558594
+      },
+      "ssim": 0.9758163690567017,
+      "loss": 50.7069394740766
+    },
+    "motion_support": {
+      "requested_native_px": 20,
+      "actual_native_px": 20,
+      "axis": "y",
+      "minimum_scored_lookup_3sigma_defined_fraction": 1,
+      "minimum_whole_shape_lookup_defined_fraction": 1,
+      "minimum_scored_lookup_3sigma_observed_fraction": 1,
+      "minimum_whole_shape_lookup_observed_fraction": 1,
+      "completion": "Nearest observed RGB extends unobserved input for still/video presentation only. Original input files, native benchmark and fitted coefficients are unchanged.",
+      "limits": "Native-grid support tests at33 shifts, not continuous/subpixel or output-scattering confidence. Completed pixels remain estimates.",
+      "exterior_context": "Exterior and refracted glass use one translating coordinate system, with completed incident RGB and any separately declared exterior layer. Missing context remains an estimate; no fixed reference strip is spliced into the moving background."
+    },
+    "presentation_completion_native_delta": {
+      "max_abs_rgb": 0,
+      "rmse": 0
+    },
+    "motion": "Stationary element; recovered backdrop translates vertically. Optical/material coefficients remain frozen.",
+    "limits": "Offline preview, not Apple motion timing, a device benchmark or proof of adaptive cross-scene material. Source footage retains its original information quality; SVG icons/font and catalogue artwork use their declared clean/high-resolution inputs. Undeclared legacy foreground coverage remains reference-derived.",
+    "files": {
+      "motion.mp4": {
+        "bytes": 594194,
+        "sha256": "514c2081202be782490f4b072e0ef74adca02f65b4797ed6a69e5f94b5b8a7da"
+      },
+      "motion.gif": {
+        "bytes": 7622950,
+        "sha256": "c413a671aecb6e38ea291e65153434d7905216803431f1036596e14cd26bd46c"
+      },
+      "comparison.png": {
+        "bytes": 1526093,
+        "sha256": "3dd5c001ad522693d517b00e47bb9840054272e880f44e64887c222e1faa2bf0"
+      }
+    },
+    "gif": {
+      "fps": 6,
+      "output_size": [
+        1080,
+        1058
+      ],
+      "master_relative_scale": 1,
+      "palette_colors": 256,
+      "palette_sampling": "All frame pixels",
+      "dither": "sierra2_4a",
+      "maximum_megabytes": 10,
+      "spatial_downsampling": false
+    },
+    "video_color": {
+      "metadata": {
+        "codec_name": "h264",
+        "color_range": "tv",
+        "color_space": "smpte170m"
+      },
+      "limits": "Encoded RGB export metadata; no measured display/transfer-function calibration."
+    }
+  }
+}
