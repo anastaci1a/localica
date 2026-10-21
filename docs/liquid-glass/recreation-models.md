@@ -152,11 +152,11 @@ Read the red, green and blue channels at their respective `F_λ`, then apply the
 
 The recovered background includes an antialiased track of height `20/56.5` in normalized units, centered `(.9295089030362/56.5)` below the lens center. Its hidden blue endpoint is estimated. The replay fixes this input explicitly; source reconstruction uncertainty remains part of the comparison.
 
-The generated contact shadow uses the same footprint, scaled by `s_x=1963/1896`, `s_y=929/906`, with normalized vertical offset `δ_y=−(s_y−1)`. It stays horizontally centered and bottom-aligned. Let `α_c` be its independently rasterized coverage, `s` the original signed distance divided by L, and `B` the frozen incident input:
+The generated contact shadow uses the same footprint, scaled by `s_x=1963/1896`, `s_y=929/906`, with normalized vertical offset `δ_y=−(s_y−1)`. It stays horizontally centered and bottom-aligned. Let `p=(pixel−center)/L`, `α_c` be the contact coverage, `sd_normalized` be signed distance to the original normalized footprint, and `B` the frozen incident input:
 
 ```text
 C0 = B (1−q α_c)
-s_h = signed_distance(original_shape, p−(0,.1)) / L
+s_h = sd_normalized(p−(0,.1))
 h = a exp(−.5 [max(s_h,0)/σ]²)
 B_out = (1−h) C0 + h β accent
 complete = body coverage_4x4 + B_out (1−coverage_4x4)
