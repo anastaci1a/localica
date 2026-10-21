@@ -1,0 +1,25 @@
+{
+  "status": "Accepted pass03 final-format export; no new pass",
+  "raster_per_side": [
+    1080,
+    1056
+  ],
+  "render_sampling": "Accepted material freshly evaluated at1800x1760,2x2 per OUTPUT pixel, then resized to1080",
+  "source": "Original native Apple left resized once; reconstructed right from cached unchanged high-resolution material plus candidate shadow3; no new material/optics fit",
+  "source_full_finite_kernel_enclosure": [
+    1303.255,
+    600.9689999999999,
+    1511.953,
+    809.667
+  ],
+  "source_radius_4sigma_plus1": 24,
+  "post_footprint_native": 5.125,
+  "original_defined_domain": [
+    1180,
+    525,
+    1541,
+    831
+  ],
+  "hidden_observed_fraction": 0,
+  "not_a_new_pass": true
+}

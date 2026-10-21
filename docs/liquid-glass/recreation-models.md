@@ -367,3 +367,48 @@ Replay with `python vector_revision.py INPUTS studies/music-home-vector/boundary
 ### Expanded mini-player revision
 
 The [current Expanded recipe](experiments/reconstruction/studies/music-mini-expanded-vector/review-round/pass-03.json) refines the existing outer-normal spline and shared material on both backgrounds; shape, blur, SVG geometry, catalogue artwork and generated shadow remain fixed. Native blur widths use reference pixels; divide by the source short half-size L before transferring to another scale. Replay with `python vector_revision.py INPUTS studies/music-mini-expanded-vector/review-round/pass-03.json OUTPUT`, using the original frozen a/b cases and hashed assets. Positive crown replacements failed the original guards and are not part of this record.
+
+## Safari circular controls: conditional material transfer
+
+The [Safari comparison](reconstruction.md#safari-circular-controls) retains a failed cross-background transfer. It is a source-limited material study, not a new refraction model. Both controls reuse the detached Music Search map and material; the magnifier and plus are separate solid vectors. The complete [coefficient records](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) fix each private case fingerprint; [input construction](experiments/reconstruction/studies/safari-circles/input-construction.json) records normalized affine coefficients, pose and solid-vector placement.
+
+For reference center c and radius L, define normalized coordinates u=(p−c)/L. The footprint is |u|≤1. Fit the incident affine RGB field only on uncovered panel controls, then freeze it:
+
+```text
+B(u) = b + G u
+G = L [∂B/∂x, ∂B/∂y]
+```
+
+The field is encoded RGB. Its fitted gradients and intercept are input construction, not lens parameters. Hidden pixels remain modeled, observed confidence0. Mathematical source-domain coverage does not establish panel segmentation or hidden RGB truth; the parent-panel corner is omitted and its exterior error is retained.
+
+Source/output ordinary Gaussian widths scale with radius: magnifier σ/L=5.554174315475217/72.894 and postσ/L=1.2089179687310392/72.894. All dimensionless displacement, light/material coefficients and shadow dimensions stay fixed in the unfitted plus transfer. No selected-color or per-control material correction is added.
+
+The existing generated shadow operates on the modeled exterior independently of the sharp vector foreground:
+
+```text
+d_s(u) = |u−o|−1
+q(u) = a exp(−0.5 [max(d_s(u),0)/s]²)
+B_shadow = (1−q) B
+C = α M + (1−α) B_shadow
+```
+
+Here a is opacity, s is dimensionless width, o is normalized offset, α is independently sampled circle coverage and M is the conditional glass color. Apply the solid SVG afterward. This Gaussian is empirical; neither the fitted field nor shadow identifies Apple's lighting. Sampling is native2×2; caption/image resizing never changes native scores.
+
+Reproduce frozen native outputs without fitting:
+
+```sh
+python safari_transfer.py --search-input /private/proposed-a --plus-input /private/b-proposed --output /private/new-replay
+```
+
+Input hashes include the source PNG, target visibility, source-defined/observed masks and foreground vector. The replay refuses a different case fingerprint or existing output directory. The retained large cyan/brightness error on the darker plus control demonstrates a material-transfer limitation; low-frequency gray panels cannot determine a refraction field or dispersion.
+
+Final plus exports use the three-pass shadow recipe (opacity 0.05622886993343976), with all optical/material coefficients unchanged. Reproduce the 1080px comparison and motion from the reconstruction directory:
+
+```sh
+python vector_revision.py /private/safari-inputs studies/safari-circles/plus-round/pass-03.json /private/still --high-quality
+python circular_motion.py /private/safari-inputs/b-proposed studies/safari-circles/plus-round/pass-03.json /private/motion
+```
+
+The motion retains 90 frames at 15fps,1080×720, a fixed circle and actual moving source queries. Its coordinate viewport is 360×240 reference units at 3× output scale. The parent-panel boundary is omitted; the entire source field is an estimate. A continuous radial-map bound includes the actual finite automatic Gaussian support (conservative 4σ+1 pixel radius) and bilinear taps for every pose. This is stronger than the earlier separately labeled 3σ diagnostic; it does not establish observed RGB or physical lens accuracy. Cache identity excludes only shadow: changing source, geometry, material or filters invalidates it.
+
+Frozen recipe stage labels retain their original input/transfer-proposal status; accepted exterior passes are recorded separately in their linked verification files. They do not certify the failed shared-material transfer.
