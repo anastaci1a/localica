@@ -57,6 +57,10 @@ class LyricsReturnBackdropTest {
     private var lastSnapshot: ImageBitmap? = null
     private var lastLens: ImageBitmap? = null
 
+    private data class ViewportPose(val surfaceTop: Float, val titleTop: Float) {
+        val viewport get() = playerLyricsViewport(surfaceTop, titleTop, metadataTarget = 348f, topInset = 24f)
+    }
+
     private class Scene {
         var document by mutableStateOf(document('M'))
         var incoming by mutableStateOf<ParsedLyrics?>(null)
@@ -68,6 +72,7 @@ class LyricsReturnBackdropTest {
         var shown by mutableStateOf(true)
         var song by mutableIntStateOf(0)
         var source by mutableIntStateOf(0)
+        var pose by mutableStateOf<ViewportPose?>(null)
     }
 
     @Test fun movingAndReemphasizingGlyphsRefreshesTheActualReturnLens() {
@@ -125,6 +130,72 @@ class LyricsReturnBackdropTest {
         val steady = capture("blank-still-stable")
         assertTrue("An idle control cannot accumulate its own arrow or rim in its source",
             interiorDifference(blank, steady, button) < .003f)
+    }
+
+    @Test fun movingPlayerViewportKeepsTheActiveReturnLensRegisteredThroughReversal() {
+        val poses = listOf(ViewportPose(0f, 348f), ViewportPose(48f, 316f))
+        val state = Scene().apply { pose = poses.first() }
+        mount(state)
+        alignCurrentLine(state.document)
+        val source = requireNotNull(sampledScene).source
+        val selected = compose.onNodeWithText(state.document.lines[30].text)
+        val list = compose.onNodeWithTag("lyric-lines")
+        val initialRowOffset = (selected.getUnclippedBoundsInRoot().top - list.getUnclippedBoundsInRoot().top).value
+        val frames = mutableMapOf<ViewportPose, PixelMap>()
+        val bounds = mutableMapOf<ViewportPose, Rect>()
+        // Keep the same document, scroll state and active return consumer while the
+        // upper edge first stays window-anchored, then is clipped by the player.
+        // The content drifts inside its stable 320 dp layout in both directions.
+        for ((index, pose) in (poses + poses.dropLast(1).asReversed()).withIndex()) {
+            compose.runOnIdle { state.pose = pose; state.depth = .6f }
+            compose.onNodeWithContentDescription(ReturnLabel).assertIsDisplayed()
+            updateSampleOrigin()
+            // Capture with optics still enabled, before toggling the negative
+            // control: reacquiring a lease must not conceal a stale motion frame.
+            val shallow = capture("viewport-$index-shallow", expectFresh = index > 0)
+            val button = returnBounds()
+            val probe = localBounds(compose.onNodeWithTag(ProbeTag))
+            assertSame("Viewport motion must retain the active sampling scene", source, requireNotNull(sampledScene).source)
+            if (Build.VERSION.SDK_INT < 33)
+                assertTrue("The moving return control must keep its legacy sampling lease", source.consumers > 0)
+            val viewport = compose.onNodeWithTag("lyrics-viewport", true).getUnclippedBoundsInRoot()
+            val root = compose.onNodeWithTag(SceneTag).getUnclippedBoundsInRoot()
+            assertEquals("The viewport top must follow the player's clipping edge", max(24f, pose.surfaceTop),
+                (viewport.top - root.top).value, 1f)
+            assertEquals("The viewport bottom must follow the presented title", pose.surfaceTop + pose.titleTop - 4f,
+                (viewport.bottom - root.top).value, 1f)
+            assertEquals("Inner lyric layout must not resize with the viewport", 320f, list.getUnclippedBoundsInRoot().height.value, 1f)
+            assertEquals("Viewport motion must not scroll or replace the lyric document", initialRowOffset,
+                (selected.getUnclippedBoundsInRoot().top - list.getUnclippedBoundsInRoot().top).value, 1f)
+            assertTrue("The moving lens must still sample actual lyric ink", green(shallow, button) > .025f)
+            assertTrue("Artwork-only control cannot acquire lyric ink during motion", green(shallow, referenceBounds()) < .015f)
+
+            compose.runOnIdle { state.optics = false }
+            val direct = capture("viewport-$index-direct")
+            assertTrue("Every held viewport must contain real glyph pixels behind its return control", green(direct, button) > .04f)
+            assertEquals("Moving source must match the displayed clipped/faded viewport, not stale or raw glyphs",
+                green(direct, button), green(shallow, probe), .012f)
+            compose.runOnIdle { state.optics = true; state.depth = 2f }
+            val deep = capture("viewport-$index-deep")
+            assertChromaMoves("The actual return lens must refract glyphs at each held viewport", shallow, deep, button, green = true)
+            assertEquals("Changing lens depth must not alter uncovered moving lyrics",
+                uncoveredGreen(shallow, button), uncoveredGreen(deep, button), .003f)
+
+            frames[pose]?.let { previous ->
+                assertEquals("Reversal must restore the presented return geometry", bounds.getValue(pose), button)
+                assertTrue("Reversal must restore the sampled glyph pattern, not retain the later viewport",
+                    interiorDifference(previous, shallow, button) < .015f)
+            }
+            frames[pose] = shallow
+            bounds[pose] = button
+        }
+        assertTrue("The fixture must move the return control, not only its contents",
+            abs(bounds.getValue(poses.last()).center.y - bounds.getValue(poses.first()).center.y) >
+                bounds.getValue(poses.first()).width * .2f)
+        compose.onNodeWithContentDescription(ReturnLabel).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription(ReturnLabel).assertDoesNotExist()
+        selected.assertIsDisplayed().assertIsSelected()
     }
 
     @Test fun overlappingDocumentsShareTheReturnSourceAndFadeAfterCompositing() {
@@ -257,26 +328,33 @@ class LyricsReturnBackdropTest {
                             Canvas(Modifier.matchParentSize().recordFrostedBackdrop(artwork)) { drawRect(state.art) }
                             CompositionLocalProvider(LocalFrostedBackdrop provides artwork, LocalGlassVisible provides state.optics) {
                                 if (state.shown) {
-                                    val modifier = Modifier.offset(8.dp, 24.dp).size(280.dp, 320.dp)
-                                        .graphicsLayer { alpha = state.alpha }
-                                    if (panel) LyricsPanel(Track("lyrics-sampling:${state.song}", "Sampling fixture", fileName = "fixture.mp3", relativePath = "fixture.mp3"),
-                                        state.position, false, {}, modifier,
-                                        result = LyricsResult(listOf(LyricSource("source-${state.source}", "Fixture", state.document))),
-                                        contentAlpha = { state.alpha })
-                                    else LyricsBackdrop(state.document to state.incoming, modifier, contentAlpha = { state.alpha }) {
-                                        val scene = requireNotNull(LocalLyricsBackdropScene.current)
-                                        SideEffect { sampledScene = scene }
-                                        val outgoingAlpha = if (state.incoming == null) 1f else .5f
-                                        Box(Modifier.fillMaxSize().graphicsLayer { alpha = outgoingAlpha }) {
-                                            LyricsLines(state.document, state.position, true, {}, Modifier.fillMaxSize(),
-                                                sourceAlpha = { outgoingAlpha })
-                                        }
-                                        state.incoming?.let { incoming ->
-                                            Box(Modifier.fillMaxSize().graphicsLayer { alpha = .5f }) {
-                                                LyricsLines(incoming, state.position, true, {}, Modifier.fillMaxSize(), sourceAlpha = { .5f })
+                                    val pose = state.pose
+                                    val viewport = pose?.viewport
+                                    Box(Modifier.fillMaxSize().offset(y = (pose?.surfaceTop ?: 0f).dp).clipToBounds()) {
+                                        val modifier = Modifier.offset(8.dp, (viewport?.top ?: 24f).dp)
+                                            .width(280.dp).height((viewport?.height ?: 320f).dp)
+                                            .graphicsLayer { alpha = state.alpha }
+                                        if (panel) LyricsPanel(Track("lyrics-sampling:${state.song}", "Sampling fixture", fileName = "fixture.mp3", relativePath = "fixture.mp3"),
+                                            state.position, false, {}, modifier,
+                                            result = LyricsResult(listOf(LyricSource("source-${state.source}", "Fixture", state.document))),
+                                            contentAlpha = { state.alpha })
+                                        else LyricsBackdrop(state.document to state.incoming, modifier, contentAlpha = { state.alpha }) {
+                                            val scene = requireNotNull(LocalLyricsBackdropScene.current)
+                                            SideEffect { sampledScene = scene }
+                                            val outgoingAlpha = if (state.incoming == null) 1f else .5f
+                                            Box(Modifier.fillMaxSize().graphicsLayer { alpha = outgoingAlpha }) {
+                                                LyricsLines(state.document, state.position, true, {}, Modifier.fillMaxSize(),
+                                                    sourceAlpha = { outgoingAlpha },
+                                                    contentHeight = if (viewport != null) 320.dp else null,
+                                                    contentOffset = (viewport?.contentOffset ?: 0f).dp)
                                             }
-                                        }
+                                            state.incoming?.let { incoming ->
+                                                Box(Modifier.fillMaxSize().graphicsLayer { alpha = .5f }) {
+                                                    LyricsLines(incoming, state.position, true, {}, Modifier.fillMaxSize(), sourceAlpha = { .5f })
+                                                }
+                                            }
 
+                                        }
                                     }
                                 }
                                 if (!panel) {
@@ -325,6 +403,12 @@ class LyricsReturnBackdropTest {
         assertEquals("The selected glyph row must intersect the actual return control",
             compose.onNodeWithContentDescription(ReturnLabel).fetchSemanticsNode().boundsInRoot.center.y,
             text.fetchSemanticsNode().boundsInRoot.center.y, 2f)
+        updateSampleOrigin()
+    }
+
+    private fun updateSampleOrigin() {
+        // Re-read window coordinates after every viewport/ancestor move. These
+        // are pixels already; never mix their origin with the fixture's dp inputs.
         val bounds = compose.onNodeWithContentDescription(ReturnLabel).fetchSemanticsNode().boundsInRoot
         compose.runOnIdle {
             val origin = IntArray(2)
