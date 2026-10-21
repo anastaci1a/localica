@@ -170,7 +170,13 @@ All original optical/body coefficients, inputs and native scores stay fixed. Nea
 python slider_exterior.py INPUTS OUTPUT --recipe studies/slider-exterior/review-round/pass-03.json
 ```
 
-INPUTS contains the frozen slider-source.png and slider-target.png. The target is read only for scoring and the comparison; it never enters the generated exterior. Optional `--material-cache` verifies the original array hash and avoids repeating an unchanged body render. Preview exports resample native4×4 output; native scoring and the analytic all-RGB source-domain bound remain separate from output size.
+INPUTS contains the frozen slider-source.png and slider-target.png. The target is read only for scoring and the comparison; it never enters the generated exterior. Optional `--material-cache` verifies the original array hash and avoids repeating an unchanged body render. The native command verifies the original calibration. For final1080px stills and motion, run:
+
+```sh
+python slider_motion.py INPUTS studies/slider-exterior/review-round/pass-03.json OUTPUT --width 1080 --frames 90 --fps 15
+```
+
+[ClearField](experiments/reconstruction/clear_field.py) caches only fixed outline/map/material fields and omits zero-weight source queries; each moving position samples the source again. The body matches the original native renderer bit-for-bit at zero and a distinct17px translation. Nearly96× faster per-frame native sampling in this offline case is not an Android benchmark. Source/output blur are unsupported by this cache. Rebuild it when shape or material changes. Final stills/motion use4×4 samples per output pixel; native scoring is inherited unchanged. [Source-domain/media evidence](experiments/reconstruction/studies/slider-exterior/review-round/motion.json) covers contributing and unused pack queries; defined input is not observed hidden RGB. This exterior is calibrated only to the observed blue-tinted control on light backgrounds; other themes/tints remain unvalidated.
 
 ## Uniform light and dark surfaces
 

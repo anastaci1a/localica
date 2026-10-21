@@ -80,12 +80,23 @@ Apple, [Build a UIKit app with the new design, 18:12](https://developer.apple.co
 - The recovered track has a 20-pixel reference height; its hidden blue endpoint is estimated. The upper dark ridge constrains the outline, with 54 fitted and 27 withheld columns. Bottom/right symmetry remains assumed.
 - Colored rim detail supports testing channel-separated lookups, but does not prove dispersion: lighting, adaptive processing and video chroma subsampling are confounds.
 - Current exterior round: **3/3**, single-background reconstruction. A generated neutral contact follows the measured width/height ratios; a broad tinted halo uses the exposed track accent. Original optics and every native optical score are unchanged. Near-exterior RMSE falls 19.299789 → 11.701439 and full-visible exterior 9.391866 → 6.010572, including held blocks. The replacement of copied context itself gets no credit. [Recipe](experiments/reconstruction/studies/slider-exterior/review-round/pass-03.json) · [Independent replay/domain check](experiments/reconstruction/studies/slider-exterior/review-round/pass-03-verification.json).
-- A gray-track minimum-state reference gives a withheld nine-patch halo-profile error of 11.109 → 3.542. Its shape/track also deform under edge compression; this is component transfer evidence, **not a verified second-background optical benchmark**. Halo hue and blue-track stretching onset remain unresolved. The current 720/1080-per-side exports resample the frozen native 4×4 body; final high-resolution geometry export is pending.
+- A gray-track minimum-state reference gives a withheld nine-patch halo-profile error of 11.109 → 3.542. Its shape/track also deform under edge compression; this is component transfer evidence, **not a verified second-background optical benchmark**. Halo hue and blue-track stretching onset remain unresolved. Final reconstruction is evaluated at1080px wide with4×4 samples per output pixel; the Apple reference is resized once from its native crop. Native scoring stays unchanged. The generated contact band remains too pronounced; this provisional exterior is not a finished optical match.
 
 <details>
 <summary>1080px-per-side slider comparison</summary>
 
 [![Full HD slider comparison](assets/match-slider-full.png)](assets/match-slider-full.png)
+
+</details>
+
+<details>
+<summary>Final slider motion — video and GIF</summary>
+
+<video controls preload="none" playsinline width="1080" height="608" aria-label="Generated slider lens motion"><source src="assets/slider-final.mp4" type="video/mp4"><a href="assets/slider-final.mp4">Open video</a></video>
+
+<img src="assets/slider-final.gif" alt="Fixed-shape slider lens translated over the inferred track" width="1080" height="608" loading="lazy" decoding="async">
+
+1080px wide,90frames at15fps,6seconds; GIF9,887,212bytes. Geometry/material are fixed; source sampling, contact and halo follow each position. The track fill stays fixed. One bottom row pads the607px raster for video encoding. This is illustrative motion, not captured Apple interaction or Android performance. [Media/source verification](experiments/reconstruction/studies/slider-exterior/review-round/motion.json) · [Cache equivalence](experiments/reconstruction/studies/slider-exterior/review-round/cache-equivalence.json).
 
 </details>
 
