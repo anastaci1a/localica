@@ -313,7 +313,7 @@ class BrowseLoadingRevealTest {
                         BrowseLoadingItem(style, geometry, showInformation = true)
                     }
                     Box(Modifier.weight(1f).testTag("reserved-slot")) {
-                        Box(Modifier.padding(geometry.cardInset.dp)) {
+                        Box(Modifier.padding(horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp)) {
                             LookaheadScope {
                                 BrowseItemLayout(item, style, geometry, this, true, {}, loadingReveal = cell)
                             }
@@ -387,7 +387,7 @@ class BrowseLoadingRevealTest {
                         BrowseLoadingItem(style, geometry, showInformation = true)
                     }
                     Box(Modifier.fillMaxWidth().testTag("after-ready-slot")) {
-                        Box(Modifier.padding(geometry.cardInset.dp)) {
+                        Box(Modifier.padding(horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp)) {
                             LookaheadScope {
                                 BrowseItemLayout(item, style, geometry, this, true, {}, loadingReveal = cell)
                             }

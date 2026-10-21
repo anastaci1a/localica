@@ -147,7 +147,7 @@ internal fun BrowseLoadingItem(style: BrowseStyle, geometry: BrowseCellGeometry,
         if (style.presentation == Presentation.List) 1 else 2
     val infoLine = with(density) { MaterialTheme.typography.bodySmall.lineHeight.roundToPx() }
     val infoHeight = if (showInformation) infoLine * if (style.presentation == Presentation.List) 1 else 2 else 0
-    Layout(modifier = Modifier.fillMaxWidth().testTag("browse-skeleton-item").padding(geometry.cardInset.dp), content = {
+    Layout(modifier = Modifier.fillMaxWidth().testTag("browse-skeleton-item").padding(horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp), content = {
         Box(Modifier.graphicsLayer {
             shape = if (artistOnly) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(corner.floatValue)
             clip = true
@@ -182,7 +182,7 @@ internal fun BrowseLoadingViewport(style: BrowseStyle, geometry: BrowseCellGeome
         val metrics = BrowseItemMetrics(style, geometry.columns, geometry.artworkWidth(widthPx, this.density), this.density, false)
         val titleHeight = style.browseTitleLine(geometry.columns).sp.roundToPx() * metrics.lines
         val infoHeight = if (showInformation) MaterialTheme.typography.bodySmall.lineHeight.roundToPx() * metrics.lines else 0
-        val pitch = metrics.place(titleHeight, 0, infoHeight).height + geometry.cardInset.dp.roundToPx() * 2
+        val pitch = metrics.place(titleHeight, 0, infoHeight).height + geometry.cardVerticalInset(style).dp.roundToPx() * 2
         (ceil(heightPx.toFloat() / pitch.coerceAtLeast(1)).toInt() + 1) * geometry.columns
     }
     LazyVerticalGrid(columns = GridCells.Fixed(geometry.columns), userScrollEnabled = false,

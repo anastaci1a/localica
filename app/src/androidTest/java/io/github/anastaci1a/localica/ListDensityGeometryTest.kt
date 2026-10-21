@@ -146,4 +146,57 @@ class ListDensityGeometryTest {
         compose.waitForIdle()
         assertEquals(centers.last(), bounds("info").center.x, 1f)
     }
+    @Test fun tracklistNumbersAndOrdinaryNormalHaveSeparateStableEndpoints() {
+        var size by mutableStateOf(ListSize.Tracklist)
+        var albumNumber by mutableStateOf<String?>("12")
+        var density = 1f
+        compose.setContent { LocalicaTheme {
+            density = LocalDensity.current.density
+            LookaheadScope {
+                Box(Modifier.width(328.dp)) {
+                    BrowseItemLayout(item, BrowseStyle(listSize = size, extraInfo = ExtraInfo.Artist),
+                        BrowseCellGeometry(1), this@LookaheadScope, true, menu = {}, trackNumber = albumNumber, itemIndex = 4)
+                }
+            }
+        } }
+        compose.onNodeWithText("12").assertIsDisplayed()
+        assertEquals(28 * density, bounds("art").width, 1f)
+        val numberedInfo = bounds("info")
+        assertTrue("Tracklist retains subtitle information", numberedInfo.top >= bounds("text").bottom - 1f)
+        compose.runOnIdle { size = ListSize.Normal }
+        compose.waitForIdle()
+        compose.onNodeWithText("12").assertDoesNotExist()
+        assertTrue("Normal restores cover width", bounds("art").width > 28 * density)
+        compose.runOnIdle { albumNumber = null; size = ListSize.Tracklist }
+        compose.waitForIdle()
+        compose.onNodeWithText("5").assertIsDisplayed()
+        assertEquals(28 * density, bounds("art").width, 1f)
+        compose.runOnIdle { size = ListSize.Compact }
+        compose.waitForIdle()
+        compose.onNodeWithText("5").assertDoesNotExist()
+        assertTrue(bounds("art").width > 28 * density)
+    }
+
+    @Test fun liftedTracklistKeepsCapturedOccurrenceNumberAfterLiveRowsChange() {
+        lateinit var drag: SongDragState
+        var captured by mutableStateOf<SongDragPresentation?>(null)
+        compose.setContent { LocalicaTheme {
+            val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+            val scope = rememberCoroutineScope()
+            drag = remember { SongDragState(grid, scope) }
+            captured?.let { presentation -> LookaheadScope {
+                BrowseItemLayout(item, presentation.style, presentation.cellGeometry, this@LookaheadScope,
+                    true, menu = {}, itemIndex = presentation.indices.getValue(item.key))
+            } }
+        } }
+        compose.runOnIdle {
+            drag.style = BrowseStyle(listSize = ListSize.Tracklist)
+            drag.items = listOf(item.copy(row = row.copy(id = "earlier")), item)
+            captured = drag.capturePresentation()
+            drag.items = listOf(item)
+        }
+        compose.onNodeWithText("2").assertIsDisplayed()
+        compose.onNodeWithText("1").assertDoesNotExist()
+    }
+
 }

@@ -40,4 +40,14 @@ class BrowseZoomTest {
         assertFalse(next.quickSearch)
         assertEquals(old.copy(listSize = ListSize.Large), next)
     }
+    @Test fun albumAndMutableListZoomIncludesTracklistOnlyBetweenCompactAndNormal() {
+        val compact = BrowseStyle(listSize = ListSize.Compact)
+        val numbered = compact.zoomStep(true, 400f, albumSongs = true)
+        assertEquals(ListSize.Tracklist, numbered.listSize)
+        assertEquals(ListSize.Normal, numbered.zoomStep(true, 400f, albumSongs = true).listSize)
+        assertEquals(compact, numbered.zoomStep(false, 400f, albumSongs = true))
+        assertEquals(ListSize.Tracklist, BrowseStyle().zoomStep(false, 400f, albumSongs = true).listSize)
+        assertEquals(ListSize.Normal, compact.zoomStep(true, 400f).listSize)
+    }
+
 }

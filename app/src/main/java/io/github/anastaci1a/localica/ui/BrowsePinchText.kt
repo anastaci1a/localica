@@ -44,7 +44,7 @@ internal fun rememberBrowsePinchMeasure(item: BrowserItem, source: BrowseStyle, 
     val titleStyle = MaterialTheme.typography.titleMedium
     val infoStyle = MaterialTheme.typography.bodySmall
     fun endpoint(value: BrowseStyle, columns: Int, width: Int): BrowsePinchEndpoint {
-        val numbered = trackNumber != null && value.presentation == Presentation.List && value.listSize != ListSize.Large
+        val numbered = value.trackNumberLabel(trackNumber, index) != null
         val metrics = BrowseItemMetrics(value, columns, width, density.density, numbered)
         val info = if (showInformation) item.information(value, inherited)?.let {
             measurer.measure(AnnotatedString(it), infoStyle, overflow = TextOverflow.Ellipsis,
@@ -52,7 +52,7 @@ internal fun rememberBrowsePinchMeasure(item: BrowserItem, source: BrowseStyle, 
         } else null
         val title = measurer.measure(AnnotatedString(item.title), titleStyle.copy(
             fontSize = metrics.titleSize.sp, lineHeight = metrics.titleLine.sp,
-            fontWeight = if (trackNumber != null) FontWeight.Normal else titleStyle.fontWeight),
+            fontWeight = if (numbered) FontWeight.Normal else titleStyle.fontWeight),
             overflow = TextOverflow.Ellipsis, maxLines = metrics.lines,
             constraints = Constraints.fixedWidth(metrics.titleWidth(info?.size?.width ?: 0)))
         val placement = metrics.place(title.size.height, info?.size?.width ?: 0, info?.size?.height ?: 0)

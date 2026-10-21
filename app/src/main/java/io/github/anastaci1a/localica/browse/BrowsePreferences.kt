@@ -8,9 +8,9 @@ enum class Presentation(val label: String) { List("List"), Compact("Compact gall
 enum class ExtraInfo { Automatic, Inherited, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
 enum class SongGrouping(val label: String) { None("None"), Artist("Artist"), AlbumArtist("Album Artist"), Composer("Composer") }
 // Names are persisted; density order is explicit so existing values stay compatible.
-enum class ListSize { Compact, Normal, Large, Small, Smallest;
+enum class ListSize { Compact, Normal, Large, Small, Smallest, Tracklist;
     val trailingInformation get() = this == Compact || this == Small || this == Smallest
-    companion object { val densityOrder = listOf(Smallest, Small, Compact, Normal, Large) }
+    companion object { val densityOrder = listOf(Smallest, Small, Compact, Tracklist, Normal, Large) }
 }
 data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boolean = true,
     val presentation: Presentation = Presentation.List, val extraInfo: ExtraInfo = ExtraInfo.Automatic,
@@ -24,7 +24,7 @@ class BrowsePreferences(context: Context) {
     private val store = context.getSharedPreferences("browse-style", Context.MODE_PRIVATE)
     private val legacyStore = context.getSharedPreferences("library-query", Context.MODE_PRIVATE)
     fun type(route: BrowseRoute): String = BrowsePreferenceKeys.type(route)
-    init { migrateCatalogScopes() }
+    init { migrateCatalogScopes(); migrateAlbumTracklist() }
     // Collection identities remain independent; roots share their catalog type.
     fun allowsOverride(route: BrowseRoute) = BrowsePreferenceKeys.allowsOverride(route)
     private fun migrateCatalogScopes() {
@@ -63,6 +63,16 @@ class BrowsePreferences(context: Context) {
         all.keys.filter { it.startsWith("catalog.") && ".tab." in it }.forEach { edit.remove(it) }
         edit.putBoolean("shared-catalog-scopes", true).apply()
     }
+    /** Old album Normal meant numbered rows, not ordinary Normal artwork. */
+    private fun migrateAlbumTracklist() {
+        if (store.getBoolean("album-tracklist", false)) return
+        val edit = store.edit()
+        store.all.forEach { (key, value) ->
+            if (key.startsWith("contents.Album.") && key.endsWith(".list-size") && value == "Normal")
+                edit.putString(key, ListSize.Tracklist.name)
+        }
+        edit.putBoolean("album-tracklist", true).apply()
+    }
     private fun listKey(route: BrowseRoute) = BrowsePreferenceKeys.list(route)
     fun overridden(route: BrowseRoute) = sortSnapshot().overridden(route)
     fun sortSnapshot() = BrowseSortSnapshot.fromValues(store.all, legacyStore.all)
@@ -96,7 +106,7 @@ class BrowsePreferences(context: Context) {
             store.getBoolean("$key.quick-search", true),
             sorts.grouping(route),
             store.getInt("$key.columns", 0).takeIf { it in 1..5 },
-            store.enumValue<ListSize>("$key.list-size") ?: ListSize.Normal)
+            store.enumValue<ListSize>("$key.list-size") ?: route.defaultListSize())
     }
     /** Reuse the artwork resolver and one immutable read for every row type. */
     fun informationStyles(): Map<MediaKind, BrowseStyle> {
@@ -156,3 +166,16 @@ internal fun BrowseRoute.informationChoices(): List<ExtraInfo> =
         listOf(ExtraInfo.Automatic) + ExtraInfo.entries.filterNot {
             it in setOf(ExtraInfo.None, ExtraInfo.Inherited, ExtraInfo.Automatic)
         }
+
+/** Numbered album-style rows are also available for ordered mutable song collections. */
+internal fun BrowseRoute.supportsTracklist() = collection?.kind in setOf(MediaKind.Album, MediaKind.Playlist, MediaKind.Queue)
+internal fun BrowseRoute.listSizes() = ListSize.densityOrder.filter { it != ListSize.Tracklist || supportsTracklist() }
+internal fun BrowseRoute.defaultListSize() = if (collection?.kind == MediaKind.Album && !search) ListSize.Tracklist else ListSize.Normal
+
+/** Album dense rows retain their numbers; Normal is ordinary cover/subtitle presentation everywhere. */
+internal fun BrowseStyle.trackNumberLabel(albumNumber: String?, index: Int): String? = when {
+    presentation != Presentation.List -> null
+    listSize == ListSize.Tracklist -> albumNumber ?: (index + 1).toString()
+    listSize in setOf(ListSize.Smallest, ListSize.Small, ListSize.Compact) -> albumNumber
+    else -> null
+}

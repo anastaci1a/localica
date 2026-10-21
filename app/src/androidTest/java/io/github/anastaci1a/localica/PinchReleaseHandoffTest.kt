@@ -48,9 +48,9 @@ class PinchReleaseHandoffTest {
         val original = prefs.read(route)
         val overridden = prefs.overridden(route)
         val initial = if (gallery) BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5, listSize = ListSize.Large)
-            else BrowseStyle(listSize = if (outward) ListSize.Compact else ListSize.Normal)
+            else BrowseStyle(listSize = if (outward) ListSize.Tracklist else ListSize.Normal)
         val target = if (gallery) { if (outward) "Gallery, 4 columns" else "List, Large" }
-            else if (outward) "List, Normal" else "List, Compact"
+            else if (outward) "List, Normal" else "List, Tracklist"
         val tracks = (0..159).map { index -> Track("release:$index", "Song ${index.toString().padStart(3, '0')}",
             fileName = "$index.mp3", relativePath = "$index.mp3") }
         // Keep query identity stable when the presentation marker invalidates drawing.
@@ -68,7 +68,7 @@ class PinchReleaseHandoffTest {
             compose.setContent { LocalicaTheme {
                 view = LocalView.current
                 // The current-row highlight is a real rendered landmark in both
-                // Compact (which has no cover) and Normal list presentations.
+                // Tracklist (which has no cover) and Normal list presentations.
                 MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
                     Box(Modifier.fillMaxSize().testTag("release-scene")) {
                         BrowserScreen(library, playlists, route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
@@ -190,7 +190,7 @@ class PinchReleaseHandoffTest {
                 assertTrue("Artwork edge $edge cannot jump at handoff: $values",
                     values.zipWithNext().all { (a, b) -> kotlin.math.abs(b - a) <= range * .25f + 3f })
             }
-            assertEquals(if (cancelled || gallery) initial.listSize else if (outward) ListSize.Normal else ListSize.Compact,
+            assertEquals(if (cancelled || gallery) initial.listSize else if (outward) ListSize.Normal else ListSize.Tracklist,
                 prefs.read(route).listSize)
             if (gallery && !cancelled) {
                 assertEquals(if (outward) Presentation.Standard else Presentation.List, prefs.read(route).presentation)

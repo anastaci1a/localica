@@ -92,7 +92,8 @@ internal class BrowsePinchMotion {
         val inset = (BrowseCellGeometry(sourceColumns).cardInset * pixelDensity).roundToInt()
         val bounds = sourceBounds(key, index)
         val sourceWidth = (bounds.width - 2 * inset).coerceAtLeast(0f)
-        val sourceHeight = (bounds.height - 2 * inset).coerceAtLeast(0f)
+        val verticalInset = (BrowseCellGeometry(sourceColumns).cardVerticalInset(requireNotNull(source)) * pixelDensity).roundToInt()
+        val sourceHeight = (bounds.height - 2 * verticalInset).coerceAtLeast(0f)
         val p = progress.value.coerceIn(0f, 1f)
         return androidx.compose.ui.geometry.Size(sourceWidth + (target.width - sourceWidth) * p,
             sourceHeight + (target.height - sourceHeight) * p)
@@ -240,7 +241,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             }
         }) { zoomIn, midpoint ->
         val next = style.zoomStep(zoomIn, with(density) { width.toDp().value },
-            albumSongs = route.collection?.kind == MediaKind.Album)
+            albumSongs = route.supportsTracklist())
         if (next != style && !motion.disposed && motion.source == null) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
             motion.capturing = true
@@ -390,13 +391,15 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * targetHeight
             val inset = (geometry.cardInset * motion.pixelDensity).roundToInt()
+            val verticalInset = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
+            val sourceInset = (BrowseCellGeometry(motion.sourceColumns).cardVerticalInset(requireNotNull(motion.source)) * motion.pixelDensity).roundToInt()
             // A retained card is a source snapshot, not a destination row. Keep
             // its aspect ratio and fade it reversibly while live content reflows.
             val fit = minOf((width - 2 * inset).coerceAtLeast(0f) / image.size.width,
-                (targetHeight - 2 * inset).coerceAtLeast(0f) / image.size.height)
+                (targetHeight - 2 * verticalInset).coerceAtLeast(0f) / image.size.height)
             val factor = 1f + (fit - 1f) * p
             val alpha = 1f - p * p * (3f - 2f * p)
-            translate(old.left + (x - old.left) * p + inset, old.top + (y - old.top) * p + inset) {
+            translate(old.left + (x - old.left) * p + inset, old.top + (y - old.top) * p + sourceInset + (verticalInset - sourceInset) * p) {
                 image.highlight?.let { highlight ->
                     val originalSize = androidx.compose.ui.geometry.Size(image.size.width.toFloat(), image.size.height.toFloat())
                     with(highlight.renderer) {

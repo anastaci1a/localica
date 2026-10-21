@@ -60,6 +60,30 @@ class WorkflowPersistenceTest {
         } finally { prefs.write(route, original, overridden) }
     }
 
+    @Test fun albumNormalMigratesOnceToTracklistWithoutChangingOtherListsOrExplicitNewNormal() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = context.getSharedPreferences("browse-style", 0)
+        store.edit().clear().putBoolean("shared-catalog-scopes", true)
+            .putString("contents.Album.list-size", "Normal")
+            .putString("contents.Album.Album.3:old.sort", "Title")
+            .putString("contents.Album.Album.3:old.list-size", "Normal")
+            .putString("contents.Album.Album.5:large.sort", "Title")
+            .putString("contents.Album.Album.5:large.list-size", "Large")
+            .putString("contents.Playlist.list-size", "Normal").commit()
+        val album = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "old"))
+        try {
+            val prefs = BrowsePreferences(context)
+            assertEquals(ListSize.Tracklist, prefs.read(album).listSize)
+            assertEquals(ListSize.Tracklist, prefs.read(album.copy(collection = MediaRef(MediaKind.Album, "new"))).listSize)
+            assertEquals(ListSize.Large, prefs.read(album.copy(collection = MediaRef(MediaKind.Album, "large"))).listSize)
+            assertEquals(ListSize.Normal, prefs.read(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, "p"))).listSize)
+            prefs.write(album, prefs.read(album).copy(listSize = ListSize.Normal), true)
+            assertEquals(ListSize.Normal, BrowsePreferences(context).read(album).listSize)
+            prefs.reset(album)
+            assertEquals(ListSize.Tracklist, prefs.read(album).listSize)
+        } finally { store.edit().clear().commit() }
+    }
+
     @Test fun sortedOccurrencesAndManualBaselineSurviveReopeningBothStores() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val qName = "sorted-queue-test.db"; val pName = "sorted-playlist-test.db"
