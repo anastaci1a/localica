@@ -1,7 +1,10 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -53,13 +56,14 @@ private sealed interface LyricsPresentation {
     data class Available(val source: LyricSource) : LyricsPresentation
 }
 
+@OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
 @Composable
 internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, sourcesRequest: Int = 0, sourcesAnchor: GlassAnchor? = null,
     sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null,
     contentHeight: Dp? = null, result: LyricsResult? = rememberLyrics(track),
     sourcesVisible: Boolean? = null, onSourcesDismiss: (() -> Unit)? = null,
-    originPreparation: GlassOriginPreparation? = null) {
+    originPreparation: GlassOriginPreparation? = null, contentAlpha: () -> Float = { 1f }) {
     val lyricClock by produceState(positionMs, positionMs, sampledAtMs, playing, speed, delayMs, durationMs) {
         do {
             value = lyricPosition(positionMs, sampledAtMs, android.os.SystemClock.elapsedRealtime(), playing, speed, delayMs, durationMs)
@@ -118,21 +122,31 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         }
     }
     // The empty decoration uses the stable background viewport. Only actual lyrics resize with metadata.
-    Column(modifier.testTag("lyrics-panel")) {
-        androidx.compose.animation.Crossfade(presentation, Modifier.weight(1f),
-            animationSpec = tween(if (reducedMotion) 0 else 300), label = "Song lyrics") { shown ->
-            when (shown) {
-                LyricsPresentation.Loading, LyricsPresentation.Unavailable -> Box(Modifier.fillMaxSize())
-                LyricsPresentation.Missing -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    // A prior song's empty state is no longer authoritative once another read starts.
-                    if (presentation == LyricsPresentation.Missing) Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_lyrics),
-                        "No local lyrics", Modifier.size(56.dp).testTag("empty-lyrics"), tint = LocalContentColor.current.copy(alpha = .22f))
-                }
-                is LyricsPresentation.Available -> key(shown.source.id, shown.source.document) {
-                    var shownPosition by remember { mutableLongStateOf(lyricClock) }
-                    SideEffect { if (shown == presentation) shownPosition = lyricClock }
-                    LyricsLines(shown.source.document, shownPosition, reducedMotion, onSeek,
-                        Modifier.fillMaxWidth().then(contentHeight?.let { Modifier.height(it) } ?: Modifier.fillMaxHeight()))
+    LyricsBackdrop(presentation, modifier.testTag("lyrics-panel"), contentAlpha) {
+        Column {
+            val transition = updateTransition(presentation, label = "Song lyrics")
+            transition.Crossfade(Modifier.weight(1f), animationSpec = tween(if (reducedMotion) 0 else 300)) { shown ->
+                // Share Crossfade's transition clock so the sampled scene includes both
+                // retained documents at exactly the opacity used by their visible parents.
+                val sourceAlpha by transition.animateFloat(transitionSpec = { tween(if (reducedMotion) 0 else 300) },
+                    label = "Lyric source alpha") { if (it == shown) 1f else 0f }
+                val scene = requireNotNull(LocalLyricsBackdropScene.current)
+                val ink = LocalContentColor.current
+                when (shown) {
+                    LyricsPresentation.Loading, LyricsPresentation.Unavailable -> Box(Modifier.fillMaxSize())
+                    LyricsPresentation.Missing -> Box(Modifier.fillMaxSize()
+                        .recordLyricsLayer(scene, { sourceAlpha }) { presentation to ink }, contentAlignment = Alignment.Center) {
+                        // A prior song's empty state is no longer authoritative once another read starts.
+                        if (presentation == LyricsPresentation.Missing) Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_lyrics),
+                            "No local lyrics", Modifier.size(56.dp).testTag("empty-lyrics"), tint = LocalContentColor.current.copy(alpha = .22f))
+                    }
+                    is LyricsPresentation.Available -> key(shown.source.id, shown.source.document) {
+                        var shownPosition by remember { mutableLongStateOf(lyricClock) }
+                        SideEffect { if (shown == presentation) shownPosition = lyricClock }
+                        LyricsLines(shown.source.document, shownPosition, reducedMotion, onSeek,
+                            Modifier.fillMaxWidth().then(contentHeight?.let { Modifier.height(it) } ?: Modifier.fillMaxHeight()),
+                            sourceAlpha = { sourceAlpha })
+                    }
                 }
             }
         }
@@ -141,7 +155,14 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
 
 @Composable
 internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier, sourceAlpha: () -> Float = { 1f }) {
+    val scene = LocalLyricsBackdropScene.current
+    if (scene == null) {
+        LyricsBackdrop(document, modifier) {
+            LyricsLines(document, positionMs, reducedMotion, onSeek, Modifier.fillMaxSize(), sourceAlpha)
+        }
+        return
+    }
     val list = rememberLazyListState()
     val dragged by list.interactionSource.collectIsDraggedAsState()
     val context = LocalContext.current
@@ -150,6 +171,11 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
     var following by rememberSaveable { mutableStateOf(!touchExploration) }
     LaunchedEffect(dragged) { if (dragged) following = false }
     val active = LrcParser.current(document.lines, positionMs)
+    val selectedInk = MaterialTheme.colorScheme.onSurface
+    val inactiveInk = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val lyricStyle = MaterialTheme.typography.headlineSmall
+    val warningInk = LocalContentColor.current
+    val warningStyle = MaterialTheme.typography.bodySmall
     LaunchedEffect(active, following, document) {
         if (following && active >= 0) {
             // The top content padding already places the active line one third down.
@@ -157,10 +183,15 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
         }
     }
     Column(modifier) {
-        document.warning?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        document.warning?.let { Text(it, Modifier.recordLyricsLayer(scene, sourceAlpha) { Triple(it, warningInk, warningStyle) },
+            style = warningStyle) }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("lyric-lines")
                 .controlScrollParent(list, ControlScrollAxis.Vertical)
+                .recordLyricsLayer(scene, sourceAlpha) {
+                    listOf(document, active, selectedInk, inactiveInk, lyricStyle,
+                        list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset, list.isScrollInProgress)
+                }
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawWithContent {
                     drawContent()
@@ -169,10 +200,10 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                 }, contentPadding = PaddingValues(top = maxHeight / 3, bottom = maxHeight / 2)) {
                 itemsIndexed(document.lines) { index, line ->
                     val selected = !document.synced || index == active
-                    val color by animateColorAsState(if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    val color by animateColorAsState(if (selected) selectedInk else inactiveInk,
                         tween(if (reducedMotion) 0 else 350), label = "Lyric emphasis")
                     Text(line.text.ifEmpty { "♪" }, color = color,
-                        style = MaterialTheme.typography.headlineSmall, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        style = lyricStyle, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         modifier = Modifier.fillMaxWidth().semantics { this.selected = document.synced && index == active }
                             .then(if (line.timeMs != null) Modifier.clickable(interactionSource = null, indication = null,
                                 onClickLabel = "Seek to lyric") { onSeek(line.timeMs); following = true } else Modifier)
@@ -185,8 +216,10 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                 exit = androidx.compose.animation.fadeOut(tween(if (reducedMotion) 0 else 300)) +
                     androidx.compose.animation.slideOutVertically(tween(if (reducedMotion) 0 else 300)) { it }) {
                 val current = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == active }
-                ReturnToPositionButton(up = current?.let { it.offset < 0 } ?: (active < list.firstVisibleItemIndex),
-                    label = "Return to current line", visible = !following) { following = true }
+                CompositionLocalProvider(LocalFrostedBackdrop provides scene.source) {
+                    ReturnToPositionButton(up = current?.let { it.offset < 0 } ?: (active < list.firstVisibleItemIndex),
+                        label = "Return to current line", visible = !following) { following = true }
+                }
             }
         }
     }

@@ -323,7 +323,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     },
                 contentHeight = (metadataY - statusInset - 64.dp).coerceAtLeast(96.dp), sourcesAnchor = sourcesAnchor,
                 result = lyricsResult, sourcesVisible = sourcesVisible, onSourcesDismiss = { sourcesVisible = false },
-                originPreparation = sourcesPreparation,
+                originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
                 sampledAtMs = state.sampledAtMs, playing = state.isPlaying, speed = state.playbackSpeed,
                 delayMs = settings.lyricDelayMs, durationMs = state.durationMs) }
             val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value
