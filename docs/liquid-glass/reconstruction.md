@@ -197,7 +197,7 @@ Frames A/B: 2.5/2.0 seconds. The magnifier is a clean symmetric vector trace; co
 
 ### Navigation control
 
-Current round: **2/3** verified passes. Native E: A1.979013→1.976554; B7.434360→7.430089. All16 foreground and exterior measurements are unchanged. Shared outer-normal and rim-lighting width adjustments improve both references; advisory interior error slightly increases in the second pass. Unknown exterior context uses nearest defined source RGB for presentation only; measured pixels are unchanged. Motion below remains the earlier calibration until this round finishes.
+Current round: **3/3** verified passes. Native E: A1.979013→1.975144; B7.434360→7.429451. All16 foreground and exterior measurements are unchanged. Shared outer-normal and rim-lighting width adjustments improve both references; advisory interior error slightly increases in passes2–3. Unknown exterior context uses nearest defined source RGB for presentation only; measured pixels are unchanged. Motion below remains the earlier calibration until this round finishes.
 
 Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray selection backing, symbols and text. Original font outlines are used for labels; unresolved symbols use clean traces or a documented public vector. **The upper rim on B remains too dark.** The mostly white background A weakly constrains refraction.
 
@@ -205,7 +205,7 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 
 [![Navigation control, background B: Apple left, reconstruction right](assets/study-music-navigation-paired-b.png)](assets/study-music-navigation-paired-b.png)
 
-- [Current recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-02.json) · [Independent verification](experiments/reconstruction/studies/music-navigation/review-round/pass-02-verification.json) · [Historical calibration](experiments/reconstruction/studies/music-navigation/paired/accepted.json) · [A diagnostics](experiments/reconstruction/studies/music-navigation/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-navigation/paired/b/diagnostics.json).
+- [Current recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-03.json) · [Independent verification](experiments/reconstruction/studies/music-navigation/review-round/pass-03-verification.json) · [Historical calibration](experiments/reconstruction/studies/music-navigation/paired/accepted.json) · [A diagnostics](experiments/reconstruction/studies/music-navigation/paired/a/diagnostics.json) · [B diagnostics](experiments/reconstruction/studies/music-navigation/paired/b/diagnostics.json).
 <details>
 <summary>Motion — background A</summary>
 

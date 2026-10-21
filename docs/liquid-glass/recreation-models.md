@@ -296,8 +296,8 @@ For `t,s∈[0,1]` and `γ>0`, the function stays bounded and monotone. The affin
 
 ### Current vector-control revisions
 
-Navigation uses the existing empirical normal/tangential map and shared material, followed by generated shadow and independently rasterized SVG coverage. Its [current recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-02.json) freezes native pixel blur widths, normalized map coefficients, input-case fingerprints and vector hashes. The native widths scale with the source short half-size L. Original references and masks remain unchanged.
+Navigation uses the existing empirical normal/tangential map and shared material, followed by generated shadow and independently rasterized SVG coverage. Its [current recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-03.json) freezes native pixel blur widths, normalized map coefficients, input-case fingerprints and vector hashes. The native widths scale with the source short half-size L. Original references and masks remain unchanged.
 
-Replay: `python vector_revision.py INPUTS studies/music-navigation/review-round/pass-02.json OUTPUT`. INPUTS contains the original private a/b source, target, known masks and SVGs. This command checks case/vector fingerprints; Study also checks source hashes. Unknown exterior is extended only for presentation; no reference shadow or image-derived foreground is copied.
+Replay: `python vector_revision.py INPUTS studies/music-navigation/review-round/pass-03.json OUTPUT`. INPUTS contains the original private a/b source, target, known masks and SVGs. This command checks case/vector fingerprints; Study also checks source hashes. Unknown exterior is extended only for presentation; no reference shadow or image-derived foreground is copied.
 
 Iteration width is `min(2W,max(W,cap))`, preserving aspect ratio; cap720px for small controls or1080px for navigation/player bars. Originals above cap retain their width; HQ exports are1080px wide. Native scoring is unchanged.
