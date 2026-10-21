@@ -90,8 +90,10 @@ Apple, [legibility demonstration, 15:15–15:20](https://developer.apple.com/vid
 
 These test tone, broad lighting and rim. Nearly uniform backdrops cannot identify refraction: high similarity here does not validate an optical model. Neither recipe uses Gaussian blur.
 
+Current round: **3/3 verified reconstruction passes**, exterior-only, with all original optical scores unchanged. One common generated shadow/glow law, with shared original-offset multiplier s=1.2 and fixed four opacity/width coefficients, improves frozen near-exterior RMSE light 6.082354 → 3.794838 / dark 6.752748 → 2.057697 and full-visible exterior 6.613297 → 4.565302 / 5.963654 → 3.712516. Comparisons use the frozen source PNGs and original4×4 body coverage; no copied reference context/shadow. Removing the previous display context earns no credit. Sources remain estimated/unobserved; upper far-light regressions, the .7L shadow-width bound and unresolved broad dark glow remain explicit. [Recipe](experiments/reconstruction/studies/light-dark/review-round/pass-03.json) · [Independent verification](experiments/reconstruction/studies/light-dark/review-round/pass-03-verification.json).
+
 <details>
-<summary>Full-resolution light and dark comparisons</summary>
+<summary>1080px-per-side light and dark comparisons</summary>
 
 [![Full HD light comparison](assets/match-regular-light-full.png)](assets/match-regular-light-full.png)
 
@@ -99,9 +101,22 @@ These test tone, broad lighting and rim. Nearly uniform backdrops cannot identif
 
 </details>
 
+<details>
+<summary>Generated light/dark motion from the final reconstruction</summary>
+
+The generated control moves horizontally over the frozen source estimates: 1080px wide, 90frames at15fps,6seconds. Both GIFs are below10MB. Every frame reevaluates the original4×4 body sampling/coverage and the shared generated exterior; no reference residual or copied context. Near-uniform sources do not validate refraction or identify lighting. This is illustrative generated motion, not captured Apple animation. [Motion/source verification](experiments/reconstruction/studies/light-dark/review-round/motion.json).
+
+[Light video](assets/regular-light-final.mp4) · [Dark video](assets/regular-dark-final.mp4)
+
+![Generated light-surface motion](assets/regular-light-final.gif)
+
+![Generated dark-surface motion](assets/regular-dark-final.gif)
+
+</details>
+
 ## Apple Music studies
 
-References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Use **Fullscreen** to inspect the full-size pair.
+References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. Current reconstruction exports are **1080px wide per side**; native scoring remains fixed to the reference resolution. The Apple halves retain the original video's detail. Use **Fullscreen** to inspect the full-size pair.
 
 ### Expanded mini-player
 

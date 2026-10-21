@@ -1,0 +1,5 @@
+{
+  "initial_independent_reference": "float64 coordinates and combined sigma*L arithmetic",
+  "max_difference_regular_light": 4.628705752018902e-9,
+  "status": "Initial strict exact-composite assertion failed; retained. Native compositor uses original float32 coordinate/distance stage followed by float64 Gaussian parameters. Replaying that declared arithmetic order is required for exact arrays; no regression tolerance or scoring change."
+}
