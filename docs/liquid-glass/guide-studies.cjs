@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),sharp=require('sharp');
 const studies={
  'clear-playback-control':['Playback','Circular control · most polished'],
  'archive-and-plus-toolbar':['Toolbar','Archive and plus · text backdrop'],
+ 'safari-circular-controls':['Safari','Circular controls · transfer under review'],
  'active-slider':['Settings','Active slider · blue track'],
  'light-and-dark-surfaces':['Surfaces','Light and dark material responses'],
  'expanded-mini-player':['Apple Music','Expanded mini-player'],
