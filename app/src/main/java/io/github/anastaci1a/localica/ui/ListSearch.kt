@@ -57,11 +57,14 @@ private fun SearchPillFace(label: String) {
 internal fun GlassSearchField(value: String, onValue: (String) -> Unit, label: String,
     modifier: Modifier = Modifier, fieldModifier: Modifier = Modifier, enabled: Boolean = true,
     keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
-    keyboardActions: androidx.compose.foundation.text.KeyboardActions = androidx.compose.foundation.text.KeyboardActions.Default) {
+    keyboardActions: androidx.compose.foundation.text.KeyboardActions = androidx.compose.foundation.text.KeyboardActions.Default,
+    showSearchIcon: Boolean = true) {
     LiquidGlassSurface(modifier, cornerRadius = 28.dp, pressFeedback = false) {
         ClearableTextField(value, onValue, fieldModifier.fillMaxWidth().semantics { contentDescription = "$label input" }, enabled = enabled,
             singleLine = true, placeholder = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            leadingIcon = { Icon(painterResource(R.drawable.ic_search), null, Modifier.size(22.dp)) },
+            leadingIcon = if (showSearchIcon) {
+                { Icon(painterResource(R.drawable.ic_search), null, Modifier.size(22.dp).testTag("glass-search-icon")) }
+            } else null,
             keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
             colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
                 disabledContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent,
