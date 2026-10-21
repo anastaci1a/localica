@@ -16,7 +16,7 @@ Apple, [Meet Liquid Glass, 3:10](https://developer.apple.com/videos/play/wwdc202
 - [Complete equations and operation order](recreation-models.md#playback-radial-map-and-smooth-inner-transition). This is an empirical refraction map, not an identified Apple solid.
 - The reference-derived triangle silhouette is reused; its **color is independently calculated**. It has no stroked outline. The response is photograph-specific, not a universal contrast algorithm.
 - Short round, **3/3 verified passes**: shared material exposure ×1.005; post-refraction blur 1.6 native-reference pixels; highlight taper .48; radial edge-displacement amplitude ×1.001. Weighted RMS error decreases **9.10758 → 9.07967 → 9.06493 → 9.06475**. Current glass/icon errors are **8.04005/3.21105**; neither regresses in any pass. The third gain is small (0.002%). [Final recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json) · [Independent replay/domain/visual checks](experiments/reconstruction/studies/playback/review-round/pass-03-verification.json).
-- The current 4× comparison uses the registered clean photograph outside the lens; no photographed shadow is copied. Exterior shadow modeling remains incomplete. The older full-frame comparison below is historical; motion uses the final short-round recipe.
+- The current compact comparison is1080px per side with a64px caption, over the full680×655 native control crop. The reconstruction uses the same accepted lossless4× body/icon render; the Apple panel is resized once from the frozen native reference. The entire lens body remains in view; registered clean photograph is used outside it and no photographed shadow is copied. Exterior shadow modeling remains incomplete. The older full-frame comparison below is historical; motion uses the final short-round recipe.
 
 <details>
 <summary>Full-resolution playback comparison</summary>
@@ -30,11 +30,19 @@ Each half retains 1920 × 1080 pixels.
 <details>
 <summary>Motion preview — full-size GIF and video</summary>
 
-<video controls preload="none" playsinline width="1920" height="1080" aria-label="Settled playback control motion"><source src="assets/playback-settled.mp4" type="video/mp4"><a href="assets/playback-settled.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="608" aria-label="Settled playback control motion"><source src="assets/playback-settled.mp4" type="video/mp4"><a href="assets/playback-settled.mp4">Open video</a></video>
 
-<img src="assets/playback-settled.gif" alt="Settled playback model translated over the recovered photograph" width="1920" height="1080" loading="lazy" decoding="async">
+<img src="assets/playback-settled.gif" alt="Settled playback model translated over the recovered photograph" width="1080" height="608" loading="lazy" decoding="async">
 
-[Full-HD video](assets/playback-settled.mp4). GIF: 7,740,942 bytes, 1920 × 1080, about six seconds (5.99 s), 15 fps; video: six seconds at 30 fps. Both use the [final short-round recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json), with no exterior shadow. Motion integrates 2×2 samples per output pixel, versus 4×4 for still verification. [Media hashes and encoding](experiments/reconstruction/studies/playback/review-round/motion.json). These are offline renders, not device-performance measurements or a matched Apple motion clip.
+[Video](assets/playback-settled.mp4). GIF: 3,072,914 bytes,1080×608; both exports contain90frames at15fps, exactly6seconds. They retain the [final short-round recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json), original motion path and registered clean-source exterior, with no copied target context/shadow. Motion retains its original2×2 integration; native4×4 scoring/material are unchanged. The compact still reuses lossless final frames; no optical model was refitted or counted again. [Media hashes, source support and format verification](experiments/reconstruction/studies/playback/review-round/motion.json). These are offline renders, not device-performance measurements or a matched Apple motion clip.
+
+Reproduce the current motion format from the reconstruction directory using the frozen input PNGs and accepted record:
+
+```sh
+python motion.py INPUTS OUTPUT --record studies/playback/review-round/pass-03.json --frames 90 --fps 15 --width 1080
+```
+
+Width/fps defaults remain1920/30. The export keeps the original path and2×2 motion integration; native4×4 still scoring is unchanged. GIFs use Bayer128 first, preserve the selected GIF rate (at most15fps) during palette-only size fallback, and use centisecond delays totaling exactly6seconds for this command.
 
 </details>
 
