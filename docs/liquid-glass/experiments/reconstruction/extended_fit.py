@@ -116,7 +116,10 @@ class Study:
             self.exterior_source=cv2.imread(str(self.folder/name))[:,:,::-1].astype(np.float32)/255
             assert self.exterior_source.shape==self.source.shape
         self.target=cv2.imread(str(self.folder/'target.png'))[:,:,::-1].astype(np.float32)/255
-        known=cv2.imread(str(self.folder/'known.png'),cv2.IMREAD_GRAYSCALE)>0
+        target_mask=self.case.get('target_observation_mask','known.png')
+        assert Path(target_mask).name==target_mask and target_mask in self.case['source_sha256'],'Freeze target visibility independently of source confidence'
+        known=cv2.imread(str(self.folder/target_mask),cv2.IMREAD_GRAYSCALE)>0
+        assert known.shape==self.source.shape[:2]
         self.L=min(self.case['half'])
         assert self.case.get('parameter_length_reference',self.L)>0
         self.half=np.array(self.case['half'])/self.L
