@@ -10,7 +10,8 @@ const expected=[...markdown.matchAll(/!\[[^\]]*\]\(([^)]+)\)|<img\b[^>]*src="([^
   const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   for(const width of [1280,390]){
    await page.setViewportSize({width,height:950});await page.goto(pathToFileURL(path.join(root,'site/liquid-glass/reconstruction.html')).href);
-   assert.equal(await page.locator('details.study').count(),11);
+   assert.equal(await page.locator('details.study').count(),12);
+   assert.equal(await page.locator('details.study#safari-circular-controls').count(),1,'Safari is a compact study, not an unbounded page section');
    const refs=await page.locator('main img:not(.study-thumbnail)').evaluateAll(list=>list.map(i=>(i.dataset.mediaSrc||i.getAttribute('src')).split('?')[0]));
    assert.deepEqual(refs,expected,'Retain every source image in order');
    assert.equal(await page.locator('details img[src]:not(.study-thumbnail)').count(),0);
