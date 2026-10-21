@@ -318,7 +318,10 @@ class ModalGestureTakeoverTest {
             awaitNode("browser-list")
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(30)
-            val before = compose.onNodeWithText("Song 029").fetchSemanticsNode().boundsInRoot.top
+            // ScrollToIndex schedules work; use a fixed interior row once that work is visible.
+            awaitNode("media-modal:33")
+            val landmark = compose.onNodeWithTag("media-modal:33").assertIsDisplayed()
+            val before = landmark.fetchSemanticsNode().boundsInRoot.top
             val area = bounds("browser-list", rootOrigin)
             val trigger = bounds("open-modal", rootOrigin).center
             compose.mainClock.autoAdvance = false
@@ -337,7 +340,7 @@ class ModalGestureTakeoverTest {
             compose.waitForIdle()
             assertEquals(original, preferences.read(route))
             assertEquals("Rollback must restore the source viewport, not merely its preference", before,
-                compose.onNodeWithText("Song 029").fetchSemanticsNode().boundsInRoot.top, 2f)
+                landmark.assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top, 2f)
         } finally { preferences.write(route, saved, overridden) }
     }
 
