@@ -166,6 +166,31 @@ F(x,y) = ((1−core S)x, (1−core S)y) − a n
 
 The `regular-light` and `regular-dark` recipes independently specify field parameters and material coefficients. Neither uses Gaussian blur. Their nearly uniform backdrops cannot identify an optical model; high scores here validate tone/rim approximation, **not refraction**.
 
+The first current reconstruction checkpoint adds a **shared generated exterior**, with the original independent body recipes, source PNGs and native 4×4 coverage unchanged. This empirical component improves exterior reconstruction; optical scores tie. It does not identify refraction, the incident background, or Apple's lighting setup.
+
+Let L=106.5 pixels, p=(pixel−center)/L, and sd be the original rounded-rectangle signed distance in normalized units. With K offset (0,.06) and H offset (0,−.4):
+
+```text
+alpha_i = opacity_i exp(−.5 [max(sd(p−offset_i),0)/sigma_i]²)
+B1 = B (1−alpha_K)
+B_out = B1 + alpha_H (1−B1)
+complete = body coverage_4x4 + B_out (1−coverage_4x4)
+K: opacity .028644737086080185, sigma .7
+H: opacity .0391166614246353, sigma .11786013768786802
+```
+
+Both themes use these exact coefficients. B is the existing frozen source PNG, not a fitted background plane. The light paper is polynomial-estimated; dark underbody source0 remains an assumption. No copied target residual or reference shadow enters this exterior law. Gaussian distance falloff is an exterior opacity law, not image blur or chromatic dispersion. The black sigma reaches its declared .7L limit; upper light far bands regress and the broader dark gray field remains unresolved.
+
+For exact native replay, coordinates/signed distances retain the existing float32 staging and Gaussian parameters/compositing use float64. A pure-float64 coordinate control differs by up to 4.63e−9; no regression tolerance was changed. [Recipe and original independent body materials](experiments/reconstruction/studies/light-dark/review-round/pass-01.json) · [Independent verification](experiments/reconstruction/studies/light-dark/review-round/pass-01-verification.json).
+
+Run the standalone [replay](experiments/reconstruction/regular_exterior.py) from the reconstruction directory, with the four frozen regular-light/dark source/target PNGs in INPUTS:
+
+```sh
+python regular_exterior.py INPUTS OUTPUT --recipe studies/light-dark/review-round/pass-01.json
+```
+
+This performs the original native body render and separately generates the exterior; it never invokes the old context compositor. Reuse immutable native material arrays with --material-cache CACHE when those arrays already match the recipe. Output includes all original score checks, frozen-range/full-visible exterior scores and 720/1080-width per-side comparisons with explicit 64px captions.
+
 ## Music and switch profile family
 
 The newer [paired studies](reconstruction.md#apple-music-studies) use one normalized image-map family. Each `studies/<id>/paired/accepted.json` supplies the shared coefficients; `a.json` and `b.json` supply measured poses and frozen input hashes. Home's corrected chain protects the retained single-background result; the earlier invalid pairing is archived separately.
