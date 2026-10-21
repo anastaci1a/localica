@@ -235,9 +235,9 @@ Frames A/B: 0/6.033 seconds. The study separates the outer glass, fixed gray sel
 
 ### Home control
 
-Current boundary-approximation round: **1/3** verified passes. This is a new input epoch, not a claimed gain over the historical backdrop. Nearest-defined RGB estimates missing incident content while preserving every originally observed pixel and target scoring mask. About0.44%/0.30% of full emitted rays still depend on unobserved content; this is a boundary assumption, not recovered Apple imagery. Within that fixed epoch, native E improves A6.342535→6.342162/B10.160994→10.160419. **The overly dark outer rim and foreground mismatch remain unresolved.**
+Current boundary-approximation round: **2/3** verified passes. This is a new input epoch, not a claimed gain over the historical backdrop. Nearest-defined RGB estimates missing incident content while preserving every originally observed pixel and target scoring mask. About0.44%/0.30% of full emitted rays still depend on unobserved content; this is a boundary assumption, not recovered Apple imagery. Within that fixed epoch, native E improves A6.342535→6.342153/B10.160994→10.160405. A shared bounded icon-color response reduces foreground RMSE A11.1165→11.0619/B11.8255→11.6845. **The overly dark outer rim and foreground mismatch remain unresolved.**
 
-[Current recipe](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-01.json) · [Independent verification and source limits](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-01-verification.json). Motion below remains the historical calibration until this round finishes.
+[Current recipe](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-02.json) · [Independent verification and source limits](experiments/reconstruction/studies/music-home-vector/boundary-round/pass-02-verification.json). Motion below remains the historical calibration until this round finishes.
 
 Frames A/B: 2.5/2.0 seconds. The corrected study has 22 initial/refinement and 21 paired experiments, with one sparse source-brightness response and a clean Home vector. Both references pass the frozen native loss, whole-glass and foreground gates. The earlier pairing regressed the first-background result; its unchanged archived records do not count as current acceptance.
 
