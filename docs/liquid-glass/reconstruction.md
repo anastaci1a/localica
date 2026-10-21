@@ -36,6 +36,14 @@ Each half retains 1920 × 1080 pixels.
 
 [Video](assets/playback-settled.mp4). GIF: 3,072,914 bytes,1080×608; both exports contain90frames at15fps, exactly6seconds. They retain the [final short-round recipe](experiments/reconstruction/studies/playback/review-round/pass-03.json), original motion path and registered clean-source exterior, with no copied target context/shadow. Motion retains its original2×2 integration; native4×4 scoring/material are unchanged. The compact still reuses lossless final frames; no optical model was refitted or counted again. [Media hashes, source support and format verification](experiments/reconstruction/studies/playback/review-round/motion.json). These are offline renders, not device-performance measurements or a matched Apple motion clip.
 
+Reproduce the current motion format from the reconstruction directory using the frozen input PNGs and accepted record:
+
+```sh
+python motion.py INPUTS OUTPUT --record studies/playback/review-round/pass-03.json --frames 90 --fps 15 --width 1080
+```
+
+Width/fps defaults remain1920/30. The export keeps the original path and2×2 motion integration; native4×4 still scoring is unchanged. GIFs use Bayer128 first, preserve the selected GIF rate (at most15fps) during palette-only size fallback, and use centisecond delays totaling exactly6seconds for this command.
+
 </details>
 
 ## Archive and plus toolbar
