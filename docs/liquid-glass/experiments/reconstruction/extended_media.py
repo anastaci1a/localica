@@ -2,7 +2,8 @@
 
 python extended_media.py /private/study [--frames 90] [--travel 45]
 Use --finish-existing to retry GIF encoding from the hash-checked render manifest.
-GIF previews retain a full palette; masters above2MP use half-size GIFs.
+GIF previews try a full palette, then a reduced palette if needed for the budget.
+Masters above2MP use half-size GIFs unless --gif-full-size is supplied.
 --gif-full-size overrides preview sizing; --gif-max-mb sets the size budget.
 No reference material rectangle is composited into the computed glass.
 """

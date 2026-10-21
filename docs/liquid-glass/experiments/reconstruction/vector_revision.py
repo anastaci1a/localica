@@ -1,4 +1,4 @@
-"""Clean glass/shadow compositing for studies with solid SVG foregrounds.
+"""Clean glass/shadow compositing for studies with declared SVGs and separately hashed artwork.
 
 Unlike the historical context compositor, this never retains a reference shadow
 or screenshot-derived foreground. Material/ray evaluation remains Study.render.
@@ -7,8 +7,11 @@ import cv2,numpy as np
 
 
 def composite(study,p,material,scale=1,background_source=None):
-    assert not study.transmission_layers,'Nonlinear foreground layers need an explicit replay contract'
-    assert all('vector_asset' in layer and layer['mode']!='artwork' for layer in study.case.get('foreground_layers',[])),'Only declared vector glyphs are supported'
+    if study.transmission_layers:
+        params=np.asarray(study.case.get('foreground_response',[]),float)
+        assert params.shape==(3,3) and np.isfinite(params).all(),'Freeze nonlinear foreground response explicitly'
+        assert np.all((params[:,:2]>=0)&(params[:,:2]<=1)) and np.all(params[:,2]>0)
+    assert all(('vector_asset' in layer and layer['mode']!='artwork') or (layer['mode']=='artwork' and 'artwork_asset' in layer and 'artwork_sha256' in layer) for layer in study.case.get('foreground_layers',[])),'Require declared vector glyphs or independently hashed artwork'
     a,b,c,d=study.crop;H,W=material.shape[:2]
     assert (H,W)==((d-b)*scale,(c-a)*scale)
     yy,xx=np.mgrid[:H,:W].astype(np.float32);X=a-.5+(xx+.5)/scale;Y=b-.5+(yy+.5)/scale
@@ -22,7 +25,23 @@ def composite(study,p,material,scale=1,background_source=None):
         *_,(sd,_,_)=study.shape(x-q['offset'][0],y-q['offset'][1],p)
         background*=1-q['opacity']*np.exp(-.5*(np.maximum(sd,0)/q['sigma'])**2)[...,None]
     alpha=study.shape_coverage(p,scale)
-    return study.apply_foreground(material*alpha[...,None]+background*(1-alpha[...,None]),scale)
+    out=material*alpha[...,None]+background*(1-alpha[...,None])
+    if not study.transmission_layers:return study.apply_foreground(out,scale)
+    # Fixed vector response: no target-based matte or color calibration.
+    layers=study.transmission_layers
+    try:
+        study.transmission_layers=[]
+        out=study.apply_foreground(out,scale)
+    finally:study.transmission_layers=layers
+    from vector_foreground import coverage
+    from foreground_response import response
+    for layer in layers:
+        box=tuple(layer['box']);assert box in study.vector_layers
+        x0,y0,_,_=study.crop;a,b,c,d=box
+        region=out[(b-y0)*scale:(d-y0)*scale,(a-x0)*scale:(c-x0)*scale]
+        A=coverage(study.folder,study.vector_layers[box],scale)
+        region[:]=region*(1-A[...,None])+response(region,params)*A[...,None]
+    return out
 
 
 def replay(folder,record,observation,output,high_quality=False):
@@ -40,6 +59,9 @@ def replay(folder,record,observation,output,high_quality=False):
     assert fingerprint==record['case_sha256'][observation], 'Frozen case mismatch'
     for name,digest in record['vector_sha256'][observation].items():
         assert hashlib.sha256((Path(folder)/name).read_bytes()).hexdigest()==digest
+    if 'foreground_response' in record:
+        assert study.transmission_layers,'Response override requires declared transmission vectors'
+        study.case={**study.case,'foreground_response':record['foreground_response']}
     p=record['parameters'];material=np.asarray(record['material'])
     x0,y0,x1,y1=study.crop
     w,h=dimensions(x1-x0,y1-y0,large=record.get('large',False),high_quality=high_quality)
