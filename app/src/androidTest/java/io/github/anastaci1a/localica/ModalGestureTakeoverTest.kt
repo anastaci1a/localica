@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Bitmap
 import android.view.MotionEvent
 import android.view.Window
 import androidx.compose.foundation.layout.*
@@ -12,9 +13,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -63,6 +66,8 @@ class ModalGestureTakeoverTest {
     private var openOnCommit = false
     private var popupActivations = 0
     private var retiredCommittedHandoff = false
+    private val viewer = ArtworkViewerState()
+    private var artworkAtTakeover: ArtworkTransform? = null
 
     @After fun releaseInput() {
         // A failed held assertion must not leave native contact or modal windows for teardown.
@@ -138,6 +143,153 @@ class ModalGestureTakeoverTest {
         } }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
+    }
+
+    private fun artworkFixture() {
+        val artwork = Bitmap.createBitmap(800, 400, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.RED)
+        }.asImageBitmap()
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides false) {
+                // Match ArtworkViewer's real page/window host, not just its pointer modifier.
+                GlassDialog({}, GlassPlacement.Page) {
+                    rootView = LocalView.current
+                    rootWindow = checkNotNull((rootView.parent as? DialogWindowProvider)?.window)
+                    rootOwner = checkNotNull(LocalModalGestures.current)
+                    OnModalGestureCancellation { artworkAtTakeover = viewer.transform }
+                    Box(Modifier.fillMaxSize()) {
+                        ArtworkViewerContent(artwork, false, {}, state = viewer)
+                        ActionTextButton({ popup = true }, Modifier.align(Alignment.TopEnd)
+                            .height(64.dp).testTag("open-modal")) { Text("Options") }
+                    }
+                    GlassMorphPopup(popup, rememberGlassAnchor(), { popup = false }, GlassPlacement.Center) {
+                        ActionTextButton({ popup = false }, Modifier.testTag("dismiss-modal")) { Text("Done") }
+                    }
+                }
+            }
+        } }
+        compose.awaitExpectedWindowFocus(compose.onNodeWithTag("artwork-viewer-viewport"))
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+    }
+
+    @Test fun modalFreezesHeldArtworkPanAndDismissalCannotReviveTheOldFinger() {
+        artworkFixture()
+        repeat(3) { artworkAction("Zoom in") }
+        val area = bounds("artwork-viewer-viewport", rootOrigin)
+        val touch = WindowTouch(rootWindow)
+        touch.down(0, area.center)
+        touch.move(0, area.center + Offset(area.width * .12f, 0f), 80)
+        await("native artwork pan acquired") { viewer.transform.offset.x > 0f }
+        val held = artworkTransform()
+        assertTrue("The native pan must own and move the viewer before takeover", held.offset.x > 0f)
+        val generation = compose.runOnUiThread { viewer.generation }
+        touch.down(1, bounds("open-modal", rootOrigin).center); touch.up(1)
+        await { rootOwner.blocked }
+        assertArtworkCancelled(generation, held)
+        awaitNode("dismiss-modal")
+        touch.move(0, area.center + Offset(area.width * .2f, 0f))
+        assertEquals("A blocked native MOVE cannot move the artwork", held, artworkTransform())
+        compose.runOnUiThread { popup = false }
+        await { !rootOwner.blocked }
+        touch.move(0, area.center - Offset(area.width * .2f, 0f), 16); touch.up(0)
+        pump(600)
+        assertEquals("Dismissal and the stale UP cannot resume or fling the old pan", held, artworkTransform())
+        await { rootView.hasWindowFocus() }
+        touch.down(0, area.center)
+        touch.move(0, area.center - Offset(area.width * .1f, 0f), 80); touch.up(0)
+        assertTrue("A fresh native pan must work after dismissal", artworkTransform().offset.x < held.offset.x)
+    }
+
+    @Test fun modalFreezesHeldArtworkPinchForEitherReleaseOrderAndFreshPinchRecovers() {
+        artworkFixture()
+        val area = bounds("artwork-viewer-viewport", rootOrigin)
+        val touch = WindowTouch(rootWindow)
+        for (releaseFirst in listOf(0, 1)) {
+            artworkAction("Zoom in")
+            beginPinch(touch, area)
+            await("native artwork pinch acquired") { viewer.transform.scale > 2f }
+            val held = artworkTransform()
+            assertTrue("The native pinch must zoom before takeover", held.scale > 2f)
+            val generation = compose.runOnUiThread { viewer.generation }
+            touch.down(2, bounds("open-modal", rootOrigin).center); touch.up(2)
+            await { rootOwner.blocked }
+            assertArtworkCancelled(generation, held)
+            awaitNode("dismiss-modal")
+            touch.move(0, area.center + Offset(-150f, 0f)); touch.move(1, area.center + Offset(150f, 0f))
+            touch.up(releaseFirst)
+            assertEquals("Blocked pinch movement/release must stay frozen", held, artworkTransform())
+            compose.runOnUiThread { popup = false }
+            await { !rootOwner.blocked }
+            // Leave one old finger down across dismissal, then try to turn it into a pan/fling.
+            touch.move(1 - releaseFirst, area.center + Offset(area.width * .2f, 0f), 16)
+            touch.up(1 - releaseFirst)
+            pump(600)
+            assertEquals("Neither release order may replay a pinch or launch a stale fling", held, artworkTransform())
+            await { rootView.hasWindowFocus() }
+            artworkAction("Reset zoom")
+            beginPinch(touch, area)
+            await("fresh artwork pinch acquired") { viewer.transform.scale > 1f }
+            val fresh = artworkTransform()
+            assertTrue("A fresh native pinch must work after dismissal", fresh.scale > 1f)
+            touch.up(1 - releaseFirst); touch.up(releaseFirst)
+            pump(600)
+            assertEquals("Fresh pinch release must not become a false one-finger fling", fresh, artworkTransform())
+            artworkAction("Reset zoom")
+        }
+    }
+
+    @Test fun modalStopsActiveArtworkKineticsAtTakeoverWithoutResumingAfterDismissal() {
+        artworkFixture()
+        repeat(3) { artworkAction("Zoom in") }
+        val area = bounds("artwork-viewer-viewport", rootOrigin)
+        val touch = WindowTouch(rootWindow)
+        fun flick(direction: Float) {
+            touch.down(0, area.center)
+            repeat(4) { step -> touch.move(0, area.center + Offset(area.width * .04f * (step + 1) * direction, 0f), 20) }
+            touch.up(0)
+        }
+        flick(1f)
+        val released = artworkTransform()
+        pump(64)
+        val moving = artworkTransform()
+        assertTrue("The released native pan must actually be kinetic", moving.offset.x > released.offset.x)
+        pump(32)
+        assertTrue("Takeover must interrupt continuing motion, not an already stopped pan", artworkTransform().offset.x > moving.offset.x)
+        val generation = compose.runOnUiThread { viewer.generation }
+        compose.runOnUiThread { popup = true }
+        await { rootOwner.blocked }
+        val stopped = compose.runOnUiThread { checkNotNull(artworkAtTakeover) }
+        assertArtworkCancelled(generation, stopped)
+        val edge = compose.runOnUiThread {
+            artworkPanBounds(viewer.viewport, androidx.compose.ui.geometry.Size(800f, 400f), stopped.scale).x
+        }
+        assertTrue("The modal, not a pan boundary, must stop motion", stopped.offset.x < edge)
+        awaitNode("dismiss-modal")
+        pump(600)
+        assertEquals("No frame may continue past the takeover position", stopped, artworkTransform())
+        compose.runOnUiThread { popup = false }
+        await { !rootOwner.blocked }
+        pump(600)
+        assertEquals("Dismissal cannot restart cancelled kinetics", stopped, artworkTransform())
+        await { rootView.hasWindowFocus() }
+        flick(-1f)
+        val freshRelease = artworkTransform()
+        assertTrue("A new native pan must remain available", freshRelease.offset.x < stopped.offset.x)
+        pump(64)
+        assertTrue("A new release must still start kinetics", artworkTransform().offset.x < freshRelease.offset.x)
+    }
+
+    private fun artworkTransform() = compose.runOnUiThread { viewer.transform }
+    private fun artworkAction(label: String) {
+        val actions = compose.onNodeWithTag("artwork-viewer-viewport").fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsActions.CustomActions]
+        compose.runOnUiThread { assertTrue(actions.single { it.label == label }.action()) }
+    }
+    private fun assertArtworkCancelled(generation: Long, expected: ArtworkTransform) = compose.runOnUiThread {
+        assertTrue("Viewer contact must be cancelled as soon as its modal owner is blocked", viewer.generation > generation)
+        assertEquals("Cancellation must retain the displayed artwork transform", expected, viewer.transform)
+        assertEquals("Takeover must record the same displayed frame", expected, artworkAtTakeover)
     }
 
     @Test fun thirdPointerPopupCancelsHeldPinchAndNeitherReleaseOrderCanSaveIt() {
@@ -372,7 +524,8 @@ class ModalGestureTakeoverTest {
                     "style=$style source=${motion.source} target=${motion.target} generation=${motion.transaction} " +
                     "held=${motion.held} capturing=${motion.capturing} captureProblem=${motion.captureProblem} " +
                     "progress=${motion.progress.value} finger=${motion.fingerProgress} committed=${motion.committed} " +
-                    "commits=$commits disposed=${motion.disposed}"
+                    "commits=$commits disposed=${motion.disposed} artwork=${viewer.transform} " +
+                    "artworkGeneration=${viewer.generation} artworkAtTakeover=$artworkAtTakeover"
             }
             throw AssertionError("$phase: $state", failure)
         }
