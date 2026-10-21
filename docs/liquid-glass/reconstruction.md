@@ -10,12 +10,13 @@ Open a study to load its comparisons. **Wipe** shows Apple on the left and the r
 
 Apple, [Meet Liquid Glass, 3:10](https://developer.apple.com/videos/play/wwdc2025/219/?time=190); uncovered photograph at 3:00. The selected radial map has a quiet center, stronger rim refraction and slight filtering after refraction. The play symbol's calculated color is blurred internally before sharp triangular coverage is applied.
 
-![Apple playback control and settled reconstruction](assets/match-media.png)
+![Apple playback control and current reconstruction](assets/playback-round-current.png)
 
 - **Most polished:** width multiplier 4.5; gain 1; source/glass/icon blur σ respectively `0.5/490`, `1.5/490`, `3/490` times the shorter dimension. Dark saturation 0.2; highlight taper 0.5. All lengths, including lighting, scale with the element.
 - [Complete equations and operation order](recreation-models.md#playback-radial-map-and-smooth-inner-transition). This is an empirical refraction map, not an identified Apple solid.
 - The reference-derived triangle silhouette is reused; its **color is independently calculated**. It has no stroked outline. The response is photograph-specific, not a universal contrast algorithm.
-- Distant exterior is retained; the contact band is estimated. Exterior shadows are not scored.
+- Short round, pass **1/3**: one shared material exposure multiplier of **1.005** reduces weighted RMS error from **9.10758 to 9.07967** (0.31%); glass error falls from 8.07670 to 8.05385 and icon error from 3.22750 to 3.21576. Geometry, filters and icon color function are unchanged. [Recipe](experiments/reconstruction/studies/playback/review-round/pass-01.json) · [Replay/domain/visual checks](experiments/reconstruction/studies/playback/review-round/pass-01-verification.json).
+- The current 4× comparison uses the registered clean photograph outside the lens; no photographed shadow is copied. Exterior shadow modeling remains incomplete. The older full-frame comparison and motion below retain their original calibration/context and are historical.
 
 <details>
 <summary>Full-resolution playback comparison</summary>
