@@ -266,7 +266,7 @@ Frames A/B: 9.4/10.5 seconds in [Apple's Details video](https://www.apple.com/ne
 
 - The hidden track is an explicit symmetric, uniform-color estimate. Defined source coverage is distinct from directly observed pixels; scores are conditional on that estimate.
 - A shared source-color rule reduces the material’s green cast on neutral backgrounds without desaturating refracted RGB detail. Directional channel separation reproduces part of the inner fringe; upper-rim color and edge shape remain incomplete; there is no claim of a recovered Apple solid.
-- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) verifies all 24 paired passes. Both motion captures show pass24. The 4× masters are four seconds at 30 fps; GIF previews are half-size at 15 fps and under 10 MB.
+- [Current recipe and pass records](experiments/reconstruction/studies/active-switch/paired/accepted.json) · [Snapshot measurements](experiments/reconstruction/switch-gallery-progress.json) · [Study PR #425](https://github.com/anastaci1a/localica/pull/425). [Native paired replay](experiments/reconstruction/studies/active-switch/paired/verification.json) reproduces the 24 historical paired checkpoints under their original nonregression gate. Both motion captures show pass24. The 4× masters are four seconds at 30 fps; GIF previews are half-size at 15 fps and under 10 MB.
 
 <details>
 <summary>Motion — green track</summary>
@@ -327,9 +327,11 @@ The blue curves compare three geometric footprints against the same Apple rim. C
 
 ## Scores
 
+Historical experiment counts below include rejected proposals, ties and improvements smaller than the current milestone. They are not counts of passes under the [current verification protocol](recreation-models.md#verified-improvement-protocol). New qualifying passes must reduce weighted RMS error by at least0.5% on every active observation, with the additional source, visual and nonregression checks.
+
 ### Music and switch studies
 
-| Study | Weighted loss A / B | Glass RMSE A / B | Initial / paired passes | Status |
+| Study | Weighted loss A / B | Glass RMSE A / B | Initial / paired experiments | Status |
 | --- | ---: | ---: | ---: | --- |
 | Expanded mini-player | 29.031 / 9.723 | 4.366 / 2.571 | 22 / 21 | Completed study |
 | Compact mini-player | 24.899 / 23.369 | 4.370 / 4.325 | 29 / 21 | Completed study |
