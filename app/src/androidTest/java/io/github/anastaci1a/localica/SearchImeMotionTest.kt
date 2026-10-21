@@ -47,6 +47,7 @@ class SearchImeMotionTest {
     private var mounted by mutableStateOf(true)
     private var keyboardAllowed by mutableStateOf(true)
     private var text by mutableStateOf("")
+    private var extraContentHeight by mutableIntStateOf(0)
     private lateinit var anchor: GlassAnchor
     private var popupView: android.view.View? = null
     private var keyboardSettled = true
@@ -72,8 +73,9 @@ class SearchImeMotionTest {
             compose.runOnUiThread { motionTimeline.toList() }.joinToString("\n"))
     }
 
-    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false) {
+    private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0) {
         text = initialQuery
+        extraContentHeight = initialExtraContentHeight
         keyboardAllowed = !deferKeyboard
         compose.setContent { LocalicaTheme {
             val speed = LocalMotionSpeed.current
@@ -112,7 +114,10 @@ class SearchImeMotionTest {
                         }
                     }
                     CompositionLocalProvider(LocalEmptySearchBack provides ({ visible = false }).takeIf { text.isBlank() }) {
-                        GlassSearchField(text, { text = it }, "Search fixture", fieldModifier = Modifier.focusRequester(focus))
+                        Column {
+                            GlassSearchField(text, { text = it }, "Search fixture", fieldModifier = Modifier.focusRequester(focus))
+                            Spacer(Modifier.height(extraContentHeight.dp))
+                        }
                     }
                 }
             }
@@ -148,34 +153,43 @@ class SearchImeMotionTest {
     }
 
     private fun opened() {
-        // Native focus/insets use real time; the spring uses the controlled clock.
-        // Slow API26 rendering can consume five wall seconds before one virtual
-        // second has elapsed, so give the started spring its actual frame budget.
+        // Shape starts independently of native input. Give each independent spring
+        // its calculated frame budget, not a longer undiagnosed overall wait.
         advanceUntil { anchor.contact.expansion.isRunning || anchor.contact.expansion.value == 1f }
-        val springMillis = compose.runOnUiThread {
+        val shapeMillis = compose.runOnUiThread {
             val expansion = anchor.contact.expansion
-            (TargetBasedAnimation(
-                glassMorphSpring(motionSpeed), Float.VectorConverter, expansion.value, 1f,
-                AnimationVector1D(expansion.velocity),
-            ).durationNanos + 999_999L) / 1_000_000L
+            springDuration(expansion.value, 1f, expansion.velocity)
         }
-        advanceUntil(wallTimeoutMillis = 20000, virtualTimeoutMillis = springMillis + 256L) {
-            // Position callbacks need not repeat when the final spring tick only
-            // changes metadata: observe the actual clock and last placed geometry.
-            anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning &&
-                samples.lastOrNull()?.let { sample ->
-                    sample.opening && listOf(
-                        sample.bounds.left - sample.destination.left,
-                        sample.bounds.top - sample.destination.top,
-                        sample.bounds.right - sample.destination.right,
-                        sample.bounds.bottom - sample.destination.bottom,
-                    ).all { kotlin.math.abs(it) <= 2f }
-                } == true
+        advanceUntil(wallTimeoutMillis = 20000, virtualTimeoutMillis = shapeMillis + 256L) {
+            anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning
+        }
+        // Hardware/refused IMEs use the bounded real-time fallback. Do not charge
+        // those native frames to the independent position spring's virtual budget.
+        advanceUntil { samples.lastOrNull()?.let { it.placementBottom != null || it.flight == null } == true }
+        val positionMillis = compose.runOnUiThread {
+            val sample = samples.last()
+            // A full screen of travel bounds the start distance. The critical
+            // spring retains velocity on retarget, with one extra frame allowance.
+            springDuration(0f, maxOf(sample.destination.bottom, sample.bounds.bottom), pixels = true)
+        }
+        advanceUntil(wallTimeoutMillis = 20000, virtualTimeoutMillis = positionMillis + 256L) {
+            samples.lastOrNull()?.let { sample ->
+                sample.opening && listOf(
+                    sample.bounds.left - sample.destination.left,
+                    sample.bounds.top - sample.destination.top,
+                    sample.bounds.right - sample.destination.right,
+                    sample.bounds.bottom - sample.destination.bottom,
+                ).all { kotlin.math.abs(it) <= 2f }
+            } == true
         }
         compose.runOnUiThread { samples.last() }.let {
             assertRect("Opening reaches its placed endpoint", it.destination, it.bounds)
         }
     }
+
+    private fun springDuration(from: Float, to: Float, velocity: Float = 0f, pixels: Boolean = false): Long =
+        (TargetBasedAnimation(if (pixels) searchBottomSpring(motionSpeed) else glassMorphSpring(motionSpeed), Float.VectorConverter, from, to,
+            AnimationVector1D(velocity)).durationNanos + 999_999L) / 1_000_000L
 
     private fun closed() = advanceUntil { !anchor.modalPresent }
 
@@ -196,15 +210,23 @@ class SearchImeMotionTest {
         val opening = compose.runOnUiThread { samples.filter { it.opening && it.progress > .001f } }
         assertTrue("Observe actual placed opening frames", opening.isNotEmpty())
         if (!reduced) assertTrue("Opening has intermediate frames", opening.any { it.progress < .99f })
-        val destination = opening.first().destination
         opening.forEach { sample ->
-            assertTrue("Opening starts only after final native IME placement: $sample",
-                sample.ime > 0 && sample.ime == sample.imeSource && sample.ime == sample.imeTarget)
             if (reduced) assertEquals(1f, sample.progress, 0f)
-            assertRect("One opening destination", destination, sample.destination)
-            assertRect("Direct opening at ${sample.progress}", between(home, destination, sample.progress), sample.bounds)
+            sample.flight?.let { flight ->
+                val shapeTarget = requireNotNull(sample.openingShapeDestination)
+                val remaining = 1f - flight.startingProgress
+                val fraction = if (remaining <= .0001f) 1f else
+                    ((sample.progress - flight.startingProgress) / remaining).coerceIn(0f, 1f)
+                val shape = between(flight.from, shapeTarget, fraction)
+                val height = minOf(shape.height, sample.openingHeightLimit)
+                val top = sample.placementBottom?.minus(height) ?: flight.from.top
+                assertRect("Independent opening shape/bottom at ${sample.progress}",
+                    Rect(shape.left, top, shape.right, top + height), sample.bounds)
+                if (sample.placementBottom == null)
+                    assertEquals("Before keyboard travel, the pill top stays anchored", home.top, sample.bounds.top, 2f)
+            }
         }
-        assertRect("No second leg after opening", destination, opening.last().bounds)
+        assertRect("Opening reaches the keyboard anchor", opening.last().destination, opening.last().bounds)
         val view = requireNotNull(popupView)
         compose.runOnUiThread {
             val insets = requireNotNull(ViewCompat.getRootWindowInsets(view))
@@ -235,7 +257,8 @@ class SearchImeMotionTest {
             assertTrue("The observed native hide reaches its end after moving overlap",
                 returning.drop(overlap + 1).any { it.ime == 0 && it.imeSource == 0 && it.imeTarget == 0 })
         }
-        compose.runOnUiThread { samples.filter { it.opening && it.imeTarget == 0 && it.progress == 1f } }.forEach {
+        all.drop(all.indexOfLast { it.opening && it.ime > 0 } + 1)
+            .filter { it.opening && it.imeTarget == 0 && it.progress == 1f }.forEach {
             assertRect("No keyboard-following frame before return ownership", from, it.bounds)
         }
         returning.forEach { sample ->
@@ -251,6 +274,10 @@ class SearchImeMotionTest {
         try {
             val home = compose.runOnUiThread { anchor.bounds }
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+            opened()
+            // Opening no longer waits for native onEnd. Dismissal specifically
+            // needs the editor's settled-IME hide detector armed before Back.
+            awaitDockedKeyboard()
             opened()
             verifyOpening(home, reduced)
             compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
@@ -270,9 +297,9 @@ class SearchImeMotionTest {
         }
     }
 
-    @Test fun openingAndEmptyNativeBackHaveOneDirectFlight() = exerciseDismissal(outside = false)
+    @Test fun independentOpeningAndEmptyNativeBackHaveOneDirectReturn() = exerciseDismissal(outside = false)
     @Test fun outsidePointerDismissalDoesNotFollowTheKeyboardDown() = exerciseDismissal(outside = true)
-    @Test fun reducedMotionResolvesTheKeyboardThenSnapsDirectlyHome() = exerciseDismissal(outside = false, reduced = true)
+    @Test fun reducedMotionShapesImmediatelyThenAnchorsAndSnapsDirectlyHome() = exerciseDismissal(outside = false, reduced = true)
 
     @Test fun absentKeyboardOpeningCanBeCancelledAndReopenedWithoutStaleReadiness() = withNativeAnimations {
         fixture(false)
@@ -289,7 +316,12 @@ class SearchImeMotionTest {
             compose.runOnUiThread { samples.clear(); visible = false }
             advanceUntil { anchor.contact.expansion.value in .2f.. .8f }
             val partial = compose.runOnUiThread { samples.last().bounds }
+            val partialSurface = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
             compose.runOnUiThread { visible = true }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            assertRect("First reopening placement cannot borrow the previous opening bottom",
+                partialSurface, compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot)
             opened()
             val reopening = compose.runOnUiThread { samples.filter { it.opening && it.flight != null } }
             assertTrue("Observe retained-window reopening", reopening.isNotEmpty())
@@ -311,6 +343,84 @@ class SearchImeMotionTest {
             compose.onNodeWithTag("list-search-pill").assertIsDisplayed()
             compose.onNodeWithTag("list-search-popup").assertDoesNotExist()
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun shapeStartsBeforeKeyboardAndNativeArrivalDoesNotWaitForShapeCompletion() = withDockedKeyboard {
+        fixture(true, deferKeyboard = true)
+        try {
+            val home = compose.runOnUiThread { anchor.bounds }
+            compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+            advanceUntil { samples.any { it.progress in .05f.. .35f && it.bounds.height > home.height + 2f } }
+            val before = compose.runOnUiThread { samples.last() }
+            assertEquals("The delayed IME has not appeared", 0, before.ime)
+            assertNull("Keyboard travel has not started", before.placementBottom)
+            assertEquals("Shape expands downward from the pill", home.top, before.bounds.top, 2f)
+            compose.runOnUiThread { keyboardAllowed = true }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            // Native insets advance on real time while the controlled morph is
+            // paused. Then one frame must let position start before p reaches one.
+            compose.waitUntil(5000) {
+                compose.runOnUiThread {
+                    popupView?.let(ViewCompat::getRootWindowInsets)
+                        ?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { it > 0 } == true
+                }
+            }
+            advanceUntil(virtualTimeoutMillis = 256) {
+                samples.any { it.ime > 0 && it.progress < 1f && it.placementBottom != null }
+            }
+            val placed = compose.runOnUiThread { samples.last { it.placementBottom != null } }
+            assertTrue("Travel starts while shape is incomplete", placed.progress < 1f)
+            opened()
+            verifyOpening(home, false)
+        } finally {
+            compose.runOnUiThread { visible = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test fun tallContentKeepsItsTargetBottomAboveTheArrivingNativeKeyboard() = withDockedKeyboard {
+        fixture(true, initialExtraContentHeight = 1000)
+        try {
+            compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+            opened()
+            awaitDockedKeyboard()
+            opened()
+            val frames = compose.runOnUiThread { samples.filter { it.opening && it.ime > 0 && it.imeTarget > 0 } }
+            assertTrue("Observe real keyboard arrival with bounded tall content", frames.isNotEmpty())
+            val finalAnchor = frames.last().destination.bottom + frames.last().imeTarget
+            frames.forEach {
+                assertEquals("Target bottom cannot inherit oversized intermediate foreground height: $it",
+                    finalAnchor, it.destination.bottom + it.imeTarget, 2f)
+            }
+        } finally {
+            compose.runOnUiThread { visible = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test fun completedShapeCanResizeBeforeDelayedKeyboardPlacementWithoutAStaleEndpoint() = withDockedKeyboard {
+        fixture(true, reduced = true, deferKeyboard = true)
+        try {
+            compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+            advanceUntil { samples.any { it.opening && it.progress == 1f } }
+            val original = compose.runOnUiThread { samples.last() }
+            assertEquals("The editor has not requested its keyboard", 0, original.ime)
+            compose.runOnUiThread { extraContentHeight = 72; keyboardAllowed = true }
+            compose.mainClock.advanceTimeByFrame()
+            opened()
+            awaitDockedKeyboard()
+            advanceUntil {
+                samples.lastOrNull()?.let { it.bounds.height > original.bounds.height + 2f &&
+                    kotlin.math.abs(it.bounds.bottom - it.destination.bottom) <= 2f &&
+                    kotlin.math.abs(it.bounds.height - it.destination.height) <= 2f } == true
+            }
+            val placed = compose.runOnUiThread { samples.last() }
+            assertRect("Late size and keyboard share the final owned endpoint", placed.destination, placed.bounds)
+        } finally {
+            compose.runOnUiThread { visible = false }
+            compose.mainClock.autoAdvance = true
+        }
     }
 
     @Test fun lateNativeImeCannotSnapAtTheOpeningToPlacementHandoff() = withDockedKeyboard {
