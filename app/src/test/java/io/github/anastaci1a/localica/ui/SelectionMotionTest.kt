@@ -12,7 +12,9 @@ class SelectionMotionTest {
         for (step in 0..20) {
             val p = step / 20f
             val scaled = selectionRevealBounds(bounds, p)
-            assertEquals(bounds.center, scaled.center)
+            // Arithmetic on opposite Float edges can differ by one ULP while remaining centered.
+            assertEquals(bounds.center.x, scaled.center.x, .0001f)
+            assertEquals(bounds.center.y, scaled.center.y, .0001f)
             assertEquals(bounds.width * (.92f + .08f * p), scaled.width, .0001f)
             assertEquals(bounds.height * (.92f + .08f * p), scaled.height, .0001f)
         }

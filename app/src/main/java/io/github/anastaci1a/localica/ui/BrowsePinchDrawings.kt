@@ -136,7 +136,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
             val origin = Offset(old.left + sourceInset + (x + targetInset - old.left - sourceInset) * p,
-                old.top + sourceVerticalInset + (y + targetVerticalInset - old.top - sourceVerticalInset) * p)
+                y + targetVerticalInset + pinchContentTranslation(old.top, y.toFloat(), sourceVerticalInset, targetVerticalInset, p))
             retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                 image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
                 browseViewVisibility(true, false, p), index)

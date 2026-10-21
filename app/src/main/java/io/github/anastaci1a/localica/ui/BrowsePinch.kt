@@ -130,6 +130,11 @@ internal class BrowsePinchMotion {
     }
 }
 
+/** The live cell is already laid out with target padding; restore source padding at p=0. */
+internal fun pinchContentTranslation(sourceStart: Float, targetStart: Float,
+    sourceInset: Int, targetInset: Int, progress: Float): Float =
+    (sourceStart - targetStart + sourceInset - targetInset) * (1f - progress.coerceIn(0f, 1f))
+
 /** Linear finger distance; returning to the starting span restores the source. */
 internal fun pinchProgress(scale: Float, outward: Boolean): Float =
     ((if (outward) scale - 1f else 1f - scale) / if (outward) .8f else .45f).coerceIn(0f, 1f)

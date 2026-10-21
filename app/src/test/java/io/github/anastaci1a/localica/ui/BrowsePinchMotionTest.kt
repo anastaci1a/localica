@@ -4,6 +4,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.browse.ListSize
+import io.github.anastaci1a.localica.browse.BrowseCellGeometry
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
@@ -11,6 +13,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BrowsePinchMotionTest {
+    @Test fun smallestPaddingKeepsLiveAndRetainedInnerOriginsContinuousInBothDirections() {
+        for ((sourceSize, targetSize) in listOf(ListSize.Small to ListSize.Smallest, ListSize.Smallest to ListSize.Small)) {
+            for (density in listOf(1f, 1.75f, 2.75f)) {
+                val geometry = BrowseCellGeometry(1)
+                val sourceInset = (geometry.cardVerticalInset(BrowseStyle(listSize = sourceSize)) * density).roundToInt()
+                val targetInset = (geometry.cardVerticalInset(BrowseStyle(listSize = targetSize)) * density).roundToInt()
+                val sourceTop = 20f; val targetTop = 70f
+                for (p in listOf(0f, .1f, .5f, 1f, .6f, .2f, 0f)) {
+                    val actual = targetTop + targetInset + pinchContentTranslation(sourceTop, targetTop, sourceInset, targetInset, p)
+                    val expected = (sourceTop + sourceInset) * (1f - p) + (targetTop + targetInset) * p
+                    assertEquals("$sourceSize to $targetSize at $density/$p", expected, actual, .0001f)
+                }
+                assertEquals(0f, pinchContentTranslation(sourceTop, targetTop, sourceInset, targetInset, 1f), 0f)
+            }
+        }
+    }
+
     @Test fun sourceLayerTreeDoesNotChangeUntilReadbackFinishes() {
         val original = BrowseStyle(listSize = ListSize.Large)
         val motion = BrowsePinchMotion().apply {

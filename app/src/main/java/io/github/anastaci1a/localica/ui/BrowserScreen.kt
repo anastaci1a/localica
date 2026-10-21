@@ -799,7 +799,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     val old = pinchMotion.sourceBounds(item.key, itemIndex)
                                     val alignment = if (pinchMotion.rightToLeft) old.width - placed.size.width else 0f
                                     translationX = (old.left - position.x - cellGeometry.gridInset.dp.roundToPx() + alignment) * (1f - pinchMotion.progress.value)
-                                    translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
+                                    val sourceInset = BrowseCellGeometry(pinchMotion.sourceColumns)
+                                        .cardVerticalInset(requireNotNull(pinchMotion.visualSource)).dp.roundToPx()
+                                    val targetInset = cellGeometry.cardVerticalInset(displayedStyle).dp.roundToPx()
+                                    translationY = pinchContentTranslation(old.top, position.y.toFloat(), sourceInset,
+                                        targetInset, pinchMotion.progress.value)
                                 }
                             }).onGloballyPositioned {
                                 reorder.itemCoordinates[item.key] = it
