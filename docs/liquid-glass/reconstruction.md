@@ -90,8 +90,10 @@ Apple, [legibility demonstration, 15:15–15:20](https://developer.apple.com/vid
 
 These test tone, broad lighting and rim. Nearly uniform backdrops cannot identify refraction: high similarity here does not validate an optical model. Neither recipe uses Gaussian blur.
 
+Current round: **1/3 verified reconstruction passes**, exterior-only, with all original optical scores unchanged. One common generated shadow/glow law improves frozen near-exterior RMSE light6.082354→3.805386/dark6.752748→2.120522 and full-visible exterior6.613297→4.615888/5.963654→4.041905. Comparisons use the frozen source PNGs and original4×4 body coverage; no copied reference context/shadow. Removing the previous display context earns no credit. Sources remain estimated/unobserved; upper far-light regressions, the .7L shadow-width bound and unresolved broad dark glow remain explicit. [Recipe](experiments/reconstruction/studies/light-dark/review-round/pass-01.json) · [Independent verification](experiments/reconstruction/studies/light-dark/review-round/pass-01-verification.json).
+
 <details>
-<summary>Full-resolution light and dark comparisons</summary>
+<summary>1080px-per-side light and dark comparisons</summary>
 
 [![Full HD light comparison](assets/match-regular-light-full.png)](assets/match-regular-light-full.png)
 
@@ -101,7 +103,7 @@ These test tone, broad lighting and rim. Nearly uniform backdrops cannot identif
 
 ## Apple Music studies
 
-References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. The reconstruction halves are evaluated at **4× resolution**, including fresh vector coverage; the Apple halves retain the original video's detail. Use **Fullscreen** to inspect the full-size pair.
+References come from [Apple's original Music video](https://www.apple.com/newsroom/videos/2025/autoplay/06/apple-introduces-a-delightful-and-elegant-new-software-design/apple-wwdc25-liquid-glass-apple-music-dynamic-tab-bars/large_2x.mp4). Each study shares optics/material across two observed backgrounds. Current reconstruction exports are **1080px wide per side**; native scoring remains fixed to the reference resolution. The Apple halves retain the original video's detail. Use **Fullscreen** to inspect the full-size pair.
 
 ### Expanded mini-player
 
