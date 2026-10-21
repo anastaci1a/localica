@@ -1,0 +1,187 @@
+{
+  "parameters": {
+    "sigma": 6.873701880782254,
+    "amplitude": 0.8549633279539612,
+    "band": 0.3432151452803186,
+    "power": 1.2,
+    "tangent": 2.3665570048675132e-07,
+    "tangent_band": 0.38395835711730114,
+    "core_x": 0.000680987558105228,
+    "core_y": 0.00017882158264183274,
+    "post_sigma": 0.3739770378752519,
+    "coupling": 0.9953606349456361,
+    "gamma": 0.9999374924186542,
+    "rim_width": 0.07062951704484222,
+    "thin_width": 0.02729765520182567,
+    "spline": true,
+    "shape_dx": -0.013450159975193283,
+    "shape_dy": 0.0024344086886602372,
+    "half_x_delta": 0.0026082358353385227,
+    "half_y_delta": 0.00017512742414114445,
+    "radius_delta": 0.012043263143639913,
+    "c0": 0.72491385118923,
+    "c1": 0.8403824271761257,
+    "c2": 0.7974332460999846,
+    "c3": 0.7748446004343662,
+    "c4": 0.6383246393743889,
+    "c5": 0.0002660090101418661,
+    "c6": 0.0002660090101418661,
+    "shadow": {
+      "opacity": 0.08790470169280003,
+      "sigma": 0.17728739366196827,
+      "offset": [
+        -0.007872829689131732,
+        -0.03542565342084158
+      ]
+    },
+    "blur_transition": 0.006517444077003604,
+    "tangent_exponent": 7.514788530197878,
+    "cap_normal_gain": 0.03978177645840648,
+    "cap_tangent_fade": 0.29351234524113295,
+    "cap_join_width": 0.35
+  },
+  "material": [
+    0.588953800879858,
+    0.6056992969721775,
+    0.5980702237856941,
+    0.3883869313670674,
+    0.38384978623350474,
+    0.3887148406208048,
+    0.3419890267465143,
+    -0.13161726190619152,
+    0.11205671823633598,
+    0.044948087984604444,
+    0.007313605089007992,
+    0.0076480687823184505,
+    -0.01734103815461145,
+    0.002338257258734137,
+    0.003875361900232931,
+    -0.0027652657403467867,
+    -0.003398992434024202,
+    0.004682617079084397,
+    0.013442870714991147,
+    0.005789750094092049,
+    0.6116235750943757,
+    0.617469032972503,
+    0.607167887794005
+  ],
+  "scores": [
+    {
+      "glass": {
+        "pixels": 83012,
+        "rmse": 4.369511127471924
+      },
+      "rim": {
+        "pixels": 31757,
+        "rmse": 6.197892665863037
+      },
+      "held": {
+        "pixels": 21209,
+        "rmse": 4.495326995849609
+      },
+      "interior": {
+        "pixels": 51255,
+        "rmse": 2.6685969829559326
+      },
+      "loss": 24.88900129443832,
+      "E": 4.988887781303395,
+      "foreground_mse": {
+        "jupiter.jpg": 1802.8430711477995,
+        "title.svg": 413.37720109149814,
+        "artist.svg": 13.20063349121483,
+        "play.svg": 64.97489030880388,
+        "forward.svg": 150.09458817075938
+      },
+      "exterior": {
+        "pixels": 31956,
+        "rmse": 4.954218705118386
+      }
+    },
+    {
+      "glass": {
+        "pixels": 83012,
+        "rmse": 4.321866035461426
+      },
+      "rim": {
+        "pixels": 31757,
+        "rmse": 5.84912109375
+      },
+      "held": {
+        "pixels": 21209,
+        "rmse": 4.279618263244629
+      },
+      "interior": {
+        "pixels": 51255,
+        "rmse": 3.0089919567108154
+      },
+      "loss": 23.3386334907379,
+      "E": 4.831007502658002,
+      "foreground_mse": {
+        "jupiter.jpg": 1901.9035917241126,
+        "title.svg": 362.18204589094967,
+        "artist.svg": 19.890261883847415,
+        "play.svg": 64.94438358640764,
+        "forward.svg": 153.30300211790018
+      },
+      "exterior": {
+        "pixels": 31956,
+        "rmse": 4.243026628824928
+      }
+    }
+  ],
+  "advisory_double": [
+    {
+      "glass": {
+        "baseline_mse": 19.09265856693198,
+        "candidate_mse": 19.092628476061087,
+        "delta_mse_direct": -3.0090870892886112e-05
+      },
+      "rim": {
+        "baseline_mse": 38.41395003142322,
+        "candidate_mse": 38.41387581344411,
+        "delta_mse_direct": -7.421797911041643e-05
+      },
+      "weighted_loss_delta": -4.33290033581452e-05,
+      "E_delta": -4.342549401847862e-06,
+      "nonincreasing_E": true
+    },
+    {
+      "glass": {
+        "baseline_mse": 18.678847953262686,
+        "candidate_mse": 18.67852677946376,
+        "delta_mse_direct": -0.00032117379892731207
+      },
+      "rim": {
+        "baseline_mse": 34.21248886110903,
+        "candidate_mse": 34.21221904381128,
+        "delta_mse_direct": -0.00026981729774702744
+      },
+      "weighted_loss_delta": -0.0003057668485732267,
+      "E_delta": -3.1646177384381247e-05,
+      "nonincreasing_E": true
+    }
+  ],
+  "source_proof": "FRESH smaller changed-map native whole + ALL scored incl outsideoutline, finite3sigma support; see fresh-source-proof.json",
+  "factor": 0.125,
+  "large": true,
+  "case_sha256": {
+    "a": "5970077e697fa37ea561f4ef38f45e12299dece587d0d4c35ba392be46933f18",
+    "b": "955e23e0fd8b225afa2eb0cc90cb8f190c4f993082ced71b0c26ab8275092109"
+  },
+  "vector_sha256": {
+    "a": {
+      "title.svg": "315646b31db3d6dc0f68211cf5f7afa64d8e5c2cdb2bd194546fde30235f3805",
+      "artist.svg": "d9053598a02e959d995573a27b2d12abf9d8442d3904a183ff14d1cab7c84803",
+      "play.svg": "e2ff010b70a623cd1c7da1f04c4189504aeb95da79afdf1e2b70896988181584",
+      "forward.svg": "ca91b5ca526207178ffe09c948fb19151278eb1b43c5501f2a5f85bc734f0f6d"
+    },
+    "b": {
+      "title.svg": "315646b31db3d6dc0f68211cf5f7afa64d8e5c2cdb2bd194546fde30235f3805",
+      "artist.svg": "d9053598a02e959d995573a27b2d12abf9d8442d3904a183ff14d1cab7c84803",
+      "play.svg": "e2ff010b70a623cd1c7da1f04c4189504aeb95da79afdf1e2b70896988181584",
+      "forward.svg": "ca91b5ca526207178ffe09c948fb19151278eb1b43c5501f2a5f85bc734f0f6d"
+    }
+  },
+  "parameter_units": "Native sigma/post_sigma in reference pixels; geometry and map normalized by L, the source short half-size. Preserve each case parameter_length_reference.",
+  "limits": "Two observations from one Apple recording; source/artwork/icon assignments have their existing uncertainties. No proprietary Apple formula or parity claim."
+}
