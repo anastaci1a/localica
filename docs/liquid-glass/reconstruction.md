@@ -105,6 +105,9 @@ References come from [Apple's original Music video](https://www.apple.com/newsro
 
 ### Expanded mini-player
 
+Current round: **3/3** verified passes. A shared outer-normal/material update changes native E A5.388053→5.388045/B3.118163→3.116864. Both glass errors improve and all ten glyph/artwork guards hold; fixed exterior error is unchanged. All original emitted and scored subrays pass the finite3sigma recovered-source check. [Current recipe](experiments/reconstruction/studies/music-mini-expanded-vector/review-round/pass-03.json) · [Independent verification](experiments/reconstruction/studies/music-mini-expanded-vector/review-round/pass-03-verification.json). The crown-only variants failed the frozen guards and are not adopted; existing footprint limitations remain. Final motion uses this third-pass recipe: 1080px wide, 90 frames at 15fps. Both full-size 256-color GIFs are below10MB (A7.0MB/B4.0MB). [Motion verification](experiments/reconstruction/studies/music-mini-expanded-vector/review-round/motion.json). The sampled moving source checks pass; this is illustrative backdrop motion, not captured Apple animation or device-performance evidence.
+
+
 Frame A: 0 seconds. Frame B: 6.033 seconds. Cover art is a separate high-resolution image; symbols and labels use vector geometry. Recovered background strips and registration limits are recorded with the measurements.
 
 [![Expanded mini-player, background A: Apple left, reconstruction right](assets/study-music-mini-expanded-vector-paired-a.png)](assets/study-music-mini-expanded-vector-paired-a.png)
@@ -115,9 +118,9 @@ Frame A: 0 seconds. Frame B: 6.033 seconds. Cover art is a separate high-resolut
 <details>
 <summary>Motion — background A</summary>
 
-<video controls preload="none" playsinline width="5440" height="1000" aria-label="Expanded mini-player, background A motion"><source src="assets/study-music-mini-expanded-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-mini-expanded-vector-paired-a.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="200" aria-label="Expanded mini-player, background A motion"><source src="assets/study-music-mini-expanded-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-mini-expanded-vector-paired-a.mp4">Open video</a></video>
 
-<img src="assets/study-music-mini-expanded-vector-paired-a.gif" alt="Expanded mini-player motion on background A" width="2720" height="500" loading="lazy" decoding="async">
+<img src="assets/study-music-mini-expanded-vector-paired-a.gif" alt="Expanded mini-player motion on background A" width="1080" height="200" loading="lazy" decoding="async">
 
 [Video](assets/study-music-mini-expanded-vector-paired-a.mp4) · [GIF](assets/study-music-mini-expanded-vector-paired-a.gif)
 
@@ -126,15 +129,19 @@ Frame A: 0 seconds. Frame B: 6.033 seconds. Cover art is a separate high-resolut
 <details>
 <summary>Motion — background B</summary>
 
-<video controls preload="none" playsinline width="5440" height="1000" aria-label="Expanded mini-player, background B motion"><source src="assets/study-music-mini-expanded-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-mini-expanded-vector-paired-b.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="200" aria-label="Expanded mini-player, background B motion"><source src="assets/study-music-mini-expanded-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-mini-expanded-vector-paired-b.mp4">Open video</a></video>
 
-<img src="assets/study-music-mini-expanded-vector-paired-b.gif" alt="Expanded mini-player motion on background B" width="2720" height="500" loading="lazy" decoding="async">
+<img src="assets/study-music-mini-expanded-vector-paired-b.gif" alt="Expanded mini-player motion on background B" width="1080" height="200" loading="lazy" decoding="async">
 
 [Video](assets/study-music-mini-expanded-vector-paired-b.mp4) · [GIF](assets/study-music-mini-expanded-vector-paired-b.gif)
 
 </details>
 
 ### Compact mini-player
+
+Current round: **3/3** verified passes. Shared lighting, outer-normal and material updates change native E A 4.989875→4.988888/B 4.834120→4.831008. All ten glyph/artwork guards hold; artwork and exterior errors are unchanged. Frozen sources fully support the original emitted and scored subrays.
+
+[Current recipe](experiments/reconstruction/studies/music-mini-compact-vector/review-round/pass-03.json) · [Independent verification](experiments/reconstruction/studies/music-mini-compact-vector/review-round/pass-03-verification.json). Final motion uses this recipe: 6 seconds at 15fps, 1080px wide. Both full-size GIFs have 256 colors and remain below 10MB. [Motion verification](experiments/reconstruction/studies/music-mini-compact-vector/review-round/motion.json). The sampled moving source checks pass; this is illustrative motion, not captured Apple animation or device-performance evidence.
 
 Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback component. The exterior mask remains fixed while the silhouette is refined; it cannot move to conceal shadow error.
 
@@ -146,9 +153,9 @@ Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback c
 <details>
 <summary>Motion — background A</summary>
 
-<video controls preload="none" playsinline width="3680" height="960" aria-label="Compact mini-player, background A motion"><source src="assets/study-music-mini-compact-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-mini-compact-vector-paired-a.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="282" aria-label="Compact mini-player, background A motion"><source src="assets/study-music-mini-compact-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-mini-compact-vector-paired-a.mp4">Open video</a></video>
 
-<img src="assets/study-music-mini-compact-vector-paired-a.gif" alt="Compact mini-player motion on background A" width="1840" height="480" loading="lazy" decoding="async">
+<img src="assets/study-music-mini-compact-vector-paired-a.gif" alt="Compact mini-player motion on background A" width="1080" height="282" loading="lazy" decoding="async">
 
 [Video](assets/study-music-mini-compact-vector-paired-a.mp4) · [GIF](assets/study-music-mini-compact-vector-paired-a.gif)
 
@@ -157,9 +164,9 @@ Frames A/B: 2.5/2.0 seconds. This tests the compact state of the same playback c
 <details>
 <summary>Motion — background B</summary>
 
-<video controls preload="none" playsinline width="3680" height="960" aria-label="Compact mini-player, background B motion"><source src="assets/study-music-mini-compact-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-mini-compact-vector-paired-b.mp4">Open video</a></video>
+<video controls preload="none" playsinline width="1080" height="282" aria-label="Compact mini-player, background B motion"><source src="assets/study-music-mini-compact-vector-paired-b.mp4" type="video/mp4"><a href="assets/study-music-mini-compact-vector-paired-b.mp4">Open video</a></video>
 
-<img src="assets/study-music-mini-compact-vector-paired-b.gif" alt="Compact mini-player motion on background B" width="1840" height="480" loading="lazy" decoding="async">
+<img src="assets/study-music-mini-compact-vector-paired-b.gif" alt="Compact mini-player motion on background B" width="1080" height="282" loading="lazy" decoding="async">
 
 [Video](assets/study-music-mini-compact-vector-paired-b.mp4) · [GIF](assets/study-music-mini-compact-vector-paired-b.gif)
 
@@ -417,6 +424,8 @@ Primary sources: [Materials HIG](https://developer.apple.com/design/human-interf
 ## Reproduce
 
 Use Python 3.11+ and the [pinned dependencies](experiments/reconstruction/requirements.txt) in a private virtual environment. Linux DejaVu Sans affects captions only. Download original HD videos privately as `219-hd.mp4` and `284-hd.mp4` using [sources.json](experiments/reconstruction/sources.json); replay checks hashes and decoded dimensions.
+
+Comparison figures declare caption bounds in [comparison-panels.json](comparison-panels.json). Update those dimensions with each resized figure so wipe mode preserves the full rendered body.
 
 From the repository root:
 
