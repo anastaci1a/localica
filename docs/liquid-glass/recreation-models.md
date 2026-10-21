@@ -299,6 +299,6 @@ For `t,s∈[0,1]` and `γ>0`, the function stays bounded and monotone. The affin
 
 ### Current vector-control revisions
 
-The [Search recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-01.json) refines the shared affine material with map, blur, SVG geometry and generated shadow fixed. The [Navigation recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-01.json) adjusts the existing empirical outer-normal profile. Both freeze normalized map coefficients, native pixel blur widths, case fingerprints and vector hashes; scale pixel widths with the source short half-size L.
+The [Search recipe](experiments/reconstruction/studies/music-search-vector/review-round/pass-02.json) refines the shared affine material with map, blur, SVG geometry and generated shadow fixed. The [Navigation recipe](experiments/reconstruction/studies/music-navigation/review-round/pass-01.json) adjusts the existing empirical outer-normal profile. Both freeze normalized map coefficients, native pixel blur widths, case fingerprints and vector hashes; scale pixel widths with the source short half-size L.
 
 Replay: `python vector_revision.py INPUTS RECORD OUTPUT`, using either linked recipe and its original private a/b source, target, known masks and SVGs. Case, source and vector hashes are checked. Unknown exterior uses nearest defined RGB for presentation only; no photographed shadow or foreground is copied, and scored pixels remain unchanged.
