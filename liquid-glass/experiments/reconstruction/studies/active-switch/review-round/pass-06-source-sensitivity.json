@@ -1,0 +1,120 @@
+{
+  "method": "Sensitivity to recorded exposed-track color ranges, not an optical pass.\n\nFrozen reference files/hashes/masks/recipes are unchanged. Only the in-memory\nmodeled track color is perturbed, within prior recorded componentwise5/95\npercentiles. These are not joint confidence intervals or verified hidden RGB.\nReported scores are conditional sensitivity, never a new scoring epoch.\n",
+  "source_files_unchanged": true,
+  "confidence_intervals": false,
+  "observations": [
+    {
+      "observation": "A",
+      "trials": [
+        {
+          "label": "baseline",
+          "track_rgb_255": [
+            121,
+            192,
+            132
+          ],
+          "E": 14.075942720072991
+        },
+        {
+          "label": "low",
+          "track_rgb_255": [
+            120,
+            190,
+            132
+          ],
+          "E": 14.085944207522676
+        },
+        {
+          "label": "half-low",
+          "track_rgb_255": [
+            120.5,
+            191,
+            132
+          ],
+          "E": 14.075079078389884
+        },
+        {
+          "label": "half-high",
+          "track_rgb_255": [
+            121.5,
+            192.5,
+            132.5
+          ],
+          "E": 14.08210271318403
+        },
+        {
+          "label": "high",
+          "track_rgb_255": [
+            122,
+            193,
+            133
+          ],
+          "E": 14.093209320790926
+        }
+      ],
+      "source_file_sha256": "bbd52a46c6c0e5008d4d9e746c9ea5c17acad781e1c2391607b8b7b5f6c64002",
+      "direct_observed_pixels_preserved": true,
+      "error_range": [
+        14.075079078389884,
+        14.093209320790926
+      ]
+    },
+    {
+      "observation": "B",
+      "trials": [
+        {
+          "label": "baseline",
+          "track_rgb_255": [
+            190,
+            195,
+            189
+          ],
+          "E": 15.317415659821096
+        },
+        {
+          "label": "low",
+          "track_rgb_255": [
+            188,
+            193,
+            187
+          ],
+          "E": 15.698787378871238
+        },
+        {
+          "label": "half-low",
+          "track_rgb_255": [
+            189,
+            194,
+            188
+          ],
+          "E": 15.495799869570323
+        },
+        {
+          "label": "half-high",
+          "track_rgb_255": [
+            190.5,
+            195.49999999999997,
+            189.5
+          ],
+          "E": 15.237718643143888
+        },
+        {
+          "label": "high",
+          "track_rgb_255": [
+            191,
+            196,
+            190
+          ],
+          "E": 15.164557032358942
+        }
+      ],
+      "source_file_sha256": "8d4176c394424213d60d7fdbc9d3236c03a726407731f93e87bd0cfccb1e892b",
+      "direct_observed_pixels_preserved": true,
+      "error_range": [
+        15.164557032358942,
+        15.698787378871238
+      ]
+    }
+  ],
+  "limits": "The empirical percentiles contain measurement/encoding/lighting variation; varying all channels together is a stress test, not a joint uncertainty distribution. No input changes adopted and no score improvements counted."
+}
