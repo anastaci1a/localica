@@ -1,0 +1,35 @@
+{
+  "candidate": {
+    "glass": 8.040206909179688,
+    "rim": 11.093774795532227,
+    "foreground": 3.2110546834767844,
+    "E": 9.064932474314984
+  },
+  "previous": {
+    "E": 9.079667846490835,
+    "glass": 8.053853034973145,
+    "foreground": 3.2157627701031943
+  },
+  "native_pixel_max_difference": 0,
+  "source_hashes_verified": true,
+  "domain": {
+    "method": "Analytic enclosure of every native/HQ query over entire output crop; 0<=radial displacement<=A, |r-a|<=max(r,A). Output blur reflects only already calculated crop pixels.",
+    "minimum_frame_margin_px": 61.08351572991296,
+    "source_kernel_3sigma_px": 2,
+    "passed": true,
+    "reused_from": "pass-01-verification.json",
+    "reason": "Same source, map, source blur, output extent and AA. Output Gaussian only filters already calculated crop pixels; icon taper is pointwise."
+  },
+  "native_replay": true,
+  "visual_review": {
+    "accepted": true,
+    "scope": "Fresh 4x full comparison inspected; no new seam, misplaced icon or visibly worsened rim. Tiny filtering/response changes relative to verified pass1.",
+    "remaining": [
+      "Photograph-specific icon response",
+      "Rim/highlight and exterior-shadow mismatches remain",
+      "Single reference only"
+    ]
+  },
+  "accepted": true,
+  "qualification": "Second verified short-round pass: ordinary postfilter 1.5 to 1.6 native-reference pixels, normalized by L=245, and icon highlight taper .5 to .48."
+}

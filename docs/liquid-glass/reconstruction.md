@@ -12,10 +12,10 @@ Apple, [Meet Liquid Glass, 3:10](https://developer.apple.com/videos/play/wwdc202
 
 ![Apple playback control and current reconstruction](assets/playback-round-current.png)
 
-- **Most polished:** width multiplier 4.5; gain 1; source/glass/icon blur σ respectively `0.5/490`, `1.5/490`, `3/490` times the shorter dimension. Dark saturation 0.2; highlight taper 0.5. All lengths, including lighting, scale with the element.
+- **Most polished:** width multiplier 4.5; gain 1; source/glass/icon blur σ respectively `0.5/490`, `1.6/490`, `3/490` times the shorter dimension. Dark saturation 0.2; highlight taper 0.48. All lengths, including lighting, scale with the element.
 - [Complete equations and operation order](recreation-models.md#playback-radial-map-and-smooth-inner-transition). This is an empirical refraction map, not an identified Apple solid.
 - The reference-derived triangle silhouette is reused; its **color is independently calculated**. It has no stroked outline. The response is photograph-specific, not a universal contrast algorithm.
-- Short round, pass **1/3**: one shared material exposure multiplier of **1.005** reduces weighted RMS error from **9.10758 to 9.07967** (0.31%); glass error falls from 8.07670 to 8.05385 and icon error from 3.22750 to 3.21576. Geometry, filters and icon color function are unchanged. [Recipe](experiments/reconstruction/studies/playback/review-round/pass-01.json) · [Replay/domain/visual checks](experiments/reconstruction/studies/playback/review-round/pass-01-verification.json).
+- Short round, pass **2/3**: the shared material exposure multiplier remains **1.005**. Post-refraction blur changes from 1.5 to 1.6 native-reference pixels and icon highlight taper from .5 to .48. Weighted RMS error decreases **9.10758 → 9.07967 → 9.06493**; current glass/icon errors are **8.04021/3.21105**, both improved. [Recipe](experiments/reconstruction/studies/playback/review-round/pass-02.json) · [Replay/domain/visual checks](experiments/reconstruction/studies/playback/review-round/pass-02-verification.json).
 - The current 4× comparison uses the registered clean photograph outside the lens; no photographed shadow is copied. Exterior shadow modeling remains incomplete. The older full-frame comparison and motion below retain their original calibration/context and are historical.
 
 <details>
