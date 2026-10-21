@@ -412,7 +412,7 @@ The blue curves compare three geometric footprints against the same Apple rim. C
 
 ## Scores
 
-Historical experiment counts below include rejected proposals, ties and improvements smaller than the current milestone. They are not counts of passes under the [current verification protocol](recreation-models.md#verified-improvement-protocol). New qualifying passes must reduce weighted RMS error by at least0.5% on every active observation, with the additional source, visual and nonregression checks.
+Historical experiment counts below include rejected proposals and ties; they are not counts of verified passes. The [current verification protocol](recreation-models.md#verified-improvement-protocol) defines nonregression, measurable progress and independent checks; it replaces the earlier fixed0.5% minimum.
 
 ### Music and switch studies
 
