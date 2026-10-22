@@ -53,6 +53,8 @@ class SearchImeMotionTest {
     private val samples = mutableListOf<SearchMorphSample>()
     private val keyboardSetup = mutableListOf<String>()
     private val motionTimeline = mutableListOf<String>()
+    private val nativeTimeline = mutableListOf<String>()
+    private var omittedNativeEvents = 0
     private val nativeWindows = mutableListOf<ObservedImeWindow>()
     private val nativeFrames = mutableListOf<NativeMotionFrame>()
 
@@ -60,7 +62,7 @@ class SearchImeMotionTest {
     private data class NativeImeSample(
         val name: String, val nativeBottom: Int, val nativeVisible: Boolean,
         val appliedBottom: Int, val appliedVisible: Boolean, val navigation: Int,
-        val progressingHide: Boolean, val animations: Int, val completedHides: Int,
+        val progressingHide: Boolean, val animations: Int, val completedHides: Int, val windowFocused: Boolean,
     ) {
         val occluding: Boolean get() = nativeVisible && appliedVisible &&
             nativeBottom > navigation && appliedBottom > navigation
@@ -70,7 +72,11 @@ class SearchImeMotionTest {
     @Composable private fun ObserveImeWindow(view: View, name: String) {
         DisposableEffect(view) {
             val decor = view.rootView as ViewGroup
-            val observation = SearchImeHandoffObservation()
+            val observation = SearchImeHandoffObservation { event ->
+                if (nativeTimeline.size < 2048)
+                    nativeTimeline += "${SystemClock.uptimeMillis()} window=$name focused=${view.hasWindowFocus()} $event"
+                else omittedNativeEvents++
+            }
             val observer = createSearchImeObserver(view.context, observation)
             // Observe both native windows before show/dismissal. The returning
             // popup relinquishes input immediately, so its insets alone can go
@@ -96,7 +102,8 @@ class SearchImeMotionTest {
             applied?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0,
             applied?.isVisible(WindowInsetsCompat.Type.ime()) == true,
             native?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0,
-            window.observation.progressingHide, window.observation.animationCount, window.observation.completedHideCount)
+            window.observation.progressingHide, window.observation.animationCount, window.observation.completedHideCount,
+            window.view.hasWindowFocus())
     }
 
     @Before fun prepareWindow() {
@@ -114,6 +121,8 @@ class SearchImeMotionTest {
         java.io.File(directory, "${name.methodName}-keyboard-setup.txt").writeText(keyboardSetup.joinToString("\n"))
         java.io.File(directory, "${name.methodName}-timeline.txt").writeText(
             compose.runOnUiThread { motionTimeline.toList() }.joinToString("\n"))
+        java.io.File(directory, "${name.methodName}-native-insets.txt").writeText(
+            compose.runOnUiThread { nativeTimeline.toList() + "omittedEvents=$omittedNativeEvents" }.joinToString("\n"))
     }
 
     private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0) {

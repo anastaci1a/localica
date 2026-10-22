@@ -10,8 +10,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 
-/** Applied native state and animated samples have different lifetimes on legacy Android. */
-internal class SearchImeHandoffObservation {
+/** Applied destinations and native animation sources have independent lifetimes. */
+internal class SearchImeHandoffObservation(private val trace: ((String) -> Unit)? = null) {
     var applied: WindowInsetsCompat? = null
         private set
     var animated: WindowInsetsCompat? = null
@@ -32,38 +32,50 @@ internal class SearchImeHandoffObservation {
         it.sourceBottom > 0 && it.started && it.targetHidden && it.progressed && it.fraction > 0f && it.fraction < 1f
     }
 
-    fun apply(insets: WindowInsetsCompat) { applied = insets }
+    fun apply(insets: WindowInsetsCompat) {
+        applied = insets
+        trace?.invoke("apply ${insets.imeDescription()}")
+    }
     fun prepare(animation: WindowInsetsAnimationCompat) {
+        observeAnimation(animation)?.let {
+            trace?.invoke("prepare id=${System.identityHashCode(animation)} type=${animation.typeMask} $it")
+        }
+    }
+    private fun observeAnimation(animation: WindowInsetsAnimationCompat): AnimationState? =
         if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0)
             animations.getOrPut(animation) { AnimationState(applied?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0) }
-    }
-    fun start(animation: WindowInsetsAnimationCompat) {
-        prepare(animation)
-        animations[animation]?.let {
+        else null
+    fun start(animation: WindowInsetsAnimationCompat, bounds: WindowInsetsAnimationCompat.BoundsCompat? = null) {
+        observeAnimation(animation)?.let {
             it.started = true
             // onApply precedes onStart. Capture this animation's destination now;
             // a newer hide must not relabel an older show/resize as another hide.
             it.targetHidden = applied?.imeHidden() == true
+            trace?.invoke("start id=${System.identityHashCode(animation)} bounds=$bounds $it")
         }
     }
     fun progress(insets: WindowInsetsCompat, running: List<WindowInsetsAnimationCompat>) {
         animated = insets
+        if (running.none { it.typeMask and WindowInsetsCompat.Type.ime() != 0 })
+            trace?.invoke("progress ${insets.imeDescription()} noRunningIme types=${running.map { it.typeMask }}")
         // API26 compat animators dispatch independent singleton lists. An old show's
         // final frame must not erase a newer hide, or overwrite its applied insets.
         running.forEach { animation ->
-            prepare(animation)
-            animations[animation]?.let {
+            observeAnimation(animation)?.let {
                 it.progressed = true
                 it.fraction = animation.fraction
                 it.reachedHiddenEnd = it.sourceBottom > 0 && it.started && it.targetHidden &&
                     insets.imeHidden() && animation.fraction == 1f
+                trace?.invoke("progress id=${System.identityHashCode(animation)} ${insets.imeDescription()} $it")
             }
         }
     }
     fun end(animation: WindowInsetsAnimationCompat) {
         // onEnd also runs when a window loses IME control. Only completed hidden
         // progress, never cancellation alone, proves the keyboard finished hiding.
-        if (animations.remove(animation)?.reachedHiddenEnd == true) completedHideCount++
+        val ended = animations.remove(animation)
+        if (ended?.reachedHiddenEnd == true) completedHideCount++
+        trace?.invoke("end id=${System.identityHashCode(animation)} $ended completedHides=$completedHideCount")
     }
 
     fun complete(windowFocused: Boolean, native: WindowInsetsCompat?): Boolean =
@@ -85,7 +97,7 @@ internal fun createSearchImeObserver(context: Context, observation: SearchImeHan
     ViewCompat.setWindowInsetsAnimationCallback(observer, object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
         override fun onPrepare(animation: WindowInsetsAnimationCompat) { observation.prepare(animation) }
         override fun onStart(animation: WindowInsetsAnimationCompat, bounds: WindowInsetsAnimationCompat.BoundsCompat): WindowInsetsAnimationCompat.BoundsCompat {
-            observation.start(animation)
+            observation.start(animation, bounds)
             return bounds
         }
         override fun onProgress(insets: WindowInsetsCompat, runningAnimations: MutableList<WindowInsetsAnimationCompat>): WindowInsetsCompat {
