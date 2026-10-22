@@ -12,7 +12,7 @@ from publish import pair
 from neutral_material import affine_coefficients
 from video_color import ENCODING_COLOR_ARGS,rgb_digest
 from motion import set_gif_timing
-ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('inputs',type=Path);ap.add_argument('record',type=Path);ap.add_argument('output',type=Path);ap.add_argument('--native-reference',type=Path,required=True);ap.add_argument('--check-native-only',action='store_true');ap.add_argument('--travel',type=float,default=20);ap.add_argument('--trim',type=int,default=0);a=ap.parse_args();assert np.isfinite(a.travel) and a.travel>=0 and a.trim>=0
+ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('inputs',type=Path);ap.add_argument('record',type=Path);ap.add_argument('output',type=Path);ap.add_argument('--native-reference',type=Path,required=True);ap.add_argument('--check-native-only',action='store_true');ap.add_argument('--rim-record',type=Path);ap.add_argument('--travel',type=float,default=20);ap.add_argument('--trim',type=int,default=0);a=ap.parse_args();assert np.isfinite(a.travel) and a.travel>=0 and a.trim>=0
 D=a.output;assert not D.exists(),'Use a new export directory';D.mkdir(parents=True);(D/'frames').mkdir()
 import settled
 from extended_fit import Study
@@ -23,6 +23,11 @@ for glyphs in rec['vector_sha256'].values():
  for name,d in glyphs.items():assert hashlib.sha256((a.inputs/name).read_bytes()).hexdigest()==d
 assert np.array_equal(affine_coefficients(rec['g'],rec['b']),p['material']) and p['model']=='radial-tail'
 assert not p.get('blur_transition') and 'icon' not in p
+rim=json.loads(a.rim_record.read_text()) if a.rim_record else None
+if rim:
+ assert rim['amplitude']>=0 and rim['width']>0
+ from neutral_rim import field as rim_field
+clip_audit={'minimum':1.,'maximum':0.,'clipped_channels':0}
 L=min(s.case['half']);x0,y0,x1,y1=s.crop
 sigma=p['source_sigma']*L;blur=cv2.GaussianBlur(s.source,(0,0),sigma) if sigma else s.source
 
@@ -37,13 +42,20 @@ def tiles(scale):
   bottom=min(top+24*scale,y1*scale);yy,xx=np.mgrid[top/scale:bottom/scale:step,x0:x1:step]
   x=(xx-.5+.5/(samples*scale)-s.case['center'][0])/L;y=(yy-.5+.5/(samples*scale)-s.case['center'][1])/L
   X,Y=settled.mapping(x,y,p)
-  yield top-y0*scale,bottom-y0*scale,(X*L+s.case['center'][0]),(Y*L+s.case['center'][1]),settled.lighting(x,y,p)
+  light=settled.lighting(x,y,p)
+  if rim:light=np.concatenate([light,rim_field(x,y,p,rim['width'])[...,None]],axis=-1)
+  yield top-y0*scale,bottom-y0*scale,(X*L+s.case['center'][0]),(Y*L+s.case['center'][1]),light
 
 def render(scale,shift=(0,0),cached=None):
  H,W=(y1-y0)*scale,(x1-x0)*scale;out=np.zeros((H,W,3),np.float32)
  for top,bottom,X,Y,light in (cached if cached is not None else tiles(scale)):
   sampled=cv2.remap(blur,(X+shift[0]).astype(np.float32),(Y+shift[1]).astype(np.float32),cv2.INTER_LINEAR)
-  q=settled.shade(sampled,light,np.asarray(p['material']));out[top:bottom]=q.reshape(bottom-top,2,W,2,3).mean((1,3))
+  if rim:
+   raw=settled.shade(sampled,light[...,:-1],np.asarray(p['material']))+rim['amplitude']*light[...,-1,None]
+   clip_audit['minimum']=min(clip_audit['minimum'],float(raw.min()));clip_audit['maximum']=max(clip_audit['maximum'],float(raw.max()));clip_audit['clipped_channels']+=int(np.count_nonzero((raw<0)|(raw>1)))
+   q=np.clip(raw,0,1)
+  else:q=settled.shade(sampled,light,np.asarray(p['material']))
+  out[top:bottom]=q.reshape(bottom-top,2,W,2,3).mean((1,3))
  return cv2.GaussianBlur(out,(0,0),p['post_sigma']*L*scale) if p.get('post_sigma') else out
 
 def combine(M,scale,shift=(0,0),alpha=None):
@@ -79,7 +91,7 @@ def check_rect(b,margin=0):
  assert known[t:z+1,l:r+1].all(),(l,t,r,z)
  return [l,t,r,z]
 union=[bounds[0],bounds[1]-travel,bounds[2],bounds[3]+travel];rayrect=check_rect(union,sourceradius+1)
-backgroundrect=check_rect([x0-.5,y0-.5-travel,x1-.5,y1-.5+travel],1)
+backgroundrect=check_rect([x0-.5+a.trim,y0-.5+a.trim-travel,x1-.5-a.trim,y1-.5-a.trim+travel],1)
 # Independent conservative radial enclosure, not an extremum search.
 # For active output/post neighbor subrays r<=1+sqrt(2)*(postradius+.5)/scale/L.
 # Tail <= A*.5**power because both exponent coefficients are nonpositive.
@@ -107,4 +119,4 @@ files={}
 for name in ['motion.mp4','motion.gif']:
  f=D/name;probe=json.loads(subprocess.check_output(['ffprobe','-v','error','-count_frames','-show_streams','-show_format','-of','json',str(f)]));assert int(probe['streams'][0]['nb_read_frames'])==90
  files[name]={'bytes':f.stat().st_size,'sha256':digest(f),'probe':probe,'decoded_rgb_digest':rgb_digest(f)}
-save('verification.json',{'recipe_sha256':digest(a.record),'native_zero_exact':checks,'source_support':'source-support.json','internal_raster':[W,H],'export':[finalW,finalH],'frames':90,'seconds':6,'presentation_trim_native_pixels':a.trim,'travel_native_pixels':a.travel,'files':files,'limits':'Illustrative source translation over estimated background, observed hidden fraction0; no new scoring, physical-optics or Apple-motion validation.'})
+save('verification.json',{'recipe_sha256':digest(a.record),'native_zero_exact':checks,'source_support':'source-support.json','internal_raster':[W,H],'export':[finalW,finalH],'frames':90,'seconds':6,'rim_record_sha256':digest(a.rim_record) if a.rim_record else None,'raw_rim_audit_all_export_pixels':clip_audit if rim else None,'presentation_trim_native_pixels':a.trim,'travel_native_pixels':a.travel,'files':files,'limits':'Illustrative source translation over estimated background, observed hidden fraction0; no new scoring, physical-optics or Apple-motion validation.'})

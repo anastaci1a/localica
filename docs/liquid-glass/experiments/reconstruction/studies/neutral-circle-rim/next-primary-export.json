@@ -1,0 +1,20 @@
+{
+  "control": "next",
+  "accepted_primary": true,
+  "comparison_target_exact_and_reconstruction_equals_frame_zero": true,
+  "all_export_media_sha256_exact": true,
+  "finite_declared_all_pose_source_rectangles_independently_known": true,
+  "native_export_equation_control_exact": true,
+  "raw_clipped_channels": 0,
+  "internal_raster": [
+    1268,
+    1260
+  ],
+  "export": [
+    1080,
+    1073
+  ],
+  "gif_bytes": 6687025,
+  "no_duplicate_native_scores_or_body": true,
+  "limits": "Illustrative source translation on estimated backgrounds, not Apple video reconstruction; shared normal highlight remains empirical. Native image epoch unchanged."
+}
