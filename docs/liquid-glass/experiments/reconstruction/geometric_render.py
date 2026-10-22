@@ -6,7 +6,7 @@ optional frozen constant grading reproduces historical diagnostics only.
 import cv2,numpy as np
 from geometric_optics import trace_flat_front_orthographic
 
-def render_rows(source,case,p,surface,index,distance,start,stop,raw_transmission=False,exact_bilinear=False,samples_per_axis=4,source_known=None,required_pixels=None,return_support=False):
+def render_rows(source,case,p,surface,index,distance,start,stop,raw_transmission=False,exact_bilinear=False,samples_per_axis=4,source_known=None,required_pixels=None,return_support=False,return_layers=False):
     """Finite pixel integration with coupled lens/background coverage.
 
     Default4 preserves the historical geometric control. Explicit2 preserves an
@@ -56,7 +56,14 @@ def render_rows(source,case,p,surface,index,distance,start,stop,raw_transmission
     result=C.reshape(stop-start,s,x1-x0,s,3).mean((1,3)).astype(np.float32)
     bounds=[float(X.min()),float(Y.min()),float(X.max()),float(Y.max())]
     support=defined.reshape(stop-start,s,x1-x0,s).all((1,3))
-    return (result,bounds,support) if return_support else (result,bounds)
+    out=(result,bounds,support) if return_support else (result,bounds)
+    if return_layers:
+        alpha=q['inside'].reshape(stop-start,s,x1-x0,s).mean((1,3))
+        lens=np.where(q['inside'][...,None],C,0).reshape(stop-start,s,x1-x0,s,3).mean((1,3))
+        lens=np.divide(lens,alpha[...,None],out=np.zeros_like(lens),where=alpha[...,None]>0)
+        clear=np.where((~q['inside'])[...,None],C,0).reshape(stop-start,s,x1-x0,s,3).mean((1,3))
+        out+=({'lens_color':lens,'coverage':alpha,'clear_premultiplied':clear},)
+    return out
 
 
 def coverage_blur(material,coverage,sigma_pixels):

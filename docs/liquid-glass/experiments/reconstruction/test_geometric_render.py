@@ -12,6 +12,10 @@ class GeometricRenderTest(unittest.TestCase):
   # Linear image has an exact closed-form bilinear sample.
   direct=np.stack([X/100,Y/100,(X+Y)/200],-1).reshape(3,2,25,2,3).mean((1,3)).astype(np.float32)
   np.testing.assert_array_equal(got,direct)
+ def test_returned_layers_reconstruct_pixel_integration(self):
+  C,_,layers=render_rows(self.source,self.case,{},self.surface,1.5,2,0,3,True,True,return_layers=True)
+  rebuilt=(layers['coverage'][...,None]*layers['lens_color']+layers['clear_premultiplied']).astype(np.float32)
+  np.testing.assert_array_equal(C,rebuilt)
  def test_default_four_is_explicit_four(self):
   a,_=render_rows(self.source,self.case,{},self.surface,1.5,2,0,3,True,True);b,_=render_rows(self.source,self.case,{},self.surface,1.5,2,0,3,True,True,samples_per_axis=4);np.testing.assert_array_equal(a,b)
  def test_unknown_clear_exterior_nan_but_lens_protected(self):
