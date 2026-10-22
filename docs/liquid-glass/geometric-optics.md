@@ -49,7 +49,15 @@ background_hit = (x,y,-h) + travel t
 
 For exterior index1 and interior index `n>1`, a global slope bound `M<1/sqrt(n²-1)` guarantees subcritical transmission. Require `D>max(h)` and a downward exit. Concavity certifies no back reentry: along the exiting ray, `g(s)=z(s)+h(x(s),y(s))` is concave and starts with a negative derivative. It stays below the back; upon leaving the footprint it is below the side. This proof applies to the restricted orthographic geometry, not arbitrary cameras or solids.
 
-**Primary path completeness is not full radiance completeness.** Reflected/environment branches and Fresnel weights remain unimplemented here. Unknown background samples, unresolved boundaries and invalid branches must be reported, never hidden by clamping coordinates or dropping scored pixels.
+**Primary path completeness is not full radiance completeness.** The image renderer remains primary-only. Shared Fresnel components and ordered reflected-path steps now support bounded geometry/energy audits, but the current reflected-light audit is incomplete. Unknown background samples, unresolved boundaries and invalid branches must be reported, never hidden by clamping coordinates or dropping scored pixels.
+
+## Outline transport audit
+
+The same circular height can be wrapped as a closed solid with a flat front. Shared `next_convex_boundary` advances an inward boundary ray using the existing bounded bisection; intersections and normals still come from that solid. There is no origin nudge or alternate normal field. Dielectric s/p Fresnel powers and reflection directions are separate reusable primitives; they do not supply an environment image or replace a missing path.
+
+For the current thin G05 lens, 997 cached primary paths plus12 unit-index controls conserved energy within2.23×10⁻¹⁶ and matched the flat-core parallel-slab analytic check. After the declared32 internal encounters, some paths still retain about4.19% incident power. The audit is therefore **incomplete**, with no reflected-light image or accepted outline correction. The source/geometry and historical controls remain fixed. [Audit scope, budgets and limitations](experiments/reconstruction/studies/geometric-playback/outline-path-audit.json)
+
+The circular paths stay meridional, allowing separate s/p weights without rotating their axes; that simplification is not a general3D polarization model for pills. An assumed environment and source-transfer convention would be additional scene/material inputs. Neither unknown HDR light nor unresolved internal energy may be replaced with target-colored pixels. Mathematical direction/path correctness, material softness, visible outline agreement and device performance remain distinct claims.
 
 ## Verification and reproduction
 

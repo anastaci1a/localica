@@ -234,24 +234,101 @@ def trace_closed_orthographic(surface,x,y,index,background_distance,tolerance=1e
         n=g/np.linalg.norm(g,axis=-1)[:,None];i=np.zeros_like(n);i[:,2]=-1
         d,first_blocked,_=refract(i,n,1.,index)
         if first_blocked.any():raise ValueError('Unavailable entry branch')
-        lo=np.zeros(len(j));hi=np.full(len(j),2*np.linalg.norm(ext)+tolerance)
-        fhi,_=surface.level_gradient(p+hi[:,None]*d)
-        if np.any(fhi<=0):raise ValueError('Exit bracket not outside solid')
-        for iterations in range(max_iterations):
-            mid=(lo+hi)/2;fm,_=surface.level_gradient(p+mid[:,None]*d)
-            lo=np.where(fm<=0,mid,lo);hi=np.where(fm>0,mid,hi)
-            if np.max(hi-lo)<=tolerance:break
-        else:raise ValueError('Intersection solver did not converge')
-        t=(lo+hi)/2;q=p+t[:,None]*d;fq,gq=surface.level_gradient(q);nq=gq/np.linalg.norm(gq,axis=-1)[:,None]
-        if np.any(np.sum(d*nq,axis=-1)<=0):raise ValueError('Wrong exit root')
-        e,tir,k=refract(d,-nq,index,1.)
+        event=next_convex_boundary(surface,p,d,tolerance,max_iterations)
+        q=event['point'];nq=event['outward_normal'];width_event=event['bracket'];fq=event['residual']
+        e=np.full_like(d,np.nan);tir=np.zeros(len(j),bool);k=np.full(len(j),np.nan);regular=event['complete']
+        e[regular],tir[regular],k[regular]=refract(d[regular],-nq[regular],index,1.)
         good=~tir&(e[:,2]<0);distance=np.full(len(j),np.nan)
         distance[good]=(-background_distance-q[good,2])/e[good,2]
         good&=distance>0
         X[j]=np.where(good,q[:,0]+distance*e[:,0],np.nan);Y[j]=np.where(good,q[:,1]+distance*e[:,1],np.nan)
         complete[j]=good;blocked[j]=tir
-        entry[j]=p;exit[j]=q;ni[j]=n;no[j]=nq;internal[j]=d;outgoing[j]=e;discriminant[j]=k;width[j]=hi-lo;residual[j]=fq
+        entry[j]=p;exit[j]=q;ni[j]=n;no[j]=nq;internal[j]=d;outgoing[j]=e;discriminant[j]=k;width[j]=width_event;residual[j]=fq
     X[boundary]=np.nan;Y[boundary]=np.nan
     scalar=lambda v:v.reshape(shape)
     vector=lambda v:v.reshape(shape+(3,))
     return dict(X=scalar(X),Y=scalar(Y),inside=scalar(inside),complete=scalar(complete),boundary_unresolved=scalar(boundary),blocked=scalar(blocked),entry=vector(entry),exit=vector(exit),entry_normal=vector(ni),exit_normal=vector(no),internal_direction=vector(internal),exit_direction=vector(outgoing),discriminant=scalar(discriminant),intersection_bracket=scalar(width),exit_level_residual=scalar(residual))
+
+
+def fresnel_components(cosine,n_from,n_to):
+    """Power reflectance of an uncoated lossless scalar dielectric interface.
+
+    Positive incidence cosine is measured toward the surface's outward side.
+    Caller supplies the actual medium transition; equal-index R=0, critical/TIR R=1.
+    Independent of color encoding: these weights must operate on radiance.
+    """
+    c=np.asarray(cosine,float)
+    if not np.isfinite([n_from,n_to]).all() or n_from<=0 or n_to<=0 or not np.isfinite(c).all() or np.any(c< -1e-12) or np.any(c>1+1e-12):raise ValueError('Valid indices and positive incidence cosine required')
+    c=np.clip(c,0,1)
+    if n_from==n_to:return np.zeros(c.shape+(2,))
+    sint2=(n_from/n_to)**2*(1-c*c);blocked=sint2>=1;ct=np.sqrt(np.maximum(1-sint2,0))
+    ds=n_from*c+n_to*ct;dp=n_to*c+n_from*ct
+    rs=np.divide(n_from*c-n_to*ct,ds,out=np.ones_like(c),where=ds>0)
+    rp=np.divide(n_to*c-n_from*ct,dp,out=np.ones_like(c),where=dp>0)
+    return np.where(blocked[...,None],1,np.stack([rs*rs,rp*rp],axis=-1))
+
+
+def fresnel_unpolarized(cosine,n_from,n_to):
+    """Unpolarized mean of actual dielectric s/p power reflectances."""
+    return fresnel_components(cosine,n_from,n_to).mean(axis=-1)
+
+
+def reflect_direction(incident,outward_normal):
+    """Propagation-vector reflection about the same physical surface normal."""
+    i=np.asarray(incident,float);n=np.asarray(outward_normal,float)
+    if not np.isfinite(i).all() or not np.isfinite(n).all() or np.any(abs(np.linalg.norm(i,axis=-1)-1)>1e-10) or np.any(abs(np.linalg.norm(n,axis=-1)-1)>1e-10):raise ValueError('Finite unit vectors required')
+    return i-2*np.sum(i*n,axis=-1)[...,None]*n
+
+
+class CircularHeightSolid:
+    """Convex closed solid for a separately certified concave circular back.
+
+    The very same height supplies the back level and normal; front is z=0 and
+    the footprint r<=1. At an edge-thickness0 crease there is no unique normal.
+    This wrapper adds no new geometry parameters or displacement map.
+    """
+    def __init__(self,back):
+        if not isinstance(back,(RadialCurvatureBack,CircularBevel,HarmonicCircularBack)) or back.maximum_height<=0:raise ValueError('A positive certified concave circular height is required')
+        self.back=back;self.half_extents=np.array([1.,1.,back.maximum_height/2]);self.center=np.array([0.,0.,-back.maximum_height/2]);self.level_point_evaluations=0;self.maximum_level_points=None
+
+    def level_gradient(self,p):
+        p=np.asarray(p,float);count=p[...,0].size
+        if self.maximum_level_points is not None and self.level_point_evaluations+count>self.maximum_level_points:raise RuntimeError('Declared level-point budget would be exceeded')
+        self.level_point_evaluations+=count;x,y,z=p[...,0],p[...,1],p[...,2];h,hx,hy,_=self.back.height_gradient(x,y);r2=x*x+y*y
+        values=np.stack([z,-z-h,r2-1],-1);j=np.argmax(values,-1);ones=np.ones_like(x);zero=np.zeros_like(x)
+        g=np.stack([np.stack([zero,zero,ones],-1),np.stack([-hx,-hy,-ones],-1),np.stack([2*x,2*y,zero],-1)],-2)
+        return np.take_along_axis(values,j[...,None],-1)[...,0],np.take_along_axis(g,j[...,None,None],-2)[...,0,:]
+
+    def front_height(self,x,y):
+        x,y=np.broadcast_arrays(np.asarray(x,float),np.asarray(y,float));return np.zeros_like(x),np.hypot(x,y)<1
+
+    def boundary_mask(self,x,y):return self.back.boundary_mask(x,y)
+
+    def nonsmooth_mask(self,p,uncertainty):
+        h,_,_,_=self.back.height_gradient(p[:,0],p[:,1]);near=abs(np.hypot(p[:,0],p[:,1])-1)<=2*uncertainty
+        return near&((abs(p[:,2])<=2*uncertainty)|(abs(p[:,2]+h)<=2*uncertainty))
+
+
+def next_convex_boundary(surface,points,directions,tolerance=1e-11,max_iterations=64):
+    """Ordered next exit from an on-boundary inward ray in a convex solid.
+
+    No origin epsilon/nudge. Returns actual bracket/residual and actual normals.
+    Surface occupancy/convexity is a required separate certificate. This traces
+    a segment, not a background/environment lookup or a complete radiance path.
+    """
+    p=np.asarray(points,float);d=np.asarray(directions,float);ext=np.asarray(surface.half_extents,float)
+    if p.shape!=d.shape or p.ndim!=2 or p.shape[-1]!=3 or not np.isfinite(p).all() or not np.isfinite(d).all() or np.any(abs(np.linalg.norm(d,axis=-1)-1)>1e-10) or not np.isfinite(tolerance) or tolerance<=0 or max_iterations<1:raise ValueError('Finite points, unit directions and positive solver controls required')
+    if ext.shape!=(3,) or not np.isfinite(ext).all() or np.any(ext<=0):raise ValueError('Positive finite enclosing box required')
+    if not len(p):return dict(point=p.copy(),outward_normal=p.copy(),bracket=np.empty(0),residual=np.empty(0),complete=np.empty(0,bool),iterations=0)
+    f0,g0=surface.level_gradient(p)
+    if np.any(abs(f0)>1e-9) or np.any(np.sum(g0*d,axis=-1)>=0):raise ValueError('Ray must start on the actual boundary and point inward')
+    lo=np.zeros(len(p));hi=np.full(len(p),2*np.linalg.norm(ext)+tolerance);fhi,_=surface.level_gradient(p+hi[:,None]*d)
+    if np.any(fhi<=0):raise ValueError('Exit bracket not outside solid')
+    for iterations in range(max_iterations):
+        mid=(lo+hi)/2;fm,_=surface.level_gradient(p+mid[:,None]*d);lo=np.where(fm<=0,mid,lo);hi=np.where(fm>0,mid,hi)
+        if np.max(hi-lo)<=tolerance:break
+    else:raise ValueError('Next-boundary solver did not converge')
+    t=(lo+hi)/2;q=p+t[:,None]*d;f,g=surface.level_gradient(q);normal=g/np.linalg.norm(g,axis=-1)[:,None]
+    if np.any(np.sum(d*normal,axis=-1)<=0):raise ValueError('Wrong next exit root')
+    unresolved=surface.nonsmooth_mask(q,hi-lo) if hasattr(surface,'nonsmooth_mask') else np.zeros(len(p),bool)
+    return dict(point=q,outward_normal=np.where(unresolved[:,None],np.nan,normal),bracket=hi-lo,residual=f,complete=~unresolved,iterations=iterations+1)

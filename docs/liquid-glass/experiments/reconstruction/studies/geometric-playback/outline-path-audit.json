@@ -1,0 +1,108 @@
+{
+  "status": "INCOMPLETE_REFLECTED_ENERGY_NO_IMAGE_AUTHORITY",
+  "rows": [
+    {
+      "label": "g05",
+      "incident_paths": 997,
+      "primary_reused": true,
+      "new_primary_queries": 0,
+      "maximum_residual_weight": 0.04193249022182247,
+      "maximum_unresolved_weight": 0,
+      "maximum_conservation_error": 2.220446049250313e-16,
+      "active_by_step": [
+        997,
+        997,
+        997,
+        997,
+        45,
+        41,
+        39,
+        38,
+        38,
+        38,
+        38,
+        37,
+        37,
+        37,
+        37,
+        37,
+        37,
+        37,
+        37,
+        37,
+        36,
+        36,
+        36,
+        36,
+        36,
+        36,
+        35,
+        35,
+        35,
+        34,
+        34
+      ],
+      "maximum_root_bracket_L": 5.1449955407179004e-12,
+      "maximum_level_residual": 2.569160162391171e-12,
+      "background_weight_min_max": [
+        0.9112555534764626,
+        0.957916459788238
+      ],
+      "environment_weight_min_max": [
+        0.04000000000000001,
+        0.08872026229115987
+      ],
+      "flat_core_analytic_slab_check": true,
+      "all_path_energy_resolved_within_tolerance": false
+    },
+    {
+      "label": "unit-index",
+      "incident_paths": 12,
+      "primary_reused": false,
+      "new_primary_queries": 12,
+      "maximum_residual_weight": 0,
+      "maximum_unresolved_weight": 0,
+      "maximum_conservation_error": 0,
+      "active_by_step": [],
+      "maximum_root_bracket_L": 0,
+      "maximum_level_residual": 0,
+      "background_weight_min_max": [
+        1,
+        1
+      ],
+      "environment_weight_min_max": [
+        0,
+        0
+      ],
+      "flat_core_analytic_slab_check": true,
+      "all_path_energy_resolved_within_tolerance": true
+    }
+  ],
+  "incident_paths_total": 1009,
+  "new_primary_geometric_queries": 12,
+  "cached_primary_paths_reused": 997,
+  "internal_interface_events": 5996,
+  "level_point_evaluations": 209454,
+  "budgets": {
+    "paths": 1025,
+    "internal_events": 32800,
+    "level_points": 3000000,
+    "internal_per_path": 32,
+    "residual_power_tolerance": 0.000001
+  },
+  "separate_meridional_s_p_weights": true,
+  "assumption": "Rotational circle keeps every path in its own meridional plane; s/p polarization axes do not mix. No claim for arbitrary3D polarization transfer. Geometry/sharedSnell exact to declared root tolerance. No spectral dispersion.",
+  "wall_seconds": 0.4139275550842285,
+  "deadline": "2026-10-22T08:19:52.385815+00:00",
+  "RGB_samples": 0,
+  "fits": 0,
+  "images": 0,
+  "environment": "Terminal directions/weights only; incident radiance NOT inferred from target",
+  "reproduction": {
+    "scope": "Fixed circle geometry/energy audit; no image/fit",
+    "private_command": "PYTHONPATH=code:/tmp/optics-deps:/tmp/optics-fit-deps python outline_paths.py",
+    "inputs": "Original G05 radial-geometry.npz and geometry-513.npz; paths and executed-code snapshot retained privately",
+    "public_primitives": "geometric_optics.CircularHeightSolid, next_convex_boundary, fresnel_components, reflect_direction",
+    "limitation": "The executed bounded driver stopped at32 and did not preserve last internal states. No continuation or complete-radiance reproduction claimed."
+  }
+}
