@@ -74,7 +74,7 @@ Each experiment declares the visible defect, physical parameters, frozen nuisanc
 
 ## Circular play control: first geometric comparison
 
-Reference: [Apple's clear playback control,219 at3:10](https://developer.apple.com/videos/play/wwdc2025/219/?time=190), using the frozen registered photograph from3:00. Ana identified the abrupt shoulder and unwanted reversed outer strip in the historical fit. Exact local windows remain bottom-left[690,570,910,810], top-left[690,290,910,530], upper-right[1025,320,1245,560].
+Reference: [Apple's clear playback control,219 at3:10](https://developer.apple.com/videos/play/wwdc2025/219/?time=190), using the frozen registered photograph from3:00. Earlier notes questioned the abrupt shoulder and outer reversed strip. Ana later clarified that edge reversal belongs in this reference; the comparison must test its shape and extent rather than remove it. Exact local windows remain bottom-left[690,570,910,810], top-left[690,290,910,530], upper-right[1025,320,1245,560].
 
 **Match reference-specific reversal.** Ana explicitly superseded her earlier no-reversal note for this particular lens: edge reversal is wanted. Compare its onset, location, strength, extent and transition with the reference. The initial no-fold aim is historical, not an active acceptance constraint. A mapping fold, or its absence, is not by itself success or failure.
 
