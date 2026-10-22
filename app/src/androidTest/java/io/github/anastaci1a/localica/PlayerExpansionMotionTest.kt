@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -20,6 +21,7 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import org.junit.Assert.*
 import org.junit.Rule
@@ -181,11 +183,37 @@ class PlayerExpansionMotionTest {
         var selectedVisual by mutableStateOf(visual)
         var reduced by mutableStateOf(false)
         lateinit var scope: CoroutineScope
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
-            scope = rememberCoroutineScope()
-            PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout, reducedMotion = reduced),
-                progress, {}, {}, {}, {}, {}, {}, visual = selectedVisual)
-        } } }
+        data class Frame(val progress: Float, val layout: ArtworkLayout, val aspect: Float, val reduced: Boolean)
+        var drawnFrame: Frame? = null
+        compose.setContent {
+            // Capture the composition's inputs, not a later draw-time read of mutable state.
+            val frame = Frame(progress.value, layout, selectedVisual.palette.aspect, reduced)
+            LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().drawWithContent {
+                drawContent()
+                drawnFrame = frame
+            }) {
+                scope = rememberCoroutineScope()
+                PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout, reducedMotion = reduced),
+                    progress, {}, {}, {}, {}, {}, {}, visual = selectedVisual)
+            } }
+        }
+        fun sampleProgress(p: Float) {
+            compose.runOnIdle {
+                // A queued launch can leave the immediately following semantics read at
+                // the previous endpoint. Complete the fixture input before requesting a frame.
+                val snap = scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(p) }
+                assertTrue("The direct progress sample must complete synchronously", snap.isCompleted)
+                assertEquals("The fixture owns this exact progress", p, progress.value, 0f)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertEquals("Bounds must belong to the requested drawn source frame",
+                    Frame(p, layout, selectedVisual.palette.aspect, reduced), drawnFrame)
+            }
+        }
+        val evidence = File(playerMotionOutputDirectory(), "artwork-size-frames.txt")
+        evidence.writeText("")
         for (reduce in listOf(false, true)) for (artworkLayout in ArtworkLayout.entries) for (aspect in listOf(1f / 3f, 1f, 3f)) {
             compose.runOnIdle {
                 reduced = reduce
@@ -196,7 +224,7 @@ class PlayerExpansionMotionTest {
                 }.asImageBitmap(), palette = visual.palette.copy(aspect = aspect))
             }
             compose.waitForIdle()
-            compose.runOnIdle { scope.launch { progress.snapTo(1f) } }
+            sampleProgress(1f)
             val full = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
             val fullTitle = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
             val backgroundHeight = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot().height.value
@@ -205,9 +233,12 @@ class PlayerExpansionMotionTest {
             val snapshots = mutableMapOf<Float, androidx.compose.ui.unit.DpRect>()
             for (p in listOf(0f, .02f, .05f, .08f, .12f, .16f, .2f, .3f, .5f, .8f, 1f,
                 .8f, .5f, .3f, .2f, .16f, .12f, .08f, .05f, .02f, 0f)) {
-                compose.runOnIdle { scope.launch { progress.snapTo(p) } }
+                sampleProgress(p)
                 val art = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
                 val title = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
+                val context = "layout=$artworkLayout aspect=$aspect reduced=$reduce p=$p " +
+                    "reverse=${snapshots.containsKey(p)} compatible=$compatible full=$full title=$title art=$art"
+                evidence.appendText("$context\n")
                 if (compatible) {
                     if (art.top + 32.dp > title.top + 1.dp) {
                         assertEquals("Retain mini width before clearing title", 32f, art.width.value, .5f)
@@ -217,8 +248,8 @@ class PlayerExpansionMotionTest {
                     }
                 } else {
                     val usual = p * (.58f + .42f * p)
-                    assertEquals("Constrained layout keeps existing width motion", 32f + (full.width.value - 32f) * usual, art.width.value, 1f)
-                    assertEquals("Constrained layout keeps existing height motion", minOf(backgroundHeight, 32f + (rawHeight - 32f) * usual), art.height.value, 1f)
+                    assertEquals("Constrained layout keeps existing width motion: $context", 32f + (full.width.value - 32f) * usual, art.width.value, 1f)
+                    assertEquals("Constrained layout keeps existing height motion: $context", minOf(backgroundHeight, 32f + (rawHeight - 32f) * usual), art.height.value, 1f)
                 }
                 snapshots[p]?.let { assertEquals("Held reversal must retrace artwork bounds", it, art) }
                 snapshots[p] = art
@@ -226,14 +257,18 @@ class PlayerExpansionMotionTest {
         }
     }
 
-    private fun recordSemantics(layout: ArtworkLayout, stage: String) {
+    private fun playerMotionOutputDirectory(): File {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
             ?.takeIf { it.isNotBlank() }?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
         val directory = File(root, "player-expansion-motion")
         check(directory.isDirectory || directory.mkdirs())
-        File(directory, "$layout-$stage.txt").writeText(
+        return directory
+    }
+
+    private fun recordSemantics(layout: ArtworkLayout, stage: String) {
+        File(playerMotionOutputDirectory(), "$layout-$stage.txt").writeText(
             "MERGED\n${compose.onRoot().printToString()}\nUNMERGED\n${compose.onRoot(useUnmergedTree = true).printToString()}")
     }
 
