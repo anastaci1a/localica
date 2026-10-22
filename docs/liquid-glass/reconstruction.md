@@ -141,6 +141,17 @@ Both contain 90frames at 15fps, exactly 6 seconds; GIF: 6,185,889 bytes. Rays, o
 - This reuses the selected playback map and normalized kernels as a prior, with a pinned solid bag outline. A quadratic estimate from uncovered controls supplies hidden panel RGB; no hidden pixels were independently observed. Held and independent upper controls support that source family, while the lower-control error2.273levels and pose residualp95≈2px remain uncertainties. [Case](experiments/reconstruction/studies/safari-bag/case.json) · [Source controls](experiments/reconstruction/studies/safari-bag/source-controls.json).
 - Missing rim highlights and glyph-weight differences remain visible. The smooth estimated background cannot identify refraction or blur. This is a single-background material study, using the [shared neutral response](recreation-models.md#neutral-additive-playback-response), without a paired-optics claim.
 
+<details>
+<summary>1080px motion and export details</summary>
+
+![Illustrative Safari bag source motion](assets/safari-bag-motion.gif)
+
+[MP4](assets/safari-bag-motion.mp4) · [Export record](experiments/reconstruction/studies/safari-bag/round/export.json) · [Source support](experiments/reconstruction/studies/safari-bag/round/export-source-support.json) · [Primary review](experiments/reconstruction/studies/safari-bag/round/export-primary-verification.json).
+
+The field is evaluated at1560×1600 before downsampling to1080×1108. One native pixel is trimmed from each presentation edge; native scores retain the original crop. The source moves±4native pixels vertically for6seconds; this is illustrative motion over the estimated panel, not an Apple video match. GIF2.95MB.
+
+</details>
+
 ## Safari tab-count pill
 
 ![Safari tab-count pill and neutral material reconstruction](assets/safari-tab-pill-current.png)

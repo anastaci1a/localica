@@ -12,7 +12,7 @@ from publish import pair
 from neutral_material import affine_coefficients
 from video_color import ENCODING_COLOR_ARGS,rgb_digest
 from motion import set_gif_timing
-ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('inputs',type=Path);ap.add_argument('record',type=Path);ap.add_argument('output',type=Path);ap.add_argument('--native-reference',type=Path,required=True);ap.add_argument('--check-native-only',action='store_true');a=ap.parse_args()
+ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('inputs',type=Path);ap.add_argument('record',type=Path);ap.add_argument('output',type=Path);ap.add_argument('--native-reference',type=Path,required=True);ap.add_argument('--check-native-only',action='store_true');ap.add_argument('--travel',type=float,default=20);ap.add_argument('--trim',type=int,default=0);a=ap.parse_args();assert np.isfinite(a.travel) and a.travel>=0 and a.trim>=0
 D=a.output;assert not D.exists(),'Use a new export directory';D.mkdir(parents=True);(D/'frames').mkdir()
 import settled
 from extended_fit import Study
@@ -60,13 +60,16 @@ else:
  M=render(1);Q=combine(M,1);checks=dict(material_exact=bool(np.array_equal(M,old['material'])),complete_exact=bool(np.array_equal(Q,old['complete'])),clean_public_compositor_exact=bool(np.array_equal(Q,composite(s,p,M))))
  save('native-zero-control.json',dict(checks=checks,material_max_difference=float(np.max(abs(M-old['material']))),complete_max_difference=float(np.max(abs(Q-old['complete']))),native_scores_not_rerun=True));assert all(checks.values());print('native-zero EXACT',flush=True)
 if a.check_native_only:sys.exit(0)
-scale=4;W=(x1-x0)*scale;H=(y1-y0)*scale;postradius=kernel_radius(p['post_sigma']*L*scale);sourceradius=kernel_radius(sigma);alpha=s.shape_coverage(p,scale);scope=cv2.dilate((alpha>0).astype(np.uint8),np.ones((2*postradius+1,2*postradius+1),np.uint8))>0
+assert 2*a.trim<min(x1-x0,y1-y0)
+scale=1
+while (x1-x0-2*a.trim)*scale<1080:scale*=2
+W=(x1-x0)*scale;H=(y1-y0)*scale;postradius=kernel_radius(p['post_sigma']*L*scale);sourceradius=kernel_radius(sigma);alpha=s.shape_coverage(p,scale);scope=cv2.dilate((alpha>0).astype(np.uint8),np.ones((2*postradius+1,2*postradius+1),np.uint8))>0
 # Retain only reusable geometry/light, NOT shaded material. Every pose samples
 # the original fixed source and executes actual shade/post blur anew.
 cache=[];bounds=np.array([np.inf,np.inf,-np.inf,-np.inf]);subrays=0
 for top,bottom,X,Y,J in tiles(scale):
  m=np.repeat(np.repeat(scope[top:bottom],2,0),2,1);xx=X[m].astype(np.float32);yy=Y[m].astype(np.float32);bounds=np.array([min(bounds[0],float(xx.min()) if xx.size else np.inf),min(bounds[1],float(yy.min()) if yy.size else np.inf),max(bounds[2],float(xx.max()) if xx.size else -np.inf),max(bounds[3],float(yy.max()) if yy.size else -np.inf)]);subrays+=len(xx);cache.append((top,bottom,X,Y,J))
-travel=20.;frames=90;fps=15;poses=[(0.,float(travel*np.sin(2*np.pi*i/frames))) for i in range(frames)]
+travel=a.travel;frames=90;fps=15;poses=[(0.,float(travel*np.sin(2*np.pi*i/frames))) for i in range(frames)]
 known=cv2.imread(str(a.inputs/'known.png'),cv2.IMREAD_GRAYSCALE)>254
 # Enclose every actual query after float32 rounding, bilinear footprint and
 # ALL finite nonzero source-Gaussian neighbors. Rectangle conservative.
@@ -81,16 +84,16 @@ backgroundrect=check_rect([x0-.5,y0-.5-travel,x1-.5,y1-.5+travel],1)
 # For active output/post neighbor subrays r<=1+sqrt(2)*(postradius+.5)/scale/L.
 # Tail <= A*.5**power because both exponent coefficients are nonpositive.
 rmax=1+np.sqrt(2)*(postradius+.5)/scale/L;par=p['parameters'];assert par['inner_power']-par['power']*par['width']<=0 and par['inner_power']-par['power']*par['width']**2<=0
-amax=par['amplitude']*(1+max(rmax-1,0)/par['band'])**par['power'];Rbound=max(rmax,amax)*L
+amax=par['amplitude']*(1+max(rmax-1,0)/par['band'])**par['power'];Rbound=max(rmax,par['amplitude'],max(amax-1,0))*L
 independent=check_rect([s.case['center'][0]-Rbound,s.case['center'][1]-Rbound-travel,s.case['center'][0]+Rbound,s.case['center'][1]+Rbound+travel],sourceradius+1)
-save('source-support.json',dict(passed=True,internal_scale=scale,post_radius_output_pixels=postradius,source_radius_native_pixels=sourceradius,contributing_subrays=subrays,actual_zero_query_bounds=bounds.tolist(),all_90_pose_source_enclosure_including_bilinear_and_source_kernel=rayrect,all_90_pose_exterior_enclosure=backgroundrect,independent_radial_rmax=rmax,independent_radial_amax=amax,independent_all_pose_enclosure=independent,minimum_modeled_confidence=1,observed_hidden_fraction=0,stalk_exclusion_respected=True,travel_native_pixels=travel,axis='y',poses=poses,limits='Finite discrete kernels + all visible-alpha/post-neighbor source subrays with bilinear footprint; conservative independent bound includes every pose. Modeled sky definition, not observed recovery or physical optical validation. Full native scored proof inherited separately; export does not rescore.'))
+save('source-support.json',dict(passed=True,internal_scale=scale,post_radius_output_pixels=postradius,source_radius_native_pixels=sourceradius,contributing_subrays=subrays,actual_zero_query_bounds=bounds.tolist(),all_90_pose_source_enclosure_including_bilinear_and_source_kernel=rayrect,all_90_pose_exterior_enclosure=backgroundrect,independent_radial_rmax=rmax,independent_radial_amax=amax,independent_all_pose_enclosure=independent,minimum_modeled_confidence=1,observed_hidden_fraction=0,declared_source_domain_respected=True,travel_native_pixels=travel,axis='y',poses=poses,limits='Finite discrete kernels + all visible-alpha/post-neighbor source subrays with bilinear footprint; conservative independent bound includes every pose. Modeled background definition, not observed recovery or physical optical validation. Full native scored proof inherited separately; export does not rescore.'))
 print('all-pose/source support PASS',rayrect,independent,flush=True)
-finalW=1080;finalH=round((y1-y0)*finalW/(x1-x0));zero=None;framehashes=[];t0=time.time()
+finalW=1080;finalH=round((y1-y0-2*a.trim)*finalW/(x1-x0-2*a.trim));zero=None;framehashes=[];t0=time.time()
 for i,pose in enumerate(poses):
- M=render(scale,pose,cache);rgb=combine(M,scale,pose,alpha);rgb8=np.uint8(np.rint(np.clip(rgb,0,1)*255));out=cv2.resize(rgb8,(finalW,finalH),interpolation=cv2.INTER_AREA)
+ M=render(scale,pose,cache);rgb=combine(M,scale,pose,alpha);rgb8=np.uint8(np.rint(np.clip(rgb,0,1)*255));trim=a.trim*scale;rgb8=rgb8[trim:rgb8.shape[0]-trim,trim:rgb8.shape[1]-trim];out=cv2.resize(rgb8,(finalW,finalH),interpolation=cv2.INTER_AREA)
  file=D/'frames'/f'{i:03}.png';Image.fromarray(out).save(file);framehashes.append(dict(frame=i,shift=pose,sha256=digest(file)))
  if i==0:
-  zero=out;Image.fromarray(out).save(D/'reconstruction.png');target=cv2.resize(np.uint8(np.rint(s.target_crop*255)),(finalW,finalH),interpolation=cv2.INTER_LANCZOS4);Image.fromarray(target).save(D/'original.png');pair(target,out,('Apple source','Neutral material reconstruction'),font_size=32).save(D/'comparison.png')
+  zero=out;Image.fromarray(out).save(D/'reconstruction.png');target=cv2.resize(np.uint8(np.rint(s.target_crop[a.trim:s.target_crop.shape[0]-a.trim,a.trim:s.target_crop.shape[1]-a.trim]*255)),(finalW,finalH),interpolation=cv2.INTER_LANCZOS4);Image.fromarray(target).save(D/'original.png');pair(target,out,('Apple source','Reconstruction'),font_size=32).save(D/'comparison.png')
  print(f'frame {i+1}/{frames}',flush=True)
 cmd=['ffmpeg','-v','error','-threads','2','-filter_threads','1','-y','-framerate',str(fps),'-i',str(D/'frames/%03d.png')]
 subprocess.run(cmd+['-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2,'+ENCODING_COLOR_ARGS[1],'-c:v','libx264','-threads','2','-crf','18','-pix_fmt','yuv420p',*ENCODING_COLOR_ARGS[2:],'-movflags','+faststart',str(D/'motion.mp4')],check=True)
@@ -104,4 +107,4 @@ files={}
 for name in ['motion.mp4','motion.gif']:
  f=D/name;probe=json.loads(subprocess.check_output(['ffprobe','-v','error','-count_frames','-show_streams','-show_format','-of','json',str(f)]));assert int(probe['streams'][0]['nb_read_frames'])==90
  files[name]={'bytes':f.stat().st_size,'sha256':digest(f),'probe':probe,'decoded_rgb_digest':rgb_digest(f)}
-save('verification.json',{'recipe_sha256':digest(a.record),'native_zero_exact':checks,'source_support':'source-support.json','internal_raster':[W,H],'export':[finalW,finalH],'frames':90,'seconds':6,'files':files,'limits':'Illustrative source translation over estimated affine sky, observed hidden fraction0; no new scoring, physical-optics or Apple-motion validation.'})
+save('verification.json',{'recipe_sha256':digest(a.record),'native_zero_exact':checks,'source_support':'source-support.json','internal_raster':[W,H],'export':[finalW,finalH],'frames':90,'seconds':6,'presentation_trim_native_pixels':a.trim,'travel_native_pixels':a.travel,'files':files,'limits':'Illustrative source translation over estimated background, observed hidden fraction0; no new scoring, physical-optics or Apple-motion validation.'})
