@@ -1,7 +1,7 @@
 """Geometry invariants; no private images or fitted score fixtures."""
 import unittest
 import numpy as np
-from geometric_optics import CircularBevel,bevel_profile,refract,trace_flat_front_orthographic,ClosedCircularOval,trace_closed_orthographic
+from geometric_optics import CircularBevel,bevel_profile,refract,trace_flat_front_orthographic,ClosedCircularOval,trace_closed_orthographic,harmonic_cap,HarmonicCircularBack,RadialCurvatureBack
 
 class GeometryTests(unittest.TestCase):
     def setUp(self):
@@ -40,6 +40,9 @@ class GeometryTests(unittest.TestCase):
             self.assertTrue(blocked[0]);self.assertTrue(np.isnan(d).all())
         with self.assertRaises(ValueError):trace_flat_front_orthographic(CircularBevel(depth=.3),self.x,self.y,1.5,2)
         with self.assertRaises(ValueError):trace_flat_front_orthographic(self.s,self.x,self.y,1.5,.01)
+        with self.assertRaises(ValueError):trace_flat_front_orthographic(self.s,np.array([np.nan]),0,1.5,2)
+        with self.assertRaises(ValueError):trace_closed_orthographic(ClosedCircularOval(),np.array([np.nan]),0,1.5,2)
+        with self.assertRaises(ValueError):refract([[0,0,-1]],[[0,0,1]],np.nan,1)
 
     def test_concave_profile_and_plateau_C2(self):
         r=np.array([0,.599999,.6,.600001,1]);h,hr,hrr=bevel_profile(r,.6,.02,3)
@@ -67,5 +70,37 @@ class GeometryTests(unittest.TestCase):
         tangent=trace_closed_orthographic(s,np.array([1.,1.1]),np.array([0.,0.]),1.5,2)
         self.assertFalse(tangent['complete'][0]);self.assertTrue(np.isnan(tangent['X'][0]))
         self.assertTrue(tangent['complete'][1]);self.assertEqual(tangent['X'][1],1.1)
+
+    def test_harmonic_height_derivatives_and_concavity(self):
+        a=np.linspace(.01,.5,51);b=np.full_like(a,.3);h,wa,wb=harmonic_cap(a,b);e=1e-6
+        fd=(harmonic_cap(a+e,b)[0]-harmonic_cap(a-e,b)[0])/(2*e)
+        self.assertLess(abs(fd-wa).max(),1e-9);self.assertTrue((wa+wb<=1).all())
+        self.assertTrue((np.diff(h,2)<=0).all())
+        s=HarmonicCircularBack();x=np.linspace(.05,.97,101);y=np.full_like(x,.03)
+        h,hx,hy,_=s.height_gradient(x,y)
+        fd=(s.height_gradient(x+e,y)[0]-s.height_gradient(x-e,y)[0])/(2*e)
+        self.assertLess(abs(hx-fd).max(),1e-9)
+        q=trace_flat_front_orthographic(s,x,y,1.5,2);self.assertTrue(q['complete'].all())
+
+    def test_curvature_surface_is_one_concave_height(self):
+        s=RadialCurvatureBack([.5,.75,1],[0,1,2]);r=np.linspace(0,.999,201);h,hx,_,_=s.height_gradient(r,np.zeros_like(r))
+        self.assertTrue((np.diff(h)<=0).all());self.assertTrue((np.diff(hx)<=0).all())
+        self.assertEqual(s.height_gradient(np.array([1]),np.array([0]))[0][0],0)
+        e=1e-6;fd=(s.height_gradient(r+e,0)[0]-s.height_gradient(r-e,0)[0])/(2*e)
+        self.assertLess(abs(hx-fd).max(),1e-9)
+        q=trace_flat_front_orthographic(s,r,0,1.5,2);self.assertTrue(q['complete'].all())
+        with self.assertRaises(ValueError):RadialCurvatureBack([.5,.75,1],[0,-1,2])
+
+    def test_shared_circle_fixtures_for_crowned_adapters(self):
+        from crowned_bevel import CrownedBevel
+        from harmonic_crowned_back import HarmonicCrownedBack
+        from closed_crowned_surface import ClosedCrownedSurface
+        x=np.linspace(-.9,.9,21);y=np.full_like(x,.11)
+        for circle,pill in [(CircularBevel(core=0,depth=.02),CrownedBevel(half=(1.,1.),depth=.02,radial_fixture=True)),(HarmonicCircularBack(),HarmonicCrownedBack(half=(1.,1.),radial_fixture=True))]:
+            a=trace_flat_front_orthographic(circle,x,y,1.5,2);b=trace_flat_front_orthographic(pill,x,y,1.5,2)
+            for key in ['X','Y','back','outward_normal']:np.testing.assert_allclose(a[key],b[key],atol=1e-12,rtol=0)
+        a=trace_closed_orthographic(ClosedCircularOval(),x,y,1.5,2)
+        b=trace_closed_orthographic(ClosedCrownedSurface(half=(1.,1.),radial_fixture=True),x,y,1.5,2)
+        for key in ['X','Y','entry','exit','entry_normal','exit_normal']:np.testing.assert_allclose(a[key],b[key],atol=1e-11,rtol=0,equal_nan=True)
 
 if __name__=='__main__':unittest.main()

@@ -1,0 +1,11 @@
+{
+  "surface_kind": "harmonic",
+  "surface": {
+    "depth": 0.15,
+    "crown_depth": 0.4
+  },
+  "index": 1.5,
+  "background_distance": 2,
+  "raw_transmission": true,
+  "exact_bilinear": true
+}

@@ -1,0 +1,423 @@
+{
+  "classification": "USEFUL_RAW_GEOMETRY_DIAGNOSTIC_NOT_ACCEPTED_FIDELITY",
+  "surface": {
+    "family": "HarmonicCrownedBack",
+    "depth": 0.15,
+    "crown_depth": 0.4,
+    "half": [
+      2.3058823529411763,
+      1
+    ],
+    "softness": 0.1,
+    "index": 1.5,
+    "background_distance": 2
+  },
+  "source_epoch": "d1d864eb6eb193d8b4b8ba4563dd89b667727059ad48d770602bb690e53f575d",
+  "measurements": {
+    "classification": "FIXED_GEOMETRIC_DIAGNOSTICS_NOT_ACCEPTED_FIDELITY",
+    "source_uncertainty": "Estimated blank paper/unknown hidden text remains; direct-observation footprint fractions in preflight, not source truth",
+    "shadow": "ZERO generated shadow/highlights in new diagnostics; historical control retains its original shading/shadow/filter",
+    "source_sigma": 0,
+    "post_sigma": 0,
+    "metrics": {
+      "0.15": {
+        "glass": {
+          "pixels": 188771,
+          "RGB_RMSE": 50.99490403870204,
+          "luma_RMSE": 50.844350143372644,
+          "chroma_RMSE": 0.5823992586636453,
+          "signed_RGB": [
+            -7.685844541179191,
+            -7.873485063210713,
+            -7.3216462569494425
+          ]
+        },
+        "rim": {
+          "pixels": 61248,
+          "RGB_RMSE": 47.828798261345476,
+          "luma_RMSE": 47.49404918230205,
+          "chroma_RMSE": 0.7024592569797636,
+          "signed_RGB": [
+            7.706116720214523,
+            7.449538058654925,
+            8.212930747331987
+          ]
+        },
+        "held": {
+          "pixels": 47010,
+          "RGB_RMSE": 47.654342464710616,
+          "luma_RMSE": 47.51174715655029,
+          "chroma_RMSE": 0.5758927196970381,
+          "signed_RGB": [
+            -5.675864067055372,
+            -5.868820536876137,
+            -5.302455478718595
+          ]
+        },
+        "exterior": {
+          "pixels": 71384,
+          "RGB_RMSE": 19.555949198517478,
+          "luma_RMSE": 19.545372803238994,
+          "chroma_RMSE": 0.33750380700000926,
+          "signed_RGB": [
+            16.006611322113933,
+            15.996605449640585,
+            15.997910852921493
+          ]
+        },
+        "full": {
+          "pixels": 543200,
+          "RGB_RMSE": 37.533063504645256,
+          "luma_RMSE": 37.45015075276057,
+          "chroma_RMSE": 0.440522337930334,
+          "signed_RGB": [
+            4.557494652766942,
+            4.472569221457031,
+            4.712934398026469
+          ]
+        },
+        "crops": {
+          "upper": {
+            "historical": {
+              "pixels": 61380,
+              "RGB_RMSE": 10.802674331890248,
+              "luma_RMSE": 10.77720826222609,
+              "chroma_RMSE": 0.4775116051204203,
+              "signed_RGB": [
+                -0.3112285719670989,
+                -0.40037294889561426,
+                -0.14566221174244742
+              ]
+            },
+            "new": {
+              "pixels": 61380,
+              "RGB_RMSE": 51.74087452836569,
+              "luma_RMSE": 51.469282228631634,
+              "chroma_RMSE": 0.7293914973448653,
+              "signed_RGB": [
+                10.020299389709194,
+                9.720764866238472,
+                10.600548250314004
+              ]
+            }
+          },
+          "d-stroke": {
+            "historical": {
+              "pixels": 13120,
+              "RGB_RMSE": 3.4370514099288667,
+              "luma_RMSE": 3.205128170606613,
+              "chroma_RMSE": 0.4517232131040344,
+              "signed_RGB": [
+                1.7561812903637364,
+                1.5328536856181911,
+                2.2010573555783903
+              ]
+            },
+            "new": {
+              "pixels": 13120,
+              "RGB_RMSE": 90.2463050841677,
+              "luma_RMSE": 90.13893578170129,
+              "chroma_RMSE": 0.9093023841406429,
+              "signed_RGB": [
+                -32.33588135447061,
+                -32.86211916649124,
+                -31.306515474929235
+              ]
+            }
+          },
+          "underside": {
+            "historical": {
+              "pixels": 47120,
+              "RGB_RMSE": 6.975874550043021,
+              "luma_RMSE": 6.963059726360742,
+              "chroma_RMSE": 0.1957277822747751,
+              "signed_RGB": [
+                0.4247542579631449,
+                0.5252215077596952,
+                0.23177239663459373
+              ]
+            },
+            "new": {
+              "pixels": 47120,
+              "RGB_RMSE": 11.944717458442,
+              "luma_RMSE": 11.944717458442,
+              "chroma_RMSE": 1.633779519889897e-14,
+              "signed_RGB": [
+                -5.17254402424837,
+                -5.17254402424837,
+                -5.17254402424837
+              ]
+            }
+          }
+        }
+      }
+    },
+    "crop_rectangles": {
+      "upper": [
+        650,
+        369,
+        1270,
+        468
+      ],
+      "d-stroke": [
+        960,
+        468,
+        1120,
+        550
+      ],
+      "underside": [
+        650,
+        650,
+        1270,
+        726
+      ]
+    },
+    "additional_section_rays": 31,
+    "checkpoint_rays_total_including_failed441_and_sections": 11532,
+    "finished_unix": 1792642782.9092138,
+    "native_images": 1
+  },
+  "source_preflight": {
+    "status": "ONE_PASS_BEFORE_RGB_SAMPLING",
+    "observations": [
+      {
+        "depth": 0.15,
+        "rays": 8691200,
+        "whole_inside_rays": 3864420,
+        "scored_rays": 4980688,
+        "scored_outside_outline_rays": 1141256,
+        "incomplete": 0,
+        "boundary_unresolved": 0,
+        "unsupported_texels": 0,
+        "unobserved_footprints": 4274655,
+        "bounds_min": [
+          474.625,
+          284.625
+        ],
+        "bounds_max": [
+          1444.375,
+          844.375
+        ],
+        "minimum_domain_confidence": 1,
+        "source_sampling_started": false,
+        "status": "ALL_ACTUAL_PATHS_AND_FOUR_TEXELS_DEFINED"
+      }
+    ],
+    "source_sigma": 0,
+    "post_sigma": 0,
+    "finite_kernel": "Exact four floor/floor+1 bilinear texels; no additional filter",
+    "domain": "Full-confidence warped original donor domain; modeled paper retained; observed false is disclosed, not filled",
+    "registration": {
+      "matrix": [
+        [
+          0.9578697054607762,
+          0.00018082755364204328,
+          40.514486622923656
+        ],
+        [
+          -0.00018082755364204328,
+          0.9578697054607762,
+          210.46202215716735
+        ]
+      ],
+      "sift_inliers": 37,
+      "exterior_mae_255": 7.47734260559082,
+      "exterior_pixels": 114780,
+      "page_field": {
+        "background_samples": 14173,
+        "background_mae_255": 0.372067869156587,
+        "background_coefficients": [
+          [
+            0.85374710743246,
+            0.8498255390387519,
+            0.8615902442198634
+          ],
+          [
+            -0.017164289043214247,
+            -0.01716428904321442,
+            -0.01716428904321595
+          ],
+          [
+            0.013300966761147882,
+            0.013300966761148073,
+            0.013300966761149648
+          ],
+          [
+            0.009844076562525247,
+            0.009844076562525587,
+            0.009844076562528803
+          ],
+          [
+            -0.0032662297302650813,
+            -0.0032662297302654695,
+            -0.0032662297302696744
+          ],
+          [
+            -0.009739844251569435,
+            -0.009739844251569324,
+            -0.009739844251569627
+          ],
+          [
+            0.00043794283578916745,
+            0.0004379428357893464,
+            0.00043794283579021257
+          ],
+          [
+            0.007440208965034734,
+            0.007440208965034948,
+            0.007440208965038091
+          ],
+          [
+            -0.0044245243829162464,
+            -0.004424524382916756,
+            -0.004424524382921465
+          ],
+          [
+            0.030740090090263104,
+            0.03074009009026275,
+            0.030740090090260446
+          ],
+          [
+            0.01415930130863971,
+            0.014159301308639818,
+            0.014159301308640702
+          ],
+          [
+            -0.02771869325031582,
+            -0.027718693250315937,
+            -0.027718693250315996
+          ],
+          [
+            0.007435340482972385,
+            0.0074353404829724115,
+            0.0074353404829718885
+          ],
+          [
+            -0.00714139373801689,
+            -0.007141393738016703,
+            -0.007141393738015745
+          ],
+          [
+            -0.02336482140817683,
+            -0.02336482140817667,
+            -0.023364821408174835
+          ]
+        ]
+      },
+      "source_frame": {
+        "requested_seconds": 720,
+        "presentation_seconds": 719.9859333333334,
+        "frame_index": 21578,
+        "native_size": [
+          1920,
+          1080
+        ]
+      }
+    },
+    "source_sha256": "6c68d31ac994001701ae3763d67f494bca91d03fda950789dddf01cbb60ea21b",
+    "mask_sha256": "da7d9dec1b557f91321e9ed5aaef5a4416371cbd5657b83e2ff6fccb86b0aa53"
+  },
+  "checkpoint": {
+    "rays": 11501,
+    "checks": {
+      "actual_gradient": {
+        "pass": true,
+        "details": {
+          "FD_steps": [
+            0.00001,
+            0.000005
+          ],
+          "errors": [
+            4.155191468679931e-11,
+            1.2408560290388948e-11
+          ]
+        }
+      },
+      "shared_circle_isotropic_fixture": {
+        "pass": true,
+        "details": {
+          "X": 1.1102230246251565e-16,
+          "Y": 1.1102230246251565e-16,
+          "back": 0,
+          "outward_normal": 5.551115123125783e-17,
+          "exit_direction": 5.551115123125783e-17,
+          "discriminant": 0,
+          "path_length": 0
+        }
+      },
+      "global_certificates": {
+        "pass": true,
+        "details": {
+          "maximum_height": 0.10909090909090907,
+          "global_slope_bound": 0.44999999999999996,
+          "observed_slope_max": 0.43922090545148257,
+          "proof": "h1,h2 concave and nonnegative; shared H increasing concave with nonnegative weights summing<=1. Gradient bound=max(bounds). Exact crease unresolved, no boundary normal claimed."
+        }
+      },
+      "all_regular_primary_paths_complete": {
+        "pass": true,
+        "details": {
+          "regular_inside": 4381,
+          "tangent": 4,
+          "minimum_discriminant": 0.6361360556785729
+        }
+      },
+      "unit_index_identity": {
+        "pass": true,
+        "details": "Boundary remains unresolved"
+      },
+      "analytic_actual_source_Jxx": {
+        "pass": true,
+        "details": {
+          "steps": [
+            0.00001,
+            0.000005
+          ],
+          "max_errors": [
+            7.316369732279782e-12,
+            1.488809076022335e-11
+          ],
+          "meaning": "Analytic derivative of actual h/H and shared flatfront Snell/background equation, not a renderer warp."
+        }
+      }
+    },
+    "status": "PASS_CHECKPOINT",
+    "centerline": {
+      "y": [
+        -0.95,
+        -0.75,
+        -0.5,
+        -0.25,
+        0,
+        0.25,
+        0.5,
+        0.75,
+        0.95
+      ],
+      "hxx": [
+        -0.00038780495047761773,
+        -0.004776233605350915,
+        -0.009183673469387756,
+        -0.0109371273280324,
+        -0.01119110150384998,
+        -0.0109371273280324,
+        -0.009183673469387756,
+        -0.004776233605350915,
+        -0.00038780495047761773
+      ],
+      "source_X_x": [
+        0.999594857228175,
+        0.9953424388166561,
+        0.9912567541989908,
+        0.9896517614130008,
+        0.9894193222145419,
+        0.9896517614130008,
+        0.9912567541989908,
+        0.9953424388166561,
+        0.999594857228175
+      ]
+    },
+    "finished_unix": 1792642745.2073433
+  },
+  "interpretation": "Compare reference-specific reversals, never prohibit all folds. Raw unit transmission omits frosted/material appearance, so overall errors cannot isolate geometry. Nonzero central longitudinal curvature is too weak to claim the d-stroke complaint fixed; source/PSF uncertainty remains."
+}

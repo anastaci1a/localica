@@ -1,0 +1,64 @@
+{
+  "protocol": {
+    "started_unix": 1792644474.646,
+    "wall_limit_seconds": 120,
+    "maximum_actual_ray_queries": 1536,
+    "software_controls": "Three32pixel patches through the identical generic image-formation function: recovered circle, harmonic circle, harmonic toolbar.",
+    "full_candidate_images": 0,
+    "fits": 0,
+    "scope": "Refactor validation only; no new image fidelity or acceptance scores. Same frozen inputs/geometry; reference arrays compared explicitly as float32, with original precision difference retained."
+  },
+  "controls": [
+    {
+      "name": "inferred-circle",
+      "pixels": 32,
+      "source_sha256": "ae20f4366287078794c6e84d70aff6e786400456264d88ffd832fd478d7b23f6",
+      "original_array_dtype": "float32",
+      "comparison_dtype": "float32",
+      "maximum_difference_after_explicit_float32_cast": 0.0,
+      "maximum_difference_against_original_precision": 0.0,
+      "source_bounds": [
+        1034.947870124291,
+        404.625,
+        1191.375,
+        491.49666597778537
+      ]
+    },
+    {
+      "name": "harmonic-circle",
+      "pixels": 32,
+      "source_sha256": "ae20f4366287078794c6e84d70aff6e786400456264d88ffd832fd478d7b23f6",
+      "original_array_dtype": "float32",
+      "comparison_dtype": "float32",
+      "maximum_difference_after_explicit_float32_cast": 0.0,
+      "maximum_difference_against_original_precision": 0.0,
+      "source_bounds": [
+        1100.813591820798,
+        404.625,
+        1191.375,
+        445.9918995807285
+      ]
+    },
+    {
+      "name": "harmonic-toolbar",
+      "pixels": 32,
+      "source_sha256": "6c68d31ac994001701ae3763d67f494bca91d03fda950789dddf01cbb60ea21b",
+      "original_array_dtype": "float64",
+      "comparison_dtype": "float32",
+      "maximum_difference_after_explicit_float32_cast": 0.0,
+      "maximum_difference_against_original_precision": 2.7863171658815133e-08,
+      "source_bounds": [
+        667.4251075096743,
+        460.22641777796116,
+        692.9528732309695,
+        462.4958203267529
+      ]
+    }
+  ],
+  "actual_queries": 1536,
+  "wall_seconds": 1.069869041442871,
+  "full_candidate_images": 0,
+  "new_scores": 0,
+  "fits": 0,
+  "conclusion": "One unchanged projection/ray/source/AA function matches saved circle and toolbar patches. Explicit float32 comparison is software verification, not a score gate or optical-fidelity improvement."
+}

@@ -1,0 +1,178 @@
+{
+  "classification": "USEFUL_NEGATIVE_NOT_ACCEPTED_VISIBLE_IMPROVEMENT",
+  "geometry": {
+    "minimum_radial_map_derivative": 0.43630357341803794,
+    "edge_inward_displacement": 0.2975068101203515,
+    "actual_max_height": 0.10909090909090907,
+    "global_slope_bound": 0.8,
+    "gradient_error": 1.9246770843750483e-11,
+    "geometry_checkpoint_rays": 2001,
+    "complete": true,
+    "fold": false
+  },
+  "surface_recipe": "g04-surface.json",
+  "source_hashes": {
+    "media-source.png": "ae20f4366287078794c6e84d70aff6e786400456264d88ffd832fd478d7b23f6",
+    "media-target.png": "f47fba56384d84de3c106812e8b153fe7a826cfbd0dc082a75f62bc4e2df6bb9"
+  },
+  "source_support": {
+    "all_crop_rays": 7126400,
+    "whole_lens_rays": 3017148,
+    "all_original_scored_subrays": 2151728,
+    "incomplete": 0,
+    "unsupported_bilinear": 0,
+    "unsupported_registered_frame_texels": 0,
+    "source_query_bounds": [
+      619.625,
+      219.625,
+      1299.375,
+      874.375
+    ]
+  },
+  "scores": {
+    "train": {
+      "pixels": 100630,
+      "rmse": 25.856693267822266,
+      "mae": 18.48583221435547,
+      "opponent_chroma_rmse": 3.692918539047241
+    },
+    "held_blocks": {
+      "pixels": 33853,
+      "rmse": 27.435569763183594,
+      "mae": 18.98246955871582,
+      "opponent_chroma_rmse": 4.065887451171875
+    },
+    "all_glass": {
+      "pixels": 134483,
+      "rmse": 26.263078689575195,
+      "mae": 18.610849380493164,
+      "opponent_chroma_rmse": 3.7902631759643555
+    },
+    "rim": {
+      "pixels": 66832,
+      "rmse": 27.38905906677246,
+      "mae": 19.072059631347656,
+      "opponent_chroma_rmse": 4.077249050140381
+    },
+    "outer_rim": {
+      "pixels": 5100,
+      "rmse": 34.903743743896484,
+      "mae": 25.784746170043945,
+      "opponent_chroma_rmse": 3.9120001792907715
+    },
+    "interior": {
+      "pixels": 67651,
+      "rmse": 25.101186752319336,
+      "mae": 18.155221939086914,
+      "opponent_chroma_rmse": 3.483613967895508
+    },
+    "ssim": 0.8417069315910339,
+    "gradient_mae": 11.044257164001465,
+    "selection_loss": 0.01710135037144732
+  },
+  "local": {
+    "bottom-left": {
+      "box": [
+        690,
+        570,
+        910,
+        810
+      ],
+      "historical": {
+        "RGB_RMSE": 8.082544184044801,
+        "luma_RMSE": 7.9320384713171,
+        "chroma_RMSE": 1.3240013605245156,
+        "signed_RGB": [
+          -0.7916652887999746,
+          -0.9850563797503752,
+          -0.6928574516023897
+        ]
+      },
+      "candidate": {
+        "RGB_RMSE": 24.21381187438965,
+        "luma_RMSE": 24.645552229213063,
+        "chroma_RMSE": 2.4890570640563965,
+        "signed_RGB": [
+          -8.239852905273438,
+          -8.276975631713867,
+          -7.97007942199707
+        ]
+      }
+    },
+    "top-left": {
+      "box": [
+        690,
+        290,
+        910,
+        530
+      ],
+      "historical": {
+        "RGB_RMSE": 8.447668312354681,
+        "luma_RMSE": 8.505394463730813,
+        "chroma_RMSE": 1.1032217329398213,
+        "signed_RGB": [
+          1.1227868555361429,
+          0.8887930108203593,
+          0.26732686852450327
+        ]
+      },
+      "candidate": {
+        "RGB_RMSE": 18.362829208374023,
+        "luma_RMSE": 18.49558273721276,
+        "chroma_RMSE": 1.6275999546051025,
+        "signed_RGB": [
+          -5.154587268829346,
+          -4.38742733001709,
+          -4.1530046463012695
+        ]
+      }
+    },
+    "upper-right-crossings": {
+      "box": [
+        1025,
+        320,
+        1245,
+        560
+      ],
+      "historical": {
+        "RGB_RMSE": 7.192991006167936,
+        "luma_RMSE": 7.274635274539061,
+        "chroma_RMSE": 1.2763600401708532,
+        "signed_RGB": [
+          0.9987549484667131,
+          0.5451943250781054,
+          0.14591865285635927
+        ]
+      },
+      "candidate": {
+        "RGB_RMSE": 19.28799819946289,
+        "luma_RMSE": 19.753076587979386,
+        "chroma_RMSE": 2.1547045707702637,
+        "signed_RGB": [
+          -2.500103235244751,
+          -1.946783423423767,
+          -1.2061305046081543
+        ]
+      }
+    }
+  },
+  "scope": "Unit raw transmission, no body grading/lighting/reflection/shadow/scattering; historical filtered icon color/alpha frozen nuisance. Exact bilinear differs from old quantized remap. Original source/masks/registration unchanged; historical official records remain authoritative.",
+  "optical_source_blur": 0,
+  "optical_output_blur": 0,
+  "sampling": "4x4 finite pixel integration and exact bilinear; not optical blur",
+  "renders": 1,
+  "fits": 0,
+  "public_wrapper_partial_control": {
+    "folder": "/evidence/extended/geometric-playback-harmonic",
+    "pixels": 32,
+    "actual_geometry_queries": 512,
+    "max_complete_difference": 0.0,
+    "bounds": [
+      1100.813591820798,
+      404.625,
+      1191.375,
+      445.9918995807285
+    ],
+    "scope": "Partial public wrapper identity, actual prescribed surface; no new optical proposal/image/fit or full replay"
+  }
+}

@@ -3,11 +3,11 @@
   "rows": [
     {
       "nodes": 257,
-      "max_map_error_L": 1.4711575634152041e-05,
+      "max_map_error_L": 0.000014711575634152041,
       "change_from_previous_L": null,
       "actual_height_max": 0.018579301516847627,
       "actual_slope_bound": 0.5529698519949015,
-      "curvature_min": 0.0,
+      "curvature_min": 0,
       "minimum_map_jacobian": -13.101201352999235,
       "fold_present": true,
       "minimum_Snell_discriminant": 0.47311377142221356,
@@ -15,11 +15,11 @@
     },
     {
       "nodes": 513,
-      "max_map_error_L": 3.67769696019149e-06,
-      "change_from_previous_L": 1.1033897145962257e-05,
+      "max_map_error_L": 0.00000367769696019149,
+      "change_from_previous_L": 0.000011033897145962257,
       "actual_height_max": 0.018578715453328575,
       "actual_slope_bound": 0.5529737355053215,
-      "curvature_min": 0.0,
+      "curvature_min": 0,
       "minimum_map_jacobian": -13.101373509019606,
       "fold_present": true,
       "minimum_Snell_discriminant": 0.47310810379335855,
@@ -33,5 +33,6 @@
   "image_renders": 0,
   "conclusion": "A globally concave back height can realize the historical folded radial map with subcritical transmitted paths. Copying it into geometry preserves the unwanted fold. This neither establishes Apple geometry nor rules out other flat-front shapes/cameras.",
   "surface_definition": "Nonnegative continuous piecewise-linear curvature integrated twice; one C2 concave height and its exact polynomial derivative define every normal and path.",
-  "limits": "ODE/convergence are numerical; indices/background depth fixed hypotheses. Orthographic primary transmission only. No full radiance/dispersion/device-performance claim."
+  "limits": "ODE/convergence are numerical; indices/background depth fixed hypotheses. Orthographic primary transmission only. No full radiance/dispersion/device-performance claim.",
+  "interpretation_addendum": "Ana explicitly superseded her earlier no-reversal instruction for this particular lens. The original result and wording are preserved as history; the fold pattern must match reference-specific onset, location, strength and transition, rather than be eliminated globally."
 }

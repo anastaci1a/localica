@@ -1,0 +1,97 @@
+{
+  "classification": "USEFUL_GEOMETRIC_DISTANCE_AMBIGUITY_NOT_IMAGE_FIDELITY",
+  "protocol": {
+    "started_unix": 1792643904.239,
+    "deadline_unix": 1792644204.239,
+    "wall_limit_seconds": 300,
+    "new_inverse_distances": [
+      1,
+      4
+    ],
+    "cached_distance": 2,
+    "index": 1.5,
+    "RHS_limit": 6000,
+    "geometry_ray_limit": 105000,
+    "images": 0,
+    "fits": 0,
+    "question": "What does background distance change at fixed geometry, and can distinct actual flat-front convex backs compensate that change?",
+    "frozen": "Original diagnostic radial map initializes geometry only. All rendered references, masks, sources and accepted baselines unchanged. No new Apple fit or no-fold objective.",
+    "checkpoint": "Branch/global concavity/clearance certificate before each inverse solve; same numerical convergence as G02.",
+    "stop": "At original wall/ray/RHS limit or invariant failure; no additional distances/shape search."
+  },
+  "compensating_surfaces": [
+    {
+      "distance": 1,
+      "new_geometry": {
+        "nodes": 1025,
+        "max_map_error_L": 3.4388888967562536e-06,
+        "change_from_previous_L": 1.0321675995905721e-05,
+        "actual_height_max": 0.03268159409209903,
+        "actual_slope_bound": 0.8171382112762391,
+        "curvature_min": 0.0,
+        "minimum_map_jacobian": -13.101291778656943,
+        "fold_present": true,
+        "minimum_Snell_discriminant": 0.09915150795259142,
+        "ray_paths_complete": true
+      },
+      "fresh_rays": 49155,
+      "RHS_calls": 706
+    },
+    {
+      "distance": 2,
+      "new_geometry": {
+        "nodes": 513,
+        "max_map_error_L": 3.67769696019149e-06,
+        "change_from_previous_L": 1.1033897145962257e-05,
+        "actual_height_max": 0.018578715453328575,
+        "actual_slope_bound": 0.5529737355053215,
+        "curvature_min": 0.0,
+        "minimum_map_jacobian": -13.101373509019606,
+        "fold_present": true,
+        "minimum_Snell_discriminant": 0.47310810379335855,
+        "ray_paths_complete": true
+      },
+      "fresh_rays": 0,
+      "RHS_calls": 0,
+      "evidence_reused": true
+    },
+    {
+      "distance": 4,
+      "new_geometry": {
+        "nodes": 513,
+        "max_map_error_L": 3.7686460027108737e-06,
+        "change_from_previous_L": 1.1306517551212814e-05,
+        "actual_height_max": 0.009668176913080792,
+        "actual_slope_bound": 0.3057560767396456,
+        "curvature_min": 0.0,
+        "minimum_map_jacobian": -13.10145457653889,
+        "fold_present": true,
+        "minimum_Snell_discriminant": 0.8076380549149014,
+        "ray_paths_complete": true
+      },
+      "fresh_rays": 32770,
+      "RHS_calls": 568
+    }
+  ],
+  "fixed_surface": [
+    {
+      "distance": 1,
+      "edge_inward_displacement_L": 0.3172205114597757,
+      "minimum_radial_jacobian": -6.11898920666084,
+      "all_paths_complete": true
+    },
+    {
+      "distance": 4,
+      "edge_inward_displacement_L": 1.2688820433653465,
+      "minimum_radial_jacobian": -26.957617529505324,
+      "all_paths_complete": true
+    }
+  ],
+  "fresh_geometry_rays": 85927,
+  "RHS_calls": 1274,
+  "wall_seconds": 1.3836536407470703,
+  "images": 0,
+  "fits": 0,
+  "interpretation": "At fixed geometry distance changes refraction. Different actual convex back heights can compensate distance to recover the same diagnostic map, so this single map cannot identify physical distance and geometry uniquely. This is not an Apple inverse solution or a rendering gain. Edge reversal is wanted where the reference shows it, not prohibited.",
+  "limits": "Fixed orthographic camera/index1.5/primary branch. Inverse initialized from historical diagnostic map. No source queries/images, finite camera, reflection radiance or performance claim."
+}
