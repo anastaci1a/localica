@@ -1,0 +1,24 @@
+{
+  "raster_evaluated": [
+    1360,
+    450
+  ],
+  "export_per_side": [
+    1080,
+    357
+  ],
+  "sampling": "2x2 per evaluated output pixel; area downsample",
+  "source": {
+    "rectangular_queries": 2448000,
+    "bad": 0,
+    "bounds": [
+      375.7406311035156,
+      641.4816284179688,
+      930.103759765625,
+      761.3052978515625
+    ],
+    "filters": 0,
+    "hidden_observed_fraction": 0
+  },
+  "native_scores": "Unchanged saved pass03; presentation only"
+}
