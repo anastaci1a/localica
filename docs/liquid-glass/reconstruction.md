@@ -193,9 +193,11 @@ The field is evaluated at1560×1600 before downsampling to1080×1108. One native
 
 ![Illustrative tab-count pill translation](assets/safari-tab-pill-motion.gif)
 
-- Four seconds,60frames,1080×360; GIF0.43MB. Lens, solid glyphs and sampling coordinates translate together over the polynomial source estimate. Parent-panel boundaries and reference shadows are omitted.
+- Four seconds,60frames,1080×360; GIF0.46MB. Lens, solid glyphs and sampling coordinates translate together over the polynomial source estimate. Parent-panel boundaries and reference shadows are omitted.
 - The still evaluates1260×840 at two subpixels per output axis, then downsamples to1080×720 per side. Every emitted rectangular-crop query is checked at the HQ grid and each unique motion pose, including partial edge samples. There are no ordinary source/output filters in this prior; no blur or refraction calibration is claimed.
-- [Motion record](experiments/reconstruction/studies/safari-tab-pill/round/final-motion.json) · [HQ record](experiments/reconstruction/studies/safari-tab-pill/round/final-hq.json). Native pass scores remain unchanged.
+- [Motion record](experiments/reconstruction/studies/safari-tab-pill/rim-round/final-media.json) · [HQ record](experiments/reconstruction/studies/safari-tab-pill/rim-round/final-hq.json). Native pass scores remain unchanged.
+
+[Current rim export verification](experiments/reconstruction/studies/safari-tab-pill/rim-round/final-primary-verification.json) · [Native export control](experiments/reconstruction/studies/safari-tab-pill/rim-round/final-native-control.json).
 
 </details>
 
