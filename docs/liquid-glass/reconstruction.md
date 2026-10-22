@@ -50,7 +50,8 @@ Width/fps defaults remain1920/30. The export keeps the original path and2×2 mot
 
 ![Next-track circle and neutral material reconstruction](assets/flower-next-current.png)
 
-- **3/3 verified material passes:** additive values b=.025→.05→.075 shared across RGB, gain1. E **25.734→19.689→13.942→9.076**; glass/rim **25.114/27.126→8.156/10.924**. Every original held, interior, SSIM, icon and near/full exterior guard improves; no clipping in the audited native samples. [Recipe and scores](experiments/reconstruction/studies/flower-next/round/pass-03.json) · [Independent replay](experiments/reconstruction/studies/flower-next/round/pass-03-verification.json).
+- **Current preview: E8.027**, after the [shared rim round](#shared-rim-response-next-and-bag).
+- **Initial3/3 material passes:** additive values b=.025→.05→.075 shared across RGB, gain1. E **25.734→19.689→13.942→9.076**; glass/rim **25.114/27.126→8.156/10.924**. Every original held, interior, SSIM, icon and near/full exterior guard improves; no clipping in the audited native samples. [Recipe and scores](experiments/reconstruction/studies/flower-next/round/pass-03.json) · [Independent replay](experiments/reconstruction/studies/flower-next/round/pass-03-verification.json).
 - The circular map and normalized source/output kernels reuse the selected playback model. The former icon-specific color grade is removed; the pinned solid forward-end glyph stays white. [Frozen case](experiments/reconstruction/studies/flower-next/case.json) · [Baseline](experiments/reconstruction/studies/flower-next/baseline.json) · [Vector](experiments/reconstruction/studies/flower-next/foreground/forward.end.fill-pinned.svg).
 - Sky RGB beneath the circle is an affine estimate from uncovered controls, with no independently observed hidden pixels. A visible stalk is excluded from those controls. Source coverage proves definedness, not optical accuracy. This smooth background does not identify the ray map or blur; missing edge highlights and glyph differences remain visible. No paired-background claim.
 
@@ -61,9 +62,9 @@ Width/fps defaults remain1920/30. The export keeps the original path and2×2 mot
 
 ![Next-track control with moving source](assets/flower-next-motion.gif)
 
-- Six seconds,90 frames;1080×1073 content with one bottom padding row in the MP4. GIF6.72MB. The estimated sky moves vertically beneath the fixed lens; each pose samples, grades and filters the source again. This is illustrative motion, not an Apple recording.
+- Six seconds,90 frames;1080×1073 content with one bottom padding row in the MP4. GIF6.69MB. The estimated sky moves vertically beneath the fixed lens; each pose samples, grades and filters the source again. This is illustrative motion, not an Apple recording.
 - The still evaluates the field and solid vector at1268×1260, then downsamples to1080px per side. All visible-alpha/output-kernel queries, finite source-kernel support and bilinear neighborhoods remain in the original defined source domain, including the stalk exclusion. An independent radial bound agrees. Defined source RGB remains estimated.
-- [Primary media review](experiments/reconstruction/studies/flower-next/round/final-media-verification.json) · [Source-support record](experiments/reconstruction/studies/flower-next/round/final-source-support.json). Native scores are unchanged by this export.
+- [Primary media review](experiments/reconstruction/studies/neutral-circle-rim/next-primary-export.json) · [Source-support record](experiments/reconstruction/studies/neutral-circle-rim/next-source-support.json). Native scores are unchanged by this export.
 
 </details>
 
@@ -137,7 +138,8 @@ Both contain 90frames at 15fps, exactly 6 seconds; GIF: 6,185,889 bytes. Rays, o
 
 ![Safari bag circle and neutral material reconstruction](assets/safari-bag-current.png)
 
-- **3/3 verified material passes:** common RGB bias b=.075, gain1. E **24.479→18.262→12.209→6.775**, with every original glass, rim, held, interior, icon, SSIM and near/full exterior check improving. No clipped audited samples. [Recipe and scores](experiments/reconstruction/studies/safari-bag/round/pass-03.json) · [Independent replay](experiments/reconstruction/studies/safari-bag/round/pass-03-verification.json).
+- **Current preview: E5.778**, after the [shared rim round](#shared-rim-response-next-and-bag).
+- **Initial3/3 material passes:** common RGB bias b=.075, gain1. E **24.479→18.262→12.209→6.775**, with every original glass, rim, held, interior, icon, SSIM and near/full exterior check improving. No clipped audited samples. [Recipe and scores](experiments/reconstruction/studies/safari-bag/round/pass-03.json) · [Independent replay](experiments/reconstruction/studies/safari-bag/round/pass-03-verification.json).
 - This reuses the selected playback map and normalized kernels as a prior, with a pinned solid bag outline. A quadratic estimate from uncovered controls supplies hidden panel RGB; no hidden pixels were independently observed. Held and independent upper controls support that source family, while the lower-control error2.273levels and pose residualp95≈2px remain uncertainties. [Case](experiments/reconstruction/studies/safari-bag/case.json) · [Source controls](experiments/reconstruction/studies/safari-bag/source-controls.json).
 - Missing rim highlights and glyph-weight differences remain visible. The smooth estimated background cannot identify refraction or blur. This is a single-background material study, using the [shared neutral response](recreation-models.md#neutral-additive-playback-response), without a paired-optics claim.
 
@@ -146,11 +148,16 @@ Both contain 90frames at 15fps, exactly 6 seconds; GIF: 6,185,889 bytes. Rays, o
 
 ![Illustrative Safari bag source motion](assets/safari-bag-motion.gif)
 
-[MP4](assets/safari-bag-motion.mp4) · [Export record](experiments/reconstruction/studies/safari-bag/round/export.json) · [Source support](experiments/reconstruction/studies/safari-bag/round/export-source-support.json) · [Primary review](experiments/reconstruction/studies/safari-bag/round/export-primary-verification.json).
+[MP4](assets/safari-bag-motion.mp4) · [Export record](experiments/reconstruction/studies/neutral-circle-rim/bag-export.json) · [Source support](experiments/reconstruction/studies/neutral-circle-rim/bag-source-support.json) · [Primary review](experiments/reconstruction/studies/neutral-circle-rim/bag-primary-export.json).
 
-The field is evaluated at1560×1600 before downsampling to1080×1108. One native pixel is trimmed from each presentation edge; native scores retain the original crop. The source moves±4native pixels vertically for6seconds; this is illustrative motion over the estimated panel, not an Apple video match. GIF2.95MB.
+The field is evaluated at1560×1600 before downsampling to1080×1108. One native pixel is trimmed from each presentation edge; native scores retain the original crop. The source moves±4native pixels vertically for6seconds; this is illustrative motion over the estimated panel, not an Apple video match. GIF2.75MB.
 
 </details>
+
+
+### Shared rim response: NEXT and bag
+
+- **3/3 verified shared passes:** one neutral boundary-normal response improves NEXT E9.076→8.861→8.373→8.027 and bag6.775→6.588→6.163→5.778, preserving every original check on both controls. Fixed source/geometry/kernels; no copied shadow or residual correction. [Recipe, scores and verification](experiments/reconstruction/studies/neutral-circle-rim/pass-03.json) · [Equation](recreation-models.md#shared-neutral-rim-response). This is cross-control material evidence, not paired optical calibration.
 
 ## Safari tab-count pill
 
