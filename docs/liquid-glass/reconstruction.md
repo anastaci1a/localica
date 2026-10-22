@@ -54,6 +54,19 @@ Width/fps defaults remain1920/30. The export keeps the original path and2×2 mot
 - The circular map and normalized source/output kernels reuse the selected playback model. The former icon-specific color grade is removed; the pinned solid forward-end glyph stays white. [Frozen case](experiments/reconstruction/studies/flower-next/case.json) · [Baseline](experiments/reconstruction/studies/flower-next/baseline.json) · [Vector](experiments/reconstruction/studies/flower-next/foreground/forward.end.fill-pinned.svg).
 - Sky RGB beneath the circle is an affine estimate from uncovered controls, with no independently observed hidden pixels. A visible stalk is excluded from those controls. Source coverage proves definedness, not optical accuracy. This smooth background does not identify the ray map or blur; missing edge highlights and glyph differences remain visible. No paired-background claim.
 
+<details>
+<summary>1080px motion and source-support details</summary>
+
+<video controls preload="none" playsinline poster="assets/flower-next-current.png" src="assets/flower-next-motion.mp4"></video>
+
+![Next-track control with moving source](assets/flower-next-motion.gif)
+
+- Six seconds,90 frames;1080×1073 content with one bottom padding row in the MP4. GIF6.72MB. The estimated sky moves vertically beneath the fixed lens; each pose samples, grades and filters the source again. This is illustrative motion, not an Apple recording.
+- The still evaluates the field and solid vector at1268×1260, then downsamples to1080px per side. All visible-alpha/output-kernel queries, finite source-kernel support and bilinear neighborhoods remain in the original defined source domain, including the stalk exclusion. An independent radial bound agrees. Defined source RGB remains estimated.
+- [Primary media review](experiments/reconstruction/studies/flower-next/round/final-media-verification.json) · [Source-support record](experiments/reconstruction/studies/flower-next/round/final-source-support.json). Native scores are unchanged by this export.
+
+</details>
+
 ## Archive and plus toolbar
 
 Apple, [Meet Liquid Glass, 11:50](https://developer.apple.com/videos/play/wwdc2025/219/?time=710); uncovered text at 12:00. Review revision 3 adds a shared intensity curve and common material adjustment; shape and refraction are unchanged. Weighted RMS error decreases **1.17%** from revision 2, with glass, exterior and both foreground checks passing.
