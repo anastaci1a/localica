@@ -206,5 +206,19 @@
     "top": 36,
     "bottom": 0,
     "gutter": 2
+  },
+  "assets/home-thin-rim-rejected-a.png": {
+    "width": 942,
+    "height": 516,
+    "top": 36,
+    "bottom": 0,
+    "gutter": 2
+  },
+  "assets/home-thin-rim-rejected-b.png": {
+    "width": 942,
+    "height": 516,
+    "top": 36,
+    "bottom": 0,
+    "gutter": 2
   }
 }
