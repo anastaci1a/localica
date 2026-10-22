@@ -57,3 +57,23 @@ def render_rows(source,case,p,surface,index,distance,start,stop,raw_transmission
     bounds=[float(X.min()),float(Y.min()),float(X.max()),float(Y.max())]
     support=defined.reshape(stop-start,s,x1-x0,s).all((1,3))
     return (result,bounds,support) if return_support else (result,bounds)
+
+
+def coverage_blur(material,coverage,sigma_pixels):
+    """Ordinary output-color filter; preserve sharp physical shape coverage.
+
+    Reuses crowned_tensor's coverage-normalized numerator/denominator operation
+    with an explicit finite3sigma kernel. This is a material approximation, not
+    geometric displacement, AA, dispersion or a full microfacet transport model.
+    RGB outside coverage may be undefined and contributes nothing to the filter.
+    Caller must certify crop padding and all covered/source samples first.
+    """
+    if not np.isfinite(sigma_pixels) or sigma_pixels<0:raise ValueError('Finite nonnegative color sigma required')
+    material=np.asarray(material);coverage=np.asarray(coverage)
+    if material.shape!=coverage.shape+(3,) or np.any(coverage<0) or np.any(coverage>1) or not np.isfinite(coverage).all():raise ValueError('Coverage/material shape or alpha invalid')
+    if not np.isfinite(material[coverage>0]).all():raise ValueError('Undefined lens material cannot be filtered')
+    if sigma_pixels==0:return material.copy()
+    radius=int(np.ceil(3*sigma_pixels));size=2*radius+1
+    numerator=cv2.GaussianBlur(np.where((coverage>0)[...,None],material,0)*coverage[...,None],(size,size),sigma_pixels,borderType=cv2.BORDER_CONSTANT)
+    denominator=cv2.GaussianBlur(coverage,(size,size),sigma_pixels,borderType=cv2.BORDER_CONSTANT)
+    return np.divide(numerator,denominator[...,None],out=np.zeros_like(numerator),where=denominator[...,None]>0)
