@@ -1,0 +1,111 @@
+{
+  "accepted_primary": true,
+  "accepted_pass": 2,
+  "amplitude": 0.1,
+  "width": 0.02,
+  "previous_amplitude": 0.025,
+  "source_epoch_and_native_masks_unchanged": true,
+  "trial": {
+    "amplitude": 0.1,
+    "width": 0.02,
+    "items": [
+      {
+        "scores": {
+          "glass": {
+            "pixels": 31119,
+            "rmse": 7.5885820388793945
+          },
+          "rim": {
+            "pixels": 13909,
+            "rmse": 9.966445922851562
+          },
+          "held": {
+            "pixels": 8377,
+            "rmse": 7.759426593780518
+          },
+          "interior": {
+            "pixels": 17210,
+            "rmse": 4.883625507354736
+          },
+          "ssim": 0.9935412406921387,
+          "loss": 70.10961745249942,
+          "E": 8.373148598496233,
+          "glyph": {
+            "pixels": 8600,
+            "rmse": 15.919487953186035
+          },
+          "exterior": {
+            "pixels": 33399,
+            "rmse": 3.4605889320373535
+          },
+          "full_visible_exterior": {
+            "pixels": 59242,
+            "rmse": 2.7609357833862305
+          }
+        },
+        "checks": {
+          "glass": true,
+          "rim": true,
+          "held": true,
+          "interior": true,
+          "glyph": true,
+          "exterior": true,
+          "full_visible_exterior": true,
+          "E": true,
+          "ssim": true
+        },
+        "unclipped_upper_bound": 0.9553921699523925,
+        "independent_cached_linear_prediction_error": 8.940696716308594e-7
+      },
+      {
+        "scores": {
+          "glass": {
+            "pixels": 7805,
+            "rmse": 5.9451470375061035
+          },
+          "rim": {
+            "pixels": 5194,
+            "rmse": 6.64359188079834
+          },
+          "held": {
+            "pixels": 3065,
+            "rmse": 5.711163520812988
+          },
+          "interior": {
+            "pixels": 2611,
+            "rmse": 4.225398540496826
+          },
+          "ssim": 0.992450475692749,
+          "loss": 37.982535231880206,
+          "E": 6.16299726041479,
+          "glyph": {
+            "pixels": 7735,
+            "rmse": 16.173450469970703
+          },
+          "exterior": {
+            "pixels": 12761,
+            "rmse": 16.59889793395996
+          },
+          "full_visible_exterior": {
+            "pixels": 22835,
+            "rmse": 12.436049461364746
+          }
+        },
+        "checks": {
+          "glass": true,
+          "rim": true,
+          "held": true,
+          "interior": true,
+          "glyph": true,
+          "exterior": true,
+          "full_visible_exterior": true,
+          "E": true,
+          "ssim": true
+        },
+        "unclipped_upper_bound": 0.7357207417488097,
+        "independent_cached_linear_prediction_error": 8.344650268554688e-7
+      }
+    ],
+    "qualifier": true
+  }
+}
