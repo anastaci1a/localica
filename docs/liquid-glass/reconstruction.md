@@ -207,7 +207,7 @@ Apple, [Meet Liquid Glass,1:40](https://developer.apple.com/videos/play/wwdc2025
 
 ![Mail toolbar and neutral material reconstruction](assets/mail-toolbar-current.png)
 
-- **Current preview: rim round1/3**, E11.683→11.099; every original guard holds, no clipping or source/map change. [Recipe and verification](experiments/reconstruction/studies/mail-toolbar/rim-round/pass-01.json).
+- **Current preview: rim round2/3**, E11.683→11.099→10.121; every original guard holds, no clipping or source/map change. [Recipe and verification](experiments/reconstruction/studies/mail-toolbar/rim-round/pass-02.json).
 - **3/3 verified material passes:** transmission τ1→.95→.90→.85, with one value shared across RGB. E **26.249→20.982→16.002→11.683**, glass/rim **25.298/28.345→10.252/14.483**. Every icon, glass/interior/held region, near/full exterior and SSIM check passes. [Recipe](experiments/reconstruction/studies/mail-toolbar/round/pass-03.json) · [Scores](experiments/reconstruction/studies/mail-toolbar/round/pass-03-scores.json) · [Independent replay](experiments/reconstruction/studies/mail-toolbar/round/pass-03-verification.json).
 - The affine incident field is estimated only from uncovered controls. Held error2.132 levels; independent upper/lower1.905/2.235. A quadratic failed the predefined independent-lower improvement test and is not used. Hidden RGB is modeled, not recovered.
 - The continuous crown uses the existing shared footprint with softness.1 as a prior. Image contour evidence cannot distinguish its softness reliably; it is not an identified Apple solid. The fixed empirical ray prior is unchanged during material trials. Ordinary blur is fixed at0 because this source cannot constrain it, not because Apple blur was disproven.
