@@ -1,0 +1,74 @@
+{
+  "accepted_primary": true,
+  "accepted_pass": 1,
+  "amplitude": 0.05,
+  "width": 0.028,
+  "base_record": "../round/pass-03.json",
+  "scope": "Same neutral normal response on existing crowned boundary coordinate, not Euclidean thickness or optical identification. Source/map/kernels/neutral tau/SVG/coverage/masks/shadow fixed.",
+  "trial": {
+    "amplitude": 0.05,
+    "width": 0.028,
+    "scores": {
+      "glass": {
+        "pixels": 66774,
+        "rmse": 9.854394912719727
+      },
+      "rim": {
+        "pixels": 20736,
+        "rmse": 13.565956115722656
+      },
+      "held": {
+        "pixels": 16634,
+        "rmse": 9.570625305175781
+      },
+      "interior": {
+        "pixels": 46038,
+        "rmse": 7.612926959991455
+      },
+      "ssim": 0.9942359328269958,
+      "loss": 123.18691896719938,
+      "E": 11.098960265141928
+    },
+    "guards": {
+      "glyph_trash": 24.880760192871094,
+      "glyph_folder": 30.123838424682617,
+      "glyph_reply": 18.09088897705078,
+      "combined_glyph": 24.664653778076172,
+      "near_exterior": 3.5196797847747803,
+      "full_exterior": 4.232602119445801
+    },
+    "checks": {
+      "glass": true,
+      "rim": true,
+      "held": true,
+      "interior": true,
+      "E": true,
+      "SSIM": true,
+      "no_clipping": true,
+      "glyph_trash": true,
+      "glyph_folder": true,
+      "glyph_reply": true,
+      "combined_glyph": true,
+      "near_exterior": true,
+      "full_exterior": true
+    },
+    "numerical_qualifier": true,
+    "unclipped_audit": {
+      "minimum": 0.5700000002980232,
+      "maximum": 0.7272309648261749,
+      "clipped_channels": 0
+    },
+    "independent_cached_addition_max_error": 5.960464477539063e-8,
+    "source_ray_and_filter_proof_transfers": true
+  },
+  "verification": {
+    "accepted_primary": true,
+    "accepted_pass": 1,
+    "public_shared_adapter_material_and_composite_pixel_exact": true,
+    "no_raw_clipping": true,
+    "source_queries_filters_unchanged": true,
+    "mail_and_tab_case_and_actual_png_fingerprints_verified": true,
+    "scope": "Same normal response on fixed crowned geometry, empirical neutral illumination, not refraction/blur/physical lighting identification."
+  },
+  "visual_review": "Edge highlights remainweaker than reference; no new contour or glyph artifacts. Parentline outside crop model remains omitted."
+}
