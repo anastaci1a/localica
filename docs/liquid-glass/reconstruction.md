@@ -198,13 +198,14 @@ Apple, [Meet Liquid Glass,1:40](https://developer.apple.com/videos/play/wwdc2025
 
 ![Mail toolbar and neutral material reconstruction](assets/mail-toolbar-current.png)
 
-- **3/3 verified material passes:** transmission τ1→.95→.90→.85, with one value shared across RGB. E **26.249→20.982→16.002→11.683**, glass/rim **25.298/28.345→10.252/14.483**. Every icon, glass/interior/held region, near/full exterior and SSIM check passes. [Recipe](experiments/reconstruction/studies/mail-toolbar/round/pass-03.json) · [Scores](experiments/reconstruction/studies/mail-toolbar/round/pass-03-scores.json) · [Independent replay](experiments/reconstruction/studies/mail-toolbar/round/pass-03-verification.json).
+- **Current preview: rim round3/3**, E11.683→11.099→10.121→9.459; every original guard holds, no clipping or source/map change. [Recipe and verification](experiments/reconstruction/studies/mail-toolbar/rim-round/pass-03.json).
+- **Initial3/3 material passes:** transmission τ1→.95→.90→.85, with one value shared across RGB. E **26.249→20.982→16.002→11.683**, glass/rim **25.298/28.345→10.252/14.483**. Every icon, glass/interior/held region, near/full exterior and SSIM check passes. [Recipe](experiments/reconstruction/studies/mail-toolbar/round/pass-03.json) · [Scores](experiments/reconstruction/studies/mail-toolbar/round/pass-03-scores.json) · [Independent replay](experiments/reconstruction/studies/mail-toolbar/round/pass-03-verification.json).
 - The affine incident field is estimated only from uncovered controls. Held error2.132 levels; independent upper/lower1.905/2.235. A quadratic failed the predefined independent-lower improvement test and is not used. Hidden RGB is modeled, not recovered.
 - The continuous crown uses the existing shared footprint with softness.1 as a prior. Image contour evidence cannot distinguish its softness reliably; it is not an identified Apple solid. The fixed empirical ray prior is unchanged during material trials. Ordinary blur is fixed at0 because this source cannot constrain it, not because Apple blur was disproven.
 - Trash/reply reuse pinned solid SF-export outlines. Folder is a clean connected-rail trace after the available vectors failed to match that detail. Its input correction is separate from material progress; exact original weights remain unproven. All three glyph boxes are guarded individually. [Frozen case](experiments/reconstruction/studies/mail-toolbar/case.json).
 - Reflections/highlights, body tone, foreground geometry and parent-panel context remain incomplete. This component study is separate from the most-polished clear playback control.
 
-[Material equation and replay](recreation-models.md#neutral-material-response) · [Native replay helper](experiments/reconstruction/neutral_material.py).
+[Current rim equation and replay](recreation-models.md#shared-neutral-rim-response) · [Replay helper](experiments/reconstruction/neutral_rim.py) · [Initial neutral response](recreation-models.md#neutral-material-response).
 
 <details>
 <summary>1080px motion and export details</summary>
@@ -213,9 +214,11 @@ Apple, [Meet Liquid Glass,1:40](https://developer.apple.com/videos/play/wwdc2025
 
 ![Illustrative Mail toolbar translation](assets/mail-toolbar-motion.gif)
 
-- Four seconds, 60 frames, 1080×360; GIF 0.88MB. This is an illustrative translation over the estimated affine panel, without the parent panel boundary. Each pose reevaluates the fixed field and solid glyphs; no reference shadow is retained.
+- Four seconds, 60 frames, 1080×360; GIF 0.87MB. This is an illustrative translation over the estimated affine panel, without the parent panel boundary. Each pose reevaluates the fixed field and solid glyphs; no reference shadow is retained.
 - The still evaluates 1360×450 at two subpixels per output axis and downsamples to1080px per side. The Apple crop is resized directly from its native source. Native pass scores remain unchanged.
-- Every emitted rectangular-crop query, including partial edge pixels, stays in the frozen defined source domain. Hidden RGB remains modeled, not observed. [Motion record](experiments/reconstruction/studies/mail-toolbar/round/final-motion.json) · [HQ record](experiments/reconstruction/studies/mail-toolbar/round/final-hq.json).
+- Every emitted rectangular-crop query, including partial edge pixels, stays in the frozen defined source domain. Hidden RGB remains modeled, not observed. [Motion record](experiments/reconstruction/studies/mail-toolbar/rim-round/final-media.json) · [HQ record](experiments/reconstruction/studies/mail-toolbar/rim-round/final-hq.json).
+
+[Primary export verification](experiments/reconstruction/studies/mail-toolbar/rim-round/final-primary-verification.json) · [Native export control](experiments/reconstruction/studies/mail-toolbar/rim-round/final-native-control.json).
 
 </details>
 
