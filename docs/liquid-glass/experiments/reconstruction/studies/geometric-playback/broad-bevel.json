@@ -1,0 +1,10 @@
+{
+  "surface": {
+    "core": 0.3,
+    "depth": 0.04,
+    "power": 3,
+    "edge": 0
+  },
+  "index": 1.5,
+  "background_distance": 2
+}

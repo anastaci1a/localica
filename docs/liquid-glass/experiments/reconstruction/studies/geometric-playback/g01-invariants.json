@@ -1,0 +1,15 @@
+{
+  "invalid_branch_rejected": true,
+  "height_gradient_fd_max": 9.466899486554325e-12,
+  "snell_max": 5.551115123125783e-17,
+  "reciprocity_max": 2.220446049250313e-16,
+  "identity_index_pass": true,
+  "mirror_rotation_pass": true,
+  "no_reentry_finite_control_max": -9.877102731788504e-07,
+  "global_no_reentry_proof": "h concave on convex disk; outgoing g=z+h has negative initial derivative and is concave; outside disk ray is below cylinder bottom",
+  "front": "exact normal-incidence air/solid interface",
+  "units": "all lengths normalized by radius; scale similarity exact by construction",
+  "optical_blur": 0,
+  "new_image_renders": 0,
+  "wall_seconds": 0.009913206100463867
+}

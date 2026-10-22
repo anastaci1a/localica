@@ -1,12 +1,14 @@
 # Apple reference recreations
 
-Open a study to load its comparisons. **Wipe** shows Apple on the left and the reconstruction on the right; **Side by side** shows both panels. **Fullscreen** enlarges any image. The divider resets to the center when a view reopens. Motion captures load only when their dropdown is opened. The clear playback control is the **current most-polished model**. These offline results are separate from the live lab and Android app.
+Open a study to load its comparisons. **Wipe** shows Apple on the left and the reconstruction on the right; **Side by side** shows both panels. **Fullscreen** enlarges any image. The divider resets to the center when a view reopens. Motion captures load only when their dropdown is opened. The clear playback control is the **current most-polished historical image fit**. New refraction work follows the [geometry-only optical contract](geometric-optics.md). These offline results are separate from the live lab and Android app.
 
 [Mathematical specification](recreation-models.md) · [Parameters](experiments/reconstruction/recipes.json) · [Scores](#scores) · [Reproduce](#reproduce) · [Material roles](#material-roles) · [Guide](README.md)
 
 [Playback](#clear-playback-control) · [Toolbar](#archive-and-plus-toolbar) · [Slider](#active-slider) · [Light/dark](#light-and-dark-surfaces) · [Apple Music](#apple-music-studies) · [Switch](#active-switch)
 
 ## Clear playback control
+
+The [first exact-surface comparison](geometric-optics.md#circular-play-control-first-geometric-comparison) is a useful negative result; it does not replace this historical filtered fit.
 
 Apple, [Meet Liquid Glass, 3:10](https://developer.apple.com/videos/play/wwdc2025/219/?time=190); uncovered photograph at 3:00. The selected radial map has a quiet center, stronger rim refraction and slight filtering after refraction. The play symbol's calculated color is blurred internally before sharp triangular coverage is applied.
 

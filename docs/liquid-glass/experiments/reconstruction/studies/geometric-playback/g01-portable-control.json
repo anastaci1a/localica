@@ -1,0 +1,13 @@
+{
+  "partial_public_wrapper_pixel_exact": true,
+  "rows": [
+    100,
+    112
+  ],
+  "pixels": 8160,
+  "new_full_candidate_renders": 0,
+  "new_model_or_fit": false,
+  "all_saved_candidate_images_unchanged": true,
+  "boundary_fix": "No exact-rim hits on native4x4 circle lattice: odd eighth-pixel squared sums cannot equal integer radius squared. Existing images need no rerender.",
+  "initial_test_fix": "Sine comparison changed from subtracting nearly equal cosines to stable cross products; original failed check retained. No optics changed for that test correction."
+}

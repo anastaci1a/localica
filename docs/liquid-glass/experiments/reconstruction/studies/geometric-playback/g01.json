@@ -1,0 +1,386 @@
+{
+  "checkpoint": {
+    "stage": "GEOMETRY_CHECKPOINT_BEFORE_IMAGES",
+    "started_unix": 1792638898.6595252,
+    "deadline_unix": 1792640098.6595252,
+    "proposal_count": 3,
+    "small_geometry_evaluations": 16,
+    "allowed": 24,
+    "historical_map": {
+      "folds": true,
+      "fold_start": 0.91326904296875,
+      "fold_end": 1,
+      "minimum_radial_jacobian": -13.101468692544586,
+      "comment": "Diagnostic empirical map only. It is NEVER called in the new ray tracer."
+    },
+    "surfaces": [
+      {
+        "name": "narrow-bevel",
+        "surface": {
+          "core": 0.6,
+          "depth": 0.02,
+          "power": 3,
+          "edge": 0
+        },
+        "radial_min_jacobian": 0.21923669259740564,
+        "edge_displacement": 0.15128557571605838,
+        "maximum_height": 0.02,
+        "slope_bound": 0.15
+      },
+      {
+        "name": "broad-bevel",
+        "surface": {
+          "core": 0.3,
+          "depth": 0.04,
+          "power": 3,
+          "edge": 0
+        },
+        "radial_min_jacobian": 0.47861616017144115,
+        "edge_displacement": 0.17335691026524136,
+        "maximum_height": 0.04,
+        "slope_bound": 0.17142857142857143
+      },
+      {
+        "name": "nonfold-depth-limit",
+        "surface": {
+          "core": 0.6,
+          "depth": 0.023975116859555373,
+          "power": 3,
+          "edge": 0
+        },
+        "radial_min_jacobian": 0.050693817447609035,
+        "edge_displacement": 0.18204338392000075,
+        "maximum_height": 0.023975116859555373,
+        "slope_bound": 0.17981337644666529,
+        "selection": "12-step geometry-only bisection; no target pixels or image score"
+      }
+    ],
+    "optical_source_blur": 0,
+    "optical_post_blur": 0,
+    "AA": 4,
+    "source_hashes": {
+      "media-source.png": "ae20f4366287078794c6e84d70aff6e786400456264d88ffd832fd478d7b23f6",
+      "media-target.png": "f47fba56384d84de3c106812e8b153fe7a826cfbd0dc082a75f62bc4e2df6bb9"
+    },
+    "frozen_nuisance": "Constant historical RGB gain/bias only; no old spatial lights. Historical calculated foreground color/alpha frozen separately, including its old icon-only filtering; not an unfiltered icon experiment.",
+    "historical_official_filtered_E": 9.06474721701574
+  },
+  "rows": [
+    {
+      "name": "narrow-bevel",
+      "surface": {
+        "core": 0.6,
+        "depth": 0.02,
+        "power": 3,
+        "edge": 0
+      },
+      "radial_min_jacobian": 0.21923669259740564,
+      "edge_displacement": 0.15128557571605838,
+      "maximum_height": 0.02,
+      "slope_bound": 0.15,
+      "visible_composite_scores": {
+        "train": {
+          "pixels": 100630,
+          "rmse": 17.760189056396484,
+          "mae": 12.249286651611328,
+          "opponent_chroma_rmse": 2.0749456882476807
+        },
+        "held_blocks": {
+          "pixels": 33853,
+          "rmse": 18.087865829467773,
+          "mae": 12.397418975830078,
+          "opponent_chroma_rmse": 2.1107237339019775
+        },
+        "all_glass": {
+          "pixels": 134483,
+          "rmse": 17.843242645263672,
+          "mae": 12.286575317382812,
+          "opponent_chroma_rmse": 2.084009885787964
+        },
+        "rim": {
+          "pixels": 66832,
+          "rmse": 22.080764770507812,
+          "mae": 14.433128356933594,
+          "opponent_chroma_rmse": 2.5456631183624268
+        },
+        "outer_rim": {
+          "pixels": 5100,
+          "rmse": 43.0285758972168,
+          "mae": 33.13923645019531,
+          "opponent_chroma_rmse": 4.0765814781188965
+        },
+        "interior": {
+          "pixels": 67651,
+          "rmse": 12.298392295837402,
+          "mae": 10.166009902954102,
+          "opponent_chroma_rmse": 1.4938769340515137
+        },
+        "ssim": 0.8940582871437073,
+        "gradient_mae": 8.784554481506348,
+        "selection_loss": 0.01255570211176851
+      },
+      "local": {
+        "bottom-left": {
+          "box": [
+            690,
+            570,
+            910,
+            810
+          ],
+          "composite_RGB_RMSE": 14.52601432800293,
+          "historical_composite_RGB_RMSE": 8.082544184044801
+        },
+        "top-left": {
+          "box": [
+            690,
+            290,
+            910,
+            530
+          ],
+          "composite_RGB_RMSE": 14.468358039855957,
+          "historical_composite_RGB_RMSE": 8.447668312354681
+        },
+        "upper-right-crossings": {
+          "box": [
+            1025,
+            320,
+            1245,
+            560
+          ],
+          "composite_RGB_RMSE": 11.29358959197998,
+          "historical_composite_RGB_RMSE": 7.192991006167936
+        }
+      },
+      "source_query_bounds": [
+        619.625,
+        219.625,
+        1299.375,
+        874.375
+      ],
+      "all_paths_complete": true,
+      "finite_bilinear_source_domain_pass": true,
+      "source_is_frozen_registered_photo": true,
+      "new_image_render": 1,
+      "accepted_visible_improvement": false
+    },
+    {
+      "name": "broad-bevel",
+      "surface": {
+        "core": 0.3,
+        "depth": 0.04,
+        "power": 3,
+        "edge": 0
+      },
+      "radial_min_jacobian": 0.47861616017144115,
+      "edge_displacement": 0.17335691026524136,
+      "maximum_height": 0.04,
+      "slope_bound": 0.17142857142857143,
+      "visible_composite_scores": {
+        "train": {
+          "pixels": 100630,
+          "rmse": 18.634567260742188,
+          "mae": 12.969660758972168,
+          "opponent_chroma_rmse": 2.3169076442718506
+        },
+        "held_blocks": {
+          "pixels": 33853,
+          "rmse": 19.427833557128906,
+          "mae": 13.484745025634766,
+          "opponent_chroma_rmse": 2.4270317554473877
+        },
+        "all_glass": {
+          "pixels": 134483,
+          "rmse": 18.837400436401367,
+          "mae": 13.099322319030762,
+          "opponent_chroma_rmse": 2.345115900039673
+        },
+        "rim": {
+          "pixels": 66832,
+          "rmse": 22.513696670532227,
+          "mae": 15.123045921325684,
+          "opponent_chroma_rmse": 2.7169876098632812
+        },
+        "outer_rim": {
+          "pixels": 5100,
+          "rmse": 41.12456130981445,
+          "mae": 31.567060470581055,
+          "opponent_chroma_rmse": 3.9125773906707764
+        },
+        "interior": {
+          "pixels": 67651,
+          "rmse": 14.306262016296387,
+          "mae": 11.100098609924316,
+          "opponent_chroma_rmse": 1.9078534841537476
+        },
+        "ssim": 0.8598191738128662,
+        "gradient_mae": 10.508769989013672,
+        "selection_loss": 0.01279204083789485
+      },
+      "local": {
+        "bottom-left": {
+          "box": [
+            690,
+            570,
+            910,
+            810
+          ],
+          "composite_RGB_RMSE": 16.154207229614258,
+          "historical_composite_RGB_RMSE": 8.082544184044801
+        },
+        "top-left": {
+          "box": [
+            690,
+            290,
+            910,
+            530
+          ],
+          "composite_RGB_RMSE": 15.431471824645996,
+          "historical_composite_RGB_RMSE": 8.447668312354681
+        },
+        "upper-right-crossings": {
+          "box": [
+            1025,
+            320,
+            1245,
+            560
+          ],
+          "composite_RGB_RMSE": 13.289795875549316,
+          "historical_composite_RGB_RMSE": 7.192991006167936
+        }
+      },
+      "source_query_bounds": [
+        619.625,
+        219.625,
+        1299.375,
+        874.375
+      ],
+      "all_paths_complete": true,
+      "finite_bilinear_source_domain_pass": true,
+      "source_is_frozen_registered_photo": true,
+      "new_image_render": 1,
+      "accepted_visible_improvement": false
+    },
+    {
+      "name": "nonfold-depth-limit",
+      "surface": {
+        "core": 0.6,
+        "depth": 0.023975116859555373,
+        "power": 3,
+        "edge": 0
+      },
+      "radial_min_jacobian": 0.050693817447609035,
+      "edge_displacement": 0.18204338392000075,
+      "maximum_height": 0.023975116859555373,
+      "slope_bound": 0.17981337644666529,
+      "selection": "12-step geometry-only bisection; no target pixels or image score",
+      "visible_composite_scores": {
+        "train": {
+          "pixels": 100630,
+          "rmse": 17.545000076293945,
+          "mae": 12.174051284790039,
+          "opponent_chroma_rmse": 2.073446035385132
+        },
+        "held_blocks": {
+          "pixels": 33853,
+          "rmse": 17.783016204833984,
+          "mae": 12.299596786499023,
+          "opponent_chroma_rmse": 2.1409387588500977
+        },
+        "all_glass": {
+          "pixels": 134483,
+          "rmse": 17.60521697998047,
+          "mae": 12.20565414428711,
+          "opponent_chroma_rmse": 2.0906410217285156
+        },
+        "rim": {
+          "pixels": 66832,
+          "rmse": 21.66175079345703,
+          "mae": 14.243144035339355,
+          "opponent_chroma_rmse": 2.549091100692749
+        },
+        "outer_rim": {
+          "pixels": 5100,
+          "rmse": 40.529212951660156,
+          "mae": 31.17107391357422,
+          "opponent_chroma_rmse": 3.8666865825653076
+        },
+        "interior": {
+          "pixels": 67651,
+          "rmse": 12.352500915527344,
+          "mae": 10.192830085754395,
+          "opponent_chroma_rmse": 1.5064679384231567
+        },
+        "ssim": 0.8943658471107483,
+        "gradient_mae": 8.887411117553711,
+        "selection_loss": 0.011881492155621063
+      },
+      "local": {
+        "bottom-left": {
+          "box": [
+            690,
+            570,
+            910,
+            810
+          ],
+          "composite_RGB_RMSE": 14.493297576904297,
+          "historical_composite_RGB_RMSE": 8.082544184044801
+        },
+        "top-left": {
+          "box": [
+            690,
+            290,
+            910,
+            530
+          ],
+          "composite_RGB_RMSE": 14.416121482849121,
+          "historical_composite_RGB_RMSE": 8.447668312354681
+        },
+        "upper-right-crossings": {
+          "box": [
+            1025,
+            320,
+            1245,
+            560
+          ],
+          "composite_RGB_RMSE": 11.482868194580078,
+          "historical_composite_RGB_RMSE": 7.192991006167936
+        }
+      },
+      "source_query_bounds": [
+        619.625,
+        219.625,
+        1299.375,
+        874.375
+      ],
+      "all_paths_complete": true,
+      "finite_bilinear_source_domain_pass": true,
+      "source_is_frozen_registered_photo": true,
+      "new_image_render": 1,
+      "accepted_visible_improvement": false
+    }
+  ],
+  "wall_seconds": 377.8010709285736,
+  "completed_image_renders": 3,
+  "fits": 0,
+  "classification": "USEFUL_NEGATIVE_NOT_ACCEPTED_FIDELITY",
+  "limitations": "Only orthographic flat-front primary transmission tested. No finite camera, Fresnel multipath, lighting fit, optical blur, spectral dispersion or device performance claim. Historical filtered baseline is not silently replaced; foreground color remains frozen historical nuisance.",
+  "visual_review": {
+    "accepted": false,
+    "observation": "The reversed outer strip is absent, but dune-edge crossings remain too weakly displaced and differently curved. Missing illumination/outline and the deliberately different blur/color stages also contribute to RGB error.",
+    "local_regressions_retained": true,
+    "global_conclusion": "Three profile proposals do not rule out other convex-back surfaces or finite cameras."
+  },
+  "implementation_review": {
+    "partial_public_wrapper_pixel_exact": true,
+    "rows": [
+      100,
+      112
+    ],
+    "pixels": 8160,
+    "new_full_candidate_renders": 0,
+    "new_model_or_fit": false,
+    "all_saved_candidate_images_unchanged": true,
+    "boundary_fix": "No exact-rim hits on native4x4 circle lattice: odd eighth-pixel squared sums cannot equal integer radius squared. Existing images need no rerender.",
+    "initial_test_fix": "Sine comparison changed from subtracting nearly equal cosines to stable cross products; original failed check retained. No optics changed for that test correction."
+  }
+}
