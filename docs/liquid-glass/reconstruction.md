@@ -153,7 +153,7 @@ The field is evaluated at1560×1600 before downsampling to1080×1108. One native
 </details>
 
 
-- **Shared rim review2/3:** one neutral boundary-normal response improves NEXT E9.076→8.861→8.373 and bag6.775→6.588→6.163, preserving every original check on both controls. Fixed source/geometry/kernels; no copied shadow or residual correction. [Recipe, scores and verification](experiments/reconstruction/studies/neutral-circle-rim/pass-02.json) · [Equation](recreation-models.md#shared-neutral-rim-response). This is cross-control material evidence, not paired optical calibration.
+- **Shared rim review3/3:** one neutral boundary-normal response improves NEXT E9.076→8.861→8.373→8.027 and bag6.775→6.588→6.163→5.778, preserving every original check on both controls. Fixed source/geometry/kernels; no copied shadow or residual correction. [Recipe, scores and verification](experiments/reconstruction/studies/neutral-circle-rim/pass-03.json) · [Equation](recreation-models.md#shared-neutral-rim-response). This is cross-control material evidence, not paired optical calibration.
 
 ## Safari tab-count pill
 
