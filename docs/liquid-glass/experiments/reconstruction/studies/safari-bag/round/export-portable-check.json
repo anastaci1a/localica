@@ -1,0 +1,11 @@
+{
+  "syntax_valid": true,
+  "render_tiles_combine_ast_exact_to_verified_export": true,
+  "kernel_radius_comparator_equal": true,
+  "automatic_internal_scale": {
+    "193": 8,
+    "317": 4
+  },
+  "bag_arguments": "--travel 4 --trim 1",
+  "no_duplicate_native_body": true
+}

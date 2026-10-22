@@ -185,5 +185,12 @@
     "top": 64,
     "bottom": 0,
     "gutter": 2
+  },
+  "assets/safari-bag-current.png": {
+    "width": 2162,
+    "height": 1172,
+    "top": 64,
+    "bottom": 0,
+    "gutter": 2
   }
 }

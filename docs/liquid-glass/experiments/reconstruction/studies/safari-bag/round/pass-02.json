@@ -1,0 +1,146 @@
+{
+  "preset": {
+    "model": "radial-tail",
+    "shape": {
+      "half": [
+        1,
+        1
+      ],
+      "radius": 1
+    },
+    "parameters": {
+      "amplitude": 0.6344430313360516,
+      "band": 0.09445809156460266,
+      "power": 2.10022237760162,
+      "width": 4.5,
+      "inner_power": 4
+    },
+    "source_sigma": 0.0020408163265306124,
+    "rim_width": 0.04897845813577233,
+    "thin_rim": 0.005714285714285714,
+    "blur_transition": null,
+    "material": [
+      1,
+      1,
+      1,
+      0.05,
+      0.05,
+      0.05,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "reference_length": 245,
+    "post_sigma": 0.006530612244897959
+  },
+  "g": 1,
+  "b": 0.05,
+  "material_contract": "Gainsall1/offsetsb/all14light0. NEWdeclaredneutraladditivegrading, NOTtau/whiteveiling, encodedRGBempiricalnotphysicalradiance/Appleproof",
+  "seed_recipe_sha256": "87c8bdb17ece1673da33c7a0a6584aa488810c5300ef0d62b1e6c01414ed80eb",
+  "selected_model": "CURRENTpublicNEXTbaseline/playbackradial-tail",
+  "samples": 2,
+  "source_dtype": "float32",
+  "material_dtype": "float32",
+  "kernel_scaling": "Dimensionlesssource_sigma/post_sigma unchanged; physicalpixels useNEWLNEWbagposeL vs reference245 viaexactsettled.render. Noquarterpixelbins/overridessampling.",
+  "old_reference_L": 245,
+  "physical_length_ratio": 0.29279676958824025,
+  "legacy_icon_colorgrader_removed": false,
+  "legacy_material_not_reused": true,
+  "generated_shadow": "NONE/zero baseline, clean source/vector_revision composite. No publish.compose/contact_context/targetresidual.",
+  "case_sha256": {
+    "a": "23413dc5066115f3698260d63d5e62cf9f07c0706906d5465af9d641fca3e9cc"
+  },
+  "vector_sha256": {
+    "a": {
+      "bag-pinned.svg": "4fb84c79ae37593f902adc9223b50d981ca9f134c497e47d4521af066257928f"
+    }
+  },
+  "input_approval": "00c04b5e-f3f9-4162-8a84-864ff58a017f",
+  "stage": "ACCEPTED_PRIMARY_MATERIAL_ONLY",
+  "accepted_passes": 2,
+  "B_paired": false,
+  "material_family": "NEUTRAL_AFFINE_Cclip(g*S+b),g1,bsharedRGB",
+  "baseline_equivalence": "Acceptedpass1 equalsg1,b.025, sourceepoch/nativeprotocolsame",
+  "assignment": "67cb80b9-7686-485d-b4d1-221fc3a3c2f5",
+  "scores": {
+    "glass": {
+      "pixels": 7805,
+      "rmse": 11.921043395996094
+    },
+    "rim": {
+      "pixels": 5194,
+      "rmse": 12.855820655822754
+    },
+    "held": {
+      "pixels": 3065,
+      "rmse": 11.562995910644531
+    },
+    "interior": {
+      "pixels": 2611,
+      "rmse": 9.799893379211426
+    },
+    "ssim": 0.9904099702835083,
+    "loss": 149.05953037485915,
+    "E": 12.208993831387547,
+    "advisory_f64_E": 12.208993496698152,
+    "glyph": {
+      "pixels": 7735,
+      "rmse": 16.733707427978516
+    },
+    "exterior": {
+      "pixels": 12761,
+      "rmse": 16.828954696655273
+    },
+    "full_visible_exterior": {
+      "pixels": 22835,
+      "rmse": 12.607654571533203
+    }
+  },
+  "clipping_counts": {
+    "whole": {
+      "subrays": 64655,
+      "lower_clipped_subrays": 0,
+      "upper_clipped_subrays": 0,
+      "lower_clipped_channels": 0,
+      "upper_clipped_channels": 0,
+      "at_endpoints_subrays": 0,
+      "min_unclipped": 0.5245098054409028,
+      "max_unclipped": 0.6107207417488099
+    },
+    "scored": {
+      "subrays": 31220,
+      "lower_clipped_subrays": 0,
+      "upper_clipped_subrays": 0,
+      "lower_clipped_channels": 0,
+      "upper_clipped_channels": 0,
+      "at_endpoints_subrays": 0,
+      "min_unclipped": 0.5245098054409028,
+      "max_unclipped": 0.6107207417488099
+    },
+    "postfootprint": {
+      "subrays": 69908,
+      "lower_clipped_subrays": 0,
+      "upper_clipped_subrays": 0,
+      "lower_clipped_channels": 0,
+      "upper_clipped_channels": 0,
+      "at_endpoints_subrays": 0,
+      "min_unclipped": 0.5245098054409028,
+      "max_unclipped": 0.6107207417488099
+    }
+  },
+  "source_proof_transfer": "OnlyscalarRGBtiedbchanged aftersampling; source/map/kernels/shape/AA/sourceconfidence/SVG/native/scoringmasks unchanged. AcceptedWHOLE+ALLscored+post prooftransfers, observed0. No refraction/dispersion/blurvalidation."
+}
