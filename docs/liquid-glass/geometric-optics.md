@@ -202,7 +202,36 @@ The [shared core](experiments/reconstruction/geometric_optics.py) also supplies 
 
 The common [image-formation function](experiments/reconstruction/geometric_render.py) handles physical projection, tracing, source sampling and pixel integration for both circles and pills. Its default remains4×4; an explicit `samples_per_axis=2` preserves an element’s existing2×2 protocol, without claiming a quadrature change as optical progress. Optional source-known and required-pixel masks reject unsupported lens/guard rays before RGB lookup; only explicitly unscored clear exterior may return NaN with a false support mask. No coordinates are clamped or source holes filled. Registered-source provenance still needs its scene-specific audit. Optional `return_layers=True` exposes the SAME integrated lens color, physical coverage and premultiplied clear contribution, so later material stages do not trace a second map. The shared `coverage_blur` material operation filters premultiplied lens color and divides by filtered coverage, preserving sharp shape alpha and the clear backdrop. Its explicit finite radius is `ceil(3 sigma)`; sigma scales with L and must be audited separately from AA and source interpolation. It is an ordinary Gaussian material approximation, not a geometric warp, dispersion or a full rough-surface transport claim. A shared achromatic `neutral_color_response` supplies common gain/bias and an optional source-luminance highlight lift before that filter. Gain `t` and bias `1-t` give a neutral white veil; these are declared encoded-RGB material controls, not independently fitted RGB channels or measured radiance. Three32-pixel controls match the saved inferred-circle, harmonic-circle and harmonic-toolbar outputs after an explicit common float32 cast; the toolbar's original float64 difference is at most2.79×10⁻⁸. These are software checks, not new score improvements. [Exact control scope and precision](experiments/reconstruction/studies/geometric-playback/shared-render-control.json)
 
-Clear and frosted appearance are not forced to share blur parameters. The current clear-body diagnostics have zero optical blur. A frosted material needs its own justified scattering model, with the same actual geometric rays; that stage is not completed here. The foreground grader is a labeled historical control, not a new shared physical material. The held-out Music Navigation comparison also remains incomplete: its source/path preflight was started, but the original budget ended before all guard/compositing checks and an image. There is no claimed third-reference visual validation.
+Clear and frosted appearance are not forced to share blur parameters. The geometric baselines above are unfiltered; the isolated material checklist below tests ordinary color filtering separately. This material approximation is not a measured rough-surface model. The foreground grader is a labeled historical control, not a new shared physical material. The held-out Music Navigation comparison also remains incomplete: its source/path preflight was started, but the original budget ended before all guard/compositing checks and an image. There is no claimed third-reference visual validation.
+
+## Isolated material checklist
+
+The timed checklist retains the G05 geometry: the bounded refraction proposals did not improve all protected regions. Their failure does not reject the desired edge reversal. A fourth geometric checkpoint exceeded its declared ray budget and stopped before any image; it is not an accepted model result.
+
+**Accepted local increment:** a coverage-normalized output color Gaussian of sigma1.7 native pixels, or1.7/245L, improves the sand texture while leaving shape alpha, source, geometry and foreground fixed. The finite kernel radius is6 native pixels; this is an explicit color-softness stage, separate from4×4 antialiasing. Its lens-versus-capture/PSF origin is not identified. Texture-band RMS changes from3.726 to1.122 versus Apple's1.147. A score-minimizing2.5px alternative was rejected for visible over-softening.
+
+![Apple, unfiltered G05 and accepted color-softness increment in fixed crops](assets/geometric-playback-pipeline-blur.png)
+
+| Measurement | Unfiltered G05 | Accepted softness |
+| --- | ---: | ---: |
+| Glass RGB RMSE | 13.081 | 12.569 |
+| Rim RGB RMSE | 14.651 | 13.872 |
+| Interior RGB RMSE | 11.318 | 11.134 |
+| SSIM | .93295 | .96980 |
+| Full foreground MSE | 98.656 | 98.167 |
+| Exterior MSE | 24.090 | 24.067 |
+
+The auxiliary outer-rim MAE regresses16.528→16.897 despite improved RMSE. Missing thin highlights, lower-left illumination and crossing offsets remain. The more polished historical fit is unchanged. The original G05 image above remains the unfiltered control.
+
+Common neutral grading proposals improve some dune tones but fail perimeter/exterior protection. The reflected-path outline audit is incomplete, so no outline image is accepted. The best generated-shadow change is too small and uncertain to count as visible progress. Dispersion is absent for this play button and was skipped.
+
+![Reference, incumbent and rejected clean rounded-triangle vector](assets/geometric-playback-pipeline-icon-rejected.png)
+
+The original SF play path and one clean symmetric triangle with circular corner arcs were tested separately from icon color. Both fail the fixed full-foreground check: MSE130.632 and120.473 versus98.167. Current-background icon-response controls also regress. The old raster coverage and empirical-material-driven icon grader therefore remain a **labeled historical dependency**, not a completed solid-vector or unified physical foreground model. No target-colored outline or screenshot matte was substituted.
+
+An audit corrected the root's supplemental foreground checker: it had reversed the x/y arrays returned by points(). Its old foreground values and initial icon-acceptance flags are superseded; original body scores and exterior checks were unaffected. Correct saved-array checks preserve the blur acceptance and reject both icon proposals. [Measurements, bounded experiments and remaining limits](experiments/reconstruction/studies/geometric-playback/pipeline-01.json)
+
+The same coverage filter and neutral encoded-color function were independently replayed on two expanded-miniplayer backgrounds. Clear and frosted materials use distinct, declared softness values; the optical surfaces and shared ray calculations remain independent of that stage. This establishes reusable software and paired material increments within those diagnostic pipelines, **not transferred optical fidelity** or a completed held-out third reference. Review stops at the checklist boundary; no motion or device-performance result is implied.
 
 ## What distance can and cannot identify
 

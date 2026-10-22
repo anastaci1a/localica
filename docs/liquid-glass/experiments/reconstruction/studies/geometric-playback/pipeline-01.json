@@ -1,0 +1,94 @@
+{
+  "status": "Accepted local blur increment; incomplete overall reconstruction",
+  "geometry": "Unchanged G05, explicit surface; orthographic n=1.5 D=2L",
+  "material": {
+    "source_sigma_over_L": 0,
+    "output_sigma_over_L": 0.0069387755102040816,
+    "gain": 1,
+    "bias": 0,
+    "new_outline": false,
+    "new_shadow": false,
+    "dispersion": "Absent per Ana"
+  },
+  "original_body_scores": {
+    "train": {
+      "pixels": 100630,
+      "rmse": 12.585246086120605,
+      "mae": 7.980888843536377,
+      "opponent_chroma_rmse": 1.5761111974716187
+    },
+    "held_blocks": {
+      "pixels": 33853,
+      "rmse": 12.521955490112305,
+      "mae": 8.325145721435547,
+      "opponent_chroma_rmse": 1.6069767475128174
+    },
+    "all_glass": {
+      "pixels": 134483,
+      "rmse": 12.569343566894531,
+      "mae": 8.067547798156738,
+      "opponent_chroma_rmse": 1.5839375257492065
+    },
+    "rim": {
+      "pixels": 66832,
+      "rmse": 13.872037887573242,
+      "mae": 8.214303970336914,
+      "opponent_chroma_rmse": 1.9819753170013428
+    },
+    "outer_rim": {
+      "pixels": 5100,
+      "rmse": 25.81536293029785,
+      "mae": 16.89735221862793,
+      "opponent_chroma_rmse": 4.150359153747559
+    },
+    "interior": {
+      "pixels": 67651,
+      "rmse": 11.133749961853027,
+      "mae": 7.922568321228027,
+      "opponent_chroma_rmse": 1.051985263824463
+    },
+    "ssim": 0.9697988629341125,
+    "gradient_mae": 4.502345561981201,
+    "selection_loss": 0.005157371750851086,
+    "exterior_MSE": 24.06739616394043,
+    "foreground_fullbox_MSE": 98.1666030883789
+  },
+  "correct_supplemental_checks": {
+    "raw": {
+      "foreground_pixels": 52998,
+      "foreground_MSE": 98.65575408935547,
+      "exterior_pixels": 256839,
+      "exterior_MSE": 24.090118408203125
+    },
+    "accepted_blur": {
+      "foreground_pixels": 52998,
+      "foreground_MSE": 98.1666030883789,
+      "exterior_pixels": 256839,
+      "exterior_MSE": 24.06739616394043
+    },
+    "rejected_vector": {
+      "foreground_pixels": 52998,
+      "foreground_MSE": 130.63246154785156,
+      "exterior_pixels": 256839,
+      "exterior_MSE": 24.06739616394043
+    },
+    "rejected_clean_trace": 120.47261047363281
+  },
+  "limits": [
+    "All initial root supplemental foreground values with reversed points() grids are superseded; original scores and exterior unchanged.",
+    "Inherited icon color still uses historical empirical material and raster alpha. Solid vector replacement and current-background response did not pass.",
+    "Outline transport incomplete after32 encounters; no reflected image, invented environment or residual fill.",
+    "R4 attempted27264 checkpoint rays exceeded20000 cap including forgotten baseline; stopped before image.",
+    "No geometric improvement, full radiance, held-out optical validation or device-performance claim."
+  ],
+  "budget": {
+    "refraction": "Three proposals reviewed; fourth explicit checkpoint failure stopped",
+    "blur": "12 cached source/filter candidates; no new optical rays",
+    "grading": "8 rejected composites",
+    "outline": "997 cached paths +12 controls; maximum32 encounters, incomplete",
+    "shadow": "6 generated-underlay priors, no visible accepted result",
+    "icon": "48 original-vector +72 clean-vector raster evaluations;8 composites, none accepted",
+    "dispersion": "SKIPPED"
+  },
+  "historical_polished_fit": "Preserved unchanged"
+}
