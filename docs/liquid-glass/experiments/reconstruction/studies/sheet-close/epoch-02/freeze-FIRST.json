@@ -1,0 +1,21 @@
+{
+  "stage": "EPOCH02_FROZEN_BEFORE_GRAY_RECALIBRATION",
+  "frozen_at": "2026-10-22T02:19:30.390339+00:00",
+  "case_fingerprint": "6e0f6b9a7f5558ee5d229d2466de2cadf2d9e8929d87f0bbd19833997c68850b",
+  "mask_counts": {
+    "glass": 1345,
+    "rim": 544,
+    "held": 143,
+    "interior": 801,
+    "SSIM_safe": 94,
+    "glyph": 400,
+    "exterior": 1162,
+    "full_visible_exterior": 1431
+  },
+  "primary_arrays_sha256": "4bff8a0947dfa6baf7c04334c1ed7f602b035de56d3b7d872d1f4bcb5ea6292f",
+  "body_renders": 0,
+  "new_epoch_count": 0,
+  "old_epoch_count": 1,
+  "no_cross_epoch_gain": true,
+  "old_source_case_immutable": true
+}
