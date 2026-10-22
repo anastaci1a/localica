@@ -6,7 +6,7 @@ New refraction studies use explicit optical surfaces. Their intersections, norma
 
 ## Scope and conventions
 
-- Lengths use the minor half-extent `L`; x points right, y down, +z toward the camera. The first comparator uses an orthographic camera, front plane `z=0` and background plane `z=-D`.
+- Lengths use the fixed reference minor half-extent `L`; actual surface extents remain explicit multiples of it. x points right, y down, +z toward the camera. The first comparator uses an orthographic camera, front plane `z=0` and background plane `z=-D`.
 - Geometry determines refraction. Parameters describe shape, thickness, camera, index or scene placement. No independent normal adjustment, fitted screen displacement or post-trace residual warp is allowed.
 - Pixel integration and interpolation are numerical sampling. Optical scattering/blur, spectral dispersion, reflection, lighting, color, foregrounds and shadows are separate material/compositing stages. They cannot conceal a failed geometric comparison.
 - The first tracer follows the primary transmitted branch. It does not implement finite-camera entry, arbitrary side intersections, reflected radiance or a complete dielectric energy solution. Those are separate claims requiring corresponding geometry/path tests.
@@ -232,6 +232,36 @@ The original SF play path and one clean symmetric triangle with circular corner 
 An audit corrected the root's supplemental foreground checker: it had reversed the x/y arrays returned by points(). Its old foreground values and initial icon-acceptance flags are superseded; original body scores and exterior checks were unaffected. Correct saved-array checks preserve the blur acceptance and reject both icon proposals. [Measurements, bounded experiments and remaining limits](experiments/reconstruction/studies/geometric-playback/pipeline-01.json)
 
 The same coverage filter and neutral encoded-color function were independently replayed on two expanded-miniplayer backgrounds. Clear and frosted materials use distinct, declared softness values; the optical surfaces and shared ray calculations remain independent of that stage. This establishes reusable software and paired material increments within those diagnostic pipelines, **not transferred optical fidelity** or a completed held-out third reference. Review stops at the checklist boundary; no motion or device-performance result is implied.
+
+## Frosted miniplayer: paired component checks
+
+The expanded Apple Music miniplayer is a deliberately different family: an elongated frosted surface with text, symbols and artwork. It uses the same surface-normal/Snell tracer and coverage/material components. Its harmonic height adapter changes the actual solid; it does not add an image warp. The frozen XY outline is an ordinary rounded rectangle: it does not yet reproduce Ana’s minute outward bow across the top/bottom. Longitudinal back-height curvature is a different quantity. Index1.5 and background distance2L are declared hypotheses, not identified Apple parameters. Its original2×2 sampling protocol stays fixed, separately from the circle's4×4.
+
+| Paired score E | Background A | Background B |
+| --- | ---: | ---: |
+| Initial physical geometry | 77.977 | 49.987 |
+| Shared output softness6.75px | 70.949 | 31.982 |
+| Shared neutral gain/bias | 49.127 | 19.819 |
+| Historical polished fit, unchanged | 5.388 | 3.117 |
+
+The common encoded response is0.70198083S+0.22423217, applied before the same coverage-normalized filter. Softness is6.75/88.5L here versus1.7/245L for the clear circle. The visibly frosted and clear references justify testing different material softness; these values do not identify physical roughness or capture PSF. Root independently reconstructed both accepted composites pixel-exactly, verified frozen source/vector/artwork hashes and checked every original paired body, foreground, artwork and exterior guard. The rejected full color-fit step remains rejected.
+
+<details>
+<summary>Paired diagnostic images: reference, historical fit and material steps</summary>
+
+![Expanded miniplayer background A: reference, historical fit, physical blur, accepted neutral response and rejected full step](assets/geometric-expanded-pipeline-a.png)
+
+![Expanded miniplayer background B: the same ordered diagnostic steps](assets/geometric-expanded-pipeline-b.png)
+
+All panels are saved native comparisons, not new optical renders. Black strips at undefined unscored clear exterior are presentation markers, not a claimed shadow or recovered background. Historical panels are presentation controls only; their old exterior completion never enters the new model.
+
+</details>
+
+The physical geometry still misplaces/deforms background features, lacks the bright rounded rim and has substantial cap/body and tone errors. No new geometry, outline or shadow is accepted. Generated shadows fail B glass/rim/held guards at16 partially covered pixels; all16 remain scored. A shared artist-label opacity improves B but worsens A, so the original vector styles stay fixed. Exact source font paths do not establish the original UI weight or layout.
+
+Selected neutral text regions in B have coincident reference RGB channels; A already has strong source color differences. The saved-array audit does not identify a source-independent spectral term, so no dispersion fit is added. This is an identification limit, not proof of nondispersive glass. The circle's dispersion stage is separately skipped on Ana's explicit observation.
+
+These paired checks establish shared implementation and material increments relative to the raw physical hypothesis. They do not establish a successful transferred optical model, complete reflected radiance, final visual parity or performance. [Parameters, source/guard scope and rejected outcomes](experiments/reconstruction/studies/geometric-expanded-pipeline/summary.json)
 
 ## What distance can and cannot identify
 

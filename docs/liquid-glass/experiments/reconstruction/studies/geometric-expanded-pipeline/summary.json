@@ -1,0 +1,103 @@
+{
+  "status": "Accepted paired material increments within experimental geometry; historical reconstruction unchanged",
+  "geometry": {
+    "adapter": "ExpandedHarmonicBack",
+    "half": "refraction/h1/geometry-checkpoint.json.scene.surface_half",
+    "radius": "same scene.surface_radius",
+    "depth": 0.15,
+    "crown_depth": 0.4,
+    "power": 3,
+    "index": 1.5,
+    "D": 2,
+    "L": 88.5,
+    "center": [
+      961.2086505368733,
+      413.1445363169052
+    ],
+    "original_reference_L": 88.5,
+    "surface_half": [
+      7.225022904390323,
+      1.012503164339156
+    ],
+    "surface_radius": 1.0043663048754772,
+    "footprint": "Frozen ordinary rounded rectangle; no barely bowed XY top/bottom silhouette",
+    "height_law": "harmonic_cap(depth*(1-rho^power),crown_depth*(1-(x/majorhalf)^2)); rho=distance to core box/radius",
+    "maximum_height": 0.10909090909090907,
+    "slope_bound": 0.4480437045882295,
+    "regularity": "Actual height/gradient C1; second derivatives can jump at the frozen capsule/core-box joins. No false global C2 claim or independent normals."
+  },
+  "material": {
+    "source_sigma": 0,
+    "ordinary_output_sigma_native_px": 6.75,
+    "ordinary_output_sigma_over_L": 0.07627118644067797,
+    "gain": 0.701980827595718,
+    "bias": 0.22423217000784113,
+    "highlight": 0
+  },
+  "primary_replay": {
+    "pixel_exact_both_references": true,
+    "all_original_paired_guards": true,
+    "source_vector_artwork_hashes_verified": true,
+    "evidence_sha256": "b945afd441f56f31d8bc69eb4c689cb57f69f455767d810527712ea0cf03f236"
+  },
+  "primary_acceptance": {
+    "status": "ACCEPT_BLUR_AND_HALFSTEP_COLOR_WITHIN_EXPERIMENTAL_GEOMETRIC_PIPELINE",
+    "historical_public_reconstruction_replaced": false,
+    "optical_geometry_fidelity_accepted": false,
+    "blur": {
+      "sigma_over_L": 0.07627118644067797,
+      "sigma_native_px": 6.75,
+      "primary_native_replay": "EXACT",
+      "all_original_paired_guards": true
+    },
+    "color": {
+      "gain": 0.701980827595718,
+      "bias": 0.22423217000784113,
+      "highlight_lift": 0,
+      "primary_native_replay": "EXACT",
+      "all_original_paired_guards": true,
+      "full_step_rejection_preserved": true
+    }
+  },
+  "foreground_test": {
+    "status": "NEGATIVE_SHARED_BLACK_OPACITY_NO_MORE_CANDIDATES",
+    "opacity": 0.34476567281781456,
+    "paired_qualifier": false,
+    "failures": {
+      "a": [
+        "foreground2"
+      ],
+      "b": []
+    }
+  },
+  "spectral_evidence": {
+    "fits": 0,
+    "new_rays": 0,
+    "new_images": 0,
+    "B_selected_text_target_RGB_coincident": true,
+    "B_text_residual": {
+      "luma_RMSE": 13.409281613086465,
+      "opponent_RMSE": 0.06284252349205438,
+      "signed_RGB": [
+        -6.340951912054582,
+        -6.403618200920468,
+        -6.3558844169684106
+      ]
+    },
+    "conclusion": "No identified source-independent dispersion direction. This does not prove wavelength-independent optics."
+  },
+  "limits": [
+    "Frozen XY outline has a flat central top/bottom interval. Ana’s minute outward pill bow remains unresolved; back-surface longitudinal curvature is a different quantity.",
+    "Geometry, cap/body shape and brightness/rim remain visibly wrong versus the historical fit.",
+    "Generated shadow fails B glass/rim/held/E; all16 partial-coverage glass pixels retained.",
+    "Original SVG identity does not establish exact Apple UI weight/layout.",
+    "Original2x2 pixel integration is preserved, distinct from circle4x4; no precision gain claim.",
+    "Some unscored clear exterior is undefined and appears black in diagnostic presentation, never filled with target pixels.",
+    "No complete reflected radiance, third-reference visual validation, physical frosted-scattering identification or device-performance claim."
+  ],
+  "comparisons": "Apple; saved historical pass03; physical geometry with6.75px blur; accepted common neutral halfstep; rejected full neutral fit",
+  "selected_complete_sha256": {
+    "a": "e19bdee8c71a09eeb688053dd949a76057d9a28d3b0762809d7fbe7807060025",
+    "b": "8415ed3202bdb7f4e4d34451c68dc5a5503a0dc7016ca673c522692378fdff39"
+  }
+}
