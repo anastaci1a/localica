@@ -1,0 +1,17 @@
+{
+  "proof_sha256": "9847996a28ffbe4068cf75c324506c514c93c4975b153b9ddf6f854beec291d3",
+  "native_samples_per_axis": 2,
+  "old_all_scored_subrays": 5624,
+  "new_all_scored_subrays": 5380,
+  "removed_subrays": 244,
+  "new_scored_subset_of_proved_old": true,
+  "scored_bad": 0,
+  "scored_outside_outline": 0,
+  "whole_count_unchanged": 7731,
+  "post_count_unchanged": 8752,
+  "post_pixel_mask_exact": true,
+  "whole_confidence_defined": 1,
+  "observed_hidden_fraction": 0,
+  "no_new_ray_sweep": true,
+  "limitations": "Exact prior finite discrete sourcekernel/postkernel+bilinear only; not observed photographic source or infinite support proof."
+}

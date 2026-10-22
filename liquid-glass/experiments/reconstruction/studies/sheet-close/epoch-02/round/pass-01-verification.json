@@ -1,0 +1,14 @@
+{
+  "accepted_primary": true,
+  "accepted_pass": 1,
+  "epoch": "02",
+  "analytic_gray": 0.24982225414468506,
+  "cached_composite_pixel_exact": true,
+  "material_and_outside_glyph_pixel_exact": true,
+  "glyph_before": 17.85308837890625,
+  "glyph_after": 8.30663013458252,
+  "all_original_guards_hold": true,
+  "source_geometry_masks_frozen": true,
+  "body_renders": 0,
+  "limits": "Foreground-only improvement; no optical gain. Original SF default weight canonical, exact Apple UI weight unproven; estimated source and absent paired background unchanged."
+}
