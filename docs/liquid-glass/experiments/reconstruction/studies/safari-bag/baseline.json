@@ -1,0 +1,76 @@
+{
+  "preset": {
+    "model": "radial-tail",
+    "shape": {
+      "half": [
+        1,
+        1
+      ],
+      "radius": 1
+    },
+    "parameters": {
+      "amplitude": 0.6344430313360516,
+      "band": 0.09445809156460266,
+      "power": 2.10022237760162,
+      "width": 4.5,
+      "inner_power": 4
+    },
+    "source_sigma": 0.0020408163265306124,
+    "rim_width": 0.04897845813577233,
+    "thin_rim": 0.005714285714285714,
+    "blur_transition": null,
+    "material": [
+      1.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "reference_length": 245,
+    "post_sigma": 0.006530612244897959
+  },
+  "g": 1.0,
+  "b": 0.0,
+  "material_contract": "Neutral C=clip(g*S+b), common g1/b0, 14lighting0; not23freeparameters or Music material",
+  "seed_recipe_sha256": "87c8bdb17ece1673da33c7a0a6584aa488810c5300ef0d62b1e6c01414ed80eb",
+  "selected_model": "CURRENTpublicNEXTbaseline/playbackradial-tail",
+  "samples": 2,
+  "source_dtype": "float32",
+  "material_dtype": "float32",
+  "kernel_scaling": "Dimensionlesssource_sigma/post_sigma unchanged; physicalpixels useNEWLNEWbagposeL vs reference245 viaexactsettled.render. Noquarterpixelbins/overridessampling.",
+  "old_reference_L": 245,
+  "physical_length_ratio": 0.29279676958824025,
+  "legacy_icon_colorgrader_removed": false,
+  "legacy_material_not_reused": true,
+  "generated_shadow": "NONE/zero baseline, clean source/vector_revision composite. No publish.compose/contact_context/targetresidual.",
+  "case_sha256": {
+    "a": "23413dc5066115f3698260d63d5e62cf9f07c0706906d5465af9d641fca3e9cc"
+  },
+  "vector_sha256": {
+    "a": {
+      "bag-pinned.svg": "4fb84c79ae37593f902adc9223b50d981ca9f134c497e47d4521af066257928f"
+    }
+  },
+  "input_approval": "00c04b5e-f3f9-4162-8a84-864ff58a017f",
+  "stage": "ONE_NEUTRAL_BASELINE_NO_MATERIAL_FIT_BEFORE_PRIMARY_REVIEW",
+  "accepted_passes": 0,
+  "B_paired": false
+}

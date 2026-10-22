@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path');
 const studies={
  'clear-playback-control':['Playback','Circular control · most polished'],
  'archive-and-plus-toolbar':['Toolbar','Archive and plus · text backdrop'],
+ 'safari-bag-control':['Safari','Bag outline · neutral material study'],
  'safari-tab-count-pill':['Safari','Tab-count and plus · grouped control'],
  'safari-circular-controls':['Safari','Circular controls · transfer under review'],
  'next-track-control':['Playback','Next-track circle · sky background'],
