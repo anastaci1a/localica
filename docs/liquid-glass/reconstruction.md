@@ -444,6 +444,18 @@ Reference frames A/B: 2.5/2.0 seconds. The source-brightness response, white inc
 - Final stills reuse lossless zero-shift movie frames; no extra high-resolution optical render. [Prior capture diagnostics](experiments/reconstruction/home-gallery-progress.json) remain historical. The [target-independent edge-lighting probe](experiments/reconstruction/studies/music-home-vector/boundary-round/edge-lighting-diagnostic.json) records negative pre-clamp values in the signed rim model; no pixel correction is applied.
 
 <details>
+<summary>Rejected thin-rim attenuation</summary>
+
+![Home thin-light attenuation, background A](assets/home-thin-rim-rejected-a.png)
+
+![Home thin-light attenuation, background B](assets/home-thin-rim-rejected-b.png)
+
+A shared gain of.99 or.995 on the existing thin-light terms, including their source-brightness response, fails the two-background checks. At.99, E changes A6.34215→6.33972/B10.16040→10.17527; A's held region and B's glass/rim regress. The.995 backtrack fails the same guards. Four native renders; no accepted pass, source/mask change or external-shadow adjustment. This is separate from the earlier rejected10% shadow reduction. The current primary previews remain unchanged. [Frozen baseline checks and results](experiments/reconstruction/studies/music-home-vector/boundary-round/thin-rim-attenuation-rejected.json).
+
+</details>
+
+
+<details>
 <summary>Motion — background A</summary>
 
 <video controls preload="none" playsinline width="1080" height="1104" aria-label="Home correction, background A motion"><source src="assets/study-music-home-vector-paired-a.mp4" type="video/mp4"><a href="assets/study-music-home-vector-paired-a.mp4">Open video</a></video>
