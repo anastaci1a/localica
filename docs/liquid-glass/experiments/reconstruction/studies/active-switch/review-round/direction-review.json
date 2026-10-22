@@ -1,0 +1,375 @@
+{
+  "status": "REJECTED_BOUNDED_REVIEW_NO_ACCEPTED_PASS",
+  "baseline": "pass-09.json",
+  "baseline_E": [
+    14.075935303899977,
+    15.317072568588035
+  ],
+  "source_epoch": "Original frozen active-switch inputs, masks and accepted material remain unchanged",
+  "fixed": "Shape, map coefficients, ordinary blur, RGB material, lighting, shadow, dispersion length/strength; only the named existing parameter varies",
+  "trials": [
+    {
+      "parameter": "angle",
+      "delta": -3,
+      "unit": "degrees",
+      "source": [
+        {
+          "transmission_queries": 1872636,
+          "bad": 0,
+          "source_radius_native": 18,
+          "post_scope_radius_native": 10,
+          "passed": true,
+          "limits": "Conservative finite source kernel and output footprint; reflection/context queries unchanged from accepted proof. Hidden track is modeled, not observed."
+        },
+        {
+          "transmission_queries": 1623276,
+          "bad": 0,
+          "source_radius_native": 17,
+          "post_scope_radius_native": 9,
+          "passed": true,
+          "limits": "Conservative finite source kernel and output footprint; reflection/context queries unchanged from accepted proof. Hidden track is modeled, not observed."
+        }
+      ],
+      "observations": [
+        {
+          "reference": 0,
+          "E": 14.103841186040928,
+          "glass": 11.1804780960083,
+          "rim": 19.27140998840332,
+          "exterior": 6.533999443054199,
+          "ssim": 0.9644894599914551
+        },
+        {
+          "reference": 1,
+          "E": 15.314068219920626,
+          "glass": 13.63869571685791,
+          "rim": 18.646793365478516,
+          "exterior": 4.46268367767334,
+          "ssim": 0.9325904250144958
+        }
+      ],
+      "qualifies": false,
+      "advisory_crops": [
+        {
+          "upper-left": {
+            "RGB_RMSE": 11.669412908941739,
+            "luma_RMSE": 6.982492287618903,
+            "chroma_RMSE": 9.807238433318854
+          },
+          "lower-left": {
+            "RGB_RMSE": 13.848527741899966,
+            "luma_RMSE": 10.690768265460237,
+            "chroma_RMSE": 9.344377890776068
+          },
+          "right-rim": {
+            "RGB_RMSE": 13.840992791392924,
+            "luma_RMSE": 8.124882547768648,
+            "chroma_RMSE": 10.9851259648054
+          },
+          "center": {
+            "RGB_RMSE": 1.7921855057159948,
+            "luma_RMSE": 1.6892974985383202,
+            "chroma_RMSE": 0.48697122852984376
+          }
+        },
+        {
+          "upper-left": {
+            "RGB_RMSE": 11.93426264510944,
+            "luma_RMSE": 11.663643068997143,
+            "chroma_RMSE": 1.8911118035209609
+          },
+          "lower-left": {
+            "RGB_RMSE": 11.832515676866235,
+            "luma_RMSE": 11.297573093270364,
+            "chroma_RMSE": 2.3178947443348634
+          },
+          "right-rim": {
+            "RGB_RMSE": 11.231104439832968,
+            "luma_RMSE": 11.160261159788035,
+            "chroma_RMSE": 3.1393936963768216
+          },
+          "center": {
+            "RGB_RMSE": 4.77513304651118,
+            "luma_RMSE": 4.818911628891758,
+            "chroma_RMSE": 1.2284929334011734
+          }
+        }
+      ]
+    },
+    {
+      "parameter": "angle",
+      "delta": 3,
+      "unit": "degrees",
+      "source": [
+        {
+          "transmission_queries": 1872636,
+          "bad": 0,
+          "source_radius_native": 18,
+          "post_scope_radius_native": 10,
+          "passed": true,
+          "limits": "Conservative finite source kernel and output footprint; reflection/context queries unchanged from accepted proof. Hidden track is modeled, not observed."
+        },
+        {
+          "transmission_queries": 1623276,
+          "bad": 0,
+          "source_radius_native": 17,
+          "post_scope_radius_native": 9,
+          "passed": true,
+          "limits": "Conservative finite source kernel and output footprint; reflection/context queries unchanged from accepted proof. Hidden track is modeled, not observed."
+        }
+      ],
+      "observations": [
+        {
+          "reference": 0,
+          "E": 14.051457089234368,
+          "glass": 11.132747650146484,
+          "rim": 19.208227157592773,
+          "exterior": 6.53466272354126,
+          "ssim": 0.964729368686676
+        },
+        {
+          "reference": 1,
+          "E": 15.319255558943134,
+          "glass": 13.643024444580078,
+          "rim": 18.653606414794922,
+          "exterior": 4.462636947631836,
+          "ssim": 0.9324881434440613
+        }
+      ],
+      "qualifies": false,
+      "advisory_crops": [
+        {
+          "upper-left": {
+            "RGB_RMSE": 11.639382766999303,
+            "luma_RMSE": 6.988329599674336,
+            "chroma_RMSE": 9.765884404618104
+          },
+          "lower-left": {
+            "RGB_RMSE": 13.644962386384217,
+            "luma_RMSE": 10.657409358707772,
+            "chroma_RMSE": 9.106721419152892
+          },
+          "right-rim": {
+            "RGB_RMSE": 13.840992791392924,
+            "luma_RMSE": 8.124882547768648,
+            "chroma_RMSE": 10.9851259648054
+          },
+          "center": {
+            "RGB_RMSE": 1.7921990970823882,
+            "luma_RMSE": 1.689301873244513,
+            "chroma_RMSE": 0.48699685445549773
+          }
+        },
+        {
+          "upper-left": {
+            "RGB_RMSE": 11.942890456538418,
+            "luma_RMSE": 11.665175974416382,
+            "chroma_RMSE": 1.890297219822219
+          },
+          "lower-left": {
+            "RGB_RMSE": 11.822073856188766,
+            "luma_RMSE": 11.291724628972887,
+            "chroma_RMSE": 2.3087316768773873
+          },
+          "right-rim": {
+            "RGB_RMSE": 11.231104439832968,
+            "luma_RMSE": 11.160261159788035,
+            "chroma_RMSE": 3.1393936963768216
+          },
+          "center": {
+            "RGB_RMSE": 4.774652083232348,
+            "luma_RMSE": 4.816550138708275,
+            "chroma_RMSE": 1.2271607645862201
+          }
+        }
+      ]
+    },
+    {
+      "parameter": "fade_center",
+      "delta": -0.02,
+      "unit": "normalized major-axis coordinate",
+      "source": [
+        {
+          "transmission_queries": 1848820,
+          "bad": 0,
+          "source_radius_native": 18,
+          "post_scope_radius_native": 10,
+          "passed": true,
+          "limits": "Conservative finite source kernel and output footprint; reflection/context queries unchanged from accepted proof. Hidden track is modeled, not observed."
+        },
+        {
+          "transmission_queries": 1602972,
+          "bad": 0,
+          "source_radius_native": 17,
+          "post_scope_radius_native": 9,
+          "passed": true,
+          "limits": "Conservative finite source kernel and output footprint; reflection/context queries unchanged from accepted proof. Hidden track is modeled, not observed."
+        }
+      ],
+      "observations": [
+        {
+          "reference": 0,
+          "E": 14.078813590644067,
+          "glass": 11.152527809143066,
+          "rim": 19.248184204101562,
+          "exterior": 6.534313201904297,
+          "ssim": 0.9645830392837524
+        },
+        {
+          "reference": 1,
+          "E": 15.324337076950227,
+          "glass": 13.65001392364502,
+          "rim": 18.655588150024414,
+          "exterior": 4.462650775909424,
+          "ssim": 0.9323800206184387
+        }
+      ],
+      "qualifies": false,
+      "advisory_crops": [
+        {
+          "upper-left": {
+            "RGB_RMSE": 11.627395220201997,
+            "luma_RMSE": 6.9719600543538816,
+            "chroma_RMSE": 9.760114246611142
+          },
+          "lower-left": {
+            "RGB_RMSE": 13.754029959363104,
+            "luma_RMSE": 10.702055218063519,
+            "chroma_RMSE": 9.20746277177456
+          },
+          "right-rim": {
+            "RGB_RMSE": 13.840992791392924,
+            "luma_RMSE": 8.124882547768648,
+            "chroma_RMSE": 10.9851259648054
+          },
+          "center": {
+            "RGB_RMSE": 1.7921704584327616,
+            "luma_RMSE": 1.6892920039134316,
+            "chroma_RMSE": 0.48694630549810225
+          }
+        },
+        {
+          "upper-left": {
+            "RGB_RMSE": 11.942499106182252,
+            "luma_RMSE": 11.665479856582085,
+            "chroma_RMSE": 1.889884185090193
+          },
+          "lower-left": {
+            "RGB_RMSE": 11.847193458055347,
+            "luma_RMSE": 11.311611733793317,
+            "chroma_RMSE": 2.2909042546792255
+          },
+          "right-rim": {
+            "RGB_RMSE": 11.231104439832968,
+            "luma_RMSE": 11.160261159788035,
+            "chroma_RMSE": 3.1393936963768216
+          },
+          "center": {
+            "RGB_RMSE": 4.796057071740482,
+            "luma_RMSE": 4.8239970981389595,
+            "chroma_RMSE": 1.227173228419615
+          }
+        }
+      ]
+    },
+    {
+      "parameter": "fade_center",
+      "delta": -0.04,
+      "unit": "normalized major-axis coordinate",
+      "source": [
+        {
+          "transmission_queries": 1825004,
+          "bad": 0,
+          "source_radius_native": 18,
+          "post_scope_radius_native": 10,
+          "passed": true,
+          "limits": "Conservative finite source kernel and output footprint; reflection/context queries unchanged from accepted proof. Hidden track is modeled, not observed."
+        },
+        {
+          "transmission_queries": 1582668,
+          "bad": 0,
+          "source_radius_native": 17,
+          "post_scope_radius_native": 9,
+          "passed": true,
+          "limits": "Conservative finite source kernel and output footprint; reflection/context queries unchanged from accepted proof. Hidden track is modeled, not observed."
+        }
+      ],
+      "observations": [
+        {
+          "reference": 0,
+          "E": 14.091131714418161,
+          "glass": 11.158557891845703,
+          "rim": 19.270063400268555,
+          "exterior": 6.5342535972595215,
+          "ssim": 0.9645241498947144
+        },
+        {
+          "reference": 1,
+          "E": 15.330654380184788,
+          "glass": 13.658129692077637,
+          "rim": 18.659029006958008,
+          "exterior": 4.462650775909424,
+          "ssim": 0.932246744632721
+        }
+      ],
+      "qualifies": false,
+      "advisory_crops": [
+        {
+          "upper-left": {
+            "RGB_RMSE": 11.617731947776697,
+            "luma_RMSE": 6.964120110471653,
+            "chroma_RMSE": 9.745246492415673
+          },
+          "lower-left": {
+            "RGB_RMSE": 13.799325242281336,
+            "luma_RMSE": 10.743384463201195,
+            "chroma_RMSE": 9.216155392764552
+          },
+          "right-rim": {
+            "RGB_RMSE": 13.840992791392924,
+            "luma_RMSE": 8.124882547768648,
+            "chroma_RMSE": 10.9851259648054
+          },
+          "center": {
+            "RGB_RMSE": 1.7921534800969563,
+            "luma_RMSE": 1.689286470294898,
+            "chroma_RMSE": 0.4869148926077322
+          }
+        },
+        {
+          "upper-left": {
+            "RGB_RMSE": 11.945763325261801,
+            "luma_RMSE": 11.666310864464752,
+            "chroma_RMSE": 1.8908636126856477
+          },
+          "lower-left": {
+            "RGB_RMSE": 11.86260298382204,
+            "luma_RMSE": 11.324928189201636,
+            "chroma_RMSE": 2.2738284929711527
+          },
+          "right-rim": {
+            "RGB_RMSE": 11.231104439832968,
+            "luma_RMSE": 11.160261159788035,
+            "chroma_RMSE": 3.1393936963768216
+          },
+          "center": {
+            "RGB_RMSE": 4.815458798029726,
+            "luma_RMSE": 4.829623166756096,
+            "chroma_RMSE": 1.2282798513367752
+          }
+        }
+      ]
+    }
+  ],
+  "native_renders": 8,
+  "baseline_rerenders": 0,
+  "accepted_passes": 0,
+  "conclusions": [
+    "Angle -3degrees worsens A and improves B; +3degrees reverses that tradeoff.",
+    "Moving the fade center left .02 or .04 worsens both original overall errors.",
+    "No trial satisfies the original paired E/glass/exterior gate. No global impossibility, optimality or exhaustion claim.",
+    "Conservative finite source/output-footprint transmission checks pass for both backgrounds; unchanged reflection/context paths retain the earlier disclosed source assumptions.",
+    "Local crops remain advisory; no changed mask, residual overlay, source correction or new image is promoted."
+  ],
+  "metadata_correction": "The private fade driver initially reused an angle-named delta field. Original files preserved; labels corrected to dimensionless fade_center without changing any parameter, image, score or decision."
+}
