@@ -459,7 +459,7 @@ Reference frames A/B: 2.5/2.0 seconds. The source-brightness response, white inc
 
 ![Home thin-light attenuation, background B](assets/home-thin-rim-rejected-b.png)
 
-A shared gain of.99 or.995 on the existing thin-light terms, including their source-brightness response, fails the two-background checks. At.99, E changes A6.34215→6.33972/B10.16040→10.17527; A's held region and B's glass/rim regress. The.995 backtrack fails the same guards. Four native renders; no accepted pass, source/mask change or external-shadow adjustment. This is separate from the earlier rejected10% shadow reduction. The current primary previews remain unchanged. [Frozen baseline checks and results](experiments/reconstruction/studies/music-home-vector/boundary-round/thin-rim-attenuation-rejected.json).
+A shared gain of.99 or.995 on the existing thin-light terms, including their source-brightness response, fails the two-background checks. At.99, E changes A6.34215→6.33972/B10.16040→10.17527; A's held region and B's glass/rim regress. The.995 backtrack fails the same guards. Four native renders; no accepted pass, source/mask change or external-shadow adjustment. This is separate from the earlier rejected10% shadow reduction. A separate [existing white grazing-field strength check](experiments/reconstruction/studies/music-home-vector/boundary-round/grazing-strength-rejected.json),.5→.55/.525, also fails cached guards: A held error worsens and B stays tied. No native body was rendered for that family. The current primary previews remain unchanged. [Frozen baseline checks and results](experiments/reconstruction/studies/music-home-vector/boundary-round/thin-rim-attenuation-rejected.json).
 
 </details>
 

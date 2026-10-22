@@ -1,0 +1,163 @@
+{
+  "rows": [
+    {
+      "strength": 0.55,
+      "predictions": [
+        {
+          "observation": "a",
+          "scores": {
+            "glass": {
+              "pixels": 15221,
+              "rmse": 5.862835884094238
+            },
+            "rim": {
+              "pixels": 8296,
+              "rmse": 7.339605808258057
+            },
+            "held": {
+              "pixels": 2797,
+              "rmse": 6.78728723526001
+            },
+            "interior": {
+              "pixels": 6925,
+              "rmse": 3.3190197944641113
+            },
+            "loss": 40.22193524886077,
+            "E": 6.342076572295605,
+            "foreground": {
+              "rmse": 11.061939174094931
+            }
+          },
+          "checks": {
+            "glass": true,
+            "rim": true,
+            "held": false,
+            "interior": true,
+            "foreground": true,
+            "E": true,
+            "shadow_unchanged": true
+          }
+        },
+        {
+          "observation": "b",
+          "scores": {
+            "glass": {
+              "pixels": 15289,
+              "rmse": 9.222246170043945
+            },
+            "rim": {
+              "pixels": 8364,
+              "rmse": 12.069098472595215
+            },
+            "held": {
+              "pixels": 2804,
+              "rmse": 11.424983024597168
+            },
+            "interior": {
+              "pixels": 6925,
+              "rmse": 3.4411025047302246
+            },
+            "loss": 103.23381847698319,
+            "E": 10.16040444455747,
+            "foreground": {
+              "rmse": 11.684537119166679
+            }
+          },
+          "checks": {
+            "glass": true,
+            "rim": true,
+            "held": true,
+            "interior": true,
+            "foreground": true,
+            "E": false,
+            "shadow_unchanged": true
+          }
+        }
+      ],
+      "predicted_qualifier": false
+    },
+    {
+      "strength": 0.525,
+      "predictions": [
+        {
+          "observation": "a",
+          "scores": {
+            "glass": {
+              "pixels": 15221,
+              "rmse": 5.862868785858154
+            },
+            "rim": {
+              "pixels": 8296,
+              "rmse": 7.339653968811035
+            },
+            "held": {
+              "pixels": 2797,
+              "rmse": 6.787264347076416
+            },
+            "interior": {
+              "pixels": 6925,
+              "rmse": 3.3190197944641113
+            },
+            "loss": 40.222417394697985,
+            "E": 6.342114583851193,
+            "foreground": {
+              "rmse": 11.061939174094931
+            }
+          },
+          "checks": {
+            "glass": true,
+            "rim": true,
+            "held": false,
+            "interior": true,
+            "foreground": true,
+            "E": true,
+            "shadow_unchanged": true
+          }
+        },
+        {
+          "observation": "b",
+          "scores": {
+            "glass": {
+              "pixels": 15289,
+              "rmse": 9.222246170043945
+            },
+            "rim": {
+              "pixels": 8364,
+              "rmse": 12.069098472595215
+            },
+            "held": {
+              "pixels": 2804,
+              "rmse": 11.425005912780762
+            },
+            "interior": {
+              "pixels": 6925,
+              "rmse": 3.4411025047302246
+            },
+            "loss": 103.23381847698319,
+            "E": 10.16040444455747,
+            "foreground": {
+              "rmse": 11.684537119166679
+            }
+          },
+          "checks": {
+            "glass": true,
+            "rim": true,
+            "held": true,
+            "interior": true,
+            "foreground": true,
+            "E": false,
+            "shadow_unchanged": true
+          }
+        }
+      ],
+      "predicted_qualifier": false
+    }
+  ],
+  "native": [],
+  "qualifies": false,
+  "accepted": false,
+  "native_body_renders": 0,
+  "sourceproof": "Original computationally defined query support transfers; no transmission or reflectionsource queries added, declared white environment unchanged; estimated boundary .44/.30percent remains",
+  "status": "REJECTED_NO_BODY_RENDER_OR_COUNT",
+  "limits": "Cached inverse of existing positive mixture; both proposed strengths fail, so no native proposal or renderer change. A held guard worsens, B aggregate stays exactly tied. Negative signed-light base remains unresolved; no physical environment identification."
+}
