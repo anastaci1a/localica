@@ -1,0 +1,54 @@
+{
+  "recipe_sha256": "5df0c59008948cb0129541d000f467617f8778212658bfe9ab13a8d7d6fa602d",
+  "files": {
+    "motion.mp4": {
+      "bytes": 35537,
+      "sha256": "7674b1b35a137add33e9ec357669cc2a92ffec4268a935e75fed0576630d2792",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "width": 1080,
+            "height": 360,
+            "duration": "4.000000",
+            "nb_read_frames": "60"
+          }
+        ],
+        "format": {
+          "duration": "4.000000"
+        }
+      },
+      "decoded_rgb_digest": "SHA256=38893f9b8c0344194b292f7411c5efc8863985a8ef0ac4cea44ed503f2fb09c7"
+    },
+    "motion.gif": {
+      "bytes": 421213,
+      "sha256": "6f92d974166fa725d93b1636923d3f7dd4d824d3363932aaadb3672cdef8d461",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "width": 1080,
+            "height": 360,
+            "duration": "4.000000",
+            "nb_read_frames": "60"
+          }
+        ],
+        "format": {
+          "duration": "4.000000"
+        }
+      },
+      "decoded_rgb_digest": "SHA256=a4892e3b97dbff51acbe03e493774f76d3b23056f45ef63154e9c808f5c0b20a"
+    }
+  },
+  "raster": [
+    1080,
+    360
+  ],
+  "frames": 60,
+  "fps": 15,
+  "duration": 4,
+  "unique_poses": 59,
+  "sampling": "2x2 per OUTPUT pixel, fixed field evaluated at each translated pose; repeated positions cached",
+  "source_support": "Every unique pose: ALL emitted rectangular crop queries checked against original frozen defined mask; no filters. Proof files retained privately. Modeled polynomial exterior extends outside the original source rectangle, no parent boundary/reference shadow.",
+  "limits": "Illustrative translation only; source hiddenRGB modeled, no new optical fit, Android measurement or Apple motion claim"
+}

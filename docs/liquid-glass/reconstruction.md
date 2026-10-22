@@ -141,6 +141,19 @@ Both contain 90frames at 15fps, exactly 6 seconds; GIF: 6,185,889 bytes. Rays, o
 - A quadratic RGB field fitted only to uncovered controls improved held error .805→.697 and independent lower error4.298→1.999 levels. Hidden RGB remains modeled, not observed. The crowned footprint uses the existing .1-softness prior and an independently measured pose; this smooth source cannot identify refraction or blur. Missing angular highlights remain visible. [Case](experiments/reconstruction/studies/safari-tab-pill/case.json) · [Source controls](experiments/reconstruction/studies/safari-tab-pill/source-controls.json).
 - Numeral1 uses the original SF Pro Text Regular outline at uniform aspect. The plus uses a pinned solid SF-export outline; its input-only replacement improved ink overlap .783→.995 before the material epoch was frozen. Exact UI weight is unproven. [Input record](experiments/reconstruction/studies/safari-tab-pill/baseline.json) · [Neutral response model](recreation-models.md#neutral-material-response).
 
+<details>
+<summary>1080px motion and export details</summary>
+
+<video controls preload="none" playsinline poster="assets/safari-tab-pill-current.png" src="assets/safari-tab-pill-motion.mp4"></video>
+
+![Illustrative tab-count pill translation](assets/safari-tab-pill-motion.gif)
+
+- Four seconds,60frames,1080×360; GIF0.43MB. Lens, solid glyphs and sampling coordinates translate together over the polynomial source estimate. Parent-panel boundaries and reference shadows are omitted.
+- The still evaluates1260×840 at two subpixels per output axis, then downsamples to1080×720 per side. Every emitted rectangular-crop query is checked at the HQ grid and each unique motion pose, including partial edge samples. There are no ordinary source/output filters in this prior; no blur or refraction calibration is claimed.
+- [Motion record](experiments/reconstruction/studies/safari-tab-pill/round/final-motion.json) · [HQ record](experiments/reconstruction/studies/safari-tab-pill/round/final-hq.json). Native pass scores remain unchanged.
+
+</details>
+
 ## Mail three-action toolbar
 
 Apple, [Meet Liquid Glass,1:40](https://developer.apple.com/videos/play/wwdc2025/219/?time=100). This preliminary study isolates a neutral material response over a smooth estimated panel; it does not identify the lens from that background.
