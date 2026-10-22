@@ -1,0 +1,153 @@
+{
+  "preset": {
+    "model": "radial-tail",
+    "shape": {
+      "half": [
+        1,
+        1
+      ],
+      "radius": 1
+    },
+    "parameters": {
+      "amplitude": 0.6344430313360516,
+      "band": 0.09445809156460266,
+      "power": 2.10022237760162,
+      "width": 4.5,
+      "inner_power": 4
+    },
+    "source_sigma": 0.0020408163265306124,
+    "rim_width": 0.04897845813577233,
+    "thin_rim": 0.005714285714285714,
+    "blur_transition": null,
+    "material": [
+      1,
+      1,
+      1,
+      0.07500000000000001,
+      0.07500000000000001,
+      0.07500000000000001,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "reference_length": 245,
+    "post_sigma": 0.006530612244897959
+  },
+  "neutral_rim": {
+    "amplitude": 0.125,
+    "width": 0.028
+  },
+  "material_contract": "Best current shared prior, g1/b.07500000000000001/14lights0 plus neutral normal-white rim a.125/w.028. Prior transfer count0, not deliberately poor b0 or new calibration.",
+  "samples": 2,
+  "case_sha256": {
+    "a": "6e0f6b9a7f5558ee5d229d2466de2cadf2d9e8929d87f0bbd19833997c68850b"
+  },
+  "vector_sha256": {
+    "a": "c16b39bcfb1e453f8e5bbac64196a4cb11f9e6f1d044a5ccc1f1e32126d596d7"
+  },
+  "prior_commit": "4d27add70e78da7152eb86cccae67b37d7445b4b",
+  "selected_recipe_hashes": {
+    "selected-public-next-pass03.json": "584b82d6030f11939e4f65879c34dc50e2a65d2ac45c5bbd2fb1c47c25691351",
+    "selected-public-neutral-rim-pass03.json": "b736daea2337466af1100acad4e0ec6af675f389a6df5bc9bb9d686149c76ab6"
+  },
+  "helper_sha256": "4ae3711c075ad815a716dde1e691d5f568ffa16c8513aa56153761e80baf8fa3",
+  "stage": "ADOPTED_INPUT_BASELINE_NOT_A_GAIN",
+  "accepted_count": 0,
+  "source_kind": "Estimated local header affineRGB/hiddenobserved0/upper3.785 uncertainty",
+  "generated_shadow": "ZERO/no targetcontext",
+  "B_paired": false,
+  "foreground_styles": {
+    "xmark-pinned.svg": {
+      "color": [
+        0.1422113443266031,
+        0.1422113443266031,
+        0.1422113443266031
+      ],
+      "opacity": 1
+    }
+  },
+  "foreground_model": "ONEopaqueuniformneutralgray, RGBtied and opacity1. Parameter override in EXISTING public Study.apply_foreground, not input/case/SVG/source modification.",
+  "foreground_gray": 0.1422113443266031,
+  "gray_bounds": [
+    0,
+    0.4
+  ],
+  "scores": {
+    "glass": {
+      "pixels": 1345,
+      "rmse": 2.9372386932373047
+    },
+    "rim": {
+      "pixels": 544,
+      "rmse": 3.9105236530303955
+    },
+    "held": {
+      "pixels": 143,
+      "rmse": 1.9574376344680786
+    },
+    "interior": {
+      "pixels": 801,
+      "rmse": 2.0250802040100098
+    },
+    "ssim": 0.9921990036964417,
+    "loss": 10.62681837100833,
+    "E": 3.259880116048492,
+    "glyph": {
+      "pixels": 400,
+      "rmse": 17.85308837890625
+    },
+    "exterior": {
+      "pixels": 1162,
+      "rmse": 2.7387917041778564
+    },
+    "full_visible_exterior": {
+      "pixels": 1431,
+      "rmse": 2.6554365158081055
+    }
+  },
+  "original_source_proof_sha256": "9847996a28ffbe4068cf75c324506c514c93c4975b153b9ddf6f854beec291d3",
+  "original_native_clip_proof_sha256": "b55ecbcc96aa9024c34890f1d65919522821d432bccfc5434f18eb2ea9b00a00",
+  "old_accepted_count_preserved": 1,
+  "new_epoch_count": 0,
+  "source_support_transfer": {
+    "proof_sha256": "9847996a28ffbe4068cf75c324506c514c93c4975b153b9ddf6f854beec291d3",
+    "native_samples_per_axis": 2,
+    "old_all_scored_subrays": 5624,
+    "new_all_scored_subrays": 5380,
+    "removed_subrays": 244,
+    "new_scored_subset_of_proved_old": true,
+    "scored_bad": 0,
+    "scored_outside_outline": 0,
+    "whole_count_unchanged": 7731,
+    "post_count_unchanged": 8752,
+    "post_pixel_mask_exact": true,
+    "whole_confidence_defined": 1,
+    "observed_hidden_fraction": 0,
+    "no_new_ray_sweep": true,
+    "limitations": "Exact prior finite discrete sourcekernel/postkernel+bilinear only; not observed photographic source or infinite support proof."
+  },
+  "source_adopted": true,
+  "epoch": "02-original-SF-default400-full-canvas",
+  "old_epoch_count": 1,
+  "foreground_guard": "Half-open20x20paint400; inclusiveexclusion441NOTglyphguard",
+  "scoring_epoch_adopted": true,
+  "source_epoch": "02-original-SF-default400-full-canvas",
+  "source_adoption_is_not_verified_pass": true,
+  "limitations": "Adopted epoch02 input baseline only. Oldepoch acceptedforeground trial annotations are historical, not newbaseline checks/gains. NewFGguard halfopen400. Source modeled/unobserved, UIweight/pose uncertainty retained.",
+  "historical_old_epoch_annotations_removed": true,
+  "base_material_sha256": "7fa02aac4e30d846da577ad1ded1b7471f1b084ad9de5a1a4e0619dd0e8a3766"
+}

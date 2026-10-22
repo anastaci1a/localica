@@ -1,0 +1,149 @@
+{
+  "id": "new-sheet-close-circle-single-a",
+  "category": "WWDC219/320 sheet CLOSE circle; visible parenttitle NEW, not More",
+  "radial": true,
+  "center": [
+    746.2986369222403,
+    187.29390886719523
+  ],
+  "half": [
+    24.80021893722715,
+    24.80021893722715
+  ],
+  "radius": 24.80021893722715,
+  "crop": [
+    720,
+    160,
+    778,
+    218
+  ],
+  "foreground": [
+    [
+      737,
+      178,
+      757,
+      198
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "mask",
+      "box": [
+        737,
+        178,
+        757,
+        198
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.3,
+      "vector_asset": "xmark-original-default400.svg",
+      "vector_sha256": "c16b39bcfb1e453f8e5bbac64196a4cb11f9e6f1d044a5ccc1f1e32126d596d7",
+      "vector_box": [
+        736.5,
+        177.5,
+        756.5,
+        197.5
+      ],
+      "opacity": 1.0,
+      "style_key": "xmark-pinned.svg"
+    }
+  ],
+  "allow_estimated_background": true,
+  "source_observation_mask": "observed.png",
+  "target_observation_mask": "target-visible.png",
+  "source_sha256": {
+    "source.png": "0791430758dfd144edc914ac528e161f7ad1fe4ca5b791c21fc1aadee40b2430",
+    "target.png": "edae65724bac014ac7644e8812c5ddec69daaf6e2fcf72ad6ed4f057710bcdc8",
+    "known.png": "3a721ec734fc2993ebb4c4696c5d684b9a8e22480e190b6a4a544c8eae1fb11e",
+    "observed.png": "06da5431a575e89e972435a0219b390d3dbb32e73ad342de409a935744365f76",
+    "target-visible.png": "6ae2cfa8276a1bd642b45a5401579b8a93bc9506299ae41171573adff763f9f6"
+  },
+  "background_estimate": {
+    "kind": "affine local uncovered parent-header RGB estimate, not observedhiddenpixels",
+    "basis": [
+      "1",
+      "u",
+      "v"
+    ],
+    "coordinates": {
+      "u": "(x-747)/60",
+      "v": "(y-188)/60"
+    },
+    "coefficient_rgb": [
+      [
+        0.6870634557557791,
+        0.7027497302655832,
+        0.7314026132092796
+      ],
+      [
+        0.015758014389088398,
+        0.015758014389088235,
+        0.017257462078177143
+      ],
+      [
+        0.029628759199649884,
+        0.02962875919964973,
+        0.03203007891078004
+      ]
+    ],
+    "source_domain": "[719,159,811,245] intersect approximate parentroundrect inset5px; no parentedge copied",
+    "observed_hidden_fraction": 0,
+    "uncertainty": "Effective local paper/header appearance, not physical incidentlight proof. Parentcorner/lighting/ownrimtail uncertainty retained."
+  },
+  "reference": {
+    "video": "219",
+    "seconds": 320,
+    "original_png": "/evidence/apple-matches/219-320.png",
+    "native_resolution": [
+      1920,
+      1080
+    ],
+    "source_adoption": false
+  },
+  "protocol": {
+    "stage": "DEFAULT400_SOURCE_AND_SCORING_EPOCH_PROPOSAL_NOT_ADOPTED",
+    "condition": "Primary input/proposedsource-kernel/native-mask review BEFORE baseline; freeze existing neutral radial prior, no refraction or blur identification from smoothsource.",
+    "source_correction_not_optical_gain": true,
+    "prior_count_preserved": 1,
+    "new_epoch_count": 0
+  },
+  "glyph_provenance_history": [
+    {
+      "identity": "xmark",
+      "pinned_commit": "2a0100e93e11a22ea0ff5e0530efd10e2cf0d243",
+      "module": "dist/module/sfXmark.js",
+      "module_sha256": "57dab561f71683b638d9f042533e3956fb5dfb2d421a5ed974c65750653a06c1",
+      "module_blob_sha1": "5630bd35132a912e2854726d146e74270e8f9d4f",
+      "limits": "Literal pinned solidoriginal SF export path, black1/uniform aspect, noJS/screenshot matte/weightfit; exact UI weight not proved."
+    }
+  ],
+  "glyph_provenance": {
+    "identity": "xmark",
+    "glyph_name": "xmark.tag.color.large",
+    "glyph_id": 4836,
+    "font": "/evidence/extended/icon-source/fallback/Applications/SF Symbols.app/Contents/Resources/Fonts/SFSymbolsFallback.otf",
+    "font_sha256": "bba5e09ec296a17e7dfc4644caa2e3b2b1524c5630a7dfd708140cc51628c7ca",
+    "weight_axis": 400,
+    "font_default_weight": 400,
+    "weight_not_fitted": true,
+    "placement_center": [
+      746.1498559450467,
+      187.75939245047653
+    ],
+    "major_span_native": 19.1377995,
+    "uniform_aspect": true,
+    "painting_canvas": [
+      737,
+      178,
+      757,
+      198
+    ],
+    "exact_symbol_family": true,
+    "exact_Apple_UI_weight_not_proven": true,
+    "source": "Original SF Symbols font, not Unicode multiply or screenshot matte"
+  }
+}

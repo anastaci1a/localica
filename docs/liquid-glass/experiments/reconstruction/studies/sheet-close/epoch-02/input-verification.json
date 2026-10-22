@@ -1,0 +1,47 @@
+{
+  "primary_adopts_source_and_scoring_epoch": true,
+  "epoch": "02-original-SF-default400-full-canvas",
+  "new_verified_count": 0,
+  "old_epoch_verified_count": 1,
+  "original_font_outline_exact": true,
+  "default_weight_not_fitted": true,
+  "UI_actual_weight_unproven": true,
+  "source_pngs_and_body_material_unchanged": true,
+  "scored_mask_change": "Correct expanded foreground exclusion; GL1406->1345/SSIM140->94. Do not interpret changed baseline as optical improvement.",
+  "foreground_guard_convention": "Half-open20x20paintbox400 pixels, same old convention; proposed441-pixel inclusive aggregate remains advisory only.",
+  "new_epoch_scores": {
+    "glass": {
+      "pixels": 1345,
+      "rmse": 2.9372386932373047
+    },
+    "rim": {
+      "pixels": 544,
+      "rmse": 3.9105236530303955
+    },
+    "held": {
+      "pixels": 143,
+      "rmse": 1.9574376344680786
+    },
+    "interior": {
+      "pixels": 801,
+      "rmse": 2.0250802040100098
+    },
+    "ssim": 0.9921990036964417,
+    "loss": 10.62681837100833,
+    "E": 3.259880116048492,
+    "glyph": {
+      "pixels": 400,
+      "rmse": 17.85308837890625
+    },
+    "exterior": {
+      "pixels": 1162,
+      "rmse": 2.7387917041778564
+    },
+    "full_visible_exterior": {
+      "pixels": 1431,
+      "rmse": 2.6554365158081055
+    }
+  },
+  "source_support": "Whole7731/post8752 queries unchanged, scored5380subsetold5624. No new source/ray/render.",
+  "limits": "Estimated header RGB/upper3.785/posep95.463 and source AA/codec uncertainty. Original SF family/default400 chosen for provenance, not an exact Apple UI weight claim."
+}
