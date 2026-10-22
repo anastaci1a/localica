@@ -199,5 +199,12 @@
     "top": 56,
     "bottom": 0,
     "gutter": 2
+  },
+  "assets/sheet-close-current.png": {
+    "width": 234,
+    "height": 152,
+    "top": 36,
+    "bottom": 0,
+    "gutter": 2
   }
 }

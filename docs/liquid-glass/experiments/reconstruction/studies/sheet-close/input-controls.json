@@ -1,0 +1,236 @@
+{
+  "stage": "SINGLE_INPUT_PROPOSAL_REVIEW_REQUIRED_NO_BASELINE_OR_FIT",
+  "source_family": "affine",
+  "affine_coefficients": [
+    [
+      0.6870634557557791,
+      0.7027497302655832,
+      0.7314026132092796
+    ],
+    [
+      0.015758014389088398,
+      0.015758014389088235,
+      0.017257462078177143
+    ],
+    [
+      0.029628759199649884,
+      0.02962875919964973,
+      0.03203007891078004
+    ]
+  ],
+  "affine_controls": {
+    "train": {
+      "pixels": 3542,
+      "rgb_rmse": 0.9785092564267677,
+      "signed_rgb": [
+        -2.3408540931596865e-12,
+        -2.3556196205638714e-12,
+        1.2163197546213065e-12
+      ],
+      "p95_absolute": 1.965000031326631
+    },
+    "spatial_heldout": {
+      "pixels": 1217,
+      "rgb_rmse": 0.9622933729699773,
+      "signed_rgb": [
+        -0.02155597497108341,
+        -0.02155597497109785,
+        -0.014194542190094995
+      ],
+      "p95_absolute": 1.879972547789765
+    },
+    "left": {
+      "pixels": 107,
+      "rgb_rmse": 0.5830084446012236,
+      "signed_rgb": [
+        0.301282826899057,
+        0.30128282689907976,
+        0.053465758970382846
+      ],
+      "p95_absolute": 1.1706158645311753
+    },
+    "upper": {
+      "pixels": 228,
+      "rgb_rmse": 3.785048859724956,
+      "signed_rgb": [
+        -3.6212013138797547,
+        -3.6212013138797294,
+        -3.7594143792698183
+      ],
+      "p95_absolute": 5.000608612458988
+    },
+    "lower": {
+      "pixels": 322,
+      "rgb_rmse": 1.1716098131660742,
+      "signed_rgb": [
+        -1.0463101868277975,
+        -1.0463101868278006,
+        -1.1485931795784587
+      ],
+      "p95_absolute": 1.7927555397947084
+    }
+  },
+  "nested_quadratic": {
+    "coefficient_rgb": [
+      [
+        0.6818951441381964,
+        0.6975814186480008,
+        0.7222736820347326
+      ],
+      [
+        0.02221443458048111,
+        0.02221443458048096,
+        0.028936240524858072
+      ],
+      [
+        0.022001491558449465,
+        0.022001491558449247,
+        0.033918089071205124
+      ],
+      [
+        -0.0030628146473079343,
+        -0.003062814647307947,
+        -0.00441215332074947
+      ],
+      [
+        -0.00046886552552746275,
+        -0.00046886552552714465,
+        -0.00853678193412701
+      ],
+      [
+        0.02627794744565082,
+        0.02627794744565104,
+        0.024613883963192786
+      ]
+    ],
+    "controls": {
+      "train": {
+        "pixels": 3542,
+        "rgb_rmse": 0.737502172808573,
+        "signed_rgb": [
+          -2.347126132324777e-12,
+          -2.256794224488545e-12,
+          1.2553044744590962e-12
+        ],
+        "p95_absolute": 1.3976542603006208
+      },
+      "spatial_heldout": {
+        "pixels": 1217,
+        "rgb_rmse": 0.7503455572310075,
+        "signed_rgb": [
+          -0.003115619247537768,
+          -0.0031156192474472047,
+          0.006883652120799325
+        ],
+        "p95_absolute": 1.470696605125073
+      },
+      "left": {
+        "pixels": 107,
+        "rgb_rmse": 1.4429602042268315,
+        "signed_rgb": [
+          -1.1617393767540856,
+          -1.1617393767539752,
+          -1.5180102286379653
+        ],
+        "p95_absolute": 2.50818895366895
+      },
+      "upper": {
+        "pixels": 228,
+        "rgb_rmse": 2.120397584101672,
+        "signed_rgb": [
+          -1.3496963538571285,
+          -1.349696353857011,
+          -2.6720999609466336
+        ],
+        "p95_absolute": 4.056551024533134
+      },
+      "lower": {
+        "pixels": 322,
+        "rgb_rmse": 1.5346655362497836,
+        "signed_rgb": [
+          1.1771470595648534,
+          1.1771470595649773,
+          1.7516586579302953
+        ],
+        "p95_absolute": 2.5724635266799614
+      }
+    },
+    "all_validation_improves": false
+  },
+  "pose": {
+    "center": [
+      746.2986369222403,
+      187.29390886719523
+    ],
+    "radius": 24.80021893722715,
+    "ridge_p10_p50_p90": [
+      23.875,
+      24.6875,
+      25.875
+    ],
+    "residual_p95": 0.4633718361094643,
+    "not_knownphysicalalpha": true
+  },
+  "glyph": {
+    "native_ink_bbox": [
+      737,
+      179,
+      756,
+      197
+    ],
+    "uniform_placement": [
+      736.9980523809649,
+      178.5,
+      755.0019476190351,
+      196.5
+    ],
+    "svg_sha256": "9158df2c121853f26f67c74159e91957f41a9f886cce1a461d2987d7b7229424"
+  },
+  "source_proposed_domain": {
+    "status": "SOURCE_ONLY_PROPOSED_PRIOR_DOMAIN_NOT_BODYRENDER",
+    "counts": {
+      "whole": 7731,
+      "scored": 5624,
+      "postfootprint": 8752,
+      "whole_bad": 0,
+      "scored_bad": 0,
+      "postfootprint_bad": 0,
+      "scored_outside_outline": 0
+    },
+    "passed": true,
+    "source_bounds": [
+      723.9635620117188,
+      164.96009826660156,
+      768.5989990234375,
+      209.5963897705078
+    ],
+    "source_sigma_native": 0.05061269170862684,
+    "source_kernel_radius": 0,
+    "post_sigma_native": 0.16196061346760587,
+    "post_kernel_radius": 1,
+    "source_confidence": "Modeled1/observedhidden0, exact finitefloat32kernel+bilinear lookup only, not infinitekernel/photographicrecovery",
+    "native_guard_feasibility": {
+      "glass": 1406,
+      "rim": 544,
+      "held": 143,
+      "interior": 862,
+      "SSIM11x11_safe_pixels": 140,
+      "glyph_box": [
+        737,
+        179,
+        756,
+        197
+      ]
+    },
+    "sampling": "Exact selected settled radial-tail mapping at2x2native subrays, unchangedinside/outside; no bodycolor/shade/render called.",
+    "code_snapshot": "/evidence/extended/helper-toolbar-work/safari-right-circle-round/neutral-baseline/code-snapshot.json"
+  },
+  "case_fingerprint": "f5c3921820dc50fd9230bfeab581a26954e408b98817f7e433463b2bf3041506",
+  "native_target_png_sha256": "edae65724bac014ac7644e8812c5ddec69daaf6e2fcf72ad6ed4f057710bcdc8",
+  "observed_hidden_fraction": 0,
+  "body_renders": 0,
+  "optical_fits": 0,
+  "count": 0,
+  "elapsed_seconds": 227.34593,
+  "limits": "ParenttitlevisiblyNEW notMore; sameassigned closecontrol. Sourceestimate/pose/variant/protocol conditional, no sourceadoption or paired/physicaloptics claim."
+}

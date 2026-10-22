@@ -1,0 +1,76 @@
+{
+  "preset": {
+    "model": "radial-tail",
+    "shape": {
+      "half": [
+        1,
+        1
+      ],
+      "radius": 1
+    },
+    "parameters": {
+      "amplitude": 0.6344430313360516,
+      "band": 0.09445809156460266,
+      "power": 2.10022237760162,
+      "width": 4.5,
+      "inner_power": 4
+    },
+    "source_sigma": 0.0020408163265306124,
+    "rim_width": 0.04897845813577233,
+    "thin_rim": 0.005714285714285714,
+    "blur_transition": null,
+    "material": [
+      1,
+      1,
+      1,
+      0.07500000000000001,
+      0.07500000000000001,
+      0.07500000000000001,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "reference_length": 245,
+    "post_sigma": 0.006530612244897959
+  },
+  "neutral_rim": {
+    "amplitude": 0.125,
+    "width": 0.028
+  },
+  "material_contract": "Best current shared prior, g1/b.07500000000000001/14lights0 plus neutral normal-white rim a.125/w.028. Prior transfer count0, not deliberately poor b0 or new calibration.",
+  "samples": 2,
+  "case_sha256": {
+    "a": "f5c3921820dc50fd9230bfeab581a26954e408b98817f7e433463b2bf3041506"
+  },
+  "vector_sha256": {
+    "a": {
+      "xmark-pinned.svg": "9158df2c121853f26f67c74159e91957f41a9f886cce1a461d2987d7b7229424"
+    }
+  },
+  "prior_commit": "4d27add70e78da7152eb86cccae67b37d7445b4b",
+  "selected_recipe_hashes": {
+    "selected-public-next-pass03.json": "584b82d6030f11939e4f65879c34dc50e2a65d2ac45c5bbd2fb1c47c25691351",
+    "selected-public-neutral-rim-pass03.json": "b736daea2337466af1100acad4e0ec6af675f389a6df5bc9bb9d686149c76ab6"
+  },
+  "helper_sha256": "4ae3711c075ad815a716dde1e691d5f568ffa16c8513aa56153761e80baf8fa3",
+  "input_approval": "f03593c7-65a7-4dfc-9b45-728f0d33596d",
+  "stage": "FROZEN_ONE_BASELINE_BEFORE_ANY_NEW_INPUT_FIT",
+  "accepted_count": 0,
+  "source_kind": "Estimated local header affineRGB/hiddenobserved0/upper3.785 uncertainty",
+  "generated_shadow": "ZERO/no targetcontext",
+  "B_paired": false
+}
