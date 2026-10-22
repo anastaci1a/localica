@@ -446,3 +446,16 @@ The next-track case uses the existing dimensionless radial-tail playback map and
 Replay from this directory: `python neutral_affine.py INPUTS RECORD NEW_OUTPUT`. The [helper](experiments/reconstruction/neutral_affine.py) checks the frozen case/vector hashes and tied gain/bias, then produces native scores and the approved iteration preview. Source images remain private.
 
 The [export helper](experiments/reconstruction/settled_export.py) reproduces the1080px still and illustrative source motion from the same circle model: `python settled_export.py INPUTS RECORD NEW_OUTPUT --native-reference NATIVE.npz`. It first checks its native operation order against the saved accepted material/composite arrays, then reevaluates at the larger grid, scales only the output kernel, checks source support and encodes the motion. `--check-native-only` stops after that control. The source kernel remains in reference coordinates. Internal power-of-two resolution is chosen to reach at least1080px before final downsampling. Optional `--travel` changes source-motion distance in native pixels; `--trim` removes a presentation border after rendering, leaving native scores untouched. The bag export uses `--travel 4 --trim 1` and the same material/map contract; its estimated quadratic panel does not establish optical transfer. This export does not alter native scores.
+
+### Shared neutral rim response
+
+On the fixed NEXT and Safari bag circles, add a neutral boundary-normal response after the existing material and before the unchanged pixel/postfilter integration:
+
+```text
+d = max(-signedDistance, 0)
+ell = (1, 1) / sqrt(2)
+H = exp(-(d/w)^2) (n · ell)^2
+C = clamp(C0 + a H, 0, 1)
+```
+
+Here n is the unit outward footprint normal and w is measured in units of L. The response has two opposite lobes; it is invariant under n→−n and scales with the footprint. Outside the silhouette, d remains0 and the normal field continues for the fixed postfilter before alpha composition. The source/map/kernel/foreground are unchanged. This is an empirical illumination basis, not Fresnel reflection or an identified environment. Neither smooth estimated source identifies optics. [Replay](experiments/reconstruction/neutral_rim.py): `python neutral_rim.py INPUTS BASE_RECORD RIM_RECORD NEW_OUTPUT`. Use the corresponding accepted pass03 base record and the shared rim record.
