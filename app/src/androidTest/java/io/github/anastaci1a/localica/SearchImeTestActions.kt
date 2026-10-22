@@ -38,6 +38,9 @@ internal class SearchImeHandoffObservation {
 private fun WindowInsetsCompat.imeHidden() =
     !isVisible(WindowInsetsCompat.Type.ime()) && getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
 
+private fun WindowInsetsCompat.imeShown() =
+    isVisible(WindowInsetsCompat.Type.ime()) && getInsets(WindowInsetsCompat.Type.ime()).bottom > 0
+
 private fun WindowInsetsCompat?.imeDescription(): String =
     if (this == null) "unobserved" else "visible=${isVisible(WindowInsetsCompat.Type.ime())},bottom=${getInsets(WindowInsetsCompat.Type.ime()).bottom}"
 
@@ -59,8 +62,8 @@ internal fun disposeSearchImeObserver(observer: View) {
     ViewCompat.setOnApplyWindowInsetsListener(observer, null)
 }
 
-/** Observe the expected popup's native handoff without replacing application callbacks. */
-internal fun ComposeContentTestRule.awaitSearchImeHandoff(action: () -> Unit) {
+/** Observe the editor's native window handoff without replacing application callbacks. */
+internal fun ComposeContentTestRule.awaitSearchImeHandoff(requireShownBeforeAction: Boolean = false, action: () -> Unit) {
     val editor = onNode(hasSetTextAction())
     val view = (editor.fetchSemanticsNode().root as ViewRootForTest).view
     val decor = view.rootView as ViewGroup
@@ -79,7 +82,11 @@ internal fun ComposeContentTestRule.awaitSearchImeHandoff(action: () -> Unit) {
         android.util.Log.i("SearchImeHandoff", "${android.os.SystemClock.uptimeMillis()} phase=$name ${state()}")
     }
     try {
-        waitUntil(5000) { runOnUiThread { observation.applied != null && view.hasWindowFocus() } }
+        waitUntil(5000) { runOnUiThread {
+            observation.applied != null && view.hasWindowFocus() &&
+                (!requireShownBeforeAction || observation.applied?.imeShown() == true &&
+                    ViewCompat.getRootWindowInsets(view)?.imeShown() == true)
+        } }
         phase("before editor action")
         action()
         waitUntil(5000) { onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isEmpty() }
