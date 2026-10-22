@@ -1,0 +1,200 @@
+{
+  "preset": {
+    "model": "radial-tail",
+    "shape": {
+      "half": [
+        1,
+        1
+      ],
+      "radius": 1
+    },
+    "parameters": {
+      "amplitude": 0.6344430313360516,
+      "band": 0.09445809156460266,
+      "power": 2.10022237760162,
+      "width": 4.5,
+      "inner_power": 4
+    },
+    "source_sigma": 0.0020408163265306124,
+    "rim_width": 0.04897845813577233,
+    "thin_rim": 0.005714285714285714,
+    "blur_transition": null,
+    "material": [
+      1,
+      1,
+      1,
+      0.07500000000000001,
+      0.07500000000000001,
+      0.07500000000000001,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "reference_length": 245,
+    "post_sigma": 0.006530612244897959
+  },
+  "neutral_rim": {
+    "amplitude": 0.125,
+    "width": 0.028
+  },
+  "material_contract": "Best current shared prior, g1/b.07500000000000001/14lights0 plus neutral normal-white rim a.125/w.028. Prior transfer count0, not deliberately poor b0 or new calibration.",
+  "samples": 2,
+  "case_sha256": {
+    "a": "f5c3921820dc50fd9230bfeab581a26954e408b98817f7e433463b2bf3041506"
+  },
+  "vector_sha256": {
+    "a": {
+      "xmark-pinned.svg": "9158df2c121853f26f67c74159e91957f41a9f886cce1a461d2987d7b7229424"
+    }
+  },
+  "prior_commit": "4d27add70e78da7152eb86cccae67b37d7445b4b",
+  "selected_recipe_hashes": {
+    "selected-public-next-pass03.json": "584b82d6030f11939e4f65879c34dc50e2a65d2ac45c5bbd2fb1c47c25691351",
+    "selected-public-neutral-rim-pass03.json": "b736daea2337466af1100acad4e0ec6af675f389a6df5bc9bb9d686149c76ab6"
+  },
+  "helper_sha256": "4ae3711c075ad815a716dde1e691d5f568ffa16c8513aa56153761e80baf8fa3",
+  "input_approval": "f03593c7-65a7-4dfc-9b45-728f0d33596d",
+  "stage": "ACCEPTED_FOREGROUND_ONLY",
+  "accepted_count": 1,
+  "source_kind": "Estimated local header affineRGB/hiddenobserved0/upper3.785 uncertainty",
+  "generated_shadow": "ZERO/no targetcontext",
+  "B_paired": false,
+  "foreground_styles": {
+    "xmark-pinned.svg": {
+      "color": [
+        0.1422113443266031,
+        0.1422113443266031,
+        0.1422113443266031
+      ],
+      "opacity": 1.0
+    }
+  },
+  "foreground_model": "ONEopaqueuniformneutralgray, RGBtied and opacity1. Parameter override in EXISTING public Study.apply_foreground, not input/case/SVG/source modification.",
+  "approval": "6a9a563d-4f4b-4795-8230-adaacdbab0f2",
+  "foreground_gray": 0.1422113443266031,
+  "analytic_unbounded_gray": 0.1422113443266031,
+  "gray_bounds": [
+    0,
+    0.4
+  ],
+  "scores": {
+    "glass": {
+      "pixels": 1406,
+      "rmse": 3.675133466720581
+    },
+    "rim": {
+      "pixels": 544,
+      "rmse": 3.9105236530303955
+    },
+    "held": {
+      "pixels": 143,
+      "rmse": 1.9574376344680786
+    },
+    "interior": {
+      "pixels": 862,
+      "rmse": 3.5184850692749023
+    },
+    "ssim": 0.9916671514511108,
+    "loss": 14.042282771019801,
+    "E": 3.747303399915705,
+    "glyph": {
+      "pixels": 342,
+      "rmse": 31.302234649658203
+    },
+    "exterior": {
+      "pixels": 1162,
+      "rmse": 2.7387917041778564
+    },
+    "full_visible_exterior": {
+      "pixels": 1431,
+      "rmse": 2.6554365158081055
+    }
+  },
+  "checks": {
+    "glass": true,
+    "rim": true,
+    "held": true,
+    "interior": true,
+    "glyph": true,
+    "exterior": true,
+    "full_visible_exterior": true,
+    "E": true,
+    "SSIM": true,
+    "foreground_progress": true,
+    "body_bit_exact": true,
+    "outside_glyph_bit_exact": true,
+    "opacity_fixed_1": true,
+    "input_case_unchanged": true
+  },
+  "qualifies_numerically": true,
+  "foreground_f64": {
+    "before": 35.785369093427704,
+    "after": 31.30223544613139
+  },
+  "advisory_cohorts": {
+    "canonical_deep": {
+      "pixels": 62,
+      "old_RGB_RMSE": 56.11937586646014,
+      "new_RGB_RMSE": 20.19578508222478,
+      "old_signed_RGB": [
+        -54.13377846802412,
+        -54.54658689188598,
+        -59.21202352063002
+      ],
+      "new_signed_RGB": [
+        -17.9292346501062,
+        -18.342043150576853,
+        -23.00748005990059
+      ],
+      "advisory_only": true
+    },
+    "canonical_partial_edge": {
+      "pixels": 70,
+      "old_RGB_RMSE": 36.5926369062883,
+      "new_RGB_RMSE": 47.93515543036032,
+      "old_signed_RGB": [
+        24.68949308219765,
+        25.844071978304004,
+        24.828919550270907
+      ],
+      "new_signed_RGB": [
+        41.549538453774794,
+        42.70411670527288,
+        41.6889649150627
+      ],
+      "advisory_only": true
+    }
+  },
+  "body_source_proof_transfer": "Material/source/rays/map/kernels/rim/pose/alpha/SVG/masks/shadow unchanged. WHOLE7731/ALLscored5624/post8752 originalmodelconfidence1/hiddenobserved0 and priorrawclip0 transfer; newcolorin[0,.4] withfixedalpha isconvex, no body/ray rerender.",
+  "original_source_proof_sha256": "9847996a28ffbe4068cf75c324506c514c93c4975b153b9ddf6f854beec291d3",
+  "original_native_clip_proof_sha256": "b55ecbcc96aa9024c34890f1d65919522821d432bccfc5434f18eb2ea9b00a00",
+  "actual_body_renders_added": 0,
+  "actual_native_composites": 1,
+  "uniform_gray_LS_solves": 1,
+  "limits": "Foreground-only empirical color, not optics/materialradiance/Appleopacity identification. SVG remains thinner than target; partialedge regression retained. BodyE/SSIM exactties. Sourceupper3.785/pose.463/sourcehidden0 unchanged.",
+  "base_material_sha256": "7fa02aac4e30d846da577ad1ded1b7471f1b084ad9de5a1a4e0619dd0e8a3766",
+  "accepted_primary": true,
+  "primary_verification": {
+    "accepted_primary": true,
+    "accepted_pass": 1,
+    "cached_body_composite_pixel_exact": true,
+    "material_and_outside_glyph_pixel_exact": true,
+    "glyph_rmse": 31.302234649658203,
+    "foreground_gray": 0.1422113443266031,
+    "scope": "Foreground tint only, glass/SSIM exactties; empirical neutral fill, no optical gain. Canonical edge local RMSE worsens36.593->47.935; retained, exact icon weight unresolved."
+  }
+}

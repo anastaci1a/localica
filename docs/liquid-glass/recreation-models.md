@@ -459,3 +459,7 @@ C = clamp(C0 + a H, 0, 1)
 ```
 
 Here n is the unit outward footprint normal and w is measured in units of L. The response has two opposite lobes; it is invariant under n→−n and scales with the footprint. Outside the silhouette, d remains0 and the normal field continues for the fixed postfilter before alpha composition. The source/map/kernel/foreground are unchanged. This is an empirical illumination basis, not Fresnel reflection or an identified environment. Neither smooth estimated source identifies optics. [Replay](experiments/reconstruction/neutral_rim.py): `python neutral_rim.py INPUTS BASE_RECORD RIM_RECORD NEW_OUTPUT`. Use the corresponding accepted pass03 base record and the shared rim record.
+
+### Uniform foreground response
+
+For an opaque uniform symbol, composite `C=(1-alpha)B+alpha*g`, with alpha supplied only by the original solid vector, B the existing complete material beneath it, and g a single RGB-tied constant. Opacity stays1. This parameter represents empirical icon tint; it does not identify Apple opacity, change glyph weight, or modify the glass. The original glyph box remains protected. [Replay](experiments/reconstruction/foreground_style.py): `python foreground_style.py INPUTS BODY.npz RECORD.json NEW_OUTPUT`. First reproduce BODY using the baseline circle/rim record; the helper checks source/vector/case and float-buffer fingerprints, then applies the existing shared foreground style path.

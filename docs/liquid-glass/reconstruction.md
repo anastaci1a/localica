@@ -143,6 +143,15 @@ The shared NEXT/bag model fails this search observation: E7.692→9.705. SSIM an
 
 </details>
 
+## Sheet close control
+
+![Sheet close button and uniform foreground reconstruction](assets/sheet-close-current.png)
+
+- **1/3 verified passes, foreground only:** one opaque neutral tint changes glyph RMSE35.785→31.302; glass E3.747, SSIM and all pixels outside the glyph are exact ties. Tint g=.1422113443, opacity1; the original solid SF xmark and placement stay fixed. [Recipe and independent verification](experiments/reconstruction/studies/sheet-close/round/pass-01.json).
+- The canonical stroke is thinner than Apple’s. Local partial-edge RMSE worsens36.593→47.935 while deep-core error improves56.119→20.196; this is not a finished icon match. No target-derived alpha, per-pixel color or body/source correction is used.
+- The glass baseline transfers the shared NEXT/bag circle map, normalized kernels and neutral rim, without a fitted optical pass. Hidden header RGB is a local affine estimate: held error.962, upper independent-control error3.785levels. Pose residualp95=.463px; exact symbol weight is unproven. [Input and controls](experiments/reconstruction/studies/sheet-close/input-controls.json) · [Frozen case](experiments/reconstruction/studies/sheet-close/case.json) · [Baseline](experiments/reconstruction/studies/sheet-close/baseline.json).
+- [Uniform foreground equation](recreation-models.md#uniform-foreground-response) · [Reproduction helper](experiments/reconstruction/foreground_style.py). Illustrative media follows the completed round.
+
 ## Safari bag control
 
 ![Safari bag circle and neutral material reconstruction](assets/safari-bag-current.png)
