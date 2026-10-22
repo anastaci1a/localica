@@ -5,12 +5,18 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -23,7 +29,7 @@ internal class LyricsBackdropScene(val source: FrostedBackdrop) {
 
 internal class LyricsBackdropLayer(val source: FrostedBackdrop, val alpha: () -> Float,
     val contentKey: () -> Any?) {
-    // Main-thread diagnostic of the completed draw, not observable state.
+    // Main-thread diagnostic of the completed masked draw, not observable state.
     var recordedReadbackRequest = -1
 }
 
@@ -84,7 +90,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
     }
 }
 
-/** Register in composition/draw order, including documents retained by Crossfade. */
+/** Record the final clipped/faded viewport, including documents retained by Crossfade. */
 @Composable
 internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () -> Float,
     contentKey: () -> Any?): Modifier {
@@ -97,13 +103,17 @@ internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () ->
         scene.layers.add(layer)
         onDispose { scene.layers.remove(layer) }
     }
-    return recordFrostedBackdrop(source).drawWithContent {
-        // API 26 readback uses another rendering surface. Re-record retained glyphs
-        // before both the first and settled captures, rather than reusing a child
-        // RenderNode whose visible text has changed since the previous snapshot.
-        // This state is read only in drawing, never in the refresh/capture flows.
-        val request = scene.source.readbackRequest
-        drawContent()
-        layer.recordedReadbackRequest = request
-    }
+    return recordFrostedBackdrop(source).clipToBounds()
+        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            // Observe inside the retained mask layer: invalidating only its parent
+            // replays the same child display list on API 26's readback surface. Both
+            // existing captures must redraw this final viewport, not just its wrapper.
+            // Never feed this draw-only request back into refresh/capture flows.
+            val request = scene.source.readbackRequest
+            drawContent()
+            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
+                0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+            layer.recordedReadbackRequest = request
+        }
 }

@@ -17,9 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
@@ -138,8 +135,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                     LyricsPresentation.Missing -> BoxWithConstraints(Modifier.fillMaxSize()) {
                         val stableHeight = contentHeight ?: maxHeight
                         Box(Modifier.fillMaxSize().testTag("lyrics-viewport")
-                            .recordLyricsLayer(scene, { sourceAlpha }) { listOf(presentation, ink, stableHeight, contentOffset) }
-                            .lyricsViewportMask()) {
+                            .recordLyricsLayer(scene, { sourceAlpha }) { listOf(presentation, ink, stableHeight, contentOffset) }) {
                             Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
                                 .height(stableHeight).offset(y = contentOffset), contentAlignment = Alignment.Center) {
                                 // A prior song's empty state is no longer authoritative once another read starts.
@@ -198,7 +194,7 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                 listOf(document, active, selectedInk, inactiveInk, lyricStyle, warningInk, warningStyle,
                     stableHeight, contentOffset, list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset,
                     list.isScrollInProgress)
-            }.lyricsViewportMask()) {
+            }) {
             Column(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
                 .height(stableHeight).offset(y = contentOffset)) {
                 document.warning?.let { Text(it, style = warningStyle) }
@@ -234,13 +230,3 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
         }
     }
 }
-
-/** Record this final clipped/faded viewport for #383 as well as displaying it. Moving the child
- * inside the mask must never move the mask itself or expose glyphs to the return lens outside it. */
-private fun Modifier.lyricsViewportMask(): Modifier = clipToBounds()
-    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
-            0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-    }
