@@ -58,6 +58,9 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
     var readbackRequest by mutableIntStateOf(0)
     // Main-thread diagnostic paired with snapshot publication, not observable state.
     var snapshotReadbackRequest = -1
+    var readbackBarrier: BackdropReadback? = null
+    var snapshotDraws: BackdropReadbackDraws? = null
+    var lastReadbackAbort: String? = null
     var recorded by mutableStateOf(false)
     fun refresh() { revision++ }
 }
@@ -117,16 +120,27 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
             val captureKey = listOf(key, size, revision)
             if (size == IntSize.Zero || captured == captureKey) return@collectLatest
             suspend fun capture(): Boolean {
-                val request = ++source.readbackRequest
-                withFrameNanos { }; withFrameNanos { }
-                // Layout can exist before the first recorded draw, or survive a restored
-                // player layer briefly. ImageReader rejects a zero-sized recording.
-                if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return false
-                val snapshot = source.layer.toImageBitmap()
-                source.snapshotReadbackRequest = request
-                source.snapshot = snapshot
-                source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
-                return true
+                val request = source.readbackRequest + 1
+                val ticket = source.readbackBarrier?.begin(request)
+                source.readbackRequest = request
+                try {
+                    withFrameNanos { }; withFrameNanos { }
+                    val draws = ticket?.awaitDraws()
+                    if (ticket != null && (draws == null || !ticket.isCurrent())) return false
+                    // Layout can precede the first recording, or survive a restored layer.
+                    if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return false
+                    val snapshot = source.layer.toImageBitmap()
+                    if (ticket != null && !ticket.isCurrent()) return false
+                    source.snapshotReadbackRequest = request
+                    source.snapshotDraws = draws
+                    source.snapshot = snapshot
+                    source.lastReadbackAbort = null
+                    source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
+                    return ticket == null || ticket.isCurrent()
+                } finally {
+                    source.lastReadbackAbort = ticket?.abortReason
+                    ticket?.close()
+                }
             }
             capture()
             // Artwork/lyrics may still be easing when the new scene key is published.
@@ -175,7 +189,8 @@ internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view:
 
 @Composable
 internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null,
-    enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null): Modifier {
+    enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null,
+    readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null): Modifier {
     BackdropLease(backing.takeIf { enabled })
     return backdropLocation(source.location)
         .onSizeChanged { source.size = it }
@@ -185,6 +200,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 drawContent()
                 return@drawWithContent
             }
+            val request = readbackRequest?.invoke()
             val viewport = size
             val extent = IntSize(size.width.toInt(), size.height.toInt())
             source.layer.record(size = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent) {
@@ -197,6 +213,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 }
             }
             source.recorded = true
+            if (request != null) onRecorded?.invoke(request)
             // A transparent optical overlay replaces the source beneath its body;
             // retain the complete source for sampling, omit only its direct display.
             val cutout = displayCutout?.invoke(this)

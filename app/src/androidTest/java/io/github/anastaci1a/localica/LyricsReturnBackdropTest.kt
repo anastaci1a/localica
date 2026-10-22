@@ -455,25 +455,28 @@ class LyricsReturnBackdropTest {
     @Composable private fun SourceFrameMarker(scene: LyricsBackdropScene) {
         val recording = rememberGraphicsLayer()
         val source = remember(recording) { FrostedBackdrop(recording, false).apply { size = IntSize(8, 8) } }
-        val layer = remember(source) { LyricsBackdropLayer(source, { 1f }, { SourceMarkerKey }) }
+        val layer = remember(source) { LyricsBackdropLayer(source, { 1f }, { SourceMarkerKey }, hasMask = false) }
         DisposableEffect(scene, layer) {
             scene.layers.add(layer)
-            onDispose { scene.layers.remove(layer) }
+            scene.readback.sceneChanged()
+            onDispose { scene.layers.remove(layer); scene.readback.sceneChanged() }
         }
         // Record only, outside every tested return footprint. This marker has no
         // onPlaced/onSizeChanged observer: its key, alpha, size and placement counter
         // stay constant, so it cannot request refresh in place of real lyric changes.
         Canvas(Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).size(8.dp)) {
+            val request = scene.source.readbackRequest
             scene.source.location.placement
             source.location.coordinates = scene.source.location.coordinates
             source.location.windowOffset = scene.source.location.windowOffset
             source.layer.record(size = source.size) { drawRect(sourceFrame(scene).marker) }
             source.recorded = true
+            scene.recorded(layer, request)
         }
     }
 
     private data class LegacyPreparation(val snapshot: ImageBitmap?, val lensSnapshot: ImageBitmap?,
-        val request: Int, val snapshotRequest: Int, val glyphsRedrawn: Boolean)
+        val request: Int, val snapshotRequest: Int, val drawsCompletedBeforeSnapshot: Boolean)
 
     private fun awaitLegacySample(scene: LyricsBackdropScene, previous: ImageBitmap?, requireFresh: Boolean) {
         var requested = 0
@@ -485,9 +488,13 @@ class LyricsReturnBackdropTest {
                 val source = scene.source
                 val preparation = compose.runOnUiThread {
                     val request = source.readbackRequest
+                    val draws = source.snapshotDraws
                     LegacyPreparation(source.snapshot, source.lensSnapshot, request, source.snapshotReadbackRequest,
-                        scene.layers.filter { it.contentKey() !== SourceMarkerKey }
-                            .all { it.recordedReadbackRequest == request })
+                        draws?.request == request && draws.composite == request &&
+                            scene.layers.filter { it.alpha() > 0f }.all { layer ->
+                                val producer = draws.producers[layer]
+                                producer?.outer == request && producer.mask == request.takeIf { layer.hasMask }
+                            })
                 }
                 val snapshot = preparation.snapshot
                 requested = frame.id
@@ -504,7 +511,7 @@ class LyricsReturnBackdropTest {
                 // Zero blur/tint means preparation publishes the very same image.
                 // Its marker identifies the real layer's requested content/placement,
                 // not merely a different but still pre-alignment bitmap.
-                if (!preparation.glyphsRedrawn || preparation.snapshotRequest != preparation.request ||
+                if (!preparation.drawsCompletedBeforeSnapshot || preparation.snapshotRequest != preparation.request ||
                     snapshot == null || preparation.lensSnapshot !== snapshot ||
                     requireFresh && snapshot === previous || x !in 0 until snapshot.width || y !in 0 until snapshot.height) false
                 else {
@@ -514,7 +521,13 @@ class LyricsReturnBackdropTest {
             }
         } catch (failure: Throwable) {
             throw AssertionError("Legacy source-frame preparation: requested=$requested observed=$observed " +
-                "sourceRevision=${scene.source.revision} samePreparedImage=${scene.source.lensSnapshot === scene.source.snapshot}", failure)
+                compose.runOnUiThread { "sourceRevision=${scene.source.revision} " +
+                    "samePreparedImage=${scene.source.lensSnapshot === scene.source.snapshot} " +
+                    "snapshotDraws=${scene.source.snapshotDraws} lastReadbackAbort=${scene.source.lastReadbackAbort} " +
+                    "liveProducerDraws=${scene.layers.map { layer ->
+                        listOf(layer.hasMask, layer.alpha(), layer.source.recorded,
+                            layer.recordedReadbackRequest, layer.maskedReadbackRequest)
+                    }}" }, failure)
         }
     }
 
@@ -588,13 +601,13 @@ class LyricsReturnBackdropTest {
                 if (source != null) {
                     appendLine("sourceOrigin=${source.origin} sourceSize=${source.size} revision=${source.revision} consumers=${source.consumers}")
                     appendLine(compose.runOnUiThread {
-                        "snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest}"
+                        "snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest} snapshotCompositeRequest=${source.snapshotDraws?.composite} lastReadbackAbort=${source.lastReadbackAbort}"
                     })
                     appendLine("sourceFrame=${compose.runOnUiThread { sourceFrame(requireNotNull(sampledScene)) }}")
                     appendLine("probeGreen=${green(pixels, localBounds(compose.onNodeWithTag(ProbeTag)))}")
                     compose.runOnUiThread {
                         sampledScene?.layers?.mapIndexed { index, layer ->
-                            "layer=$index recorded=${layer.source.recorded} origin=${layer.source.origin} size=${layer.source.size} alpha=${layer.alpha()} recordedReadbackRequest=${layer.recordedReadbackRequest}"
+                            "layer=$index recorded=${layer.source.recorded} origin=${layer.source.origin} size=${layer.source.size} alpha=${layer.alpha()} outerReadbackRequest=${layer.recordedReadbackRequest} maskReadbackRequest=${layer.maskedReadbackRequest} snapshotDraws=${source.snapshotDraws?.producers?.get(layer)}"
                         }.orEmpty()
                     }.forEach { appendLine(it) }
                 }
