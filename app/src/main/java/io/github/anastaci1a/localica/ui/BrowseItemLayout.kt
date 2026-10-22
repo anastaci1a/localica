@@ -12,8 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LookaheadScope
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
@@ -101,10 +99,10 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                 color = if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified,
                 style = MaterialTheme.typography.bodySmall, maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis) }
         }
+        // Retain outgoing menu pixels, not an input shield. Even a zero-width
+        // gallery slot can acquire a minimum touch target and swallow list drags.
         Box(Modifier.morph().reveal().graphicsLayer { alpha = menuAlpha }.then(if (gallery)
-            Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
-                awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
-            } else Modifier).testTag("browse-menu-${item.key}")) { menu(!gallery || menuAlpha > 0f) }
+            Modifier.clearAndSetSemantics { } else Modifier).testTag("browse-menu-${item.key}")) { menu(!gallery || menuAlpha > 0f) }
         if (loadingReveal != null) {
         Box(Modifier.artShape().testTag("browse-loading-art-${item.key}")) {
             BrowseLoadingShape(Modifier.fillMaxSize(), { 0f }) { 1f - (loadingReveal?.alpha ?: 1f) }

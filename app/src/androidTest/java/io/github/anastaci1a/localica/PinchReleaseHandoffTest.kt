@@ -233,11 +233,22 @@ class PinchReleaseHandoffTest {
             assertTrue("Scroll probe stays within the list", viewport.contains(rootPoint))
             assertFalse("Scroll probe must not start on the floating return control", returnBounds.contains(rootPoint))
         }
+        // Record the real layout hit path without moving the probe away from a
+        // regression. Zero-width hidden menu slots can still own touch targets.
+        val rootStart = start + viewport.topLeft
+        val nearbyMenuSlots = compose.onAllNodes(SemanticsMatcher("release menu slot") {
+            it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-menu-release:") == true
+        }, useUnmergedTree = true).fetchSemanticsNodes()
+            .sortedBy { (it.positionInRoot - rootStart).getDistance() }.take(3)
+            .map { "${it.config.getOrNull(SemanticsProperties.TestTag)}:${it.positionInRoot}/${it.size}" }
+        val rangeBefore = list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)?.value?.invoke()
         list.performTouchInput { swipe(start, end, durationMillis = 200) }
         compose.mainClock.advanceTimeBy(500)
         val remaining = compose.onAllNodesWithTag("media-release:73").fetchSemanticsNodes()
         val after = if (remaining.isEmpty()) null else remaining.single().boundsInRoot.center.y
-        assertTrue("$message: before=$before after=$after start=$start return=$returnBounds",
+        val rangeAfter = list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)?.value?.invoke()
+        android.util.Log.i("PinchReleaseHandoff", "Touch scroll: before=$before after=$after range=$rangeBefore->$rangeAfter start=$rootStart slots=$nearbyMenuSlots")
+        assertTrue("$message: before=$before after=$after start=$start return=$returnBounds range=$rangeBefore->$rangeAfter slots=$nearbyMenuSlots",
             after == null || after < (expectedCenter ?: before) - 8f)
     }
 
