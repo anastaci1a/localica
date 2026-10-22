@@ -1,0 +1,186 @@
+{
+  "id": "safari-tab-count-plus-single-a",
+  "category": "Safari grouped tab-count and plus pill",
+  "radial": false,
+  "center": [
+    1172.2322639484858,
+    705.3145061963321
+  ],
+  "half": [
+    125.67898717509557,
+    71.878307500327
+  ],
+  "radius": 71.878307500327,
+  "crop": [
+    1015,
+    600,
+    1330,
+    810
+  ],
+  "foreground": [
+    [
+      1092,
+      673,
+      1128,
+      740
+    ],
+    [
+      1186,
+      670,
+      1259,
+      743
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "mask",
+      "box": [
+        1092,
+        673,
+        1128,
+        740
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.3,
+      "vector_asset": "count-one.svg",
+      "vector_box": [
+        1099.160776160776,
+        679.5,
+        1119.839223839224,
+        732.5
+      ],
+      "vector_sha256": "ebc2cda4488705df3d34131c2f64fbfbc8d9ebe50a4a04d8b3221c393031e694",
+      "opacity": 1.0
+    },
+    {
+      "mode": "mask",
+      "box": [
+        1186,
+        670,
+        1259,
+        743
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.3,
+      "vector_asset": "plus.svg",
+      "vector_box": [
+        1192.5420644761314,
+        676.5,
+        1251.4579355238686,
+        735.5
+      ],
+      "vector_sha256": "067e5107c52792f102b144ef5082903a2453594e8c6cfbf9e82fa2a1e75689fd",
+      "opacity": 1.0
+    }
+  ],
+  "allow_estimated_background": true,
+  "source_observation_mask": "observed.png",
+  "target_observation_mask": "target-visible.png",
+  "background_estimate": {
+    "kind": "Quadratic RGB plane fitted ONLY uncovered controls, accepted by held+20percent-independent-lower criterion",
+    "basis": [
+      "1",
+      "u",
+      "v",
+      "u^2",
+      "uv",
+      "v^2"
+    ],
+    "coordinates": {
+      "u": "(x-1173)/150",
+      "v": "(y-706)/100"
+    },
+    "coefficient_rgb": [
+      [
+        0.5699869013247932,
+        0.5832724584450081,
+        0.6126042199594032
+      ],
+      [
+        -0.04908739572236506,
+        -0.04988036966714458,
+        -0.05130217429016113
+      ],
+      [
+        0.01830638256816853,
+        0.01588862783181847,
+        0.01335936411261153
+      ],
+      [
+        -4.245726563625502e-05,
+        0.000258577337153464,
+        -3.0981405370708924e-05
+      ],
+      [
+        -0.0014763327581186218,
+        -0.0018428811239000183,
+        -0.0026687588323139944
+      ],
+      [
+        -0.002456991614128535,
+        -0.0031022903733256405,
+        -0.0037188929531471954
+      ]
+    ],
+    "source_defined_domain": [
+      910,
+      400,
+      1341,
+      851
+    ],
+    "observed_hidden_fraction": 0,
+    "controls": {
+      "train": 35200,
+      "held": 8800,
+      "lower": 6750
+    },
+    "limits": "Modeled hidden RGB, parent curvature/shadow uncertain, original scalar prior optics NOT identified by smooth gradient."
+  },
+  "pose_provenance": {
+    "center_half": [
+      1172.2322639484858,
+      705.3145061963321,
+      125.67898717509557,
+      71.878307500327
+    ],
+    "crown_softness_prior": 0.1,
+    "held_gradient_normal_rmse": 0.3998243052732562,
+    "landmarks": 680,
+    "not_Apple_solid": true
+  },
+  "glyph_provenance": {
+    "count": {
+      "font": "/evidence/extended/icon-source/fonts/Library/Fonts/SF-Pro-Text-Regular.otf",
+      "sha256": "20dee6be8db086d6e824558d69055fe04b278a153e5ef591496f89e06a2a2a90",
+      "glyph": "one",
+      "svg_sha256": "ebc2cda4488705df3d34131c2f64fbfbc8d9ebe50a4a04d8b3221c393031e694",
+      "limits": "Original SF Pro Text Regular numeral; exact UI weight/variant not established. Uniform aspect from glyph ink bounds, solid black, no screenshot matte."
+    },
+    "plus": {
+      "source_url": "https://raw.githubusercontent.com/bradleyhodges/sfsymbols/2a0100e93e11a22ea0ff5e0530efd10e2cf0d243/dist/module/sfPlus.js",
+      "module_sha256": "6f1b90b59a62a771d8cdbf4ea0df72104988f621d1678d68ac0570810f2311d1",
+      "module_blob_sha1": "7f92fa2517458e548b1eafa0ac54fdb8f6fa1153",
+      "svg_sha256": "067e5107c52792f102b144ef5082903a2453594e8c6cfbf9e82fa2a1e75689fd",
+      "limits": "Literal pinned SF export data only, fixed black1 and uniform aspect; exact UI variant/weight not proven. No JS executed. Replaces visibly heavy tag-font variant as INPUT correction count0."
+    }
+  },
+  "reference": {
+    "video": "219",
+    "seconds": 290
+  },
+  "source_sha256": {
+    "source.png": "5c526324f0c4f53f24925fd93838683c4a9cbc29f0ce593c92ed00df1e384d46",
+    "known.png": "b7bd9f85e21b9b9532f1fdaaf72ef8ba33eeb418ad5ec5f72db4e93f73a0c517",
+    "observed.png": "06da5431a575e89e972435a0219b390d3dbb32e73ad342de409a935744365f76",
+    "target-visible.png": "6ae2cfa8276a1bd642b45a5401579b8a93bc9506299ae41171573adff763f9f6",
+    "target.png": "104f4ffdc970410560f3ce15f05350a3a5bb5dbd27eeaaa56ae28a72ef22464f"
+  }
+}

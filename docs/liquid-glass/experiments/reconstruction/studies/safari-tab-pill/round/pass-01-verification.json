@@ -1,0 +1,13 @@
+{
+  "pixel_exact_native_material": true,
+  "pixel_exact_complete": true,
+  "scores_and_each_foreground_exterior_exact": true,
+  "case_hash_and_scalar_neutral_material_exact": true,
+  "source_geometry_map_filter_AA_glyphs_unchanged": true,
+  "source_proof_reused": true,
+  "accepted_primary": true,
+  "verified_pass": 1,
+  "E": 24.324870436832217,
+  "visual_review": "Whole current comparison; no new artifact seen, highlights/foreground/source-context differences remain. Material-only progress; no refraction/blur identification.",
+  "hidden_source_observed": 0
+}
