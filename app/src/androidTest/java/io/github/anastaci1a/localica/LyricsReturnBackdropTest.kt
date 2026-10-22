@@ -472,6 +472,9 @@ class LyricsReturnBackdropTest {
         }
     }
 
+    private data class LegacyPreparation(val snapshot: ImageBitmap?, val lensSnapshot: ImageBitmap?,
+        val request: Int, val snapshotRequest: Int, val glyphsRedrawn: Boolean)
+
     private fun awaitLegacySample(scene: LyricsBackdropScene, previous: ImageBitmap?, requireFresh: Boolean) {
         var requested = 0
         var observed = Color.Transparent
@@ -480,7 +483,13 @@ class LyricsReturnBackdropTest {
                 compose.mainClock.advanceTimeByFrame()
                 val frame = compose.runOnUiThread { sourceFrame(scene) }
                 val source = scene.source
-                val snapshot = source.snapshot
+                val preparation = compose.runOnUiThread {
+                    val request = source.readbackRequest
+                    LegacyPreparation(source.snapshot, source.lensSnapshot, request, source.snapshotReadbackRequest,
+                        scene.layers.filter { it.contentKey() !== SourceMarkerKey }
+                            .all { it.recordedReadbackRequest == request })
+                }
+                val snapshot = preparation.snapshot
                 requested = frame.id
                 val marker = scene.layers.single { it.contentKey() === SourceMarkerKey }.source
                 assertEquals("Diagnostic recording size is fixed", IntSize(8, 8), marker.size)
@@ -495,11 +504,8 @@ class LyricsReturnBackdropTest {
                 // Zero blur/tint means preparation publishes the very same image.
                 // Its marker identifies the real layer's requested content/placement,
                 // not merely a different but still pre-alignment bitmap.
-                val glyphsRedrawn = compose.runOnUiThread {
-                    scene.layers.filter { it.contentKey() !== SourceMarkerKey }
-                        .all { it.recordedReadbackRequest == source.readbackRequest }
-                }
-                if (!glyphsRedrawn || snapshot == null || source.lensSnapshot !== snapshot ||
+                if (!preparation.glyphsRedrawn || preparation.snapshotRequest != preparation.request ||
+                    snapshot == null || preparation.lensSnapshot !== snapshot ||
                     requireFresh && snapshot === previous || x !in 0 until snapshot.width || y !in 0 until snapshot.height) false
                 else {
                     observed = snapshot.toPixelMap(startX = x, startY = y, width = 1, height = 1)[0, 0]
@@ -581,7 +587,9 @@ class LyricsReturnBackdropTest {
                 appendLine("artworkOnlyGreen=${green(pixels, referenceBounds())}")
                 if (source != null) {
                     appendLine("sourceOrigin=${source.origin} sourceSize=${source.size} revision=${source.revision} consumers=${source.consumers}")
-                    appendLine("snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest}")
+                    appendLine(compose.runOnUiThread {
+                        "snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest}"
+                    })
                     appendLine("sourceFrame=${compose.runOnUiThread { sourceFrame(requireNotNull(sampledScene)) }}")
                     appendLine("probeGreen=${green(pixels, localBounds(compose.onNodeWithTag(ProbeTag)))}")
                     compose.runOnUiThread {
