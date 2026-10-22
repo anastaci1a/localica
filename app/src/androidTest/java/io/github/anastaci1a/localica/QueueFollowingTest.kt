@@ -440,6 +440,8 @@ class QueueFollowingTest {
 
     @Test fun scopedQueueSearchRetainsExplicitExactOccurrenceReturnWithoutAutomaticFollowing() {
         val fixture = fixture(initial = 95, text = "Following", search = true)
+        // Submit as soon as the editor is ready, even if the native show is still
+        // in flight. Only its real hidden/focus handoff admits the return gesture.
         compose.awaitSearchImeHandoff { compose.onNode(hasSetTextAction()).performImeAction() }
         compose.waitForIdle()
         row(95).assertDoesNotExist()
