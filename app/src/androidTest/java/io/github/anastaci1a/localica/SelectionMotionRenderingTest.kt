@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
@@ -61,6 +63,47 @@ class SelectionMotionRenderingTest {
         }
     }
 
+    @Test fun emptyAndSparseMasksMixOnlyTheirCoveredPremultipliedScenePixels() {
+        var fraction by mutableFloatStateOf(0f)
+        var maskWidth by mutableFloatStateOf(0f)
+        compose.setContent { LocalicaTheme {
+            val base = rememberGraphicsLayer()
+            val selected = rememberGraphicsLayer()
+            val mask = rememberGraphicsLayer()
+            Canvas(Modifier.size(80.dp).background(Color.Green).testTag("sparse-mix")) {
+                // The scenes have different colors, alpha and unpainted regions.
+                // Bottom-right has neither scene; top-left has both.
+                base.record { drawRect(Color.Blue.copy(alpha = .4f), size = Size(size.width, size.height / 2)) }
+                selected.record { drawRect(Color.Red.copy(alpha = .7f), size = Size(size.width / 2, size.height)) }
+                mask.record {
+                    if (maskWidth > 0f) drawRect(Color.White.copy(alpha = fraction),
+                        topLeft = Offset(size.width * (1f - maskWidth) / 2f, 0f),
+                        size = Size(size.width * maskWidth, size.height))
+                }
+                drawSelectionTransition(base, selected, mask)
+            }
+        } }
+        // Truly empty recording, zero-alpha paint, fractional sparse mask, full
+        // mask, interrupted reversal, and empty again reuse the same layers.
+        for ((width, p) in listOf(0f to 0f, .5f to 0f, .5f to .2f, .5f to .8f,
+            1f to 1f, .5f to .5f, .5f to 1f, .5f to 0f, 0f to 1f, 1f to .5f, 0f to 0f)) {
+            compose.runOnIdle { maskWidth = width; fraction = p }
+            val actual = compose.onNodeWithTag("sparse-mix").captureToImage().toPixelMap()
+            for (yFraction in listOf(.25f, .75f)) for (xFraction in listOf(.125f, .375f, .625f, .875f)) {
+                val covered = width > 0f && xFraction > (1f - width) / 2f && xFraction < (1f + width) / 2f
+                val m = if (covered) p else 0f
+                val blue = if (yFraction < .5f) .4f * (1f - m) else 0f
+                val red = if (xFraction < .5f) .7f * m else 0f
+                val pixel = actual[(actual.width * xFraction).toInt(), (actual.height * yFraction).toInt()]
+                val at = "mask=$width/$p at $xFraction/$yFraction"
+                assertEquals("Selected contribution $at", red, pixel.red, 2f / 255)
+                assertEquals("Backdrop through mixed alpha $at", 1f - red - blue, pixel.green, 2f / 255)
+                assertEquals("Base contribution $at", blue, pixel.blue, 2f / 255)
+                assertEquals("Opaque backdrop $at", 1f, pixel.alpha, 2f / 255)
+            }
+        }
+    }
+
     @Test fun adjacentMixedOpacityMasksKeepTheExistingLensAndUseMaximumAtOverlap() {
         var entering by mutableFloatStateOf(.25f)
         compose.setContent { LocalicaTheme {
@@ -94,6 +137,7 @@ class SelectionMotionRenderingTest {
             for (xFraction in listOf(.2f, .5f, .8f)) {
                 val x = (actual.width * xFraction).toInt(); val y = actual.height / 2
                 assertEquals("Existing/overlap/entering red at $p/$xFraction", expected[x, y].red, actual[x, y].red, 2f / 255)
+                assertEquals("Backdrop through mixed alpha at $p/$xFraction", expected[x, y].green, actual[x, y].green, 2f / 255)
                 assertEquals("Existing/overlap/entering blue at $p/$xFraction", expected[x, y].blue, actual[x, y].blue, 2f / 255)
                 assertEquals("Premultiplied alpha at $p/$xFraction", expected[x, y].alpha, actual[x, y].alpha, 2f / 255)
             }

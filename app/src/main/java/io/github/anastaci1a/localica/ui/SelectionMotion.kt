@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 
@@ -37,10 +36,6 @@ internal fun DrawScope.drawSelectionVisibilityMask(entries: List<Pair<Rect, Floa
  * All extra recordings are used only while an entry is arriving/departing.
  */
 internal fun DrawScope.drawSelectionTransition(base: GraphicsLayer, selected: GraphicsLayer, mask: GraphicsLayer) {
-    // DstIn must sample transparent pixels too. Legacy display-list playback can
-    // discard an empty/transparent mask instead of clearing the selected scene;
-    // materialize its full bounds before using it in either blend pass.
-    mask.compositingStrategy = CompositingStrategy.Offscreen
     val canvas = drawContext.canvas
     val bounds = Rect(Offset.Zero, size)
     canvas.saveLayer(bounds, Paint())
@@ -50,8 +45,15 @@ internal fun DrawScope.drawSelectionTransition(base: GraphicsLayer, selected: Gr
     canvas.restore()
     canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.Plus })
     drawLayer(selected)
-    canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstIn })
+    // Legacy HWUI can omit an empty DstIn saveLayer, leaving selected unmasked.
+    // Instead remove its complement: selected * (1 - (1 - mask)). Start the
+    // complement with full-bounds opaque coverage so transparent/unpainted mask
+    // pixels still remove selected. Every empty DstOut pass is safely a no-op.
+    canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
+    drawRect(Color.White)
+    canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
     drawLayer(mask)
+    canvas.restore()
     canvas.restore()
     canvas.restore()
     canvas.restore()
