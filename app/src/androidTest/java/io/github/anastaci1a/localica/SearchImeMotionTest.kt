@@ -172,17 +172,21 @@ class SearchImeMotionTest {
             // spring retains velocity on retarget, with one extra frame allowance.
             springDuration(0f, maxOf(sample.destination.bottom, sample.bounds.bottom), pixels = true)
         }
+        var placed: SearchMorphSample? = null
         advanceUntil(wallTimeoutMillis = 20000, virtualTimeoutMillis = positionMillis + 256L) {
-            samples.lastOrNull()?.let { sample ->
+            samples.lastOrNull()?.takeIf { sample ->
                 sample.opening && listOf(
                     sample.bounds.left - sample.destination.left,
                     sample.bounds.top - sample.destination.top,
                     sample.bounds.right - sample.destination.right,
                     sample.bounds.bottom - sample.destination.bottom,
                 ).all { kotlin.math.abs(it) <= 2f }
-            } == true
+            }?.also { placed = it } != null
         }
-        compose.runOnUiThread { samples.last() }.let {
+        // Native insets keep advancing while the Compose clock is paused. Assert
+        // the exact placed frame observed by the UI-thread predicate, not a later
+        // frame whose new keyboard destination may legitimately be in flight.
+        requireNotNull(placed).let {
             assertRect("Opening reaches its placed endpoint", it.destination, it.bounds)
         }
     }
