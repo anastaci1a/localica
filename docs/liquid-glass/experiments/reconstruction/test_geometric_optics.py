@@ -34,6 +34,17 @@ class GeometryTests(unittest.TestCase):
         seam=trace_flat_front_orthographic(self.s,np.array([1.]),np.array([0.]),1.5,2)
         self.assertTrue(seam['boundary_unresolved'][0]);self.assertFalse(seam['complete'][0]);self.assertTrue(np.isnan(seam['X'][0]))
 
+    def test_zero_height_is_unresolved_without_footprint_equality(self):
+        class ZeroSheet:
+            maximum_height=.02;slope_bound=.1
+            def boundary_mask(self,x,y):return np.zeros_like(x,dtype=bool)
+            def height_gradient(self,x,y):return np.zeros_like(x),np.zeros_like(x),np.zeros_like(x),np.ones_like(x,dtype=bool)
+        q=trace_flat_front_orthographic(ZeroSheet(),np.array([0.,.5]),np.array([0.,0.]),1.5,2)
+        self.assertTrue(q['zero_thickness_unresolved'].all());self.assertFalse(q['complete'].any());self.assertTrue(np.isnan(q['X']).all());self.assertTrue(np.isnan(q['outward_normal']).all())
+        class BadHeight(ZeroSheet):
+            def height_gradient(self,x,y):return np.full_like(x,np.nan),np.zeros_like(x),np.zeros_like(x),np.ones_like(x,dtype=bool)
+        with self.assertRaises(ValueError):trace_flat_front_orthographic(BadHeight(),np.array([0.]),np.array([0.]),1.5,2)
+
     def test_rejects_unavailable_transmission(self):
         for index in [1.25,1.5,2.]:
             d,blocked,k=refract([[0,0,-1]],[[.8,0,.6]],index,1)

@@ -153,14 +153,18 @@ def trace_flat_front_orthographic(surface,x,y,index,background_distance):
     Only CircularBevel is certified here; other surfaces need separate proof.
     """
     if index<1 or not np.isfinite([index,background_distance]).all() or background_distance<=surface.maximum_height:raise ValueError('Invalid index or background clearance')
+    if not np.isfinite([surface.maximum_height,surface.slope_bound]).all() or surface.maximum_height<0 or surface.slope_bound<0:raise ValueError('Finite nonnegative global surface bounds required')
     limit=np.inf if index==1 else 1/np.sqrt(index*index-1)
     if surface.slope_bound>=limit:raise ValueError('Cannot certify a transmitted branch across footprint')
     x,y=np.broadcast_arrays(np.asarray(x,float),np.asarray(y,float))
     if not np.isfinite(x).all() or not np.isfinite(y).all():raise ValueError('Finite view coordinates required')
     h,hx,hy,inside=surface.height_gradient(x,y)
-    boundary=surface.boundary_mask(x,y)
+    if np.any(inside&(~np.isfinite(h)|(h<0))):raise ValueError('Invalid physical height inside footprint')
+    zero_thickness=inside&(h==0)
+    boundary=np.asarray(surface.boundary_mask(x,y),bool)|zero_thickness
+    valid_surface=inside&~boundary
     # Do not evaluate an extrapolated bevel as an optical solid outside radius1.
-    hx=np.where(inside,hx,0);hy=np.where(inside,hy,0);h=np.where(inside,h,0)
+    hx=np.where(valid_surface,hx,0);hy=np.where(valid_surface,hy,0);h=np.where(inside,h,0)
     n_against=np.stack([hx,hy,np.ones_like(h)],axis=-1);n_against/=np.linalg.norm(n_against,axis=-1)[...,None]
     i=np.zeros_like(n_against);i[...,2]=-1
     direction,tir,k=refract(i,n_against,index,1.)
@@ -172,7 +176,7 @@ def trace_flat_front_orthographic(surface,x,y,index,background_distance):
     valid_surface=inside&~boundary
     return dict(X=np.where(boundary,np.nan,np.where(inside,X,x)),
                 Y=np.where(boundary,np.nan,np.where(inside,Y,y)),inside=inside,
-                boundary_unresolved=boundary,
+                boundary_unresolved=boundary,zero_thickness_unresolved=zero_thickness,
                 back=np.where(valid_surface[...,None],np.stack([x,y,-h],axis=-1),np.nan),
                 outward_normal=np.where(valid_surface[...,None],-n_against,np.nan),
                 exit_direction=direction,discriminant=k,path_length=distance,
