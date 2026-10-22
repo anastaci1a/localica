@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -98,14 +99,17 @@ class FrostedSurfaceTest {
         val tracks = (0..24).map { track.copy(id = "frost:$it", title = if (it == 0) track.title else "Evening light · ${it + 1}") }
         val queue = io.github.anastaci1a.localica.queue.QueueEdits.create(tracks, 0, "Color studies ◀ Localica")
         lateinit var hostView: android.view.View
+        var presentedStage by mutableIntStateOf(0)
         try {
             compose.setContent { hostView = androidx.compose.ui.platform.LocalView.current
-                LocalicaTheme { LocalicaScreen(
+                LocalicaTheme { Box(Modifier.fillMaxSize().testTag("queue-frosted-scene")) { LocalicaScreen(
                 LibraryUiState(io.github.anastaci1a.localica.library.LibrarySnapshot(tracks = tracks), loading = false),
                 io.github.anastaci1a.localica.playback.PlaybackState(connected = true, trackId = tracks.first().id, trackUri = track.uri,
                     title = track.title, artist = track.artist, album = track.album, durationMs = 180000),
                 {}, {}, {}, {}, {}, {}, queues = io.github.anastaci1a.localica.queue.QueueUiState(
-                    io.github.anastaci1a.localica.queue.QueueLibrary(listOf(queue), queue.id), loading = false)) } }
+                    io.github.anastaci1a.localica.queue.QueueLibrary(listOf(queue), queue.id), loading = false))
+                    PresentationMarker { presentedStage }
+                } } }
             compose.onNodeWithTag("player-title", useUnmergedTree = true).performTouchInput { click() }
             compose.onNodeWithContentDescription("Open queue").assertIsDisplayed()
             fun record(name: String) {
@@ -117,13 +121,34 @@ class FrostedSurfaceTest {
                     assertFalse("Keep light status icons over the player and Queue", bars.isAppearanceLightStatusBars)
                     assertFalse("Keep light navigation icons over the player and Queue", bars.isAppearanceLightNavigationBars)
                 }
-                val image = compose.onRoot().captureToImage()
-                File(context.getExternalFilesDir(null), name).outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+                compose.runOnIdle { presentedStage++ }
+                val root = compose.onNodeWithTag("queue-frosted-scene")
+                // Prove the compositor has presented this stage, then sample that
+                // same frame. A separate node capture can otherwise read another
+                // frame of the newly attached player/Queue recording.
+                val pixels = capturePresentedPopupPixels(compose, root, presentedStage) { hostView }
+                val rootOrigin = root.fetchSemanticsNode().boundsInRoot.topLeft
+                val surface = compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot.translate(-rootOrigin)
+                val sampleX = (surface.left + surface.width / 3f).toInt()
+                val sampleY = (surface.top + 10.coerceAtMost(surface.height.toInt() - 1)).toInt()
+                assertTrue("Queue sample must remain in the presented window", sampleX in 0 until pixels.width && sampleY in 0 until pixels.height)
+                val c = pixels[sampleX, sampleY]
+                val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+                    ?: requireNotNull(context.getExternalFilesDir(null))
+                val directory = File(output, "player-expansion-motion/queue-frosted")
+                check(directory.isDirectory || directory.mkdirs())
+                val image = Bitmap.createBitmap(pixels.width, pixels.height, Bitmap.Config.ARGB_8888)
+                try {
+                    image.setPixels(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() },
+                        0, pixels.width, 0, 0, pixels.width, pixels.height)
+                    File(directory, name).outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                } finally { image.recycle() }
+                File(directory, name.removeSuffix(".png") + ".txt").writeText(
+                    "stage=$presentedStage surface=$surface sample=($sampleX,$sampleY) color=$c\n")
                 if (name == "queue-frosted-collapsed.png") {
                     // Attaching a new recording modifier at the end of expansion can
                     // leave descendant layers blank for a frame despite intact semantics.
-                    val bounds = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
-                    val pixels = image.toPixelMap()
+                    val bounds = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot.translate(-rootOrigin)
                     var whitePixels = 0
                     for (y in bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(pixels.height)) {
                         for (x in bounds.left.toInt().coerceAtLeast(0) until bounds.right.toInt().coerceAtMost(pixels.width)) {
@@ -133,8 +158,6 @@ class FrostedSurfaceTest {
                     }
                     assertTrue("Keep the Play icon painted while preparing the Queue backdrop", whitePixels > 30)
                 }
-                val glass = compose.onNodeWithTag("queue-surface").captureToImage().toPixelMap()
-                val c = glass[glass.width / 3, 10.coerceAtMost(glass.height - 1)]
                 assertTrue("Queue material must not flash white: $c", c.red + c.green + c.blue < 2f)
             }
             record("queue-frosted-collapsed.png")
