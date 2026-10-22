@@ -2,7 +2,7 @@
 import unittest
 import numpy as np
 from geometric_optics import CircularBevel,trace_flat_front_orthographic
-from geometric_render import render_rows,coverage_blur
+from geometric_render import render_rows,coverage_blur,neutral_color_response
 class GeometricRenderTest(unittest.TestCase):
  def setUp(self):
   y,x=np.mgrid[:100,:100];self.source=np.stack([x/100,y/100,(x+y)/200],-1);self.surface=CircularBevel(core=.6,depth=.02);self.case=dict(center=[50,50],half=[10,10],crop=[39,45,64,48])
@@ -36,4 +36,11 @@ class CoverageFilterTest(unittest.TestCase):
   cov=np.ones((10,10));M=np.ones((10,10,3));M[4,4]=np.nan
   with self.assertRaises(ValueError):coverage_blur(M,cov,1.)
   with self.assertRaises(ValueError):coverage_blur(np.zeros((10,10,3)),cov,-1.)
+class NeutralResponseTest(unittest.TestCase):
+ def test_identity_and_white_veil(self):
+  M=np.array([[[.1,.3,.7],[.2,.4,.6]]]);np.testing.assert_array_equal(neutral_color_response(M),M)
+  np.testing.assert_array_equal(neutral_color_response(M,0,1),np.ones_like(M));np.testing.assert_allclose(neutral_color_response(M,.5,.5),.5*M+.5)
+ def test_highlight_lift_is_achromatic_and_dark_response_frozen(self):
+  M=np.array([[[.1,.15,.2],[.3,.5,.7]]]);C,pre=neutral_color_response(M,highlight_lift=.03,return_preclip=True)
+  np.testing.assert_array_equal(C[0,0],M[0,0]);lift=pre[0,1]-M[0,1];np.testing.assert_allclose(lift,np.full(3,lift[0]),atol=1e-15)
 if __name__=='__main__':unittest.main()

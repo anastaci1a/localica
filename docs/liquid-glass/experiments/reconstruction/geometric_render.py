@@ -84,3 +84,18 @@ def coverage_blur(material,coverage,sigma_pixels):
     numerator=cv2.GaussianBlur(np.where((coverage>0)[...,None],material,0)*coverage[...,None],(size,size),sigma_pixels,borderType=cv2.BORDER_CONSTANT)
     denominator=cv2.GaussianBlur(coverage,(size,size),sigma_pixels,borderType=cv2.BORDER_CONSTANT)
     return np.divide(numerator,denominator[...,None],out=np.zeros_like(numerator),where=denominator[...,None]>0)
+
+
+def neutral_color_response(material,gain=1.,bias=0.,highlight_lift=0.,return_preclip=False):
+    """Shared achromatic encoded-RGB grading, independent of geometry/pixels.
+
+    Constant gain/bias includes a neutral white veil (gain=t,bias=1-t).
+    Optional neutral highlight lift uses one fixed luminance smoothstep(.25,.65).
+    This is an empirical color response, not a radiometric transmission claim.
+    Apply before coverage_blur; never substitute it for refraction or an outline.
+    """
+    if not np.isfinite([gain,bias,highlight_lift]).all() or gain<0:raise ValueError('Finite common tone parameters and nonnegative gain required')
+    value=np.asarray(material)*gain+bias
+    y=value@np.array([.2126,.7152,.0722]);u=np.clip((y-.25)/.4,0,1);w=u**3*(u*(6*u-15)+10)
+    value=value+highlight_lift*w[...,None]
+    return (np.clip(value,0,1),value) if return_preclip else np.clip(value,0,1)
