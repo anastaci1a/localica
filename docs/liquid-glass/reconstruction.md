@@ -172,7 +172,8 @@ The field is evaluated at1560×1600 before downsampling to1080×1108. One native
 
 ![Safari tab-count pill and neutral material reconstruction](assets/safari-tab-pill-current.png)
 
-- **3/3 verified material passes:** the shared neutral white-mixture response uses τ=.95→.90→.85. E **29.117→24.325→19.764→15.638**, with every original glass, rim, held, interior, SSIM, individual-icon and near/full exterior check improving. [Recipe](experiments/reconstruction/studies/safari-tab-pill/round/pass-03.json) · [Scores](experiments/reconstruction/studies/safari-tab-pill/round/pass-03-scores.json) · [Independent replay](experiments/reconstruction/studies/safari-tab-pill/round/pass-03-verification.json).
+- **Current preview: rim round3/3**, E15.638→14.823→13.302→11.973. The same normal-dependent neutral response used on the circles preserves every original check; no clipping or source/map/filter change. [Recipe and verification](experiments/reconstruction/studies/safari-tab-pill/rim-round/pass-03.json).
+- **Initial3/3 material passes:** the shared neutral white-mixture response uses τ=.95→.90→.85. E **29.117→24.325→19.764→15.638**, with every original glass, rim, held, interior, SSIM, individual-icon and near/full exterior check improving. [Recipe](experiments/reconstruction/studies/safari-tab-pill/round/pass-03.json) · [Scores](experiments/reconstruction/studies/safari-tab-pill/round/pass-03-scores.json) · [Independent replay](experiments/reconstruction/studies/safari-tab-pill/round/pass-03-verification.json).
 - A quadratic RGB field fitted only to uncovered controls improved held error .805→.697 and independent lower error4.298→1.999 levels. Hidden RGB remains modeled, not observed. The crowned footprint uses the existing .1-softness prior and an independently measured pose; this smooth source cannot identify refraction or blur. Missing angular highlights remain visible. [Case](experiments/reconstruction/studies/safari-tab-pill/case.json) · [Source controls](experiments/reconstruction/studies/safari-tab-pill/source-controls.json).
 - Numeral1 uses the original SF Pro Text Regular outline at uniform aspect. The plus uses a pinned solid SF-export outline; its input-only replacement improved ink overlap .783→.995 before the material epoch was frozen. Exact UI weight is unproven. [Input record](experiments/reconstruction/studies/safari-tab-pill/baseline.json) · [Neutral response model](recreation-models.md#neutral-material-response).
 
@@ -183,9 +184,11 @@ The field is evaluated at1560×1600 before downsampling to1080×1108. One native
 
 ![Illustrative tab-count pill translation](assets/safari-tab-pill-motion.gif)
 
-- Four seconds,60frames,1080×360; GIF0.43MB. Lens, solid glyphs and sampling coordinates translate together over the polynomial source estimate. Parent-panel boundaries and reference shadows are omitted.
+- Four seconds,60frames,1080×360; GIF0.46MB. Lens, solid glyphs and sampling coordinates translate together over the polynomial source estimate. Parent-panel boundaries and reference shadows are omitted.
 - The still evaluates1260×840 at two subpixels per output axis, then downsamples to1080×720 per side. Every emitted rectangular-crop query is checked at the HQ grid and each unique motion pose, including partial edge samples. There are no ordinary source/output filters in this prior; no blur or refraction calibration is claimed.
-- [Motion record](experiments/reconstruction/studies/safari-tab-pill/round/final-motion.json) · [HQ record](experiments/reconstruction/studies/safari-tab-pill/round/final-hq.json). Native pass scores remain unchanged.
+- [Motion record](experiments/reconstruction/studies/safari-tab-pill/rim-round/final-media.json) · [HQ record](experiments/reconstruction/studies/safari-tab-pill/rim-round/final-hq.json). Native pass scores remain unchanged.
+
+[Current rim export verification](experiments/reconstruction/studies/safari-tab-pill/rim-round/final-primary-verification.json) · [Native export control](experiments/reconstruction/studies/safari-tab-pill/rim-round/final-native-control.json).
 
 </details>
 

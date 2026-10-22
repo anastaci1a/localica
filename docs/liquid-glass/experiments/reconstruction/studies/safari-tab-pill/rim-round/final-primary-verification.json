@@ -1,0 +1,18 @@
+{
+  "accepted_primary": true,
+  "original_target_crop_resize_exact": true,
+  "native_export_control_exact": true,
+  "all_media_hashes_and_60_frames_verified": true,
+  "all_hq_and_motion_query_support_passed": true,
+  "raw_clipped_channels": 0,
+  "internal_raster": [
+    1260,
+    840
+  ],
+  "export_per_side": [
+    1080,
+    720
+  ],
+  "gif_bytes": 455354,
+  "scope": "Illustrative moving shape over estimated quadratic backdrop; no source/ray/optical fit or Android/Apple motion validation. Mathematical exterior only, frozen source unchanged."
+}
