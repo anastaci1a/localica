@@ -248,22 +248,31 @@ class ModalGestureTakeoverTest {
         repeat(3) { artworkAction("Zoom in") }
         val area = bounds("artwork-viewer-viewport", rootOrigin)
         val touch = WindowTouch(rootWindow)
-        fun flick(direction: Float) {
+        fun flick(direction: Float, releaseDelay: Long = 16) {
             touch.down(0, area.center)
             repeat(4) { step -> touch.move(0, area.center + Offset(area.width * .04f * (step + 1) * direction, 0f), 20) }
-            touch.up(0)
+            touch.up(0, releaseDelay)
+        }
+        fun observe(phase: String): ArtworkTransform = compose.runOnUiThread {
+            val bounds = artworkPanBounds(viewer.viewport, androidx.compose.ui.geometry.Size(800f, 400f), viewer.transform.scale)
+            android.util.Log.i("ModalArtworkKinetics", "$phase: transform=${viewer.transform} " +
+                "viewport=${viewer.viewport} bounds=$bounds " +
+                "generation=${viewer.generation} blocked=${rootOwner.blocked} focus=${rootView.hasWindowFocus()} " +
+                "clock=${compose.mainClock.currentTime} input=${touch.timeline}")
+            viewer.transform
         }
         flick(1f)
-        val released = artworkTransform()
+        val released = observe("first release")
         pump(64)
-        val moving = artworkTransform()
+        val moving = observe("first release +64ms")
         assertTrue("The released native pan must actually be kinetic", moving.offset.x > released.offset.x)
         pump(32)
-        assertTrue("Takeover must interrupt continuing motion, not an already stopped pan", artworkTransform().offset.x > moving.offset.x)
+        assertTrue("Takeover must interrupt continuing motion, not an already stopped pan", observe("first release +96ms").offset.x > moving.offset.x)
         val generation = compose.runOnUiThread { viewer.generation }
         compose.runOnUiThread { popup = true }
         await { rootOwner.blocked }
         val stopped = compose.runOnUiThread { checkNotNull(artworkAtTakeover) }
+        observe("modal takeover")
         assertArtworkCancelled(generation, stopped)
         val edge = compose.runOnUiThread {
             artworkPanBounds(viewer.viewport, androidx.compose.ui.geometry.Size(800f, 400f), stopped.scale).x
@@ -271,17 +280,27 @@ class ModalGestureTakeoverTest {
         assertTrue("The modal, not a pan boundary, must stop motion", stopped.offset.x < edge)
         awaitNode("dismiss-modal")
         pump(600)
-        assertEquals("No frame may continue past the takeover position", stopped, artworkTransform())
+        assertEquals("No frame may continue past the takeover position", stopped, observe("modal held +600ms"))
         compose.runOnUiThread { popup = false }
         await { !rootOwner.blocked }
         pump(600)
-        assertEquals("Dismissal cannot restart cancelled kinetics", stopped, artworkTransform())
+        assertEquals("Dismissal cannot restart cancelled kinetics", stopped, observe("modal dismissed +600ms"))
         await { rootView.hasWindowFocus() }
         flick(-1f)
-        val freshRelease = artworkTransform()
+        val freshRelease = observe("fresh release")
         assertTrue("A new native pan must remain available", freshRelease.offset.x < stopped.offset.x)
+        assertTrue("The fresh release must have room to move before the opposite edge", freshRelease.offset.x > -edge)
         pump(64)
-        assertTrue("A new release must still start kinetics", artworkTransform().offset.x < freshRelease.offset.x)
+        val freshMoving = observe("fresh release +64ms")
+        assertTrue("A new release must still start kinetics", freshMoving.offset.x < freshRelease.offset.x)
+        // Explicit event time still models a real hold; only host scheduling is excluded.
+        flick(1f, releaseDelay = 300)
+        val heldRelease = observe("stationary release")
+        assertTrue("The stationary release must follow a moving pan", heldRelease.offset.x > freshMoving.offset.x)
+        assertTrue("The stationary hold, not the pan edge, must prevent kinetics", heldRelease.offset.x < edge)
+        pump(600)
+        assertEquals("Holding still before UP must not replay the preceding velocity", heldRelease,
+            observe("stationary release +600ms"))
     }
 
     private fun artworkTransform() = compose.runOnUiThread { viewer.transform }
@@ -539,26 +558,40 @@ class ModalGestureTakeoverTest {
         private val points = linkedMapOf<Int, Offset>()
         private var downTime = 0L
         private var eventTime = android.os.SystemClock.uptimeMillis()
+        private val events = mutableListOf<String>()
+        val timeline get() = events.joinToString("; ")
         init { drivers += this }
         fun down(id: Int, point: Offset) {
-            if (points.isEmpty()) downTime = maxOf(eventTime + 1, android.os.SystemClock.uptimeMillis())
+            val first = points.isEmpty()
+            if (first) {
+                // Rebase between streams, never within one: a busy UI thread must not turn
+                // a requested 20 ms MOVE into a stationary hold in the velocity tracker.
+                downTime = maxOf(eventTime + 16, android.os.SystemClock.uptimeMillis())
+                eventTime = downTime
+            }
             points[id] = point
-            send(if (points.size == 1) MotionEvent.ACTION_DOWN else MotionEvent.ACTION_POINTER_DOWN or (points.keys.indexOf(id) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT))
+            send(if (first) MotionEvent.ACTION_DOWN else MotionEvent.ACTION_POINTER_DOWN or
+                (points.keys.indexOf(id) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), if (first) 0 else 16)
         }
         fun move(id: Int, point: Offset, delay: Long = 16) { points[id] = point; send(MotionEvent.ACTION_MOVE, delay) }
-        fun up(id: Int) {
-            send(if (points.size == 1) MotionEvent.ACTION_UP else MotionEvent.ACTION_POINTER_UP or (points.keys.indexOf(id) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT))
+        fun up(id: Int, delay: Long = 16) {
+            send(if (points.size == 1) MotionEvent.ACTION_UP else MotionEvent.ACTION_POINTER_UP or
+                (points.keys.indexOf(id) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), delay)
             points.remove(id)
         }
         fun cancel() { if (points.isNotEmpty()) { send(MotionEvent.ACTION_CANCEL); points.clear() } }
         private fun send(action: Int, delay: Long = 16) {
-            eventTime = maxOf(eventTime + delay, android.os.SystemClock.uptimeMillis(), downTime)
+            eventTime += delay
             val properties = points.keys.map { id -> MotionEvent.PointerProperties().apply { this.id = id; toolType = MotionEvent.TOOL_TYPE_FINGER } }.toTypedArray()
             val coordinates = points.values.map { point -> MotionEvent.PointerCoords().apply { x = point.x; y = point.y; pressure = 1f; size = 1f } }.toTypedArray()
             compose.runOnUiThread {
                 val event = MotionEvent.obtain(downTime, eventTime, action, points.size, properties, coordinates,
                     0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
-                try { window.callback.dispatchTouchEvent(event) } finally { event.recycle() }
+                try {
+                    val handled = window.callback.dispatchTouchEvent(event)
+                    events += "${MotionEvent.actionToString(action)} t=$eventTime down=$downTime " +
+                        "dispatch=${android.os.SystemClock.uptimeMillis()} points=$points handled=$handled"
+                } finally { event.recycle() }
             }
         }
     }
