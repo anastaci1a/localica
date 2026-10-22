@@ -105,12 +105,16 @@ class GalleryMenuInputTest {
             } }
             val list = compose.onNodeWithTag("browser-list")
             compose.waitUntil(5000) {
-                compose.onAllNodesWithTag("browse-menu-menu-slot:0", true).fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithTag("media-menu-slot:0").fetchSemanticsNodes().isNotEmpty()
             }
             // Use the second row's first card, well inside the viewport, so both
             // the source and the destination of the swipe have scrolling room.
             val key = "menu-slot:$columns"
-            val menu = compose.onNodeWithTag("browse-menu-$key", true).fetchSemanticsNode()
+            // Readiness belongs to the card, not its intentionally cleared
+            // action semantics. The retained layout tag must still be queryable.
+            val menuNode = compose.onNodeWithTag("browse-menu-$key", true)
+                .assertExists().assert(hasClickAction().not())
+            val menu = menuNode.fetchSemanticsNode()
             val slotPosition = menu.positionInRoot
             val slotSize = menu.size
             val card = compose.onNodeWithTag("media-$key").fetchSemanticsNode().boundsInRoot

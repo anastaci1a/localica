@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,8 +102,11 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         }
         // Retain outgoing menu pixels, not an input shield. Even a zero-width
         // gallery slot can acquire a minimum touch target and swallow list drags.
+        val menuTag = "browse-menu-${item.key}"
         Box(Modifier.morph().reveal().graphicsLayer { alpha = menuAlpha }.then(if (gallery)
-            Modifier.clearAndSetSemantics { } else Modifier).testTag("browse-menu-${item.key}")) { menu(!gallery || menuAlpha > 0f) }
+            // Keep the layout witness inside the clear boundary; a later testTag
+            // modifier would be cleared along with the outgoing action semantics.
+            Modifier.clearAndSetSemantics { testTag = menuTag } else Modifier.testTag(menuTag))) { menu(!gallery || menuAlpha > 0f) }
         if (loadingReveal != null) {
         Box(Modifier.artShape().testTag("browse-loading-art-${item.key}")) {
             BrowseLoadingShape(Modifier.fillMaxSize(), { 0f }) { 1f - (loadingReveal?.alpha ?: 1f) }
