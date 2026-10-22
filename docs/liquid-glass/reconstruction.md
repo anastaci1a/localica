@@ -134,6 +134,15 @@ Both contain 90frames at 15fps, exactly 6 seconds; GIF: 6,185,889 bytes. Rays, o
 
 [Equations](recreation-models.md#safari-circular-controls-conditional-material-transfer) · [Fixed recipes and fingerprints](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) · [Native replay](experiments/reconstruction/safari_transfer.py). Inputs remain private. Native sampling is Study2×2; previews are resized from those saved native arrays. This study is separate from the more polished clear playback control and does not replace it.
 
+<details>
+<summary>Rejected shared-circle material transfer</summary>
+
+![Rejected shared normal-rim prior on Safari search](assets/safari-search-rejected-neutral.png)
+
+The shared NEXT/bag model fails this search observation: E7.692→9.705. SSIM and icon error improve, but glass, rim, held, interior and exterior guards regress. Source support and unclipped output pass; the current search image stays unchanged. One native proposal, no fitting or source change. This limits transfer of the material, rather than proving a different optical geometry. [Native measurements and recipe](experiments/reconstruction/studies/safari-circles/common-rim-transfer-rejected.json).
+
+</details>
+
 ## Safari bag control
 
 ![Safari bag circle and neutral material reconstruction](assets/safari-bag-current.png)
