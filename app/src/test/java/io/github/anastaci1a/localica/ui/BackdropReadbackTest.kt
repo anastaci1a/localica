@@ -25,8 +25,9 @@ class BackdropReadbackTest {
             BackdropProducerDraws(request, request.takeIf { producer.masked })
         }
         fun producers(request: Int) {
-            barrier.producerRecorded("lyrics", request, request)
-            barrier.producerRecorded("marker", request, null)
+            barrier.producerRecorded("lyrics", request)
+            barrier.producerMasked("lyrics", request)
+            barrier.producerRecorded("marker", request)
         }
         fun ready(request: Int) { producers(request); barrier.compositeRecorded(request, draws(request)) }
         fun run(delay: Long, evenCancelled: Boolean = false) {
@@ -58,9 +59,9 @@ class BackdropReadbackTest {
         val f = Fixture()
         val ticket = f.barrier.begin(9)
         val result = async(start = CoroutineStart.UNDISPATCHED) { ticket.awaitDraws() }
-        f.barrier.producerRecorded("lyrics", 8, 9)
-        f.barrier.producerRecorded("lyrics", 9, 8)
-        f.barrier.producerRecorded("marker", 9, 9) // An unmasked producer must say so truthfully.
+        f.barrier.producerRecorded("lyrics", 8)
+        f.barrier.producerMasked("lyrics", 9)
+        f.barrier.producerMasked("marker", 9) // A mask cannot attest an unmasked outer recording.
         f.barrier.compositeRecorded(9, f.draws(9))
         f.run(0)
         assertFalse(result.isCompleted)
@@ -68,6 +69,7 @@ class BackdropReadbackTest {
         f.producers(9)
         f.barrier.compositeRecorded(8, f.draws(8))
         f.run(0)
+        assertEquals(1, f.redraws)
         assertFalse(result.isCompleted)
         f.barrier.compositeRecorded(9, f.draws(9))
         assertFalse(result.isCompleted) // Never resume readback within record's draw stack.
@@ -82,14 +84,58 @@ class BackdropReadbackTest {
         f.barrier.compositeRecorded(9, emptyMap())
         f.producers(9)
         f.producers(9)
-        assertEquals(1, f.redraws)
+        assertEquals(0, f.redraws) // Must leave the producer draw stack before invalidation.
         val result = async(start = CoroutineStart.UNDISPATCHED) { ticket.awaitDraws() }
         f.run(0)
+        assertEquals(1, f.redraws)
         assertFalse(result.isCompleted)
         f.barrier.compositeRecorded(9, f.draws(9))
         f.run(0)
         assertNotNull(result.await())
         ticket.close()
+    }
+
+    @Test fun lateMasksJoinEarlierOuterRecordsWithoutAnotherOuterDraw() = runTest {
+        val f = Fixture()
+        f.scene = f.scene.copy(producers = f.scene.producers +
+            ("incoming" to BackdropReadbackProducer("line30 incoming half", true)))
+        val ticket = f.barrier.begin(9)
+        val result = async(start = CoroutineStart.UNDISPATCHED) { ticket.awaitDraws() }
+        f.barrier.producerMasked("lyrics", 8)
+        f.barrier.producerRecorded("lyrics", 9) // Outer redraw can reuse a clean clipping RenderNode.
+        f.barrier.producerMasked("incoming", 9) // The other retained document finishes in reverse order.
+        f.barrier.producerRecorded("marker", 9)
+        f.barrier.compositeRecorded(9, f.draws(9))
+        f.run(0)
+        assertFalse(result.isCompleted)
+        assertEquals(0, f.redraws)
+        f.barrier.producerRecorded("incoming", 9)
+        f.barrier.producerMasked("lyrics", 9) // No second lyrics outer callback follows this mask.
+        f.barrier.producerMasked("lyrics", 8) // A late old callback cannot erase matching evidence.
+        f.barrier.producerMasked("lyrics", 9)
+        assertEquals(0, f.redraws)
+        f.run(0)
+        assertEquals(1, f.redraws)
+        assertFalse(result.isCompleted)
+        f.barrier.compositeRecorded(9, f.draws(9))
+        f.run(0)
+        assertEquals(BackdropReadbackDraws(9, f.draws(9), 9), result.await())
+        ticket.close()
+    }
+
+    @Test fun cancelledQueuedRedrawCannotInvalidateItsSuccessor() = runTest {
+        val f = Fixture()
+        val old = f.barrier.begin(8)
+        f.producers(8)
+        val ticket = f.barrier.begin(9)
+        f.run(0, evenCancelled = true)
+        assertNull(old.awaitDraws())
+        assertEquals(0, f.redraws)
+        f.producers(9)
+        ticket.close()
+        f.run(0, evenCancelled = true)
+        assertEquals(0, f.redraws)
+        assertNull(ticket.awaitDraws())
     }
 
     @Test fun completionBeforeAwaitIsRetainedAndCancelsDeadline() = runTest {
@@ -166,7 +212,7 @@ class BackdropReadbackTest {
     @Test fun missingVisibleProducerTimesOutWithoutPublishingOrRetrying() = runTest {
         val f = Fixture()
         val ticket = f.barrier.begin(9)
-        f.barrier.producerRecorded("marker", 9, null)
+        f.barrier.producerRecorded("marker", 9)
         f.barrier.compositeRecorded(9, f.draws(9))
         f.run(500)
         assertNull(ticket.awaitDraws())

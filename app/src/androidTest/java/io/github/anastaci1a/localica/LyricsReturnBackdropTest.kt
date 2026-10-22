@@ -60,6 +60,7 @@ class LyricsReturnBackdropTest {
     private var sampledScene by mutableStateOf<LyricsBackdropScene?>(null)
     private var sampleOrigin by mutableStateOf(Offset.Zero)
     private var lastSnapshot: ImageBitmap? = null
+    private var panelFixture = false
     private lateinit var fixtureState: Scene
     private val sourceFrameIds = mutableMapOf<Any, Int>()
 
@@ -267,7 +268,7 @@ class LyricsReturnBackdropTest {
         capture("interrupted-crossfade-settled", expectReturn = false)
         compose.onAllNodesWithTag("lyric-lines").assertCountEquals(1)
         alignCurrentLine(state.document)
-        val replacement = capture("replacement-song")
+        val replacement = capture("replacement-song", expectFresh = true)
         assertTrue("The replacement song has fresh sampled glyphs", green(replacement, returnBounds()) > .02f)
         assertTrue("The clean sparse baseline must distinguish a stale dense W source",
             interiorDifference(cleanSparse, replacement, returnBounds()) > .025f)
@@ -278,7 +279,7 @@ class LyricsReturnBackdropTest {
         }
         compose.waitForIdle()
         alignCurrentLine(state.document)
-        val reopened = capture("reopened-song")
+        val reopened = capture("reopened-song", expectFresh = true)
         assertTrue("The reopened scene samples the new document", green(reopened, returnBounds()) > .01f)
         assertEquals("The clean and reopened samples need identical viewport, row and lens placement",
             cleanGeometry, panelGeometry(state.document))
@@ -331,6 +332,7 @@ class LyricsReturnBackdropTest {
 
     private fun mount(state: Scene, panel: Boolean = false) {
         fixtureState = state
+        panelFixture = panel
         compose.setContent { LocalicaTheme {
             view = LocalView.current
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.Green, onSurfaceVariant = Color.Red),
@@ -338,7 +340,11 @@ class LyricsReturnBackdropTest {
                     fontFamily = FontFamily.Monospace, fontSize = 24.sp, lineHeight = 28.sp))) {
                 CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(depth = state.depth,
                     blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f),
-                    LocalReducedMotion provides true) {
+                    LocalReducedMotion provides true,
+                    LocalLyricsBackdropObserver provides { scene, attached ->
+                        if (attached) sampledScene = scene
+                        else if (sampledScene === scene) sampledScene = null
+                    }) {
                     artwork = rememberFrostedBackdrop(state.art, glassBlur = 0f, whiteTint = 0f)
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Box(Modifier.size(360.dp, 384.dp).background(Color.Black).testTag(SceneTag)) {
@@ -357,7 +363,6 @@ class LyricsReturnBackdropTest {
                                             contentAlpha = { state.alpha })
                                         else LyricsBackdrop(state.document to state.incoming, modifier, contentAlpha = { state.alpha }) {
                                             val scene = requireNotNull(LocalLyricsBackdropScene.current)
-                                            SideEffect { sampledScene = scene }
                                             val outgoingAlpha = if (state.incoming == null) 1f else .5f
                                             Box(Modifier.fillMaxSize().graphicsLayer { alpha = outgoingAlpha }) {
                                                 LyricsLines(state.document, state.position, true, {}, Modifier.fillMaxSize(),
@@ -478,26 +483,33 @@ class LyricsReturnBackdropTest {
     private data class LegacyPreparation(val snapshot: ImageBitmap?, val lensSnapshot: ImageBitmap?,
         val request: Int, val snapshotRequest: Int, val drawsCompletedBeforeSnapshot: Boolean)
 
-    private fun awaitLegacySample(scene: LyricsBackdropScene, previous: ImageBitmap?, requireFresh: Boolean) {
+    private fun awaitLegacySample(scene: LyricsBackdropScene, previous: ImageBitmap?, requireFresh: Boolean,
+        markerRequired: Boolean = true) {
         var requested = 0
         var observed = Color.Transparent
         try {
-            compose.waitUntil(10_000) {
+            compose.waitUntil(if (markerRequired) 10_000 else 2_000) {
                 compose.mainClock.advanceTimeByFrame()
-                val frame = compose.runOnUiThread { sourceFrame(scene) }
+                val frame = if (markerRequired) compose.runOnUiThread { sourceFrame(scene) } else null
                 val source = scene.source
                 val preparation = compose.runOnUiThread {
                     val request = source.readbackRequest
                     val draws = source.snapshotDraws
                     LegacyPreparation(source.snapshot, source.lensSnapshot, request, source.snapshotReadbackRequest,
-                        draws?.request == request && draws.composite == request &&
+                        !source.layer.isReleased && draws?.request == request && draws.composite == request &&
                             scene.layers.filter { it.alpha() > 0f }.all { layer ->
                                 val producer = draws.producers[layer]
                                 producer?.outer == request && producer.mask == request.takeIf { layer.hasMask }
                             })
                 }
                 val snapshot = preparation.snapshot
-                requested = frame.id
+                requested = frame?.id ?: preparation.request
+                // Panel and direct fixtures must both publish the completed source,
+                // never merely display a screenshot after a fixed native delay.
+                if (!preparation.drawsCompletedBeforeSnapshot || preparation.snapshotRequest != preparation.request ||
+                    snapshot == null || preparation.lensSnapshot !== snapshot ||
+                    requireFresh && snapshot === previous) return@waitUntil false
+                if (!markerRequired) return@waitUntil true
                 val marker = scene.layers.single { it.contentKey() === SourceMarkerKey }.source
                 assertEquals("Diagnostic recording size is fixed", IntSize(8, 8), marker.size)
                 assertEquals("Diagnostic placement must never request a source refresh", 0, marker.location.placement)
@@ -506,24 +518,22 @@ class LyricsReturnBackdropTest {
                 assertFalse("Frame marker must remain beyond the return lens's sampling neighborhood",
                     markerBounds.overlaps(Rect(sampleOrigin, androidx.compose.ui.geometry.Size(button.width, button.height)).inflate(button.width)))
                 val offset = marker.origin - source.origin + Offset(4f, 4f)
-                val x = (offset.x * (snapshot?.width ?: 0) / source.size.width.coerceAtLeast(1)).toInt()
-                val y = (offset.y * (snapshot?.height ?: 0) / source.size.height.coerceAtLeast(1)).toInt()
+                val x = (offset.x * snapshot.width / source.size.width.coerceAtLeast(1)).toInt()
+                val y = (offset.y * snapshot.height / source.size.height.coerceAtLeast(1)).toInt()
                 // Zero blur/tint means preparation publishes the very same image.
                 // Its marker identifies the real layer's requested content/placement,
                 // not merely a different but still pre-alignment bitmap.
-                if (!preparation.drawsCompletedBeforeSnapshot || preparation.snapshotRequest != preparation.request ||
-                    snapshot == null || preparation.lensSnapshot !== snapshot ||
-                    requireFresh && snapshot === previous || x !in 0 until snapshot.width || y !in 0 until snapshot.height) false
+                if (x !in 0 until snapshot.width || y !in 0 until snapshot.height) false
                 else {
                     observed = snapshot.toPixelMap(startX = x, startY = y, width = 1, height = 1)[0, 0]
-                    maxChannelDifference(observed.toArgb(), frame.sampled.toArgb()) <= 1
+                    maxChannelDifference(observed.toArgb(), requireNotNull(frame).sampled.toArgb()) <= 1
                 }
             }
         } catch (failure: Throwable) {
             throw AssertionError("Legacy source-frame preparation: requested=$requested observed=$observed " +
                 compose.runOnUiThread { "sourceRevision=${scene.source.revision} " +
                     "samePreparedImage=${scene.source.lensSnapshot === scene.source.snapshot} " +
-                    "snapshotDraws=${scene.source.snapshotDraws} lastReadbackAbort=${scene.source.lastReadbackAbort} " +
+                    "snapshotDraws=${scene.source.snapshotDraws} lastReadbackAbort=${scene.source.lastReadbackAbort} lastReadbackProgress=${scene.source.lastReadbackProgress} " +
                     "liveProducerDraws=${scene.layers.map { layer ->
                         listOf(layer.hasMask, layer.alpha(), layer.source.recorded,
                             layer.recordedReadbackRequest, layer.maskedReadbackRequest)
@@ -559,20 +569,9 @@ class LyricsReturnBackdropTest {
             compose.waitForIdle()
             // Wait for prepared-snapshot identity, never for the optical result.
             // This also fails if settled scrolling/emphasis stops requesting a refresh.
-            sampledScene?.takeIf { Build.VERSION.SDK_INT < 33 && it.source.consumers > 0 }?.let { scene ->
-                awaitLegacySample(scene, lastSnapshot, requireFresh = expectFresh)
-            }
-            if (Build.VERSION.SDK_INT < 33 && sampledScene == null) {
-                // LyricsPanel owns its source privately. Give its debounce, settled
-                // readback and off-main preparation bounded native turns; never poll
-                // for the chroma being asserted. The final marker still proves which
-                // frame was presented. Direct scene tests above verify snapshot IDs.
-                val started = SystemClock.uptimeMillis()
-                compose.waitUntil(2_000) {
-                    compose.mainClock.advanceTimeBy(64)
-                    compose.runOnUiThread { }
-                    SystemClock.uptimeMillis() - started >= 1_000
-                }
+            requireNotNull(sampledScene) { "The mounted lyrics source must be observable" }
+                .takeIf { Build.VERSION.SDK_INT < 33 && it.source.consumers > 0 }?.let { scene ->
+                awaitLegacySample(scene, lastSnapshot, requireFresh = expectFresh, markerRequired = !panelFixture)
             }
         }
         compose.runOnIdle { stage = (stage + 1) % 32 }
@@ -601,10 +600,12 @@ class LyricsReturnBackdropTest {
                 if (source != null) {
                     appendLine("sourceOrigin=${source.origin} sourceSize=${source.size} revision=${source.revision} consumers=${source.consumers}")
                     appendLine(compose.runOnUiThread {
-                        "snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest} snapshotCompositeRequest=${source.snapshotDraws?.composite} lastReadbackAbort=${source.lastReadbackAbort}"
+                        "snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest} snapshotCompositeRequest=${source.snapshotDraws?.composite} lastReadbackAbort=${source.lastReadbackAbort} lastReadbackProgress=${source.lastReadbackProgress}"
                     })
-                    appendLine("sourceFrame=${compose.runOnUiThread { sourceFrame(requireNotNull(sampledScene)) }}")
-                    appendLine("probeGreen=${green(pixels, localBounds(compose.onNodeWithTag(ProbeTag)))}")
+                    if (!panelFixture) {
+                        appendLine("sourceFrame=${compose.runOnUiThread { sourceFrame(requireNotNull(sampledScene)) }}")
+                        appendLine("probeGreen=${green(pixels, localBounds(compose.onNodeWithTag(ProbeTag)))}")
+                    }
                     compose.runOnUiThread {
                         sampledScene?.layers?.mapIndexed { index, layer ->
                             "layer=$index recorded=${layer.source.recorded} origin=${layer.source.origin} size=${layer.source.size} alpha=${layer.alpha()} outerReadbackRequest=${layer.recordedReadbackRequest} maskReadbackRequest=${layer.maskedReadbackRequest} snapshotDraws=${source.snapshotDraws?.producers?.get(layer)}"

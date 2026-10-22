@@ -61,6 +61,7 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
     var readbackBarrier: BackdropReadback? = null
     var snapshotDraws: BackdropReadbackDraws? = null
     var lastReadbackAbort: String? = null
+    var lastReadbackProgress: String? = null
     var recorded by mutableStateOf(false)
     fun refresh() { revision++ }
 }
@@ -139,6 +140,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                     return ticket == null || ticket.isCurrent()
                 } finally {
                     source.lastReadbackAbort = ticket?.abortReason
+                    source.lastReadbackProgress = ticket?.takeIf { it.abortReason != null }?.progress()
                     ticket?.close()
                 }
             }

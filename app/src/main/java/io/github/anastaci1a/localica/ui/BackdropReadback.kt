@@ -25,6 +25,7 @@ internal class BackdropReadback(
         internal val producers = mutableMapOf<Any, BackdropProducerDraws>()
         internal var composite: BackdropReadbackDraws? = null
         internal var redrawRequested = false
+        internal var cancelRedraw: (() -> Unit)? = null
         internal var cancelPost: (() -> Unit)? = null
         internal var cancelTimeout: (() -> Unit)? = null
         var abortReason: String? = null
@@ -33,8 +34,13 @@ internal class BackdropReadback(
         suspend fun awaitDraws(): BackdropReadbackDraws? = result.await()
         fun isCurrent(): Boolean = pending === this && abortReason == null && scene() == expected
         fun close() = abort("closed")
+        // Build only for an aborted capture, never on idle/modern draws.
+        fun progress(): String = "request=$request producers=$producers " +
+            "expectedMasks=${expected.producers.mapValues { it.value.masked }} " +
+            "composite=${composite?.composite} redrawRequested=$redrawRequested"
         internal fun abort(reason: String) {
             if (abortReason == null) abortReason = reason
+            cancelRedraw?.invoke(); cancelRedraw = null
             cancelPost?.invoke(); cancelPost = null
             cancelTimeout?.invoke(); cancelTimeout = null
             result.complete(null)
@@ -60,16 +66,34 @@ internal class BackdropReadback(
 
     fun dispose() { pending?.abort("disposed") }
 
-    fun producerRecorded(producer: Any, request: Int, maskRequest: Int?) {
+    fun producerRecorded(producer: Any, request: Int) {
         val ticket = current(request) ?: return
-        val expected = ticket.expected.producers[producer] ?: return
-        if (maskRequest != request.takeIf { expected.masked }) return
-        ticket.producers[producer] = BackdropProducerDraws(request, maskRequest)
-        if (ticket.producers.keys == ticket.expected.producers.keys && !ticket.redrawRequested) {
-            // If the aggregate drew first, it may have omitted a not-yet-recorded child.
-            // Invalidate its draw node once, never observable state or a capture key.
+        if (producer !in ticket.expected.producers) return
+        val previous = ticket.producers[producer]
+        ticket.producers[producer] = BackdropProducerDraws(request, previous?.mask)
+        requestComposite(ticket)
+    }
+
+    fun producerMasked(producer: Any, request: Int) {
+        val ticket = current(request) ?: return
+        if (ticket.expected.producers[producer]?.masked != true) return
+        val previous = ticket.producers[producer]
+        ticket.producers[producer] = BackdropProducerDraws(previous?.outer ?: -1, request)
+        requestComposite(ticket)
+    }
+
+    private fun requestComposite(ticket: Ticket) {
+        val ready = ticket.expected.producers.all { (producer, expected) ->
+            val drawn = ticket.producers[producer]
+            drawn?.outer == ticket.request && drawn.mask == ticket.request.takeIf { expected.masked }
+        }
+        if (ready && !ticket.redrawRequested) {
+            // Outer and mask records may finish in either order across retained layers.
+            // Post once: inline invalidation can be cleared by an enclosing record().
             ticket.redrawRequested = true
-            invalidateComposite?.invoke()
+            ticket.cancelRedraw = schedule(0) {
+                if (ticket.isCurrent() && !ticket.result.isCompleted) invalidateComposite?.invoke()
+            }
         }
     }
 

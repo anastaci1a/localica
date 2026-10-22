@@ -46,7 +46,7 @@ internal class LyricsBackdropScene(val source: FrostedBackdrop, alpha: () -> Flo
 
     fun recorded(layer: LyricsBackdropLayer, request: Int) {
         layer.recordedReadbackRequest = request
-        readback.producerRecorded(layer, request, layer.maskedReadbackRequest)
+        readback.producerRecorded(layer, request)
     }
 }
 
@@ -75,6 +75,8 @@ private class LyricsReadbackNode(private var readback: BackdropReadback) : Modif
     }
 }
 
+/** Optional lifecycle observation; never acquires a sampling lease or requests a refresh. */
+internal val LocalLyricsBackdropObserver = staticCompositionLocalOf<((LyricsBackdropScene, Boolean) -> Unit)?> { null }
 internal val LocalLyricsBackdropScene = staticCompositionLocalOf<LyricsBackdropScene?> { null }
 
 @Composable
@@ -92,9 +94,11 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         val cancel: () -> Unit = { handler.removeCallbacks(runnable) }
         cancel
     } }
-    SideEffect { source.parent = backing; source.readbackBarrier = scene.readback }
+    val observer by rememberUpdatedState(LocalLyricsBackdropObserver.current)
+    SideEffect { source.parent = backing; source.readbackBarrier = scene.readback; observer?.invoke(scene, true) }
     DisposableEffect(scene) { onDispose {
         scene.readback.dispose()
+        observer?.invoke(scene, false)
         if (source.readbackBarrier === scene.readback) source.readbackBarrier = null
     } }
     // Coalesce legacy scroll/opacity changes rather than capturing every frame.
@@ -175,5 +179,6 @@ internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () ->
             drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
                 0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
             layer.maskedReadbackRequest = request
+            scene.readback.producerMasked(layer, request)
         }
 }
