@@ -2,7 +2,7 @@
 
 Research notes and implementation requirements for Localica’s glass rendering and interaction system, with links to primary Apple sources.
 
-[Apple evidence](sources.md) · [Recreations and scores](reconstruction.md) · [Mathematical recipes](recreation-models.md) · [Localica specification](specification.md) · [Live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) · [Project docs](../README.md)
+[Apple evidence](sources.md) · [Recreations and scores](reconstruction.md) · [Geometric optics](geometric-optics.md) · [Historical recipes](recreation-models.md) · [Localica specification](specification.md) · [Live lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) · [Project docs](../README.md)
 
 ![The current dark lab showing a refracting lens over a gradient with vertical lines](assets/lab-desktop.png)
 
@@ -17,7 +17,8 @@ Research notes and implementation requirements for Localica’s glass rendering 
 | Interactive rendering model | [Live WebGL lab](https://anastaci1a.github.io/localica/liquid-glass/lab.html) — runs in your browser |
 | Measurements and model limitations | [Optical findings and reproducible experiments](optics.md) |
 | Calibrated reference studies | [Apple/reconstruction comparisons, scores and replay](reconstruction.md) |
-| Portable reproduction contract | [Equations and dimensionless recipes for all five scenes](recreation-models.md) |
+| Geometric model contract | [Surfaces, normals and shared optical paths](geometric-optics.md) |
+| Historical reproduction contract | [Equations and frozen image-fit recipes](recreation-models.md) |
 | Recorded demonstrations | Expand the demonstrations below |
 | App behavior | [Current interface contract](../interface.md) |
 

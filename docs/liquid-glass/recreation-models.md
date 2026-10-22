@@ -1,5 +1,7 @@
 # Mathematical models for the reference recreations
 
+**Historical image-fit recipes.** New refraction work follows the [geometry-only contract](geometric-optics.md). Empirical maps below remain frozen diagnostic controls; they do not establish realizable optical surfaces.
+
 These are **rendering-method-independent inverse image maps and material functions**. They can be evaluated by a shader, a mesh with sufficient sampling, a CPU renderer or another implementation. The Python replay is a reference implementation, not the specification's coordinate system or required rendering technology.
 
 [Comparisons and scores](reconstruction.md) · [Exact parameter records](experiments/reconstruction/recipes.json) · [General optical models](model.md) · [Replay](reconstruction.md#reproduce)
@@ -22,7 +24,7 @@ The circular playback control is the **current most-polished calibration**, sele
 
 ## Model responsibilities and evidence
 
-- A model owns the footprint, front/back surfaces or explicitly empirical map, thickness, transmission/reflection, dispersion, ordinary blur, foreground response, contrast, highlights and exterior shadows. Each stage has declared normalized parameters and operation order; no renderer-specific tricks are required by the specification.
+- These historical models own the footprint, front/back surfaces or explicitly empirical map, thickness, transmission/reflection, dispersion, ordinary blur, foreground response, contrast, highlights and exterior shadows. Each stage has declared normalized parameters and operation order; no renderer-specific tricks are required by the specification.
 - **Ordinary blur and dispersion are separate.** Ordinary blur averages neighboring samples with one spatial kernel shared by the channels. Dispersion changes the sampling/transport by wavelength (or a declared RGB proxy); it can produce colored edge spreading without ordinary blur. Corner color highlights require a separate lighting test before attributing them to dispersion.
 - Geometry-led candidates must state camera, surfaces, IOR, background distance and valid ray branches. Derive normals from one surface and check its [ray-map compatibility](model.md#flat-front-inverse-map-compatibility); zero image-map curl alone neither establishes nor rejects a refracting solid. Empirical maps remain labeled approximations; folds and total internal reflection are distinct phenomena.
 - Pill silhouettes should be tested for smoothly joined shoulders and a minute center crown rather than assumed to be a straight capsule. Curvature is a parameter of the element family, not a pixel correction on one reference.

@@ -12,7 +12,7 @@ const {prepareStudies}=require('./guide-studies.cjs');
   const repo='https://github.com/anastaci1a/localica/blob/main/';
   const escape=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   const slug=s=>s.replace(/<[^>]*>/g,'').toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu,'').replace(/\s/g,'-');
-  const pages=['README.md','sources.md','specification.md','controls.md','optics.md','model.md','reconstruction.md','recreation-models.md'];
+  const pages=['README.md','sources.md','specification.md','controls.md','optics.md','model.md','reconstruction.md','recreation-models.md','geometric-optics.md'];
   function link(href){
     if(!href||/^(https?:|#|mailto:)/.test(href))return href;
     const [file,hash]=href.split('#');
