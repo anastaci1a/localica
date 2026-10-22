@@ -1,0 +1,172 @@
+{
+  "status": "BEST_CURRENT_SHARED_PRIOR_BASELINE_READY_PRIMARY_REVIEW_COUNT0",
+  "scores": {
+    "glass": {
+      "pixels": 1406,
+      "rmse": 3.675133466720581
+    },
+    "rim": {
+      "pixels": 544,
+      "rmse": 3.9105236530303955
+    },
+    "held": {
+      "pixels": 143,
+      "rmse": 1.9574376344680786
+    },
+    "interior": {
+      "pixels": 862,
+      "rmse": 3.5184850692749023
+    },
+    "ssim": 0.9916671514511108,
+    "loss": 14.042282771019801,
+    "E": 3.747303399915705,
+    "glyph": {
+      "pixels": 342,
+      "rmse": 35.785369873046875
+    },
+    "exterior": {
+      "pixels": 1162,
+      "rmse": 2.7387917041778564
+    },
+    "full_visible_exterior": {
+      "pixels": 1431,
+      "rmse": 2.6554365158081055
+    }
+  },
+  "source_proof": {
+    "status": "SOURCE_ONLY_PROPOSED_PRIOR_DOMAIN_NOT_BODYRENDER",
+    "counts": {
+      "whole": 7731,
+      "scored": 5624,
+      "postfootprint": 8752,
+      "whole_bad": 0,
+      "scored_bad": 0,
+      "postfootprint_bad": 0,
+      "scored_outside_outline": 0
+    },
+    "passed": true,
+    "source_bounds": [
+      723.9635620117188,
+      164.96009826660156,
+      768.5989990234375,
+      209.5963897705078
+    ],
+    "source_sigma_native": 0.05061269170862684,
+    "source_kernel_radius": 0,
+    "post_sigma_native": 0.16196061346760587,
+    "post_kernel_radius": 1,
+    "source_confidence": "Modeled1/observedhidden0, exact finitefloat32kernel+bilinear lookup only, not infinitekernel/photographicrecovery",
+    "native_guard_feasibility": {
+      "glass": 1406,
+      "rim": 544,
+      "held": 143,
+      "interior": 862,
+      "SSIM11x11_safe_pixels": 140,
+      "glyph_box": [
+        737,
+        179,
+        756,
+        197
+      ]
+    },
+    "sampling": "Exact selected settled radial-tail mapping at2x2native subrays, unchangedinside/outside; no bodycolor/shade/render called.",
+    "code_snapshot": "/evidence/extended/helper-toolbar-work/safari-right-circle-round/neutral-baseline/code-snapshot.json",
+    "stage": "FIRST_BEFORE_NEW_BASELINE_COMPATIBLE_PROOF_REUSED",
+    "transfer": "Exact case/PNG/source masks, canonical native masks, settled/render/Study/source-support function hashes, map and source/post kernels identical to source-only preflight. New helper adds normal-lighting only, no source queries. No repeated ray sweep.",
+    "neutral_rim_sha256": "4ae3711c075ad815a716dde1e691d5f568ffa16c8513aa56153761e80baf8fa3"
+  },
+  "native_raw_clip_proof": {
+    "stage": "ACTUAL_NATIVE_STREAM_BOTH_BASE_AND_ADDED_RIM",
+    "cohorts": {
+      "base_unclipped": {
+        "whole": {
+          "subrays": 7731,
+          "clipped_subrays": 0,
+          "clipped_channels": 0,
+          "endpoints": 0,
+          "minimum": 0.7495098233222961,
+          "maximum": 0.820098054409027
+        },
+        "scored": {
+          "subrays": 5624,
+          "clipped_subrays": 0,
+          "clipped_channels": 0,
+          "endpoints": 0,
+          "minimum": 0.7495098233222961,
+          "maximum": 0.820098054409027
+        },
+        "postfootprint": {
+          "subrays": 8752,
+          "clipped_subrays": 0,
+          "clipped_channels": 0,
+          "endpoints": 0,
+          "minimum": 0.7495098233222961,
+          "maximum": 0.820098054409027
+        },
+        "global": {
+          "subrays": 13456,
+          "clipped_subrays": 0,
+          "clipped_channels": 0,
+          "endpoints": 0,
+          "minimum": 0.7495098233222961,
+          "maximum": 0.820098054409027
+        }
+      },
+      "rim_unclipped": {
+        "whole": {
+          "subrays": 7731,
+          "clipped_subrays": 0,
+          "clipped_channels": 0,
+          "endpoints": 0,
+          "minimum": 0.7495098233222961,
+          "maximum": 0.9361664200639384
+        },
+        "scored": {
+          "subrays": 5624,
+          "clipped_subrays": 0,
+          "clipped_channels": 0,
+          "endpoints": 0,
+          "minimum": 0.7495098233222961,
+          "maximum": 0.8664891837187582
+        },
+        "postfootprint": {
+          "subrays": 8752,
+          "clipped_subrays": 0,
+          "clipped_channels": 0,
+          "endpoints": 0,
+          "minimum": 0.7495098233222961,
+          "maximum": 0.9372549156770325
+        },
+        "global": {
+          "subrays": 13456,
+          "clipped_subrays": 0,
+          "clipped_channels": 0,
+          "endpoints": 0,
+          "minimum": 0.7495098233222961,
+          "maximum": 0.945098053630429
+        }
+      }
+    },
+    "committed_helper_global_actual_audit": {
+      "minimum": 0.7495098233222961,
+      "maximum": 0.945098053630429,
+      "clipped_channels": 0
+    },
+    "helper_audit_matches_scoped_reconstruction": true,
+    "observational_only": true
+  },
+  "native_body_renders": 1,
+  "optical_fits": 0,
+  "accepted_count": 0,
+  "case_sha256": {
+    "a": "f5c3921820dc50fd9230bfeab581a26954e408b98817f7e433463b2bf3041506"
+  },
+  "prior": {
+    "g": 1,
+    "b": 0.07500000000000001,
+    "neutral_rim_a": 0.125,
+    "neutral_rim_w": 0.028,
+    "commit": "4d27add70e78da7152eb86cccae67b37d7445b4b"
+  },
+  "limitations": "Conditionalaffinepaper/sourcehidden0/upper3.785levels; posep95.463/nativeXweight/AA uncertainty. Circlemap/blurpriornotidentifiedbylowfrequencyinput. No baselinegain/pass, no materialfituntilprimaryindependentbaseline review. No shadow/context/copiedpixels."
+}

@@ -1,0 +1,118 @@
+{
+  "id": "new-sheet-close-circle-single-a",
+  "category": "WWDC219/320 sheet CLOSE circle; visible parenttitle NEW, not More",
+  "radial": true,
+  "center": [
+    746.2986369222403,
+    187.29390886719523
+  ],
+  "half": [
+    24.80021893722715,
+    24.80021893722715
+  ],
+  "radius": 24.80021893722715,
+  "crop": [
+    720,
+    160,
+    778,
+    218
+  ],
+  "foreground": [
+    [
+      737,
+      179,
+      756,
+      197
+    ]
+  ],
+  "foreground_layers": [
+    {
+      "mode": "mask",
+      "box": [
+        737,
+        179,
+        756,
+        197
+      ],
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "threshold": 0.3,
+      "vector_asset": "xmark-pinned.svg",
+      "vector_sha256": "9158df2c121853f26f67c74159e91957f41a9f886cce1a461d2987d7b7229424",
+      "vector_box": [
+        736.9980523809649,
+        178.5,
+        755.0019476190351,
+        196.5
+      ],
+      "opacity": 1.0
+    }
+  ],
+  "allow_estimated_background": true,
+  "source_observation_mask": "observed.png",
+  "target_observation_mask": "target-visible.png",
+  "source_sha256": {
+    "source.png": "0791430758dfd144edc914ac528e161f7ad1fe4ca5b791c21fc1aadee40b2430",
+    "target.png": "edae65724bac014ac7644e8812c5ddec69daaf6e2fcf72ad6ed4f057710bcdc8",
+    "known.png": "3a721ec734fc2993ebb4c4696c5d684b9a8e22480e190b6a4a544c8eae1fb11e",
+    "observed.png": "06da5431a575e89e972435a0219b390d3dbb32e73ad342de409a935744365f76",
+    "target-visible.png": "6ae2cfa8276a1bd642b45a5401579b8a93bc9506299ae41171573adff763f9f6"
+  },
+  "background_estimate": {
+    "kind": "affine local uncovered parent-header RGB estimate, not observedhiddenpixels",
+    "basis": [
+      "1",
+      "u",
+      "v"
+    ],
+    "coordinates": {
+      "u": "(x-747)/60",
+      "v": "(y-188)/60"
+    },
+    "coefficient_rgb": [
+      [
+        0.6870634557557791,
+        0.7027497302655832,
+        0.7314026132092796
+      ],
+      [
+        0.015758014389088398,
+        0.015758014389088235,
+        0.017257462078177143
+      ],
+      [
+        0.029628759199649884,
+        0.02962875919964973,
+        0.03203007891078004
+      ]
+    ],
+    "source_domain": "[719,159,811,245] intersect approximate parentroundrect inset5px; no parentedge copied",
+    "observed_hidden_fraction": 0,
+    "uncertainty": "Effective local paper/header appearance, not physical incidentlight proof. Parentcorner/lighting/ownrimtail uncertainty retained."
+  },
+  "reference": {
+    "video": "219",
+    "seconds": 320,
+    "original_png": "/evidence/apple-matches/219-320.png",
+    "native_resolution": [
+      1920,
+      1080
+    ],
+    "source_adoption": false
+  },
+  "glyph_provenance": {
+    "identity": "xmark",
+    "pinned_commit": "2a0100e93e11a22ea0ff5e0530efd10e2cf0d243",
+    "module": "dist/module/sfXmark.js",
+    "module_sha256": "57dab561f71683b638d9f042533e3956fb5dfb2d421a5ed974c65750653a06c1",
+    "module_blob_sha1": "5630bd35132a912e2854726d146e74270e8f9d4f",
+    "limits": "Literal pinned solidoriginal SF export path, black1/uniform aspect, noJS/screenshot matte/weightfit; exact UI weight not proved."
+  },
+  "protocol": {
+    "stage": "PROPOSED_INPUT_ONLY_NO_BODY_RENDER",
+    "condition": "Primary input/proposedsource-kernel/native-mask review BEFORE baseline; freeze existing neutral radial prior, no refraction or blur identification from smoothsource."
+  }
+}
