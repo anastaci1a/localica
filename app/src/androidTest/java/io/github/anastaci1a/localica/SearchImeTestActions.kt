@@ -16,20 +16,55 @@ internal class SearchImeHandoffObservation {
         private set
     var animated: WindowInsetsCompat? = null
         private set
-    private val animations = mutableSetOf<WindowInsetsAnimationCompat>()
+    private data class AnimationState(
+        val sourceBottom: Int,
+        var started: Boolean = false,
+        var targetHidden: Boolean = false,
+        var progressed: Boolean = false,
+        var fraction: Float = 0f,
+        var reachedHiddenEnd: Boolean = false,
+    )
+    private val animations = mutableMapOf<WindowInsetsAnimationCompat, AnimationState>()
     val animationCount: Int get() = animations.size
+    var completedHideCount: Int = 0
+        private set
+    val progressingHide: Boolean get() = animations.values.any {
+        it.sourceBottom > 0 && it.started && it.targetHidden && it.progressed && it.fraction > 0f && it.fraction < 1f
+    }
 
     fun apply(insets: WindowInsetsCompat) { applied = insets }
     fun prepare(animation: WindowInsetsAnimationCompat) {
-        if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) animations += animation
+        if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0)
+            animations.getOrPut(animation) { AnimationState(applied?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0) }
+    }
+    fun start(animation: WindowInsetsAnimationCompat) {
+        prepare(animation)
+        animations[animation]?.let {
+            it.started = true
+            // onApply precedes onStart. Capture this animation's destination now;
+            // a newer hide must not relabel an older show/resize as another hide.
+            it.targetHidden = applied?.imeHidden() == true
+        }
     }
     fun progress(insets: WindowInsetsCompat, running: List<WindowInsetsAnimationCompat>) {
         animated = insets
         // API26 compat animators dispatch independent singleton lists. An old show's
         // final frame must not erase a newer hide, or overwrite its applied insets.
-        running.forEach(::prepare)
+        running.forEach { animation ->
+            prepare(animation)
+            animations[animation]?.let {
+                it.progressed = true
+                it.fraction = animation.fraction
+                it.reachedHiddenEnd = it.sourceBottom > 0 && it.started && it.targetHidden &&
+                    insets.imeHidden() && animation.fraction == 1f
+            }
+        }
     }
-    fun end(animation: WindowInsetsAnimationCompat) { animations -= animation }
+    fun end(animation: WindowInsetsAnimationCompat) {
+        // onEnd also runs when a window loses IME control. Only completed hidden
+        // progress, never cancellation alone, proves the keyboard finished hiding.
+        if (animations.remove(animation)?.reachedHiddenEnd == true) completedHideCount++
+    }
 
     fun complete(windowFocused: Boolean, native: WindowInsetsCompat?): Boolean =
         windowFocused && applied?.imeHidden() == true && native?.imeHidden() == true && animations.isEmpty()
@@ -49,6 +84,10 @@ internal fun createSearchImeObserver(context: Context, observation: SearchImeHan
     ViewCompat.setOnApplyWindowInsetsListener(observer) { _, insets -> observation.apply(insets); insets }
     ViewCompat.setWindowInsetsAnimationCallback(observer, object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
         override fun onPrepare(animation: WindowInsetsAnimationCompat) { observation.prepare(animation) }
+        override fun onStart(animation: WindowInsetsAnimationCompat, bounds: WindowInsetsAnimationCompat.BoundsCompat): WindowInsetsAnimationCompat.BoundsCompat {
+            observation.start(animation)
+            return bounds
+        }
         override fun onProgress(insets: WindowInsetsCompat, runningAnimations: MutableList<WindowInsetsAnimationCompat>): WindowInsetsCompat {
             observation.progress(insets, runningAnimations)
             return insets

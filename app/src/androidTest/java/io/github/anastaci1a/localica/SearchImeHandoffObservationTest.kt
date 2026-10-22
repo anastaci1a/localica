@@ -76,4 +76,83 @@ class SearchImeHandoffObservationTest {
         state.end(ime)
         assertTrue(state.complete(true, insets(0)))
     }
+
+    @Test fun nativeHideRequiresItsOwnShownSourceStartedProgressAndTerminalEnd() {
+        val state = SearchImeHandoffObservation()
+        val hide = animation()
+        state.apply(insets(867))
+        state.prepare(hide)
+        state.apply(insets(0))
+        assertFalse("Preparation alone is not moving hide evidence", state.progressingHide)
+        state.start(hide)
+        assertFalse(state.progressingHide)
+        hide.fraction = .5f
+        state.progress(insets(400), listOf(hide))
+        assertTrue(state.progressingHide)
+        assertEquals(0, state.completedHideCount)
+        hide.fraction = 1f
+        state.progress(insets(0), listOf(hide))
+        assertFalse("Terminal zero is no longer moving hide overlap", state.progressingHide)
+        assertEquals("Terminal progress still waits for native end", 0, state.completedHideCount)
+        state.end(hide)
+        assertEquals(1, state.completedHideCount)
+        assertFalse(state.progressingHide)
+    }
+
+    @Test fun controlLossCannotInventACompletedHideOrBorrowAnotherWindowsSource() {
+        val popup = SearchImeHandoffObservation()
+        val activity = SearchImeHandoffObservation()
+        val canceled = animation()
+        popup.apply(insets(867))
+        popup.prepare(canceled)
+        popup.apply(insets(0))
+        popup.end(canceled)
+        assertEquals("Prepare then end may only be control revocation", 0, popup.completedHideCount)
+        val unowned = animation()
+        activity.apply(insets(0))
+        activity.prepare(unowned)
+        activity.start(unowned)
+        unowned.fraction = 1f
+        activity.progress(insets(0), listOf(unowned))
+        assertFalse("This window never observed a shown source", activity.progressingHide)
+        activity.end(unowned)
+        assertEquals(0, activity.completedHideCount)
+        val interrupted = animation()
+        popup.apply(insets(867))
+        popup.prepare(interrupted)
+        popup.apply(insets(0))
+        popup.start(interrupted)
+        interrupted.fraction = .5f
+        popup.progress(insets(400), listOf(interrupted))
+        popup.end(interrupted)
+        assertEquals("An interrupted hide cannot supply terminal hidden evidence", 0, popup.completedHideCount)
+    }
+
+    @Test fun aNewHiddenApplyCannotRelabelAnOlderResizeAsACompletedHide() {
+        val state = SearchImeHandoffObservation()
+        val resize = animation()
+        val hide = animation()
+        state.apply(insets(400))
+        state.prepare(resize)
+        state.apply(insets(867))
+        state.start(resize)
+        resize.fraction = .5f
+        state.progress(insets(600), listOf(resize))
+        state.prepare(hide)
+        state.apply(insets(0))
+        state.start(hide)
+        assertFalse("The new hide has not progressed; the old resize is not a hide", state.progressingHide)
+        hide.fraction = .5f
+        state.progress(insets(300), listOf(hide))
+        assertTrue(state.progressingHide)
+        state.end(hide)
+        assertFalse(state.progressingHide)
+        // An API26 singleton callback for the old animation cannot inherit the
+        // canceled hide's target, even when its last frame is reported as zero.
+        resize.fraction = 1f
+        state.progress(insets(0), listOf(resize))
+        assertFalse(state.progressingHide)
+        state.end(resize)
+        assertEquals(0, state.completedHideCount)
+    }
 }

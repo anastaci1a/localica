@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.AnimationVector1D
@@ -51,6 +53,51 @@ class SearchImeMotionTest {
     private val samples = mutableListOf<SearchMorphSample>()
     private val keyboardSetup = mutableListOf<String>()
     private val motionTimeline = mutableListOf<String>()
+    private val nativeWindows = mutableListOf<ObservedImeWindow>()
+    private val nativeFrames = mutableListOf<NativeMotionFrame>()
+
+    private data class ObservedImeWindow(val name: String, val view: View, val observation: SearchImeHandoffObservation, var observing: Boolean = true)
+    private data class NativeImeSample(
+        val name: String, val nativeBottom: Int, val nativeVisible: Boolean,
+        val appliedBottom: Int, val appliedVisible: Boolean, val navigation: Int,
+        val progressingHide: Boolean, val animations: Int, val completedHides: Int,
+    ) {
+        val occluding: Boolean get() = nativeVisible && appliedVisible &&
+            nativeBottom > navigation && appliedBottom > navigation
+    }
+    private data class NativeMotionFrame(val sample: SearchMorphSample, val windows: List<NativeImeSample>, val completedHides: Int)
+
+    @Composable private fun ObserveImeWindow(view: View, name: String) {
+        DisposableEffect(view) {
+            val decor = view.rootView as ViewGroup
+            val observation = SearchImeHandoffObservation()
+            val observer = createSearchImeObserver(view.context, observation)
+            // Observe both native windows before show/dismissal. The returning
+            // popup relinquishes input immediately, so its insets alone can go
+            // to zero before the activity's native hide has actually finished.
+            val window = ObservedImeWindow(name, view, observation)
+            nativeWindows += window
+            decor.addView(observer, 0, ViewGroup.LayoutParams(0, 0))
+            ViewCompat.requestApplyInsets(observer)
+            onDispose {
+                window.observing = false
+                disposeSearchImeObserver(observer)
+                decor.removeView(observer)
+            }
+        }
+    }
+
+    private fun nativeSamples(): List<NativeImeSample> = nativeWindows.filter { it.observing }.map { window ->
+        val native = ViewCompat.getRootWindowInsets(window.view)
+        val applied = window.observation.applied
+        NativeImeSample(window.name,
+            native?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0,
+            native?.isVisible(WindowInsetsCompat.Type.ime()) == true,
+            applied?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0,
+            applied?.isVisible(WindowInsetsCompat.Type.ime()) == true,
+            native?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0,
+            window.observation.progressingHide, window.observation.animationCount, window.observation.completedHideCount)
+    }
 
     @Before fun prepareWindow() {
         compose.activityRule.scenario.onActivity {
@@ -74,12 +121,15 @@ class SearchImeMotionTest {
         extraContentHeight = initialExtraContentHeight
         keyboardAllowed = !deferKeyboard
         compose.setContent { LocalicaTheme {
+            ObserveImeWindow(compose.activity.window.decorView, "activity")
             val speed = LocalMotionSpeed.current
             SideEffect { motionSpeed = speed }
             CompositionLocalProvider(LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides {
                     samples += it
-                    motionTimeline += "${SystemClock.uptimeMillis()} $it"
+                    val windows = nativeSamples()
+                    nativeFrames += NativeMotionFrame(it, windows, nativeWindows.sumOf { window -> window.observation.completedHideCount })
+                    motionTimeline += "${SystemClock.uptimeMillis()} $it nativeWindows=$windows"
                 }) {
                 anchor = rememberGlassAnchor()
                 Box(Modifier.fillMaxSize()) {
@@ -92,6 +142,7 @@ class SearchImeMotionTest {
                     val focusedWindow = LocalWindowInfo.current.isWindowFocused
                     val ready = LocalSearchOpeningReady.current
                     val view = LocalView.current
+                    ObserveImeWindow(view, "popup")
                     val density = LocalDensity.current
                     val ime = WindowInsets.ime.getBottom(density)
                     val source = WindowInsets.imeAnimationSource.getBottom(density)
@@ -140,7 +191,7 @@ class SearchImeMotionTest {
             val state = compose.runOnUiThread {
                 "visible=$visible modal=${anchor.modalPresent} progress=${anchor.contact.expansion.value} " +
                     "running=${anchor.contact.expansion.isRunning} keyboardSettled=$keyboardSettled " +
-                    "placedFrames=${samples.size} last=${samples.lastOrNull()}"
+                    "placedFrames=${samples.size} last=${samples.lastOrNull()} native=${nativeSamples()}"
             }
             throw AssertionError("Search readiness timed out after ${SystemClock.uptimeMillis() - wallStart}ms wall " +
                 "and ${compose.mainClock.currentTime - start}ms virtual " +
@@ -247,15 +298,26 @@ class SearchImeMotionTest {
         assertRect("Return captures the keyboard-visible placement", positiveImeCapture.bounds, from)
         if (!reduced) {
             assertTrue("Return has intermediate frames", returning.any { it.progress in .01f.. .99f })
-            // Compose 1.8.2 preserves the source during the native animation and
-            // resets source/target onEnd. Current insets may already be zero when
-            // a closing window loses IME control, before that animation finishes.
-            val overlap = returning.indexOfFirst {
-                it.progress < .99f && (it.ime > 0 || it.imeSource > it.imeTarget)
+            val nativeReturning = compose.runOnUiThread { nativeFrames.filter { !it.sample.opening } }
+            val overlap = nativeReturning.indexOfFirst { frame ->
+                frame.sample.progress < .99f && (frame.sample.ime > 0 || frame.sample.imeSource > frame.sample.imeTarget ||
+                    frame.windows.any { it.occluding || it.progressingHide })
             }
             assertTrue("Return moves before the native keyboard hide settles", overlap >= 0)
-            assertTrue("The observed native hide reaches its end after moving overlap",
-                returning.drop(overlap + 1).any { it.ime == 0 && it.imeSource == 0 && it.imeTarget == 0 })
+            val completedAtOverlap = nativeReturning[overlap].completedHides
+            // A native onEnd can mean control revocation, not completed hiding.
+            // Keep pumping until a real hide reaches terminal zero progress and
+            // ends, and the focused activity receives its settled hidden insets.
+            advanceUntil {
+                nativeWindows.sumOf { it.observation.completedHideCount } > completedAtOverlap &&
+                    nativeWindows.first { it.name == "activity" }.let {
+                        it.observation.complete(it.view.hasWindowFocus(), ViewCompat.getRootWindowInsets(it.view))
+                    }
+            }
+            assertTrue("The popup also settles to zero after moving overlap",
+                nativeReturning.drop(overlap + 1).any {
+                    it.sample.ime == 0 && it.sample.imeSource == 0 && it.sample.imeTarget == 0
+                })
         }
         all.drop(all.indexOfLast { it.opening && it.ime > 0 } + 1)
             .filter { it.opening && it.imeTarget == 0 && it.progress == 1f }.forEach {
