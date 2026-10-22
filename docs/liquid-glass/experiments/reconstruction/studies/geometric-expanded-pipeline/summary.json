@@ -24,7 +24,7 @@
     "height_law": "harmonic_cap(depth*(1-rho^power),crown_depth*(1-(x/majorhalf)^2)); rho=distance to core box/radius",
     "maximum_height": 0.10909090909090907,
     "slope_bound": 0.4480437045882295,
-    "regularity": "Actual height/gradient C1; second derivatives can jump at the frozen capsule/core-box joins. No false global C2 claim or independent normals."
+    "regularity": "C1 on the regular interior; second derivatives can jump at core-box joins. Exact zero-height tips and rim creases are unresolved; no globally smooth closed-solid claim."
   },
   "material": {
     "source_sigma": 0,
