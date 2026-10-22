@@ -2,8 +2,12 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
@@ -11,6 +15,8 @@ import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.After
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -74,16 +80,55 @@ class ListControlsTest {
         compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Z song 070"))
         compose.onNodeWithContentDescription("Current song").assertIsDisplayed()
         val selected = compose.onNodeWithTag("media-${queue.entries[70].id}")
-        val selectionTarget = compose.onNodeWithText("Z song 070")
+        compose.awaitExpectedWindowFocus(selected)
+        val row = selected.fetchSemanticsNode()
+        val rowBounds = row.boundsInRoot
+        val rootBounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val view = (row.root as ViewRootForTest).view
+        val (nativeVisibleBounds, systemBarSafeBounds) = compose.runOnUiThread {
+            val visible = android.graphics.Rect()
+            check(view.getLocalVisibleRect(visible)) { "The input root must have native visible bounds" }
+            val rootOrigin = IntArray(2).also(view::getLocationOnScreen)
+            val window = view.rootView
+            val windowOrigin = IntArray(2).also(window::getLocationOnScreen)
+            val bars = checkNotNull(ViewCompat.getRootWindowInsets(view)).getInsets(WindowInsetsCompat.Type.systemBars())
+            val windowLeft = (windowOrigin[0] - rootOrigin[0]).toFloat()
+            val windowTop = (windowOrigin[1] - rootOrigin[1]).toFloat()
+            Rect(visible.left.toFloat(), visible.top.toFloat(), visible.right.toFloat(), visible.bottom.toFloat()) to
+                Rect(windowLeft + bars.left, windowTop + bars.top,
+                    windowLeft + window.width - bars.right, windowTop + window.height - bars.bottom)
+        }
+        val viewport = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
+        val returnBounds = compose.onNodeWithContentDescription("Current song").fetchSemanticsNode().boundsInRoot
+        val menuBounds = compose.onNodeWithContentDescription("Actions for Z song 070").fetchSemanticsNode().boundsInRoot
+        // The text lookup merges into this whole row. Its center overlaps Current
+        // song on API36 instead of being an exposed row contact.
+        // Keep the same occurrence and viewport; exercise its exposed row instead.
+        // Edge-to-edge semantics may also extend behind native navigation chrome.
+        val exposedRow = rowBounds.intersect(viewport).intersect(nativeVisibleBounds).intersect(systemBarSafeBounds)
+        assertTrue("The occurrence must expose a physical contact area: $exposedRow",
+            exposedRow.width > 0f && exposedRow.height > 0f)
+        val rootContact = Offset(rowBounds.left + rowBounds.width * .25f, exposedRow.center.y)
+        val contact = rootContact - rowBounds.topLeft
+        android.util.Log.i("ListControls", "Selection hit path: row=$rowBounds viewport=$viewport root=$rootBounds " +
+            "nativeVisible=$nativeVisibleBounds systemBarSafe=$systemBarSafeBounds exposedRow=$exposedRow " +
+            "mergedCenter=${rowBounds.center} return=$returnBounds menu=$menuBounds contact=$rootContact")
+        assertTrue("Selection hold must remain inside its occurrence", rowBounds.contains(rootContact))
+        assertTrue("Selection hold must remain inside the list", viewport.contains(rootContact))
+        assertTrue("Selection hold must remain inside the Compose root", rootBounds.contains(rootContact))
+        assertTrue("Selection hold must remain natively visible", nativeVisibleBounds.contains(rootContact))
+        assertTrue("Selection hold must not belong to system bars", systemBarSafeBounds.contains(rootContact))
+        assertFalse("Selection hold must not belong to Current song", returnBounds.contains(rootContact))
+        assertFalse("Selection hold must not belong to the row menu", menuBounds.contains(rootContact))
         var held = false
         try {
-            selectionTarget.performTouchInput { down(center); held = true; advanceEventTime(650); moveTo(center) }
+            selected.performTouchInput { down(contact); held = true; advanceEventTime(650); moveTo(contact) }
             selected.assertIsSelected()
             compose.onNodeWithText("Select song").assertDoesNotExist()
             compose.onNodeWithContentDescription("Current song").assertDoesNotExist()
             compose.onNodeWithText("1 selected").assertDoesNotExist()
-            selectionTarget.performTouchInput { up(); held = false }
-        } finally { if (held) selectionTarget.performTouchInput { cancel() } }
+            selected.performTouchInput { up(); held = false }
+        } finally { if (held) selected.performTouchInput { cancel() } }
         awaitDisplayed(compose.onNodeWithText("1 selected"))
         compose.onNodeWithContentDescription("Close selection").performClick()
         awaitDisplayed(compose.onNodeWithContentDescription("Current song"))
