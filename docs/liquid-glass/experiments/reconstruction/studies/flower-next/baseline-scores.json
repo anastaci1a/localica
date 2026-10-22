@@ -1,0 +1,97 @@
+{
+  "status": "UNFITTED_TAU1_BASELINE_REVIEW_READY_NO_CALIBRATION",
+  "scores": {
+    "glass": {
+      "pixels": 31119,
+      "rmse": 25.113771438598633
+    },
+    "rim": {
+      "pixels": 13909,
+      "rmse": 27.126310348510742
+    },
+    "held": {
+      "pixels": 8377,
+      "rmse": 25.014009475708008
+    },
+    "interior": {
+      "pixels": 17210,
+      "rmse": 23.36090850830078
+    },
+    "ssim": 0.9819281697273254,
+    "loss": 662.242075046237,
+    "E": 25.734064487488894,
+    "glyph": {
+      "pixels": 8600,
+      "rmse": 24.166460037231445
+    },
+    "exterior": {
+      "pixels": 33399,
+      "rmse": 3.778846502304077
+    },
+    "full_visible_exterior": {
+      "pixels": 59242,
+      "rmse": 2.986921787261963
+    }
+  },
+  "source_proof": {
+    "counts": {
+      "whole": 162445,
+      "scored": 124476,
+      "postfootprint": 174484,
+      "scored_outside_outline": 0,
+      "whole_bad": 0,
+      "scored_bad": 0,
+      "postfootprint_bad": 0
+    },
+    "minimum_defined_confidence": {
+      "whole": 1.0,
+      "scored": 1.0,
+      "postfootprint": 1.0
+    },
+    "source_bounds": [
+      1215.0306396484375,
+      449.8213195800781,
+      1419.94091796875,
+      654.718505859375
+    ],
+    "source_kernel": {
+      "sigma": 0.23203673469387756,
+      "radius": 1,
+      "centerline_nonzero": [
+        9.262367530027404e-05,
+        0.9996294379234314,
+        9.262367530027404e-05
+      ],
+      "dtype": "float32matchesRGBnativefield",
+      "operator": "ActualOpenCV GaussianBlur ksize0/default border; nonzero finiteimpulse support, notinfiniteGaussian theorem"
+    },
+    "post_kernel": {
+      "sigma": 0.7425175510204082,
+      "radius": 3,
+      "centerline_nonzero": [
+        8.234604320023209e-05,
+        0.007672522217035294,
+        0.11655084788799286,
+        0.2886519432067871,
+        0.11655084788799286,
+        0.007672522217035294,
+        8.234604320023209e-05
+      ],
+      "dtype": "float32matchesRGBnativefield",
+      "operator": "ActualOpenCV GaussianBlur ksize0/default border; nonzero finiteimpulse support, notinfiniteGaussian theorem"
+    },
+    "observed_confidence": 0.0,
+    "passed": true,
+    "limits": "Actualnative2x2 WHOLE+ALLscored(notintersection)+all postkernelneighbor subrays, actualfiniteGaussian/bilinear lookup. Modeledsource definition only, hiddenobserved0; notcontinuous/infinitekernel/photographicopticsproof. Outside-map and source-border semantics preservedexact."
+  },
+  "native_body_renders": 1,
+  "material_fit_or_sweep_count": 0,
+  "accepted_count": 0,
+  "case_sha256": {
+    "a": "295db3be4166b450a6f7bc441aeb069a729a5e78adf6add94d09e4bd7a50b195"
+  },
+  "map": "EXACTselectedsettled.mapping/render(samples2), unmodifiedinside/outside, normalizedcasepose only",
+  "source": "Conditionalestimatedsky, observed0; refraction/dispersion/scattering NOTidentified/validated bylow-frequency input",
+  "canonical_white_vector": "Pinnedoriginal-pathselectioncounts0, no screenshotmatte/icon_colorgrade",
+  "limits": "No materialtaufit untilprimaryindependentnative/source/visualbaselinechecks. NativeEisbaselineonly, nogainclaim. Zero-shadowreferenceunderlay iscleanpresentationbaseline, nocopiedcontextremovalcredit. Pairedfuturestage."
+}

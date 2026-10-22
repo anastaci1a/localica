@@ -171,5 +171,12 @@
     "top": 64,
     "bottom": 0,
     "gutter": 2
+  },
+  "assets/flower-next-current.png": {
+    "width": 2162,
+    "height": 1137,
+    "top": 64,
+    "bottom": 0,
+    "gutter": 2
   }
 }

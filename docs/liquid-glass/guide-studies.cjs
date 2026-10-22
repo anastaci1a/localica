@@ -4,6 +4,7 @@ const studies={
  'clear-playback-control':['Playback','Circular control · most polished'],
  'archive-and-plus-toolbar':['Toolbar','Archive and plus · text backdrop'],
  'safari-circular-controls':['Safari','Circular controls · transfer under review'],
+ 'next-track-control':['Playback','Next-track circle · sky background'],
  'mail-three-action-toolbar':['Mail','Three-action toolbar · material study'],
  'active-slider':['Settings','Active slider · blue track'],
  'light-and-dark-surfaces':['Surfaces','Light and dark material responses'],
