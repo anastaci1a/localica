@@ -1,0 +1,158 @@
+name: Android IME readiness diagnostic
+
+# Temporary, class-targeted evidence only. This is not a delivery or release gate.
+on:
+  push:
+    branches: [diagnostic/dev65-api26-readiness]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-api26-readiness-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  focused-native:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/diagnostic/dev65-api26-readiness'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+    env:
+      TEST_API: ${{ matrix.api }}
+      # Exact reviewed fixture source; this diagnostic does not replace delivery gates.
+      SOURCE_COMMIT: 430ac87c7073fc628512d703953cbfcbd58f667e
+      SOURCE_TREE: 68a2a1624217fdbffede68556c406f71a3a52c1a
+      DIAGNOSTIC_CLASSES: io.github.anastaci1a.localica.ModalGestureTakeoverTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.SearchImeMotionTest,io.github.anastaci1a.localica.SearchSortResetTest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify source and record the exact test list
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          test "$(git rev-parse HEAD^^{tree})" = "$SOURCE_TREE"
+          git diff --exit-code HEAD^ HEAD -- . ':(exclude).github/workflows/android-api26-readiness-diagnostic.yml'
+          mkdir -p diagnostic-reports
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          expected_counts = {
+              "io.github.anastaci1a.localica.ModalGestureTakeoverTest": 10,
+              "io.github.anastaci1a.localica.QueueFollowingTest": 31,
+              "io.github.anastaci1a.localica.SearchImeMotionTest": 10,
+              "io.github.anastaci1a.localica.SearchSortResetTest": 2,
+          }
+          classes = os.environ["DIAGNOSTIC_CLASSES"].split(",")
+          assert len(classes) == 4 and set(classes) == set(expected_counts), classes
+          tests = []
+          for name in classes:
+              path = pathlib.Path("app/src/androidTest/java") / (name.replace(".", "/") + ".kt")
+              content = path.read_bytes()
+              methods = re.findall(r"@Test\s+fun\s+(\w+)\s*\(", content.decode())
+              assert len(methods) == expected_counts[name], (name, methods)
+              assert len(methods) == len(set(methods)), (name, methods)
+              tests.append({"class": name, "methods": methods, "source": str(path),
+                            "sha256": hashlib.sha256(content).hexdigest()})
+          api = int(os.environ["TEST_API"])
+          assert api in (26, 36), api
+          manifest = {"diagnostic_only": True, "api": api, "expected_tests": 53,
+                      "source_commit": git("rev-parse", "HEAD^"),
+                      "source_tree": git("rev-parse", "HEAD^^{tree}"),
+                      "workflow_commit": git("rev-parse", "HEAD"),
+                      "workflow_tree": git("rev-parse", "HEAD^{tree}"),
+                      "selector": os.environ["DIAGNOSTIC_CLASSES"], "tests": tests,
+                      "run_id": os.environ["GITHUB_RUN_ID"],
+                      "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"]}
+          pathlib.Path("diagnostic-reports/provenance.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          print(json.dumps(manifest, indent=2))
+          PY
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Make room for emulator userdata
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          df -h "$HOME"
+      - name: Compile instrumentation APKs before starting emulator
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - name: Run only the four selected classes on API ${{ matrix.api }}
+        id: focused
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.api < 36 }}
+          # Match delivery's per-API setup without invoking its full-suite preflight helper.
+          script: |
+            adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
+            adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
+            sleep 60
+            test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = "$TEST_API"
+            adb shell getprop > diagnostic-reports/emulator-properties.txt
+            bash .github/prepare-device-tests.sh
+            bash -o pipefail -c './gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$DIAGNOSTIC_CLASSES" 2>&1 | tee diagnostic-reports/gradle.log'
+      - name: Verify all 53 selected native tests actually ran
+        if: always() && steps.focused.outcome != 'skipped'
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, xml.etree.ElementTree as ET
+          root = pathlib.Path("diagnostic-reports")
+          manifest = json.loads((root / "provenance.json").read_text())
+          expected = {(test["class"], method) for test in manifest["tests"] for method in test["methods"]}
+          reports = sorted(pathlib.Path("app/build/outputs/androidTest-results/connected").rglob("TEST-*.xml"))
+          assert len(expected) == manifest["expected_tests"] == 53
+          assert len(reports) == 1, "Expected one complete native XML report"
+          actual = []
+          for path in reports:
+              for case in ET.parse(path).getroot().iter("testcase"):
+                  actual.append({"class": case.get("classname"), "method": case.get("name"),
+                                 "passed": not any(case.find(tag) is not None for tag in ("failure", "error", "skipped"))})
+          result = {"reports": [str(path) for path in reports], "test_count": len(actual), "tests": actual}
+          (root / "observed-tests.json").write_text(json.dumps(result, indent=2) + "\n")
+          print(json.dumps(result, indent=2))
+          assert len(actual) == 53, "Expected exactly 53 native test results"
+          assert {(test["class"], test["method"]) for test in actual} == expected, "Native test list differs from the selected source methods"
+          assert all(test["passed"] for test in actual), "At least one selected test failed or was skipped"
+          PY
+      - name: Capture host diagnostics on emulator failure
+        if: failure()
+        run: |
+          free -h
+          df -h
+          sudo dmesg --ctime | tail -100
+      - name: Preserve diagnostic reports only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ime-readiness-diagnostic-api-${{ matrix.api }}-${{ github.sha }}
+          path: |
+            diagnostic-reports/
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/**/search-ime-motion/**
+          if-no-files-found: warn
+      - name: Preserve emulator crashes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: ime-readiness-emulator-crashes-api-${{ matrix.api }}-${{ github.sha }}
+          path: /tmp/android-runner/emu-crash-*/
+          if-no-files-found: warn
