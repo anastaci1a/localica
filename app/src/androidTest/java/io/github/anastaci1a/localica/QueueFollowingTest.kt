@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
@@ -11,7 +13,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowsePreferences
@@ -36,7 +38,7 @@ import kotlin.coroutines.CoroutineContext
 
 /** Real browser/queue composition: attachment is user intent, not current-row visibility. */
 class QueueFollowingTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val tracks = (0 until 120).map { index ->
         Track("following:$index", "Song ${index.toString().padStart(3, '0')}", artist = "Following artist",
             fileName = "$index.mp3", relativePath = "$index.mp3")
@@ -110,6 +112,18 @@ class QueueFollowingTest {
         }
         fun checkpoint() {
             queueState = queueState.copy(library = queueState.library.update(queue.copy(positionMs = queue.positionMs + 1000)))
+        }
+    }
+
+    @Before fun configureNativeInputWindow() {
+        compose.activityRule.scenario.onActivity {
+            // This search editor is in the activity, not a resize-configured popup.
+            // Match MainActivity: legacy PAN can change visible insets without
+            // applying a new snapshot, leaving the independent IME observer stale.
+            it.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            assertEquals("Direct search uses the production native resize contract",
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+                it.window.attributes.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST)
         }
     }
 
