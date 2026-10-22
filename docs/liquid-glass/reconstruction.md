@@ -133,6 +133,14 @@ Both contain 90frames at 15fps, exactly 6 seconds; GIF: 6,185,889 bytes. Rays, o
 
 [Equations](recreation-models.md#safari-circular-controls-conditional-material-transfer) · [Fixed recipes and fingerprints](experiments/reconstruction/studies/safari-circles/baseline-transfer.json) · [Native replay](experiments/reconstruction/safari_transfer.py). Inputs remain private. Native sampling is Study2×2; previews are resized from those saved native arrays. This study is separate from the more polished clear playback control and does not replace it.
 
+## Safari bag control
+
+![Safari bag circle and neutral material reconstruction](assets/safari-bag-current.png)
+
+- **1/3 verified material passes:** common RGB bias b=.025, gain1. E **24.479→18.262**, with every original glass, rim, held, interior, icon, SSIM and near/full exterior check improving. No clipped audited samples. [Recipe and scores](experiments/reconstruction/studies/safari-bag/round/pass-01.json) · [Independent replay](experiments/reconstruction/studies/safari-bag/round/pass-01-verification.json).
+- This reuses the selected playback map and normalized kernels as a prior, with a pinned solid bag outline. A quadratic estimate from uncovered controls supplies hidden panel RGB; no hidden pixels were independently observed. Held and independent upper controls support that source family, while the lower-control error2.273levels and pose residualp95≈2px remain uncertainties. [Case](experiments/reconstruction/studies/safari-bag/case.json) · [Source controls](experiments/reconstruction/studies/safari-bag/source-controls.json).
+- Missing rim highlights and glyph-weight differences remain visible. The smooth estimated background cannot identify refraction or blur. This is a single-background material study, using the [shared neutral response](recreation-models.md#neutral-additive-playback-response), without a paired-optics claim.
+
 ## Safari tab-count pill
 
 ![Safari tab-count pill and neutral material reconstruction](assets/safari-tab-pill-current.png)
