@@ -1,0 +1,187 @@
+{
+  "recipe_sha256": "7ddd84eccdae52ebdfbfd287afb85d41df5429a451323aebac05ec85520a3b5c",
+  "native_zero_exact": {
+    "material_exact": true,
+    "complete_exact": true,
+    "clean_public_compositor_exact": true
+  },
+  "source_support": "source-support.json",
+  "internal_raster": [
+    1560,
+    1600
+  ],
+  "export": [
+    1080,
+    1108
+  ],
+  "frames": 90,
+  "seconds": 6,
+  "rim_record_sha256": "1ae20cbf4ae86bba4b4bf09413a1f58b2d0b902681e58417af1427f3839b4390",
+  "raw_rim_audit_all_export_pixels": {
+    "minimum": 0.5416972972437527,
+    "maximum": 0.7527053627304383,
+    "clipped_channels": 0
+  },
+  "presentation_trim_native_pixels": 1,
+  "travel_native_pixels": 4.0,
+  "files": {
+    "motion.mp4": {
+      "bytes": 120385,
+      "sha256": "7b4596bccb241942e86c30f1f88911de101daa570bdc814ce112e5cbc39c2028",
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "width": 1080,
+            "height": 1108,
+            "coded_width": 1088,
+            "coded_height": 1120,
+            "closed_captions": 0,
+            "film_grain": 0,
+            "has_b_frames": 2,
+            "pix_fmt": "yuv420p",
+            "level": 32,
+            "color_range": "tv",
+            "color_space": "smpte170m",
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "refs": 4,
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "15/1",
+            "avg_frame_rate": "15/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 92160,
+            "duration": "6.000000",
+            "bit_rate": "157921",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "90",
+            "nb_read_frames": "90",
+            "extradata_size": 51,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "vendor_id": "[0][0][0][0]",
+              "encoder": "Lavc59.37.100 libx264"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/evidence/extended/neutral-circle-rim-round/bag-final/motion.mp4",
+          "nb_streams": 1,
+          "nb_programs": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "6.000000",
+          "size": "120385",
+          "bit_rate": "160513",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf59.27.100"
+          }
+        }
+      },
+      "decoded_rgb_digest": "SHA256=312fb45ef1cf1185c40b89ebaca2bdd9c641a22435c28621d75e54310c3427e3"
+    },
+    "motion.gif": {
+      "bytes": 2753906,
+      "sha256": "78ca875a15790d7f8b2071c71ff7c47a4d363fd4b20a2779378e61f5bafd97a1",
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "gif",
+            "codec_long_name": "CompuServe GIF (Graphics Interchange Format)",
+            "codec_type": "video",
+            "codec_tag_string": "[0][0][0][0]",
+            "codec_tag": "0x0000",
+            "width": 1080,
+            "height": 1108,
+            "coded_width": 1080,
+            "coded_height": 1108,
+            "closed_captions": 0,
+            "film_grain": 0,
+            "has_b_frames": 0,
+            "pix_fmt": "bgra",
+            "level": -99,
+            "refs": 1,
+            "r_frame_rate": "15/1",
+            "avg_frame_rate": "15/1",
+            "time_base": "1/100",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 600,
+            "duration": "6.000000",
+            "nb_frames": "90",
+            "nb_read_frames": "90",
+            "disposition": {
+              "default": 0,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0
+            }
+          }
+        ],
+        "format": {
+          "filename": "/evidence/extended/neutral-circle-rim-round/bag-final/motion.gif",
+          "nb_streams": 1,
+          "nb_programs": 0,
+          "format_name": "gif",
+          "format_long_name": "CompuServe Graphics Interchange Format (GIF)",
+          "start_time": "0.000000",
+          "duration": "6.000000",
+          "size": "2753906",
+          "bit_rate": "3671874",
+          "probe_score": 100
+        }
+      },
+      "decoded_rgb_digest": "SHA256=a06d817466c4cc30f8248637c180d3ff1794a38fc051025494c54d559f348e41"
+    }
+  },
+  "limits": "Illustrative source translation over estimated background, observed hidden fraction0; no new scoring, physical-optics or Apple-motion validation."
+}
