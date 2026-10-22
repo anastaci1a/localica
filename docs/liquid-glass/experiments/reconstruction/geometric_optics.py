@@ -99,3 +99,80 @@ def trace_flat_front_orthographic(surface,x,y,index,background_distance):
                 outward_normal=np.where(valid_surface[...,None],-n_against,np.nan),
                 exit_direction=direction,discriminant=k,path_length=distance,
                 complete=~boundary)
+
+
+@dataclass(frozen=True)
+class ClosedCircularOval:
+    """One closed implicit solid; entry, exit, normals and views share F.
+
+    F=x²+y²+(1+kappa*x²)*((z+depth)/depth)²-1.
+    Convex on the enclosing |x|<=1 slab for 0<=kappa<=1/3.
+    """
+    depth: float=.15
+    kappa: float=0.
+
+    def __post_init__(self):
+        if not np.isfinite([self.depth,self.kappa]).all() or self.depth<=0 or not 0<=self.kappa<=1/3:raise ValueError('Invalid closed oval')
+
+    @property
+    def half_extents(self):return (1.,1.,self.depth)
+    @property
+    def center(self):return (0.,0.,-self.depth)
+
+    def level_gradient(self,points):
+        x,y,z=np.moveaxis(np.asarray(points,float),-1,0);u=(z+self.depth)/self.depth
+        f=x*x+y*y+(1+self.kappa*x*x)*u*u-1
+        gradient=np.stack([2*x*(1+self.kappa*u*u),2*y,2*(1+self.kappa*x*x)*u/self.depth],axis=-1)
+        return f,gradient
+
+    def boundary_mask(self,x,y):return np.asarray(x)**2+np.asarray(y)**2==1
+
+    def front_height(self,x,y):
+        x,y=np.broadcast_arrays(np.asarray(x,float),np.asarray(y,float));t=x*x+y*y
+        return self.depth*(np.sqrt(np.maximum(1-t,0)/(1+self.kappa*x*x))-1),t<1
+
+
+def trace_closed_orthographic(surface,x,y,index,background_distance,tolerance=1e-11,max_iterations=64):
+    """Ordered primary rays for a separately certified convex implicit solid.
+
+    Uses actual front root, then bounded bisection for the second intersection.
+    Total internal reflection, tangent and non-downward exit are INCOMPLETE,
+    with NaN background coordinates, never replacement samples. Convexity and
+    positive outgoing normal derivative certify no subsequent solid reentry.
+    No reflected radiance or Fresnel weighting is implemented.
+    """
+    ext=np.asarray(surface.half_extents,float);center=np.asarray(surface.center,float)
+    if index<1 or background_distance<=-center[2]+ext[2] or tolerance<=0 or max_iterations<1:raise ValueError('Invalid closed-solid scene')
+    x,y=np.broadcast_arrays(np.asarray(x,float),np.asarray(y,float));shape=x.shape
+    x=x.ravel();y=y.ravel();z,inside=surface.front_height(x,y);boundary=surface.boundary_mask(x,y)
+    X=x.copy();Y=y.copy();complete=~boundary;blocked=np.zeros_like(inside)
+    entry=np.full((len(x),3),np.nan);exit=entry.copy();ni=entry.copy();no=entry.copy();internal=entry.copy();outgoing=entry.copy()
+    discriminant=np.full(len(x),np.nan);width=np.full(len(x),np.nan);residual=np.full(len(x),np.nan)
+    j=np.flatnonzero(inside&~boundary)
+    if len(j):
+        p=np.stack([x[j],y[j],z[j]],axis=-1);f,g=surface.level_gradient(p)
+        if np.any(abs(f)>1e-10) or np.any(~np.isfinite(g)):raise ValueError('Invalid front intersection')
+        n=g/np.linalg.norm(g,axis=-1)[:,None];i=np.zeros_like(n);i[:,2]=-1
+        d,first_blocked,_=refract(i,n,1.,index)
+        if first_blocked.any():raise ValueError('Unavailable entry branch')
+        lo=np.zeros(len(j));hi=np.full(len(j),2*np.linalg.norm(ext)+tolerance)
+        fhi,_=surface.level_gradient(p+hi[:,None]*d)
+        if np.any(fhi<=0):raise ValueError('Exit bracket not outside solid')
+        for iterations in range(max_iterations):
+            mid=(lo+hi)/2;fm,_=surface.level_gradient(p+mid[:,None]*d)
+            lo=np.where(fm<=0,mid,lo);hi=np.where(fm>0,mid,hi)
+            if np.max(hi-lo)<=tolerance:break
+        else:raise ValueError('Intersection solver did not converge')
+        t=(lo+hi)/2;q=p+t[:,None]*d;fq,gq=surface.level_gradient(q);nq=gq/np.linalg.norm(gq,axis=-1)[:,None]
+        if np.any(np.sum(d*nq,axis=-1)<=0):raise ValueError('Wrong exit root')
+        e,tir,k=refract(d,-nq,index,1.)
+        good=~tir&(e[:,2]<0);distance=np.full(len(j),np.nan)
+        distance[good]=(-background_distance-q[good,2])/e[good,2]
+        good&=distance>0
+        X[j]=np.where(good,q[:,0]+distance*e[:,0],np.nan);Y[j]=np.where(good,q[:,1]+distance*e[:,1],np.nan)
+        complete[j]=good;blocked[j]=tir
+        entry[j]=p;exit[j]=q;ni[j]=n;no[j]=nq;internal[j]=d;outgoing[j]=e;discriminant[j]=k;width[j]=hi-lo;residual[j]=fq
+    X[boundary]=np.nan;Y[boundary]=np.nan
+    scalar=lambda v:v.reshape(shape)
+    vector=lambda v:v.reshape(shape+(3,))
+    return dict(X=scalar(X),Y=scalar(Y),inside=scalar(inside),complete=scalar(complete),boundary_unresolved=scalar(boundary),blocked=scalar(blocked),entry=vector(entry),exit=vector(exit),entry_normal=vector(ni),exit_normal=vector(no),internal_direction=vector(internal),exit_direction=vector(outgoing),discriminant=scalar(discriminant),intersection_bracket=scalar(width),exit_level_residual=scalar(residual))

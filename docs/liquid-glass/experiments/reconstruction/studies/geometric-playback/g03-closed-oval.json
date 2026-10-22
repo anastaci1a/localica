@@ -1,0 +1,71 @@
+{
+  "classification": "GEOMETRY_ONLY_DISCRIMINATOR_NOT_RENDERING_SUCCESS",
+  "protocol": {
+    "start_utc": "2026-10-22 04:02:32 UTC",
+    "deadline_utc": "2026-10-22 04:22:32 UTC",
+    "ray_limit": 30000,
+    "images": 0,
+    "fits": 0,
+    "depth": 0.15,
+    "kappas": [
+      0,
+      0.3333333333333333
+    ],
+    "index": 1.5,
+    "background_distance": 2,
+    "tolerance": 1e-11,
+    "iteration_limit": 64
+  },
+  "checks": [
+    {
+      "kappa": 0,
+      "gradient_error": 4.951132837049954e-10,
+      "identity_error": 0.0
+    },
+    {
+      "kappa": 0.3333333333333333,
+      "gradient_error": 4.5978687523984263e-10,
+      "identity_error": 0.0
+    }
+  ],
+  "rows": [
+    {
+      "kappa": 0,
+      "whole_geometry_rays": 5041,
+      "inside": 3613,
+      "valid_primary_transmission": 3505,
+      "blocked": 108,
+      "unavailable_primary": 108,
+      "exit_residual": 3.3508307240026625e-11,
+      "max_intersection_bracket": 5.173750317055692e-12,
+      "ellipsoid_exact_root_error": 2.5835444894539705e-12,
+      "minimum_transmitted_discriminant": 0.009485364925603479,
+      "radial_transmitted_count": 4016,
+      "radial_unavailable": 81,
+      "minimum_transmitted_map_derivative": -815.0156656070283,
+      "fold_in_transmitted_region": true
+    },
+    {
+      "kappa": 0.3333333333333333,
+      "whole_geometry_rays": 5041,
+      "inside": 3613,
+      "valid_primary_transmission": 3509,
+      "blocked": 104,
+      "unavailable_primary": 104,
+      "exit_residual": 3.285482996773226e-11,
+      "max_intersection_bracket": 5.173750317055692e-12,
+      "ellipsoid_exact_root_error": null,
+      "minimum_transmitted_discriminant": 0.051680504416560136,
+      "radial_transmitted_count": 4033,
+      "radial_unavailable": 64,
+      "minimum_transmitted_map_derivative": -1359.0859686655936,
+      "fold_in_transmitted_region": true
+    }
+  ],
+  "geometry_rays": 28562,
+  "wall_seconds": 0.1153252124786377,
+  "images": 0,
+  "fits": 0,
+  "core_sha": "89bea38e65ae84af6f08868421a86b722da39712c37995cd8c1f1ae21395fdd8",
+  "limitations": "Primary transmission only. TIR/non-downward rays unresolved; no rendered pixels. Frozen optical prior, not inferred Apple geometry. No Fresnel radiance/device/visual transfer claim."
+}

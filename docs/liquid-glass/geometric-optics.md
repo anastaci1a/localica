@@ -88,6 +88,54 @@ The new body uses only the frozen historical constant RGB gain/bias, without its
 
 This section and these rays use the same height function and parameters as the rendered refraction. Exact rim-crease rays are unresolved; native4×4 circle samples have no exact crease hits. The shape certificate and all actual source queries were checked. No Fresnel radiance, finite-camera, spectral or device-speed claim is made.
 
+## What the inverse geometry establishes
+
+The historical folded radial map can itself come from a convex back and flat front. For inward displacement `a(r)`, back height `h(r)`, index `n` and background distance `D`, the transmitted branch satisfies:
+
+```text
+q = a / (D-h)
+s = q / (n sqrt(1+q²)-1)
+h' = -s, h(1)=0
+```
+
+At `n=1.5,D=2`, two ODE tolerances and two surface resolutions were checked. Nonnegative piecewise-linear curvature, integrated twice, defines a single C2 concave height; normals are its exact polynomial derivatives. With513 nodes, traced displacement differs from the diagnostic map by at most0.000902 native pixels. Its minimum Snell discriminant is0.4731, yet its minimum radial map derivative is−13.1014: **the reversal is transmitted refraction, without total internal reflection.**
+
+This is a useful realizability result, not a reconstruction improvement. Converting the old map into valid geometry preserves its visible defect. The test neither identifies Apple's surface nor rules out other flat-front shapes or camera distances. [Numerical convergence, budgets and limits](experiments/reconstruction/studies/geometric-playback/g02-realizability.json)
+
+Reproduce without private photographs using [the geometry-only inverse check](experiments/reconstruction/geometric_inverse.py):
+
+```sh
+python geometric_inverse.py studies/playback/review-round/pass-03.json NEW_OUTPUT
+```
+
+## Closed curved-front discriminator
+
+The second shared shape hypothesis is a closed oval. With circle `T=x²+y²`, minor-depth parameter `eta`, longitudinal half-size `a` and `u=(z+eta)/eta`:
+
+```text
+F = T + (1+kappa (x/a)²) u² - 1
+solid: F<=0; 0<=kappa<=1/3
+```
+
+The same equation accepts the continuous pill's convex `T`. In the containing `|x/a|<=1` slab, the added term's x/u Hessian determinant is `4 kappa u² (1-3 kappa (x/a)²)/a²>=0`; the solid is convex. Entry uses its actual front root. A declared bounded bisection finds the ordered second intersection, and the gradient of this same `F` supplies both normals. Existing Snell calculations are reused. Exact projected tangencies, critical/TIR and non-downward exits remain unresolved, never substitute background pixels.
+
+**Useful negative; no image or fidelity success.** At `eta=.15,n=1.5,D=2`, both fixed circle shapes fold and have unavailable primary transmission near the rim:
+
+| κ | Interior sampled paths | TIR paths | Exact ellipsoid intersection error |
+| --- | ---: | ---: | ---: |
+| 0 | 3613 | 108 | 2.6×10⁻¹² L |
+| 1/3 | 3613 | 104 | Not an ellipsoid |
+
+![Actual closed surfaces and saved rays at equal x and z scale](assets/geometric-playback-g03-rays.svg)
+
+No image was rendered because a primary-transmission-only model cannot fill those paths. The transmitted regions also reverse; simply rounding the front did not solve the play-button complaint. These two fixed shapes do not rule out all curved fronts, finite cameras or full reflected transport. [Exact parameters, path counts and solver tolerances](experiments/reconstruction/studies/geometric-playback/g03-closed-oval.json)
+
+The [closed-surface check](experiments/reconstruction/geometric_closed_check.py) takes only a new output directory:
+
+```sh
+python geometric_closed_check.py NEW_OUTPUT
+```
+
 [Exact parameters, local measurements and limits](experiments/reconstruction/studies/geometric-playback/g01.json) · [Geometry invariants](experiments/reconstruction/studies/geometric-playback/g01-invariants.json) · [Partial public-wrapper identity control](experiments/reconstruction/studies/geometric-playback/g01-portable-control.json)
 
 Reproduce one diagnostic from the same frozen private inputs and historical cached material:
