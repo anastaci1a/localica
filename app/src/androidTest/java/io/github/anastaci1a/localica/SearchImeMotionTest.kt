@@ -497,13 +497,18 @@ class SearchImeMotionTest {
     private fun prepareDockedKeyboard() {
         lateinit var editor: EditText
         lateinit var root: FrameLayout
+        lateinit var insetObserver: android.view.View
+        val observation = SearchImeHandoffObservation()
         val input = requireNotNull(compose.activity.getSystemService(InputMethodManager::class.java))
         compose.runOnUiThread {
             root = FrameLayout(compose.activity).apply { isFocusableInTouchMode = true }
+            insetObserver = createSearchImeObserver(compose.activity, observation)
+            root.addView(insetObserver, FrameLayout.LayoutParams(0, 0))
             editor = EditText(compose.activity).apply { setSingleLine() }
             root.addView(editor, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
             compose.activity.setContentView(root)
+            ViewCompat.requestApplyInsets(insetObserver)
             editor.requestFocus()
         }
         fun record(label: String) {
@@ -512,7 +517,10 @@ class SearchImeMotionTest {
                 "focused=${editor.isFocused} windowFocused=${editor.hasWindowFocus()} " +
                     "visible=${insets?.isVisible(WindowInsetsCompat.Type.ime())} " +
                     "ime=${insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom} " +
-                    "navigation=${insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom}"
+                    "navigation=${insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom} " +
+                    "appliedIme=${observation.applied?.getInsets(WindowInsetsCompat.Type.ime())?.bottom} " +
+                    "animatedIme=${observation.animated?.getInsets(WindowInsetsCompat.Type.ime())?.bottom} " +
+                    "animations=${observation.animationCount}"
             }
         }
         fun awaitNativeInputView(shown: Boolean, timeoutMillis: Long) {
@@ -523,8 +531,10 @@ class SearchImeMotionTest {
                         val insets = ViewCompat.getRootWindowInsets(editor) ?: return@runOnUiThread false
                         val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
                         val navigation = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-                        if (shown) insets.isVisible(WindowInsetsCompat.Type.ime()) && ime > navigation
-                        else !editor.isFocused && !insets.isVisible(WindowInsetsCompat.Type.ime()) && ime == 0
+                        if (shown) insets.isVisible(WindowInsetsCompat.Type.ime()) && ime > navigation &&
+                            observation.applied?.isVisible(WindowInsetsCompat.Type.ime()) == true &&
+                            observation.animationCount == 0
+                        else !editor.isFocused && observation.complete(editor.hasWindowFocus(), insets)
                     }
                     if (shown && !placed && SystemClock.uptimeMillis() >= nextShowRequest) {
                         // A request rejected under the old policy need not replay
@@ -534,8 +544,9 @@ class SearchImeMotionTest {
                         nextShowRequest = SystemClock.uptimeMillis() + 1000L
                     }
                     // InputMethodService retains mIsInputViewShown after hiding
-                    // its native window. It proves input content only when shown;
-                    // hidden readiness belongs to actual insets and editor focus.
+                    // its native window, so check it only while shown. Wait for the
+                    // native hide's end too: removing the warmup window
+                    // at its first zero inset can lend the still-hiding IME to the popup.
                     placed && (!shown || Regex("\\bmIsInputViewShown=(true|false)\\b")
                         .find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1) == "true")
                 }
@@ -577,6 +588,7 @@ class SearchImeMotionTest {
             } finally {
                 try {
                     compose.runOnUiThread {
+                        disposeSearchImeObserver(insetObserver)
                         (root.parent as? ViewGroup)?.removeView(root)
                         assertEquals("The Compose test rule requires an empty activity content host", 0,
                             compose.activity.findViewById<ViewGroup>(android.R.id.content).childCount)
