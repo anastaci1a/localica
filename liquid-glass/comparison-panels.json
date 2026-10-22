@@ -178,5 +178,12 @@
     "top": 64,
     "bottom": 0,
     "gutter": 2
+  },
+  "assets/safari-tab-pill-current.png": {
+    "width": 1262,
+    "height": 484,
+    "top": 64,
+    "bottom": 0,
+    "gutter": 2
   }
 }
