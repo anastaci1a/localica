@@ -19,7 +19,7 @@ def field(x,y,p,width):
     return np.exp(-(d/width)**2)*(.5*(nx+ny)**2)
 
 
-def render(source,case,p,amplitude,width,samples=2):
+def render(source,case,p,amplitude,width,samples=2,audit=None):
     assert np.isfinite(amplitude) and amplitude>=0 and np.isfinite(width) and width>0
     if amplitude==0:return settled.render(source,case,p,samples=samples)
     old_light,old_shade=settled.lighting,settled.shade
@@ -27,7 +27,12 @@ def render(source,case,p,amplitude,width,samples=2):
         old=old_light(x,y,p,boundary)
         return np.concatenate([old,field(x,y,p,width)[...,None]],axis=-1)
     def shade(sample,light,co):
-        return np.clip(old_shade(sample,light[...,:-1],co)+amplitude*light[...,-1,None],0,1)
+        raw=old_shade(sample,light[...,:-1],co)+amplitude*light[...,-1,None]
+        if audit is not None:
+            audit['minimum']=min(audit.get('minimum',float('inf')),float(raw.min()))
+            audit['maximum']=max(audit.get('maximum',float('-inf')),float(raw.max()))
+            audit['clipped_channels']=audit.get('clipped_channels',0)+int(np.count_nonzero((raw<0)|(raw>1)))
+        return np.clip(raw,0,1)
     settled.lighting,settled.shade=lighting,shade
     try:return settled.render(source,case,p,samples=samples)
     finally:settled.lighting,settled.shade=old_light,old_shade
