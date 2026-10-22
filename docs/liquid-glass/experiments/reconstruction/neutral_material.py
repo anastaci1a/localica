@@ -11,10 +11,13 @@ from vector_revision import composite
 from preview_size import dimensions
 from publish import pair
 
-def coefficients(tau):
-    if not np.isfinite(tau) or not 0<=tau<=1:raise ValueError('Require0<=tau<=1')
-    co=np.zeros(23);co[:3]=co[-3:]=tau;co[3:6]=1-tau
+def affine_coefficients(g,b):
+    if not np.isfinite([g,b]).all() or not(0<=g<=1 and 0<=b<=1):raise ValueError('Require finite gain/bias within[0,1]')
+    co=np.zeros(23);co[:3]=co[-3:]=g;co[3:6]=b
     return co
+
+def coefficients(tau):
+    return affine_coefficients(tau,1-tau)
 
 def replay(inputs,record,output,high_quality=False):
     s=Study(inputs);assert len(record['case_sha256'])==1

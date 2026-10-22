@@ -1,0 +1,11 @@
+{
+  "native_material_complete_pixel_exact": true,
+  "scores_and_all_guards_exact": true,
+  "frozen_case_source_and_code_exact": true,
+  "sole_change_tied_RGB_additive_b": 0.07500000000000001,
+  "new_verified_pass": 3,
+  "E": 9.07579968332119,
+  "accepted_primary": true,
+  "source_observed_fraction": 0,
+  "limits": "Empirical neutral grading on estimated affine sky; no refraction/blur identification or Apple radiance model. Glyph/highlight residuals remain."
+}
