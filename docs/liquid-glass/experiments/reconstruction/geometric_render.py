@@ -1,25 +1,59 @@
 """Shared geometric transmission/pixel integration for circle and pill controls.
 
-4x4 pixel integration is AA, not optical blur. Raw unit transmission is common;
+Finite pixel integration is AA, not optical blur. Raw unit transmission is common;
 optional frozen constant grading reproduces historical diagnostics only.
 """
 import cv2,numpy as np
 from geometric_optics import trace_flat_front_orthographic
 
-def render_rows(source,case,p,surface,index,distance,start,stop,raw_transmission=False,exact_bilinear=False):
-    """4x4 finite pixel integration with coupled lens/background coverage."""
-    x0,y0,x1,y1=case['crop'];L=min(case['half'])
-    yy,xx=np.mgrid[y0+start:y0+stop:1/4,x0:x1:1/4]
-    x=(xx-.375-case['center'][0])/L;y=(yy-.375-case['center'][1])/L
+def render_rows(source,case,p,surface,index,distance,start,stop,raw_transmission=False,exact_bilinear=False,samples_per_axis=4,source_known=None,required_pixels=None,return_support=False):
+    """Finite pixel integration with coupled lens/background coverage.
+
+    Default4 preserves the historical geometric control. Explicit2 preserves an
+    existing2x2 element protocol; changing quadrature is not an optical gain.
+    Optional known support audits all four source texels. Unknown clear exterior
+    may be NaN only when an explicit required-pixel mask excludes it. Every lens
+    subray and every subray of a required pixel must remain defined and known.
+    No unsupported coordinate is clamped or sampled. Confidence means the input
+    contract's known/model support, not necessarily observed photographic truth.
+    """
+    if isinstance(samples_per_axis,bool) or int(samples_per_axis)!=samples_per_axis or not 1<=samples_per_axis<=8:raise ValueError('Integer AA samples per axis1..8 required')
+    s=int(samples_per_axis);x0,y0,x1,y1=case['crop'];L=min(case['half'])
+    yy,xx=np.mgrid[y0+start:y0+stop:1/s,x0:x1:1/s]
+    phase=(s-1)/(2*s);x=(xx-phase-case['center'][0])/L;y=(yy-phase-case['center'][1])/L
     q=trace_flat_front_orthographic(surface,x,y,index,distance)
     if not q['complete'].all():raise ValueError('Unresolved primary path; no pixel fallback')
     X=q['X']*L+case['center'][0];Y=q['Y']*L+case['center'][1]
-    if X.min()<0 or Y.min()<0 or X.max()>=source.shape[1]-1 or Y.max()>=source.shape[0]-1:raise ValueError('Undefined bilinear source footprint')
-    if exact_bilinear:
-        a=np.floor(X).astype(int);b=np.floor(Y).astype(int);fx=(X-a)[...,None];fy=(Y-b)[...,None]
-        C=(source[b,a]*(1-fx)+source[b,a+1]*fx)*(1-fy)+(source[b+1,a]*(1-fx)+source[b+1,a+1]*fx)*fy
-    else:C=cv2.remap(source,X.astype(np.float32),Y.astype(np.float32),cv2.INTER_LINEAR)
+    finite=np.isfinite(X)&np.isfinite(Y);defined=finite&(X>=0)&(Y>=0)&(X<source.shape[1]-1)&(Y<source.shape[0]-1)
+    if source_known is None and required_pixels is None:
+        if not defined.all():raise ValueError('Undefined bilinear source footprint')
+    else:
+        if source_known is not None:
+            if source_known.shape!=source.shape[:2]:raise ValueError('Known mask must match source')
+            rows,cols=np.nonzero(defined);a=np.floor(X[rows,cols]).astype(int);b=np.floor(Y[rows,cols]).astype(int)
+            known=np.zeros_like(defined)
+            known[rows,cols]=(source_known[b,a]>0)&(source_known[b,a+1]>0)&(source_known[b+1,a]>0)&(source_known[b+1,a+1]>0);defined&=known
+        if required_pixels is None:required=np.ones((stop-start,x1-x0),bool)
+        else:
+            required=np.asarray(required_pixels,bool)
+            if required.shape==(y1-y0,x1-x0):required=required[start:stop]
+            if required.shape!=(stop-start,x1-x0):raise ValueError('Required mask must match crop or rows')
+        required_rays=np.repeat(np.repeat(required,s,axis=0),s,axis=1)|q['inside']
+        if np.any(required_rays&~defined):raise ValueError('Unknown source for lens or required guard ray')
+    # Index only defined rays. Invalid unscored exterior stays explicitly NaN.
+    C=np.full(X.shape+(3,),np.nan,float)
+    if defined.all() and not exact_bilinear:
+        C=cv2.remap(source,X.astype(np.float32),Y.astype(np.float32),cv2.INTER_LINEAR)
+    else:
+        rows,cols=np.nonzero(defined);a=np.floor(X[rows,cols]).astype(int);b=np.floor(Y[rows,cols]).astype(int)
+        if exact_bilinear:
+            fx=(X[rows,cols]-a)[:,None];fy=(Y[rows,cols]-b)[:,None]
+            C[rows,cols]=(source[b,a]*(1-fx)+source[b,a+1]*fx)*(1-fy)+(source[b+1,a]*(1-fx)+source[b+1,a+1]*fx)*fy
+        else:
+            C[rows,cols]=cv2.remap(source,X[rows,cols].astype(np.float32)[None],Y[rows,cols].astype(np.float32)[None],cv2.INTER_LINEAR)[0]
     if not raw_transmission:
-        fixed=C*np.asarray(p['material'][:3])+np.asarray(p['material'][3:6])
-        C=np.where(q['inside'][...,None],fixed,C)
-    return C.reshape(stop-start,4,x1-x0,4,3).mean((1,3)).astype(np.float32),[float(X.min()),float(Y.min()),float(X.max()),float(Y.max())]
+        fixed=C*np.asarray(p['material'][:3])+np.asarray(p['material'][3:6]);C=np.where(q['inside'][...,None],fixed,C)
+    result=C.reshape(stop-start,s,x1-x0,s,3).mean((1,3)).astype(np.float32)
+    bounds=[float(X.min()),float(Y.min()),float(X.max()),float(Y.max())]
+    support=defined.reshape(stop-start,s,x1-x0,s).all((1,3))
+    return (result,bounds,support) if return_support else (result,bounds)
