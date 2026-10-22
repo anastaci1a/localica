@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
@@ -174,7 +176,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var searchTarget by remember { mutableStateOf(Rect.Zero) }
     var searchFocusRequest by remember { mutableStateOf<Boolean?>(null) }
     var searchOpeningGeneration by remember { mutableIntStateOf(0) }
-    var searchImeAvailable by remember { mutableStateOf(false) }
     var searchFallbackReady by remember { mutableStateOf(false) }
     var searchShapeStarted by remember { mutableStateOf(false) }
     var searchOpeningPositioned by remember { mutableStateOf(false) }
@@ -209,7 +210,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             if (visible) {
                 searchOpeningGeneration++
                 searchFocusRequest = null
-                searchImeAvailable = false
                 searchFallbackReady = false
                 searchShapeStarted = false
                 searchOpeningPositioned = false
@@ -324,7 +324,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         DisposableEffect(window) {
             modalWindow = window
             searchFocusRequest = null
-            searchImeAvailable = false
             // We draw our own animated scrim. A zero-alpha native dim layer still
             // blocks touches as an untrusted occluder during return on Android 16.
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
@@ -334,7 +333,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 if (modalWindow === window) {
                     modalWindow = null
                     searchFocusRequest = null
-                    searchImeAvailable = false
                 }
             }
         }
@@ -392,8 +390,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val imeTarget = WindowInsets.imeAnimationTarget.getBottom(density)
                 val safeBottom = WindowInsets.systemBars.union(WindowInsets.displayCutout).getBottom(density)
                 val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+                val nativeIme = ViewCompat.getRootWindowInsets(view)
+                    ?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
                 SideEffect {
-                    searchImeAvailable = imeHeight > 0
                     if (placement == GlassPlacement.Search && imeHeight > 0)
                         searchHeightLimit = minOf(searchHeightLimit, availableHeight)
                 }
@@ -414,11 +413,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         else searchOpeningShape.animateTo(shapeTarget(searchTarget), searchPlacementSpring(speed))
                     }
                 }
-                LaunchedEffect(placement, visible, searchTarget, searchFlight, searchImeAvailable, searchShapeStarted,
-                    searchFocusRequest, searchFallbackReady, childPanels.intValue, reduced, speed) {
+                val ownsOpeningPosition = searchOpeningOwnsPosition(searchOpeningPositioned, imeHeight, nativeIme,
+                    windowFocused, searchFocusRequest, searchFallbackReady)
+                LaunchedEffect(placement, visible, searchTarget, searchFlight, ownsOpeningPosition, searchShapeStarted,
+                    childPanels.intValue, reduced, speed) {
                     if (placement == GlassPlacement.Search && visible && searchFlight?.opening == true &&
                         searchShapeStarted && childPanels.intValue == 0 && searchTarget.height > 0f &&
-                        (searchImeAvailable || searchFocusRequest == false || searchFallbackReady)) {
+                        ownsOpeningPosition) {
                         if (!searchOpeningPositioned) {
                             searchOpeningBottom.snapTo(searchMotion.rendered.takeIf { it.height > 0f }?.bottom ?: origin.bottom)
                             searchOpeningPositioned = true
@@ -533,7 +534,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             searchMotion.observer?.invoke(SearchMorphSample(p, visible, bounds,
                                 flight, if (visible) searchTarget else anchor.bounds,
                                 imeHeight, imeSource, imeTarget, openingBottom, searchOpeningShape.value.takeIf { flight?.opening == true }, availableHeight.toFloat(),
-                                surfaceOpacity = surfaceOpacity()))
+                                surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused))
                         }
                     }.drawWithContent {
                         // Match the trigger's draw-space deformation. A layout-layer

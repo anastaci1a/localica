@@ -23,6 +23,13 @@ internal fun searchBottomSpring(speed: Float) = glassMorphSpring(speed).let {
     spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness, visibilityThreshold = .5f)
 }
 
+/** An attaching popup can briefly inherit the previous window's Compose IME value.
+ * Start from its own focused native window; once acquired, position remains owned
+ * through inset disappearance/retargeting until the opening hands off or cancels. */
+internal fun searchOpeningOwnsPosition(positioned: Boolean, ime: Int, nativeIme: Int,
+    windowFocused: Boolean, focusRequested: Boolean?, fallbackReady: Boolean): Boolean =
+    positioned || (ime > 0 && nativeIme > 0 && windowFocused) || focusRequested == false || fallbackReady
+
 /** Use the reported final IME viewport for both size and anchor, even while foreground
  * measurement still reflects the taller current viewport. */
 internal fun searchPanelTarget(origin: Offset, availableWidth: Float, availableHeight: Float,
@@ -83,5 +90,7 @@ internal data class SearchMorphSample(
     val openingHeightLimit: Float = Float.POSITIVE_INFINITY,
     /** Exact draw-gate opacity sampled at placement, not a rendered-pixel observation. */
     val surfaceOpacity: Float = 1f,
+    val nativeIme: Int = ime,
+    val windowFocused: Boolean = true,
 )
 internal val LocalSearchMorphObserver = staticCompositionLocalOf<((SearchMorphSample) -> Unit)?> { null }

@@ -3,11 +3,34 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SearchMorphMotionTest {
     private val home = Rect(20f, 100f, 380f, 140f)
     private val raised = Rect(12f, 350f, 388f, 450f)
+
+    @Test fun inheritedImeCannotStartTravelBeforeThePopupHasItsOwnNativeInsets() {
+        assertFalse(searchOpeningOwnsPosition(false, 600, 0, true, true, false))
+        assertFalse(searchOpeningOwnsPosition(false, 600, 600, false, true, false))
+        assertFalse(searchOpeningOwnsPosition(false, 0, 600, true, true, false))
+        assertTrue(searchOpeningOwnsPosition(false, 600, 600, true, true, false))
+    }
+
+    @Test fun startedPositionCannotLoseItsOwnerWhenAnImeDisappearsBeforeFallback() {
+        // The old trigger-only condition cancelled travel, while positioned=true
+        // cancelled the fallback too, permanently pinning the opening at its pill.
+        assertTrue(searchOpeningOwnsPosition(true, 0, 0, true, true, false))
+        assertTrue(searchOpeningOwnsPosition(true, 0, 0, false, null, false))
+        assertTrue(searchOpeningOwnsPosition(true, 100, 600, true, true, false))
+    }
+
+    @Test fun absentKeyboardFallbackAndNonEditingResultsStillOwnTheirPlacement() {
+        assertFalse(searchOpeningOwnsPosition(false, 0, 0, true, true, false))
+        assertTrue(searchOpeningOwnsPosition(false, 0, 0, true, true, true))
+        assertTrue(searchOpeningOwnsPosition(false, 0, 0, true, false, false))
+    }
 
     @Test fun tallForegroundTargetsTheFinalKeyboardBottomThroughoutItsArrival() {
         for (ime in listOf(100, 200, 400, 500)) {
