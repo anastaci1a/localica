@@ -1,0 +1,240 @@
+{
+  "rows": [
+    {
+      "amplitude": 0.005,
+      "scores": [
+        {
+          "glass": {
+            "pixels": 113250,
+            "rmse": 1.6028655767440796
+          },
+          "rim": {
+            "pixels": 35386,
+            "rmse": 2.630650281906128
+          },
+          "held": {
+            "pixels": 27873,
+            "rmse": 1.3417798280715942
+          },
+          "interior": {
+            "pixels": 77864,
+            "rmse": 0.769260048866272
+          },
+          "loss": 3.8745209116856283,
+          "E": 1.968380276187919,
+          "foreground_mse": {
+            "home.svg": 126.83411316247657,
+            "home-label.svg": 187.04389128251933,
+            "new.svg": 81.76136949041393,
+            "new-label.svg": 96.88008476514369,
+            "radio.svg": 16.298723623913247,
+            "radio-label.svg": 207.70146914874204,
+            "library.svg": 306.6913927788846,
+            "library-label.svg": 145.70484492578544
+          },
+          "exterior": {
+            "pixels": 46436,
+            "rmse": 8.735226423581446
+          }
+        },
+        {
+          "glass": {
+            "pixels": 113250,
+            "rmse": 6.044824123382568
+          },
+          "rim": {
+            "pixels": 35386,
+            "rmse": 9.950019836425781
+          },
+          "held": {
+            "pixels": 27873,
+            "rmse": 6.0331501960754395
+          },
+          "interior": {
+            "pixels": 77864,
+            "rmse": 2.855348587036133
+          },
+          "loss": 55.27879750141945,
+          "E": 7.434971250880493,
+          "foreground_mse": {
+            "home.svg": 141.01503059500828,
+            "home-label.svg": 195.5448506399989,
+            "new.svg": 82.63407370832283,
+            "new-label.svg": 111.52923118206672,
+            "radio.svg": 25.79649959807284,
+            "radio-label.svg": 217.38618017407134,
+            "library.svg": 306.9900407223031,
+            "library-label.svg": 149.4179748056922
+          },
+          "exterior": {
+            "pixels": 46436,
+            "rmse": 9.774154815950626
+          }
+        }
+      ],
+      "original_guard_pass": false
+    },
+    {
+      "amplitude": 0.0025,
+      "scores": [
+        {
+          "glass": {
+            "pixels": 113250,
+            "rmse": 1.6048640012741089
+          },
+          "rim": {
+            "pixels": 35386,
+            "rmse": 2.634546995162964
+          },
+          "held": {
+            "pixels": 27873,
+            "rmse": 1.3469308614730835
+          },
+          "interior": {
+            "pixels": 77864,
+            "rmse": 0.769260048866272
+          },
+          "loss": 3.8851632847265405,
+          "E": 1.9710817549575514,
+          "foreground_mse": {
+            "home.svg": 126.83411316247657,
+            "home-label.svg": 187.04389128251933,
+            "new.svg": 81.76136949041393,
+            "new-label.svg": 96.88008476514369,
+            "radio.svg": 16.298723623913247,
+            "radio-label.svg": 207.70146914874204,
+            "library.svg": 306.6913927788846,
+            "library-label.svg": 145.70484492578544
+          },
+          "exterior": {
+            "pixels": 46436,
+            "rmse": 8.735226423581446
+          }
+        },
+        {
+          "glass": {
+            "pixels": 113250,
+            "rmse": 6.042645454406738
+          },
+          "rim": {
+            "pixels": 35386,
+            "rmse": 9.945783615112305
+          },
+          "held": {
+            "pixels": 27873,
+            "rmse": 6.034348964691162
+          },
+          "interior": {
+            "pixels": 77864,
+            "rmse": 2.855348587036133
+          },
+          "loss": 55.235078376954604,
+          "E": 7.432030568892636,
+          "foreground_mse": {
+            "home.svg": 141.01503059500828,
+            "home-label.svg": 195.5448506399989,
+            "new.svg": 82.63407370832283,
+            "new-label.svg": 111.52923118206672,
+            "radio.svg": 25.79649959807284,
+            "radio-label.svg": 217.38618017407134,
+            "library.svg": 306.9900407223031,
+            "library-label.svg": 149.4179748056922
+          },
+          "exterior": {
+            "pixels": 46436,
+            "rmse": 9.774154815950626
+          }
+        }
+      ],
+      "original_guard_pass": false
+    }
+  ],
+  "native": [],
+  "accepted": false,
+  "original_guard_pass": false,
+  "native_renders": 0,
+  "source_support": "Same frozen map/source/ordinaryfilters and emitted queries; normal response introduces no incident-image samples. Exact original prior domain proof applies, not new observed-source evidence.",
+  "status": "REJECTED_NO_NATIVE_BODY_OR_COUNT",
+  "protocol": {
+    "amplitudes": [
+      0.005,
+      0.0025
+    ],
+    "width": 0.028,
+    "baseline": [
+      {
+        "glass": {
+          "pixels": 113250,
+          "rmse": 1.6078698635101318
+        },
+        "rim": {
+          "pixels": 35386,
+          "rmse": 2.640406370162964
+        },
+        "held": {
+          "pixels": 27873,
+          "rmse": 1.3533624410629272
+        },
+        "interior": {
+          "pixels": 77864,
+          "rmse": 0.769260048866272
+        },
+        "loss": 3.90119558846801,
+        "E": 1.9751444474944129,
+        "foreground_mse": {
+          "home.svg": 126.83411316247657,
+          "home-label.svg": 187.04389128251933,
+          "new.svg": 81.76136949041393,
+          "new-label.svg": 96.88008476514369,
+          "radio.svg": 16.298723623913247,
+          "radio-label.svg": 207.70146914874204,
+          "library.svg": 306.6913927788846,
+          "library-label.svg": 145.70484492578544
+        },
+        "exterior": {
+          "pixels": 46436,
+          "rmse": 8.735226423581446
+        }
+      },
+      {
+        "glass": {
+          "pixels": 113250,
+          "rmse": 6.040733814239502
+        },
+        "rim": {
+          "pixels": 35386,
+          "rmse": 9.942068099975586
+        },
+        "held": {
+          "pixels": 27873,
+          "rmse": 6.035840034484863
+        },
+        "interior": {
+          "pixels": 77864,
+          "rmse": 2.855348587036133
+        },
+        "loss": 55.19674094151321,
+        "E": 7.429450917901889,
+        "foreground_mse": {
+          "home.svg": 141.01503059500828,
+          "home-label.svg": 195.5448506399989,
+          "new.svg": 82.63407370832283,
+          "new-label.svg": 111.52923118206672,
+          "radio.svg": 25.79649959807284,
+          "radio-label.svg": 217.38618017407134,
+          "library.svg": 306.9900407223031,
+          "library-label.svg": 149.4179748056922
+        },
+        "exterior": {
+          "pixels": 46436,
+          "rmse": 9.774154815950626
+        }
+      }
+    ],
+    "all_original_sources_vectors_recipe_exact": true,
+    "prediction": "Cached material plus integrated shared normal response; no source queries. Actual clipped shading may differ and is final authority.",
+    "accepted": false
+  },
+  "bookkeeping": "First setup assertion correctly refused a stale neighboring-width cache before any candidate/field/render. Corrected to the saved candidate with exact current public parameters/material; original failed script retained privately. No source/mask or measurement change.",
+  "limits": "Cached additive approximation is only a proposal. Both amplitudes fail original B nonregression before a native test; A aggregate improves. This does not identify Apple optics or a physical lighting field, and does not prove the family globally infeasible."
+}
