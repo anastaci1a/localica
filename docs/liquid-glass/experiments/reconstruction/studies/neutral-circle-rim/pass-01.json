@@ -1,0 +1,166 @@
+{
+  "accepted_primary": true,
+  "accepted_pass": 1,
+  "amplitude": 0.025,
+  "width": 0.02,
+  "cases": [
+    "NEXT219/170",
+    "Safari bag219/290"
+  ],
+  "scope": "Shared cross-control neutral rim response, not paired same-element optical validation",
+  "equation": "C=clip(C0+a*exp(-(max(-sd,0)/w)^2)*(n dot (1,1)/sqrt(2))^2,0,1)",
+  "base_records": [
+    "../flower-next/round/pass-03.json",
+    "../safari-bag/round/pass-03.json"
+  ],
+  "native_protocol": "Frozen originals;2x2 AA, same source/map/pose/kernels/SVG/masks. No source adoption.",
+  "trial": {
+    "amplitude": 0.025,
+    "width": 0.02,
+    "items": [
+      {
+        "scores": {
+          "glass": {
+            "pixels": 31119,
+            "rmse": 7.982309341430664
+          },
+          "rim": {
+            "pixels": 13909,
+            "rmse": 10.632328987121582
+          },
+          "held": {
+            "pixels": 8377,
+            "rmse": 8.130537033081055
+          },
+          "interior": {
+            "pixels": 17210,
+            "rmse": 4.883625507354736
+          },
+          "ssim": 0.9935219883918762,
+          "loss": 78.51600960271962,
+          "E": 8.860926001424435,
+          "glyph": {
+            "pixels": 8600,
+            "rmse": 15.919487953186035
+          },
+          "exterior": {
+            "pixels": 33399,
+            "rmse": 3.5591042041778564
+          },
+          "full_visible_exterior": {
+            "pixels": 59242,
+            "rmse": 2.830660820007324
+          }
+        },
+        "baseline_E": 9.07579968332119,
+        "checks": {
+          "glass": true,
+          "rim": true,
+          "held": true,
+          "interior": true,
+          "glyph": true,
+          "exterior": true,
+          "full_visible_exterior": true,
+          "E": true,
+          "ssim": true
+        }
+      },
+      {
+        "scores": {
+          "glass": {
+            "pixels": 7805,
+            "rmse": 6.329074859619141
+          },
+          "rim": {
+            "pixels": 5194,
+            "rmse": 7.156720161437988
+          },
+          "held": {
+            "pixels": 3065,
+            "rmse": 6.079549789428711
+          },
+          "interior": {
+            "pixels": 2611,
+            "rmse": 4.225398540496826
+          },
+          "ssim": 0.9924312233924866,
+          "loss": 43.40562504580403,
+          "E": 6.588294547589993,
+          "glyph": {
+            "pixels": 7735,
+            "rmse": 16.173450469970703
+          },
+          "exterior": {
+            "pixels": 12761,
+            "rmse": 16.71776580810547
+          },
+          "full_visible_exterior": {
+            "pixels": 22835,
+            "rmse": 12.524714469909668
+          }
+        },
+        "baseline_E": 6.774755836800791,
+        "checks": {
+          "glass": true,
+          "rim": true,
+          "held": true,
+          "interior": true,
+          "glyph": true,
+          "exterior": true,
+          "full_visible_exterior": true,
+          "E": true,
+          "ssim": true
+        }
+      }
+    ],
+    "qualifier": true
+  },
+  "verification": {
+    "accepted_primary": true,
+    "accepted_pass": 1,
+    "controls": [
+      {
+        "control": "flower-next-round",
+        "case_source_hashes_exact": true,
+        "independent_radial_normal_response_max_difference": 2.384185791015625e-7,
+        "upper_unclipped_bound": 0.8803921699523926,
+        "clipping_impossible": true,
+        "source_queries_and_kernels_unchanged": true,
+        "nonregression_checks": {
+          "glass": true,
+          "rim": true,
+          "held": true,
+          "interior": true,
+          "glyph": true,
+          "exterior": true,
+          "full_visible_exterior": true,
+          "E": true,
+          "ssim": true
+        }
+      },
+      {
+        "control": "safari-right-circle-round",
+        "case_source_hashes_exact": true,
+        "independent_radial_normal_response_max_difference": 2.384185791015625e-7,
+        "upper_unclipped_bound": 0.6607207417488098,
+        "clipping_impossible": true,
+        "source_queries_and_kernels_unchanged": true,
+        "nonregression_checks": {
+          "glass": true,
+          "rim": true,
+          "held": true,
+          "interior": true,
+          "glyph": true,
+          "exterior": true,
+          "full_visible_exterior": true,
+          "E": true,
+          "ssim": true
+        }
+      }
+    ],
+    "invariants": "finite/nonnegative<=1, normal inversion, exact a0 branch; empirical neutral boundary response only; constant continuation outside silhouette before fixed postfilter",
+    "no_ray_rerender": true,
+    "float32_order_tolerance": 9.5367431640625e-7
+  },
+  "limits": "Estimated smooth backgrounds; hidden pixels unobserved. Fixed angular direction is an empirical illumination proxy, not a recovered 3D surface or Apple renderer. a0 recovers each original baseline. Exterior normal field continues before fixed postfilter."
+}
