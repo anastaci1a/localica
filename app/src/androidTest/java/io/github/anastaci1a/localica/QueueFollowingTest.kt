@@ -1,6 +1,5 @@
 package io.github.anastaci1a.localica
 
-import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
@@ -483,30 +482,22 @@ class QueueFollowingTest {
         }
     }
 
-    @Test fun scopedQueueSearchAfterNativeKeyboardArrivalRetainsExactOccurrenceReturn() {
-        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(
-            automation.executeShellCommand(command)
-        ).bufferedReader().use { it.readText().trim() }
-        val key = "show_ime_with_hard_keyboard"
-        val original = shell("settings get secure $key")
-        check(original == "null" || original.matches(Regex("-?[0-9]+")))
+    @Test fun scopedQueueSearchAfterNativeKeyboardArrivalRetainsExactOccurrenceReturn() = compose.withDockedKeyboard(compose.activity) {
+        val fixture = fixture(initial = 95, text = "Following", search = true)
+        val editor = compose.onNode(hasSetTextAction()).assertExists()
+        val view = (editor.fetchSemanticsNode().root as ViewRootForTest).view
+        val input = requireNotNull(compose.activity.getSystemService(InputMethodManager::class.java))
+        compose.runOnUiThread { assertSame("Exercise the direct activity host", compose.activity.window.decorView, view.rootView) }
+        var nextShowRequest = 0L
         try {
-            if (original != "1") shell("settings put secure $key 1")
-            assertEquals("1", shell("settings get secure $key"))
-            val fixture = fixture(initial = 95, text = "Following", search = true)
-            val editor = compose.onNode(hasSetTextAction()).assertExists()
-            val view = (editor.fetchSemanticsNode().root as ViewRootForTest).view
-            val input = requireNotNull(compose.activity.getSystemService(InputMethodManager::class.java))
-            compose.runOnUiThread { assertSame("Exercise the direct activity host", compose.activity.window.decorView, view.rootView) }
-            var nextShowRequest = 0L
             compose.waitUntil(5000) {
                 val editorFocused = editor.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Focused) == true
                 compose.runOnUiThread {
                     val native = ViewCompat.getRootWindowInsets(view)
                     val shown = editorFocused && view.isAttachedToWindow && view.hasWindowFocus() && input.isActive(view) &&
                         native?.isVisible(WindowInsetsCompat.Type.ime()) == true &&
-                        native.getInsets(WindowInsetsCompat.Type.ime()).bottom > 0
+                        native.getInsets(WindowInsetsCompat.Type.ime()).bottom >
+                        native.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
                     if (!shown && editorFocused && view.hasWindowFocus() && SystemClock.uptimeMillis() >= nextShowRequest) {
                         // Retry only the real editor if its earlier request preceded
                         // the keyboard policy notification; never synthesize insets.
@@ -516,26 +507,32 @@ class QueueFollowingTest {
                     shown
                 }
             }
-            editor.assertIsFocused()
-            // Unlike the immediate-submit case above, first prove that the
-            // independent observer has cached the real visible-IME snapshot.
-            compose.awaitSearchImeHandoff(requireShownBeforeAction = true) { editor.performImeAction() }
-            compose.waitForIdle()
-            row(95).assertDoesNotExist()
-            pressCurrentReturn()
-            awaitCurrent(95)
-            row(5).assertDoesNotExist()
-            row(45).assertDoesNotExist()
-            currentReturn.assertDoesNotExist()
-            compose.runOnIdle {
-                assertTrue(fixture.route.search)
-                assertEquals("Following", fixture.route.text)
-                assertEquals(0, fixture.playCalls)
+        } catch (failure: Throwable) {
+            compose.runOnUiThread {
+                val native = ViewCompat.getRootWindowInsets(view)
+                android.util.Log.e("QueueSearchIme", "Native arrival failed: attached=${view.isAttachedToWindow} " +
+                    "windowFocused=${view.hasWindowFocus()} active=${input.isActive(view)} " +
+                    "visible=${native?.isVisible(WindowInsetsCompat.Type.ime())} " +
+                    "ime=${native?.getInsets(WindowInsetsCompat.Type.ime())?.bottom} " +
+                    "navigation=${native?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom}")
             }
-        } finally {
-            if (original == "null") shell("settings delete secure $key")
-            else if (original != "1") shell("settings put secure $key $original")
-            assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
+            throw failure
+        }
+        editor.assertIsFocused()
+        // Unlike the immediate-submit case above, first prove that the
+        // independent observer has cached the real visible-IME snapshot.
+        compose.awaitSearchImeHandoff(requireShownBeforeAction = true) { editor.performImeAction() }
+        compose.waitForIdle()
+        row(95).assertDoesNotExist()
+        pressCurrentReturn()
+        awaitCurrent(95)
+        row(5).assertDoesNotExist()
+        row(45).assertDoesNotExist()
+        currentReturn.assertDoesNotExist()
+        compose.runOnIdle {
+            assertTrue(fixture.route.search)
+            assertEquals("Following", fixture.route.text)
+            assertEquals(0, fixture.playCalls)
         }
     }
 
