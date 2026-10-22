@@ -480,7 +480,7 @@ Current short round: **3/3** verified passes (revision9). Native E A 14.075943�
 <details>
 <summary>Colored rim — final review09 crops and measurements</summary>
 
-The current sheet shows Apple, accepted review06, and final accepted review09 in three columns. It reuses the exact historical normalized/native crop rectangles and saved native composites; no optical rerender, recentering, or color matching. Local RGB error increases at A/B lower-left and B center. A right-rim chroma and B right-rim luma also worsen; all changes remain in the advisory metrics. The tiny global gains do not resolve the heavy inner contour, excess softness, or colored fringes.
+The current sheet shows Apple, accepted review06, and final accepted review09 in three columns. It reuses the exact historical normalized/native crop rectangles and saved native composites; no optical rerender, recentering, or color matching. Local RGB error increases at A/B lower-left and B center. A right-rim chroma and B right-rim luma also worsen; all changes remain in the advisory metrics. The tiny global gains do not resolve the heavy inner contour, excess softness, or colored fringes. A bounded follow-up changed the existing dispersion angle by±3° and moved its fade center left by.02/.04. Angle changes traded the two backgrounds against each other; both fade shifts worsened overall error. All four proposals were rejected; the accepted image and pass count remain unchanged. [Measurements](experiments/reconstruction/studies/active-switch/review-round/direction-review.json).
 
 [![Final09 switch rim crops: Apple, accepted06 and final09](assets/switch-round09-crops.png)](assets/switch-round09-crops.png)
 
