@@ -53,6 +53,9 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
     var lensSnapshot by mutableStateOf<ImageBitmap?>(null)
     var lensFrostSnapshot by mutableStateOf<ImageBitmap?>(null)
     var revision by mutableIntStateOf(0)
+    // Draw invalidation only, deliberately absent from the capture key below.
+    // Each already-scheduled readback asks retained drawings to publish its frame.
+    var readbackRequest by mutableIntStateOf(0)
     var recorded by mutableStateOf(false)
     fun refresh() { revision++ }
 }
@@ -112,6 +115,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
             val captureKey = listOf(key, size, revision)
             if (size == IntSize.Zero || captured == captureKey) return@collectLatest
             suspend fun capture(): Boolean {
+                source.readbackRequest++
                 withFrameNanos { }; withFrameNanos { }
                 // Layout can exist before the first recorded draw, or survive a restored
                 // player layer briefly. ImageReader rejects a zero-sized recording.

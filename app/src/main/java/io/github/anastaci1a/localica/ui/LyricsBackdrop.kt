@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Paint
@@ -21,7 +22,10 @@ internal class LyricsBackdropScene(val source: FrostedBackdrop) {
 }
 
 internal class LyricsBackdropLayer(val source: FrostedBackdrop, val alpha: () -> Float,
-    val contentKey: () -> Any?)
+    val contentKey: () -> Any?) {
+    // Main-thread diagnostic of the completed draw, not observable state.
+    var recordedReadbackRequest = -1
+}
 
 internal val LocalLyricsBackdropScene = staticCompositionLocalOf<LyricsBackdropScene?> { null }
 
@@ -56,6 +60,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = {
             Path().apply { addRect(Rect(Offset.Zero, size)) }
         })) {
+            source.readbackRequest
             val viewport = Rect(Offset.Zero, size)
             val opacity = currentAlpha().coerceIn(0f, 1f)
             if (opacity <= 0f) return@Canvas
@@ -92,5 +97,13 @@ internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () ->
         scene.layers.add(layer)
         onDispose { scene.layers.remove(layer) }
     }
-    return recordFrostedBackdrop(source)
+    return recordFrostedBackdrop(source).drawWithContent {
+        // API 26 readback uses another rendering surface. Re-record retained glyphs
+        // before both the first and settled captures, rather than reusing a child
+        // RenderNode whose visible text has changed since the previous snapshot.
+        // This state is read only in drawing, never in the refresh/capture flows.
+        val request = scene.source.readbackRequest
+        drawContent()
+        layer.recordedReadbackRequest = request
+    }
 }

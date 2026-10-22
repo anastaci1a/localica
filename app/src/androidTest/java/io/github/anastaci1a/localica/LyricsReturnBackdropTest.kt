@@ -136,6 +136,7 @@ class LyricsReturnBackdropTest {
         val steady = capture("blank-still-stable")
         assertTrue("An idle control cannot accumulate its own arrow or rim in its source",
             interiorDifference(blank, steady, button) < .003f)
+        if (Build.VERSION.SDK_INT < 33) assertLegacyReadbackBecomesIdle(requireNotNull(sampledScene))
     }
 
     @Test fun movingPlayerViewportKeepsTheActiveReturnLensRegisteredThroughReversal() {
@@ -261,7 +262,9 @@ class LyricsReturnBackdropTest {
             compose.runOnIdle { state.song++; state.source++; state.document = document('W', dense = true) }
             compose.mainClock.advanceTimeBy(80)
         } finally { compose.mainClock.autoAdvance = true }
-        capture("interrupted-crossfade-settled")
+        // A fresh song resumes following, so there is deliberately no Return
+        // until the next manual drag. Capturing this state must not require one.
+        capture("interrupted-crossfade-settled", expectReturn = false)
         compose.onAllNodesWithTag("lyric-lines").assertCountEquals(1)
         alignCurrentLine(state.document)
         val replacement = capture("replacement-song")
@@ -492,7 +495,11 @@ class LyricsReturnBackdropTest {
                 // Zero blur/tint means preparation publishes the very same image.
                 // Its marker identifies the real layer's requested content/placement,
                 // not merely a different but still pre-alignment bitmap.
-                if (snapshot == null || source.lensSnapshot !== snapshot ||
+                val glyphsRedrawn = compose.runOnUiThread {
+                    scene.layers.filter { it.contentKey() !== SourceMarkerKey }
+                        .all { it.recordedReadbackRequest == source.readbackRequest }
+                }
+                if (!glyphsRedrawn || snapshot == null || source.lensSnapshot !== snapshot ||
                     requireFresh && snapshot === previous || x !in 0 until snapshot.width || y !in 0 until snapshot.height) false
                 else {
                     observed = snapshot.toPixelMap(startX = x, startY = y, width = 1, height = 1)[0, 0]
@@ -505,7 +512,29 @@ class LyricsReturnBackdropTest {
         }
     }
 
-    private fun capture(label: String, settle: Boolean = true, expectFresh: Boolean = false): PixelMap {
+    private fun assertLegacyReadbackBecomesIdle(scene: LyricsBackdropScene) {
+        var lastRequest = compose.runOnUiThread { scene.source.readbackRequest }
+        var quietSince = SystemClock.uptimeMillis()
+        try {
+            // Longer than the 150ms coalescing + 500ms settled capture. This runs
+            // after the optical assertions, never as a wait for their desired ink.
+            compose.waitUntil(5_000) {
+                compose.mainClock.advanceTimeByFrame()
+                val request = compose.runOnUiThread { scene.source.readbackRequest }
+                if (request != lastRequest) {
+                    lastRequest = request
+                    quietSince = SystemClock.uptimeMillis()
+                }
+                SystemClock.uptimeMillis() - quietSince >= 1_000
+            }
+        } catch (failure: Throwable) {
+            throw AssertionError("Readback draw invalidation must not schedule another capture: request=$lastRequest " +
+                "revision=${scene.source.revision}", failure)
+        }
+    }
+
+    private fun capture(label: String, settle: Boolean = true, expectFresh: Boolean = false,
+        expectReturn: Boolean = true): PixelMap {
         if (settle) {
             compose.mainClock.advanceTimeBy(800)
             compose.waitForIdle()
@@ -541,20 +570,25 @@ class LyricsReturnBackdropTest {
             File(directory, "lyrics-return-${Build.VERSION.SDK_INT}-$label.png").outputStream().use {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
-            val button = returnBounds()
+            val button = if (expectReturn) returnBounds() else {
+                compose.onNodeWithContentDescription(ReturnLabel).assertDoesNotExist()
+                null
+            }
             val source = sampledScene?.source
             File(directory, "lyrics-return-${Build.VERSION.SDK_INT}-$label.txt").writeText(buildString {
                 appendLine("capture=${pixels.width}x${pixels.height} button=$button")
-                appendLine("returnGreen=${green(pixels, button)} returnRed=${red(pixels, button)}")
+                if (button != null) appendLine("returnGreen=${green(pixels, button)} returnRed=${red(pixels, button)}")
                 appendLine("artworkOnlyGreen=${green(pixels, referenceBounds())}")
                 if (source != null) {
                     appendLine("sourceOrigin=${source.origin} sourceSize=${source.size} revision=${source.revision} consumers=${source.consumers}")
-                    appendLine("snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)}")
+                    appendLine("snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest}")
                     appendLine("sourceFrame=${compose.runOnUiThread { sourceFrame(requireNotNull(sampledScene)) }}")
                     appendLine("probeGreen=${green(pixels, localBounds(compose.onNodeWithTag(ProbeTag)))}")
-                    sampledScene?.layers?.forEachIndexed { index, layer ->
-                        appendLine("layer=$index recorded=${layer.source.recorded} origin=${layer.source.origin} size=${layer.source.size} alpha=${layer.alpha()}")
-                    }
+                    compose.runOnUiThread {
+                        sampledScene?.layers?.mapIndexed { index, layer ->
+                            "layer=$index recorded=${layer.source.recorded} origin=${layer.source.origin} size=${layer.source.size} alpha=${layer.alpha()} recordedReadbackRequest=${layer.recordedReadbackRequest}"
+                        }.orEmpty()
+                    }.forEach { appendLine(it) }
                 }
             })
         } finally { bitmap.recycle() }
