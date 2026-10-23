@@ -2,7 +2,7 @@ name: Android
 
 on:
   push:
-    branches: [main, dev/overnight-interactions-20261019, dev/recovery-feedback-20261023]
+    branches: [main, dev/overnight-interactions-20261019, dev/recovery-feedback-20261023, dev/aac-gapless-20261023]
     tags: ['v*.*.*']
   pull_request:
   workflow_dispatch:
@@ -154,7 +154,7 @@ jobs:
           path: /tmp/android-runner/emu-crash-*/
 
   compatibility:
-    if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev/overnight-interactions-20261019' || github.ref == 'refs/heads/dev/recovery-feedback-20261023') && github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.compatibility }}
+    if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev/overnight-interactions-20261019' || github.ref == 'refs/heads/dev/recovery-feedback-20261023' || github.ref == 'refs/heads/dev/aac-gapless-20261023') && github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.compatibility }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
