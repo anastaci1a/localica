@@ -2,7 +2,7 @@ name: Android
 
 on:
   push:
-    branches: [main, dev/overnight-interactions-20261019]
+    branches: [main, dev/overnight-interactions-20261019, dev/recovery-feedback-20261023]
     tags: ['v*.*.*']
   pull_request:
   workflow_dispatch:
@@ -74,9 +74,9 @@ jobs:
   device-tests:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-24.04
-    # API 26 needs ~33 minutes for the suite alone; include SDK/build/emulator startup.
+    # Allow native suites plus SDK/build/emulator startup without cutting coverage.
     # Keep every test and its assertion timeout unchanged.
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       RISK_CLASSES: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_classes || '' }}
       TEST_API: ${{ matrix.api }}
@@ -154,7 +154,7 @@ jobs:
           path: /tmp/android-runner/emu-crash-*/
 
   compatibility:
-    if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev/overnight-interactions-20261019') && github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.compatibility }}
+    if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev/overnight-interactions-20261019' || github.ref == 'refs/heads/dev/recovery-feedback-20261023') && github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.compatibility }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
