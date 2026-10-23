@@ -120,7 +120,15 @@ Offer functional information, editing, art, lyrics, playlist, pin, collection li
 - Image picker: rounded previews of readable previous choices; optional device-photo access has a short explanation and glass permission button. An evenly spaced divider separates these from icon-bearing glass Gallery/Files actions.
 - Bulk jobs: Continue in background and Stop after current file; **Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows progress/recent per-file outcomes.
 
-Mode icons visibly reflect state without filled hitboxes or ripples: dim when off, full strength when active, visible 1 for Repeat one, distinct Stop/Next paused/Next queue indicators and accessible announcements. Hold Repeat for Simple/Advanced options; tapping returns to the ordinary cycle. Both modes share a compact, screen/font-aware popup: measure Simple for the common body height and both modes for width; overflowing Advanced content scrolls with the shared directional fades, keeping mode tabs and actions fixed when they fit. Playback semantics live in [Product](product.md#queues-and-playback); keep the destination shelf extensible.
+Mode icons visibly reflect state without filled hitboxes or ripples: dim when off, full strength when active, visible 1 for Repeat one, distinct Stop/Next paused/Next queue indicators and accessible announcements. Hold Repeat for Simple/Advanced options; tapping returns to the ordinary cycle.
+
+Both modes share a compact, screen/font-aware popup: measure Simple for the common body height and both modes for width.
+
+Advanced uses **When a song ends** and **When a queue ends** buttons, matching Extra information. Each opens a non-scrolling configuration popup; Select stages its changes, while Cancel or Back discards that child draft.
+
+Parent Apply saves the selected mode; parent Cancel discards both mode drafts. Child content must fit the actual safe width, height and font scale. If it cannot fit, show a cancellable “More space needed” state instead of clipping or adding scrolling.
+
+Keep the parent’s mode tabs and actions fixed when they fit. Playback semantics live in [Product](product.md#queues-and-playback); keep the destination shelf extensible.
 
 ## Artwork and lyrics
 

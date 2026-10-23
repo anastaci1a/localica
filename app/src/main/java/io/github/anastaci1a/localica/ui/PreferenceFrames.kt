@@ -29,6 +29,7 @@ internal fun SettingsLinkFace(title: String, summary: String?, icon: Int?, modif
 
 internal val ChoiceOuterVerticalInset = 4.dp
 internal val ChoiceInnerInset = 4.dp
+internal val ChoiceLabelHorizontalInset = 12.dp
 internal val InterfaceSliderHeight = 48.dp
 internal val InterfaceSwitchWidth = 60.dp
 internal val InterfaceSwitchHeight = 48.dp
@@ -63,7 +64,8 @@ internal fun choiceRequiredCellWidth(labels: List<String>): androidx.compose.ui.
     val density = LocalDensity.current
     val style = MaterialTheme.typography.bodyLarge
     return with(density) {
-        (labels.maxOfOrNull { measurer.measure(androidx.compose.ui.text.AnnotatedString(it), style).size.width } ?: 0).toDp() + 32.dp
+        (labels.maxOfOrNull { measurer.measure(androidx.compose.ui.text.AnnotatedString(it), style).size.width } ?: 0).toDp() +
+            (ChoiceInnerInset + ChoiceLabelHorizontalInset) * 2
     }
 }
 
@@ -94,7 +96,7 @@ internal fun TextButtonMeasurement(label: String) {
 
 @Composable
 internal fun GlassChoiceFace(label: String, icon: Int? = null, tab: Boolean = false) {
-    Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+    Row(Modifier.padding(horizontal = ChoiceLabelHorizontalInset), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         icon?.let { Icon(painterResource(it), null, Modifier.size(24.dp)) }
         Text(label, style = if (tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
