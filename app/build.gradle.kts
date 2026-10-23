@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.anastaci1a.localica"
         minSdk = 26
         targetSdk = 36
-        versionCode = 64
-        versionName = "0.29.1-dev64"
+        versionCode = 65
+        versionName = "0.29.1-dev65"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
