@@ -22,6 +22,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.playback.NativeReaders
+import io.github.anastaci1a.localica.playback.PlaybackExtractors
 import io.github.anastaci1a.localica.playback.track
 import io.github.anastaci1a.localica.queue.QueueController
 import io.github.anastaci1a.localica.queue.QueueDatabase
@@ -61,6 +62,10 @@ class QueueContinuousPlaybackTest {
     @Test fun staticPlaylistTrimsShortFinalSampleM4a() = playSplitPcm(false, "boundary-edit-list.m4a")
 
     @Test fun queueActorTrimsShortFinalSampleM4a() = playSplitPcm(true, "boundary-edit-list.m4a")
+
+    @Test fun staticPlaylistPreservesM4aSilentTail() = playSplitPcm(false, "boundary-silent-tail.m4a")
+
+    @Test fun queueActorPreservesM4aSilentTail() = playSplitPcm(true, "boundary-silent-tail.m4a")
 
     @Test fun captureAcceptsEmptyInputAndPassesPcmThroughUnchanged() {
         val capture = ContinuityCapture()
@@ -143,7 +148,7 @@ class QueueContinuousPlaybackTest {
                 // Match PlaybackService's source ownership and audio attributes. Test seams are
                 // pass-through PCM capture, muting, isolated storage and disabled focus handling.
                 val engine = ExoPlayer.Builder(context, renderers)
-                    .setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context))))
+                    .setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context)), PlaybackExtractors()))
                     .build()
                 player = engine
                 engine.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
@@ -180,7 +185,7 @@ class QueueContinuousPlaybackTest {
             instrumentation.runOnMainSync {
                 checkPlayback()
                 val decoded = capture.snapshot()
-                val waveformErrors = if (encodedFixture == null) emptyList() else encodedErrors(decoded)
+                val waveformErrors = if (encodedFixture == null) emptyList() else encodedErrors(decoded, encodedFixture)
                 val digest = java.security.MessageDigest.getInstance("SHA-256").digest(decoded)
                     .joinToString("") { "%02x".format(it) }
                 // Emit evidence before assertions, including on the known shortened-sample failure.
@@ -227,7 +232,7 @@ class QueueContinuousPlaybackTest {
     // 1,024 priming samples. Expected duration comes from that provenance, not a decode.
     private fun sourceSample(index: Int) = ((index % 441) - 220) * 80
 
-    private fun encodedErrors(decoded: ByteArray): List<String> {
+    private fun encodedErrors(decoded: ByteArray, fixture: String): List<String> {
         val errors = mutableListOf<String>()
         if (decoded.size != SAMPLE_RATE * 3 * 2) errors += "expected 132300 samples; got ${decoded.size / 2}"
         val pcm = ByteBuffer.wrap(decoded).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
@@ -237,11 +242,20 @@ class QueueContinuousPlaybackTest {
         for (start in listOf(2048, 40000, SAMPLE_RATE + 2048, SAMPLE_RATE + 40000)) {
             if (start + 2048 > pcm.limit()) { errors += "missing waveform window $start"; continue }
             val rms = kotlin.math.sqrt((start until start + 2048).sumOf { i ->
-                val error = pcm[i].toDouble() - sourceSample(i)
+                val source = if (fixture == "boundary-silent-tail.m4a" && i % SAMPLE_RATE >= 33075) 0 else sourceSample(i)
+                val error = pcm[i].toDouble() - source
                 error * error
             } / 2048)
             Log.i("QueueContinuity", "waveform start=$start rms=$rms limit=2546")
             if (rms >= 2546) errors += "unaligned/distorted waveform at $start RMS=$rms"
+        }
+        if (fixture == "boundary-silent-tail.m4a") {
+            for (track in 0..1) {
+                val silenceStart = track * SAMPLE_RATE + 36000
+                val silenceEnd = track * SAMPLE_RATE + 40000
+                if (silenceEnd > pcm.limit() || (silenceStart until silenceEnd).any { kotlin.math.abs(pcm[it].toInt()) > 8 })
+                    errors += "intentional AAC silence lost or shifted in track $track"
+            }
         }
         // The lossless tail must start at the independently expected encoded endpoint.
         val tailStart = SAMPLE_RATE * 2

@@ -24,5 +24,21 @@ samples and encoded delay/padding at natural queue boundaries.
 The boundary.m4a sample table declares its complete final 1,024-sample AAC frame
 and uses the one-second edit list to trim padding. boundary-edit-list.m4a retains
 FFmpeg's original shortened final sample (68 samples), reproducing issue #28:
-Media3 currently leaves 956 padding samples at each such track boundary.
+Uncorrected Media3 1.10.1 leaves 956 padding samples at each such track boundary.
 A PCM tail in the boundary test forces the last encoded transition to be checked.
+
+boundary-silent-tail.m4a is an additional original one-second mono 44.1 kHz
+16-bit sawtooth with source samples [33075, 44100) set to zero. FFmpeg
+5.1.9-0+deb12u1 encoded the PCM WAV using `-map_metadata -1 -c:a aac -b:a 64k`.
+Its edit list declares 1000/1000 seconds from media time 1024; its final sample
+has duration 68. This checks that metadata trimming retains a quarter-second
+of intentional trailing silence. SHA-256:
+fae940f7b43d00c0cbc37f0ad96fce0f171074cf25608ee1e457a8539417cbd6
+
+The original boundary.m4a and boundary-edit-list.m4a have identical mdat payloads
+(SHA-256 69f1fd8e793f50b6ebb28b67ad30503bff735cd1536bb4899b022cbb54161351).
+Both edit lists select exactly 44100 audible samples after 1024 priming samples.
+The 45 AAC-LC access units decode to 46080 samples before trimming; 956 end
+samples lie outside the edit. This expectation comes from source/timing metadata,
+not the current decoder's output. Periodic tones cannot identify every whole-period
+shift. Lossy checks use unshifted source windows plus exact PCM-tail placement.

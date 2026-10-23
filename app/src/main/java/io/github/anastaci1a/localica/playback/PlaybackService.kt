@@ -24,7 +24,7 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         val app = application as LocalicaApplication
         val sources = app.nativeReaders.track(DefaultDataSource.Factory(this))
-        val player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(sources)).build().apply {
+        val player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(sources, PlaybackExtractors())).build().apply {
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             setHandleAudioBecomingNoisy(true)
