@@ -1,0 +1,95 @@
+{
+  "browser": "156.0.8078.4",
+  "renderer": "headless SwiftShader (not phone performance)",
+  "results": [
+    {
+      "name": "Zero-power texture identity: both models, all three shapes"
+    },
+    {
+      "name": "Actual shader displaces shoulder, registers core/exterior, has no downward bias",
+      "samples": {
+        "center": [
+          128,
+          128,
+          51,
+          255
+        ],
+        "upper": [
+          128,
+          107,
+          51,
+          255
+        ],
+        "lower": [
+          128,
+          148,
+          51,
+          255
+        ],
+        "outside": [
+          53,
+          64,
+          51,
+          255
+        ]
+      },
+      "neutral": {
+        "center": [
+          128,
+          128,
+          51,
+          255
+        ],
+        "upper": [
+          128,
+          106,
+          51,
+          255
+        ],
+        "lower": [
+          128,
+          149,
+          51,
+          255
+        ],
+        "outside": [
+          53,
+          64,
+          51,
+          255
+        ]
+      }
+    },
+    {
+      "name": "GPU tone compression remains ordered with bounded endpoints for both polarities"
+    },
+    {
+      "name": "Panel diagonal coordinate continuity",
+      "maxChannelStep": 1
+    },
+    {
+      "name": "Contact flattens/expands; release restores coupled volume",
+      "heldDepth": 0.7454188521876095,
+      "reboundDepth": 1.1059525916212871
+    },
+    {
+      "name": "Wall contact remains pinned through compression and released recovery"
+    },
+    {
+      "name": "Morph interruption returns continuously without an endpoint swap"
+    },
+    {
+      "name": "Reduced motion snaps; idle frames and texture uploads stop"
+    },
+    {
+      "name": "Context loss preserves fallback; restoration rebuilds GL resources"
+    },
+    {
+      "name": "Phone layout fits; no-WebGL fallback retains working controls"
+    },
+    {
+      "name": "No uncaught browser errors",
+      "count": 0
+    }
+  ]
+}

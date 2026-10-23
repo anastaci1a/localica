@@ -1,0 +1,509 @@
+{
+  "source_repo": "/mnt/user/live/projects/localica/localica",
+  "path_filters": [
+    "docs/liquid-glass/"
+  ],
+  "mapping": "docs/liquid-glass/:docs/",
+  "generated_path_excluded": "liquid-glass/ is generated gh-pages output, no source Markdown or rename ancestry",
+  "research_touching_commits": 677,
+  "missing_commits": [],
+  "refs": [
+    {
+      "ref": "refs/heads/docs/dark-glass-lab",
+      "sha": "90a0a100fca83271d38b914364d0f53f6a216116",
+      "type": "commit",
+      "destination_ref": "refs/heads/docs/dark-glass-lab",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/docs/glass-presets-222",
+      "sha": "8843595f34a0f28326925d5d5c32da67f6bfe07b",
+      "type": "commit",
+      "destination_ref": "refs/heads/docs/glass-presets-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/docs/glass-recreations-publish-222",
+      "sha": "282e7012858566748bdeb549ede02b61435dde67",
+      "type": "commit",
+      "destination_ref": "refs/heads/docs/glass-recreations-publish-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/docs/publish-glass-lab",
+      "sha": "9133e01f19c8571d1bf611e1f79770f0606c314a",
+      "type": "commit",
+      "destination_ref": "refs/heads/docs/publish-glass-lab",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/docs/reconstruction-evidence-status-222",
+      "sha": "27816bc1609871243575bad516ff0794e146dee7",
+      "type": "commit",
+      "destination_ref": "refs/heads/docs/reconstruction-evidence-status-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/docs/reconstruction-review-222",
+      "sha": "fa67bebf7e609b9eab4c31a91e406de5e6c0c774",
+      "type": "commit",
+      "destination_ref": "refs/heads/docs/reconstruction-review-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/docs/recreation-gallery-222",
+      "sha": "6ec38a1cbb4a57504013e2be3d7959fbbf12e8de",
+      "type": "commit",
+      "destination_ref": "refs/heads/docs/recreation-gallery-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/feature/full-glass-overhaul",
+      "sha": "d8eebebcfba9e0a087f35db51efffe9fc7669690",
+      "type": "commit",
+      "destination_ref": "refs/heads/feature/full-glass-overhaul",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/fix/lab-refraction-411",
+      "sha": "7b04c8c1a9ffc4ff5c851706760c7697d97e9a66",
+      "type": "commit",
+      "destination_ref": "refs/heads/fix/lab-refraction-411",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/liquid-glass-controls",
+      "sha": "e648a92f84e78a18afe85d3ed6825b1b6ce17f5d",
+      "type": "commit",
+      "destination_ref": "refs/heads/liquid-glass-controls",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/main",
+      "sha": "1c18648430e93a05f0fc3dfcd05a981c3379bb35",
+      "type": "commit",
+      "destination_ref": "refs/heads/main",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/maintenance/docs-glass-lab-222",
+      "sha": "191f53e6e4aaac23dea950b25019fa5b4449884e",
+      "type": "commit",
+      "destination_ref": "refs/heads/maintenance/docs-glass-lab-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/active-segmented-selector-222",
+      "sha": "7040725fa3116d2fb90d71c360341c4a82bc6602",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/active-segmented-selector-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/active-switch-paired-222",
+      "sha": "ccef19a69f077b17d779b101a485788313afae47",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/active-switch-paired-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/agent-active-slider-222",
+      "sha": "d8bfa698b8b0e29927fc46b3746b073eabc4fcd7",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/agent-active-slider-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/agent-compact-mini-222",
+      "sha": "f88d31558a8f1877404027264b667a05c276b7ae",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/agent-compact-mini-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/agent-expanded-pipeline-222",
+      "sha": "665171506829f42a278e4a74467f07ee4370b9f3",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/agent-expanded-pipeline-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/agent-light-dark-222",
+      "sha": "a0327a88133830cf3be94aa9a28c86a1810d1798",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/agent-light-dark-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/agent-navigation-222",
+      "sha": "2530fa625a638a70dd0f3609c4aad1c5bee45722",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/agent-navigation-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/agent-toolbar-222",
+      "sha": "288e2adc02da6ffe1dfc8ea25b42687dd8c262df",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/agent-toolbar-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/blue-slider-short-round-222",
+      "sha": "8997be17d16781200890f76f169ae19124b3a616",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/blue-slider-short-round-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/comparison-caption-metadata-222",
+      "sha": "8545ed81078f377e5ef6a547fd4a61f02ac88a9d",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/comparison-caption-metadata-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/expanded-mini-short-round-222",
+      "sha": "586a95046e877fe345f6b3b8098fd8c02aab5a2d",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/expanded-mini-short-round-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/flower-next-222",
+      "sha": "d7b8e338a55cde8f3e3b5d22e98fe9f459ea0f1c",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/flower-next-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/geometric-playback-222",
+      "sha": "e9fcd3a77125310ffe4f7417c1be979aabf3015b",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/geometric-playback-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/geometric-toolbar-222",
+      "sha": "05fccdfee194098018856b18f2843bd19f1201b6",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/geometric-toolbar-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/glass-lab-preserved-222",
+      "sha": "8843595f34a0f28326925d5d5c32da67f6bfe07b",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/glass-lab-preserved-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/home-boundary-correction-222",
+      "sha": "2cf242fca20a8ad82f1b9f18921fc9405f4fd6c5",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/home-boundary-correction-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/home-rim-review-222",
+      "sha": "c89a40782fbfd79b6732a61fb9df428880124e67",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/home-rim-review-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/home-short-round-222",
+      "sha": "ce3e4eadf3b8b6208aae4a6af3434ee10ee2cff9",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/home-short-round-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/mail-neutral-222",
+      "sha": "0427dbbe76f5dab142cff180a1be14d45e6c138d",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/mail-neutral-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/mail-rim-transfer-222",
+      "sha": "92a14017f457e66ca2d3dc6bcc3b505c7b5ef180",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/mail-rim-transfer-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-compact-mini-222",
+      "sha": "c3bd0cc8aad59da5090c2cce2189bb11a069db38",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-compact-mini-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-expanded-mini-222",
+      "sha": "b2436a5504c00526123003b18c3e415f1564b654",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-expanded-mini-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-home-222",
+      "sha": "95769862e6397d47eaf8e38d84429c05a6a4f985",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-home-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-home-paired-followup-222",
+      "sha": "9046ce5052cb029db706a2bd13d8406388926829",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-home-paired-followup-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-mini-compact-vector-paired-222",
+      "sha": "0764bd7fd3ccac2decb9ea8c6569fa5561ada5dc",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-mini-compact-vector-paired-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-mini-expanded-vector-paired-222",
+      "sha": "86600dd80aabe4cec98670fd8a84fb74639e650d",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-mini-expanded-vector-paired-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-navigation-vector-paired-222",
+      "sha": "e6b95bea3d5f128e5e0dd5fcac961b97753e8fe5",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-navigation-vector-paired-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-search-222",
+      "sha": "f14ca844c659bd750ab7ffff20a7ac593b520d1b",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-search-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/music-search-vector-paired-222",
+      "sha": "4ea7872da588912d69a5a2e4c5b6e5ae9c7563f9",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/music-search-vector-paired-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/navigation-rim-transfer-222",
+      "sha": "6b8550c91a9bd56e674317d9a0852bb821b0e444",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/navigation-rim-transfer-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/navigation-verified-round-222",
+      "sha": "1770a2f5c29b6eda2f248c1465eeff5e92066ace",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/navigation-verified-round-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/neutral-circle-rim-222",
+      "sha": "fefa9520339ac5bccef63151f8db705480885a4a",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/neutral-circle-rim-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/pages-checkpoints-222",
+      "sha": "d72ec8ca342f4018159d7440d9f26057e809030e",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/pages-checkpoints-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/pill-rim-transfer-222",
+      "sha": "c43c43890592fc77767ce5d7b62ea37aaf629591",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/pill-rim-transfer-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/playback-format-222",
+      "sha": "2aadbef2253b04b491e824f5a2038bb2d59deb34",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/playback-format-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/playback-short-round-222",
+      "sha": "c08597adc1c48dbc177a5e16d70d56ddc705b4ec",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/playback-short-round-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/refracting-lab-222",
+      "sha": "a62585f6d904fe5fca0289216acc6fcb0ff065ea",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/refracting-lab-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/safari-bag-222",
+      "sha": "19e61c765f84e902b6fce2e41c24996d5f3aef80",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/safari-bag-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/safari-circles-222",
+      "sha": "f4060f3851e86cac71fe675a6dcaa2f9fefa9a70",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/safari-circles-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/safari-search-common-material-222",
+      "sha": "3b5c0b450c7299a5daebe129e2fd84ba991a58b3",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/safari-search-common-material-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/safari-tab-pill-222",
+      "sha": "4620679603cd9c08e98db67fbb864e0ad4a68e57",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/safari-tab-pill-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/search-short-round-222",
+      "sha": "a553602c85b3b4ae733a7f770ddc4664b895d651",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/search-short-round-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/search-verified-round-222",
+      "sha": "c8c7feea22710739c41d7706ec7ee8480735b1ed",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/search-verified-round-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/segmented-selector-short-round-222",
+      "sha": "71f7e69a00e09165d64c497d846a1f7dbefd1b74",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/segmented-selector-short-round-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/selector-crown-222",
+      "sha": "288e2adc02da6ffe1dfc8ea25b42687dd8c262df",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/selector-crown-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/sheet-close-reconstruction-222",
+      "sha": "d952af2c0e17ad8697054579968b31e38582e52e",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/sheet-close-reconstruction-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/switch-cap-depth-222",
+      "sha": "6edccb1d1f4d90c2c1f7c06612d014e818dca7d6",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/switch-cap-depth-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/switch-direction-review-222",
+      "sha": "407c3e5aa8e894b7d089bec3a3f41f01b9b2fdb8",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/switch-direction-review-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/switch-dispersion-222",
+      "sha": "2c28a6021c702871ee45aaf9ff4b7fb0be24d2d4",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/switch-dispersion-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/switch-joint-native-222",
+      "sha": "0d64f3083c0a5f578d45ac298a22df84007ecfcf",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/switch-joint-native-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/switch-rim-review-222",
+      "sha": "f5da76eb911ec5ba9adcc2f48bde231dde10d29e",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/switch-rim-review-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/toolbar-crown-222",
+      "sha": "af5a5037b190491bc6a44bdd2037be536515948f",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/toolbar-crown-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/toolbar-format-222",
+      "sha": "14b7d0196c843cf2c9274479adef6269dada1909",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/toolbar-format-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/heads/research/toolbar-inner-profile-222",
+      "sha": "bb1ee80131d39e7661c3d55174767c4d15182e05",
+      "type": "commit",
+      "destination_ref": "refs/heads/research/toolbar-inner-profile-222",
+      "reason": "Named research branch or source main"
+    },
+    {
+      "ref": "refs/remotes/origin/audit/boundary-optics-experiment",
+      "sha": "95d4aee4748e2005bfc7539a5ae9c203bb6ec8ec",
+      "type": "commit",
+      "destination_ref": "refs/heads/archive/remotes/origin/audit/boundary-optics-experiment",
+      "reason": "Contains research-touching ancestry not covered by named branches"
+    },
+    {
+      "ref": "refs/remotes/origin/audit/multi-shadow-quantization",
+      "sha": "aaa3134ad75eb80691f5edd5336be99a418b881d",
+      "type": "commit",
+      "destination_ref": "refs/heads/archive/remotes/origin/audit/multi-shadow-quantization",
+      "reason": "Contains research-touching ancestry not covered by named branches"
+    },
+    {
+      "ref": "refs/remotes/origin/audit/press-lighting-design",
+      "sha": "94cf2f7ea814cb6d5185c9b295685f995a42ab78",
+      "type": "commit",
+      "destination_ref": "refs/heads/archive/remotes/origin/audit/press-lighting-design",
+      "reason": "Contains research-touching ancestry not covered by named branches"
+    },
+    {
+      "ref": "refs/remotes/origin/audit/press-lighting-profile",
+      "sha": "9a79553ce197668814db9a37680f419a579d2a46",
+      "type": "commit",
+      "destination_ref": "refs/heads/archive/remotes/origin/audit/press-lighting-profile",
+      "reason": "Contains research-touching ancestry not covered by named branches"
+    },
+    {
+      "ref": "refs/remotes/origin/audit/selector-rebound",
+      "sha": "802ef76395088d7eda4d23c1ba0fda225c9e4769",
+      "type": "commit",
+      "destination_ref": "refs/heads/archive/remotes/origin/audit/selector-rebound",
+      "reason": "Contains research-touching ancestry not covered by named branches"
+    }
+  ]
+}

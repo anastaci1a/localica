@@ -1,0 +1,18 @@
+[
+  {
+    "name": "default",
+    "band": 0.55,
+    "depth": 1,
+    "maxTopCenterDisplacementLogicalPx": 2.734399950260065,
+    "atInwardDistance": 13.009999999999767,
+    "softwareRasterDisplacementAt480px": 1.3671999751300326
+  },
+  {
+    "name": "maximum",
+    "band": 0.8,
+    "depth": 2,
+    "maxTopCenterDisplacementLogicalPx": 7.693844519747316,
+    "atInwardDistance": 18.640000000000114,
+    "softwareRasterDisplacementAt480px": 3.846922259873658
+  }
+]
