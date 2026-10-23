@@ -27,6 +27,28 @@ Paths below are under `app/src/main/java/io/github/anastaci1a/localica/`.
 - **Statistics:** measure monotonic playing time in the service. Serialized writes retry stable event IDs without double counting; a separate database survives collection deletion. [Counting rules](product.md#dates-and-listening-statistics).
 - **Settings/selection:** typed preference boundaries retain explicit inheritance; shared enum decoding preserves unknown-value fallbacks. Pure ordering/move helpers are shared across collection types. Selection retains source occurrence IDs and clears only after command completion. Pins retain typed identity/manual order independently of tabs.
 
+## AAC edit-list trimming
+
+`PlaybackExtractors` retains Media3 extraction and corrects missing end padding for a narrowly supported AAC-LC layout ([#28](https://github.com/anastaci1a/localica/issues/28)). It reads bounded MP4 metadata through the registered playback source. Encoded bytes, timestamps, edits and intentional silence remain unchanged.
+
+| Required evidence | Constraint |
+| --- | --- |
+| Container | Known length, unfragmented MP4, one audio track, metadata within the inspection bound. |
+| Codec | Unencrypted AAC-LC, 1,024 samples per access unit, no SBR/PS or alternate frame length. |
+| Timing | Media clock equals sample rate; frame durations are constant except the final duration. Counts and media duration agree. |
+| Edit | One rate-one edit with an exact integral audible length ending at the declared media endpoint. |
+| Existing trim | Delay equals the edit start; end padding is zero. |
+
+The edit owns audible duration. Padding is the decoded frame extent beyond that endpoint:
+
+$$
+N_{\mathrm{audible}} = \frac{D_{\mathrm{edit}}\, f_{\mathrm{sample}}}{T_{\mathrm{movie}}},
+\qquad
+N_{\mathrm{padding}} = N_{\mathrm{frames}}\, N_{\mathrm{frame}} - N_{\mathrm{delay}} - N_{\mathrm{audible}}.
+$$
+
+The correction requires an exact integer result smaller than one frame. Other layouts retain native extraction, including existing nonzero padding. No audio amplitude is inspected. Service playback and continuity controls share the extractor factory. Fixture provenance and independent edit metadata live in `app/src/androidTest/assets/README.txt`.
+
 ## File operations
 
 Use persisted Storage Access Framework tree grants without broad storage permission. Enumerate off Main; never interpret document IDs as filesystem paths. Scans and tag writes share a file-operation lock, but retain separate cancellation/recovery lifecycles.
