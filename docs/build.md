@@ -4,16 +4,47 @@
 
 Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME` or untracked `local.properties` with `sdk.dir=/path/to/sdk`; the pinned wrapper verifies its download checksum.
 
+### Development and final validation
+
+The Localica lead initiates focused local checks during development. Run affected classes or methods while implementing individual changes. Documentation-only changes need prose, structure, link and rendering checks. Run the complete suite only after all intended changes form a ready final candidate.
+
+Select tests for migrations and failed operations; occurrence/cursor/metadata preservation; navigation restoration and gestures; playback/lyrics/artwork boundaries; accessibility, short/landscape screens, large fonts and reduced motion.
+
+If full validation fails, preserve its first evidence. Repair failures with affected focused tests. Once all repairs are ready, freeze the new candidate and rerun full validation. Investigate every observed failure, including one from a slower parallel run.
+
+One verified complete equivalent pass counts for the exact candidate. A duplicate local and GitHub pass is not routinely required. Changes to code, tests or build inputs require fresh affected checks; final validation applies to the frozen candidate.
+
+| Stage | Required evidence |
+| --- | --- |
+| Development | Focused commands, immutable source, environment, duration and per-test outcomes. |
+| Final candidate | Build/checks, complete native API 26/36 suites and the applicable [compatibility gate](#compatibility-and-dependencies). |
+| Reused result | Same immutable code, tests, build inputs, API coverage and assertions; complete passing reports. |
+| Failure repair | Original failure evidence, focused repair results, then a new complete candidate result. |
+
+Final build and native commands, run only after candidate freeze:
+
 ```sh
-./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
-./gradlew connectedDebugAndroidTest  # emulator or connected device
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=2
+./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
 ```
 
-Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only synthetic audio/document-provider fixtures never ship in the app.
+Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [emulator configuration](#ci-and-signing). Physical-device review supplements automation. Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only fixtures never ship in the app.
 
-Verify affected contracts: migrations/recovery and failed operations; occurrence/cursor/metadata preservation; navigation/search restoration and gesture ownership; playback/lyrics/artwork boundaries; accessibility, short/landscape screens, large fonts and reduced motion. Physical-device review supplements automation. Docs-only edits require content/link review, not Android tests.
+### Coordinated local and hosted comparison
 
-Local and CI verification use the same tests and Gradle launcher. Use focused tests during iteration. Before pushing the final candidate, run the complete build/check commands and `connectedDebugAndroidTest` on API 26 and 36 with the emulator configurations below, unless identical source, tests and build inputs already have successful GitHub results. Record and reuse those results; do not repeat the same suites locally as an extra verification step. Changed verification inputs require fresh checks. CI independently verifies pushed release commits in a clean environment under the release gate below.
+For the next two final candidates, coordinate equivalent local and GitHub full checks in parallel to measure duration. Freeze the branch while either run is active. Record the full SHA, commands, toolchain/image identities, signing certificate, environment, start/end times, durations, outcomes and artifact hashes.
+
+| Responsibility | Owner |
+| --- | --- |
+| Freeze candidate and establish equivalence | Localica lead with the parent coordinator. |
+| Start local checks | Localica lead. |
+| Start hosted checks and identify run | Assigned hosted-run owner. |
+| Approve redundant-run cancellation | Parent coordinator with the affected run owner. |
+| Preserve and investigate any observed failure | Localica lead and failing-run owner. |
+
+Cancel only a coordinated redundant run after a complete passing result is verified. An observed failure remains unresolved evidence even if the other run passes. Never select only passing jobs from incompatible runs. Do not cancel another owner's jobs independently.
+
+The comparison does not alter CI, branch protection, deployment or [release publication gates](#release-preparation). Existing hosted publication checks remain enforced. A local result does not by itself satisfy the current release job's hosted-run lookup.
 
 A workflow dispatch may supply `risk_classes` as up to 20 comma-separated fully qualified instrumentation classes (4096 characters maximum). The hosted disposable device job records that selector and runs it before the unchanged complete suite. A failed preflight stops the job and preserves its exit status, log and reports; a passing preflight resets only the app/test packages before running the full suite. Focused success alone is never release evidence. Empty input and ordinary PR/main runs retain full-suite behavior. Preflight isolation is not used by the compatibility gate, whose app data must persist across phases.
 
