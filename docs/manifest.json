@@ -1,0 +1,19 @@
+{
+  "source": "5eb1d9400441909c5b741816d73e29fbd853e797",
+  "pages": [
+    "templates/ISSUE_TEMPLATE/bug_report.html",
+    "templates/ISSUE_TEMPLATE/feature_request.html",
+    "templates/RELEASE_TEMPLATE.html",
+    "AGENTS.html",
+    "standard.html",
+    "index.html",
+    "contributors/index.html",
+    "contributors/collaboration.html",
+    "guide/index.html",
+    "guide/build.html",
+    "guide/interface.html",
+    "guide/product.html",
+    "guide/roadmap.html",
+    "guide/structure.html"
+  ]
+}

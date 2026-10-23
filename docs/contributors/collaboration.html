@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Collaboration and handoffs · Localica</title><link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../math/katex.min.css"></head><body><a class="skip" href="#content">Skip to content</a><nav aria-label="Documentation"><a href="../index.html">Localica</a><a href="../guide/index.html">Documentation</a><a href="../standard.html">Writing standard</a><a href="index.html">Contributing</a></nav><main id="content"><h1 id="collaboration-and-handoffs">Collaboration and handoffs</h1>
+<p>Ownership labels distinguish responsibilities, not authorship. Use the repository-local author identity. Task-specific instructions override standing responsibilities and permissions.</p>
+<h2 id="ownership">Ownership</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Responsibilities</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>dot</td>
+<td>User intake, investigation, bounded or repetitive implementation and development APKs.</td>
+</tr>
+<tr>
+<td>Codex</td>
+<td>Architecture, rendering, independent review, local/device verification, main integration and release publication under standing approval.</td>
+</tr>
+</tbody></table>
+<p>A task-specific freeze or no-release instruction overrides standing approval. <a href="../guide/build.html#release-preparation">Verification gates</a> still apply.</p>
+<p>Check issue comments, branches and current ownership before editing. Claim actionable work with one ownership label and <code>in progress</code>. Coordinate overlapping shared-code edits before proceeding.</p>
+<p>Transfer ownership with a comment naming the next owner, branch, full SHA, remaining acceptance and next action. A review leaves implementation ownership unchanged.</p>
+<p>Preserve uncommitted work and frozen candidates. Branch from the agreed current-history SHA. Check ancestry before integration. Never reintegrate obsolete history.</p>
+<h2 id="communication-and-completion">Communication and completion</h2>
+<p>Use the coordination channel authorized for the task. GitHub issue/PR handoffs end with <code>— dot</code> or <code>— Codex</code>. Do not assume an undelivered message received a response.</p>
+<p>Handoffs identify exact source, relevant PRs, commands, results, blockers and next action. Link logs instead of copying them. Follow the <a href="../standard.html#scope-and-review">status definitions</a>.</p>
+<p>Continue authorized multi-phase work across progress replies. Finish its scope or report a genuine blocker requiring an owner decision, with evidence and recommendations.</p>
+<p>Explicit pauses remain binding until resumed. Never imply work continues after a process or session ends. A label or comment does not authorize launching another agent.</p>
+<p>Push coherent commits as required by <a href="index.html#issues-and-commits">working instructions</a>. If interrupted, preserve partial work with a concise handoff.</p>
+<p>dot normally groups at least ten potential resolutions into a test APK unless asked sooner. Candidate claims remain provisional until verification. Test APKs and prototypes do not establish production acceptance.</p>
+</main><footer><a href="https://github.com/anastaci1a/localica/blob/main/agents/collaboration.md">Page source</a></footer></body></html>

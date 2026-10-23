@@ -1,0 +1,57 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Documentation standard · Localica</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="math/katex.min.css"></head><body><a class="skip" href="#content">Skip to content</a><nav aria-label="Documentation"><a href="index.html">Localica</a><a href="guide/index.html">Documentation</a><a href="standard.html">Writing standard</a><a href="contributors/index.html">Contributing</a></nav><main id="content"><h1 id="documentation-standard">Documentation standard</h1>
+<p>Apply this standard to maintained documentation, contributor instructions and templates. The <a href="guide/index.html">documentation map</a> assigns each topic an authoritative home.</p>
+<h2 id="required-standard">Required standard</h2>
+<ol>
+<li>Lead with the outcome or decision. Use familiar words and one fact per sentence.</li>
+<li>Keep paragraphs under 60 words and bullets under 30 words. Use tables for comparisons, parameters, ownership and outcomes. Avoid paragraph-sized bullet points.</li>
+<li>Give each durable fact one authoritative home. Consolidate duplicate explanations, obsolete instructions, stale completion claims and repeated task histories. Link rather than restating.</li>
+<li>Write for public readers. Do not refer to the user&#39;s personal name anywhere except the license. Describe decisions and responsibilities by project role.</li>
+<li>Use LaTeX display blocks for mathematical formulas, relations, inequalities, vectors and matrices. Use actual fractions, component/label subscripts, nabla gradients and proper operators. Keep executable commands, API names and literal configuration values in code formatting.</li>
+<li>Keep current decisions separate from historical evidence. Clearly label proposed, implemented, verified, rejected and incomplete work. Do not rewrite measurements or acceptance history.</li>
+<li>Record useful work in progress in Git rather than private handoff dumps. Preserve inputs and evidence identities. Exclude credentials, private session records, dependencies and machine-specific runtime state.</li>
+<li>Make relevant maintained documentation accessible as rendered website pages where project publishing is supported. Documentation links should remain within the rendered documentation, rather than send readers to Markdown on a code host. Keep source-code and primary-reference links explicit.</li>
+<li>Preserve existing public URLs and deployment boundaries. Do not overwrite unrelated content or introduce a release as part of this documentation task.</li>
+<li>Validate structure, links, concise prose, mathematical rendering where present, and fresh-checkout build instructions. Do not run the Android/device suite solely for documentation changes.</li>
+</ol>
+<h2 id="scope-and-review">Scope and review</h2>
+<p>The checker inventories root Markdown, <code>agents/</code>, maintained <code>docs/</code>, issue templates and release templates. <code>docs/project-history/</code> and published release notes are historical evidence; preserve their content and acceptance history.</p>
+<p>The numbered standard above is retained verbatim. Its longer items are the only maintained-prose exception to the bullet limit. Table cells follow the paragraph limit.</p>
+<p>Review meaning as well as syntax. Remove duplicate contracts, stale tense and unnecessary narrative while preserving defaults, exceptions, recovery rules and evidence identities.</p>
+<p>Use status words precisely:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Proposed</td>
+<td>Intended work without an implementation claim.</td>
+</tr>
+<tr>
+<td>Implemented</td>
+<td>Present in the named source revision.</td>
+</tr>
+<tr>
+<td>Verified</td>
+<td>Passed named checks against an exact revision and environment.</td>
+</tr>
+<tr>
+<td>Rejected</td>
+<td>Evaluated and not accepted; retain the evidence.</td>
+</tr>
+<tr>
+<td>Incomplete</td>
+<td>Required work or verification remains.</td>
+</tr>
+<tr>
+<td>Released</td>
+<td>Included in an identified distributed build.</td>
+</tr>
+</tbody></table>
+<h2 id="checks-and-publishing">Checks and publishing</h2>
+<p>Use the <a href="guide/build.html#documentation">documentation commands</a> from a fresh checkout. Checks validate prose limits, headings, local files, fragments, image descriptions and rendered navigation.</p>
+<p>The website publishes maintained pages under <code>/localica/docs/</code>. Existing root pages and other published paths remain outside this deployment&#39;s ownership.</p>
+<p>Review external source accuracy separately; local link checks do not establish that a remote page remains available or supports a claim. Historical documents are available from explicitly labeled source links.</p>
+</main><footer><a href="https://github.com/anastaci1a/localica/blob/main/DOCUMENTATION.md">Page source</a></footer></body></html>

@@ -1,0 +1,258 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Interface contract · Localica</title><link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../math/katex.min.css"></head><body><a class="skip" href="#content">Skip to content</a><nav aria-label="Documentation"><a href="../index.html">Localica</a><a href="index.html">Documentation</a><a href="../standard.html">Writing standard</a><a href="../contributors/index.html">Contributing</a></nav><main id="content"><h1 id="interface-contract">Interface contract</h1>
+<p>This document owns visible behavior and UI defaults; <a href="product.html">Product</a> owns media/playback semantics and <a href="structure.html">Structure</a> owns implementation.</p>
+<h2 id="shared-controls-and-motion">Shared controls and motion</h2>
+<h3 id="materials-and-controls">Materials and controls</h3>
+<p>Floating pills, mini-player, filter/search bars and circular controls share Liquid Glass: curved refraction, illuminated edges and crisp foregrounds. The Queue uses denser textured neutral frost. Popups use the same material with light/dark tints. Related controls morph into their panels and return as one visible surface: creation, More, sorting, search and queue/lyric-source selectors.</p>
+<p>Selected media have a clear, untinted rounded lens, appearing/disappearing immediately until the next design review. Side-adjacent selections merge. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.</p>
+<p>Sort/settings choices share a moving clear lens with tap/drag control. Settings sliders and switches follow the <a href="interface.html#settings-controls">shared control specification</a>. Use deeper glass for controls that morph into menus, carrying the same depth into their flyouts.</p>
+<p>The tab bar stays flatter because it retains its shape; Search/More follows the deeper profile because its surface opens a menu. Separate the actions in every two-button glass pill with a subtle vertical divider. Use rounded Apple Music-style icons, one shared original record glyph for albums, and attributed open-source transport artwork. Omit unavailable actions.</p>
+<p>Action-menu width fits measured labels, icons and padding within the screen. Returning flyouts gradually restore the shared trigger foreground with its original ink/tint. Keep system pickers/permissions native and artwork/timed-lyric taps ripple-free.</p>
+<p>Corner tokens: small art 8 dp, cards 16, inputs/menus 20, large art 24, panels 28. Compact shelves/chips use pills. Transport uses circles. Icons start at 24 dp with a unified icon/label/surface target of at least 48 dp. Clip feedback to that shape.</p>
+<h3 id="motion-and-access">Motion and access</h3>
+<p>Gestures track slow drags, reversals and interruptions, settling by distance/velocity. Controls show contact immediately but defer movement ownership: fast drags along an available parent scroll axis scroll without activating/changing the control. Slow deliberate adjustment or a held drag retains control ownership. Perpendicular scrolling remains available.</p>
+<p>Once resolved, retain the owner through reversal and edges. Cancellation never commits. Shared action buttons, transport/player actions and filter bubbles give exactly one weak system-respecting pulse per successful activation, including accessible activation. Disabled actions, cancelled presses and programmatic state changes stay silent. Multi-select media and artist album choices retain scrolling.</p>
+<p>Lyrics, reordering, carousels and overflow bars must not swipe the parent once acquired. One gesture changes one surface level.</p>
+<p>Horizontal/vertical choices and fitting navigation preview the lens at any touched option without committing or pulsing. A deliberate hold or owned axial drag continues from that contact.</p>
+<p>Selectors, settings sliders and switch thumbs give weak owned engagement, one weak tick per distinct discrete step/Boolean transition, and a strong genuine release. Cancellation has no release pulse. Ordinary tap, keyboard and accessible activation give one weak pulse at the input owner, including the full-width switch row.</p>
+<p>Continuous sliders have no step ticks. Pending contact, parent scrolling and external/animated state changes stay silent. Parent scrolling cancels preview/activation and retains ownership through direction changes. Initial cross-axis travel alone must not disable later axial manipulation when no competing scroll wins.</p>
+<p>Presses, morphs and selectors share interruptible deformation driven by acceleration and held pressure. Position stops at the destination. Width/height/depth convey impact at approximately constant volume. Navigation and horizontal/vertical choice tracks share overdrag geometry: the track stretches along travel, its contents deform and realign proportionally, and the selector’s gap to the moving wall progressively closes.</p>
+<p>Contact corners stay circular and concentric with the enclosing track. The free end absorbs compression. Contact flattens the lens. Release keeps the configured rebound along travel. The enclosing wall and lens settle together across travel without lateral ringing, retaining their visible contour on re-touch.</p>
+<p>Either the app’s Reduced motion setting or Android’s disabled animator duration scale removes shared deformation, edge pressure and rebound. Changes apply while open. Restoring Android animations resumes motion only when the app option is off.</p>
+<p>Glass shape morphs remain visible for roughly 500 ms at normal speed and 350 ms with Faster animations; Reduce motion removes the morph. Other surfaces use about 300 ms and lyrics 260 ms. Retain exit drawing until handoff, but dismissed menus immediately release input.</p>
+<p>Reopening a retained, prepared menu immediately reclaims its surface and shadow. Newly mounted windows prepare before hiding the trigger. Full settings/editor/artwork pages slide/fade. Programmatic scrolling stops without overshoot. Long journeys virtualize each frame’s crossed distance along one continuous ease and finish within about 500 ms. Touch cancels scrolling.</p>
+<p>Active/inactive and enabled/disabled control appearances activate over 180 ms and deactivate over 270 ms (120/180 ms with Faster animations), with no onset delay. Icon badges crossfade in fixed bounds. State, accessibility and input availability change immediately, reversals continue from the visible appearance, and Reduce motion snaps to the result.</p>
+<p>Keep existing transport morphs and gesture-driven travel.</p>
+<p>Keep focus stable, accessible/tap alternatives available, and layouts usable in landscape, large fonts and short screens. Adjacent glass actions retain natural label widths and logical order. Overflow offers explicit previous/next controls without changing button-owned drags or shrinking text. Long titles pause, scroll and fade at their edges. Reduced motion uses ellipsis.</p>
+<p>Shared glass text fields wrap labels and retain native editing semantics. A plain trailing X fades in only for nonempty text. Clearing keeps or restores focus and the keyboard.</p>
+<h3 id="appearance-and-settings">Appearance and settings</h3>
+<p>Browsing/settings stay light, with a pink selected-tab accent, shared neutral gray for secondary text/inactive icons, and red for errors/destructive actions. Use Inter with compact tracking and bold mini-player titles. Do not bundle Apple&#39;s system font. <strong>Interface → Appearance</strong> persistently adjusts gray, with reset to the darker default. Broader themes remain <a href="roadmap.html">planned</a>.</p>
+<p>Settings categories are Interface, Playback and queues, Library and tags, About/licenses, with icons, summaries and chevrons. Search appears only at the root. Both Back controls reverse the page entrance direction.</p>
+<p><strong>Interface → Glass</strong> provides live persistent controls and reset, with a draggable preview that compresses at its edges and morphs between a pill and dialog:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Range / treatment</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Blur / white tint</td>
+<td>Clear through frosted. Defaults use light scattering/tint.</td>
+</tr>
+<tr>
+<td>Shape damping / resting depth</td>
+<td>Damping 2–40 (default 8). Depth 0.6–2 (default 1.35). Footprint and lensing share the same response.</td>
+</tr>
+<tr>
+<td>Shadow strength / spread</td>
+<td>Off through visible. Tight through broad. Default very subtle and broad.</td>
+</tr>
+<tr>
+<td>Adaptive contrast</td>
+<td>Page-wide ink polarity. Background brightness trim 0–50% (default 25%) and weighting from even to highlight/shadow-focused. White icons darken highlights. Dark icons lift shadows. Foreground and media selections remain unfiltered.</td>
+</tr>
+<tr>
+<td>Navigation selector</td>
+<td>Adjustable glass has independent blur/tint; Clear overlay has 0–50% darkening (default off) and optional icon/text refraction (default off). Classic gray pill has adjustable opacity (default 10%) and no glass deformation.</td>
+</tr>
+<tr>
+<td>Sliders and switches</td>
+<td>White opaque resting thumbs morph into clear unblurred glass on contact. Independent expansion 1–2× (default 1.75×).</td>
+</tr>
+</tbody></table>
+<p>These controls affect floating glass. Queue frost remains independent.</p>
+<h3 id="settings-controls">Settings controls</h3>
+<p>Use equally sized inline segments for two or three choices when measured labels fit. Longer lists stage a draft until Select; Cancel discards it. An enclosing editor retains its separate Save action.</p>
+<p>Sliders expose a label, value, endpoints and accessible range. Horizontal values run from logical leading minimum to trailing maximum, including right-to-left layouts. Vertical ranges run from bottom minimum to top maximum.</p>
+<p>Discrete settings use matching ticks and accessible increments. Percentage settings use 5% increments. Continuous ranges retain their precision. A continuous settings slider keeps its last valid value on cancellation.</p>
+<p>Switch rows expose one accessible Boolean control. A drag previews the destination. Release commits once and cancellation restores the committed value. Tap and keyboard alternatives produce the same state.</p>
+<p>Track and thumb share one coordinate model for fill, travel and boundary contact. Render identity outside the active lens and refraction inside it. Foreground labels remain sharp.</p>
+<p>The <a href="interface.html#appearance-and-settings">appearance settings</a> own thumb finish and expansion. The <a href="interface.html#motion-and-access">motion rules</a> own pickup, haptics and reduced motion. Playback retains its separate <a href="interface.html#player-and-queue-drawer">scrub cancellation</a>.</p>
+<h2 id="navigation-and-back">Navigation and Back</h2>
+<h3 id="destinations">Destinations</h3>
+<p>default Home + Library. Keep at least one unique ordered tab. Available: Home, Library, Songs, Albums, Artists, Album Artists, Folders, Playlists and Queues; Most played remains a sort/statistic, not a tab. Four fit the normal phone shelf. Wider sets or large fonts overflow without shrinking touch targets.</p>
+<p>Fitted cells accommodate the widest measured label with capsule padding.</p>
+<h3 id="selector">Selector</h3>
+<p>one lens responds immediately to taps and magnetically follows manual page swipes. Large icons/readable labels share an accent mask under the lens. Direct taps, including reselection, and owned drags use the shared selector haptics. Cancellation is silent. Page swipes, programmatic/settling tracking and overflow scrolling produce no haptics.</p>
+<p>A different tab preserves its route/position. Reselecting the settled current tab returns to its root and eases to the top, without history. Library reselection first scrolls to the top while retaining its filter. A separate tap while already at the top clears the filter.</p>
+<h3 id="dragging">Dragging</h3>
+<p>fitting navigation uses the shared selector pickup above. Overflowing navigation permits lens dragging only from its visible moving lens. Other origins scroll hidden tabs, while taps still select. Clip scrolling contents to the capsule. Shared overdrag fixes the opposite wall. Overflow keeps its undeformed viewport.</p>
+<h3 id="page-swipes">Page swipes</h3>
+<p>require at least twice as much horizontal as vertical intent, without changing carousel recognition/ownership. Follow tab order without wrapping. Preserve each tab&#39;s route, scroll, completed content and artwork. Headings travel with their pages, aligned to search/filter insets. Detail headings crossfade. Commit visit history after settling.</p>
+<h3 id="back">Back</h3>
+<p>first end focused text editing and hide keyboard/cursor while preserving the draft. Then dismiss topmost popup/dialog → visible queue/playlist selection → queue overlay, artwork viewer or lyrics → player → current main-tab list to the top → applicable list filter reset → detail/search history → tab visits → exit.</p>
+<p>Each press takes one applicable step. List scrolling/filter reset also applies within details, without returning to the tab root. Detail/search return restores the parent query, first item and pixel offset after matching results load.</p>
+<h3 id="lifecycle">Lifecycle</h3>
+<p>tab history defaults on. Exit confirmation off. Disabling tab history preserves detail/search Back. Recreation restores state. Fresh launch prefers Home, otherwise the first tab. Activity closure leaves playback running.</p>
+<h3 id="floating-navigation-geometry">Floating navigation geometry</h3>
+<p>Tabs are 64 dp high. The mini-player and standalone circular controls are four fifths of that height (51.2 dp), excluding system insets. Mini-player artwork is 32 dp, vertically centered with a 16 dp leading inset.</p>
+<p>Its lens and menu-opening controls are deeper than the tab shelf/selector (1.3× versus 0.72× the configured resting depth). Its compact title/artist use 13/11 sp with a 17 dp separation between line origins. Bottom floating surfaces share one shape-aware shadow without stacked overlap.</p>
+<p>Three aligned floating pills follow the Apple Music reference: full-width mini-player above flexible tabs at left and a divided Search/More pill with 28 dp icons at right. Search is immediately left of More; More offers Scan music and Settings; About/licenses lives only in Settings.</p>
+<p>Lists draw behind these controls, with enough content padding to reveal final items. Inside album, artist, Album Artist, playlist and folder details, tabs and utility controls leave. The mini-player moves down and remains available.</p>
+<p>Library/Playlists have an aligned circular + matching the mini-player&#39;s height. It morphs into its frosted creation menu and returns on dismissal, offering Create playlist and Import playlist from file (<a href="product.html#library-and-playlists">import rules</a>).</p>
+<h2 id="browsing-and-search">Browsing and search</h2>
+<h3 id="view-preferences">View preferences</h3>
+<p>Use shared catalog/content/search templates. Dedicated catalog tabs and corresponding Library filters share sort/view preferences, without page overrides. Existing Library filter overrides take precedence during migration. Collections and search retain optional overrides and reset. Search text does not create another override. Album catalogs and contents are separate types.</p>
+<p>List <strong>Size</strong> offers Smallest, Small, Compact, Normal (default), and Large (18 sp titles). Normal/Large covers match Gallery 5/3 respectively. Compact has small leading artwork; Small/Smallest omit artwork and progressively reduce row spacing.</p>
+<p>These three dense sizes keep one-line extra information immediately before the overflow, with smaller single-line titles. Metadata moves between trailing and subtitle positions through the shared layout animation. Long text ellipsizes, and larger system fonts grow rows. Normal retains its existing geometry. Gallery <strong>Items per row</strong> snaps to 1–5. Preserve legacy presets until changed.</p>
+<p>Use smaller text/tighter padding at three or more columns, with an overlaid scrollbar.</p>
+<h3 id="pinch-transitions">Pinch transitions</h3>
+<p>In all lists, including queues and album details, pinch outward through Smallest list → Small list → Compact list → Normal list → Large list → Gallery 5 → 4 → 3 → 2 → 1, and inward to reverse. Change one adjacent view per gesture, requiring all fingers to lift before another step.</p>
+<p>Pinch distance linearly targets geometry with a brief interruptible response filter. Reversing restores items virtualized out by the destination. Release settles before saving. Anchor the scroll range at the top/bottom when already there. Otherwise preserve the content under the pinch midpoint. Keep equal outer margins and selection across modes.</p>
+<p>View controls remain the accessible alternative. Reduced motion changes layout immediately.</p>
+<h3 id="library-collections">Library collections</h3>
+<p>With no filter selected, Library combines collections: default Albums, Album Artists, Playlists. Optionally Artists/Folders. Settings → Library and tags → Library filters owns visible filters, resting order and <strong>Unfiltered Library collections</strong>. Holding a filter opens a shortcut there. Empty filter/collection sets are valid. Hiding the active filter clears selection. Global search retains all types.</p>
+<p>Labels use <strong>Album Artist / Album Artists</strong>.</p>
+<h3 id="covers-and-collection-actions">Covers and collection actions</h3>
+<p>Covers: circles for Artist/Album Artist, rounded squares for albums/playlists. Automatic collection covers use the first displayed member under that collection’s saved sort override or inherited contents sort, including album grouping. Playlist/queue covers follow their persisted occurrence order. Explicit custom covers take precedence.</p>
+<p>A first member without artwork keeps the placeholder instead of borrowing a later member’s cover. Reuse a tapped cover immediately in its detail header and crossfade its higher-resolution replacement. Keep the visible artwork of each tab and the previous two Back destinations.</p>
+<p>Show memory-cached covers immediately. Newly decoded covers use a subtle loading sweep and 300 ms reveal, with static missing-cover placeholders and reduced-motion support. Gallery actions are on long-press, without overlaid menu buttons. Collection/nonmutable-song holds and plain row ellipses open the same anchored actions. Mutable-song holds select, then moving the same finger starts reordering.</p>
+<p>Actions include: select songs, queue/playlist destinations and pinning. Playlists additionally offer image, rename and delete. The image action sets a missing custom cover or removes an existing one. Removing it restores representative member artwork. Playlist detail repeats these actions in its floating overflow control.</p>
+<h3 id="filters-and-global-search">Filters and global search</h3>
+<p>Library root has no top search box: bottom Search opens a global-search page. Selecting a glass filter bubble moves it to the far left. The previous selection returns to its configured position, with neighbors yielding progressively and scrolling following the selected bubble.</p>
+<p>Tapping the selected filter clears it and restores its position. There is no All button. Keep configured order separate from this temporary arrangement. Start movement on tap. Immediately fade away the previous results. Reveal the new results only with their matching saved sort/layout, independently of bubble movement.</p>
+<h3 id="scoped-search-geometry">Scoped search geometry</h3>
+<p>Album contents omit scoped search and its setting. Other lists can enable scoped quick search in the <strong>View</strong> tab of browse options. Search pills and filter bubbles share their height and vertical placement (40 dp visible inside a 48 dp target, 4 dp outer vertical inset. Grow together for large text).</p>
+<p>Both float above a nonlinear list-edge fade with initial content below them. Search morphs the pill into one frosted foreground panel and reverses on close. Collapse only visible vacated header space, restoring its original scroll offset. Already-scrolled content stays put. Global/local search are not main tabs.</p>
+<h3 id="scoped-search-lifecycle">Scoped search lifecycle</h3>
+<p>Scoped search anchors its bottom above the keyboard and grows upward, keeping its field at the top without scaling it. Hiding the keyboard centers the panel and adds 20% height within safe margins. Opening a child menu freezes the parent’s position until return. Focus the field as soon as its layout is ready.</p>
+<p>Empty Back closes scoped search. Nonempty Back first ends editing. Actual dismissal clears the scoped session. Temporary covering/result navigation preserves it. Scoped results omit subtitles. Initial search results and filter changes reveal visible rows sequentially. Typing edits one draft. Its editor session survives completed-query-to-draft transitions while result/history state remains route-owned.</p>
+<p>Back or actual dismissal retires the editor and its callbacks. IME submission or opening a result commits the draft. Each completed search retains query, scope, filters, sort, results position and identity. After editing ends, Back retraces searches without reopening the keyboard. Opening results/player preserves the source and popup positions.</p>
+<p>Mixed-result queues include only displayed song occurrences, in order.</p>
+<h3 id="sort-and-view-editor">Sort and View editor</h3>
+<p>The entire divided Sort/View pill expands into one frosted panel, initially showing the tapped tab. A fixed icon-and-label glass tab header separates navigation from settings below. Keep the panel size constant across tabs and supported option states.</p>
+<p>Measure inert faces for the complete body, title and action-footer alternatives. Wrap their maximum natural width within the shared window cap. Reserve title/footer space before bounding body height. Do not use a separate screen-percentage cap. Scroll-edge fades appear only where current content is hidden. Oversized chrome scrolls too so actions remain reachable.</p>
+<p>Both tabs share one draft: switching preserves edits; Save applies both and Cancel discards them. Choice controls follow the <a href="interface.html#settings-controls">shared staged/inline rules</a>. Defaults: catalogs/search title ascending. Album songs disc/track. Playlists/queues saved order. Recent newest. Frequent most played. Pins manual. Offer applicable title/count/duration/year/date/artist/Album Artist/composer/genre fields. Date added/modified start newest-first; Most played highest-first, all reversible.</p>
+<p>Rules for dates/counts: <a href="product.html#dates-and-listening-statistics">Product</a>.</p>
+<p>Extra information starts with None, then Follow sort order. Unfiltered Library and global search additionally offer Automatic between them and default to it when no choice is saved. Automatic inherits each row type’s catalog/filter extra information and, for Follow sort order, that type’s own sort.</p>
+<p>Changes to those settings refresh mixed rows. Explicit saved choices retain their meaning.</p>
+<h3 id="overrides-and-mutable-lists">Overrides and mutable lists</h3>
+<p>Successful changed queue/playlist randomization scrolls to the top. Queue sort/revert follows the active playing or paused occurrence, otherwise the top, after matching rows publish. Unchanged or failed edits and View-only saves leave the viewport unchanged. New navigation or list input cancels pending movement.</p>
+<p>Collection/search overrides use <strong>Save only for this list</strong> above Cancel/Save. Main catalog tabs have no override. In queues/playlists the switch belongs only to View. Their Sort tab offers immediate Randomize with Revert to its right after success, a divider and a staged method/direction, with Close/Apply; Apply stays open and disables once applied.</p>
+<p>Revert uses shared glass emergence/disappearance in a reserved slot and disappears after a successful restoration. Manual restores the saved baseline. Sort by and Extra information use the same staged selector trigger and frosted dialog. View offers presentation, list Size or gallery Items per row, extra information and applicable scoped search.</p>
+<p>Overflowing lists of at least 40 items get a narrow edge scrollbar and accessible scroll action. Show letter/year previews only during dragging under title/year sort.</p>
+<h2 id="collection-details">Collection details</h2>
+<h3 id="shared-detail-header">Shared detail header</h3>
+<p>Album and artist pages use a full-width artwork header beginning below the status bar, with a blurred extension above and a feathered color continuation behind the songs. Artwork travels at 65% of content speed with a continuous offset after the lazy header leaves view. Reduced motion disables parallax.</p>
+<p>Choose black or white foregrounds from the artwork brightness. Sort and visibility share a glass pill where both are present. The whole pill opens the shared tabbed panel. Collection overflow opens the requested tab in one window and returns to the persistent three-dot anchor. Empty lists show a quiet centered inset-style icon.</p>
+<p>Back and collection overflow are glass controls. The top color fade depends on scrolling past the artwork and is absent at the top.</p>
+<p>Detail entry immediately uses the cached cover and its colors, title and artist. Crossfade the higher-resolution artwork/color continuation together. Newly loaded tracks reveal in a bounded sequential fade sweep, disabled by reduced motion.</p>
+<h3 id="album-details">Album details</h3>
+<p>Album details default to normal list presentation and ascending disc/track order, with Sort/View and pinch alternatives. Their bottom-right overflow shares playlist collection actions, excluding playlist-only edits. Album headers show the album/artist and a large Play control using the configured song-tap behavior.</p>
+<p>Smallest/Small/Compact/Normal album rows use muted track numbers instead of covers; Large/Gallery show covers without track numbers. Keep regular song titles and quiet horizontal ellipses. Song-row overflow remains plain until its menu opens. Top-level utility menus retain vertical dots.</p>
+<p>Artist and Album Artist headers follow the first displayed song, including the active album filter. No artwork scraping. Sort/View sits at top right and collection actions at bottom right. Below the header, a horizontal album multiselect filters the sorted song list.</p>
+<p>No explicit selection means All albums. Selecting an album replaces All, and deselecting the last restores All. A combined glass Play/Shuffle pill acts on that displayed list. Shuffle randomizes the new queue’s saved order without enabling global traversal shuffle.</p>
+<p>The Add to playlists panel combines covered existing-playlist rows with an inline new-name field; Add or keyboard submission applies all chosen destinations. Duplicate names disable Add, using the <a href="product.html#library-and-playlists">playlist rules</a>.</p>
+<h2 id="selection-and-reordering">Selection and reordering</h2>
+<p>Holding a mutable playlist/queue song selects immediately. Its new action panel waits for release, so continued movement into dragging never flashes it. Existing panels retain their state. Accessibility selection without a pointer shows the panel immediately. Other items use Select song / Select all songs in their shared menu.</p>
+<p>The bulk action panel slides/fades above the mini-player over 220 ms, independently of immediate item selection, retaining tabs. Normal collection taps navigate. Song taps toggle membership while selection is active. Use the <a href="interface.html#materials-and-controls">shared selection treatment</a>.</p>
+<p>Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.</p>
+<p>Panel: All, Range, count, actions and a divided collapse/close glass pill. Wrap/scroll within a bounded height. Close, mutable-list Back or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing the panel retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.</p>
+<p>In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.</p>
+<p>Lift visible selected rows into a shadowed Liquid Glass stack above selection controls/list clipping, sharing its material with Player actions dragging. The first source-order song is on top. At most two empty glass layers trail it, with a count badge for multiple items.</p>
+<p>Lifted content retains its actual list/gallery layout and lands on the rendered item bounds. Material and trailing actions crossfade without shrinking the content or jumping at handoff. Track the finger directly. Keep a one-row insertion gap, ease surrounding rows, edge-scroll and smoothly unpack on release.</p>
+<p>Playback checkpoints and unrelated refreshes retain an owned contact. Route or source occurrence-order changes cancel it, and commits reject an intervening source-order change.</p>
+<p>Hide the action panel throughout dragging/landing. Floating controls share its animated visible occupancy, with an 8 dp gap above the panel, and return above remaining bottom chrome as it leaves. The foreground drag X shares the collection utility control row without an extra bottom margin.</p>
+<p>A Liquid Glass foreground X circle remains above the stack. Hover tints it red with one firm haptic. Leaving gives a lighter tick, honoring system settings. Release there cancels and restores the panel. Other drops, including an unchanged insertion position, finish selection after successful landing.</p>
+<p>System interruption or failed persistence restores order, selection and the panel. All landings crossfade into normal rows and preserve playback cursors.</p>
+<h2 id="player-and-queue-drawer">Player and Queue drawer</h2>
+<p>The mini-player appears whenever an active queue has a current song, including paused playback. Inset its artwork/title together inside the leading curve. Use black filled Previous/Play/Pause/Next icons. The settled Play triangle uses a single filled contour. It morphs into Pause. Skips use two rounded triangles without an end bar, with a staggered directional nudge.</p>
+<p>Secondary metadata defaults to Album Artist with Artist fallback; Artist-first is configurable. The body is one rounded tap target. Transport remains independent.</p>
+<p>Tap/swipe up expands one shared outline containing glass, artwork, text and transport. The expanded player and Queue outline share device-reported corner radii. Absent or unavailable corner geometry stays square.</p>
+<p>Glass grows blurrier through expansion. The final artwork color continuation blends in later and becomes opaque near full size, without passing through a darker average-color backing. Full-background covers soften at their perimeter while keeping the center sharp, then merge into the continuation. Floating covers keep defined edges.</p>
+<p>The growing cover is weighted slightly later to clear the title. Its feather never drops away at the final handoff. All blends reverse with the gesture.</p>
+<p>Metadata/seek/actions/lyrics have 32 dp side insets. Order: artwork → metadata → seek/times → customizable actions → transport → Queue drawer. No volume controls. Album metadata fades in and seek/actions appear late, while transport persists throughout.</p>
+<p>Normal metadata and controls sit below the cover with balanced space above Queue. Lyrics mode lowers them further and centers transport between the seek track itself and the collapsed Queue shelf’s top.</p>
+<p>While scrubbing, show the same foreground X target as mutable-list dragging, above the Queue shelf. Entering and leaving X ease symmetrically between live playback and the current finger position, continuing through reversals; Faster animations shortens the transition and Reduce motion snaps.</p>
+<p>An owned seek drag gives one weak engagement pulse and a strong genuine release outside X, with no continuous-position ticks. Entering X gives the shared firm pulse and leaving gives a weak tick. Releasing there or cancelling discards the preview without a seek, pause or release pulse.</p>
+<p>Tap and accessible changes give one weak activation. Pending contact, parent scrolling, unrelated keys and live/programmatic playback tracking stay silent. Feedback honors system settings. Other genuine releases commit the finger position.</p>
+<p>A 72 dp translucent handle appears late in expansion below the safe top inset, dark gray with light icons and light gray with dark icons.</p>
+<p>During collapse it keeps the same inset from the moving top edge and fades early, avoiding control overlap. Its accessible tap target and the top-left glass down arrow collapse the player. Main tabs leave downward. Playback-starting song taps expand by default (configurable). Add-next/append do not. Swipe down/Back restores underlying browse state.</p>
+<p>Opening commits at 240 dp/s or about 22 dp of travel. Player and Queue closing share 300 dp/s or 72 dp, with progress deciding otherwise. Both remain interruptible during settling. Player collapse slows into its resting position.</p>
+<p>During collapse, artwork and its color continuation resolve together before detaching. No stretched backing cover or dark browse flash.</p>
+<table>
+<thead>
+<tr>
+<th>Queue element</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Drawer material</td>
+<td>Bottom-attached, visually separate from player artwork, with one neutral frosted surface throughout expansion: blurred backdrop colors, fine texture and neutral darkening for white text, without an added blue tint. The collapsed shelf keeps the same blur with lighter shading, darkening continuously as it opens.</td>
+</tr>
+<tr>
+<td>Drawer actions</td>
+<td>The queue header’s down arrow minimizes it. Deletion lives in Queue actions. Whole label and upward player swipes open it. Body/handle/list pulls settle by release velocity and distance. Once a gesture starts opening Queue, reversing only closes Queue and cannot dismiss the player.</td>
+</tr>
+<tr>
+<td>Drawer gesture ownership</td>
+<td>A fresh downward pull from its already top-scrolled list closes it. An interrupted pull restores the open drawer. Once either the list or drawer acquires a contact, it keeps that contact through edges and reversals until release. Switching requires a fresh gesture.</td>
+</tr>
+<tr>
+<td>Drawer edge travel</td>
+<td>Excess finger travel past a list edge must be retraced before scrolling resumes. Flings/reordering retain ownership.</td>
+</tr>
+<tr>
+<td>Queue selection and ordering</td>
+<td>Rounded popup opens already positioned at the playback queue. Numbered rows show browsing selection, a separate playback marker, plain rename/delete icons and shared whole-row long-press reordering, with accessible move actions on the handle. Dragging previews order until release. Cancellation or a failed save restores it without changing browsing/playback.</td>
+</tr>
+<tr>
+<td>Selector layout and removal</td>
+<td>Short popups omit the repeated heading to retain a usable list. When more than one queue exists, Remove all other queues morphs from a glass button into confirmation. Each confirmation name uses a single-line ellipsis.</td>
+</tr>
+<tr>
+<td>Selector titles</td>
+<td>Selected long title marquees with an unfaded leading edge during its pause. Other rows, closed selector and search prompts use single-line ellipsis.</td>
+</tr>
+<tr>
+<td>Header layout</td>
+<td>Handle and Queue title. Down/numbered-selector/More row. Sort/occurrence-index-and-count-above-runtime/add-to-playlist row. Search, then songs. Save to new/existing playlists and omit a redundant play button. Share outer margins and compact spacing while leaving shadows unclipped.</td>
+</tr>
+<tr>
+<td>Current occurrence and actions</td>
+<td>A subtly denser, textured frosted slab marks only the current queue occurrence, with a faint material edge. Other browsing lists have no playback highlight. Occurrence menus omit Move up/down. Drag ordering remains available. Information links close player/queue overlays and open the collection without changing playback.</td>
+</tr>
+<tr>
+<td>Queue action scope</td>
+<td>Queue More omits List view options. Global Repeat/Shuffle stay in the player. Browsing/deletion behavior: <a href="product.html#queues-and-playback">Product</a>.</td>
+</tr>
+<tr>
+<td>Return control</td>
+<td>When the current occurrence is offscreen or covered by floating controls, fade in a Liquid Glass bubble pointing toward it. Ease it below the search pill or to the closest possible position. Keep its last direction throughout exit. During selection/drag, slide/fade this down so selection actions occupy the bottom.</td>
+</tr>
+</tbody></table>
+<h3 id="artwork-swiping">Artwork swiping</h3>
+<p>Retain the current complete visual while the next artwork/palette loads. Prepare the actual playback neighbors without blocking audio. Album-art swiping can be disabled independently in Settings → Interface → Player (enabled by default). Enabled horizontal cover swipes follow the finger, feathering adjacent covers through their blended color continuation.</p>
+<p>A short peek returns. Sufficient travel or a directional flick commits the previewed visit once on release. Re-grabbing a settling carousel preserves its displayed position. Neither settling nor artwork loading disables horizontal ownership. Right swipes choose the actual previous visit independently of the Previous restart preference.</p>
+<p>Hold the prepared destination until playback/artwork catches up, then hand it over without a second wash. Interrupted touches and invalidated previews return safely.</p>
+<h3 id="automatic-artwork-transitions">Automatic artwork transitions</h3>
+<p>Buttons and autoplay default to a symmetric blur-through: soften the outgoing cover, blend near peak blur, then resolve the incoming cover. Settings offers the perspective carousel as an alternative. Its edge softness follows travel continuously in both directions. Identical decoded covers stay still.</p>
+<p>Full-background covers feather into their blended color continuation. Floating covers keep separate edges while their backdrops crossfade. Reduced motion uses a short fade without blur or travel. Lyrics remain open across songs and crossfade their documents. Missing local lyrics show an unobtrusive empty indicator.</p>
+<p>Loading never exposes a white backing surface, blanks the player or replaces artwork prematurely. No routine loading/connection status text. Genuine playback failures use a rounded dismissible dialog with plain-language guidance and relevant Retry/Skip actions.</p>
+<h2 id="player-actions">Player actions</h2>
+<p>Hold any slot/action to customize, except Repeat, which retains its dedicated menu; Settings also opens the editor. Drag from the reflowing available-action pool into slots, or return an assignment to the pool to remove it. Keep tap/accessible alternatives, haptics and animated landing without a disabled duplicate.</p>
+<p>Centered, 2 rows and Compact use independent Library-style filter bubbles: selected first, canonical order within both groups. Compact adds spaces without shrinking icons. Centered layout balances columns. Non-centered playback stops at the rightmost visible assignment. Preserve intentional gaps and hidden assignments.</p>
+<p>Offer functional information, editing, art, lyrics, playlist, pin, collection links, shuffle/repeat, count, ten-second seek and More actions. Default: Info/Add to playlist left, Repeat/Shuffle right. Info uses circled i. Playlist uses list-plus.</p>
+<p>Information: shared bounded frosted popup with tappable artwork and divided file/location, metadata, known technical details and listening/date sections. Leading icons align beside label/value blocks. Entire Album, Artist, Album Artist and Location rows open their existing collections.</p>
+<p>The body scrolls with directional overflow fades while Edit tags and Done stay together at the footer’s trailing edge. Popup controls and secondary text share the material’s light/dark palette.</p>
+<p>The tag editor uses a compact frosted panel, centered artwork above checked fields, change/remove controls on the preview. Follow <a href="product.html#metadata-and-artwork-editing">editing and crop rules</a>. The cropper offers pan, pinch, zoom and reset.</p>
+<p>Image picker: rounded previews of readable previous choices. Optional device-photo access has a short explanation and glass permission button. An evenly spaced divider separates these from icon-bearing glass Gallery/Files actions.</p>
+<p>Bulk jobs offer Continue in background and Stop after current file; <strong>Settings → Library and tags → Tag jobs and recovery → Tag editing jobs</strong> shows progress/recent per-file outcomes.</p>
+<p>Mode icons visibly reflect state without filled hitboxes or ripples: dim when off, full strength when active, visible 1 for Repeat one, distinct Stop/Next paused/Next queue indicators and accessible announcements. Hold Repeat for Simple/Advanced options. Tapping returns to the ordinary cycle. Playback semantics live in <a href="product.html#queues-and-playback">Product</a>. Keep the destination shelf extensible.</p>
+<h2 id="artwork-and-lyrics">Artwork and lyrics</h2>
+<p>Default full-background cover: scale uniformly to screen width without side cropping, retain its vertical center, keep roughly the upper two thirds clear. Feather the lower third into broad curved color regions preserving left/right cover colors, extending above/below with gentle control shading. Avoid a straight fade to one average color.</p>
+<p>Alternative: floating cover over an artwork-colored matte/acrylic gradient with subtle non-tiled texture.</p>
+<p>Both layouts animate into one integrated lyrics state: no boundary or Lyrics heading. Blend lyrics into the upper screen, lower metadata/transport, fade/slide extra actions away. Keep metadata above seek and transport accessible. Fade the artwork and its feathered edges uniformly. Artwork must reappear during held collapse, before release.</p>
+<p>Keep every lyrics entry point available even without local lyrics.</p>
+<p>The top-right lyrics bubble widens into a divided pill: its persistent lyrics icon moves left to select sources, and a crossed-out eye on the right hides lyrics. Source selection first separates it into two circles, then expands the left circle into its popup. Return restores that circle before rejoining.</p>
+<p>Keep the right action visible, carry contact/rebound through each boundary, and let only one surface own the left material and shadow. Cancelling or reversing preparation retraces it. Source/track changes close the outgoing menu without applying stale choices. Sort/View retains its direct whole-pill morph.</p>
+<p>Default artwork tap toggles lyrics. Hold opens View artwork / Change artwork / Configure tap action. Independently map tap/hold to lyrics, menu, viewer, change or nothing in Settings. Keep accessible alternatives.</p>
+<p>Viewer supports pinch/pan/reset and returns to the same player state; Change artwork opens image selection directly, then the shared artwork-only review/write flow for the current song in the <a href="product.html#metadata-and-artwork-editing">shared single-song editor</a>.</p>
+<p>Follow real playback/seeks/queue changes with active-line emphasis, fluid movement and fading viewport edges, inspired by <a href="https://github.com/better-lyrics/better-lyrics">Better Lyrics</a>. Manual scrolling suspends following. A Liquid Glass directional bubble returns to the current line. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.</p>
+<p>Show the shared quiet empty state only after the current lookup finds no usable lyrics without reporting a read error. Never during loading, failed reads or a real lyric document&#39;s arrival. Available lyrics remain visible when another source fails. Keep it fixed to the background while lyric content eases in/out. <a href="product.html#lyrics-sources">Source policy</a>.</p>
+<h2 id="scanner-and-folders">Scanner and folders</h2>
+<p>More → Scan music opens the shared rounded dialog: Scan now, live progress/song count, Folders to scan and Metadata read failures. Its gear opens scanner configuration under Library and tags; Settings contains configuration, not manual scanning. Both routes share the folders page with basenames, removal and Add folder.</p>
+<p>Duplicate basenames use stable-per-root-set fractions such as Media (1/2). Unique names stay plain. Metadata failures appear here, never as a persistent queue warning.</p>
+<p>After starting, offer Continue in background and Cancel with completion/failure state. Explain actual permission/background restrictions and link directly to Localica&#39;s relevant Android settings page. Do not promise to scroll another app&#39;s settings. Configuration: subfolders, minimum duration, per-folder relative exclusions and opt-in launch scanning. Adding a folder only grants access. Safety/lifecycle guarantees: <a href="structure.html#file-operations">Structure</a>.</p>
+</main><footer><a href="https://github.com/anastaci1a/localica/blob/main/docs/interface.md">Page source</a></footer></body></html>

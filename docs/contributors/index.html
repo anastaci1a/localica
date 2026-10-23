@@ -1,0 +1,60 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Working instructions · Localica</title><link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../math/katex.min.css"></head><body><a class="skip" href="#content">Skip to content</a><nav aria-label="Documentation"><a href="../index.html">Localica</a><a href="../guide/index.html">Documentation</a><a href="../standard.html">Writing standard</a><a href="index.html">Contributing</a></nav><main id="content"><h1 id="working-instructions">Working instructions</h1>
+<p>Read the <a href="../guide/index.html">documentation map</a> before editing. Follow the <a href="../standard.html">documentation standard</a> and <a href="collaboration.html">collaboration contract</a>. Task-specific owner instructions take precedence.</p>
+<h2 id="passive-documentation-maintenance">Passive documentation maintenance</h2>
+<p>Consolidate documentation during every relevant change. Edit the authoritative rule and remove superseded statements in the same pass.</p>
+<p>Preserve agreed behavior, defaults, exceptions and constraints. Keep the README short and review <a href="../guide/build.html#previews">previews</a> during release preparation.</p>
+<p>Run the <a href="../guide/build.html#documentation">documentation checks</a> before committing prose. Review meaning, duplication and current-versus-planned status as well as automated results.</p>
+<h2 id="shared-interface-controls">Shared interface controls</h2>
+<p>Build app-owned choices, switches, sliders, text fields, dialogs and drag visuals from the shared <code>ui</code> controls documented in <a href="../guide/interface.html">Interface</a>.</p>
+<p>Extend the abstraction when behavior is missing. Avoid raw Material segmented buttons, radio rows and parallel visual implementations. System permissions and external pickers remain native.</p>
+<p>Keep shared gesture, selection and material regression tests with changes to those abstractions.</p>
+<h2 id="issues-and-commits">Issues and commits</h2>
+<p><a href="https://github.com/anastaci1a/localica/issues">Issues</a> own actionable work and acceptance criteria. Use the <a href="../templates/ISSUE_TEMPLATE/bug_report.html">bug</a> or <a href="../templates/ISSUE_TEMPLATE/feature_request.html">feature</a> template, including CLI/API submissions. Omit irrelevant optional fields.</p>
+<p>Write short issue bullets. Bugs explain observed and expected behavior, reproduction and known cause. Features state the request and observable completion. Link supporting evidence.</p>
+<p>Keep commits coherent and reviewable. Separate unrelated cleanup, implementation and release automation. Reference relevant issues and use descriptive imperative subjects.</p>
+<p>Use the repository-local author identity. Inspect Git state and appropriate verification before committing. Audit staged content for secrets and report material limitations.</p>
+<p>Push every commit immediately and verify the remote branch tip. Never leave completed work only locally.</p>
+<p>Use <code>umask 0002</code> when creating workspace contents. Run <code>./fix-permissions.sh</code> on created or modified paths. It preserves executable bits and grants the shared group access.</p>
+<h3 id="labels">Labels</h3>
+<p>Use one type and usually one or two areas. Add workflow labels only while applicable. GitHub&#39;s open/closed state owns completion.</p>
+<table>
+<thead>
+<tr>
+<th>Purpose</th>
+<th>Labels</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Type</td>
+<td><code>bug</code>, <code>enhancement</code>, <code>documentation</code>, <code>maintenance</code></td>
+</tr>
+<tr>
+<td>Area</td>
+<td><code>area: library</code>, <code>area: playback</code>, <code>area: interface</code>, <code>area: storage</code>, <code>area: build</code></td>
+</tr>
+<tr>
+<td>Workflow</td>
+<td><code>in progress</code>, <code>blocked</code>, <code>question</code></td>
+</tr>
+<tr>
+<td>Ownership</td>
+<td><code>owner:dot</code>, <code>owner:codex</code>. See the collaboration contract.</td>
+</tr>
+<tr>
+<td>Accessibility</td>
+<td><code>accessibility</code>, plus type and area.</td>
+</tr>
+<tr>
+<td>Contributions</td>
+<td><code>help wanted</code>; <code>good first issue</code> for bounded, approachable work.</td>
+</tr>
+<tr>
+<td>Closure reason</td>
+<td><code>duplicate</code>, <code>invalid</code>, <code>wontfix</code>, with a short reason or link.</td>
+</tr>
+</tbody></table>
+<p>Reuse this vocabulary. Add labels only for recurring gaps and update the table. Do not invent priorities or duplicate roadmap milestones.</p>
+<h2 id="releases">Releases</h2>
+<p>Follow <a href="../guide/build.html#release-preparation">release preparation</a>, including its exact-commit gate and <a href="../templates/RELEASE_TEMPLATE.html">release template</a>.</p>
+<p>Use <code>vX.X.X</code> tags matching app versions: major for breaking changes, minor for features and patch for fixes. Leave published release descriptions unchanged unless requested.</p>
+</main><footer><a href="https://github.com/anastaci1a/localica/blob/main/agents/README.md">Page source</a></footer></body></html>
