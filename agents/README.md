@@ -19,6 +19,10 @@ Read the relevant page in the [documentation map](../docs/README.md) before edit
 - Build app-owned choices, switches, sliders, text fields, dialogs and drag visuals from the shared `ui` controls documented in [Interface](../docs/interface.md). Update the abstraction when behavior is missing; do not reintroduce raw Material segmented buttons/radio rows or a parallel visual implementation. System permissions and external pickers remain native.
 - Keep shared gesture, selection and material regression tests with changes to those abstractions.
 
+## Verification coordination
+
+Follow [development and final validation](../docs/build.md#development-and-final-validation). The Localica lead initiates focused local checks. Freeze a complete candidate before full validation; coordinate parallel comparisons and any cancellation with the parent and run owner.
+
 ## Issues and commits
 
 - [GitHub Issues](https://github.com/anastaci1a/localica/issues) track bugs/actionable work. Use the [bug](../.github/ISSUE_TEMPLATE/bug_report.md) or [feature](../.github/ISSUE_TEMPLATE/feature_request.md) template, including for CLI/API submissions; omit irrelevant optional fields.
