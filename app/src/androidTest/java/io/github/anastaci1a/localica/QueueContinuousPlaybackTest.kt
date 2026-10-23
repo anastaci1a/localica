@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.content.Context
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -53,6 +54,14 @@ class QueueContinuousPlaybackTest {
 
     @Test fun queueActorPreservesSplitPcmAcrossNaturalTransitions() = playSplitPcm(throughQueue = true)
 
+    @Test fun staticPlaylistTrimsFullFrameM4a() = playSplitPcm(false, "boundary.m4a")
+
+    @Test fun queueActorTrimsFullFrameM4a() = playSplitPcm(true, "boundary.m4a")
+
+    @Test fun staticPlaylistTrimsShortFinalSampleM4a() = playSplitPcm(false, "boundary-edit-list.m4a")
+
+    @Test fun queueActorTrimsShortFinalSampleM4a() = playSplitPcm(true, "boundary-edit-list.m4a")
+
     @Test fun captureAcceptsEmptyInputAndPassesPcmThroughUnchanged() {
         val capture = ContinuityCapture()
         capture.configure(AudioFormat(SAMPLE_RATE, 1, C.ENCODING_PCM_16BIT))
@@ -74,7 +83,7 @@ class QueueContinuousPlaybackTest {
         } finally { capture.reset() }
     }
 
-    private fun playSplitPcm(throughQueue: Boolean) {
+    private fun playSplitPcm(throughQueue: Boolean, encodedFixture: String? = null) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val preferences = QueuePreferences(context)
@@ -107,9 +116,18 @@ class QueueContinuousPlaybackTest {
         }
         try {
             repeat(3) { index ->
-                val file = File.createTempFile("queue-continuity-", ".wav", context.cacheDir)
+                val encoded = encodedFixture != null && index < 2
+                val file = File.createTempFile("queue-continuity-", if (encoded) ".m4a" else ".wav", context.cacheDir)
                 files += file
-                writeWav(file, samples.copyOfRange(index * SAMPLE_RATE, (index + 1) * SAMPLE_RATE))
+                if (encoded) {
+                    instrumentation.context.assets.open(encodedFixture!!).use { input ->
+                        file.outputStream().use { input.copyTo(it) }
+                    }
+                } else {
+                    val pcm = if (encodedFixture == null) samples.copyOfRange(index * SAMPLE_RATE, (index + 1) * SAMPLE_RATE)
+                        else ShortArray(SAMPLE_RATE) { sourceSample(it).toShort() }
+                    writeWav(file, pcm)
+                }
             }
             val tracks = files.mapIndexed { index, file ->
                 Track(file.toURI().toString(), "Split $index", durationMs = 1000,
@@ -161,8 +179,15 @@ class QueueContinuousPlaybackTest {
             }
             instrumentation.runOnMainSync {
                 checkPlayback()
-                assertArrayEquals("Decoded PCM must retain every sample and intentional silence",
-                    expected.array(), capture.snapshot())
+                val decoded = capture.snapshot()
+                val waveformErrors = if (encodedFixture == null) emptyList() else encodedErrors(decoded)
+                val digest = java.security.MessageDigest.getInstance("SHA-256").digest(decoded)
+                    .joinToString("") { "%02x".format(it) }
+                // Emit evidence before assertions, including on the known shortened-sample failure.
+                Log.i("QueueContinuity", "fixture=$encodedFixture queue=$throughQueue bytes=${decoded.size} " +
+                    "sha256=$digest arrivals=${probe.arrivals.size} discontinuities=${probe.discontinuities} " +
+                    "rebuffers=${probe.rebuffers} underruns=${probe.underruns} " +
+                    "unexpected=${probe.unexpectedTransitions} waveformErrors=$waveformErrors")
                 assertEquals("Natural transition source order", tracks.drop(1).map { it.id }, probe.arrivals.map { it.first })
                 assertEquals("Exactly two automatic discontinuities", List(2) { Player.DISCONTINUITY_REASON_AUTO_TRANSITION },
                     probe.discontinuities)
@@ -175,6 +200,11 @@ class QueueContinuousPlaybackTest {
                     assertEquals(queue.journey!!.history.drop(1).map { it.token }, probe.arrivals.map { it.second })
                     assertEquals(queue.journey.current!!.token,
                         player!!.currentMediaItem!!.mediaMetadata.extras!!.getString("queueVisit"))
+                }
+                if (encodedFixture == null) {
+                    assertArrayEquals("Decoded PCM must retain every sample and intentional silence", expected.array(), decoded)
+                } else {
+                    assertTrue("$encodedFixture queue=$throughQueue: $waveformErrors", waveformErrors.isEmpty())
                 }
             }
         } finally {
@@ -190,6 +220,38 @@ class QueueContinuousPlaybackTest {
             files.forEach(File::delete)
             if (throughQueue) preferences.write(original)
         }
+    }
+
+    // assets/README.txt defines the original one-second sawtooth. Both MP4 edit lists
+    // declare 1,000 movie ticks at timescale 1,000; audio is mono 44,100 Hz, with
+    // 1,024 priming samples. Expected duration comes from that provenance, not a decode.
+    private fun sourceSample(index: Int) = ((index % 441) - 220) * 80
+
+    private fun encodedErrors(decoded: ByteArray): List<String> {
+        val errors = mutableListOf<String>()
+        if (decoded.size != SAMPLE_RATE * 3 * 2) errors += "expected 132300 samples; got ${decoded.size / 2}"
+        val pcm = ByteBuffer.wrap(decoded).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        // Lossy AAC cannot equal the original PCM byte-for-byte. Compare unshifted
+        // source windows near both ends of each encoded track. A 25% source-amplitude
+        // RMS budget allows codec ringing; never align the observed data to hide delay.
+        for (start in listOf(2048, 40000, SAMPLE_RATE + 2048, SAMPLE_RATE + 40000)) {
+            if (start + 2048 > pcm.limit()) { errors += "missing waveform window $start"; continue }
+            val rms = kotlin.math.sqrt((start until start + 2048).sumOf { i ->
+                val error = pcm[i].toDouble() - sourceSample(i)
+                error * error
+            } / 2048)
+            Log.i("QueueContinuity", "waveform start=$start rms=$rms limit=2546")
+            if (rms >= 2546) errors += "unaligned/distorted waveform at $start RMS=$rms"
+        }
+        // The lossless tail must start at the independently expected encoded endpoint.
+        val tailStart = SAMPLE_RATE * 2
+        val mismatch = (0 until SAMPLE_RATE).firstOrNull { i ->
+            tailStart + i >= pcm.limit() || pcm[tailStart + i].toInt() != sourceSample(i)
+        }
+        if (mismatch != null) errors += "PCM tail differs at expected sample ${tailStart + mismatch}"
+        // This periodic fixture cannot identify shifts by a whole period inside an
+        // encoded window. Exact duration and the tail add independent boundary checks.
+        return errors
     }
 
     private fun writeWav(file: File, samples: ShortArray) {
