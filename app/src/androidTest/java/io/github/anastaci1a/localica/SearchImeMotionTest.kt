@@ -232,8 +232,13 @@ class SearchImeMotionTest {
                 it.progress < .99f && (it.ime > 0 || it.imeSource > it.imeTarget)
             }
             assertTrue("Return moves before the native keyboard hide settles", overlap >= 0)
-            assertTrue("The observed native hide reaches its end after moving overlap",
-                returning.drop(overlap + 1).any { it.ime == 0 && it.imeSource == 0 && it.imeTarget == 0 })
+            // A closing popup can lose IME control before disposal. Its cached current
+            // inset may rebound after onEnd, even though the active host is hidden.
+            // Control release alone is insufficient: require real native window closure
+            // and terminal zero insets on the surviving, focused activity as well.
+            assertTrue("Observe native hide control release after moving overlap",
+                returning.drop(overlap + 1).any { it.imeSource == 0 && it.imeTarget == 0 })
+            awaitNativeHideEnd()
         }
         compose.runOnUiThread { samples.filter { it.opening && it.imeTarget == 0 && it.progress == 1f } }.forEach {
             assertRect("No keyboard-following frame before return ownership", from, it.bounds)
@@ -244,6 +249,30 @@ class SearchImeMotionTest {
                 between(home, from, sample.progress), sample.bounds)
         }
         compose.onNodeWithTag("list-search-popup").assertDoesNotExist()
+    }
+
+    private fun awaitNativeHideEnd() {
+        var nativeWindow: Boolean? = null
+        var focused = false
+        var visible = true
+        var bottom: Int? = null
+        try {
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeBy(32)
+                compose.runOnUiThread {
+                    val host = compose.activity.window.decorView
+                    val insets = ViewCompat.getRootWindowInsets(host)
+                    focused = host.isAttachedToWindow && host.hasWindowFocus()
+                    visible = insets?.isVisible(WindowInsetsCompat.Type.ime()) != false
+                    bottom = insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom
+                }
+                nativeWindow = nativeImeWindowVisible(shell("dumpsys -t 2 input_method"))
+                nativeWindow == false && focused && !visible && bottom == 0
+            }
+        } finally {
+            keyboardSetup += "${SystemClock.uptimeMillis()} native-hide-end window=$nativeWindow " +
+                "hostFocused=$focused hostImeVisible=$visible hostImeBottom=$bottom"
+        }
     }
 
     private fun exerciseDismissal(outside: Boolean, reduced: Boolean = false) = withDockedKeyboard {

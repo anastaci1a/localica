@@ -62,7 +62,9 @@ A workflow dispatch may supply `risk_classes` as up to 20 comma-separated fully 
 
 ## CI and signing
 
-The [Android workflow](../.github/workflows/android.yml) builds main/PR changes and tests API 26/36. API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes; zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
+The [Android workflow](../.github/workflows/android.yml) builds main/PR changes and tests API 26/36. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
+
+API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes; zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
 On disposable GitHub-hosted API 26 emulators, the native runner force-stops preinstalled Google Search before testing because its unrelated JobScheduler crash can leave a system dialog above Localica. It does not disable the package, clear its data, or act on local/physical devices. Localica crashes and all native assertions remain fatal.
 
