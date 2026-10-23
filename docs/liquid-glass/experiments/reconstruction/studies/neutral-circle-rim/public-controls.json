@@ -1,6 +1,0 @@
-{
-  "field_matches_independent_circle_formula": true,
-  "amplitude_zero_dispatch_exact": true,
-  "global_adapter_restores_after_exception": true,
-  "no_native_body_repeated": true
-}

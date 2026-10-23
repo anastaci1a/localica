@@ -1,7 +1,0 @@
-{
-  "status": "Superseded source estimate; excluded from current calibration counts",
-  "excluded_initial_passes": 2,
-  "source_commit": "310d8f0b2c88805007e271456ca5f6a727a6bd70",
-  "reason": "Track corrected, but Month geometry still used a lensed proxy. Independent unoccluded17.0s gives67.516px at14.6s camera versus76.178px proxy. Replace with clean Medium outlines measured only from unoccluded labels; nominal incident color is separate from optics.",
-  "retained_private_inputs": "segmented-track-only-preparation"
-}
