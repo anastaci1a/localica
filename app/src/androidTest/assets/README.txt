@@ -42,3 +42,20 @@ The 45 AAC-LC access units decode to 46080 samples before trimming; 956 end
 samples lie outside the edit. This expectation comes from source/timing metadata,
 not the current decoder's output. Periodic tones cannot identify every whole-period
 shift. Lossy checks use unshifted source windows plus exact PCM-tail placement.
+
+boundary-short-config.m4a derives from boundary-edit-list.m4a. Its esds
+DecoderSpecificInfo is reduced from 120856e500 to the two-byte AAC-LC
+configuration 1208. Descriptor lengths and containing box sizes decrease by
+three bytes; timing and mdat are unchanged. The absent sync extension leaves
+SBR presence ambiguous. Its unchanged synthetic payload is AAC-LC, not an
+in-band SBR reproduction. The extraction test requires native padding to remain
+unchanged because safe correction cannot be established from this configuration.
+SHA-256: a8729b2055b0377ed3a2c2a072306dfc64c01f86fb4a005343ed340f8d6d24dc
+
+boundary-streamable.m4a derives from boundary.m4a by moving moov immediately
+after ftyp and increasing each stco chunk offset by the moov box size. Its
+mdat, codec configuration and timing are unchanged. Placing metadata before
+audio lets the native extractor finish through one sequential unknown-length
+DataSource open. The regression compares native and application extraction,
+including a source that rejects reopening.
+SHA-256: e4ff939fbb6abc189a0b1453e8982919ad3a0134fe5a738528592daf1d80d9a2

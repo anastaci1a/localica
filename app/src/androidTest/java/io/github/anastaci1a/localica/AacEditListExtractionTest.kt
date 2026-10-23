@@ -41,6 +41,15 @@ class AacEditListExtractionTest {
         assertEquals(native.timestamps, repaired.timestamps)
     }
 
+    @Test fun shortLcConfigDoesNotProveAbsenceOfInBandSbr() {
+        val native = extract("boundary-short-config.m4a", repair = false)
+        val wrapped = extract("boundary-short-config.m4a", repair = true)
+        assertEquals(2, native.format!!.initializationData.single().size)
+        assertEquals(0, native.format!!.encoderPadding)
+        assertEquals("Ambiguous configuration must retain native padding", native.format, wrapped.format)
+        assertEquals(native.timestamps, wrapped.timestamps)
+    }
+
     @Test fun unknownSourceLengthKeepsNativeExtraction() {
         val native = extract("boundary-edit-list.m4a", repair = false)
         val unknown = extract("boundary-edit-list.m4a", repair = true, knownLength = false)
