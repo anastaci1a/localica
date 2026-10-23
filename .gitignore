@@ -13,3 +13,6 @@ local.properties
 # Signing material
 *.keystore
 *.jks
+
+# Documentation tooling and local output
+tools/docs/node_modules/
