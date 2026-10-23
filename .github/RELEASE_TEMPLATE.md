@@ -1,5 +1,7 @@
 <!-- Release: v{{VERSION}} -->
 
+# Release v{{VERSION}}
+
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
 ## Changes
