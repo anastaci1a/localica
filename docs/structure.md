@@ -34,7 +34,7 @@ Paths below are under `app/src/main/java/io/github/anastaci1a/localica/`.
 | Required evidence | Constraint |
 | --- | --- |
 | Container | Known length, unfragmented MP4, one audio track, metadata within the inspection bound. |
-| Codec | Unencrypted AAC-LC, 1,024 samples per access unit, no SBR/PS or alternate frame length. |
+| Codec | Unencrypted AAC-LC, 1,024 samples per access unit, explicit SBR-absent sync extension, no alternate frame length. |
 | Timing | Media clock equals sample rate; frame durations are constant except the final duration. Counts and media duration agree. |
 | Edit | One rate-one edit with an exact integral audible length ending at the declared media endpoint. |
 | Existing trim | Delay equals the edit start; end padding is zero. |
@@ -47,7 +47,7 @@ N_{\mathrm{audible}} = \frac{D_{\mathrm{edit}}\, f_{\mathrm{sample}}}{T_{\mathrm
 N_{\mathrm{padding}} = N_{\mathrm{frames}}\, N_{\mathrm{frame}} - N_{\mathrm{delay}} - N_{\mathrm{audible}}.
 $$
 
-The correction requires an exact integer result smaller than one frame. Other layouts retain native extraction, including existing nonzero padding. No audio amplitude is inspected. Service playback and continuity controls share the extractor factory. Fixture provenance and independent edit metadata live in `app/src/androidTest/assets/README.txt`.
+The correction requires an exact integer result smaller than one frame. Other layouts retain native extraction, including existing nonzero padding and short AAC configurations. Unknown-length inputs delegate directly without a metadata scan or added reopen. No audio amplitude is inspected. Service playback and continuity controls share the extractor factory. Fixture provenance and independent edit metadata live in `app/src/androidTest/assets/README.txt`.
 
 ## File operations
 

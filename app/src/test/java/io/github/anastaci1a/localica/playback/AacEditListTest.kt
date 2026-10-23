@@ -8,10 +8,11 @@ import java.nio.ByteBuffer
 class AacEditListTest {
     private val timing = AacEditList(1000, 44100, 1000, 1024, 45124, 45, 1024, 68)
 
-    @Test fun onlyUnambiguousLcConfigurationsUse1024Samples() {
-        assertTrue(normalAacLcConfig(byteArrayOf(0x12, 0x08)))
+    @Test fun onlyExplicitSbrAbsenceQualifiesForCorrection() {
+        assertFalse(normalAacLcConfig(byteArrayOf(0x12, 0x08)))
         assertTrue(normalAacLcConfig(byteArrayOf(0x12, 0x08, 0x56, 0xe5.toByte(), 0)))
         for (config in listOf(byteArrayOf(), byteArrayOf(0x12), byteArrayOf(0x12, 0x0c),
+            byteArrayOf(0x12, 0x08, 0), byteArrayOf(0x12, 0x08, 0x56, 0xe5.toByte()),
             byteArrayOf(0x12, 0x0a), byteArrayOf(0x12, 0x09), byteArrayOf(0x2b, 0x12),
             byteArrayOf(0x12, 0x08, 0x56, 0xe5.toByte(), 0x80.toByte()))) {
             assertFalse(normalAacLcConfig(config))

@@ -57,11 +57,14 @@ private class EditListAacExtractor(private val delegate: Mp4Extractor) : Extract
     }
 
     override fun read(input: ExtractorInput, seekPosition: PositionHolder): Int {
+        // Decide before touching the input. An unknown-length stream may be single-use;
+        // even a seek to its existing position would close/reopen the progressive source.
+        if (boxesRead == 0 && input.length == C.LENGTH_UNSET.toLong()) inspected = true
         if (inspected) return delegate.read(input, seekPosition)
         // The normal MP4 extractor already seeks between moov and mdat. Inspect bounded
         // metadata through the same reader, never a second unregistered provider handle.
         // Unknown lengths, large/fragmented/ambiguous metadata keep Media3's native behavior.
-        if (input.length == C.LENGTH_UNSET.toLong() || ++boxesRead > 128) return finish(seekPosition)
+        if (++boxesRead > 128) return finish(seekPosition)
         try {
             val start = input.position
             val header = ByteArray(16)
@@ -105,7 +108,7 @@ private class EditListAacExtractor(private val delegate: Mp4Extractor) : Extract
             normalAacLcConfig(format.initializationData.single())
 }
 
-/** True only for simple 1,024-sample AAC-LC without explicit or implicit SBR/PS. */
+/** Supported 1,024-sample AAC-LC requires an explicit SBR-absent sync extension. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal fun normalAacLcConfig(config: ByteArray): Boolean = try {
     val bits = ParsableBitArray(config)
@@ -116,9 +119,10 @@ internal fun normalAacLcConfig(config: ByteArray): Boolean = try {
         // GASpecificConfig: reject 960-frame mode, core dependency and extension flags.
         if (channels !in 1..7 || bits.readBit() || bits.readBit() || bits.readBit()) false
         else {
-            val extensionAbsent = if (bits.bitsLeft() >= 11) {
+            // A short LC config can still accompany implicit/in-band SBR. Absence of
+            // an extension is not evidence of absence; require SBR explicitly disabled.
+            val extensionAbsent = bits.bitsLeft() >= 17 &&
                 bits.readBits(11) == 0x2b7 && bits.readBits(5) == 5 && !bits.readBit()
-            } else true
             extensionAbsent && bits.bitsLeft() <= 7 &&
                 (bits.bitsLeft() == 0 || bits.readBits(bits.bitsLeft()) == 0)
         }
