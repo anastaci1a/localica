@@ -1,0 +1,13 @@
+{
+  "status": "merged",
+  "source_base": "05fccdfee194098018856b18f2843bd19f1201b6",
+  "source_research_files": 620,
+  "missing_destinations": 0,
+  "scope": "Remove research directory and update documentation links only",
+  "active_checkout": "Untouched; unrelated dirty app tests preserved",
+  "session_actions": "None; Sessionsation and helper interaction prohibited",
+  "pull_request": "https://github.com/anastaci1a/localica/pull/457",
+  "cutover_commit": "e3136b7107f741a11672fa16be9bcb38cd8a922a",
+  "merge_commit": "90e8b97426503341d18d7cae305de8cbaa64b3f9",
+  "source_remote_research_directory": "Absent on main; retained in original history and recovery checkouts"
+}

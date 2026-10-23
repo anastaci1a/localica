@@ -1,0 +1,83 @@
+
+> test
+> npm run check:docs && node guide/experiments/comparison-panels.test.cjs && node guide/experiments/equations-test.cjs
+
+sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+
+> check:docs
+> node tools/check-docs.cjs && node guide/experiments/check-links.cjs
+
+sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+PASS 32 maintained Markdown documents: prose limits and local links
+PASS 919 local Pages links/assets/anchors
+PASS declared caption bounds, legacy compatibility, deferred loading and stale metadata rejection
+PASS Boundary limits: legacy field starts at zero; finite-rim compression has no identity band
+PASS Analytic Jacobian agrees with independent finite differences; compression, magnification and folds distinguished
+PASS Snell normalization, tangential law, reversible transmission and explicit total-internal-reflection rejection
+PASS Analytic cap rim normal, gap-dependent rim refraction, scale covariance and valid plane exits across sampled domain
+PASS Tone order/endpoints/inverse symmetry and determinant-one strain for arbitrary directions
+PASS Closed-form springs compose across frame rates and do not gain energy at a fixed target
+PASS Conservative nonfolding derivative/curvature bounds cover all profiles and endpoint mixes
+PASS Published portability fixtures retain reference coordinates, normals and derivatives
+{
+  "edgeOffsets": [
+    {
+      "0": 0,
+      "1": 10.120000000000005,
+      "2": 3.5420000000000016,
+      "distance": 0
+    },
+    {
+      "0": 0.0038748410935554034,
+      "1": 10.11414897080617,
+      "2": 4.138158718563048,
+      "distance": 0.25
+    },
+    {
+      "0": 0.01519153957907804,
+      "1": 10.096904865836251,
+      "2": 4.694865410667859,
+      "distance": 0.5
+    },
+    {
+      "0": 0.058340610080954036,
+      "1": 10.030063536643226,
+      "2": 5.694794679256134,
+      "distance": 1
+    },
+    {
+      "0": 0.21455085645379768,
+      "1": 9.779362131449275,
+      "2": 7.2738851560727085,
+      "distance": 2
+    },
+    {
+      "0": 0.7171955870583204,
+      "1": 8.903198780655664,
+      "2": 9.000310923050165,
+      "distance": 4
+    },
+    {
+      "0": 1.8924769534323787,
+      "1": 6.304979175050548,
+      "2": 8.51219555314831,
+      "distance": 8
+    }
+  ],
+  "jacobian": {
+    "maxDerivativeError": 1.1413945344429521e-9,
+    "minDefaultDet": 0.11443896000334869,
+    "extremeFoldSamples": 4473
+  },
+  "cap": {
+    "minCapExit": 0.39568751691228243,
+    "maxCapOffset": 149.5787597870132,
+    "outlineLookup": [
+      0,
+      -36.77034485253839
+    ]
+  },
+  "spring": {
+    "maxCompositionError": 3.1086244689504383e-15
+  }
+}

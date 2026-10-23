@@ -1,0 +1,37 @@
+{
+  "status": "PASS",
+  "verified_commit": "837a11e9f17ba511ea9f4c62b31dae0608762202",
+  "canonical_site": "https://anastaci1a.github.io/liquid-glass/",
+  "live_routes": [
+    {
+      "path": "index.html",
+      "status": 200
+    },
+    {
+      "path": "reconstruction.html",
+      "status": 200
+    },
+    {
+      "path": "geometric-optics.html",
+      "status": 200
+    },
+    {
+      "path": "lab.html",
+      "status": 200
+    },
+    {
+      "path": "katex/katex.min.css",
+      "status": 200
+    },
+    {
+      "path": "katex/fonts/KaTeX_Main-Regular.woff2",
+      "status": 200
+    }
+  ],
+  "legacy_redirect": "Exact corresponding destination, query and fragment preservation",
+  "research_ci": "https://github.com/anastaci1a/liquid-glass/actions/runs/39893476783",
+  "pages_ci": "https://github.com/anastaci1a/liquid-glass/actions/runs/39893476591",
+  "new_visibility": "public, unchanged",
+  "helper_interaction": "None",
+  "experiments": "Remain paused"
+}

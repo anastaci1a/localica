@@ -1,0 +1,91 @@
+{
+  "history": {
+    "published_branches": 108,
+    "exact_source_tree_and_metadata_comparisons": 726,
+    "imported_main": "8de5a47919f226dd2db312a3a9121c4e7e840498",
+    "full_history_secret_scan": "PASS: gitleaks 8.30.1, 668 scanned commits with changes; 726 distinct mapped retained revisions",
+    "largest_blob_bytes": 38167798
+  },
+  "local_capture": {
+    "files": 12347,
+    "bytes": 120196636,
+    "secret_scan": "PASS: 118743998 bytes scanned",
+    "privacy_marker_scan": "PASS: 12347 files; zero flagged",
+    "status": "Immutable captured versions verified; no writer freeze claimed",
+    "tracked_files": 11762,
+    "tracked_bytes": 118431732,
+    "preimport_scanned_files": 12347,
+    "privacy_and_rights_holds": "Research-related feedback excerpts and scientific vectors/evidence incorporated deliberately; whole private feedback, session transports and downloaded software remain explicitly excluded"
+  },
+  "docs": {
+    "maintained_markdown": 32,
+    "prose_and_markdown_links": "PASS",
+    "static_files": 727,
+    "local_html_links": 919,
+    "browser": "PASS: desktop/mobile compact entries, 60 figures, deferred media, comparison interactions; long inline tokens now wrap on narrow screens",
+    "environment_recovery": "Host browser lacked libraries/fonts; isolated read-only runner used host-backed dependencies. Removed old /tmp/optics-deps override in the comparison test.",
+    "latex": "334 display equations; strict local KaTeX parse, accessible MathML, 668 desktop/mobile equation views",
+    "prose_limits": "60 words per paragraph; 30 per bullet"
+  },
+  "backup": {
+    "git_bundle": "PASS: git bundle verify",
+    "filesystem_archive": "PASS: zstd integrity; 17853788160 uncompressed bytes",
+    "container_archive": "PROVISIONAL: 891 MiB read-only scoped research capture; no writer freeze",
+    "empty_container_attempt": "Excluded: first command lacked stdin forwarding and produced empty tar; retained for audit"
+  },
+  "pending": [],
+  "python": {
+    "status": "PASS",
+    "tests": 24,
+    "environment": "Isolated migration container; pinned requirements installed to independent project-workspace dependency volume",
+    "initial_attempt": "Failed ENOSPC in ephemeral Docker root; preserved log. Retried package installation on host-backed migration volume; no research/source change."
+  },
+  "whitespace": "Captured historical source retains original whitespace; new project-authored files checked separately",
+  "fresh_checkout": {
+    "path": "/mnt/user/live/projects/liquid-glass/validation-checkout",
+    "type": "Actual detached linked Git worktree",
+    "commit": "837a11e9f17ba511ea9f4c62b31dae0608762202",
+    "install": "npm ci --ignore-scripts from lockfile",
+    "build": "PASS: 727 files",
+    "tests": "PASS: concise documents, local links, comparison metadata, equation/model fixtures",
+    "python": "24 tests PASS in isolated runner with no old Localica mount",
+    "remote_lfs": "PASS: separate empty cache, compressed and decompressed SHA256 verified",
+    "limitations": "No new research experiment, optical acceptance, animation or Android build"
+  },
+  "ci": "Research checks and independent Pages deployment PASS on 837a11e9; see verification/live-deployment.json",
+  "status": "Complete: history, local scientific evidence, document consolidation, source cutover and independent Pages deployment",
+  "layout": {
+    "research": "research/",
+    "engine": "reconstruction/",
+    "guide": "guide/",
+    "lab": "lab/"
+  },
+  "evidence": {
+    "unique_objects": 8298,
+    "logical_files": 15056,
+    "lfs_objects": 1763,
+    "lfs_stored_bytes": 5564813105,
+    "full_original_object_verification": "PASS: all 8298 current objects decompressed and matched original SHA-256",
+    "alias_resolution": {
+      "added_files": 984,
+      "excluded": []
+    },
+    "inventory": "Every original inventory entry tracked or explicitly excluded",
+    "restoration": "PASS: 26 pipeline reports restored without an old Localica checkout"
+  },
+  "shared_physics": "All five shared geometry/tracing/render modules byte-identical to the pre-refactor baseline",
+  "pages": {
+    "url": "https://anastaci1a.github.io/liquid-glass/",
+    "workflow": ".github/workflows/pages.yml",
+    "run": "https://github.com/anastaci1a/liquid-glass/actions/runs/39893476591",
+    "live_build_source": "837a11e9f17ba511ea9f4c62b31dae0608762202",
+    "compatibility_redirect_commit": "22e7ebb8d2aa04d3b20618acd8ab3ceaaf9195a8"
+  },
+  "source_cutover": {
+    "pr": "https://github.com/anastaci1a/localica/pull/457",
+    "merged": true,
+    "main_research_files_remaining": 0,
+    "app_build_workflow_changes": 0
+  },
+  "validation_logs": "verification/final-*; these final record additions do not change the validated scientific code or publishing behavior"
+}

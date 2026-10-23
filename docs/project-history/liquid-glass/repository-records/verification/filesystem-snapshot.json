@@ -1,0 +1,11 @@
+{
+  "start": "2026-10-23T01:11:42.844Z",
+  "end": "2026-10-23T01:13:50.913Z",
+  "status": "PROVISIONAL_NO_WRITER_FREEZE",
+  "files": 22623,
+  "tar_exit": 0,
+  "zstd_exit": 0,
+  "metadata_drift": [],
+  "scope": "Research paths only; excluded credentials/session transport/private conversation/cache/dependencies. Third-party packages retained in LOCAL snapshot only, not licensed for publication.",
+  "warning": "No observed drift is not proof of exclusive ownership or a consistent final cutover capture."
+}

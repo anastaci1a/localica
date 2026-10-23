@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "sha256": "550ec81b929ba7a82e165fd9c9ee664b9d5a897f47a0a3ac2e9600521a036509",
+  "object": "research/evidence/large/55/550ec81b929ba7a82e165fd9c9ee664b9d5a897f47a0a3ac2e9600521a036509.zst",
+  "bytes": 1376576,
+  "stored_bytes": 1251162,
+  "lfs_oid": "7d77d11c471e4464d4f317b19b0051099735b8f6968d0676f74a513d3b4f8074",
+  "method": "Fresh linked checkout, separate empty LFS cache, remote download, decompression and both SHA256 checks"
+}
