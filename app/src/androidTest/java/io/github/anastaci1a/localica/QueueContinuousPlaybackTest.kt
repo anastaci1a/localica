@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -315,6 +316,11 @@ private class ContinuityCapture : BaseAudioProcessor() {
 /** Player and analytics callbacks, and assertions reading these fields, all run on Main. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class ContinuityEvents : Player.Listener, AnalyticsListener {
+    private val startedMs = SystemClock.elapsedRealtime()
+    private var playbackState = Player.STATE_IDLE
+    private fun trace(detail: String) {
+        Log.i("QueueContinuityEvent", "elapsedMs=${SystemClock.elapsedRealtime() - startedMs} $detail")
+    }
     var error: PlaybackException? = null
     var ended = false
     var rebuffers = 0
@@ -325,11 +331,14 @@ private class ContinuityEvents : Player.Listener, AnalyticsListener {
     val underruns = mutableListOf<String>()
     override fun onPlayerError(error: PlaybackException) { this.error = error }
     override fun onPlaybackStateChanged(playbackState: Int) {
+        this.playbackState = playbackState
+        trace("state=$playbackState")
         if (playbackState == Player.STATE_BUFFERING && ready) rebuffers++
         if (playbackState == Player.STATE_READY) ready = true
         if (playbackState == Player.STATE_ENDED) ended = true
     }
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+        trace("transition=$reason")
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
             val extras = mediaItem?.mediaMetadata?.extras
             arrivals += extras?.getString("trackId") to extras?.getString("queueVisit")
@@ -340,6 +349,17 @@ private class ContinuityEvents : Player.Listener, AnalyticsListener {
     }
     override fun onAudioUnderrun(eventTime: AnalyticsListener.EventTime, bufferSize: Int,
         bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) {
-        underruns += "bufferBytes=$bufferSize bufferMs=$bufferSizeMs sinceFeedMs=$elapsedSinceLastFeedMs"
+        val detail = "bufferBytes=$bufferSize bufferMs=$bufferSizeMs sinceFeedMs=$elapsedSinceLastFeedMs " +
+            "eventRealtimeMs=${eventTime.realtimeMs} eventWindow=${eventTime.windowIndex} " +
+            "eventPositionMs=${eventTime.eventPlaybackPositionMs} currentWindow=${eventTime.currentWindowIndex} " +
+            "currentPositionMs=${eventTime.currentPlaybackPositionMs} bufferedMs=${eventTime.totalBufferedDurationMs} " +
+            "state=$playbackState"
+        underruns += detail
+        trace("underrun $detail")
+    }
+    override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
+        trace("positionAdvancing eventRealtimeMs=${eventTime.realtimeMs} " +
+            "window=${eventTime.windowIndex} positionMs=${eventTime.eventPlaybackPositionMs} " +
+            "playoutStartSystemTimeMs=$playoutStartSystemTimeMs")
     }
 }
