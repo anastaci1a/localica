@@ -18,13 +18,16 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** One moving lens, with the same targets for tapping, dragging and accessibility. */
 @Composable
-internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifier = Modifier, horizontal: Boolean = false, icons: List<Int>? = null, role: Role = Role.RadioButton, onSelect: (Int) -> Unit) {
+internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifier = Modifier, horizontal: Boolean = false, icons: List<Int>? = null, role: Role = Role.RadioButton, cellHeight: Dp? = null,
+    labelStyle: TextStyle? = null, outerVerticalInset: Dp = ChoiceOuterVerticalInset, onSelect: (Int) -> Unit) {
     if (labels.isEmpty()) return
     val position = remember { Animatable(selected.toFloat()) }
     val scope = rememberCoroutineScope()
@@ -47,8 +50,8 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
     val density = LocalDensity.current
     var logicalWall by remember { mutableFloatStateOf(1f) }
     val shell = rememberGlassBody({ 0f }, pressure = { pressure }, contact = { if (dragging) 1f else 0f })
-    val height = glassChoiceCellHeight()
-    BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = ChoiceOuterVerticalInset)) {
+    val height = cellHeight ?: glassChoiceCellHeight()
+    BoxWithConstraints(modifier.fillMaxWidth().padding(vertical = outerVerticalInset)) {
         val baseWidth = with(density) { maxWidth.toPx() }
         // Match the inert measurement face: round each cell and inset before summing.
         val rowHeight = with(density) { height.roundToPx().toFloat() }
@@ -130,7 +133,7 @@ internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifie
                         .graphicsLayer { scaleX = contentBounds.width / originalWidth; scaleY = contentBounds.height / rowHeight },
                         contentAlignment = if (horizontal) Alignment.Center else Alignment.CenterStart) {
                         Box(Modifier.testTag("choice-option-content-$index")) {
-                            GlassChoiceFace(labels[index], icons?.getOrNull(index), role == Role.Tab)
+                            GlassChoiceFace(labels[index], icons?.getOrNull(index), role == Role.Tab, labelStyle)
                         }
                     }
                 }
