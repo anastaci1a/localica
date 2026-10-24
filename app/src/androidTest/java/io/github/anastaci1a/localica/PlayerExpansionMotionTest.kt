@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -27,6 +29,9 @@ import java.io.File
 
 class PlayerExpansionMotionTest {
     @get:Rule val compose = createComposeRule()
+    private fun trace(phase: String) {
+        Log.i("PlayerExpansionPhase", "ns=${SystemClock.elapsedRealtimeNanos()} thread=${Thread.currentThread().name} phase=$phase")
+    }
     private val state = PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000)
     private val visual = PlayerVisual(Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply {
         eraseColor(android.graphics.Color.RED)
@@ -52,6 +57,10 @@ class PlayerExpansionMotionTest {
         lateinit var scope: CoroutineScope
         var fingerDown = false
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            DisposableEffect(Unit) {
+                trace("composition-enter:$contentTag")
+                onDispose { trace("composition-dispose:$contentTag") }
+            }
             scope = rememberCoroutineScope()
             PlayerSurface(state.copy(trackId = track.id, trackUri = track.uri), expanded, { expanded = it },
                 InterfaceSettings(artworkLayout = layout), progress, {}, {}, {}, {}, {}, {},
@@ -59,6 +68,7 @@ class PlayerExpansionMotionTest {
         } } }
         try {
             for (artworkLayout in ArtworkLayout.entries) {
+                trace("layout-begin:$contentTag:$artworkLayout")
                 compose.mainClock.autoAdvance = true
                 compose.runOnIdle { layout = artworkLayout; expanded = false; scope.launch { progress.snapTo(0f) } }
                 compose.waitForIdle()
@@ -82,7 +92,9 @@ class PlayerExpansionMotionTest {
                 }
                 // Let an asynchronously loaded document finish its own crossfade while still held.
                 compose.mainClock.advanceTimeBy(400)
+                trace("capture-content-begin:$contentTag:$artworkLayout")
                 val content = compose.onNodeWithTag(contentTag, true).captureToImage().toPixelMap()
+                trace("capture-content-end:$contentTag:$artworkLayout")
                 var brightest = 0f
                 for (y in 0 until content.height step 2) for (x in 0 until content.width step 2)
                     brightest = maxOf(brightest, content[x, y].red)
@@ -98,7 +110,9 @@ class PlayerExpansionMotionTest {
                 compose.onNodeWithTag(contentTag, true).assertIsDisplayed()
                 compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
                 // Inspect actual player pixels, not a potentially transparent cover layer capture.
+                trace("capture-player-begin:$contentTag:$artworkLayout")
                 val pixels = compose.onNodeWithTag("player-surface").captureToImage().toPixelMap()
+                trace("capture-player-end:$contentTag:$artworkLayout")
                 val cover = compose.onNodeWithTag("player-artwork", true).fetchSemanticsNode().boundsInRoot
                 for (fy in listOf(.3f, .5f, .7f)) for (fx in listOf(.3f, .5f, .7f)) {
                     val x = (cover.left - player.left + cover.width * fx).toInt().coerceIn(0, pixels.width - 1)
@@ -126,18 +140,24 @@ class PlayerExpansionMotionTest {
                 assertEquals(transport, compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot)
                 assertEquals(player, compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot)
 
+                trace("release-equalities-end:$contentTag:$artworkLayout")
                 // Sample both directions, including the former low-opacity action ghost window.
                 for (p in listOf(.99f, .96f, .92f, .86f, .8f, .78f, .5f, .78f, .8f, .86f, .92f, .96f, .99f, 1f)) {
+                    trace("sweep-begin:$contentTag:$artworkLayout:$p")
                     compose.runOnIdle { scope.launch { progress.snapTo(p) } }
                     compose.onNodeWithTag("player-actions-row", true).assertDoesNotExist()
                     compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
                     if (p <= .78f) compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).assertIsNotDisplayed()
                     else compose.onNodeWithTag(contentTag, true).assertExists()
+                    trace("sweep-end:$contentTag:$artworkLayout:$p")
                 }
+                trace("layout-end:$contentTag:$artworkLayout")
             }
         } finally {
+            trace("finally-begin:$contentTag:fingerDown=$fingerDown")
             if (fingerDown) runCatching { compose.onRoot().performTouchInput { cancel() } }
             compose.mainClock.autoAdvance = true
+            trace("finally-end:$contentTag")
         }
     }
 
@@ -148,8 +168,10 @@ class PlayerExpansionMotionTest {
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
         val directory = File(root, "player-expansion-motion")
         check(directory.isDirectory || directory.mkdirs())
+        trace("semantics-begin:$layout:$stage")
         File(directory, "$layout-$stage.txt").writeText(
             "MERGED\n${compose.onRoot().printToString()}\nUNMERGED\n${compose.onRoot(useUnmergedTree = true).printToString()}")
+        trace("semantics-end:$layout:$stage")
     }
 
     @Test fun artworkSeekAndActionsHaveSeparateScreenSpaceMotionBetweenTitleAndTransport() {
