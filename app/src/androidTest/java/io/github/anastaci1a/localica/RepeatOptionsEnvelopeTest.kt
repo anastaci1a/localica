@@ -433,7 +433,7 @@ class RepeatOptionsEnvelopeTest {
             // DpRect exposes edges; subtract them in dp instead of resolving gesture-scope dimensions.
             val targetWidth = target.right - target.left
             val targetHeight = target.bottom - target.top
-            assertTrue("$label keeps a 48dp touch target", targetWidth >= 48.dp && targetHeight >= 48.dp)
+            assertTrue("$label keeps a 48dp touch target; actual=$target", targetWidth >= 48.dp && targetHeight >= 48.dp)
             childText(label).assertHasClickAction()
         }
         choices.forEach { childText(it).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)) }
@@ -459,8 +459,8 @@ class RepeatOptionsEnvelopeTest {
             if (resizeWindow) resizeNativeChild(width, height) else assertProductionChildSafeBounds(width, height)
         }
         openNative(RepeatSection.Song)
-        assertNativeControls(RepeatSection.Song, 2f)
         capture("native-${width.value.toInt()}x${height.value.toInt()}-font2-song-$resizeWindow")
+        assertNativeControls(RepeatSection.Song, 2f)
         SongEnd.entries.forEach { childText(it.label).performClick(); childText(it.label).assertIsSelected() }
         childText(SongEnd.NextPaused.label).performClick()
         closeChild("Cancel")
@@ -477,8 +477,8 @@ class RepeatOptionsEnvelopeTest {
         childText(SongEnd.Repeat.label).performClick()
         closeChild()
         openNative(RepeatSection.Queue)
-        assertNativeControls(RepeatSection.Queue, 2f)
         capture("native-${width.value.toInt()}x${height.value.toInt()}-font2-queue-warning-$resizeWindow")
+        assertNativeControls(RepeatSection.Queue, 2f)
         QueueEnd.entries.forEach { childText(it.label).performClick(); childText(it.label).assertIsSelected() }
         childText("Reset current song to the first song").performClick()
         childText("Reshuffle when shuffle is enabled").performClick()
