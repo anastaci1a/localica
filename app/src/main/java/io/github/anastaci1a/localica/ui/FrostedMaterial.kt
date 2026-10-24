@@ -26,6 +26,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalGraphicsContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -37,6 +39,7 @@ import kotlinx.coroutines.withContext
  * into its own source: the player and its lyric background use separate sources. */
 @Stable
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean) {
+    val readback = RetainedLayerReadback()
     var parent: FrostedBackdrop? = null
     var materialOnly by mutableStateOf(false)
     var materialCorner by mutableFloatStateOf(0f)
@@ -92,6 +95,9 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val source = remember(layer) { FrostedBackdrop(layer, dark) }
+    val graphicsContext = LocalGraphicsContext.current
+    val currentDensity by rememberUpdatedState(LocalDensity.current)
+    val currentDirection by rememberUpdatedState(LocalLayoutDirection.current)
     // An unreferenced scene needs a display list, not another full-window raster.
     // Sampled scenes retain pixels so sibling lenses never replay all their children.
     val sampled = source.consumers > 0
@@ -105,7 +111,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Keep a completed sample across temporary visibility changes. Modal sources
     // with no open consumer never need a CPU readback at all.
     var captured by remember(source) { mutableStateOf<List<Any?>?>(null) }
-    LaunchedEffect(source, key, enabled, sampled) {
+    LaunchedEffect(source, key, enabled, sampled, graphicsContext) {
         // Size belongs to sampling, not the caller's composition. Reading it above
         // this effect would recompose the whole player host on every resize frame.
         if (Build.VERSION.SDK_INT < 33 && enabled && sampled) snapshotFlow { source.size to source.revision }.collectLatest { (size, revision) ->
@@ -116,7 +122,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 // Layout can exist before the first recorded draw, or survive a restored
                 // player layer briefly. ImageReader rejects a zero-sized recording.
                 if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return false
-                val snapshot = source.layer.toImageBitmap()
+                val snapshot = source.readback.capture(source.layer, graphicsContext, currentDensity, currentDirection)
                 source.snapshot = snapshot
                 source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
                 return true

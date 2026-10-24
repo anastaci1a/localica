@@ -10,6 +10,9 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalGraphicsContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import io.github.anastaci1a.localica.navigation.ArtworkTransition
 import kotlinx.coroutines.Dispatchers
@@ -29,15 +32,19 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
     var frozenSoft by remember { mutableStateOf<ImageBitmap?>(null) }
     val progress = remember { Animatable(1f) }
     val layer = rememberGraphicsLayer()
+    val readback = remember(layer) { RetainedLayerReadback() }
+    val graphicsContext = LocalGraphicsContext.current
+    val currentDensity by rememberUpdatedState(LocalDensity.current)
+    val currentDirection by rememberUpdatedState(LocalLayoutDirection.current)
     val reduced = LocalReducedMotion.current
     val blurThrough = !reduced && !opacityBlend && LocalArtworkTransition.current == ArtworkTransition.BlurThrough
-    LaunchedEffect(target, immediate) {
+    LaunchedEffect(target, immediate, graphicsContext) {
         if (immediate || target.contentKey != null && target.contentKey == incoming.contentKey) {
             frozen = null; frozenSoft = null; outgoing = target; incoming = target
             progress.snapTo(1f)
         } else if (target != incoming) {
             if (progress.value < 1f && layer.size.width > 0 && !layer.isReleased) {
-                val image = layer.toImageBitmap()
+                val image = readback.capture(layer, graphicsContext, currentDensity, currentDirection)
                 val soft = if (Build.VERSION.SDK_INT < 31 && blurThrough) {
                     withContext(Dispatchers.Default) { blurGlassSnapshot(image, minOf(image.width, image.height) * .045f) }
                 } else null
