@@ -6,7 +6,7 @@ Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME` or un
 
 ### Development and final validation
 
-The Localica lead initiates focused local checks during development. Run affected classes or methods while implementing individual changes. Documentation-only changes need prose, structure, link and rendering checks. Run the complete suite only after all intended changes form a ready final candidate.
+The Localica lead runs effective tests and test setup without separate user approval. Use focused local checks while implementing individual changes. Documentation-only changes need prose, structure, link and rendering checks. Run the complete suite only after all intended changes form a ready final candidate.
 
 Select tests for migrations and failed operations; occurrence/cursor/metadata preservation; navigation restoration and gestures; playback/lyrics/artwork boundaries; accessibility, short/landscape screens, large fonts and reduced motion.
 
@@ -66,7 +66,7 @@ The [Android workflow](../.github/workflows/android.yml) builds main/PR changes 
 
 API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes; zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
-On disposable GitHub-hosted API 26 emulators, the native runner force-stops preinstalled Google Search before testing because its unrelated JobScheduler crash can leave a system dialog above Localica. It does not disable the package, clear its data, or act on local/physical devices. Localica crashes and all native assertions remain fatal.
+On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 
 `ANDROID_DEBUG_KEYSTORE` holds the base64 development key; CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key; PRs use a disposable key. Regular GitHub releases retain the existing `.debug` application ID and development key for in-place updates; separate production signing is not configured.
 
