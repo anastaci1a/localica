@@ -60,7 +60,7 @@ internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit,
         val appliedPolicy = if (advanced) policy else null
         val appliedRepeat = if (advanced) policy.repeat else simple
         onApply { it.copy(advancedRepeat = appliedPolicy, repeat = appliedRepeat) }; onDismiss()
-    }) { Text("Apply") } }, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } },
+    }) { Text("Apply") } }, dismissButton = { ActionTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel") } },
         widthMeasurement = {
             Column(Modifier.padding(24.dp)) {
                 Text("Repeat modes", style = MaterialTheme.typography.titleLarge)
@@ -166,7 +166,7 @@ internal fun RepeatSectionDialog(section: RepeatSection, policy: AdvancedRepeat,
                         Text("More space needed", style = compactStyle)
                         Text("Enlarge the window or reduce text size.", style = compactStyle)
                         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            ActionTextButton(onClick = onDismiss) { Text("Cancel", style = compactStyle) }
+                            ActionTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel", style = compactStyle) }
                         }
                     }
                 }.single().measure(constraints.copy(minHeight = 0))
@@ -213,9 +213,9 @@ private fun RepeatSectionFrame(section: RepeatSection, policy: AdvancedRepeat,
         }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             if (onDismiss == null) TextButtonMeasurement("Cancel", if (compact) style else null)
-            else ActionTextButton(onClick = onDismiss) { Text("Cancel", style = if (compact) style else MaterialTheme.typography.labelLarge) }
+            else ActionTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel", style = if (compact) style else MaterialTheme.typography.labelLarge) }
             if (onSelect == null) TextButtonMeasurement("Select", if (compact) style else null)
-            else ActionTextButton(onClick = onSelect) { Text("Select", style = if (compact) style else MaterialTheme.typography.labelLarge) }
+            else ActionTextButton(onClick = onSelect, modifier = Modifier.heightIn(min = 48.dp)) { Text("Select", style = if (compact) style else MaterialTheme.typography.labelLarge) }
         }
     }
 }
