@@ -29,7 +29,11 @@ Paths below are under `app/src/main/java/io/github/anastaci1a/localica/`.
 
 ## AAC edit-list trimming
 
-`PlaybackExtractors` retains Media3 extraction and corrects missing end padding for a narrowly supported AAC-LC layout ([#28](https://github.com/anastaci1a/localica/issues/28)). It reads bounded MP4 metadata through the registered playback source. Encoded bytes, timestamps, edits and intentional silence remain unchanged.
+`PlaybackExtractors` retains Media3 extraction and reads bounded MP4 metadata through the registered source. AAC edit handling has two narrow cases ([#28](https://github.com/anastaci1a/localica/issues/28)). Neither inspects audio amplitude or changes encoded media bytes.
+
+### Shortened final sample
+
+This correction supplies missing end padding. Packet timestamps, edit metadata and intentional silence remain unchanged.
 
 | Required evidence | Constraint |
 | --- | --- |
@@ -47,7 +51,32 @@ N_{\mathrm{audible}} = \frac{D_{\mathrm{edit}}\, f_{\mathrm{sample}}}{T_{\mathrm
 N_{\mathrm{padding}} = N_{\mathrm{frames}}\, N_{\mathrm{frame}} - N_{\mathrm{delay}} - N_{\mathrm{audible}}.
 $$
 
-The correction requires an exact integer result smaller than one frame. Other layouts retain native extraction, including existing nonzero padding and short AAC configurations. Unknown-length inputs delegate directly without a metadata scan or added reopen. No audio amplitude is inspected. Service playback and continuity controls share the extractor factory. Fixture provenance and independent edit metadata live in `app/src/androidTest/assets/README.txt`.
+The correction requires an exact integer result smaller than one frame. Other shortened-sample layouts retain native extraction, including existing nonzero padding and short AAC configurations. Fixture provenance and independent edit metadata live in `app/src/androidTest/assets/README.txt`.
+
+### Rounded edit endpoint
+
+A coarse movie clock can round a sole audio edit beyond the declared media endpoint. The native two-media-tick tolerance can then discard preroll packets and mark the stream as requiring preroll. This case preserves all declared access units and clamps the rounded edit endpoint to the existing media extent.
+
+| Required evidence | Constraint |
+| --- | --- |
+| Container | Known length, bounded ordinary moov header, one unencrypted AAC audio track and one rate-one edit. |
+| Headers | Version zero; movie, track and edit durations agree before correction. |
+| Sample tables | Constant positive packet durations; complete size/chunk tables agree with known media duration and actual `mdat` payload bounds. |
+| Rounding | Endpoint exceeds native tolerance but remains within half a movie-clock tick of the media extent. |
+| Existing trim | No conflicting gapless metadata; native corrected end padding remains zero. |
+| Output | Paired `PlaybackRenderersFactory` and `MediaEditAudioSink`; marked encoded bypass/offload is rejected. |
+
+The same-width metadata overlay expresses movie, track and edit durations in media ticks. Source files remain untouched. Unsupported layouts retain native extraction. Unknown-length sources bypass inspection and add no reopen. The shortened-sample SBR-absence requirement remains unchanged.
+
+The corrected format carries media-clock units through `Format.customData`. The sink binds them to actual decoded PCM rate and the first buffer's timestamp. It recomputes remaining leading trim after output reconfiguration or seek, rather than applying the full edit again. Foreign custom data and unmarked formats pass through unchanged.
+
+$$
+N_{\mathrm{remaining}} = \max\left(0,
+\left\lfloor\frac{s_{\mathrm{edit}}\,f_{\mathrm{PCM}}}{T_{\mathrm{media}}}\right\rfloor
+-\left\lceil\frac{\max(0,p_{\mathrm{PCM}}-o_{\mathrm{stream}})\,f_{\mathrm{PCM}}}{10^{6}}\right\rceil\right).
+$$
+
+PTS and stream offset use microseconds. Flooring the edit permits less than one output frame of rounding. Ceiling the truncated PTS recovers its represented frame. Invalid units, unsupported decoded formats and arithmetic overflow fail through the audio sink's error contract. No SBR absence or decoded frames per access unit is inferred.
 
 ## File operations
 

@@ -18,21 +18,24 @@ import java.nio.ByteBuffer
 
 /** Keep Media3's extractors, adding only the bounded AAC edit-list correction for #28. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-internal class PlaybackExtractors : ExtractorsFactory {
+internal class PlaybackExtractors(private val decodedEditBinding: Boolean = false) : ExtractorsFactory {
     private val defaults = DefaultExtractorsFactory()
     override fun createExtractors(): Array<Extractor> = wrap(defaults.createExtractors())
     override fun createExtractors(uri: Uri, responseHeaders: Map<String, List<String>>): Array<Extractor> =
         wrap(defaults.createExtractors(uri, responseHeaders))
     private fun wrap(extractors: Array<Extractor>) = extractors.map {
-        if (it is Mp4Extractor) EditListAacExtractor(it) else it
+        if (it is Mp4Extractor) EditListAacExtractor(it, decodedEditBinding) else it
     }.toTypedArray()
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-private class EditListAacExtractor(private val delegate: Mp4Extractor) : Extractor by delegate {
+private class EditListAacExtractor(private val delegate: Mp4Extractor, private val decodedEditBinding: Boolean) : Extractor by delegate {
     private var inspected = false
     private var boxesRead = 0
     private var edit: AacEditList? = null
+    private var rounded: RoundedAudioEdit? = null
+    private var pendingRounded: RoundedAudioEdit? = null
+    private val mediaPayloads = mutableListOf<LongRange>()
 
     override fun getUnderlyingImplementation(): Extractor = delegate
     override fun getSniffFailureDetails() = delegate.sniffFailureDetails
@@ -49,7 +52,13 @@ private class EditListAacExtractor(private val delegate: Mp4Extractor) : Extract
                         val padding = if (timing != null && isNormalAacLc(format)) try {
                             timing.padding(format.sampleRate, 1024, format.encoderDelay, format.encoderPadding)
                         } catch (_: ArithmeticException) { null } else null
-                        track.format(if (padding == null) format else format.buildUpon().setEncoderPadding(padding).build())
+                        val trim = if (id == 0 && type == C.TRACK_TYPE_AUDIO) rounded?.trim else null
+                        val corrected = if (trim != null) {
+                            check(format.customData == null && format.drmInitData == null && format.sampleMimeType == MimeTypes.AUDIO_AAC &&
+                                !format.hasPrerollSamples && format.encoderPadding == 0 && format.encoderDelay == trim.delayAt(format.sampleRate))
+                            format.buildUpon().setCustomData(trim).build()
+                        } else if (padding == null) format else format.buildUpon().setEncoderPadding(padding).build()
+                        track.format(corrected)
                     }
                 }
             }
@@ -60,7 +69,7 @@ private class EditListAacExtractor(private val delegate: Mp4Extractor) : Extract
         // Decide before touching the input. An unknown-length stream may be single-use;
         // even a seek to its existing position would close/reopen the progressive source.
         if (boxesRead == 0 && input.length == C.LENGTH_UNSET.toLong()) inspected = true
-        if (inspected) return delegate.read(input, seekPosition)
+        if (inspected) return delegate.read(rounded?.let { MovieClockInput(input, it.patches) } ?: input, seekPosition)
         // The normal MP4 extractor already seeks between moov and mdat. Inspect bounded
         // metadata through the same reader, never a second unregistered provider handle.
         // Unknown lengths, large/fragmented/ambiguous metadata keep Media3's native behavior.
@@ -80,15 +89,37 @@ private class EditListAacExtractor(private val delegate: Mp4Extractor) : Extract
             }
             if (size < headerSize || size > input.length - start) return finish(seekPosition)
             if (type == 0x6d6f6f76) { // moov
+                if (pendingRounded != null) return finish(seekPosition)
                 val payloadSize = size - headerSize
                 if (payloadSize <= 2 * 1024 * 1024) {
                     val payload = ByteArray(payloadSize.toInt())
                     input.readFully(payload, 0, payload.size)
                     edit = AacEditList.parse(payload)
+                    if (decodedEditBinding && headerSize == 8) pendingRounded = roundedAudioEdit(payload, start + headerSize, input.length)
+                }
+                pendingRounded?.let { candidate ->
+                    if (candidate.isInside(mediaPayloads)) { rounded = candidate; return finish(seekPosition) }
+                    if (candidate.mediaChunks.any { chunk -> chunk.first < input.position &&
+                            mediaPayloads.none { chunk.first >= it.first && chunk.last <= it.last } }) return finish(seekPosition)
+                    // Fast-start files place moov before mdat. Inspect only subsequent box
+                    // headers before activation; no second provider reader or media decoding.
+                    return Extractor.RESULT_CONTINUE
                 }
                 return finish(seekPosition)
             }
             if (type == 0x6d6f6f66) return finish(seekPosition) // moof
+            if (decodedEditBinding && type == 0x6d646174) { // mdat payload, excluding its header.
+                mediaPayloads += start + headerSize until start + size
+                pendingRounded?.let { candidate ->
+                    if (candidate.isInside(mediaPayloads)) { rounded = candidate; return finish(seekPosition) }
+                    if (candidate.mediaChunks.any { chunk -> chunk.first < input.position &&
+                            mediaPayloads.none { chunk.first >= it.first && chunk.last <= it.last } }) return finish(seekPosition)
+                }
+            }
+            if (pendingRounded != null && size - headerSize <= 64 * 1024) {
+                input.skipFully((size - headerSize).toInt())
+                return Extractor.RESULT_CONTINUE
+            }
             seekPosition.position = start + size
             return Extractor.RESULT_SEEK
         } catch (_: EOFException) {
@@ -97,6 +128,7 @@ private class EditListAacExtractor(private val delegate: Mp4Extractor) : Extract
     }
 
     private fun finish(position: PositionHolder): Int {
+        pendingRounded = null
         inspected = true
         position.position = 0
         return Extractor.RESULT_SEEK

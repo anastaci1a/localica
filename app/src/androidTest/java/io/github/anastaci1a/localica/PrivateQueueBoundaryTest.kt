@@ -33,15 +33,18 @@ class PrivateQueueBoundaryTest {
     @Test fun queueNaturalPreloadOn() = play(queue = true, preload = true)
     @Test fun queueNaturalPreloadOff() = play(queue = true, preload = false)
     @Test fun staticNaturalControl() = play(queue = false, preload = true)
+    @Test fun correctedQueueNaturalPreloadOn() = play(queue = true, preload = true, corrected = true)
+    @Test fun correctedQueueNaturalPreloadOff() = play(queue = true, preload = false, corrected = true)
+    @Test fun correctedStaticNaturalControl() = play(queue = false, preload = true, corrected = true)
 
-    private fun play(queue: Boolean, preload: Boolean) {
+    private fun play(queue: Boolean, preload: Boolean, corrected: Boolean = false) {
         val args = InstrumentationRegistry.getArguments()
         val input = args.getString("privateBoundaryInput")
         assumeTrue("Requires explicitly supplied private local files", input != null)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val root = File(input!!)
-        val label = if (queue) "queue-$preload" else "static-$preload"
+        val label = (if (corrected) "corrected-" else "") + if (queue) "queue-$preload" else "static-$preload"
         val out = File(context.getExternalFilesDir(null), "private-boundary/$label").apply { mkdirs() }
         val events = File(out, "events.jsonl")
         val started = SystemClock.elapsedRealtime()
@@ -81,6 +84,9 @@ class PrivateQueueBoundaryTest {
         var underruns = 0
         var arrivals = 0
         var done = false
+        var firstInputSeen = false
+        var firstInputBound = false
+        val rawBindingSeen = java.util.concurrent.atomic.AtomicBoolean()
         val files = (0..2).map { File(root, "track$it.m4a") }
         files.forEach { assertTrue("Private input missing", it.isFile) }
         val tracks = files.mapIndexed { i, f -> Track(f.toURI().toString(), "Private $i", durationMs = listOf(212171L,362636L,364401L)[i], fileName = f.name, relativePath = f.name) }
@@ -90,9 +96,10 @@ class PrivateQueueBoundaryTest {
                 val renderers = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): AudioSink {
                         val sink = DefaultAudioSink.Builder(context).setAudioProcessors(arrayOf(capture)).build()
-                        return object : ForwardingAudioSink(sink) {
+                        val traced = object : ForwardingAudioSink(sink) {
                             override fun configure(format: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
-                                event("sink-configure", "rate" to format.sampleRate, "channels" to format.channelCount, "delay" to format.encoderDelay, "padding" to format.encoderPadding)
+                                if (format.customData is MediaEditTrim) rawBindingSeen.set(true)
+                                event("sink-configure", "rate" to format.sampleRate, "channels" to format.channelCount, "delay" to format.encoderDelay, "padding" to format.encoderPadding, "editBinding" to (format.customData is MediaEditTrim))
                                 super.configure(format, specifiedBufferSize, outputChannels)
                             }
                             override fun handleBuffer(buffer: ByteBuffer, presentationTimeUs: Long, encodedAccessUnitCount: Int): Boolean {
@@ -105,9 +112,10 @@ class PrivateQueueBoundaryTest {
                             override fun setOutputStreamOffsetUs(offsetUs: Long) { event("stream-offset", "offsetUs" to offsetUs); super.setOutputStreamOffsetUs(offsetUs) }
                             override fun playToEndOfStream() { event("sink-end", "bytes" to byteCount); super.playToEndOfStream() }
                         }
+                        return if (corrected) MediaEditAudioSink(traced) else traced
                     }
                 }
-                val p = ExoPlayer.Builder(context, renderers).setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context)), PlaybackExtractors())).build()
+                val p = ExoPlayer.Builder(context, renderers).setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context)), PlaybackExtractors(decodedEditBinding = corrected))).build()
                 engine = p
                 p.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
                 p.volume = 0f
@@ -126,7 +134,11 @@ class PrivateQueueBoundaryTest {
                 })
                 p.addAnalyticsListener(object : AnalyticsListener {
                     override fun onAudioInputFormatChanged(time: AnalyticsListener.EventTime, format: Format, reuse: DecoderReuseEvaluation?) {
-                        event("input-format", "window" to time.windowIndex, "mime" to format.sampleMimeType, "rate" to format.sampleRate, "channels" to format.channelCount, "delay" to format.encoderDelay, "padding" to format.encoderPadding, "reuse" to reuse?.result, "discardReasons" to reuse?.discardReasons, "asc" to format.initializationData.joinToString { b -> b.joinToString("") { "%02x".format(it) } })
+                        if (time.windowIndex == 0) {
+                            firstInputSeen = true
+                            firstInputBound = format.customData is MediaEditTrim
+                        }
+                        event("input-format", "window" to time.windowIndex, "mime" to format.sampleMimeType, "rate" to format.sampleRate, "channels" to format.channelCount, "delay" to format.encoderDelay, "padding" to format.encoderPadding, "reuse" to reuse?.result, "discardReasons" to reuse?.discardReasons, "maximumInputSize" to format.maxInputSize, "preroll" to format.hasPrerollSamples, "editBinding" to (format.customData is MediaEditTrim), "asc" to format.initializationData.joinToString { b -> b.joinToString("") { "%02x".format(it) } })
                     }
                     override fun onAudioDecoderInitialized(time: AnalyticsListener.EventTime, name: String, stamp: Long, duration: Long) { event("decoder-init", "decoder" to name, "durationMs" to duration) }
                     override fun onAudioDecoderReleased(time: AnalyticsListener.EventTime, name: String) { event("decoder-release", "decoder" to name) }
@@ -142,7 +154,18 @@ class PrivateQueueBoundaryTest {
                     p.prepare(); p.play()
                 }
             }
-            fun poll(condition: () -> Boolean): Boolean { var result = false; instrumentation.runOnMainSync { error?.let { throw AssertionError("Playback error", it) }; result = condition() }; return result }
+            fun poll(condition: () -> Boolean): Boolean {
+                var result = false
+                instrumentation.runOnMainSync {
+                    error?.let { throw AssertionError("Playback error", it) }
+                    if (corrected && firstInputSeen && engine!!.playbackState == Player.STATE_READY) {
+                        assertTrue("Expected corrected first input to carry its edit binding", firstInputBound)
+                        assertTrue("Expected decoded PCM to retain its edit binding", rawBindingSeen.get())
+                    }
+                    result = condition()
+                }
+                return result
+            }
             if (queue) {
                 val deadline = SystemClock.elapsedRealtime() + 15_000
                 while (!poll { !controller!!.state.value.loading }) { assertTrue(SystemClock.elapsedRealtime() < deadline); Thread.sleep(50) }

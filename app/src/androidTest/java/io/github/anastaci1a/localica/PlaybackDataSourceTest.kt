@@ -15,6 +15,7 @@ import androidx.media3.extractor.ExtractorsFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.playback.PlaybackExtractors
+import io.github.anastaci1a.localica.playback.PlaybackRenderersFactory
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,15 +44,29 @@ class PlaybackDataSourceTest {
         assertEquals(1, wrapped.closes.get())
     }
 
-    private fun play(extractors: ExtractorsFactory, allowReopen: Boolean): ProbeSource {
+    @Test fun roundedEditBindingDoesNotReopenUnknownLengthSingleUseSource() {
+        val source = play(PlaybackExtractors(decodedEditBinding = true), allowReopen = false)
+        assertEquals(1, source.opens.get())
+        assertEquals(1, source.closes.get())
+    }
+
+    @Test fun roundedFastStartValidationAddsNoSourceReopen() {
+        val unbound = play(PlaybackExtractors(), allowReopen = true, knownLength = true, fixture = "boundary-rounded-streamable.m4a")
+        val bound = play(PlaybackExtractors(decodedEditBinding = true), allowReopen = true, knownLength = true, fixture = "boundary-rounded-streamable.m4a")
+        assertEquals(unbound.opens.get(), bound.opens.get())
+        assertEquals(unbound.closes.get(), bound.closes.get())
+    }
+
+    private fun play(extractors: ExtractorsFactory, allowReopen: Boolean, knownLength: Boolean = false,
+        fixture: String = "boundary-streamable.m4a"): ProbeSource {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val bytes = instrumentation.context.assets.open("boundary-streamable.m4a").use { it.readBytes() }
-        val source = ProbeSource(bytes, allowReopen)
+        val bytes = instrumentation.context.assets.open(fixture).use { it.readBytes() }
+        val source = ProbeSource(bytes, allowReopen, knownLength)
         val ended = AtomicBoolean()
         val failure = AtomicReference<PlaybackException?>()
         lateinit var player: ExoPlayer
         instrumentation.runOnMainSync {
-            player = ExoPlayer.Builder(instrumentation.targetContext).build()
+            player = ExoPlayer.Builder(instrumentation.targetContext, PlaybackRenderersFactory(instrumentation.targetContext)).build()
             player.volume = 0f
             // No foreground Activity/service: retain default disabled focus handling.
             player.addListener(object : Player.Listener {
@@ -81,7 +96,7 @@ class PlaybackDataSourceTest {
         return source
     }
 
-    private class ProbeSource(bytes: ByteArray, private val allowReopen: Boolean,
+    private class ProbeSource(bytes: ByteArray, private val allowReopen: Boolean, private val knownLength: Boolean,
         private val delegate: ByteArrayDataSource = ByteArrayDataSource(bytes)) : DataSource by delegate {
         val opens = AtomicInteger()
         val closes = AtomicInteger()
@@ -89,8 +104,8 @@ class PlaybackDataSourceTest {
         override fun open(dataSpec: DataSpec): Long {
             val count = opens.incrementAndGet()
             if (!allowReopen && count > 1) throw IOException("Source cannot be reopened")
-            delegate.open(dataSpec)
-            return -1L // Unknown source length, including when every byte is still readable.
+            val length = delegate.open(dataSpec)
+            return if (knownLength) length else -1L // Unknown source length, including when every byte is still readable.
         }
         override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
             delegate.read(buffer, offset, length).also { if (it > 0) bytesRead.addAndGet(it) }
