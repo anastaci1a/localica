@@ -10,6 +10,7 @@ import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.audio.AudioProcessor.UnhandledAudioFormatException
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -23,6 +24,7 @@ import java.io.Closeable
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 
@@ -60,15 +62,34 @@ class MediaEditSinkLifecycleTest {
         private val handler = Handler(thread.looper)
         private val capture = Capture()
         private var offsetUs = 0L
+        // Accessed only on the sink Looper; callbacks belong to this sink, not other tests.
+        private var initializedTracks = 0
+        private var releasedTracks = 0
+        private var closing = false
+        private val releasesComplete = CountDownLatch(1)
         private val sink = onSink {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             MediaEditAudioSink(DefaultAudioSink.Builder(context).setAudioProcessors(arrayOf(capture)).build())
-                .also { it.setVolume(0f); it.setSkipSilenceEnabled(false); it.play() }
+                .also { sink ->
+                    sink.setListener(object : AudioSink.Listener {
+                        override fun onPositionDiscontinuity() {}
+                        override fun onUnderrun(bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) {}
+                        override fun onSkipSilenceEnabledChanged(skipSilenceEnabled: Boolean) {}
+                        override fun onAudioTrackInitialized(audioTrackConfig: AudioSink.AudioTrackConfig) {
+                            initializedTracks++
+                        }
+                        override fun onAudioTrackReleased(audioTrackConfig: AudioSink.AudioTrackConfig) {
+                            releasedTracks++
+                            quitAfterOwnedReleases()
+                        }
+                    })
+                    sink.setVolume(0f); sink.setSkipSilenceEnabled(false); sink.play()
+                }
         }
-        private fun <T> onSink(block: () -> T): T {
+        private fun <T> onSink(timeoutMs: Long = 15_000, block: () -> T): T {
             val task = FutureTask(Callable { block() })
             check(handler.post(task))
-            return task.get(15, TimeUnit.SECONDS)
+            return task.get(timeoutMs, TimeUnit.MILLISECONDS)
         }
         fun configure(rate: Int = 44100, marker: Any? = MediaEditTrim(44100, 1600)) = onSink {
             val format = Format.Builder().setSampleMimeType(MimeTypes.AUDIO_RAW)
@@ -82,29 +103,62 @@ class MediaEditSinkLifecycleTest {
             sink.handleDiscontinuity()
         }
         fun flush() = onSink { sink.flush() }
-        fun feed(samples: ShortArray, positionUs: Long) = onSink {
+        private fun remaining(deadline: Long, message: String): Long {
+            val millis = deadline - SystemClock.elapsedRealtime()
+            assertTrue(message, millis > 0)
+            return millis
+        }
+        fun feed(samples: ShortArray, positionUs: Long) {
             val data = ByteBuffer.allocateDirect(samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
             samples.forEach { data.putShort(it) }
             data.flip()
+            val timestampUs = onSink { offsetUs + positionUs }
             val deadline = SystemClock.elapsedRealtime() + 5_000
-            while (!sink.handleBuffer(data, offsetUs + positionUs, 1)) {
-                assertTrue("Native sink must consume this exact buffer within 5s", SystemClock.elapsedRealtime() < deadline)
+            val message = "Native sink must consume this exact buffer within 5s"
+            // One native attempt per dispatch lets asynchronous release callbacks run between attempts.
+            while (!onSink(remaining(deadline, message)) { sink.handleBuffer(data, timestampUs, 1) }) {
+                remaining(deadline, message)
                 Thread.sleep(2)
             }
+            remaining(deadline, message)
             assertFalse("A handled buffer is completely consumed", data.hasRemaining())
         }
-        fun finishAndRead(): ShortArray = onSink {
+        fun finishAndRead(): ShortArray {
             val deadline = SystemClock.elapsedRealtime() + 5_000
-            do {
-                sink.playToEndOfStream()
-                assertTrue("Native processor/output drain must finish within 5s", SystemClock.elapsedRealtime() < deadline)
-                if (!sink.isEnded) Thread.sleep(2)
-            } while (!sink.isEnded)
-            capture.snapshot()
+            val message = "Native processor/output drain must finish within 5s"
+            while (true) {
+                onSink(remaining(deadline, message)) { sink.playToEndOfStream() }
+                val ended = onSink(remaining(deadline, message)) { sink.isEnded }
+                remaining(deadline, message)
+                if (ended) break
+                Thread.sleep(2)
+            }
+            return onSink { capture.snapshot() }
+        }
+        // Called only on the sink Looper. Even if the outer close deadline fails, keep it
+        // alive for outstanding callbacks, then quit automatically after the last owned release.
+        private fun quitAfterOwnedReleases() {
+            if (closing && initializedTracks == releasedTracks) {
+                releasesComplete.countDown()
+                thread.quitSafely()
+            }
         }
         override fun close() {
-            try { onSink { try { sink.reset() } finally { sink.release() } } }
-            finally { thread.quitSafely(); thread.join(3_000) }
+            try {
+                onSink {
+                    try { sink.reset() }
+                    finally {
+                        try { sink.release() }
+                        finally { closing = true; quitAfterOwnedReleases() }
+                    }
+                }
+            } finally {
+                // Public callbacks cover earlier flushes as well as the final reset.
+                assertTrue("Every owned AudioTrack must finish releasing before quitting its Looper",
+                    releasesComplete.await(3_000, TimeUnit.MILLISECONDS))
+                thread.join(3_000)
+                assertFalse("The released harness Looper must terminate", thread.isAlive)
+            }
         }
     }
 
