@@ -75,11 +75,16 @@ class SettingsMotionTest {
                 assertTrue("The actual Settings Dialog must own native input before Back", inputReady())
                 trace("before-back")
             }
-            if (systemBack) assertTrue("UiDevice must inject native Back",
-                UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack())
+            if (systemBack) {
+                val injected = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+                compose.runOnUiThread { trace("native-back-return=$injected") }
+            }
             else compose.onNodeWithContentDescription("Back from settings").performClick()
             try { compose.waitUntil(5000) { depth == 0 } }
             finally { compose.runOnUiThread { trace("after-back-wait") } }
+            compose.runOnUiThread {
+                assertEquals("Each Back control invokes exactly one callback", if (systemBack) 2 else 1, backCallbacks)
+            }
             compose.mainClock.advanceTimeBy(64)
             assertTrue("Back enters from the left", compose.onNodeWithTag("settings-content").fetchSemanticsNode().boundsInRoot.left < home)
             compose.mainClock.advanceTimeBy(500)
