@@ -4,8 +4,13 @@ set -euo pipefail
 classes=${RISK_CLASSES:-}
 reports="$PWD/preflight-reports"
 if [[ -z "$classes" ]]; then
-  bash .github/prepare-device-tests.sh
-  exec ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
+  source .github/prepare-device-tests.sh
+  # Keep the sourced EXIT restoration trap alive; preserve Gradle failure status.
+  set +e
+  ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
+  result=$?
+  set -e
+  exit "$result"
 fi
 [[ ${#classes} -le 4096 ]] || { echo 'risk_classes exceeds 4096 characters' >&2; exit 2; }
 pattern='^io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*(,io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*)*$'
@@ -19,7 +24,7 @@ done
 # Refuse data clearing unless this really is the disposable GitHub-hosted emulator.
 [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]] || { echo 'Preflight requires a GitHub-hosted runner' >&2; exit 2; }
 [[ $(adb shell getprop ro.kernel.qemu | tr -d '\r') == 1 ]] || { echo 'Preflight requires an emulator' >&2; exit 2; }
-bash .github/prepare-device-tests.sh
+source .github/prepare-device-tests.sh
 mkdir -p "$reports"
 printf 'sha=%s\napi=%s\nclasses=%s\n' "${GITHUB_SHA:-unknown}" "${TEST_API:-unknown}" "$classes" > "$reports/plan.txt"
 printf 'preflight=running\nfull=not-started\n' > "$reports/status.txt"
