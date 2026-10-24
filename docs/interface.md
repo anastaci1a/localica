@@ -120,6 +120,8 @@ Offer functional information, editing, art, lyrics, playlist, pin, collection li
 - Image picker: rounded previews of readable previous choices; optional device-photo access has a short explanation and glass permission button. An evenly spaced divider separates these from icon-bearing glass Gallery/Files actions.
 - Bulk jobs: Continue in background and Stop after current file; **Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows progress/recent per-file outcomes.
 
+The artwork viewer centers fitted artwork across the full page. Safe Close and contextual Zoom/Reset controls overlay the image. Pan bounds follow the fitted image. Released pans decelerate; re-grab, reset, zoom or reduced motion stops travel. Recreation preserves zoom and the visible image center.
+
 Mode icons visibly reflect state without filled hitboxes or ripples: dim when off, full strength when active, visible 1 for Repeat one, distinct Stop/Next paused/Next queue indicators and accessible announcements. Hold Repeat for Simple/Advanced options; tapping returns to the ordinary cycle.
 
 Both modes share a compact, screen/font-aware popup: measure Simple for the common body height and both modes for width.
