@@ -368,8 +368,11 @@ class RepeatOptionsEnvelopeTest {
         context.getSystemService(WindowManager::class.java).defaultDisplay.getRealMetrics(display)
         val fits = display.widthPixels / display.density >= width.value && display.heightPixels / display.density >= height.value
         val method = "native${width.value.toInt()}x${height.value.toInt()}Font2SectionsExposeEveryControlAndStageDrafts"
-        if (explicitlySelected(method)) assertTrue("Configure a display large enough for this exact native window", fits)
-        else org.junit.Assume.assumeTrue("Exact native window profile needs at least $width by $height display space", fits)
+        val actualFont = context.resources.configuration.fontScale
+        if (explicitlySelected(method)) {
+            assertTrue("Configure a display large enough for this exact native window", fits)
+            assertEquals("Configure Android's actual font scale for a native dialog", 2f, actualFont, 0f)
+        } else org.junit.Assume.assumeTrue("Exact native window profile requires sufficient display space and actual Android font scale 2", fits && actualFont == 2f)
     }
 
     @Suppress("DEPRECATION")
@@ -447,10 +450,8 @@ class RepeatOptionsEnvelopeTest {
         var submissions = 0
         var visible by mutableStateOf(true)
         compose.setContent { RepeatTestScene {
-            val density = LocalDensity.current
-            // Physical-phone entrypoints keep production density/font scaling and sizing.
-            CompositionLocalProvider(LocalDensity provides if (resizeWindow) Density(density.density, 2f) else density,
-                LocalReducedMotion provides true) {
+            // Native child windows derive density/font scaling from Android resources.
+            CompositionLocalProvider(LocalReducedMotion provides true) {
                 if (visible) RepeatOptionsDialog(settings, { visible = false }, { settings = it(settings); submissions++ })
             }
         } }
