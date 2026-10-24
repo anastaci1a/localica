@@ -11,8 +11,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import io.github.anastaci1a.localica.R
+
+/** Opt-in compact rows keep the shared switch and the full 48dp input target. */
+internal val LocalCompactPreferenceFrames = androidx.compose.runtime.compositionLocalOf { false }
 
 /** Stateless field faces shared by live controls and popup envelope measurement. */
 @Composable
@@ -29,6 +33,7 @@ internal fun SettingsLinkFace(title: String, summary: String?, icon: Int?, modif
 
 internal val ChoiceOuterVerticalInset = 4.dp
 internal val ChoiceInnerInset = 4.dp
+internal val ChoiceLabelHorizontalInset = 12.dp
 internal val InterfaceSliderHeight = 48.dp
 internal val InterfaceSwitchWidth = 60.dp
 internal val InterfaceSwitchHeight = 48.dp
@@ -47,7 +52,9 @@ internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, d
 
 @Composable
 internal fun BooleanPreferenceFrame(label: String, modifier: Modifier = Modifier, control: @Composable () -> Unit) {
-    Row(modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    val compact = LocalCompactPreferenceFrames.current
+    Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
+        .padding(vertical = if (compact) 0.dp else 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f).padding(end = 12.dp))
         control()
     }
@@ -63,7 +70,8 @@ internal fun choiceRequiredCellWidth(labels: List<String>): androidx.compose.ui.
     val density = LocalDensity.current
     val style = MaterialTheme.typography.bodyLarge
     return with(density) {
-        (labels.maxOfOrNull { measurer.measure(androidx.compose.ui.text.AnnotatedString(it), style).size.width } ?: 0).toDp() + 32.dp
+        (labels.maxOfOrNull { measurer.measure(androidx.compose.ui.text.AnnotatedString(it), style).size.width } ?: 0).toDp() +
+            (ChoiceInnerInset + ChoiceLabelHorizontalInset) * 2
     }
 }
 
@@ -82,22 +90,22 @@ internal fun ChoicePreferenceFrame(title: String, labels: List<String>, popup: B
 
 /** Material text-button sizing without installing its interaction or semantics owners. */
 @Composable
-internal fun TextButtonMeasurement(label: String) {
+internal fun TextButtonMeasurement(label: String, labelStyle: TextStyle? = null) {
     Box(Modifier.minimumInteractiveComponentSize()) {
         Row(Modifier.defaultMinSize(minWidth = ButtonDefaults.MinWidth, minHeight = ButtonDefaults.MinHeight)
             .padding(ButtonDefaults.TextButtonContentPadding),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(label, style = labelStyle ?: MaterialTheme.typography.labelLarge)
         }
     }
 }
 
 @Composable
-internal fun GlassChoiceFace(label: String, icon: Int? = null, tab: Boolean = false) {
-    Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+internal fun GlassChoiceFace(label: String, icon: Int? = null, tab: Boolean = false, labelStyle: TextStyle? = null) {
+    Row(Modifier.padding(horizontal = ChoiceLabelHorizontalInset), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         icon?.let { Icon(painterResource(it), null, Modifier.size(24.dp)) }
-        Text(label, style = if (tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+        Text(label, style = labelStyle ?: if (tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
             maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
@@ -105,11 +113,12 @@ internal fun GlassChoiceFace(label: String, icon: Int? = null, tab: Boolean = fa
 /** Pure equal-cell geometry without selector/input owners. */
 @Composable
 internal fun GlassChoicesMeasurement(labels: List<String>, icons: List<Int>? = null, tab: Boolean = false,
-    horizontal: Boolean = true) {
+    horizontal: Boolean = true, cellHeight: Dp? = null, labelStyle: TextStyle? = null,
+    outerVerticalInset: Dp = ChoiceOuterVerticalInset) {
     if (labels.isEmpty()) return
-    val height = glassChoiceCellHeight()
-    androidx.compose.ui.layout.Layout(modifier = Modifier.padding(vertical = ChoiceOuterVerticalInset).padding(ChoiceInnerInset),
-        content = { labels.forEachIndexed { index, label -> GlassChoiceFace(label, icons?.getOrNull(index), tab) } },
+    val height = cellHeight ?: glassChoiceCellHeight()
+    androidx.compose.ui.layout.Layout(modifier = Modifier.padding(vertical = outerVerticalInset).padding(ChoiceInnerInset),
+        content = { labels.forEachIndexed { index, label -> GlassChoiceFace(label, icons?.getOrNull(index), tab, labelStyle) } },
         measurePolicy = object : androidx.compose.ui.layout.MeasurePolicy {
             override fun androidx.compose.ui.layout.IntrinsicMeasureScope.maxIntrinsicHeight(
                 children: List<androidx.compose.ui.layout.IntrinsicMeasurable>, width: Int): Int =

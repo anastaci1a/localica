@@ -98,7 +98,9 @@ class PlayerActionSlotsTest {
         compose.onNodeWithTag("player-slot-0:7").performTouchInput { longClick() }
         compose.onNodeWithText("Repeat modes").assertIsDisplayed()
         compose.onNodeWithText("Advanced").performClick()
+        compose.onNodeWithText("When a song ends").performClick()
         compose.onNodeWithText("Load next song and pause").performClick()
+        compose.onNodeWithText("Select").performClick()
         compose.onNodeWithText("Apply").performClick()
         compose.runOnIdle {
             assertEquals(0, editorOpens)
@@ -115,7 +117,9 @@ class PlayerActionSlotsTest {
             if (open) RepeatOptionsDialog(settings, { open = false }) { pending = it; submissions++ }
         } }
         compose.onNodeWithText("Advanced").performClick()
+        compose.onNodeWithText("When a song ends").performClick()
         compose.onNodeWithText("Load next song and pause").performClick()
+        compose.onNodeWithText("Select").performClick()
         compose.runOnIdle { settings = settings.copy(shuffle = true) }
         compose.onNodeWithText("Apply").performClick()
         compose.runOnIdle {
