@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.Util
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.audio.BaseAudioProcessor
@@ -16,6 +17,9 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.AudioOutput
+import androidx.media3.exoplayer.audio.AudioOutputProvider
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.room.Room
@@ -158,6 +162,7 @@ class QueueContinuousPlaybackTest {
                 val renderers = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
                         enableAudioOutputPlaybackParams: Boolean): AudioSink = MediaEditAudioSink(DefaultAudioSink.Builder(context)
+                        .setAudioOutputProvider(ContinuityOutputProvider(context))
                         .setAudioProcessors(arrayOf(capture)).build())
                 }
                 // Match PlaybackService's source ownership and audio attributes. Test seams are
@@ -297,6 +302,62 @@ class QueueContinuousPlaybackTest {
     }
 
     private companion object { const val SAMPLE_RATE = 44_100 }
+}
+
+/** Observe the native provider without changing its configuration, buffers or return values. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class ContinuityOutputProvider(
+    context: Context,
+    private val native: AudioOutputProvider = AudioTrackAudioOutputProvider.Builder(context).build(),
+) : AudioOutputProvider by native {
+    override fun getAudioOutput(config: AudioOutputProvider.OutputConfig): AudioOutput {
+        val output = native.getAudioOutput(config)
+        return object : AudioOutput by output {
+            private val identity = System.identityHashCode(output)
+            private val frameSize = Util.getPcmFrameSize(config.encoding, Integer.bitCount(config.channelMask))
+            private var writtenBytes = 0L
+            private val writes = ArrayDeque<String>()
+            private fun trace(detail: String) {
+                Log.i("ContinuityOutput", "timeNs=${SystemClock.elapsedRealtimeNanos()} output=$identity $detail")
+            }
+            init {
+                trace("created rate=${config.sampleRate} encoding=${config.encoding} " +
+                    "channelMask=${config.channelMask} capacityBytes=${config.bufferSize}")
+                output.addListener(object : AudioOutput.Listener {
+                    override fun onUnderrun() {
+                        // Called from the native output's counter poll, before the next write.
+                        // Position is Media3's output position, not a raw hardware-head reading.
+                        trace("underrun writtenFrames=${writtenBytes / frameSize} " +
+                            "outputPositionUs=${output.positionUs} recentWrites=$writes")
+                    }
+                    override fun onPositionAdvancing(playoutStartSystemTimeMs: Long) {
+                        trace("positionAdvancing startSystemMs=$playoutStartSystemTimeMs")
+                    }
+                    override fun onReleased() { trace("released") }
+                    override fun onOffloadDataRequest() { trace("offloadDataRequest") }
+                    override fun onOffloadPresentationEnded() { trace("offloadPresentationEnded") }
+                })
+            }
+            override fun write(buffer: ByteBuffer, encodedAccessUnitCount: Int, presentationTimeUs: Long): Boolean {
+                val before = buffer.position()
+                val timeNs = SystemClock.elapsedRealtimeNanos()
+                val result = output.write(buffer, encodedAccessUnitCount, presentationTimeUs)
+                val accepted = buffer.position() - before
+                writtenBytes += accepted
+                if (writes.size == 16) writes.removeFirst()
+                writes.addLast("ns=$timeNs pts=$presentationTimeUs accepted=$accepted totalFrames=${writtenBytes / frameSize}")
+                return result
+            }
+            override fun play() { trace("play writtenFrames=${writtenBytes / frameSize}"); output.play() }
+            override fun stop() { trace("stop writtenFrames=${writtenBytes / frameSize}"); output.stop() }
+            override fun flush() {
+                trace("flush writtenFrames=${writtenBytes / frameSize}")
+                output.flush()
+                writtenBytes = 0
+                writes.clear()
+            }
+        }
+    }
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
