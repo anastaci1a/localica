@@ -430,7 +430,10 @@ class RepeatOptionsEnvelopeTest {
         } }
         (toggles + choices + listOf("Cancel", "Select")).forEach { label ->
             val target = childText(label).getUnclippedBoundsInRoot()
-            assertTrue("$label keeps a 48dp touch target", target.width >= 48.dp && target.height >= 48.dp)
+            // DpRect exposes edges; subtract them in dp instead of resolving gesture-scope dimensions.
+            val targetWidth = target.right - target.left
+            val targetHeight = target.bottom - target.top
+            assertTrue("$label keeps a 48dp touch target", targetWidth >= 48.dp && targetHeight >= 48.dp)
             childText(label).assertHasClickAction()
         }
         choices.forEach { childText(it).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)) }
