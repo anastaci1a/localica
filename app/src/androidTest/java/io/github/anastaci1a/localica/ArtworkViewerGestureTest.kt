@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.unit.dp
@@ -339,7 +340,15 @@ class ArtworkViewerGestureTest {
     }
 
     @Test fun savedViewerRestoresVisiblePanWithoutVelocityAndRetainsItsCenterThroughLoadingResize() {
-        val restore = StateRestorationTester(compose)
+        // StateRestorationTester uses three runOnIdle phases. With a paused clock,
+        // removal and re-emission otherwise coalesce without disposing the old owner.
+        val restore = StateRestorationTester(object : ComposeContentTestRule by compose {
+            override fun <T> runOnIdle(action: () -> T): T {
+                val result = compose.runOnIdle(action)
+                if (!compose.mainClock.autoAdvance) compose.mainClock.advanceTimeByFrame()
+                return result
+            }
+        })
         val loaded = mutableStateOf(true)
         val wide = mutableStateOf(false)
         val raw = Bitmap.createBitmap(800, 400, Bitmap.Config.ARGB_8888).apply {
