@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 
 /** A recorded scene, independent of every surface that samples it. Never record a surface
  * into its own source: the player and its lyric background use separate sources. */
@@ -116,7 +118,14 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 // Layout can exist before the first recorded draw, or survive a restored
                 // player layer briefly. ImageReader rejects a zero-sized recording.
                 if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return false
-                val snapshot = source.layer.toImageBitmap()
+                var readCompleted = false
+                tracePreparedSnapshot("owner=backdrop-capture event=begin source=${System.identityHashCode(source)} size=${source.layer.size}")
+                val snapshot = try {
+                    source.layer.toImageBitmap().also { readCompleted = true }
+                } finally {
+                    tracePreparedSnapshot("owner=backdrop-capture event=end source=${System.identityHashCode(source)} " +
+                        "completed=$readCompleted active=${currentCoroutineContext().isActive}")
+                }
                 source.snapshot = snapshot
                 source.fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
                 return true

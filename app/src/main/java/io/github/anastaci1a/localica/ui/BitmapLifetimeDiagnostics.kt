@@ -15,3 +15,9 @@ internal fun Bitmap.recyclePreparedSnapshot(owner: String) {
     if (trace) Log.i("BitmapLifetime", "ns=${SystemClock.elapsedRealtimeNanos()} thread=${Thread.currentThread().name} " +
         "owner=$owner event=after-recycle id=${System.identityHashCode(this)}")
 }
+
+internal fun tracePreparedSnapshot(event: String) {
+    if (java.lang.Boolean.getBoolean("localica.bitmapLifetimeTrace")) {
+        Log.i("BitmapLifetime", "ns=${SystemClock.elapsedRealtimeNanos()} thread=${Thread.currentThread().name} $event")
+    }
+}
