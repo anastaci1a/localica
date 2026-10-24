@@ -14,6 +14,7 @@ import androidx.media3.extractor.mp4.Mp4Extractor
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.playback.PlaybackExtractors
+import io.github.anastaci1a.localica.playback.MediaEditTrim
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,15 +58,43 @@ class AacEditListExtractionTest {
         assertEquals(native.timestamps, unknown.timestamps)
     }
 
+    @Test fun roundedClockRestoresPrerollPacketsAndCarriesMediaUnitsToTheSink() {
+        for (fixture in listOf("boundary-rounded-edit.m4a", "boundary-rounded-short-config.m4a", "boundary-rounded-streamable.m4a")) {
+            val native = extract(fixture, repair = false)
+            val corrected = extract(fixture, repair = true, rounded = true)
+            assertEquals(44, native.timestamps.size)
+            assertTrue(native.timestamps.first() < 0)
+            assertTrue(native.format!!.hasPrerollSamples)
+            assertEquals(0, native.format!!.encoderDelay)
+            assertEquals(45, corrected.timestamps.size)
+            assertEquals(0L, corrected.timestamps.first())
+            assertFalse(corrected.format!!.hasPrerollSamples)
+            assertEquals(1600, corrected.format!!.encoderDelay)
+            assertEquals(0, corrected.format!!.encoderPadding)
+            val edit = corrected.format!!.customData as MediaEditTrim
+            assertEquals(44100L, edit.timescale)
+            assertEquals(1600L, edit.start)
+            assertEquals(3200, edit.delayAt(88200))
+            assertEquals(44480L * 1_000_000 / 44100, corrected.durationUs)
+        }
+    }
+
+    @Test fun roundedClockActivationRequiresThePairedDecodedSinkOptIn() {
+        val native = extract("boundary-rounded-short-config.m4a", repair = false)
+        val notPaired = extract("boundary-rounded-short-config.m4a", repair = true)
+        assertEquals(native.format, notPaired.format)
+        assertEquals(native.timestamps, notPaired.timestamps)
+    }
+
     private class Output {
         var format: Format? = null
         var durationUs = C.TIME_UNSET
         val timestamps = mutableListOf<Long>()
     }
 
-    private fun extract(fixture: String, repair: Boolean, knownLength: Boolean = true): Output {
+    private fun extract(fixture: String, repair: Boolean, knownLength: Boolean = true, rounded: Boolean = false): Output {
         val bytes = InstrumentationRegistry.getInstrumentation().context.assets.open(fixture).use { it.readBytes() }
-        val factory = if (repair) PlaybackExtractors() else DefaultExtractorsFactory()
+        val factory = if (repair) PlaybackExtractors(decodedEditBinding = rounded) else DefaultExtractorsFactory()
         val extractor = factory.createExtractors().first { it.underlyingImplementation is Mp4Extractor }
         val output = Output()
         extractor.init(object : ExtractorOutput {

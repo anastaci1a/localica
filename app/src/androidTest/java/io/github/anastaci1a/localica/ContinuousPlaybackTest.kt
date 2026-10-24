@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import io.github.anastaci1a.localica.playback.MediaEditAudioSink
 import io.github.anastaci1a.localica.playback.PlaybackExtractors
 import androidx.media3.common.Player
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
@@ -114,8 +115,8 @@ class ContinuousPlaybackTest {
             }
             val renderers = object : DefaultRenderersFactory(context) {
                 override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
-                    enableAudioOutputPlaybackParams: Boolean): AudioSink = DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(processor)).build()
+                    enableAudioOutputPlaybackParams: Boolean): AudioSink = MediaEditAudioSink(DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(processor)).build())
             }
             player = ExoPlayer.Builder(context, renderers)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context), PlaybackExtractors())).build()

@@ -21,6 +21,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.playback.MediaEditAudioSink
 import io.github.anastaci1a.localica.playback.NativeReaders
 import io.github.anastaci1a.localica.playback.PlaybackExtractors
 import io.github.anastaci1a.localica.playback.track
@@ -67,6 +68,18 @@ class QueueContinuousPlaybackTest {
 
     @Test fun queueActorPreservesM4aSilentTail() = playSplitPcm(true, "boundary-silent-tail.m4a")
 
+    @Test fun staticPlaylistPreservesRoundedEditPreroll() = playSplitPcm(false, "boundary-rounded-edit.m4a")
+
+    @Test fun queueActorPreservesRoundedEditPreroll() = playSplitPcm(true, "boundary-rounded-edit.m4a")
+
+    @Test fun staticPlaylistBindsRoundedAmbiguousConfigToDecodedRate() = playSplitPcm(false, "boundary-rounded-short-config.m4a")
+
+    @Test fun queueActorBindsRoundedAmbiguousConfigToDecodedRate() = playSplitPcm(true, "boundary-rounded-short-config.m4a")
+
+    @Test fun staticPlaylistValidatesRoundedFastStartMediaRanges() = playSplitPcm(false, "boundary-rounded-streamable.m4a")
+
+    @Test fun queueActorValidatesRoundedFastStartMediaRanges() = playSplitPcm(true, "boundary-rounded-streamable.m4a")
+
     @Test fun captureAcceptsEmptyInputAndPassesPcmThroughUnchanged() {
         val capture = ContinuityCapture()
         capture.configure(AudioFormat(SAMPLE_RATE, 1, C.ENCODING_PCM_16BIT))
@@ -89,6 +102,7 @@ class QueueContinuousPlaybackTest {
     }
 
     private fun playSplitPcm(throughQueue: Boolean, encodedFixture: String? = null) {
+        val rounded = encodedFixture?.startsWith("boundary-rounded-") == true
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val preferences = QueuePreferences(context)
@@ -135,20 +149,20 @@ class QueueContinuousPlaybackTest {
                 }
             }
             val tracks = files.mapIndexed { index, file ->
-                Track(file.toURI().toString(), "Split $index", durationMs = 1000,
+                Track(file.toURI().toString(), "Split $index", durationMs = if (rounded && index < 2) 1009 else 1000,
                     fileName = file.name, relativePath = file.name)
             }
             if (throughQueue) preferences.write(QueueSettings())
             instrumentation.runOnMainSync {
                 val renderers = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
-                        enableAudioOutputPlaybackParams: Boolean): AudioSink = DefaultAudioSink.Builder(context)
-                        .setAudioProcessors(arrayOf(capture)).build()
+                        enableAudioOutputPlaybackParams: Boolean): AudioSink = MediaEditAudioSink(DefaultAudioSink.Builder(context)
+                        .setAudioProcessors(arrayOf(capture)).build())
                 }
                 // Match PlaybackService's source ownership and audio attributes. Test seams are
                 // pass-through PCM capture, muting, isolated storage and disabled focus handling.
                 val engine = ExoPlayer.Builder(context, renderers)
-                    .setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context)), PlaybackExtractors()))
+                    .setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context)), PlaybackExtractors(decodedEditBinding = rounded)))
                     .build()
                 player = engine
                 engine.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
@@ -234,15 +248,19 @@ class QueueContinuousPlaybackTest {
 
     private fun encodedErrors(decoded: ByteArray, fixture: String): List<String> {
         val errors = mutableListOf<String>()
-        if (decoded.size != SAMPLE_RATE * 3 * 2) errors += "expected 132300 samples; got ${decoded.size / 2}"
+        val rounded = fixture.startsWith("boundary-rounded-")
+        val encodedFrames = if (rounded) 44480 else SAMPLE_RATE
+        val expectedFrames = encodedFrames * 2 + SAMPLE_RATE
+        if (decoded.size != expectedFrames * 2) errors += "expected $expectedFrames samples; got ${decoded.size / 2}"
         val pcm = ByteBuffer.wrap(decoded).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         // Lossy AAC cannot equal the original PCM byte-for-byte. Compare unshifted
         // source windows near both ends of each encoded track. A 25% source-amplitude
         // RMS budget allows codec ringing; never align the observed data to hide delay.
-        for (start in listOf(2048, 40000, SAMPLE_RATE + 2048, SAMPLE_RATE + 40000)) {
+        for (start in listOf(2048, 40000, encodedFrames + 2048, encodedFrames + 40000)) {
             if (start + 2048 > pcm.limit()) { errors += "missing waveform window $start"; continue }
             val rms = kotlin.math.sqrt((start until start + 2048).sumOf { i ->
-                val source = if (fixture == "boundary-silent-tail.m4a" && i % SAMPLE_RATE >= 33075) 0 else sourceSample(i)
+                val sourceIndex = if (rounded) i % encodedFrames + 576 else i
+                val source = if (fixture == "boundary-silent-tail.m4a" && i % SAMPLE_RATE >= 33075) 0 else sourceSample(sourceIndex)
                 val error = pcm[i].toDouble() - source
                 error * error
             } / 2048)
@@ -258,7 +276,7 @@ class QueueContinuousPlaybackTest {
             }
         }
         // The lossless tail must start at the independently expected encoded endpoint.
-        val tailStart = SAMPLE_RATE * 2
+        val tailStart = encodedFrames * 2
         val mismatch = (0 until SAMPLE_RATE).firstOrNull { i ->
             tailStart + i >= pcm.limit() || pcm[tailStart + i].toInt() != sourceSample(i)
         }

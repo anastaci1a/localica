@@ -59,3 +59,26 @@ audio lets the native extractor finish through one sequential unknown-length
 DataSource open. The regression compares native and application extraction,
 including a source that rejects reopening.
 SHA-256: e4ff939fbb6abc189a0b1453e8982919ad3a0134fe5a738528592daf1d80d9a2
+
+boundary-rounded-edit.m4a and boundary-rounded-short-config.m4a derive only
+from the original synthetic boundary fixtures. All 45 access units declare
+1024 media ticks. The media header declares 46080 ticks at 44100 ticks/second.
+The sole edit starts at tick 1600 and lasts 1009 movie ticks at 1000 ticks/second;
+movie and track headers use that same rounded duration. Its end exceeds the
+media extent by less than half a movie-clock tick, but more than Media3's
+native two-media-tick tolerance. The bounded media edit contains 44480 ticks.
+The mdat payload is unchanged; the second fixture retains the ambiguous
+short AAC-LC ASC. It does not reproduce in-band SBR. Decoder-rate binding is
+checked separately and must never infer SBR absence from this configuration.
+These fixtures contain original generated audio, not private user recordings.
+SHA-256:
+boundary-rounded-edit.m4a:
+b7a8437a379559dfb0483b140cb5c6cdf5a10e4e0789b6e9720715f8cad1b564
+boundary-rounded-short-config.m4a:
+63a07d27a316c3bd71d03fc3c34b8ac7eed38c2583a1ae7ecf60f67d6df2fd19
+
+boundary-rounded-streamable.m4a moves the rounded short-configuration fixture's
+moov immediately after ftyp and increases each stco offset by the moov size.
+Its encoded media and edit are unchanged. It exercises post-moov mdat validation
+and proves that reading the following free/mdat headers adds no source reopen.
+SHA-256: 8ebc21c95d1e9b9d190a61c82ef9c16309b6d295d8858edfb6ea381cb4019d73
