@@ -347,6 +347,67 @@ class RepeatOptionsEnvelopeTest {
         }
     }
 
+    private fun explicitlySelected(method: String): Boolean =
+        androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("class").orEmpty()
+            .split(',').any { it.substringAfter('#', "") == method }
+
+    /** Lead-configured profiles are separate focused runs, like APK compatibility phases. */
+    private fun physicalPhoneFont2Sections(width: Dp, height: Dp) {
+        val dimensions = "${width.value.toInt()}x${height.value.toInt()}"
+        val method = "native${dimensions}PhoneFont2SectionsFitSafeInsetsWithoutWindowResize"
+        val profile = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("repeatPhoneProfile")
+        org.junit.Assume.assumeTrue("Requires the lead-configured $dimensions phone/font2 focused run",
+            explicitlySelected(method) || profile == dimensions)
+        nativeFont2Sections(width, height, resizeWindow = false)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun requireExactWindowDisplay(width: Dp, height: Dp) {
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val display = android.util.DisplayMetrics()
+        context.getSystemService(WindowManager::class.java).defaultDisplay.getRealMetrics(display)
+        val fits = display.widthPixels / display.density >= width.value && display.heightPixels / display.density >= height.value
+        val method = "native${width.value.toInt()}x${height.value.toInt()}Font2SectionsExposeEveryControlAndStageDrafts"
+        if (explicitlySelected(method)) assertTrue("Configure a display large enough for this exact native window", fits)
+        else org.junit.Assume.assumeTrue("Exact native window profile needs at least $width by $height display space", fits)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun assertPhysicalPhone(width: Dp, height: Dp) {
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val display = android.util.DisplayMetrics()
+        context.getSystemService(WindowManager::class.java).defaultDisplay.getRealMetrics(display)
+        assertEquals("Configure this method's actual phone width", width.value, display.widthPixels / display.density, .5f)
+        assertEquals("Configure this method's actual phone height including system bars", height.value,
+            display.heightPixels / display.density, .5f)
+        assertEquals("Use Android's actual font scale, not a fabricated density", 2f, context.resources.configuration.fontScale, 0f)
+    }
+
+    private fun assertProductionChildSafeBounds(width: Dp, height: Dp) {
+        assertPhysicalPhone(width, height)
+        val node = compose.onNodeWithTag("repeat-section-dialog")
+        compose.awaitExpectedWindowFocus(node)
+        val semantics = node.fetchSemanticsNode()
+        val view = (semantics.root as ViewRootForTest).view
+        assertTrue("Use the ordinary native child host", view.parent is DialogWindowProvider)
+        val window = (view.parent as DialogWindowProvider).window
+        compose.runOnUiThread {
+            val density = view.resources.displayMetrics.density
+            assertEquals("Production window stays within this phone", width.value, window.decorView.width / density, .5f)
+            assertEquals("Production height includes this phone's system bars", height.value, window.decorView.height / density, .5f)
+            val insets = requireNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(view))
+                .getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout())
+            assertTrue("Phone case retains real status/navigation or gesture insets", insets.top > 0 && insets.bottom > 0)
+            val margin = 12f * density // The production centered popup's shared outer margin.
+            val panel = semantics.boundsInRoot
+            assertTrue("Panel clears the actual left inset and shared margin", panel.left >= insets.left + margin - 1f)
+            assertTrue("Panel clears the actual right inset and shared margin", panel.right <= view.width - insets.right - margin + 1f)
+            assertTrue("Panel clears the actual top inset and shared margin", panel.top >= insets.top + margin - 1f)
+            assertTrue("Panel clears the actual bottom inset and shared margin", panel.bottom <= view.height - insets.bottom - margin + 1f)
+        }
+    }
+
     private fun assertNativeControls(section: RepeatSection, fontScale: Float) {
         compose.onNodeWithTag("repeat-section-insufficient-space").assertDoesNotExist()
         assertNoChildScroll()
@@ -376,21 +437,27 @@ class RepeatOptionsEnvelopeTest {
         toggles.forEach { childText(it).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch)) }
     }
 
-    private fun nativeFont2Sections(width: Dp, height: Dp) {
+    private fun nativeFont2Sections(width: Dp, height: Dp, resizeWindow: Boolean = true) {
+        if (resizeWindow) requireExactWindowDisplay(width, height) else assertPhysicalPhone(width, height)
         val initial = QueueSettings(advancedRepeat = AdvancedRepeat(songEnd = SongEnd.Repeat))
         var settings by mutableStateOf(initial)
         var submissions = 0
         var visible by mutableStateOf(true)
         compose.setContent { RepeatTestScene {
             val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f), LocalReducedMotion provides true) {
+            // Physical-phone entrypoints keep production density/font scaling and sizing.
+            CompositionLocalProvider(LocalDensity provides if (resizeWindow) Density(density.density, 2f) else density,
+                LocalReducedMotion provides true) {
                 if (visible) RepeatOptionsDialog(settings, { visible = false }, { settings = it(settings); submissions++ })
             }
         } }
-        fun openNative(section: RepeatSection) { open(section); resizeNativeChild(width, height) }
+        fun openNative(section: RepeatSection) {
+            open(section)
+            if (resizeWindow) resizeNativeChild(width, height) else assertProductionChildSafeBounds(width, height)
+        }
         openNative(RepeatSection.Song)
         assertNativeControls(RepeatSection.Song, 2f)
-        capture("native-${width.value.toInt()}x${height.value.toInt()}-font2-song")
+        capture("native-${width.value.toInt()}x${height.value.toInt()}-font2-song-$resizeWindow")
         SongEnd.entries.forEach { childText(it.label).performClick(); childText(it.label).assertIsSelected() }
         childText(SongEnd.NextPaused.label).performClick()
         closeChild("Cancel")
@@ -408,7 +475,7 @@ class RepeatOptionsEnvelopeTest {
         closeChild()
         openNative(RepeatSection.Queue)
         assertNativeControls(RepeatSection.Queue, 2f)
-        capture("native-${width.value.toInt()}x${height.value.toInt()}-font2-queue-warning")
+        capture("native-${width.value.toInt()}x${height.value.toInt()}-font2-queue-warning-$resizeWindow")
         QueueEnd.entries.forEach { childText(it.label).performClick(); childText(it.label).assertIsSelected() }
         childText("Reset current song to the first song").performClick()
         childText("Reshuffle when shuffle is enabled").performClick()
@@ -444,6 +511,12 @@ class RepeatOptionsEnvelopeTest {
     @Test fun native360x640Font2SectionsExposeEveryControlAndStageDrafts() = nativeFont2Sections(360.dp, 640.dp)
 
     @Test fun native400x800Font2SectionsExposeEveryControlAndStageDrafts() = nativeFont2Sections(400.dp, 800.dp)
+
+    @Test fun native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize() =
+        physicalPhoneFont2Sections(360.dp, 640.dp)
+
+    @Test fun native400x800PhoneFont2SectionsFitSafeInsetsWithoutWindowResize() =
+        physicalPhoneFont2Sections(400.dp, 800.dp)
 
     @Test fun shortLargeFontChildrenRefuseClippingAndLeaveSettingsUntouched() {
         var section by mutableStateOf(RepeatSection.Song); var generation by mutableIntStateOf(0)
