@@ -23,6 +23,6 @@ internal fun tintLensSnapshot(image: ImageBitmap, amount: Float): ImageBitmap {
         pixels[i] = (c and (255 shl 24)) or (channel(r) shl 16) or (channel(g) shl 8) or channel(b)
     }
     val result = Bitmap.createBitmap(pixels, original.width, original.height, Bitmap.Config.ARGB_8888)
-    original.recycle()
+    original.recyclePreparedSnapshot("lens-tint-original")
     return result.asImageBitmap()
 }

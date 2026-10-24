@@ -41,7 +41,7 @@ private object ToneImages {
                 (lut[c ushr 8 and 255] shl 8) or lut[c and 255]
         }
         Bitmap.createBitmap(pixels, original.width, original.height, Bitmap.Config.ARGB_8888)
-            .asImageBitmap().also { original.recycle(); images.put(key, it) }
+            .asImageBitmap().also { original.recyclePreparedSnapshot("tone-original"); images.put(key, it) }
     }
 }
 

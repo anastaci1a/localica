@@ -15,10 +15,10 @@ internal suspend fun blurGlassSnapshot(image: ImageBitmap, radius: Float): Image
     val w = (original.width / scale).coerceAtLeast(1)
     val h = (original.height / scale).coerceAtLeast(1)
     val small = Bitmap.createScaledBitmap(original, w, h, true)
-    if (original !== small) original.recycle()
+    if (original !== small) original.recyclePreparedSnapshot("glass-blur-original")
     var pixels = IntArray(w * h)
     small.getPixels(pixels, 0, w, 0, 0, w, h)
-    small.recycle()
+    small.recyclePreparedSnapshot("glass-blur-small")
     pixels.indices.forEach { index ->
         val color = pixels[index]; val a = color ushr 24
         pixels[index] = (a shl 24) or (((color ushr 16 and 255) * a / 255) shl 16) or

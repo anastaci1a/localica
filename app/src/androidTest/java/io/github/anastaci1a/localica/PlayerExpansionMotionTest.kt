@@ -23,11 +23,25 @@ import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.junit.Assert.*
+import org.junit.BeforeClass
+import org.junit.AfterClass
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
 
 class PlayerExpansionMotionTest {
+    companion object {
+        private var previousBitmapTrace: String? = null
+        @BeforeClass @JvmStatic fun enableBitmapOwnershipTrace() {
+            previousBitmapTrace = System.getProperty("localica.bitmapLifetimeTrace")
+            System.setProperty("localica.bitmapLifetimeTrace", "true")
+        }
+        @AfterClass @JvmStatic fun restoreBitmapOwnershipTrace() {
+            val previous = previousBitmapTrace
+            if (previous == null) System.clearProperty("localica.bitmapLifetimeTrace")
+            else System.setProperty("localica.bitmapLifetimeTrace", previous)
+        }
+    }
     @get:Rule val compose = createComposeRule()
     private fun trace(phase: String) {
         Log.i("PlayerExpansionPhase", "ns=${SystemClock.elapsedRealtimeNanos()} thread=${Thread.currentThread().name} phase=$phase")
