@@ -70,6 +70,10 @@ class SettingsMotionTest {
             // Keep the clock paused throughout this real-time, separately bounded precondition.
             try {
                 compose.waitUntil(5000) { compose.runOnUiThread { inputReady() } }
+            } catch (failure: Throwable) {
+                runCatching { recordPresentationFailure(compose, "settings-$phase", dialogView) }
+                    .onFailure { failure.addSuppressed(it) }
+                throw failure
             } finally { compose.runOnUiThread { trace("input-readiness-complete") } }
             compose.runOnUiThread {
                 assertTrue("The actual Settings Dialog must own native input before Back", inputReady())
