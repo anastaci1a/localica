@@ -235,10 +235,12 @@ class WorkflowContract(unittest.TestCase):
         self.assertTrue(manifest['validation_errors'])
         self.assertEqual([],apks)
 
-    def test_manual_only_and_five_required_jobs(self):
+    def test_opt_in_only_and_five_required_jobs(self):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
-        self.assertEqual({'workflow_dispatch'},set(workflow['on']))
+        self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
+        self.assertEqual({'affected_classes','coverage_reason','known_issues'},set(workflow['on']['workflow_call']['inputs']))
+        self.assertEqual({'ANDROID_DEBUG_KEYSTORE'},set(workflow['on']['workflow_call']['secrets']))
         self.assertEqual({'contents':'read'},workflow['permissions'])
         jobs=workflow['jobs']
         self.assertEqual({'build','focused_26','focused_36','compatibility_26','compatibility_36'},set(jobs['evidence']['needs']))
