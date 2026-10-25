@@ -36,6 +36,7 @@ import io.github.anastaci1a.localica.ui.*
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -45,7 +46,8 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-/** Diagnostic evidence for #171/#369, not an assertion that a particular rim is wrong.
+/** Mandatory native lifecycle/presentation regressions plus opt-in optical evidence for #171/#369.
+ * The optical lane does not assert that a particular rim is wrong.
  * Both API 26 and 36 capture the composed DISPLAY, including the underlying shadow
  * group. Only the synthetic fixture's rectangle is saved, never unrelated screen UI.
  * Bounded output: ten PNGs per scene, plus profiles/geometry for additional frames.
@@ -79,12 +81,33 @@ class UtilityPopupRenderDiagnosticTest {
     private lateinit var output: File
     private lateinit var report: JSONObject
     private var entryKeys = emptySet<Any>()
+    private var opticalDiagnostics = false
+    private var lastPresentedFrame: Bitmap? = null
+    private var failureImageSaved = false
 
     @Test fun lightUtilityPopupRepeatedReturnDiagnostics() = diagnose(Scene.Light)
     @Test fun darkUtilityPopupRepeatedReturnDiagnostics() = diagnose(Scene.Dark)
     @Test fun patternedUtilityPopupRepeatedReturnDiagnostics() = diagnose(Scene.Pattern)
 
+    @Test fun lightUtilityPopupPreservesNativeReturnOwnership() = exercise(Scene.Light, diagnostic = false)
+    @Test fun darkUtilityPopupPreservesNativeReturnOwnership() = exercise(Scene.Dark, diagnostic = false)
+    @Test fun patternedUtilityPopupPreservesNativeReturnOwnership() = exercise(Scene.Pattern, diagnostic = false)
+
     private fun diagnose(scene: Scene) {
+        assumeTrue("Ten-cycle optical recording requires explicit utilityPopupOpticalDiagnostics=true; " +
+            "mandatory native lifecycle and presentation run in the three PreservesNativeReturnOwnership methods",
+            InstrumentationRegistry.getArguments().getString("utilityPopupOpticalDiagnostics") == "true")
+        exercise(scene, diagnostic = true)
+    }
+
+    /** Default retains one live-return interruption, every unique acknowledged/first-frame
+     * handoff and both shadow-control endpoints. Only nine repeated interruption pairs,
+     * descriptive edge/shadow scans and successful evidence serialization move to opt-in.
+     * Markers still prove actual native presentation at every retained capture.
+     */
+    private fun exercise(scene: Scene, diagnostic: Boolean) {
+        opticalDiagnostics = diagnostic
+
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         // AGP/UTP copies this instrumentation output before uninstalling the app.
         // External app files only survive direct instrumentation runs without UTP.
@@ -103,6 +126,7 @@ class UtilityPopupRenderDiagnosticTest {
         entryKeys = group.entries.keys.toSet()
         assertEquals("Mini-player, tab shelf and utility have exactly three persistent entries", 3, entryKeys.size)
         compose.mainClock.autoAdvance = false
+        var primaryFailure: Throwable? = null
         try {
             settleEndpoint()
             val rest = capture("rest", save = true)
@@ -114,7 +138,7 @@ class UtilityPopupRenderDiagnosticTest {
             val firstOpen = capture("first-open", save = true)
             val firstWindow = popupWindow
             // Exercise ready-popup reversals, not a separate initial-mount race.
-            repeat(10) { cycle ->
+            repeat(if (diagnostic) 10 else 1) { cycle ->
                 compose.runOnIdle { open = false }
                 advance(96)
                 capture("reverse-$cycle-closing", save = cycle == 9)
@@ -196,14 +220,32 @@ class UtilityPopupRenderDiagnosticTest {
             report.put("matchedPairs", JSONArray().put("first-open / repeated-open")
                 .put("rest / returned-rest").put("returned-rest / app-shadow-off-rest")
                 .put("first-open / app-shadow-off-open"))
-            report.put("status", "structural assertions passed; optical profiles require inspection")
+            report.put("status", if (diagnostic) "structural assertions passed; optical profiles require inspection"
+                else "mandatory native presentation and ownership assertions passed; optical profiling not requested")
         } catch (failure: Throwable) {
+            primaryFailure = failure
             report.put("status", "failed: ${failure.message}")
+            if (!diagnostic && !failureImageSaved) lastPresentedFrame?.let { image ->
+                // Last already-presented frame, not necessarily the failing state; no new capture.
+                runCatching { report.put("lastPresentedFailureImage", saveScene(image, "last-presented-failure")) }
+                    .exceptionOrNull()?.let(failure::addSuppressed)
+            }
             throw failure
         } finally {
-            writeReport()
-            compose.runOnIdle { open = false }
-            compose.mainClock.autoAdvance = true
+            try {
+                try {
+                    if (diagnostic || report.optString("status").startsWith("failed:")) writeReport()
+                } catch (outputFailure: Throwable) {
+                    val original = primaryFailure
+                    if (original == null) throw outputFailure
+                    original.addSuppressed(outputFailure)
+                }
+            } finally {
+                lastPresentedFrame?.recycle()
+                lastPresentedFrame = null
+                try { compose.runOnIdle { open = false } }
+                finally { compose.mainClock.autoAdvance = true }
+            }
         }
     }
 
@@ -496,31 +538,39 @@ class UtilityPopupRenderDiagnosticTest {
             val image = requireNotNull(screenshot)
             if (popup != null) lastPresentedDialogStage = 31 - pageStage
             frameJson.put("presentationVerified", true)
-            frameJson.put("utilityProfiles", profiles(image, utility, sx, sy))
-            if (popup != null) frameJson.put("popupProfiles", profiles(image, popup, sx, sy))
-            val d = compose.density.density
-            val regions = JSONObject()
-                .put("belowUtility", region(image, Rect(utility.drawn.left, utility.drawn.bottom + 2*d, utility.drawn.right, utility.drawn.bottom + 12*d)))
-                .put("tabUtilityGap", region(image, Rect(tabBounds.right + d, anchor.bounds.top + 20*d, anchor.bounds.left - d, anchor.bounds.bottom - 20*d)))
-                .put("miniShelfGap", region(image, Rect(miniBounds.left + 40*d, miniBounds.bottom + d, miniBounds.right - 40*d, tabBounds.top - d)))
-            if (popup != null) regions.put("abovePopup", region(image, Rect(popup.drawn.left, popup.drawn.top - 12*d, popup.drawn.right, popup.drawn.top - 2*d)))
-            frameJson.put("shadowRegions", regions)
-            if (save) frameJson.put("image", saveScene(image, name))
-            Log.i("UtilityPopupProbe", "${report.getString("scene")} $name p=$p shape=$shape " +
-                "hidden=${anchor.hidden} modal=${anchor.modalPresent} group=${group.entries.size} regions=$regions")
+            if (opticalDiagnostics) {
+                frameJson.put("utilityProfiles", profiles(image, utility, sx, sy))
+                if (popup != null) frameJson.put("popupProfiles", profiles(image, popup, sx, sy))
+                val d = compose.density.density
+                val regions = JSONObject()
+                    .put("belowUtility", region(image, Rect(utility.drawn.left, utility.drawn.bottom + 2*d, utility.drawn.right, utility.drawn.bottom + 12*d)))
+                    .put("tabUtilityGap", region(image, Rect(tabBounds.right + d, anchor.bounds.top + 20*d, anchor.bounds.left - d, anchor.bounds.bottom - 20*d)))
+                    .put("miniShelfGap", region(image, Rect(miniBounds.left + 40*d, miniBounds.bottom + d, miniBounds.right - 40*d, tabBounds.top - d)))
+                if (popup != null) regions.put("abovePopup", region(image, Rect(popup.drawn.left, popup.drawn.top - 12*d, popup.drawn.right, popup.drawn.top - 2*d)))
+                frameJson.put("shadowRegions", regions)
+                if (save) frameJson.put("image", saveScene(image, name))
+                Log.i("UtilityPopupProbe", "${report.getString("scene")} $name p=$p shape=$shape " +
+                    "hidden=${anchor.hidden} modal=${anchor.modalPresent} group=${group.entries.size} regions=$regions")
+            } else {
+                // Transfer this existing screenshot for bounded failure-only evidence.
+                lastPresentedFrame?.recycle()
+                lastPresentedFrame = image
+                screenshot = null
+            }
         } catch (failure: Throwable) {
             frameJson.put("captureFailure", failure.message ?: failure.javaClass.simpleName)
             // At most one extra PNG per failed scene. It is explicitly unverified,
             // and explains marker failures without accepting stale optical pixels.
             screenshot?.let { image -> runCatching {
                 frameJson.put("unverifiedFailureImage", saveScene(image, "$name-unverified-failure"))
+                failureImageSaved = true
             } }
             Log.e("UtilityPopupProbe", "Presentation/profile failure: $frameJson")
             throw failure
         } finally {
             screenshot?.recycle()
             records.put(frameJson)
-            writeReport()
+            if (opticalDiagnostics) writeReport()
         }
         return frame
     }
