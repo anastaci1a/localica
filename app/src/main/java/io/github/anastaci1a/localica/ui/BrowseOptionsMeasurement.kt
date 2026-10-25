@@ -47,45 +47,44 @@ private fun ChoiceMeasurement(title: String, labels: List<String>, popup: Boolea
 }
 
 @Composable
-internal fun BrowseOptionsMeasurement(route: BrowseRoute, sortFields: List<TrackSort>, mutable: Boolean,
-    randomize: Boolean, overridden: Boolean, shadowInset: Dp, reverse: Boolean = false) {
+internal fun BrowseOptionsMeasurement(declaration: BrowseOptionsDeclaration, shadowInset: Dp) {
     @Composable fun ScopeMeasurement() {
         HorizontalDivider()
         BooleanPreferenceFrame("Save only for this list") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }
-        if (overridden) {
+        if (declaration.overridden) {
             TextButtonMeasurement("Use list-type defaults")
         }
     }
     PopupMeasurementMaximum {
         Column(Modifier.fillMaxWidth().padding(horizontal = shadowInset, vertical = shadowInset),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (randomize) {
+            if (declaration.randomize) {
                 GlassActionRowMeasurement {
                     GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
                     GlassActionButtonFace(R.drawable.ic_revert, "Revert", Modifier.heightIn(min = CompactControlSize))
                 }
-                if (reverse) GlassActionRowMeasurement {
+                if (declaration.reverse) GlassActionRowMeasurement {
                     GlassActionButtonFace(R.drawable.ic_reverse, "Reverse", Modifier.heightIn(min = CompactControlSize))
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
-            ChoiceMeasurement("Sort by", sortFields.map(::sortLabel), popup = true)
+            ChoiceMeasurement("Sort by", declaration.sortFields.map(::sortLabel), popup = true)
             GlassChoicesMeasurement(listOf("Ascending", "Descending"))
-            if (mutable || randomize) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
+            if (declaration.reserveError) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
         }
         for (gallery in listOf(false, true)) Column(
             Modifier.fillMaxWidth().padding(horizontal = shadowInset, vertical = shadowInset),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ChoiceMeasurement("View mode", listOf("List", "Gallery"))
             if (gallery) PopupMeasurementMaximum {
-                for (count in 1..5) SliderPreferenceFrame("Items per row: $count", null, null, null) {
+                for (count in 1..5) SliderPreferenceFrame(itemsPerRowTitle(count), null, null, null) {
                     Spacer(Modifier.fillMaxWidth().height(InterfaceSliderHeight))
                 }
-            } else ChoiceMeasurement("Size", route.listSizes().map { it.name }, popup = true)
-            ChoiceMeasurement("Extra information", route.informationChoices().map(::extraInfoLabel), popup = true)
-            if (!route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library))
+            } else ChoiceMeasurement("Size", declaration.sizes.map { it.name }, popup = true)
+            ChoiceMeasurement("Extra information", declaration.information.map(::extraInfoLabel), popup = true)
+            if (declaration.quickSearch)
                 BooleanPreferenceFrame("Quick-search box") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }
-            if (mutable) ScopeMeasurement()
+            if (declaration.mutable) ScopeMeasurement()
         }
     }
 }
@@ -102,14 +101,13 @@ internal fun BrowseOptionsActionsMeasurement() {
 
 /** Entire supported envelope, including chrome; independent of the current draft/tab. */
 @Composable
-internal fun BrowseOptionsWidthMeasurement(route: BrowseRoute, fields: List<TrackSort>, mutable: Boolean,
-    randomize: Boolean, overridden: Boolean, shadowInset: Dp, reverse: Boolean = false) {
+internal fun BrowseOptionsWidthMeasurement(declaration: BrowseOptionsDeclaration, shadowInset: Dp) {
     Column(Modifier.padding(24.dp)) {
         GlassChoicesMeasurement(listOf("Sort", "View"), listOf(R.drawable.ic_sort, R.drawable.ic_eye), tab = true)
-        BrowseOptionsMeasurement(route, fields, mutable, randomize, overridden, shadowInset, reverse)
-        if (!mutable && (route.collection != null || route.search)) {
+        BrowseOptionsMeasurement(declaration, shadowInset)
+        if (declaration.footerScope) {
             BooleanPreferenceFrame("Save only for this list") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }
-            if (overridden) TextButtonMeasurement("Use list-type defaults")
+            if (declaration.overridden) TextButtonMeasurement("Use list-type defaults")
         }
         BrowseOptionsActionsMeasurement()
     }

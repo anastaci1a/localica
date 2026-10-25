@@ -14,32 +14,21 @@ import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.*
 
 @Composable
-internal fun ListViewFields(route: BrowseRoute, value: BrowseStyle, onChange: (BrowseStyle) -> Unit) {
+internal fun ListViewFields(route: BrowseRoute, value: BrowseStyle, declaration: BrowseOptionsDeclaration = browseOptionsDeclaration(route), onChange: (BrowseStyle) -> Unit) {
     val width = LocalConfiguration.current.screenWidthDp.toFloat()
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ChoicePreference("View mode", value.presentation != Presentation.List, listOf(false, true), { if (it) "Gallery" else "List" }) {
+        ChoicePreference("View mode", declaration.topology(value).gallery, listOf(false, true), { if (it) "Gallery" else "List" }) {
             onChange(value.copy(presentation = if (it) Presentation.Standard else Presentation.List))
         }
-        if (value.presentation != Presentation.List) {
+        if (declaration.topology(value).gallery) {
             val columns = value.itemsPerRow ?: galleryColumns(value.presentation, width).coerceIn(1, 5)
-            SliderPreference("Items per row: $columns", columns.toFloat(), { onChange(value.copy(itemsPerRow = it.roundToInt().coerceIn(1, 5))) },
+            SliderPreference(itemsPerRowTitle(columns), columns.toFloat(), { onChange(value.copy(itemsPerRow = it.roundToInt().coerceIn(1, 5))) },
                 valueRange = 1f..5f, steps = 3, modifier = Modifier.semantics {
                     contentDescription = "Items per row"; stateDescription = columns.toString()
                 })
-        } else ChoicePreference("Size", value.listSize, route.listSizes(), { it.name }, popup = true) { onChange(value.copy(listSize = it)) }
-        ChoicePreference("Extra information", value.extraInfo, route.informationChoices(), ::extraInfoLabel, popup = true) { onChange(value.copy(extraInfo = it)) }
-        if (!route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library))
+        } else ChoicePreference("Size", value.listSize, declaration.sizes, { it.name }, popup = true) { onChange(value.copy(listSize = it)) }
+        ChoicePreference("Extra information", value.extraInfo, declaration.information, ::extraInfoLabel, popup = true) { onChange(value.copy(extraInfo = it)) }
+        if (declaration.quickSearch)
             BooleanPreference("Quick-search box", value.quickSearch) { onChange(value.copy(quickSearch = it)) }
     }
-}
-
-internal fun extraInfoLabel(info: ExtraInfo) = when (info) {
-    ExtraInfo.Inherited -> "Automatic"
-    ExtraInfo.Automatic -> "Follow sort order"
-    ExtraInfo.Count -> "Number of songs"
-    ExtraInfo.Added -> "Date added"
-    ExtraInfo.MostPlayed -> "Play count"
-    ExtraInfo.Modified -> "Date modified"
-    ExtraInfo.AlbumArtist -> "Album Artist"
-    else -> info.name
 }
