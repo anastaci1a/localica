@@ -77,7 +77,13 @@ class BrowseOptionsFaceContractTest {
                         val layouts = mutableListOf<TextLayoutResult>()
                         assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action!!.invoke(layouts))
                         assertTrue(layouts.isNotEmpty())
-                        layouts.forEach { assertFalse("Clipped $summary / $scale / $w", it.hasVisualOverflow) }
+                        layouts.forEach {
+                            assertFalse("Clipped $summary / $prefix / $scale / $w: size=${it.size} " +
+                                "constraints=${it.layoutInput.constraints} lines=${it.lineCount} " +
+                                "widthOverflow=${it.didOverflowWidth} heightOverflow=${it.didOverflowHeight} " +
+                                "font=${it.layoutInput.style.fontSize} leading=${it.layoutInput.style.lineHeight} " +
+                                "density=${it.layoutInput.density} owner=${sizes["$prefix-$index"]}", it.hasVisualOverflow)
+                        }
                     }
                     assertTrue(text.fetchSemanticsNodes().isNotEmpty())
                 }
