@@ -68,6 +68,9 @@ object QueueEdits {
         return library.active?.takeIf(::matches) ?: library.queues.firstOrNull(::matches)
     }
 
+    /** Reverse the current physical order, not the retained automatic-sort baseline. */
+    fun reverse(queue: ListeningQueue): ListeningQueue = reordered(queue, queue.entries.reversed())
+
     fun randomize(queue: ListeningQueue, keepCurrentFirst: Boolean, random: kotlin.random.Random = kotlin.random.Random.Default): ListeningQueue {
         val current = queue.entries.firstOrNull { keepCurrentFirst && it.id == queue.currentEntryId }
         val remaining = queue.entries.filterNot { it.id == current?.id }.shuffled(random)

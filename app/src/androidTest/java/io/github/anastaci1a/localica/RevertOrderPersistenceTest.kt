@@ -28,7 +28,9 @@ class RevertOrderPersistenceTest {
         try {
             withTimeout(10000) { controller.state.first { !it.loading } }
             val checkpoint = OrderCheckpoint.capture(opening.entries.map { it.id }, opening.order)
+            assertTrue(completed { controller.reverse(opening.id, it) })
             assertTrue(completed { controller.randomize(opening.id, it) })
+            assertTrue(completed { controller.reverse(opening.id, it) })
             assertTrue(completed { controller.append(opening.id, listOf(tracks.first()), it) })
             assertTrue(completed { controller.removeEntries(opening.id, setOf(opening.entries.first().id), it) })
             assertTrue(completed { controller.rename(opening.id, "Renamed", it) })
@@ -60,7 +62,9 @@ class RevertOrderPersistenceTest {
             }
             withTimeout(10000) { controller.state.first { !it.loading } }
             val checkpoint = OrderCheckpoint.capture(opening.entries.map { it.id }, opening.order)
+            assertTrue(completed { controller.reverse(opening.id, it) })
             assertTrue(completed { controller.randomize(opening.id, it) })
+            assertTrue(completed { controller.reverse(opening.id, it) })
             controller.rename(opening.id, "Renamed")
             assertTrue(completed { controller.removeEntries(setOf(opening.entries.first().id), opening.id, it) })
             val current = controller.state.value.library.active!!
