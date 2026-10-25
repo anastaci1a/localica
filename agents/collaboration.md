@@ -25,7 +25,9 @@ Requests and handoffs identify the exact branch/full SHA, scope, evidence, remai
 
 Posting a comment does not prove Dot read it or launch Dot. Do not assume a direct CLI or private-message transport exists.
 
-Sessionsation is the required channel between managed local sessions. This does not establish a Sessionsation identity for Dot.
+Managed local sessions must use Sessionsation **Steer Submit**, never Queue. This applies in both directions between the lead and helpers. For an active receiver, resolve fresh session, generation, runtime and turn identities before using native `mode: steer`.
+
+Submit immediately when the receiver is idle. If immediate delivery is unavailable, retain the checkpoint instead of queuing. Do not replay superseded receipts. Sessionsation does not establish a local identity for Dot.
 
 Continue authorized multi-phase work across progress replies. Finish its scope or report a genuine blocker requiring an owner decision, with evidence and recommendations. This replaces the historical indefinite five-minute polling rule.
 
