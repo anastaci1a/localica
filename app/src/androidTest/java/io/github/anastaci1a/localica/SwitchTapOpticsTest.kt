@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -17,9 +18,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import io.github.anastaci1a.localica.ui.*
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestWatcher
+import org.junit.runner.Description
 
 /** Presented-pixel regression plus retained baseline comparison frames for tap/held optics. */
 class SwitchTapOpticsTest {
@@ -28,6 +32,24 @@ class SwitchTapOpticsTest {
     private lateinit var view: View
     private var pixelDensity = 1f
     private val backings = mutableMapOf<String, FrostedBackdrop>()
+    // Instrumentation opt-in: -e switchTapOpticsReview true.
+    private val exportReviewFrames by lazy {
+        InstrumentationRegistry.getArguments().getString("switchTapOpticsReview") == "true"
+    }
+    // If a later capture fails, this remains the last successful capture, not the failing frame.
+    private var lastFrame: Pair<String, PixelMap>? = null
+    @get:Rule val failureEvidence = object : TestWatcher() {
+        override fun failed(failure: Throwable, description: Description) {
+            // One already-captured frame; no readback, clock advance or pacing delay.
+            lastFrame?.let { (label, pixels) ->
+                runCatching { exportFrame("failure-${description.methodName}-$label", pixels, pace = false) }
+                    .onFailure { failure.addSuppressed(it) }
+            }
+        }
+        override fun finished(description: Description) {
+            lastFrame = null
+        }
+    }
 
     @Test fun recordShortTapAndHeldReleasePatternDuringTravel() {
         var tapped by mutableStateOf(false)
@@ -217,6 +239,7 @@ class SwitchTapOpticsTest {
         val host = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
         val sample = if (tag == "popup-switch") IntOffset(host.width.toInt() / 2, 2) else IntOffset(2, 2)
         val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag(tag), stage, sample) { view }
+        lastFrame = label to pixels
         val rasterReady = backings[tag]?.snapshot != null
         val recorded = backings[tag]?.recorded == true
         val control = compose.onAllNodes(hasTestTag("settings-switch") and hasAnyAncestor(hasTestTag(tag)),
@@ -238,21 +261,7 @@ class SwitchTapOpticsTest {
             if (c.red > .85f && c.green > .85f && c.blue > .85f) white++
         }
         android.util.Log.i("SwitchTapOptics", "$label clock=${compose.mainClock.currentTime} green=$green outsideTrackGreen=$outsideGreen white=$white backingRecorded=$recorded raster=$rasterReady size=${pixels.width}x${pixels.height}")
-        // Small PNGs preserve the actual presented contour and pattern for review.
-        val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
-        try {
-            for (y in 0 until pixels.height) for (x in 0 until pixels.width) bitmap.setPixel(x, y, pixels[x, y].let {
-                android.graphics.Color.argb((it.alpha * 255).toInt(), (it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt())
-            })
-            val bytes = java.io.ByteArrayOutputStream().also { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-            val chunks = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).chunked(2500)
-            android.util.Log.i("SwitchTapPixels", "$label total=${chunks.size} bytes=${bytes.size}")
-            chunks.forEachIndexed { i, chunk ->
-                android.util.Log.i("SwitchTapPixels", "$label part=$i $chunk")
-                // Avoid overflowing legacy logcat while the captured frame/Compose clock stays frozen.
-                android.os.SystemClock.sleep(2)
-            }
-        } finally { bitmap.recycle() }
+        if (exportReviewFrames) exportFrame(label, pixels, pace = true)
         if (label == "cold-unready") {
             assertEquals("Unready switch does not expose missing backing", 0, green)
             assertTrue("Unready switch retains opaque white", white > 10)
@@ -266,5 +275,23 @@ class SwitchTapOpticsTest {
         if (label == "reduced-snap") assertEquals("Reduced motion settles without a travelling optical lens", 0, green)
         if (label.startsWith("held-ready")) assertTrue("Held lens must visibly sample its green backing", green > 10)
         return outsideGreen
+    }
+
+    private fun exportFrame(label: String, pixels: PixelMap, pace: Boolean) {
+        // Small PNGs preserve the actual presented contour and pattern for review.
+        val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
+        try {
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) bitmap.setPixel(x, y, pixels[x, y].let {
+                android.graphics.Color.argb((it.alpha * 255).toInt(), (it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt())
+            })
+            val bytes = java.io.ByteArrayOutputStream().also { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+            val chunks = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).chunked(2500)
+            android.util.Log.i("SwitchTapPixels", "$label total=${chunks.size} bytes=${bytes.size}")
+            chunks.forEachIndexed { i, chunk ->
+                android.util.Log.i("SwitchTapPixels", "$label part=$i $chunk")
+                // Avoid overflowing legacy logcat while the captured frame/Compose clock stays frozen.
+                if (pace) android.os.SystemClock.sleep(2)
+            }
+        } finally { bitmap.recycle() }
     }
 }
