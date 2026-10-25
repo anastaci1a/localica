@@ -110,7 +110,7 @@ class SelectionMotionRenderingTest {
             val base = rememberGraphicsLayer()
             val selected = rememberGraphicsLayer()
             val mask = rememberGraphicsLayer()
-            Row(Modifier.background(Color.Green)) {
+            Row(Modifier.background(Color.Green).testTag("mixed-pair")) {
                 Canvas(Modifier.size(120.dp, 60.dp).testTag("mixed-entries")) {
                     base.record { drawRect(Color.Blue.copy(alpha = .4f)) }
                     selected.record { drawRect(Color.Red.copy(alpha = .7f)) }
@@ -132,14 +132,31 @@ class SelectionMotionRenderingTest {
         } }
         for (p in listOf(.25f, .7f, .3f, 0f, 1f)) {
             compose.runOnIdle { entering = p }
-            val actual = compose.onNodeWithTag("mixed-entries").captureToImage().toPixelMap()
-            val expected = compose.onNodeWithTag("mixed-reference").captureToImage().toPixelMap()
+            val pair = compose.onNodeWithTag("mixed-pair")
+            val left = compose.onNodeWithTag("mixed-entries").fetchSemanticsNode().boundsInRoot
+            val right = compose.onNodeWithTag("mixed-reference").fetchSemanticsNode().boundsInRoot
+            assertEquals("Reference and actual retain equal widths", left.width, right.width, 0f)
+            assertEquals("Reference remains adjacent", left.right, right.left, 0f)
+            assertEquals("Both scenes retain equal heights", left.height, right.height, 0f)
+            val view = (pair.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+            fun phase(name: String) = compose.runOnUiThread {
+                android.util.Log.i("SelectionPairCapture", "phase=$name p=$p " +
+                    "ns=${android.os.SystemClock.elapsedRealtimeNanos()} clock=${compose.mainClock.currentTime} " +
+                    "attached=${view.isAttachedToWindow} shown=${view.isShown} focus=${view.hasWindowFocus()}")
+            }
+            // Compare adjacent scenes from one compositor frame, not two separate redraws.
+            // Keep the native capture route/deadline and every channel assertion unchanged.
+            phase("begin")
+            val pixels = try { pair.captureToImage().toPixelMap() } finally { phase("end") }
+            val width = pixels.width / 2
+            assertEquals("Both equal-width scenes must be captured completely", width * 2, pixels.width)
+            assertEquals("Capture includes each complete scene", left.width, width.toFloat(), 1f)
             for (xFraction in listOf(.2f, .5f, .8f)) {
-                val x = (actual.width * xFraction).toInt(); val y = actual.height / 2
-                assertEquals("Existing/overlap/entering red at $p/$xFraction", expected[x, y].red, actual[x, y].red, 2f / 255)
-                assertEquals("Backdrop through mixed alpha at $p/$xFraction", expected[x, y].green, actual[x, y].green, 2f / 255)
-                assertEquals("Existing/overlap/entering blue at $p/$xFraction", expected[x, y].blue, actual[x, y].blue, 2f / 255)
-                assertEquals("Premultiplied alpha at $p/$xFraction", expected[x, y].alpha, actual[x, y].alpha, 2f / 255)
+                val x = (width * xFraction).toInt(); val y = pixels.height / 2
+                assertEquals("Existing/overlap/entering red at $p/$xFraction", pixels[x + width, y].red, pixels[x, y].red, 2f / 255)
+                assertEquals("Backdrop through mixed alpha at $p/$xFraction", pixels[x + width, y].green, pixels[x, y].green, 2f / 255)
+                assertEquals("Existing/overlap/entering blue at $p/$xFraction", pixels[x + width, y].blue, pixels[x, y].blue, 2f / 255)
+                assertEquals("Premultiplied alpha at $p/$xFraction", pixels[x + width, y].alpha, pixels[x, y].alpha, 2f / 255)
             }
         }
     }
