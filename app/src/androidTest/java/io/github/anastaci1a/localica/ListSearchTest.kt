@@ -18,6 +18,7 @@ class ListSearchTest {
     @get:Rule val compose = createComposeRule()
     @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
     private var lastRoot = ""
+    private var lastMorph = ""
     private fun trace(message: String) {
         android.util.Log.i("ListSearchReopen", "${android.os.SystemClock.uptimeMillis()} $message")
     }
@@ -62,7 +63,11 @@ class ListSearchTest {
             BrowseSchedulerWatchdog.phase("install list search fixture")
             compose.setContent { LocalicaTheme { CompositionLocalProvider(
                 LocalTextEditingObservation provides { trace("text $it") },
-                LocalSearchEditTrace provides { trace("editor $it") }
+                LocalSearchEditTrace provides { trace("editor $it") },
+                LocalSearchMorphObserver provides { sample ->
+                    val value = "opening=${sample.opening} progressStep=${(sample.progress * 10).toInt()} window=${sample.windowFocused} ime=${sample.ime} nativeIme=${sample.nativeIme} source=${sample.imeSource} target=${sample.imeTarget}"
+                    if (lastMorph != value) { lastMorph = value; trace("morph $value") }
+                }
             ) {
                 val root = LocalView.current
                 SideEffect {
