@@ -55,6 +55,9 @@ class PrivateQueueBoundaryTest {
         }
         events.writeText("")
         val captureOutput = FileOutputStream(File(out, "rendered.pcm"))
+        val traceOutput = args.getString("privateOutputTrace") == "true"
+        val acceptedOutput = if (traceOutput) FileOutputStream(File(out, "accepted-output.pcm")) else null
+        event("diagnostic-config", "outputTrace" to traceOutput, "physicalOutputProof" to false)
         var byteCount = 0L
         val capture = object : BaseAudioProcessor() {
             override fun onConfigure(format: AudioFormat): AudioFormat {
@@ -95,7 +98,10 @@ class PrivateQueueBoundaryTest {
             instrumentation.runOnMainSync {
                 val renderers = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): AudioSink {
-                        val sink = DefaultAudioSink.Builder(context).setAudioProcessors(arrayOf(capture)).build()
+                        val builder = DefaultAudioSink.Builder(context).setAudioProcessors(arrayOf(capture))
+                        if (traceOutput) builder.setAudioOutputProvider(PrivateBoundaryOutputProvider(context,
+                            { kind, fields -> event(kind, *fields) }, checkNotNull(acceptedOutput)))
+                        val sink = builder.build()
                         val traced = object : ForwardingAudioSink(sink) {
                             override fun configure(format: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
                                 if (format.customData is MediaEditTrim) rawBindingSeen.set(true)
@@ -192,6 +198,7 @@ class PrivateQueueBoundaryTest {
             runBlocking { job.join() }
             db.close()
             synchronized(captureOutput) { captureOutput.close() }
+            acceptedOutput?.close()
             if (queue) preferences.write(original)
         }
     }
