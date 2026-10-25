@@ -271,6 +271,17 @@ class WorkflowContract(unittest.TestCase):
         self.assertTrue(manifest['validation_errors'])
         self.assertEqual([],apks)
 
+    def test_compatibility_archive_keeps_the_original_report_root(self):
+        import yaml
+        workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        for api in (26,36):
+            steps=workflow['jobs'][f'compatibility_{api}']['steps']
+            upload=next(s for s in steps if s.get('with',{}).get('name')==f'prototype-compatibility-api-{api}')
+            self.assertEqual('${{ runner.temp }}/shuffle-compatibility/reports/',upload['with']['path'])
+            preserve=next(s for s in steps if s.get('name')=='Preserve compatibility runner identity')
+            self.assertEqual('always()',preserve['if'])
+            self.assertIn('reports/prototype-runner-environment.txt',preserve['run'])
+
     def test_opt_in_only_and_five_required_jobs(self):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
