@@ -145,3 +145,13 @@ test('observer startup failure is bounded without an external cancellation', asy
   const status = JSON.parse(await readFile(path.join(f.stateDir, 'monitoring-degraded.json')));
   assert.equal(status.reason, 'observer_startup_timeout');
 });
+
+test('all allowlisted text rejects trailing newlines and other control bytes', () => {
+  for (const key of ['class', 'method', 'display_name', 'sha', 'api', 'lane', 'command_id', 'utc']) {
+    for (const control of ['\n', '\r', '\t', '\0', '\x7f']) {
+      const value = {...event(), [key]: event()[key] + control};
+      const matchingManifest = {...running, [key]: value[key]};
+      assert.throws(() => validateEvent(value, matchingManifest), key);
+    }
+  }
+});
