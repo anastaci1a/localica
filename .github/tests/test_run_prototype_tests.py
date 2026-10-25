@@ -28,13 +28,14 @@ class RunnerContract(unittest.TestCase):
         shutil.copyfile(ROOT/'.github/run-prototype-tests.sh', self.root/'runner.sh')
         (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+CONTRAST+'\n'+AFFECTED+'\n')
         for cls in [REQUIRED,FOCUS,CONTRAST,AFFECTED]:
-            (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).touch()
+            (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text('package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+' { @org.junit.Test fun regression() {} }\n')
         for apk in ['app/build/outputs/apk/debug/app-debug.apk','app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk']:
             (self.root/apk).write_bytes(b'apk')
         if not OBSERVER.is_file():
             self.fail('Integrate the reviewed observer or provide LOCALICA_OBSERVER_TEST_SOURCE for read-only dependency testing')
         (self.root/'.github/test-evidence/observe.py').symlink_to(OBSERVER.resolve())
         (self.root/'.github/test-evidence/supervise.py').symlink_to((ROOT/'.github/test-evidence/supervise.py').resolve())
+        (self.root/'.github/test-evidence/source_methods.py').symlink_to((ROOT/'.github/test-evidence/source_methods.py').resolve())
         self.executable('bin/node', '''#!/usr/bin/env python3
 import json,pathlib,sys,time
 a=sys.argv
@@ -120,6 +121,11 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 ''')
         self.run_case(3)
 
+    def test_omitted_source_method_blocks_green_xml(self):
+        path=self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')
+        path.write_text(path.read_text().rsplit('}',1)[0]+' @org.junit.Test fun omitted() {} }')
+        self.run_case(1)
+
     def test_empty(self): self.run_case(2,AFFECTED_CLASSES='')
     def test_mandatory_alone_is_not_affected_coverage(self): self.run_case(2,AFFECTED_CLASSES=REQUIRED)
     def test_injection(self):
@@ -165,7 +171,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False):
         import yaml, hashlib
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         script=workflow['jobs']['evidence']['steps'][1]['run']
@@ -179,7 +185,23 @@ class WorkflowContract(unittest.TestCase):
             if not missing:
                 for api in (26,36):
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
-                    (focused/'reconciled-tests.json').write_text(json.dumps({'sha':SHA,'api':str(api),'selectors':[REQUIRED,FOCUS,CONTRAST,AFFECTED],'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)}}))
+                    inventory={'selectors':[REQUIRED,FOCUS,CONTRAST,AFFECTED],'runtime_methods':[c+'#regression' for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)]}
+                    inventory_bytes=json.dumps(inventory).encode()
+                    (focused/'expected-methods.json').write_bytes(inventory_bytes)
+                    (focused/'reconciled-tests.json').write_text(json.dumps({'source_inventory_sha256':hashlib.sha256(inventory_bytes).hexdigest(),'required_selectors':[REQUIRED,FOCUS,CONTRAST],'methods':{c+'#regression':'passed' for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)},'sha':SHA,'api':str(api),'selectors':[REQUIRED,FOCUS,CONTRAST,AFFECTED],'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)}}))
+                    if partial_methods:
+                        data=json.loads((focused/'reconciled-tests.json').read_text())
+                        data['methods'].pop(REQUIRED+'#regression')
+                        (focused/'reconciled-tests.json').write_text(json.dumps(data))
+                    if skipped_required_method:
+                        inventory['runtime_methods'].append(REQUIRED+'#skippedRequired')
+                        inventory_bytes=json.dumps(inventory).encode()
+                        (focused/'expected-methods.json').write_bytes(inventory_bytes)
+                        data=json.loads((focused/'reconciled-tests.json').read_text())
+                        data['source_inventory_sha256']=hashlib.sha256(inventory_bytes).hexdigest()
+                        data['methods'][REQUIRED+'#skippedRequired']='skipped'
+                        data['counts'][REQUIRED]['skipped']=1
+                        (focused/'reconciled-tests.json').write_text(json.dumps(data))
                     if contradictory:
                         data=json.loads((focused/'reconciled-tests.json').read_text());data['counts'][REQUIRED]['failed']=1
                         (focused/'reconciled-tests.json').write_text(json.dumps(data))
@@ -226,6 +248,18 @@ class WorkflowContract(unittest.TestCase):
         self.assertNotEqual(0,result.returncode)
         self.assertFalse(manifest['ready_for_prototype_delivery'])
         self.assertTrue(manifest['validation_errors'])
+        self.assertEqual([],apks)
+
+    def test_class_counts_cannot_hide_an_omitted_method(self):
+        result,manifest,apks=self.decision(partial_methods=True)
+        self.assertNotEqual(0,result.returncode)
+        self.assertFalse(manifest['ready_for_prototype_delivery'])
+        self.assertEqual([],apks)
+
+    def test_a_passing_method_cannot_hide_a_skipped_required_regression(self):
+        result,manifest,apks=self.decision(skipped_required_method=True)
+        self.assertNotEqual(0,result.returncode)
+        self.assertFalse(manifest['ready_for_prototype_delivery'])
         self.assertEqual([],apks)
 
     def test_wrong_sha_blocks_delivery(self):
