@@ -213,3 +213,4 @@ io.github.anastaci1a.localica.TrackedDataSourceTest
 io.github.anastaci1a.localica.TracklistPinchIntegrationTest
 io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest
 io.github.anastaci1a.localica.WorkflowPersistenceTest
+io.github.anastaci1a.localica.ToneSnapshotContinuityTest
