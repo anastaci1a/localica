@@ -31,6 +31,16 @@ Submit immediately when the receiver is idle. If immediate delivery is unavailab
 
 Keep messages short, efficient and prose-only. Reference relevant files, modules, commits or evidence locations instead of sending diffs, code dumps, file contents, files or attachments. Split longer messages into paragraphs.
 
+Wrap every local-session message as shown below. Replace the placeholders with the sender's session name, prose and UTC ISO 8601 send timestamp. Use exactly one blank line between header and body, and between body and footer. Keep all body paragraphs inside the wrapper.
+
+```text
+-- INCOMING MSG: <session_name> --
+
+<message body>
+
+-- MSG END (<sent_timestamp>) --
+```
+
 Continue authorized multi-phase work across progress replies. Finish its scope or report a genuine blocker requiring an owner decision, with evidence and recommendations. This replaces the historical indefinite five-minute polling rule.
 
 Explicit pauses remain binding until resumed. Never imply work continues after a process or session ends. A label or comment does not authorize launching another agent.
