@@ -595,6 +595,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             queue.entries.firstOrNull { it.id == visit?.entryId }?.track?.uri
         }
     }
+    fun artworkPreloadUris(): List<String> {
+        val queue = state.value.library.active ?: return emptyList()
+        val tracks = queue.entries.associateBy { it.id }
+        return queue.journey?.artworkWindow().orEmpty().mapNotNull { tracks[it.entryId]?.track?.uri }.distinct()
+    }
     fun next() = submit {
         capture()
         state.value.library.active?.journey?.next?.let { moveTo(it) }

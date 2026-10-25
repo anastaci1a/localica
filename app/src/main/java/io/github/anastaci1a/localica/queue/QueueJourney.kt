@@ -60,6 +60,17 @@ data class QueueJourney(
         return Ordered(order, index, selected, namespace, history.firstOrNull { it.token == orderedAnchorToken }, modes.loop)
     }
 
+    /** Nearest visits first in both directions, using transport's durable shuffle/ordered plan. */
+    fun artworkWindow(radius: Int = 4): List<QueueVisit> {
+        require(radius in 0..4)
+        val visits = window()
+        val center = visits.indexOfFirst { it.token == current?.token }
+        if (center < 0) return emptyList()
+        return (1..radius).flatMap { distance ->
+            listOfNotNull(visits.getOrNull(center + distance), visits.getOrNull(center - distance))
+        }
+    }
+
     /** Bound the player timeline without discarding durable history. */
     fun window(): List<QueueVisit> {
         if (!modes.shuffle && plans.isNotEmpty()) {
