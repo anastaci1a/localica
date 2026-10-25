@@ -29,6 +29,8 @@ Managed local sessions must use Sessionsation **Steer Submit**, never Queue. Thi
 
 Submit immediately when the receiver is idle. If immediate delivery is unavailable, retain the checkpoint instead of queuing. Do not replay superseded receipts. Sessionsation does not establish a local identity for Dot.
 
+Keep messages short, efficient and prose-only. Reference relevant files, modules, commits or evidence locations instead of sending diffs, code dumps, file contents, files or attachments. Split longer messages into paragraphs.
+
 Continue authorized multi-phase work across progress replies. Finish its scope or report a genuine blocker requiring an owner decision, with evidence and recommendations. This replaces the historical indefinite five-minute polling rule.
 
 Explicit pauses remain binding until resumed. Never imply work continues after a process or session ends. A label or comment does not authorize launching another agent.
