@@ -2,28 +2,39 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.navigation.MainTab
 
 @Composable
 internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, anchor: GlassAnchor? = null,
-    glass: Boolean = true, quiet: Boolean = false, iconSize: androidx.compose.ui.unit.Dp = 24.dp, onClick: () -> Unit) {
+    glass: Boolean = true, quiet: Boolean = false, iconSize: androidx.compose.ui.unit.Dp = 24.dp,
+    onLongClickLabel: String? = null, onLongClick: (() -> Unit)? = null, quietInputEnabled: Boolean = true,
+    onClick: () -> Unit) {
     val source = LocalFrostedBackdrop.current
     SideEffect { anchor?.quiet = quiet; anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(iconSize)) } }
     val modifier = Modifier.size(if (glass) CompactControlSize else 48.dp).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)
     if (quiet) {
         val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Quiet action availability")
+        // This anchor can previously have belonged to gallery artwork. The plain
+        // icon returns to a temporary circle, not that artwork's rounded square.
+        SideEffect { anchor?.cornerRadius = null }
         anchor?.captureInk()
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-        Box(modifier.alpha(opacity).ownButtonDrag(enabled).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
-            interactionSource = interaction, indication = null, onClick = controlActivation(enabled, onClick)), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        // Outgoing quiet drawings can remain visible without retaining a hit
+        // target or changing their availability opacity during the exit fade.
+        val input = if (quietInputEnabled) Modifier.ownButtonDrag(enabled).combinedClickable(enabled = enabled,
+            role = androidx.compose.ui.semantics.Role.Button, interactionSource = interaction, indication = null,
+            onLongClickLabel = onLongClickLabel, onLongClick = onLongClick, onClick = controlActivation(enabled, onClick))
+        else Modifier.clearAndSetSemantics { }
+        Box(modifier.alpha(opacity).then(input), contentAlignment = androidx.compose.ui.Alignment.Center) {
             Icon(painterResource(resource), label, Modifier.size(iconSize))
         }
     } else if (glass) LiquidGlassSurface(modifier, pressFeedback = enabled) {

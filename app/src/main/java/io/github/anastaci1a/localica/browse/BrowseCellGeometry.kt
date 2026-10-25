@@ -8,6 +8,8 @@ internal data class BrowseCellGeometry(val columns: Int) {
     val dense = columns >= 3
     val gridInset = if (dense) 12 else 0
     val cardInset = 4
+    fun cardVerticalInset(style: BrowseStyle): Float = cardInset *
+        if (style.presentation == Presentation.List && style.listSize == ListSize.Smallest) .6f else 1f
     val contentInset = if (dense) 0 else 12
 
     fun cellWidth(viewport: Int, density: Float, column: Int = 0): Int {

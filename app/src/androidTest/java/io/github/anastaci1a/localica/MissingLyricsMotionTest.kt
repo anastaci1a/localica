@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -89,12 +90,17 @@ class MissingLyricsMotionTest {
             compose.waitUntil(10000) { compose.onAllNodesWithTag("lyric-lines").fetchSemanticsNodes().isNotEmpty() }
             compose.waitForIdle()
             val panel = compose.onNodeWithTag("lyrics-panel").fetchSemanticsNode().boundsInRoot
-            val lines = compose.onNodeWithTag("lyric-lines").fetchSemanticsNode().boundsInRoot
             compose.mainClock.autoAdvance = false
             compose.runOnIdle { open = false }
             compose.mainClock.advanceTimeBy(128)
-            assertEquals(panel, compose.onNodeWithTag("lyrics-panel").fetchSemanticsNode().boundsInRoot)
-            assertTrue("Actual lyrics still follow the metadata viewport", compose.onNodeWithTag("lyric-lines").fetchSemanticsNode().boundsInRoot.height < lines.height)
+            val movingPanel = compose.onNodeWithTag("lyrics-panel").fetchSemanticsNode().boundsInRoot
+            val movingTitle = compose.onNodeWithTag("player-title").fetchSemanticsNode().boundsInRoot
+            assertEquals("The clip top stays fixed while metadata moves", panel.top, movingPanel.top, 1f)
+            compose.onNodeWithTag("lyrics-panel").assertHeightIsAtLeast(1.dp)
+            assertTrue("The clip bottom, not the content layout, follows metadata", movingPanel.height < panel.height)
+            assertTrue("The viewport remains above the presented title", movingPanel.bottom < movingTitle.top)
+            assertEquals("The actual lyric viewport shares the clip", movingPanel,
+                compose.onNodeWithTag("lyrics-viewport").fetchSemanticsNode().boundsInRoot)
             compose.runOnIdle { open = true; settings = settings.copy(reducedMotion = true); track = missing }
             compose.mainClock.autoAdvance = true
             compose.waitUntil(10000) { compose.onAllNodesWithTag("empty-lyrics", true).fetchSemanticsNodes().size == 1 }

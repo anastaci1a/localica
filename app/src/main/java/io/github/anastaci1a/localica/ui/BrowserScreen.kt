@@ -654,8 +654,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val loadingActivity = remember { LoadingShimmerActivity() }
             val pendingArtwork by remember(loadingActivity) { derivedStateOf(structuralEqualityPolicy()) { loadingActivity.count > 0 } }
             val shimmer = rememberBrowseLoadingShimmer(loadedResult == null || !loadingReveal.complete || pendingArtwork, loadingReducedMotion)
+            val galleryLoadingText = if (displayedStyle.presentation != Presentation.List)
+                rememberGalleryLoadingTextMetrics(displayedStyle, columns) else null
             CompositionLocalProvider(LocalLoadingShimmer provides shimmer, LocalLoadingShimmerActivity provides loadingActivity,
-                LocalReducedMotion provides loadingReducedMotion) {
+                LocalReducedMotion provides loadingReducedMotion, LocalGalleryLoadingTextMetrics provides galleryLoadingText) {
             if (loadedResult == null && !artDetail) BrowseLoadingViewport(displayedStyle, cellGeometry,
                 viewportWidth, constraints.maxHeight, if (showFilters || showSearchPill) pillSlotHeight else 0.dp,
                 popupDismiss == null && displayedStyle.extraInfo != ExtraInfo.None, artistOnlyLoading)
@@ -667,9 +669,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     enabled && !queryPending && route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) { position ->
                     // Dots and rows share selection-on-hold; the panel waits for release.
                     val item = reorder.hit(position)
-                    val bounds = item?.let { reorder.bounds()[it.key] }
-                    item?.row != null && bounds != null &&
-                        (displayedStyle.presentation != Presentation.List || position.x <= bounds.right - with(density) { 48.dp.toPx() })
+                    item?.row != null
                 }
                 .songDrag(reorder, editableOrder && enabled, route.collection, session, reducedMotion,
                     displayedStyle.presentation == Presentation.List, acquisitionReady = !queryPending,
@@ -679,8 +679,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, if (artDetail) collectionSource else surroundingBackdrop)
                     .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
                 .graphicsLayer { alpha = if (artDetail || (skeletonReveal && !queryPending)) 1f else browse.reveal.value }
-                .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier)
-                .pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
+                .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier),
+                contentDrawing = Modifier.pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
                 .nestedScroll(userScrollConnection)
@@ -772,13 +772,22 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             val sweep = if (!artDetail && !route.search) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
                                 .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
                             alpha = sweep * (reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f)
+                            pinchMotion.itemAlpha[item.key] = alpha
                         }) {
                         DisposableEffect(item.key, reorder) { onDispose { reorder.itemCoordinates.remove(item.key) } }
                         val menuAnchor = rememberGlassAnchor()
                         SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
+                        val mutableSong = item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)
+                        val holdLabel = if (mutableSong) "Select song" else if (item.row != null) "Song actions" else "Collection actions"
+                        val onHold = {
+                            if (mutableSong) session.select(route.collection, listOf(requireNotNull(item.row)))
+                            else contextMenu = item.key
+                        }
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
-                                if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor, quiet = true) { contextMenu = item.key }
+                                if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor,
+                                    quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
+                                    onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { contextMenu = item.key }
                                 CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
                                     onInformation = { info = it }, containingSource = route.collection, selection = session,
                                     onRemove = if (item.row == null) null else when (route.collection?.kind) {
@@ -791,18 +800,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
                         Column(Modifier.then(if (pinchMotion.visualSource == null) Modifier.animateBounds(this@LookaheadScope,
-                            modifier = Modifier.fillMaxWidth().padding(cellGeometry.cardInset.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder || loadingCell != null) 0 else 350) })
-                            else Modifier.fillMaxWidth().padding(cellGeometry.cardInset.dp).graphicsLayer {
-                                val placed = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.key }
-                                if (placed != null) {
-                                    val position = placed.offset
-                                    val old = pinchMotion.sourceBounds(item.key, itemIndex)
-                                    val alignment = if (pinchMotion.rightToLeft) old.width - placed.size.width else 0f
-                                    translationX = (old.left - position.x - cellGeometry.gridInset.dp.roundToPx() + alignment) * (1f - pinchMotion.progress.value)
-                                    translationY = (old.top - position.y) * (1f - pinchMotion.progress.value)
-                                }
-                            }).onGloballyPositioned {
+                            else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp)
+                                .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry)).onGloballyPositioned {
                                 reorder.itemCoordinates[item.key] = it
                                 val origin = it.positionInRoot() - reorder.viewportOrigin
                                 loadingCell?.place(origin.x / density.density,
@@ -823,13 +824,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 if (item.row == null) { onSearchCommit(); onOpen(item) }
                                 else if (session.active) session.toggle(route.collection, item.row)
                                 else { onSearchCommit(); onPlay(result.rows, result.rows.indexOfFirst { it.id == item.row.id }, result.scope) }
-                            }, onLongClickLabel = if (item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) "Select song" else if (item.row != null) "Song actions" else "Collection actions",
-                            onLongClick = {
-                                // Mutable songs reserve holds for selection; dots retain context actions.
-                                if (item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) {
-                                    session.select(route.collection, listOf(item.row))
-                                } else contextMenu = item.key
-                            }
+                            }, onLongClickLabel = holdLabel, onLongClick = onHold
                         )) {
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
                                 showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,

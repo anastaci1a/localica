@@ -48,9 +48,9 @@ class PinchReleaseHandoffTest {
         val original = prefs.read(route)
         val overridden = prefs.overridden(route)
         val initial = if (gallery) BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5, listSize = ListSize.Large)
-            else BrowseStyle(listSize = if (outward) ListSize.Compact else ListSize.Normal)
+            else BrowseStyle(listSize = if (outward) ListSize.Tracklist else ListSize.Normal)
         val target = if (gallery) { if (outward) "Gallery, 4 columns" else "List, Large" }
-            else if (outward) "List, Normal" else "List, Compact"
+            else if (outward) "List, Normal" else "List, Tracklist"
         val tracks = (0..159).map { index -> Track("release:$index", "Song ${index.toString().padStart(3, '0')}",
             fileName = "$index.mp3", relativePath = "$index.mp3") }
         // Keep query identity stable when the presentation marker invalidates drawing.
@@ -68,7 +68,7 @@ class PinchReleaseHandoffTest {
             compose.setContent { LocalicaTheme {
                 view = LocalView.current
                 // The current-row highlight is a real rendered landmark in both
-                // Compact (which has no cover) and Normal list presentations.
+                // Tracklist (which has no cover) and Normal list presentations.
                 MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
                     Box(Modifier.fillMaxSize().testTag("release-scene")) {
                         BrowserScreen(library, playlists, route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
@@ -82,6 +82,12 @@ class PinchReleaseHandoffTest {
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(70)
             val anchor = compose.onNodeWithTag("media-release:73")
+            // Explicit scrolling detaches playback following and exposes the
+            // bottom-center Current song button. Establish the same unobstructed
+            // physical swipe before pinching, then restore the source viewport.
+            assertTouchScrolls(list, "The source list must accept an ordinary touch scroll")
+            list.performScrollToIndex(70)
+            compose.waitForIdle()
             val viewport = list.fetchSemanticsNode().boundsInRoot
             val originalBounds = anchor.fetchSemanticsNode().boundsInRoot
             val expectedFinalCenter = originalBounds.center.y
@@ -190,7 +196,7 @@ class PinchReleaseHandoffTest {
                 assertTrue("Artwork edge $edge cannot jump at handoff: $values",
                     values.zipWithNext().all { (a, b) -> kotlin.math.abs(b - a) <= range * .25f + 3f })
             }
-            assertEquals(if (cancelled || gallery) initial.listSize else if (outward) ListSize.Normal else ListSize.Compact,
+            assertEquals(if (cancelled || gallery) initial.listSize else if (outward) ListSize.Normal else ListSize.Tracklist,
                 prefs.read(route).listSize)
             if (gallery && !cancelled) {
                 assertEquals(if (outward) Presentation.Standard else Presentation.List, prefs.read(route).presentation)
@@ -198,11 +204,7 @@ class PinchReleaseHandoffTest {
             }
             // A completed/cancelled transaction must release its scroll mutation.
             // Ordinary touch scrolling must work immediately after the handoff.
-            list.performTouchInput { swipeUp(durationMillis = 200) }
-            compose.mainClock.advanceTimeBy(500)
-            assertTrue("Release must not leave the list scroll-locked",
-                compose.onAllNodesWithTag("media-release:73").fetchSemanticsNodes().isEmpty() ||
-                    anchor.fetchSemanticsNode().boundsInRoot.center.y < expectedFinalCenter - 8f)
+            assertTouchScrolls(list, "Release must not leave the list scroll-locked", expectedFinalCenter)
         } finally {
             try {
                 if (pointersDown) compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
@@ -211,6 +213,43 @@ class PinchReleaseHandoffTest {
                 prefs.write(route, original, overridden)
             }
         }
+    }
+
+    private fun assertTouchScrolls(list: SemanticsNodeInteraction, message: String, expectedCenter: Float? = null) {
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        val before = compose.onNodeWithTag("media-release:73").fetchSemanticsNode().boundsInRoot.center.y
+        val returnBounds = compose.onNodeWithContentDescription("Current song")
+            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        // swipeUp() starts at bottom-center, which belongs to the sibling return
+        // button, not the grid. Do not confuse that correctly owned button drag
+        // with a leaked pinch scroll mutation. Keep this hit-path precondition so
+        // future control placement changes cannot silently invalidate the probe.
+        assertTrue("The default bottom-center swipe would hit Current song: $returnBounds in $viewport",
+            returnBounds.contains(Offset(viewport.center.x, viewport.bottom - 1f)))
+        val start = Offset(viewport.width * .25f, viewport.height * .7f)
+        val end = Offset(start.x, viewport.height * .3f)
+        for (point in listOf(start, end)) {
+            val rootPoint = point + viewport.topLeft
+            assertTrue("Scroll probe stays within the list", viewport.contains(rootPoint))
+            assertFalse("Scroll probe must not start on the floating return control", returnBounds.contains(rootPoint))
+        }
+        // Record the real layout hit path without moving the probe away from a
+        // regression. Zero-width hidden menu slots can still own touch targets.
+        val rootStart = start + viewport.topLeft
+        val nearbyMenuSlots = compose.onAllNodes(SemanticsMatcher("release menu slot") {
+            it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-menu-release:") == true
+        }, useUnmergedTree = true).fetchSemanticsNodes()
+            .sortedBy { (it.positionInRoot - rootStart).getDistance() }.take(3)
+            .map { "${it.config.getOrNull(SemanticsProperties.TestTag)}:${it.positionInRoot}/${it.size}" }
+        val rangeBefore = list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)?.value?.invoke()
+        list.performTouchInput { swipe(start, end, durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(500)
+        val remaining = compose.onAllNodesWithTag("media-release:73").fetchSemanticsNodes()
+        val after = if (remaining.isEmpty()) null else remaining.single().boundsInRoot.center.y
+        val rangeAfter = list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)?.value?.invoke()
+        android.util.Log.i("PinchReleaseHandoff", "Touch scroll: before=$before after=$after range=$rangeBefore->$rangeAfter start=$rootStart slots=$nearbyMenuSlots")
+        assertTrue("$message: before=$before after=$after start=$start return=$returnBounds range=$rangeBefore->$rangeAfter slots=$nearbyMenuSlots",
+            after == null || after < (expectedCenter ?: before) - 8f)
     }
 
     private fun highlightCenter(pixels: PixelMap, expected: Float, radius: Float, fullWidth: Boolean = false): Float {

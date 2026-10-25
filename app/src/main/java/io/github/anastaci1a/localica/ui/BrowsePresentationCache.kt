@@ -63,6 +63,13 @@ internal class BrowsePresentationCache {
 
 private fun BrowseStyle.sameQuery(other: BrowseStyle) = sort == other.sort && ascending == other.ascending && songGrouping == other.songGrouping
 
+/** A cached layout-only destination must be visible in the same composition that
+ * gives pinch ownership to its geometry. Query/filter/source changes keep arrival gating. */
+internal fun browseLayoutPresentation(current: PresentedBrowse?, source: BrowseSourceRevision,
+    route: BrowseRoute, style: BrowseStyle, sorts: BrowseSortSnapshot): PresentedBrowse? =
+    if (current != null && current.source == source && current.route == route &&
+        current.style.sameQuery(style) && current.sorts == sorts) current.copy(style = style) else current
+
 internal val LocalBrowsePresentationCache = compositionLocalOf<BrowsePresentationCache?> { null }
 internal val LocalBrowseSortSnapshot = compositionLocalOf<BrowseSortSnapshot?> { null }
 
@@ -164,6 +171,7 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
                 reveal.animateTo(1f, androidx.compose.animation.core.tween(180))
         }
     }
-    return BrowsePresentationState(presentation.takeIf { sourcesReady }, cachedPresentation != null, reveal,
-        !sourcesReady || presentation?.source != source || presentation?.route != route || presentation?.style != style || presentation?.sorts != sorts)
+    val displayed = browseLayoutPresentation(presentation, source, route, style, sorts)
+    return BrowsePresentationState(displayed.takeIf { sourcesReady }, cachedPresentation != null, reveal,
+        !sourcesReady || displayed?.source != source || displayed?.route != route || displayed?.style != style || displayed?.sorts != sorts)
 }

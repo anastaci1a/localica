@@ -58,9 +58,19 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
         if (count == 0L) return NeutralPalette.middle
         return Color((red / count).toInt(), (green / count).toInt(), (blue / count).toInt())
     }
-    val wash = ArtworkWash.create(sample)
+    // Color statistics may stay tiny; the visible feather continuation must not.
+    val wash = ArtworkWash.create(bitmap)
+    // The transition's deliberately soft endpoint needs no extra detail. Preserve
+    // its old filter resolution/cost rather than scaling all preparation with wash.
+    val softSource = android.graphics.Bitmap.createScaledBitmap(wash, ArtworkWash.BLUR_WIDTH,
+        ArtworkWash.BLUR_WIDTH * 5 / 2, true)
+    val soft = try {
+        blurGlassSnapshot(softSource.asImageBitmap(), ArtworkWash.BLUR_WIDTH * .12f).asAndroidBitmap()
+    } finally {
+        if (softSource !== wash) softSource.recycle()
+    }
     PlayerPalette(band(0f, .3f), band(.3f, .7f), band(.7f, 1f), bitmap.width.toFloat() / bitmap.height,
-        wash, blurGlassSnapshot(wash.asImageBitmap(), ArtworkWash.WIDTH * .12f).asAndroidBitmap(), ArtworkWash.collectionShade(wash))
+        wash, soft, ArtworkWash.collectionShade(wash))
 }
 
 /** Low-frequency artwork colors and fixed fine grain give a matte surface without a blur dependency. */

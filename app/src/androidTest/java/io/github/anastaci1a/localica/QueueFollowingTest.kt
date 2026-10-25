@@ -500,6 +500,7 @@ class QueueFollowingTest {
             val input = requireNotNull(compose.activity.getSystemService(InputMethodManager::class.java))
             compose.runOnUiThread { assertSame("Exercise the direct activity host", compose.activity.window.decorView, view.rootView) }
             var nextShowRequest = 0L
+            var lastReadiness: String? = null
             compose.waitUntil(5000) {
                 val editorFocused = editor.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Focused) == true
                 compose.runOnUiThread {
@@ -507,6 +508,13 @@ class QueueFollowingTest {
                     val shown = editorFocused && view.isAttachedToWindow && view.hasWindowFocus() && input.isActive(view) &&
                         native?.isVisible(WindowInsetsCompat.Type.ime()) == true &&
                         native.getInsets(WindowInsetsCompat.Type.ime()).bottom > 0
+                    val readiness = "editorFocus=$editorFocused attached=${view.isAttachedToWindow} windowFocus=${view.hasWindowFocus()} " +
+                        "active=${input.isActive(view)} imeVisible=${native?.isVisible(WindowInsetsCompat.Type.ime())} " +
+                        "imeBottom=${native?.getInsets(WindowInsetsCompat.Type.ime())?.bottom} view=${view.javaClass.name}"
+                    if (readiness != lastReadiness) {
+                        android.util.Log.i("QueueSearchReadiness", "${SystemClock.uptimeMillis()} $readiness")
+                        lastReadiness = readiness
+                    }
                     if (!shown && editorFocused && view.hasWindowFocus() && SystemClock.uptimeMillis() >= nextShowRequest) {
                         // Retry only the real editor if its earlier request preceded
                         // the keyboard policy notification; never synthesize insets.

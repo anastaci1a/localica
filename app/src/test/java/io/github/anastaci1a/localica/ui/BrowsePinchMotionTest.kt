@@ -1,9 +1,13 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.browse.ListSize
+import io.github.anastaci1a.localica.browse.BrowseCellGeometry
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
@@ -11,6 +15,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BrowsePinchMotionTest {
+    @Test fun smallestPaddingKeepsLiveAndRetainedInnerOriginsContinuousInBothDirections() {
+        for ((sourceSize, targetSize) in listOf(ListSize.Small to ListSize.Smallest, ListSize.Smallest to ListSize.Small)) {
+            for (density in listOf(1f, 1.75f, 2.75f)) {
+                val geometry = BrowseCellGeometry(1)
+                val sourceInset = (geometry.cardVerticalInset(BrowseStyle(listSize = sourceSize)) * density).roundToInt()
+                val targetInset = (geometry.cardVerticalInset(BrowseStyle(listSize = targetSize)) * density).roundToInt()
+                val sourceTop = 20f; val targetTop = 70f
+                for (p in listOf(0f, .1f, .5f, 1f, .6f, .2f, 0f)) {
+                    val actual = targetTop + targetInset + pinchContentTranslation(sourceTop, targetTop, sourceInset, targetInset, p)
+                    val expected = (sourceTop + sourceInset) * (1f - p) + (targetTop + targetInset) * p
+                    assertEquals("$sourceSize to $targetSize at $density/$p", expected, actual, .0001f)
+                }
+                assertEquals(0f, pinchContentTranslation(sourceTop, targetTop, sourceInset, targetInset, 1f), 0f)
+            }
+        }
+    }
+
     @Test fun sourceLayerTreeDoesNotChangeUntilReadbackFinishes() {
         val original = BrowseStyle(listSize = ListSize.Large)
         val motion = BrowsePinchMotion().apply {
@@ -26,6 +47,109 @@ class BrowsePinchMotionTest {
         assertEquals("Only the finished snapshot permits the live tree to reflow", original, motion.visualSource)
         motion.clearTransaction()
         assertNull(motion.visualSource)
+    }
+
+    @Test fun layerPlacementRetiresAtIdentityWithoutReusingClearedSourceBounds() = runBlocking {
+        val source = BrowseStyle(listSize = ListSize.Smallest)
+        val target = BrowseStyle(listSize = ListSize.Small)
+        val motion = BrowsePinchMotion().apply {
+            this.source = source; this.target = target
+            pixelDensity = 2f
+            bounds = mapOf("song" to Rect(24f, 60f, 224f, 140f))
+        }
+        val position = IntOffset(8, 100)
+        val geometry = BrowseCellGeometry(1)
+        // This callback can outlive the composition that chose the pinch modifier.
+        val placed = { motion.contentTranslation("song", 0, position, 300, target, geometry, 2f) }
+        for (p in listOf(0f, .3f, .8f, 1f, .5f, 0f)) {
+            motion.progress.snapTo(p)
+            assertEquals(16f * (1f - p), placed().x, .001f)
+            assertEquals(-43f * (1f - p), placed().y, .001f)
+        }
+        assertEquals("Insets use the live layer density, even if capture used another density",
+            Offset(16f, -45f), motion.contentTranslation("song", 0, position, 300, target, geometry, 3f))
+        // Rollback retires at p=0, not only at the committed target's p=1.
+        motion.clearTransaction()
+        assertEquals(Offset.Zero, placed())
+        assertNull(motion.source)
+        assertTrue(motion.bounds.isEmpty())
+
+        motion.capturing = true
+        motion.source = target
+        motion.target = BrowseStyle(listSize = ListSize.Compact)
+        motion.bounds = mapOf("song" to Rect(48f, 180f, 248f, 260f))
+        assertEquals("An old attached layer cannot move during the new capture", Offset.Zero, placed())
+        motion.capturing = false
+        assertEquals(Offset(40f, 80f), placed())
+        motion.dispose()
+        assertEquals(Offset.Zero, placed())
+    }
+
+    @Test fun liveLayerPlacementKeepsDenseGridInsetAndRtlAlignmentThroughReversal() = runBlocking {
+        val style = BrowseStyle(presentation = io.github.anastaci1a.localica.browse.Presentation.Standard,
+            itemsPerRow = 5, listSize = ListSize.Large)
+        val geometry = BrowseCellGeometry(3)
+        for (rtl in listOf(false, true)) {
+            val motion = BrowsePinchMotion().apply {
+                source = style; target = style.copy(itemsPerRow = 3)
+                sourceColumns = 5; targetColumns = 3; pixelDensity = 1.75f
+                rightToLeft = rtl
+                bounds = mapOf("song" to Rect(120f, 80f, 190f, 170f))
+            }
+            val initialX = 120f - 30f - 21f + if (rtl) 70f - 110f else 0f
+            for (p in listOf(0f, .2f, .75f, 1f, .75f, .2f, 0f)) {
+                motion.progress.snapTo(p)
+                val translation = motion.contentTranslation("song", 0, IntOffset(30, 20), 110,
+                    requireNotNull(motion.target), geometry, 1.75f)
+                assertEquals(initialX * (1f - p), translation.x, .001f)
+                assertEquals(60f * (1f - p), translation.y, .001f)
+            }
+        }
+    }
+
+    @Test fun bitmapLeaseEndsExactlyOnceOnHandoffFailureOrDisposal() {
+        for (finish in listOf<(BrowsePinchMotion) -> Unit>({ it.clearTransaction() }, { it.failCapture() }, { it.dispose() })) {
+            var released = 0
+            val motion = BrowsePinchMotion().apply {
+                source = BrowseStyle(); held = true
+                releaseArtwork = { released++ }
+            }
+            finish(motion)
+            motion.clearTransaction()
+            assertEquals(1, released)
+            assertNull(motion.releaseArtwork)
+        }
+    }
+
+    @Test fun modalRollbackRetiresGenerationButKeepsArtworkThroughTwoFrames() = runBlocking {
+        val clock = androidx.compose.runtime.BroadcastFrameClock()
+        val scope = kotlinx.coroutines.CoroutineScope(coroutineContext + clock)
+        var released = 0
+        val motion = BrowsePinchMotion().apply {
+            source = BrowseStyle(); releaseArtwork = { released++ }
+        }
+        val generation = motion.transaction
+        motion.releaseArtworkAfterHandoff(scope)
+        motion.clearTransaction()
+        assertFalse(motion.owns(generation))
+        assertEquals(0, released)
+        clock.sendFrame(1L); kotlinx.coroutines.yield()
+        assertEquals("Rollback remount still needs the source bitmap on frame one", 0, released)
+        clock.sendFrame(2L); kotlinx.coroutines.yield()
+        assertEquals(1, released)
+        motion.clearTransaction()
+        assertEquals(1, released)
+    }
+
+    @Test fun cancelledRollbackScopeStillReleasesTheDetachedLease() = runBlocking {
+        val owner = Job()
+        val clock = androidx.compose.runtime.BroadcastFrameClock()
+        val scope = kotlinx.coroutines.CoroutineScope(owner + clock)
+        var released = 0
+        val motion = BrowsePinchMotion().apply { releaseArtwork = { released++ } }
+        motion.releaseArtworkAfterHandoff(scope)
+        owner.cancel(); owner.join()
+        assertEquals(1, released)
     }
 
     @Test fun handoffClearsBothDestinationsAndAnchorState() {

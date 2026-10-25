@@ -32,19 +32,21 @@ internal data class BrowsePinchEndpoint(
     val information: TextLayoutResult?, val infoX: Int, val infoY: Int,
     val menuWidth: Int, val menuHeight: Int, val menuX: Int, val menuY: Int,
     val height: Int, val artCorner: Float,
+    val number: TextLayoutResult? = null, val artwork: Boolean = true,
 )
 
-/** Measure the target from its actual row constraints, never reconstructed dp padding. */
+/** One endpoint measurer serves live cells and source cells virtualized by reflow. */
 @Composable
-internal fun rememberBrowsePinchMeasure(item: BrowserItem, source: BrowseStyle, target: BrowseStyle,
-    motion: BrowsePinchMotion, geometry: BrowseCellGeometry, index: Int, trackNumber: String?,
-    showInformation: Boolean, inherited: Map<MediaKind, BrowseStyle>): (Int) -> Pair<BrowsePinchEndpoint, BrowsePinchEndpoint> {
+internal fun rememberBrowseItemMeasure(item: BrowserItem, trackNumber: String?,
+    showInformation: Boolean, inherited: Map<MediaKind, BrowseStyle>, index: Int = 0): (BrowseStyle, Int, Int) -> BrowsePinchEndpoint {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val titleStyle = MaterialTheme.typography.titleMedium
     val infoStyle = MaterialTheme.typography.bodySmall
+    val numberStyle = MaterialTheme.typography.bodyMedium
     fun endpoint(value: BrowseStyle, columns: Int, width: Int): BrowsePinchEndpoint {
-        val numbered = trackNumber != null && value.presentation == Presentation.List && value.listSize != ListSize.Large
+        val label = value.trackNumberLabel(trackNumber, index)
+        val numbered = label != null
         val metrics = BrowseItemMetrics(value, columns, width, density.density, numbered)
         val info = if (showInformation) item.information(value, inherited)?.let {
             measurer.measure(AnnotatedString(it), infoStyle, overflow = TextOverflow.Ellipsis,
@@ -52,26 +54,37 @@ internal fun rememberBrowsePinchMeasure(item: BrowserItem, source: BrowseStyle, 
         } else null
         val title = measurer.measure(AnnotatedString(item.title), titleStyle.copy(
             fontSize = metrics.titleSize.sp, lineHeight = metrics.titleLine.sp,
-            fontWeight = if (trackNumber != null) FontWeight.Normal else titleStyle.fontWeight),
+            fontWeight = if (numbered) FontWeight.Normal else titleStyle.fontWeight),
             overflow = TextOverflow.Ellipsis, maxLines = metrics.lines,
             constraints = Constraints.fixedWidth(metrics.titleWidth(info?.size?.width ?: 0)))
+        val number = if (numbered) measurer.measure(AnnotatedString(requireNotNull(label)), numberStyle,
+            maxLines = 1, constraints = Constraints(maxWidth = metrics.art, maxHeight = metrics.art)) else null
         val placement = metrics.place(title.size.height, info?.size?.width ?: 0, info?.size?.height ?: 0)
         return with(placement) {
             BrowsePinchEndpoint(metrics.art, artX, artY, title, titleX, titleY, info, infoX, infoY,
-                metrics.menu, menuHeight, menuX, menuY, height, metrics.artCorner)
+                metrics.menu, menuHeight, menuX, menuY, height, metrics.artCorner, number, !numbered && metrics.art > 0)
         }
     }
-    val sourceWidth = motion.sourceContentWidth(item.key, index)
-    return remember(item, source, target, motion.sourceColumns, geometry.columns, sourceWidth,
-        density, titleStyle, infoStyle, trackNumber, showInformation, inherited, measurer) {
-        val from = endpoint(source, motion.sourceColumns, sourceWidth)
+    return remember(item, density, titleStyle, infoStyle, numberStyle, trackNumber, index, showInformation, inherited, measurer) {
+        { style, columns, width -> endpoint(style, columns, width) }
+    }
+}
+
+/** Measure the target from its actual row constraints, never reconstructed dp padding. */
+@Composable
+internal fun rememberBrowsePinchMeasure(measure: (BrowseStyle, Int, Int) -> BrowsePinchEndpoint,
+    key: String, source: BrowseStyle, target: BrowseStyle, motion: BrowsePinchMotion,
+    geometry: BrowseCellGeometry, index: Int): (Int) -> Pair<BrowsePinchEndpoint, BrowsePinchEndpoint> {
+    val sourceWidth = motion.sourceContentWidth(key, index)
+    return remember(measure, source, target, motion.sourceColumns, geometry.columns, sourceWidth) {
+        val from = measure(source, motion.sourceColumns, sourceWidth)
         var measuredWidth = -1
         var to: BrowsePinchEndpoint? = null
-        val measure: (Int) -> Pair<BrowsePinchEndpoint, BrowsePinchEndpoint> = { width ->
-            if (width != measuredWidth) { to = endpoint(target, geometry.columns, width); measuredWidth = width }
+        val endpoints: (Int) -> Pair<BrowsePinchEndpoint, BrowsePinchEndpoint> = { width ->
+            if (width != measuredWidth) { to = measure(target, geometry.columns, width); measuredWidth = width }
             from to requireNotNull(to)
         }
-        measure
+        endpoints
     }
 }
 
@@ -95,22 +108,29 @@ internal fun BrowsePinchText(paragraph: BrowsePinchParagraph, label: String?, pr
         }
     }) {
         val (source, target) = paragraph.layouts ?: return@Canvas
-        val p = progress.coerceIn(0f, 1f)
-        val alpha = p * p * (3f - 2f * p)
-        val sourceFont = source?.layoutInput?.style?.fontSize?.value ?: target?.layoutInput?.style?.fontSize?.value ?: 1f
-        val targetFont = target?.layoutInput?.style?.fontSize?.value ?: sourceFont
-        val font = sourceFont + (targetFont - sourceFont) * p
-        val baseline = (source?.firstBaseline ?: 0f) * (1f - p) + (target?.firstBaseline ?: 0f) * p
-        fun paint(layout: TextLayoutResult?, opacity: Float, factor: Float) {
-            if (layout == null || opacity <= 0f) return
-            val x = if (layoutDirection == LayoutDirection.Rtl) size.width - layout.size.width * factor else 0f
-            val ink = if (color != Color.Unspecified) color else
-                layout.layoutInput.style.color.takeUnless { it == Color.Unspecified } ?: foreground
-            translate(x, baseline - layout.firstBaseline * factor) {
-                scale(factor, factor, Offset.Zero) { drawText(layout, color = ink, alpha = opacity) }
-            }
-        }
-        paint(source, 1f - alpha, font / sourceFont)
-        paint(target, alpha, font / targetFont)
+        drawBrowsePinchParagraph(source, target, progress, size.width, color, foreground)
     }
+}
+
+/** The retained text pass uses the same endpoint glyphs and interpolation as live rows. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBrowsePinchParagraph(
+    source: TextLayoutResult?, target: TextLayoutResult?, progress: Float, width: Float,
+    color: Color, foreground: Color, rowAlpha: Float = 1f) {
+    val p = progress.coerceIn(0f, 1f)
+    val alpha = p * p * (3f - 2f * p)
+    val sourceFont = source?.layoutInput?.style?.fontSize?.value ?: target?.layoutInput?.style?.fontSize?.value ?: 1f
+    val targetFont = target?.layoutInput?.style?.fontSize?.value ?: sourceFont
+    val font = sourceFont + (targetFont - sourceFont) * p
+    val baseline = (source?.firstBaseline ?: 0f) * (1f - p) + (target?.firstBaseline ?: 0f) * p
+    fun paint(layout: TextLayoutResult?, opacity: Float, factor: Float) {
+        if (layout == null || opacity <= 0f) return
+        val x = if (layoutDirection == LayoutDirection.Rtl) width - layout.size.width * factor else 0f
+        val ink = if (color != Color.Unspecified) color else
+            layout.layoutInput.style.color.takeUnless { it == Color.Unspecified } ?: foreground
+        translate(x, baseline - layout.firstBaseline * factor) {
+            scale(factor, factor, Offset.Zero) { drawText(layout, color = ink, alpha = opacity * rowAlpha) }
+        }
+    }
+    paint(source, if (target == null) browseViewVisibility(true, false, p) else 1f - alpha, font / sourceFont)
+    paint(target, if (source == null) browseViewVisibility(false, true, p) else alpha, font / targetFont)
 }

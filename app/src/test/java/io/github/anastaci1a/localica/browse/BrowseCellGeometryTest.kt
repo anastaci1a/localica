@@ -40,4 +40,18 @@ class BrowseCellGeometryTest {
             }
         }
     }
+    @Test fun smallestReducesOnlyBetweenRowPaddingToSixtyPercent() {
+        val geometry = BrowseCellGeometry(1)
+        val smallest = BrowseStyle(listSize = ListSize.Smallest)
+        assertEquals(2.4f, geometry.cardVerticalInset(smallest), .00001f)
+        assertEquals(4, geometry.cardInset)
+        for (size in ListSize.entries.filterNot { it == ListSize.Smallest })
+            assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(listSize = size)), 0f)
+        assertEquals(4f, geometry.cardVerticalInset(smallest.copy(presentation = Presentation.Standard)), 0f)
+        for (density in listOf(1f, 1.5f, 2.625f, 3f)) {
+            val smallestGap = (geometry.cardVerticalInset(smallest) * density).roundToInt() * 2
+            assertEquals(2 * geometry.cardInset * .6f * density, smallestGap.toFloat(), 1f)
+        }
+    }
+
 }
