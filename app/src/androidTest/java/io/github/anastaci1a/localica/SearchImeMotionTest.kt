@@ -76,7 +76,9 @@ class SearchImeMotionTest {
         compose.setContent { LocalicaTheme {
             val speed = LocalMotionSpeed.current
             SideEffect { motionSpeed = speed }
-            CompositionLocalProvider(LocalReducedMotion provides reduced,
+            CompositionLocalProvider(LocalTextEditingObservation provides { event ->
+                motionTimeline += "${SystemClock.uptimeMillis()} textEditing $event"
+            }, LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides {
                     samples += it
                     motionTimeline += "${SystemClock.uptimeMillis()} $it"
