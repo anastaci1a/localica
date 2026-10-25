@@ -20,10 +20,20 @@ class LyricsHeaderActionsTest {
     @get:Rule val compose = createComposeRule()
 
     private fun advanceWithNativeFrames(durationMillis: Long) {
+        if (durationMillis <= 0) return
         val start = compose.mainClock.currentTime
-        while (compose.mainClock.currentTime - start < durationMillis) {
-            compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeByFrame()
+        val frameMillis = compose.mainClock.currentTime - start
+        compose.waitForIdle()
+        // Only these unobserved endpoint interiors are batched. Measure one clock
+        // frame, then spend the same ceil(duration/frame) budget without early exit.
+        // Four-frame batches still yield to native layout/draw/window work.
+        var remainingFrames = (durationMillis - 1) / frameMillis
+        while (remainingFrames > 0) {
+            val batchFrames = minOf(4L, remainingFrames)
+            compose.mainClock.advanceTimeBy(batchFrames * frameMillis)
             compose.waitForIdle()
+            remainingFrames -= batchFrames
         }
     }
 
