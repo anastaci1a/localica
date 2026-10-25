@@ -3,19 +3,20 @@
 set -euo pipefail
 classes=${AFFECTED_CLASSES:-}
 required=io.github.anastaci1a.localica.SearchImeMotionTest
+focus_regression=io.github.anastaci1a.localica.ListSearchTest
 [[ -n "$classes" && ${#classes} -le 4096 ]] || { echo 'Supply nonempty affected behavior classes (maximum 4096 characters)' >&2; exit 2; }
 pattern='^io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(,io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*)*$'
 [[ "$classes" =~ $pattern ]] || { echo 'Invalid affected class selector' >&2; exit 2; }
 IFS=, read -r -a selected <<< "$classes"
-[[ ${#selected[@]} -le 19 ]] || { echo 'At most 19 affected classes plus the required regression class' >&2; exit 2; }
+[[ ${#selected[@]} -le 18 ]] || { echo 'At most 18 affected classes plus the two required regression classes' >&2; exit 2; }
 [[ -f .github/prototype-risk-classes.txt ]] || { echo 'Missing reviewed class inventory' >&2; exit 2; }
 declare -A seen=()
 affected=0
-for name in "${selected[@]}" "$required"; do
+for name in "${selected[@]}" "$required" "$focus_regression"; do
   grep -Fxq "$name" .github/prototype-risk-classes.txt || { echo "Class is not in the reviewed inventory: $name" >&2; exit 2; }
   source_path="app/src/androidTest/java/${name//.//}"
   [[ -f "$source_path.kt" || -f "$source_path.java" ]] || { echo "Missing instrumentation source: $name" >&2; exit 2; }
-  [[ "$name" == "$required" ]] || affected=1
+  [[ "$name" == "$required" || "$name" == "$focus_regression" ]] || affected=1
   seen["$name"]=1
 done
 (( affected )) || { echo 'Name affected behavior coverage in addition to the mandatory IME regression' >&2; exit 2; }
@@ -47,7 +48,7 @@ stop_child() {
 trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
 set +e
-python3 .github/test-evidence/observe.py --output prototype-evidence/observed --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$selector" &
+python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$selector" &
 child=$!
 wait "$child"
 result=$?
@@ -56,10 +57,10 @@ set -e
 python3 - "$selector" <<'PYXML'
 import json, pathlib, sys, xml.etree.ElementTree as ET
 root = pathlib.Path('prototype-evidence')
-observed = json.loads((root/'observed/manifest.json').read_text())
+observed = json.loads((root/'live/observed/manifest.json').read_text())
 assert observed['status'] == 'completed' and observed['child_returncode'] == 0
 assert observed['observer_exit_status'] == 0 and observed['observed_failure_lines'] == 0
-assert not (root/'observed/events.jsonl').read_text().strip(), 'Observed failure contradicts a successful exit'
+assert not (root/'live/observed/events.jsonl').read_text().strip(), 'Observed failure contradicts a successful exit'
 selected = set(sys.argv[1].split(','))
 counts = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in selected}
 files = sorted(pathlib.Path('app/build/outputs/androidTest-results').rglob('*.xml'))

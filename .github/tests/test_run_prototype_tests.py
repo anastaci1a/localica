@@ -12,6 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 OBSERVER = Path(os.environ.get('LOCALICA_OBSERVER_TEST_SOURCE', ROOT/'.github/test-evidence/observe.py'))
 REQUIRED = 'io.github.anastaci1a.localica.SearchImeMotionTest'
+FOCUS = 'io.github.anastaci1a.localica.ListSearchTest'
 AFFECTED = 'io.github.anastaci1a.localica.QueueRecoveryTest'
 SHA = 'f'*40
 
@@ -24,14 +25,24 @@ class RunnerContract(unittest.TestCase):
         for d in ['.github/test-evidence', 'bin', 'app/src/androidTest/java/io/github/anastaci1a/localica', 'app/build/outputs/apk/debug', 'app/build/outputs/apk/androidTest/debug']:
             (self.root/d).mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT/'.github/run-prototype-tests.sh', self.root/'runner.sh')
-        (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+AFFECTED+'\n')
-        for cls in [REQUIRED,AFFECTED]:
+        (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+AFFECTED+'\n')
+        for cls in [REQUIRED,FOCUS,AFFECTED]:
             (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).touch()
         for apk in ['app/build/outputs/apk/debug/app-debug.apk','app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk']:
             (self.root/apk).write_bytes(b'apk')
         if not OBSERVER.is_file():
             self.fail('Integrate the reviewed observer or provide LOCALICA_OBSERVER_TEST_SOURCE for read-only dependency testing')
         (self.root/'.github/test-evidence/observe.py').symlink_to(OBSERVER.resolve())
+        (self.root/'.github/test-evidence/supervise.py').symlink_to((ROOT/'.github/test-evidence/supervise.py').resolve())
+        self.executable('bin/node', '''#!/usr/bin/env python3
+import json,pathlib,sys,time
+a=sys.argv
+e=pathlib.Path(a[a.index('--evidence-dir')+1]);s=pathlib.Path(a[a.index('--state-dir')+1]);s.mkdir()
+while not (e/'manifest.json').exists(): time.sleep(.01)
+while json.loads((e/'manifest.json').read_text())['status']=='running':time.sleep(.01)
+m=json.loads((e/'manifest.json').read_text())
+(s/'complete.json').write_text(json.dumps(dict(m,status='monitoring_complete',observed_failures=m['observed_failure_lines'])))
+''')
         (self.root/'.github/prepare-device-tests.sh').write_text('''printf 'setup\\n' >> lifecycle
 trap 'status=$?; printf "restore\\n" >> lifecycle; if [[ ${CLEANUP_FAIL:-0} == 1 && $status == 0 ]]; then status=3; fi; exit "$status"' EXIT
 trap 'exit 143' TERM
@@ -64,7 +75,7 @@ for i,cls in enumerate(classes):
     if mode=='bad-count':suite.set('tests','2')
     E.ElementTree(suite).write(root/('TEST-'+str(i)+'.xml'))
 ''')
-        self.env = dict(os.environ, PATH=str(self.root/'bin')+os.pathsep+os.environ['PATH'], AFFECTED_CLASSES=AFFECTED, TEST_API='36', GITHUB_SHA=SHA, GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted')
+        self.env = dict(os.environ, PATH=str(self.root/'bin')+os.pathsep+os.environ['PATH'], AFFECTED_CLASSES=AFFECTED, TEST_API='36', GITHUB_SHA=SHA, GITHUB_RUN_ID='1', GITHUB_RUN_ATTEMPT='1', GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted')
 
     def executable(self,path,text):
         target=self.root/path;target.write_text(text);target.chmod(0o755)
@@ -77,17 +88,36 @@ for i,cls in enumerate(classes):
     def test_duplicate_selectors_deduplicate(self):
         self.run_case(AFFECTED_CLASSES=AFFECTED+','+AFFECTED)
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertEqual(2,len(args[-1].split('=',1)[1].split(',')))
+        self.assertEqual(3,len(args[-1].split('=',1)[1].split(',')))
 
     def test_focused_only_and_restoration(self):
         self.run_case()
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(1,args.count('connectedDebugAndroidTest'))
-        self.assertEqual(set(args[-1].split('=',1)[1].split(',')),{REQUIRED,AFFECTED})
+        self.assertEqual(set(args[-1].split('=',1)[1].split(',')),{REQUIRED,FOCUS,AFFECTED})
         self.assertEqual('setup\nrestore\n',(self.root/'lifecycle').read_text())
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         self.assertEqual({REQUIRED,AFFECTED},set(evidence['counts']))
         self.assertFalse(evidence['release_certified'])
+
+    def test_publisher_failure_holds_success(self):
+        self.executable('bin/node', '#!/bin/sh\nexit 17\n')
+        self.run_case(3)
+        receipt=json.loads((self.root/'prototype-evidence/live/supervision.json').read_text())
+        self.assertEqual(0,receipt['observer_exit'])
+        self.assertEqual(17,receipt['publisher_exit'])
+        self.assertFalse(receipt['monitoring_complete'])
+
+    def test_test_failure_wins_over_publisher_failure(self):
+        self.executable('bin/node', '#!/bin/sh\nexit 17\n')
+        self.run_case(7,MODE='exit7')
+
+    def test_invalid_publisher_completion_holds_success(self):
+        self.executable('bin/node', '''#!/usr/bin/env python3
+import pathlib,sys
+p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete.json').write_text('{}')
+''')
+        self.run_case(3)
 
     def test_empty(self): self.run_case(2,AFFECTED_CLASSES='')
     def test_mandatory_alone_is_not_affected_coverage(self): self.run_case(2,AFFECTED_CLASSES=REQUIRED)
@@ -148,7 +178,7 @@ class WorkflowContract(unittest.TestCase):
             if not missing:
                 for api in (26,36):
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
-                    (focused/'reconciled-tests.json').write_text(json.dumps({'sha':SHA,'api':str(api),'selectors':[REQUIRED,AFFECTED],'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in (REQUIRED,AFFECTED)}}))
+                    (focused/'reconciled-tests.json').write_text(json.dumps({'sha':SHA,'api':str(api),'selectors':[REQUIRED,FOCUS,AFFECTED],'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in (REQUIRED,FOCUS,AFFECTED)}}))
                     if contradictory:
                         data=json.loads((focused/'reconciled-tests.json').read_text());data['counts'][REQUIRED]['failed']=1
                         (focused/'reconciled-tests.json').write_text(json.dumps(data))
