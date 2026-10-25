@@ -35,6 +35,11 @@ printf 'candidate_sha=%s\napi=%s\nrelease_certified=false\n' "$GITHUB_SHA" "$TES
 # These APKs are independently compiled test inputs, NOT the canonical signed delivery APK.
 sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > prototype-evidence/test-input-apks.sha256
 [[ -z $(find app/build/outputs/androidTest-results -name '*.xml' -print 2>/dev/null) ]] || { echo 'Refusing stale instrumentation XML' >&2; exit 2; }
+serial=${ANDROID_SERIAL:-emulator-5554}
+[[ "$serial" =~ ^emulator-[0-9]+$ ]] || { echo 'Require an explicit emulator serial' >&2; exit 2; }
+actual_api=$(adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')
+[[ "$actual_api" == "$TEST_API" ]] || { echo "Actual SDK $actual_api differs from requested $TEST_API" >&2; exit 2; }
+printf 'serial=%s\nactual_api=%s\n' "$serial" "$actual_api" >> prototype-evidence/context.txt
 source .github/prepare-device-tests.sh
 # Retain the setup's EXIT restoration trap; forward cancellation to the observer,
 # which owns its child process group, before restoration runs.

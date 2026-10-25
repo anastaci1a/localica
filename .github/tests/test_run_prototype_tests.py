@@ -50,6 +50,7 @@ trap 'status=$?; printf "restore\\n" >> lifecycle; if [[ ${CLEANUP_FAIL:-0} == 1
 trap 'exit 143' TERM
 trap 'exit 130' INT
 ''')
+        self.executable('bin/adb', '#!/bin/sh\nprintf \"%s\\n\" \"${ACTUAL_API:-$TEST_API}\"\n')
         self.executable('bin/git', '#!/bin/sh\nprintf "%s\\n" "$GITHUB_SHA"\n')
         self.executable('gradlew', '''#!/usr/bin/env python3
 import json,os,pathlib,signal,sys,time,xml.etree.ElementTree as E
@@ -140,6 +141,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_missing_observer(self):
         (self.root/'.github/test-evidence/observe.py').unlink();self.run_case(2)
     def test_non_hosted(self): self.run_case(2,RUNNER_ENVIRONMENT='self-hosted')
+    def test_actual_sdk_must_match_declared_api(self): self.run_case(2,ACTUAL_API='26')
     def test_bad_api(self): self.run_case(2,TEST_API='35')
     def test_bad_sha(self): self.run_case(2,GITHUB_SHA='main')
     def test_stale_evidence(self):
