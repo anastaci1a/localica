@@ -4,7 +4,7 @@ name: Prototype (not release certified)
   workflow_dispatch:
     inputs:
       affected_classes:
-        description: Comma-separated affected behavior test classes; IME and search-focus regressions are added automatically
+        description: Comma-separated affected behavior test classes; IME, focus and contrast regressions are added automatically
         required: true
         type: string
       coverage_reason:
@@ -355,7 +355,7 @@ jobs:
             'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
             'checks': results,
             'requested_affected_classes': os.environ['AFFECTED_CLASSES'].split(','),
-            'required_regression_classes': ['io.github.anastaci1a.localica.SearchImeMotionTest', 'io.github.anastaci1a.localica.ListSearchTest'],
+            'required_regression_classes': ['io.github.anastaci1a.localica.SearchImeMotionTest', 'io.github.anastaci1a.localica.ListSearchTest', 'io.github.anastaci1a.localica.FrostedSurfaceTest'],
             'coverage_reason': os.environ['COVERAGE_REASON'], 'known_issues': os.environ['KNOWN_ISSUES'],
             'full_native_api_26': 'not-run', 'full_native_api_36': 'not-run',
             'monitoring': 'Supervised observer and bounded live artifact publisher; inspect monitoring status separately from final XML',

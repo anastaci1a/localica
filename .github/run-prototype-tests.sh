@@ -4,19 +4,20 @@ set -euo pipefail
 classes=${AFFECTED_CLASSES:-}
 required=io.github.anastaci1a.localica.SearchImeMotionTest
 focus_regression=io.github.anastaci1a.localica.ListSearchTest
+contrast_regression=io.github.anastaci1a.localica.FrostedSurfaceTest
 [[ -n "$classes" && ${#classes} -le 4096 ]] || { echo 'Supply nonempty affected behavior classes (maximum 4096 characters)' >&2; exit 2; }
 pattern='^io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(,io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*)*$'
 [[ "$classes" =~ $pattern ]] || { echo 'Invalid affected class selector' >&2; exit 2; }
 IFS=, read -r -a selected <<< "$classes"
-[[ ${#selected[@]} -le 18 ]] || { echo 'At most 18 affected classes plus the two required regression classes' >&2; exit 2; }
+[[ ${#selected[@]} -le 17 ]] || { echo 'At most 17 affected classes plus the three required regression classes' >&2; exit 2; }
 [[ -f .github/prototype-risk-classes.txt ]] || { echo 'Missing reviewed class inventory' >&2; exit 2; }
 declare -A seen=()
 affected=0
-for name in "${selected[@]}" "$required" "$focus_regression"; do
+for name in "${selected[@]}" "$required" "$focus_regression" "$contrast_regression"; do
   grep -Fxq "$name" .github/prototype-risk-classes.txt || { echo "Class is not in the reviewed inventory: $name" >&2; exit 2; }
   source_path="app/src/androidTest/java/${name//.//}"
   [[ -f "$source_path.kt" || -f "$source_path.java" ]] || { echo "Missing instrumentation source: $name" >&2; exit 2; }
-  [[ "$name" == "$required" || "$name" == "$focus_regression" ]] || affected=1
+  [[ "$name" == "$required" || "$name" == "$focus_regression" || "$name" == "$contrast_regression" ]] || affected=1
   seen["$name"]=1
 done
 (( affected )) || { echo 'Name affected behavior coverage in addition to the mandatory IME regression' >&2; exit 2; }

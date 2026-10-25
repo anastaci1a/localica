@@ -50,7 +50,7 @@ A workflow dispatch may supply `risk_classes` as up to 20 comma-separated fully 
 
 ### Opt-in prototypes
 
-The separate manual `prototype.yml` lane builds an explicitly uncertified development APK. Select affected behavior classes and describe coverage and known limitations. Search IME and search-focus regression coverage is mandatory on API 26/36; build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Failed checks are never waived by a known-issues note.
+The separate manual `prototype.yml` lane builds an explicitly uncertified development APK. Select affected behavior classes and describe coverage and known limitations. Search IME, search-focus and contrast regression coverage is mandatory on API 26/36; build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Failed checks are never waived by a known-issues note.
 
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
 
