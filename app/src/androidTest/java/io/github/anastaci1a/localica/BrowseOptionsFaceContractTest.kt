@@ -29,6 +29,7 @@ class BrowseOptionsFaceContractTest {
 
     @Test fun everySelectableAndLegacySummaryUsesTheMeasuredFaceWithoutClippedText() {
         val declaration = browseOptionsDeclaration(BrowseRoute(MainTab.Library))
+        val scoped = browseOptionsDeclaration(BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "fixture")), mutable = true)
         val summaries = declaration.sortSummaries.map { value ->
             BrowseFaceProbe("Sort by", sortLabel(value)) {
                 ChoicePreference("Sort by", value, declaration.sortFields, ::sortLabel, popup = true) {}
@@ -42,13 +43,23 @@ class BrowseOptionsFaceContractTest {
                 ChoicePreference("Extra information", value, declaration.information, ::extraInfoLabel, popup = true) {}
             }
         }
+        val fallbackProbes = listOf(
+            BrowseFaceProbe("Sort by", sortLabel(io.github.anastaci1a.localica.library.TrackSort.Count)) {
+                ChoicePreference("Sort by", io.github.anastaci1a.localica.library.TrackSort.Count,
+                    scoped.sortFields, ::sortLabel, popup = true) {}
+            },
+            BrowseFaceProbe("Extra information", extraInfoLabel(io.github.anastaci1a.localica.browse.ExtraInfo.Inherited)) {
+                ChoicePreference("Extra information", io.github.anastaci1a.localica.browse.ExtraInfo.Inherited,
+                    scoped.information, ::extraInfoLabel, popup = true) {}
+            })
+        val probes = summaries + fallbackProbes
         var width by mutableStateOf(148.dp)
         var font by mutableFloatStateOf(1f)
         val sizes = mutableMapOf<String, IntSize>()
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(2.625f, font), LocalReducedMotion provides true) {
                 Column(Modifier.width(width).verticalScroll(rememberScrollState())) {
-                    summaries.forEachIndexed { index, probe ->
+                    probes.forEachIndexed { index, probe ->
                         Box(Modifier.fillMaxWidth().testTag("live-$index").onSizeChanged { sizes["live-$index"] = it }) {
                             probe.live()
                         }
@@ -61,7 +72,7 @@ class BrowseOptionsFaceContractTest {
         } }
         for (scale in listOf(1f, 1.5f, 2f)) for (w in listOf(148.dp, 280.dp)) {
             compose.runOnIdle { width = w; font = scale }
-            summaries.forEachIndexed { index, probe ->
+            probes.forEachIndexed { index, probe ->
                 val summary = probe.summary
                 compose.runOnIdle { assertEquals("$summary / $scale / $w", sizes["face-$index"], sizes["live-$index"]); assertNotNull(sizes["live-$index"]) }
                 for (prefix in listOf("live", "face")) {
