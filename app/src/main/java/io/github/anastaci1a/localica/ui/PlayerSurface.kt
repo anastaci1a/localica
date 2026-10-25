@@ -171,14 +171,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val ordinarySeekY = (oldMetadataY + (lyricSeekY - oldMetadataY) * .5f)
         .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
     val lyricMetadataY = maxOf(ordinarySeekY, lyricSeekY)
-    // Mode owns the target; expansion has one direct clock rather than multiplying the
-    // lyric displacement into the title/transport motion a second time.
-    val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricVisibility
+    // Preserve the delivered title trajectory, including selected-lyrics expansion.
+    val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricProgress
     // Geometry may change while held (new aspect/layout/mode). Ease only that gate,
     // never finger progress, so crossing the fallback boundary cannot pop the cover.
     val clearanceTarget = if (minOf(fullArt, fullArtHeight) < MiniArtworkSize) 0f else
         playerArtworkClearance((fullArtY - 24.dp * lyricVisibility).value,
-            fullArtHeight.value, metadataY.value, miniArtY.value, MiniArtworkSize.value)
+            fullArtHeight.value, (ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricVisibility).value,
+            miniArtY.value, MiniArtworkSize.value, ((lyricMetadataY - ordinarySeekY) * lyricVisibility).value)
     val artClearance by animateFloatAsState(clearanceTarget,
         tween(settings.motionDuration(300)), label = "Artwork clearance")
     val artCropRetention by animateFloatAsState(if (clearanceTarget > 0f) 1f else 0f,
@@ -195,9 +195,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     fun smoothReveal(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
     val titleY = 7.dp + (metadataY - 7.dp) * p
     val subtitleY = 24.dp + (metadataY + 34.dp - 24.dp) * p
-    val fullTransportY = normalTransport + (lyricTransport - normalTransport) * lyricVisibility
-    val transportY = fullTransportY + playerTransportOffset(p, (metadataY - 7.dp).value,
-        (fullTransportY - (CompactControlSize - 48.dp) / 2).value).dp
+    val transportY = (CompactControlSize - 48.dp) / 2 +
+        (normalTransport + (lyricTransport - normalTransport) * lyricProgress - (CompactControlSize - 48.dp) / 2) * transportMotion
+    val fullTransportY = normalTransport + (lyricTransport - normalTransport) * lyricProgress
     val rowMotion = playerRowMotion(p, (titleY - metadataY).value, (transportY - fullTransportY).value, lyricVisibility)
     val seekY = metadataY + 64.dp + rowMotion.seekOffset.dp
     val actionsY = ordinarySeekY + 128.dp + 32.dp * lyricVisibility + rowMotion.actionsOffset.dp

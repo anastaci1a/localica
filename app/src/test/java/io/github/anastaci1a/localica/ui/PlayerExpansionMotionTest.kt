@@ -26,14 +26,14 @@ class PlayerExpansionMotionTest {
         }
     }
 
-    @Test fun seekAndActionsFollowDistinctRatesBetweenTitleAndTransport() {
+    @Test fun seekAndActionsFollowDistinctRatesBetweenUnchangedTitleAndTransport() {
         // Actual window-space displacement includes the same moving surface top.
         // Title moves slowest; transport initially flies down fastest from full size.
         val miniTop = 560f
         for (step in 84..99) {
             val p = step / 100f
             val titleOffset = (7f - 300f) * (1f - p)
-            val transportOffset = playerTransportOffset(p, 293f, 482.4f)
+            val transportOffset = (1.6f - 484f) * (1f - p * p * (3f - 2f * p))
             val surfaceTop = miniTop * (1f - p)
             val motion = playerRowMotion(p, titleOffset, transportOffset, 0f)
             val title = surfaceTop + titleOffset
@@ -75,40 +75,28 @@ class PlayerExpansionMotionTest {
         }
     }
 
-    @Test fun visibleRowsHaveUniformScreenSpaceVelocitiesWithoutDisappearanceDeceleration() {
-        for (metadata in listOf(184f, 300f, 520f)) {
-            val titleTravel = metadata - 7f
-            val transportTravel = metadata + 184f - 1.6f
-            val miniTop = metadata + 260f
-            fun presented(p: Float): List<Float> {
-                val title = -titleTravel * (1f - p)
-                val transport = playerTransportOffset(p, titleTravel, transportTravel)
-                val rows = playerRowMotion(p, title, transport, 0f)
-                return listOf(title, rows.seekOffset, rows.actionsOffset, transport).map { miniTop * (1f - p) + it }
+    @Test fun rowsRemainBetweenUnchangedReferencesForSelectedLyricsAndReversal() {
+        for (mode in listOf(0f, .5f, 1f)) {
+            val samples = mutableMapOf<Float, PlayerRowMotion>()
+            for (p in listOf(1f, .97f, .91f, .85f, .5f, .2f, 0f, .2f, .5f, .85f, .91f, .97f, 1f)) {
+                // Delivered references: the lyrics target itself retains its expansion factor.
+                val metadata = 300f + 88f * mode * p
+                val title = 7f + (metadata - 7f) * p
+                val transportTarget = 484f + 72f * mode * p
+                val transport = 1.6f + (transportTarget - 1.6f) * p * p * (3f - 2f * p)
+                val titleOffset = title - metadata
+                val transportOffset = transport - transportTarget
+                val rows = playerRowMotion(p, titleOffset, transportOffset, mode)
+                assertTrue(rows.seekOffset >= minOf(titleOffset, transportOffset) - .0001f)
+                assertTrue(rows.seekOffset <= maxOf(titleOffset, transportOffset) + .0001f)
+                assertTrue(rows.actionsOffset >= minOf(titleOffset, transportOffset) - .0001f)
+                assertTrue(rows.actionsOffset <= maxOf(titleOffset, transportOffset) + .0001f)
+                assertEquals("Distinct reference mixtures retain their relative separation",
+                    (transportOffset - titleOffset) / 3f, rows.actionsOffset - rows.seekOffset, .0001f)
+                samples[p]?.let { assertEquals("Reversal retraces the unchanged references", it, rows) }
+                samples[p] = rows
             }
-            val previousSteps = mutableListOf<List<Float>>()
-            for (p in listOf(1f, .97f, .94f, .91f, .88f, .85f)) {
-                val distances = presented(p)
-                if (p < 1f) {
-                    val gaps = distances.zipWithNext { slower, faster -> faster - slower }
-                    assertTrue("Natural speed order at metadata=$metadata p=$p: $distances", gaps.all { it > 0f })
-                    gaps.forEach { assertEquals("Equal screen-space speed separation", gaps.first(), it, .0001f) }
-                }
-                previousSteps += distances
-            }
-            val increments = previousSteps.zipWithNext { previous, next -> next.zip(previous) { a, b -> a - b } }
-            increments.drop(1).forEach { step -> step.zip(increments.first()).forEach { (actual, expected) ->
-                assertEquals("No slowing as rows disappear", expected, actual, .0002f)
-            } }
         }
-        for (p in listOf(.65f, .8f)) {
-            val h = .0001f
-            val left = (playerTransportOffset(p, 293f, 482.4f) - playerTransportOffset(p - h, 293f, 482.4f)) / h
-            val right = (playerTransportOffset(p + h, 293f, 482.4f) - playerTransportOffset(p, 293f, 482.4f)) / h
-            assertEquals("Transport join is velocity-continuous at $p", left, right, 1.5f)
-        }
-        assertEquals(-482.4f, playerTransportOffset(0f, 293f, 482.4f), 0f)
-        assertEquals(0f, playerTransportOffset(1f, 293f, 482.4f), 0f)
     }
 
     @Test fun rowOpacityIsLinearThroughoutItsVisibleWindow() {
@@ -150,18 +138,19 @@ class PlayerExpansionMotionTest {
             for (aspect in listOf(1f / 3f, 1f, 3f)) for (background in listOf(false, true)) for (mode in listOf(0f, .5f, 1f)) {
                 val fullHeight = if (background) width / aspect else minOf(floatingArt, floatingArt / aspect)
                 val fullTop = 76f + (floatingArt - fullHeight) / 2f - 24f * mode
-                val titleTarget = ordinary + (lyricMetadata - ordinary) * mode
+                val titleQuadratic = (lyricMetadata - ordinary) * mode
+                val titleTarget = ordinary + titleQuadratic
                 val fits = fullTop + fullHeight <= titleTarget
                 if (fits) compatible++ else constrained++
                 val snapshots = mutableMapOf<Float, Float>()
                 var prior = 0f
                 for (step in 0..1000) {
                     val p = step / 1000f
-                    val size = playerArtworkSizeProgress(p, fullTop, fullHeight, titleTarget, 9.6f, 32f)
+                    val size = playerArtworkSizeProgress(p, fullTop, fullHeight, titleTarget, 9.6f, 32f, titleQuadratic)
                     assertTrue("Size never reverses during forward movement", size >= prior)
                     assertTrue("Size remains bounded", size in 0f..1f)
                     val top = 9.6f + (fullTop - 9.6f) * p - 48f * p * (1f - p)
-                    val title = 7f + (titleTarget - 7f) * p
+                    val title = 7f + (ordinary + titleQuadratic * p - 7f) * p
                     if (fits) {
                         if (top + 32f > title) assertEquals("Retain mini size until clear", 0f, size, 0f)
                         if (size > 0f) assertTrue("Growing cover stays clear: $width x $height aspect=$aspect background=$background p=$p",
@@ -203,5 +192,5 @@ class PlayerExpansionMotionTest {
     }
 
     private fun rows(p: Float, mode: Float) = playerRowMotion(p,
-        (7f - 300f) * (1f - p), playerTransportOffset(p, 293f, 482.4f), mode)
+        (7f - 300f) * (1f - p), (1.6f - 484f) * (1f - p * p * (3f - 2f * p)), mode)
 }

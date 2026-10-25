@@ -322,54 +322,65 @@ class PlayerExpansionMotionTest {
         }
     }
 
-    @Test fun lateAlbumRowsKeepUniformScreenSpaceSpeedInBothDirections() = exerciseRowMotion(false)
+    @Test fun albumRowsRetainTheUnchangedTitleAndTransportReferences() = exerciseUnchangedReferences(false)
 
-    @Test fun selectedLyricsKeepLinearSeekAndTransportMotionInBothDirections() = exerciseRowMotion(true)
+    @Test fun selectedLyricsRetainTheUnchangedTitleAndTransportReferences() = exerciseUnchangedReferences(true)
 
-    private fun exerciseRowMotion(lyrics: Boolean) {
+    private fun exerciseUnchangedReferences(lyrics: Boolean) {
         val progress = Animatable(0f)
+        var lyricsMode by mutableStateOf(false)
         lateinit var scope: CoroutineScope
+        var pixelsPerDp = 0f
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             scope = rememberCoroutineScope()
+            pixelsPerDp = androidx.compose.ui.platform.LocalDensity.current.density
             PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {},
-                lyricsOpen = lyrics, visual = visual) {
-                Text("Album-only action")
-            }
+                lyricsOpen = lyricsMode, visual = visual) { Text("Album-only action") }
         } } }
-        val tags = listOf("player-title", "player-seek-row") + if (lyrics) emptyList() else listOf("player-actions-row")
-        fun tops() = tags.map { compose.onNodeWithTag(it, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top } +
-            compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot.top
-        compose.runOnIdle { scope.launch { progress.snapTo(1f) } }
-        val full = tops()
-        val samples = mutableMapOf<Float, List<Float>>()
-        val increments = mutableListOf<List<Float>>()
-        var previous = full
-        for (p in listOf(.97f, .94f, .91f, .88f, .85f, .88f, .91f, .94f, .97f, 1f)) {
-            compose.runOnIdle { scope.launch { progress.snapTo(p) } }
-            val current = tops()
-            if (p < 1f) {
-                val movement = current.zip(full) { now, target -> now - target }
-                assertTrue("Title < seek < actions < transport at $p: $movement",
-                    movement.zipWithNext().all { (slower, faster) -> slower < faster })
-                val separation = movement.zipWithNext { slower, faster -> faster - slower }
-                separation.forEachIndexed { index, gap ->
-                    val steps = if (lyrics && index == 1) 2 else 1
-                    assertEquals("Uniform presented speed ladder at $p", separation.first() * steps, gap, 2f)
-                }
-            } else assertEquals(full, current)
-            if (p >= .85f && samples[p] == null && p < 1f) {
-                val step = current.zip(previous) { now, before -> now - before }
-                increments.firstOrNull()?.let { initial ->
-                    step.zip(initial).forEach { (actual, expected) ->
-                        // Each independently rounded Surface/row offset can contribute one pixel.
-                        assertEquals("No screen-space deceleration while fading at $p", expected, actual, 2f)
-                    }
-                }
-                increments += step
+        fun snap(p: Float) {
+            compose.runOnIdle {
+                val update = scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(p) }
+                assertTrue("Fixture progress is applied before measuring", update.isCompleted)
             }
-            previous = current
-            samples[p]?.let { assertEquals("Reversal uses the same displayed trajectory at $p", it, current) }
-            samples[p] = current
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+        fun surfaceTop() = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot.top
+        fun references() = listOf(compose.onNodeWithTag("player-title", true).fetchSemanticsNode().boundsInRoot.top,
+            compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot.top).map { it - surfaceTop() }
+        snap(1f)
+        val normal = references()
+        compose.runOnIdle { lyricsMode = lyrics }
+        compose.waitForIdle()
+        val selected = references()
+        snap(0f)
+        val mini = references()
+        val snapshots = mutableMapOf<Float, List<Float>>()
+        for (p in listOf(0f, .2f, .5f, .8f, .85f, .91f, .97f, 1f, .97f, .91f, .85f, .8f, .5f, .2f, 0f)) {
+            snap(p)
+            val actual = references()
+            val metadata = normal[0] + (selected[0] - normal[0]) * p
+            val transportTarget = normal[1] + (selected[1] - normal[1]) * p
+            val smooth = p * p * (3f - 2f * p)
+            val title = mini[0] + (metadata - mini[0]) * p
+            val transport = mini[1] + (transportTarget - mini[1]) * smooth
+            // The two independently rounded reference endpoints/placement can differ by one pixel each.
+            assertEquals("Delivered title trajectory at p=$p lyrics=$lyrics", title, actual[0], 2f)
+            assertEquals("Delivered transport trajectory at p=$p lyrics=$lyrics", transport, actual[1], 2f)
+            if (p > .83f) {
+                val seek = compose.onNodeWithTag("player-seek-row", true).fetchSemanticsNode().boundsInRoot.top - surfaceTop()
+                val titleOffset = title - metadata
+                val transportOffset = transport - transportTarget
+                assertEquals("Seek mixes the unchanged references at p=$p", metadata + 64f * pixelsPerDp +
+                    titleOffset + (transportOffset - titleOffset) / 3f, seek, 2f)
+                if (!lyrics) {
+                    val actions = compose.onNodeWithTag("player-actions-row", true).fetchSemanticsNode().boundsInRoot.top - surfaceTop()
+                    assertEquals("Actions retain their distinct reference mixture at p=$p", normal[0] + 128f * pixelsPerDp +
+                        titleOffset + (transportOffset - titleOffset) * (2f / 3f), actions, 2f)
+                }
+            }
+            snapshots[p]?.let { assertEquals("Held reversal retraces both unchanged references", it, actual) }
+            snapshots[p] = actual
         }
     }
 }
