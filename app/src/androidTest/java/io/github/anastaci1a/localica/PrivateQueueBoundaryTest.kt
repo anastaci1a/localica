@@ -50,6 +50,7 @@ class PrivateQueueBoundaryTest {
         val out = File(context.getExternalFilesDir(null), "private-boundary/$label").apply { mkdirs() }
         val events = File(out, "events.jsonl")
         events.writeText("")
+        val lateEvents = File(out, "late-events.jsonl").apply { writeText("") }
         val traceOutput = args.getString("privateOutputTrace") == "true"
         val asyncEvidence = args.getString("privateAsyncEvidence") == "true"
         require(!asyncEvidence || traceOutput) { "Asynchronous evidence requires the explicit output trace" }
@@ -73,7 +74,9 @@ class PrivateQueueBoundaryTest {
                 values.forEach { (key, value) -> item.put(key, value ?: JSONObject.NULL) }
                 val line = item.toString() + "\n"
                 val writing = SystemClock.elapsedRealtimeNanos()
-                eventWriter?.write(line) ?: events.appendText(line)
+                // After playback teardown, late release callbacks use a separate append-only file.
+                // Never reopen the async worker's file while a failed close may still own it.
+                eventWriter?.write(line) ?: (if (traceOutput) lateEvents else events).appendText(line)
                 val completed = SystemClock.elapsedRealtimeNanos()
                 if (traceOutput) {
                     traceWriteMaxNs = maxOf(traceWriteMaxNs, completed - entered)
@@ -255,8 +258,10 @@ class PrivateQueueBoundaryTest {
                 // Keep diagnostic timing even when a codec/playback error exits before assertions.
                 if (traceOutput) event("trace-write-summary", "maximumDurationNs" to traceWriteMaxNs,
                     "slowCount" to traceWriteSlowCount, "first128" to org.json.JSONArray(traceWriteDelays))
+            } }
+            cleanup { synchronized(events) {
                 val writer = eventWriter
-                eventWriter = null // A late native release callback may still append its evidence.
+                eventWriter = null // Only post-playback callbacks can reach the separate late file.
                 writer?.close()
             } }
             cleanup { if (queue) preferences.write(original) }
