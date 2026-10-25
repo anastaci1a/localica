@@ -51,7 +51,14 @@ class GlassOriginPreparationTest {
 
     private fun advanceWithNativeFrames(durationMillis: Long) {
         val start = compose.mainClock.currentTime
-        while (compose.mainClock.currentTime - start < durationMillis) frame()
+        // Only unobserved endpoints may batch: keep the full horizon and yield
+        // for native drawing within four frames (64 ms), below the six-frame fallback.
+        // Frame-sensitive handoffs must continue to use frame() directly.
+        while (compose.mainClock.currentTime - start < durationMillis) {
+            val remaining = durationMillis - (compose.mainClock.currentTime - start)
+            compose.mainClock.advanceTimeBy(minOf(64L, remaining))
+            compose.waitForIdle()
+        }
     }
 
     @Test fun preparedOriginReclaimsRetainedReadyWindowBeforeSuspending() = retainedReadyReopen(false)
