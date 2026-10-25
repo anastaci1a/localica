@@ -97,7 +97,7 @@ for i,cls in enumerate(classes):
         self.assertEqual(set(args[-1].split('=',1)[1].split(',')),{REQUIRED,FOCUS,AFFECTED})
         self.assertEqual('setup\nrestore\n',(self.root/'lifecycle').read_text())
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual({REQUIRED,AFFECTED},set(evidence['counts']))
+        self.assertEqual({REQUIRED,FOCUS,AFFECTED},set(evidence['counts']))
         self.assertFalse(evidence['release_certified'])
 
     def test_publisher_failure_holds_success(self):
