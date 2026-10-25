@@ -31,6 +31,9 @@ test('first failure is uploaded while command runs, before final flush; allowlis
   const f = await fixture(t); await f.append(event()); let tick = 0;
   f.options.wait = async () => {
     assert.equal(f.uploads.length, 1); assert.equal(f.uploads[0].packet.status, 'running');
+    assert.equal(f.uploads[0].packet.observer_manifest_snapshot_count, 0);
+    assert.equal(f.uploads[0].packet.publisher_observed_failure_lines, 1);
+    assert.equal(f.uploads[0].packet.observed_failure_lines, undefined);
     assert(!JSON.stringify(f.uploads).includes('SECRET'));
     tick++; await f.append(event(2)); await f.done();
   };
