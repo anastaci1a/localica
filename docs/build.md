@@ -48,6 +48,16 @@ The comparison does not alter CI, branch protection, deployment or [release publ
 
 A workflow dispatch may supply `risk_classes` as up to 20 comma-separated fully qualified instrumentation classes (4096 characters maximum). The hosted disposable device job records that selector and runs it before the unchanged complete suite. A failed preflight stops the job and preserves its exit status, log and reports; a passing preflight resets only the app/test packages before running the full suite. Focused success alone is never release evidence. Empty input and ordinary PR/main runs retain full-suite behavior. Preflight isolation is not used by the compatibility gate, whose app data must persist across phases.
 
+### Opt-in prototypes
+
+The separate manual `prototype.yml` lane builds an explicitly uncertified development APK. Select affected behavior classes and describe coverage and known limitations. Search IME and search-focus regression coverage is mandatory on API 26/36; build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Failed checks are never waived by a known-issues note.
+
+The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
+
+The observer preserves command output and provisional failure observations; final instrumentation XML owns test outcomes. A supervised Node 24 publisher uses the pinned artifact SDK to upload at most six bounded live failure packets. Monitoring degradation is explicit and blocks an otherwise green prototype; a test failure retains its original exit status.
+
+No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision; offline contract success alone does not prove live delivery. New manual workflows require registration or an explicitly coordinated branch smoke before use.
+
 ## Compatibility and dependencies
 
 - Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing it, dispatch the exact candidate through the Android workflow with `compatibility=true`. Its API 26/36 gate installs candidate → legacy-behavior bridge → candidate with the same package/signature and increasing private version codes, without clearing data. The [isolated overlay](../.github/compatibility/prepare.py) retains current schema, journal and recovery safety; only traversal behavior changes. `ShuffleApkCompatibilityTest` checks duplicate occurrences, saved order/cursor, controller reopening and statistics across `seed`, `bridge`, then `verify`; bridge journal/recovery checks run separately. Private compatibility artifacts are never distributed: use the canonical `localica-debug` APK. Ordinary migration tests do not replace this gate. Track exact-source evidence in [#295](https://github.com/anastaci1a/localica/issues/295).

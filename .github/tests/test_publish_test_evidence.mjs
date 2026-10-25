@@ -3,11 +3,43 @@ import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, writeFile, appendFile, readFile, readdir, rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {publish, validateEvent} from '../test-evidence/publish.mjs';
 
 const ids = {command_id: '12345678-1234-1234-1234-123456789012', sha: 'a'.repeat(40), api: '26', lane: 'prototype'};
 const running = {...ids, schema_version: 1, started_utc: '2026-10-25T18:00:00.000Z', ended_utc: null, status: 'running', observed_failure_lines: 0, argv: ['SECRET_ARG'], observer_error: 'SECRET_ERROR'};
 const event = (n = 1) => ({...ids, event: 'test_failure_observed', provisional: true, utc: '2026-10-25T18:00:01.000Z', observation_index: n, stream: 'stdout', stream_line: n, stream_byte_offset: n * 100, class: 'example.SomeTest', method: 'fails', display_name: 'fails[emulator-5554]', parsed_line: 'SECRET_RAW', environment: 'SECRET_ENV'});
+
+test('real observer streams a failure to publisher before command finishes and preserves exit seven', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'observer-publisher-'));
+  t.after(() => rm(root, {recursive: true, force: true}));
+  const evidenceDir = path.join(root, 'observed');
+  const release = path.join(root, 'release');
+  const script = fileURLToPath(new URL('../test-evidence/observe.py', import.meta.url));
+  const source = `from pathlib import Path; import time\nprint('example.SomeTest > fails[emulator-5554] FAILED',flush=True)\nwhile not Path(${JSON.stringify(release)}).exists(): time.sleep(.01)\nraise SystemExit(7)`;
+  const child = spawn('python3', [script, '--output', evidenceDir, '--sha', ids.sha,
+    '--api', '26', '--lane', 'prototype', '--', 'python3', '-u', '-c', source], {stdio: 'ignore'});
+  let ended = false;
+  const result = new Promise((resolve, reject) => {child.on('error', reject); child.on('exit', code => {ended = true; resolve(code);});});
+  t.after(() => {if (!ended) child.kill('SIGTERM');});
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), 5000);
+  t.after(() => clearTimeout(deadline));
+  let packets = 0;
+  const status = await publish({evidenceDir, stateDir: path.join(root, 'publishing'),
+    runId: '123', attempt: '1', signal: controller.signal, pollMs: 10,
+    client: {async uploadArtifact(name, files) {
+      assert.equal(ended, false);
+      const packet = JSON.parse(await readFile(files[0], 'utf8'));
+      assert.equal(packet.failures[0].class, 'example.SomeTest');
+      assert.equal(packet.test_verdict, 'not_determined');
+      await writeFile(release, 'done');
+      return {id: ++packets};
+    }}});
+  assert.equal(await result, 7);
+  assert.deepEqual(status, {uploadedPackets: 1, observedFailures: 1});
+});
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'publisher-test-'));
   t.after(() => rm(root, {recursive: true, force: true}));

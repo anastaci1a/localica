@@ -4,7 +4,7 @@ name: Prototype (not release certified)
   workflow_dispatch:
     inputs:
       affected_classes:
-        description: Comma-separated affected behavior test classes; IME regression is added automatically
+        description: Comma-separated affected behavior test classes; IME and search-focus regressions are added automatically
         required: true
         type: string
       coverage_reason:
@@ -91,6 +91,11 @@ jobs:
         distribution: temurin
         java-version: '17'
     - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
+    - name: Install pinned live evidence publisher
+      run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
     - name: Enable emulator acceleration
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -204,6 +209,11 @@ jobs:
         distribution: temurin
         java-version: '17'
     - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
+    - name: Install pinned live evidence publisher
+      run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
     - name: Enable emulator acceleration
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -345,10 +355,10 @@ jobs:
             'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
             'checks': results,
             'requested_affected_classes': os.environ['AFFECTED_CLASSES'].split(','),
-            'required_regression_class': 'io.github.anastaci1a.localica.SearchImeMotionTest',
+            'required_regression_classes': ['io.github.anastaci1a.localica.SearchImeMotionTest', 'io.github.anastaci1a.localica.ListSearchTest'],
             'coverage_reason': os.environ['COVERAGE_REASON'], 'known_issues': os.environ['KNOWN_ISSUES'],
             'full_native_api_26': 'not-run', 'full_native_api_36': 'not-run',
-            'monitoring': 'Observer console/JSONL only; hosted live artifact notification is not yet integrated',
+            'monitoring': 'Supervised observer and bounded live artifact publisher; inspect monitoring status separately from final XML',
             'native_test_apks': 'Independent same-SHA builds, not asserted identical to canonical signed delivery APK',
             'ready_for_prototype_delivery': False, 'validation_errors': [],
             'focused_evidence': {}, 'compatibility_evidence': {},
@@ -368,7 +378,7 @@ jobs:
                 canonical_valid = True
             except (AssertionError, KeyError, ValueError, OSError) as error:
                 errors.append('Canonical APK provenance validation failed: ' + type(error).__name__)
-        expected = set(manifest['requested_affected_classes']) | {manifest['required_regression_class']}
+        expected = set(manifest['requested_affected_classes']) | set(manifest['required_regression_classes'])
         for api in (26, 36):
             focused = root / f'prototype-focused-api-{api}' / 'prototype-evidence'
             receipt = focused / 'reconciled-tests.json'
