@@ -60,6 +60,8 @@ internal class TextEditingImeSession {
     }
 }
 
+internal val LocalTextEditingObservation = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
 /** Back dismisses editing before dismissing its page/dialog, including IME-owned Back. */
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable internal fun Modifier.clearTextFocusOnBack(): Modifier {
@@ -77,22 +79,26 @@ internal class TextEditingImeSession {
     val keyboard = LocalSoftwareKeyboardController.current
     val emptySearchBack by rememberUpdatedState(LocalEmptySearchBack.current)
     val beginSearchReturn by rememberUpdatedState(LocalSearchReturnStart.current)
-    fun endEditing() {
+    val observe by rememberUpdatedState(LocalTextEditingObservation.current)
+    fun endEditing(reason: String) {
+        observe?.invoke("endEditing reason=$reason focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
         if (emptySearchBack != null) beginSearchReturn?.invoke()
         restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
     }
-    BackHandler(focused) { endEditing() }
+    BackHandler(focused) { endEditing("backDispatcher") }
     LaunchedEffect(focused, windowFocused, keyboardVisible, keyboardHeight, keyboardSource, keyboardTarget) {
-        if (imeSession.shouldEnd(focused, windowFocused, keyboardVisible, keyboardHeight,
-                keyboardSource, keyboardTarget, endAtHideStart = emptySearchBack != null)) {
+        val end = imeSession.shouldEnd(focused, windowFocused, keyboardVisible, keyboardHeight,
+            keyboardSource, keyboardTarget, endAtHideStart = emptySearchBack != null)
+        observe?.invoke("imeDecision end=$end focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
+        if (end) {
             // IME-owned Back announces its zero target before its last visible
             // frame. Empty search returns home immediately, independently of it.
-            endEditing()
+            endEditing("imeObservation")
         }
     }
     return onFocusChanged { focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
         if (focused && event.key == Key.Back) {
-            if (event.type == KeyEventType.KeyUp) endEditing()
+            if (event.type == KeyEventType.KeyUp) endEditing("backKey")
             true
         } else false
     }
