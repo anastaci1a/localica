@@ -56,6 +56,7 @@ internal class PrivateBoundaryOutputProvider(
                     writtenBytes += count
                 }
                 emit("output-write", "entryNs" to start, "returnNs" to end,
+                    "captureReturnNs" to SystemClock.elapsedRealtimeNanos(),
                     "ptsUs" to presentationTimeUs, "acceptedBytes" to count, "handled" to result)
                 return result
             }
