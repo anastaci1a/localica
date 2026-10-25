@@ -123,6 +123,53 @@ class SourceMethodsContract(unittest.TestCase):
         with self.assertRaises(source_methods.InventoryError):
             self.inventory("sample.Fake")
 
+    def test_bodyless_private_helper_does_not_own_following_public_class_prefix(self):
+        for helper in ("private data class Probe(val title: String)", "private class Probe",
+                       "private data class Probe(val live: @Composable () -> Unit)"):
+            with self.subTest(helper=helper):
+                self.source("Probe.kt", "package sample\nimport org.junit.Test\n" + helper +
+                            "\nclass PublicCase { @Test fun actual() {} }")
+                self.assertEqual(self.inventory("sample.PublicCase")["methods"], ["sample.PublicCase#actual"])
+
+    def test_following_class_keeps_qualified_annotations_and_multiline_modifiers(self):
+        self.source("Annotated.kt", '''
+            package sample
+            import org.junit.Test
+            private data class Probe(val content: @Composable () -> Unit)
+            @org.junit.runner.RunWith(
+                AndroidJUnit4::class
+            )
+            @Notice(data = "private", value = listOf(Probe::class))
+            public
+            final
+            class Selected { @Test fun actual() {} }
+        ''')
+        self.assertEqual(self.inventory("sample.Selected")["methods"], ["sample.Selected#actual"])
+
+    def test_bodyless_helper_cannot_hide_rejected_selected_class_modifiers_or_runner(self):
+        declarations = ["private\nclass Selected", "@Notice(data = 1)\nprivate\nclass Selected",
+                        "abstract\nclass Selected", "@Notice\nabstract\nclass Selected",
+                        "@org.junit.runner.RunWith(\n Parameterized::class\n)\npublic\nclass Selected",
+                        "class Selected : Parent()", "class Selected<T>"]
+        for declaration in declarations:
+            with self.subTest(declaration=declaration):
+                self.source("Rejected.kt", "package sample\nimport org.junit.Test\nprivate data class Probe(val x: String)\n" +
+                            declaration + " { @Test fun actual() {} }")
+                with self.assertRaises(source_methods.InventoryError):
+                    self.inventory("sample.Selected")
+
+    def test_real_browse_face_class_follows_private_bodyless_probe(self):
+        cls = "io.github.anastaci1a.localica.BrowseOptionsFaceContractTest"
+        result = source_methods.inventory(ROOT, [cls])
+        self.assertEqual(result["methods"], [
+            cls + "#everyGalleryCaptionKeepsItsLiveSliderEnvelopeAndNativeEndpoints",
+            cls + "#everySelectableAndLegacySummaryUsesTheMeasuredFaceWithoutClippedText",
+        ])
+
+        receipt = result["classes"][0]
+        self.assertTrue(receipt["source"].endswith("BrowseOptionsFaceContractTest.kt"))
+        self.assertEqual(receipt["sha256"], hashlib.sha256((ROOT / receipt["source"]).read_bytes()).hexdigest())
+
     def test_missing_empty_and_repeated_selected_classes_are_rejected(self):
         self.source("Empty.kt", "package sample\nclass Empty { fun helper() {} }")
         for classes in [("sample.Missing",), ("sample.Empty",), ("sample.Empty", "sample.Empty"),

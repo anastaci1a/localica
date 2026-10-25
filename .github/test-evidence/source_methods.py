@@ -258,17 +258,48 @@ def annotation(source, i):
     return name, end
 
 
+def class_prefix(source, start):
+    """Walk only this declaration's contiguous annotations and class modifiers.
+
+    A previous Kotlin declaration need not have a body/semicolon. Its constructor's
+    closing parenthesis is not an annotation unless the complete preceding name has
+    an @ owner and annotation parsing ends exactly at our current boundary.
+    """
+    tokens, pairs, depths = source.tokens, source.pairs, source.depths
+    modifiers = {"public", "internal", "private", "protected", "final", "open", "abstract",
+                 "sealed", "expect", "actual", "data", "enum", "annotation", "value", "inline"}
+    cursor = start
+    own_modifiers = []
+    while cursor > 0:
+        previous = cursor - 1
+        if depths[previous] == depths[start] and tokens[previous].text in modifiers:
+            own_modifiers.append(tokens[previous])
+            cursor = previous
+            continue
+        name_end = pairs[previous] if tokens[previous].text == ")" else cursor
+        name_start = name_end - 1
+        if name_start < 0 or tokens[name_start].kind != "name":
+            break
+        while name_start >= 2 and tokens[name_start - 1].text == "." and tokens[name_start - 2].kind == "name":
+            name_start -= 2
+        at = name_start - 1
+        if at < 0 or tokens[at].text != "@" or depths[at] != depths[start]:
+            break
+        _, end = annotation(source, at)
+        if end != cursor:
+            fail(source.path, tokens[at].line, "Ambiguous selected class annotation ownership")
+        cursor = at
+    return tokens[cursor:start], own_modifiers
+
+
 def selected_methods(source, entry):
     cls, start, body = entry
     tokens, pairs, depths = source.tokens, source.pairs, source.depths
     if body is None:
         fail(source.path, tokens[start].line, "Selected class has no parsed body")
     # Do not silently claim inherited tests or parameterized/abstract discovery.
-    before = start - 1
-    while before >= 0 and tokens[before].text not in ("}", ";"):
-        before -= 1
-    prefix = tokens[before + 1:start]
-    if any(t.text in ("abstract", "expect", "annotation", "enum", "data", "private", "protected") for t in prefix):
+    prefix, own_modifiers = class_prefix(source, start)
+    if any(t.text in ("abstract", "expect", "annotation", "enum", "data", "private", "protected") for t in own_modifiers):
         fail(source.path, tokens[start].line, "Selected class kind/modifiers unsupported")
     header = tokens[start + 2:body]
     if source.path.suffix == ".kt":
