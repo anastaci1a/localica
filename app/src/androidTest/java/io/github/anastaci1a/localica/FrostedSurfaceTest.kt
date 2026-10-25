@@ -31,19 +31,46 @@ class FrostedSurfaceTest {
         lateinit var source: FrostedBackdrop
         var lightInk by mutableStateOf(true)
         var appearance by mutableStateOf(io.github.anastaci1a.localica.navigation.GlassAppearance(contrast = 0f))
+        fun identity(value: Any?): String = value?.let { System.identityHashCode(it).toString(16) } ?: "null"
+        fun diagnosticState(): String = "tone=${appearance.contrast},${appearance.contrastWeight},$lightInk " +
+            "source=${identity(source)} fallback=${identity(source.fallback)} snapshot=${identity(source.snapshot)} " +
+            "request=${source.readbackRequest} published=${source.snapshotReadbackRequest} " +
+            "size=${source.size} dark=${source.dark} revision=${source.revision} " +
+            "consumers=${source.consumers} recorded=${source.recorded} layerReleased=${source.layer.isReleased} " +
+            "draws=${source.snapshotDraws} pending=${source.readbackBarrier?.isPending} " +
+            "abort=${source.lastReadbackAbort} progress=${source.lastReadbackProgress}"
+        val lastObservations = java.util.concurrent.ConcurrentHashMap<String, String>()
+        fun observe(phase: String, state: String = diagnosticState()) {
+            if (lastObservations.put(phase, state) != state) android.util.Log.i("FrostToneContinuity",
+                "ns=${android.os.SystemClock.elapsedRealtimeNanos()} phase=$phase $state")
+        }
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides appearance) {
                 GlassPanelTheme(lightInk) { Box(Modifier.fillMaxSize()) {
                     source = rememberFrostedBackdrop(Unit, dark = lightInk)
+                    LaunchedEffect(source) {
+                        // Existing observable state only; no frames, capture or publication mutation.
+                        // Plain draw diagnostics are sampled when observable state changes, not
+                        // evidence of which bitmap the native compositor actually consumed.
+                        snapshotFlow { diagnosticState() }.collect { observe("state-change", it) }
+                    }
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Gray) }
                     FrostedSurface(Modifier.align(Alignment.Center).fillMaxWidth().height(200.dp)
                         .testTag("neutral-frost"), source = source) { }
                 } }
             }
         } }
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback != null }
-        fun center(): Color = compose.onNodeWithTag("neutral-frost").captureToImage().toPixelMap().let {
-            it[it.width / 2, it.height / 2]
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) {
+            observe("initial-readiness")
+            source.fallback != null
+        }
+        fun center(phase: String): Color {
+            observe("$phase-pre-capture")
+            val color = compose.onNodeWithTag("neutral-frost").captureToImage().toPixelMap().let {
+                it[it.width / 2, it.height / 2]
+            }
+            observe("$phase-post-capture", diagnosticState() + " center=$color")
+            return color
         }
         fun assertNeutral(color: Color) {
             assertEquals("Neutral red/green: $color", color.red, color.green, .015f)
@@ -53,7 +80,7 @@ class FrostedSurfaceTest {
         for (dark in listOf(true, false)) {
             compose.runOnIdle { lightInk = dark; appearance = appearance.copy(contrast = 0f) }
             compose.waitForIdle()
-            val baseline = center()
+            val baseline = center("baseline")
             assertNeutral(baseline)
             assertEquals("Zero trim preserves gray apart from the neutral frost finish",
                 Color.Gray.red, baseline.red, .04f)
@@ -63,8 +90,8 @@ class FrostedSurfaceTest {
                 // Bound that small effect instead of retaining the obsolete fixed-dark-tint range.
                 val expectedDelta = GlassTone(trim, weight, dark).channel(Color.Gray.red) - Color.Gray.red
                 val expected = baseline.red + expectedDelta
-                compose.waitUntil(10000) { kotlin.math.abs(center().red - expected) < .025f }
-                val actual = center()
+                compose.waitUntil(10000) { kotlin.math.abs(center("polling").red - expected) < .025f }
+                val actual = center("final")
                 assertNeutral(actual)
                 assertEquals("Configured curve: lightInk=$dark trim=$trim weight=$weight",
                     expected, actual.red, .025f)
