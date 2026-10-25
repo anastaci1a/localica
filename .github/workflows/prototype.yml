@@ -215,13 +215,16 @@ jobs:
           sleep 60
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/compatibility/run.sh
+    - name: Preserve compatibility runner identity
+      if: always()
+      run: |
+        mkdir -p "$RUNNER_TEMP/shuffle-compatibility/reports"
+        cp prototype-runner-environment.txt "$RUNNER_TEMP/shuffle-compatibility/reports/prototype-runner-environment.txt"
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
         name: prototype-compatibility-api-26
-        path: |-
-          ${{ runner.temp }}/shuffle-compatibility/reports/
-          prototype-runner-environment.txt
+        path: ${{ runner.temp }}/shuffle-compatibility/reports/
         if-no-files-found: error
     name: Prototype preserved-data compatibility API 26
   focused_36:
@@ -342,13 +345,16 @@ jobs:
           sleep 60
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/compatibility/run.sh
+    - name: Preserve compatibility runner identity
+      if: always()
+      run: |
+        mkdir -p "$RUNNER_TEMP/shuffle-compatibility/reports"
+        cp prototype-runner-environment.txt "$RUNNER_TEMP/shuffle-compatibility/reports/prototype-runner-environment.txt"
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
         name: prototype-compatibility-api-36
-        path: |-
-          ${{ runner.temp }}/shuffle-compatibility/reports/
-          prototype-runner-environment.txt
+        path: ${{ runner.temp }}/shuffle-compatibility/reports/
         if-no-files-found: error
     name: Prototype preserved-data compatibility API 36
   evidence:
