@@ -1,0 +1,107 @@
+name: Live test evidence smoke
+
+on:
+  push:
+    branches: [dot/test-evidence-smoke-20261025]
+
+permissions:
+  contents: read
+
+jobs:
+  live-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Install pinned official artifact SDK
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix .github/test-evidence
+      - name: Offline regression checks
+        run: |
+          python3 -m unittest discover -s .github/tests -p test_observe_test_evidence.py
+          node --test .github/tests/test_publish_test_evidence.mjs
+      # Child processes inherit the JS action's normal runtime environment; never
+      # extract, forward explicitly, or print runtime tokens. This is a transport
+      # smoke, not an emulator/native-app pass or proof of emulator integration.
+      - name: Publish synthetic failures while producer continues for 90 seconds
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const {spawn} = require('node:child_process');
+            const fs = require('node:fs/promises');
+            const assert = require('node:assert/strict');
+            const root = 'smoke-evidence';
+            await fs.mkdir(root);
+            function launch(command, args) {
+              const child = spawn(command, args, {stdio: 'inherit'});
+              const result = new Promise(resolve => {
+                child.once('error', () => resolve({code: null, signal: null, spawnError: true}));
+                child.once('exit', (code, signal) => resolve({code, signal, spawnError: false}));
+              });
+              return {child, result};
+            }
+            const publisher = launch('node', ['.github/test-evidence/publish.mjs',
+              '--evidence-dir', `${root}/observed`, '--state-dir', `${root}/publishing`,
+              '--run-id', String(context.runId), '--attempt', process.env.GITHUB_RUN_ATTEMPT]);
+            const observer = launch('python3', ['.github/test-evidence/observe.py',
+              '--output', `${root}/observed`, '--sha', context.sha, '--api', '26', '--lane', 'transport-smoke',
+              '--', 'python3', '-c',
+              'import time; print("example.SyntheticTest > firstFailure[synthetic] FAILED", flush=True); time.sleep(5); print("example.SyntheticTest > secondFailure[synthetic] FAILED", flush=True); time.sleep(85); raise SystemExit(7)']);
+            const started = new Date().toISOString();
+            const watchdog = setTimeout(() => {
+              observer.child.kill('SIGTERM'); publisher.child.kill('SIGTERM');
+            }, 150000);
+            let observerResult, publisherResult;
+            try {
+              observerResult = await observer.result;
+              // A missing/nonterminal manifest cannot leave the publisher hanging.
+              let terminal = false;
+              try {
+                const manifest = JSON.parse(await fs.readFile(`${root}/observed/manifest.json`, 'utf8'));
+                terminal = ['completed', 'failed', 'cancelled', 'incomplete'].includes(manifest.status);
+              } catch {}
+              if (!terminal) publisher.child.kill('SIGTERM');
+              const flushDeadline = setTimeout(() => publisher.child.kill('SIGTERM'), 20000);
+              const hardDeadline = setTimeout(() => publisher.child.kill('SIGKILL'), 25000);
+              try { publisherResult = await publisher.result; }
+              finally { clearTimeout(flushDeadline); clearTimeout(hardDeadline); }
+              await fs.writeFile(`${root}/summary.json`, JSON.stringify({schema_version: 1,
+                smoke_only: true, sha: context.sha, run_id: String(context.runId),
+                started_utc: started, ended_utc: new Date().toISOString(),
+                observer: observerResult, publisher: publisherResult}, null, 2));
+              assert.deepEqual(observerResult, {code: 7, signal: null, spawnError: false});
+              assert.deepEqual(publisherResult, {code: 0, signal: null, spawnError: false});
+              const complete = JSON.parse(await fs.readFile(`${root}/publishing/complete.json`, 'utf8'));
+              assert.equal(complete.status, 'monitoring_complete');
+              assert.equal(complete.observer_status, 'failed');
+              assert.equal(complete.sha, context.sha);
+              assert.equal(complete.api, '26');
+              assert.equal(complete.observed_failures, 2);
+              assert.equal(complete.uploaded_packets, 2);
+              const packet = JSON.parse(await fs.readFile(`${root}/publishing/packet-1.json`, 'utf8'));
+              assert.equal(packet.status, 'running');
+              assert.equal(packet.sha, context.sha);
+              assert.equal(packet.run_id, String(context.runId));
+              assert.equal(packet.command_id, complete.command_id);
+              assert.equal(packet.failures[0].method, 'firstFailure');
+              assert.equal(packet.test_verdict, 'not_determined');
+              core.info('Transport smoke passed: synthetic exit 7 preserved; publisher exit 0. Not an app test pass.');
+            } finally {
+              clearTimeout(watchdog);
+              if (observer.child.exitCode === null) observer.child.kill('SIGTERM');
+              if (publisher.child.exitCode === null) publisher.child.kill('SIGTERM');
+            }
+      - name: Preserve bounded synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: transport-smoke-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            smoke-evidence/summary.json
+            smoke-evidence/publishing/*.json
+          if-no-files-found: warn
+          retention-days: 3
