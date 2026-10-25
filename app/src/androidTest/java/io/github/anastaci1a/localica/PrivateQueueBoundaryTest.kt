@@ -44,19 +44,25 @@ class PrivateQueueBoundaryTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val root = File(input!!)
+        val files = (0..2).map { File(root, "track$it.m4a") }
+        files.forEach { assertTrue("Private input missing", it.isFile) }
         val label = (if (corrected) "corrected-" else "") + if (queue) "queue-$preload" else "static-$preload"
         val out = File(context.getExternalFilesDir(null), "private-boundary/$label").apply { mkdirs() }
         val events = File(out, "events.jsonl")
+        events.writeText("")
+        val traceOutput = args.getString("privateOutputTrace") == "true"
+        // The optional per-write trace must not open a file for every output attempt.
+        // Buffer only this diagnostic path; timestamps and all failure assertions remain unchanged.
+        var eventWriter = if (traceOutput) events.bufferedWriter(bufferSize = 64 * 1024) else null
         val started = SystemClock.elapsedRealtime()
         fun event(kind: String, vararg values: Pair<String, Any?>) = synchronized(events) {
             val item = JSONObject().put("kind", kind).put("elapsedMs", SystemClock.elapsedRealtime() - started)
             values.forEach { (key, value) -> item.put(key, value ?: JSONObject.NULL) }
-            events.appendText(item.toString() + "\n")
+            val line = item.toString() + "\n"
+            eventWriter?.write(line) ?: events.appendText(line)
         }
-        events.writeText("")
         val captureOutput = FileOutputStream(File(out, "rendered.pcm"))
-        val traceOutput = args.getString("privateOutputTrace") == "true"
-        val acceptedOutput = if (traceOutput) FileOutputStream(File(out, "accepted-output.pcm")) else null
+        val acceptedOutput = if (traceOutput) FileOutputStream(File(out, "accepted-output.pcm")).buffered(256 * 1024) else null
         event("diagnostic-config", "outputTrace" to traceOutput, "physicalOutputProof" to false)
         var byteCount = 0L
         val capture = object : BaseAudioProcessor() {
@@ -90,8 +96,6 @@ class PrivateQueueBoundaryTest {
         var firstInputSeen = false
         var firstInputBound = false
         val rawBindingSeen = java.util.concurrent.atomic.AtomicBoolean()
-        val files = (0..2).map { File(root, "track$it.m4a") }
-        files.forEach { assertTrue("Private input missing", it.isFile) }
         val tracks = files.mapIndexed { i, f -> Track(f.toURI().toString(), "Private $i", durationMs = listOf(212171L,362636L,364401L)[i], fileName = f.name, relativePath = f.name) }
         try {
             if (queue) preferences.write(QueueSettings(preloadNext = preload))
@@ -199,6 +203,11 @@ class PrivateQueueBoundaryTest {
             db.close()
             synchronized(captureOutput) { captureOutput.close() }
             acceptedOutput?.close()
+            synchronized(events) {
+                val writer = eventWriter
+                eventWriter = null // A late native release callback may still append its evidence.
+                writer?.close()
+            }
             if (queue) preferences.write(original)
         }
     }
