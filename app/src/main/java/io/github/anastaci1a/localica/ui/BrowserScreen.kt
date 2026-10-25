@@ -654,8 +654,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val loadingActivity = remember { LoadingShimmerActivity() }
             val pendingArtwork by remember(loadingActivity) { derivedStateOf(structuralEqualityPolicy()) { loadingActivity.count > 0 } }
             val shimmer = rememberBrowseLoadingShimmer(loadedResult == null || !loadingReveal.complete || pendingArtwork, loadingReducedMotion)
+            val galleryLoadingText = if (displayedStyle.presentation != Presentation.List)
+                rememberGalleryLoadingTextMetrics(displayedStyle, columns) else null
             CompositionLocalProvider(LocalLoadingShimmer provides shimmer, LocalLoadingShimmerActivity provides loadingActivity,
-                LocalReducedMotion provides loadingReducedMotion) {
+                LocalReducedMotion provides loadingReducedMotion, LocalGalleryLoadingTextMetrics provides galleryLoadingText) {
             if (loadedResult == null && !artDetail) BrowseLoadingViewport(displayedStyle, cellGeometry,
                 viewportWidth, constraints.maxHeight, if (showFilters || showSearchPill) pillSlotHeight else 0.dp,
                 popupDismiss == null && displayedStyle.extraInfo != ExtraInfo.None, artistOnlyLoading)

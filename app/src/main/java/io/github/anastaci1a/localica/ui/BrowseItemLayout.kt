@@ -40,6 +40,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)
     val loadingInformation = showInformation && style.extraInfo != ExtraInfo.None
     val infoLine = MaterialTheme.typography.bodySmall.lineHeight
+    val galleryLoadingText = if (gallery && loadingReveal != null) rememberGalleryLoadingTextMetrics(style, geometry.columns) else null
     fun Modifier.reveal() = if (loadingReveal == null) this else graphicsLayer { alpha = loadingReveal.alpha }
     fun Modifier.artShape() = graphicsLayer {
         shape = RoundedCornerShape(browseLoadingArtCorner(artCorner.floatValue, size.minDimension,
@@ -49,14 +50,14 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     fun trailing(value: BrowseStyle) = value.presentation == Presentation.List && value.listSize.trailingInformation
     val titleSize by animateFloatAsState(style.browseTitleSize(geometry.columns).toFloat(), tween(duration), label = "Browse title size")
     val titleLine by animateFloatAsState(style.browseTitleLine(geometry.columns).toFloat(), tween(duration), label = "Browse title line")
-    fun numbered(value: BrowseStyle) = trackNumber != null && value.presentation == Presentation.List && value.listSize != ListSize.Large
+    fun numbered(value: BrowseStyle) = value.trackNumberLabel(trackNumber, itemIndex) != null
     val numberAlpha = if (from == null) { if (numbered(style)) 1f else 0f } else
         (if (numbered(from)) 1f else 0f) + ((if (numbered(style)) 1f else 0f) - (if (numbered(from)) 1f else 0f)) * progress
     fun Modifier.morph() = if (from != null) this else animateBounds(lookahead, boundsTransform = { _, _ -> tween(duration) })
     Layout(modifier = Modifier.fillMaxWidth(), content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
             item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).testTag("browse-art-${item.key}")) {
-            if (numberAlpha > 0f) Text(requireNotNull(trackNumber), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
+            if (numberAlpha > 0f) Text(style.trackNumberLabel(trackNumber, itemIndex) ?: from?.trackNumberLabel(trackNumber, itemIndex).orEmpty(), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (numberAlpha < 1f)
                 MediaArtwork(item.coverUris, Modifier.fillMaxSize().graphicsLayer {
@@ -69,7 +70,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         Box(Modifier.morph().reveal().testTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, progress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
-                fontWeight = if (trackNumber != null) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
+                fontWeight = if (numbered(style)) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
                 maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis)
         }
         Box(Modifier.morph().reveal().testTag("browse-info-${item.key}")) {
@@ -121,8 +122,9 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         val textWidth = metrics.titleWidth(information.width)
         val text = children[1].measure(Constraints.fixedWidth(textWidth))
         val reserve = if (from == null) loadingReveal?.reservation ?: 0f else 0f
-        val reservedTitle = maxOf(text.height, metrics.titleLine.sp.roundToPx() * metrics.lines)
-        val reservedInfo = if (loadingInformation) maxOf(information.height, infoLine.roundToPx() * metrics.lines) else information.height
+        val reservedTitle = maxOf(text.height, galleryLoadingText?.titleReservation ?: (metrics.titleLine.sp.roundToPx() * metrics.lines))
+        val reservedInfo = if (loadingInformation) maxOf(information.height,
+            galleryLoadingText?.informationReservation ?: (infoLine.roundToPx() * metrics.lines)) else information.height
         fun retained(real: Int, reserved: Int) = (real + (reserved - real) * reserve).toInt()
         val placement = metrics.place(retained(text.height, reservedTitle), information.width,
             retained(information.height, reservedInfo))
@@ -130,10 +132,12 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         val actions = children[3].measure(Constraints.fixed(metrics.menu, placement.menuHeight))
         val blankArt = children.getOrNull(4)?.measure(Constraints.fixed(metrics.art, metrics.art))
         val blankInfoWidth = metrics.loadingInformationWidth(loadingInformation)
-        val blankTitle = children.getOrNull(5)?.measure(Constraints.fixed(metrics.titleWidth(blankInfoWidth), reservedTitle))
-        val blankInfo = children.getOrNull(6)?.measure(Constraints.fixed(blankInfoWidth, if (loadingInformation) infoLine.roundToPx() else 0))
-        val blankPlacement = metrics.place(retained(text.height, reservedTitle), blankInfoWidth,
-            retained(information.height, reservedInfo))
+        val blankTitleHeight = if (gallery) galleryLoadingText?.titleLine ?: metrics.titleLine.sp.roundToPx() else reservedTitle
+        val blankInfoHeight = if (loadingInformation) galleryLoadingText?.informationLine ?: infoLine.roundToPx() else 0
+        val blankTitle = children.getOrNull(5)?.measure(Constraints.fixed(metrics.titleWidth(blankInfoWidth), blankTitleHeight))
+        val blankInfo = children.getOrNull(6)?.measure(Constraints.fixed(blankInfoWidth, blankInfoHeight))
+        val blankPlacement = if (gallery) metrics.place(blankTitleHeight, blankInfoWidth, blankInfoHeight) else
+            metrics.place(retained(text.height, reservedTitle), blankInfoWidth, retained(information.height, reservedInfo))
         layout(constraints.maxWidth, placement.height) {
             blankArt?.placeRelative(placement.artX, placement.artY)
             blankTitle?.placeRelative(placement.titleX, placement.titleY)

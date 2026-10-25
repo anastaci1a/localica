@@ -245,7 +245,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             }
         }) { zoomIn, midpoint ->
         val next = style.zoomStep(zoomIn, with(density) { width.toDp().value },
-            albumSongs = route.collection?.kind == MediaKind.Album)
+            albumSongs = route.supportsTracklist())
         if (next != style && !motion.disposed && motion.source == null) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
             motion.capturing = true
