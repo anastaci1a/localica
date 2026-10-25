@@ -402,6 +402,20 @@ jobs:
                     data = json.loads(receipt.read_text())
                     assert data['sha'] == manifest['sha'] and str(data['api']) == str(api)
                     assert set(data['selectors']) == expected and set(data['counts']) == expected
+                    source_bytes = (focused / 'expected-methods.json').read_bytes()
+                    source_inventory = json.loads(source_bytes)
+                    assert hashlib.sha256(source_bytes).hexdigest() == data['source_inventory_sha256']
+                    assert set(source_inventory['selectors']) == expected
+                    assert set(data['methods']) == set(source_inventory['runtime_methods'])
+                    required = set(manifest['required_regression_classes'])
+                    assert set(data['required_selectors']) == required
+                    derived = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in expected}
+                    for method, outcome in data['methods'].items():
+                        cls, name = method.rsplit('#', 1)
+                        assert cls in expected and name and outcome in derived[cls]
+                        derived[cls][outcome] += 1
+                        assert cls not in required or outcome == 'passed'
+                    assert derived == data['counts']
                     assert all(value['passed'] > 0 and value['failed'] == 0 and value['errors'] == 0
                                for value in data['counts'].values())
                     data['independent_test_apk_hashes'] = (focused / 'test-input-apks.sha256').read_text()
