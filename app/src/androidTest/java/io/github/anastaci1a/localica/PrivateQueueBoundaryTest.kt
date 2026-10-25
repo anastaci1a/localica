@@ -51,9 +51,16 @@ class PrivateQueueBoundaryTest {
         val events = File(out, "events.jsonl")
         events.writeText("")
         val traceOutput = args.getString("privateOutputTrace") == "true"
+        val asyncEvidence = args.getString("privateAsyncEvidence") == "true"
+        require(!asyncEvidence || traceOutput) { "Asynchronous evidence requires the explicit output trace" }
+        fun evidenceOutput(file: File): java.io.OutputStream {
+            val stream = FileOutputStream(file)
+            return if (asyncEvidence) PrivateDiagnosticWriter(stream) else stream
+        }
         // The optional per-write trace must not open a file for every output attempt.
         // Buffer only this diagnostic path; timestamps and all failure assertions remain unchanged.
-        var eventWriter = if (traceOutput) events.bufferedWriter(bufferSize = 64 * 1024) else null
+        var eventWriter = if (traceOutput) java.io.BufferedWriter(
+            java.io.OutputStreamWriter(evidenceOutput(events), Charsets.UTF_8), 64 * 1024) else null
         val started = SystemClock.elapsedRealtime()
         val traceWriteDelays = mutableListOf<JSONObject>()
         var traceWriteSlowCount = 0
@@ -80,9 +87,11 @@ class PrivateQueueBoundaryTest {
                 }
             }
         }
-        val captureOutput = FileOutputStream(File(out, "rendered.pcm"))
-        val acceptedOutput = if (traceOutput) FileOutputStream(File(out, "accepted-output.pcm")).buffered(256 * 1024) else null
-        event("diagnostic-config", "outputTrace" to traceOutput, "physicalOutputProof" to false)
+        val captureOutput = evidenceOutput(File(out, "rendered.pcm"))
+        val acceptedOutput = if (traceOutput) evidenceOutput(File(out, "accepted-output.pcm")).buffered(256 * 1024) else null
+        event("diagnostic-config", "outputTrace" to traceOutput, "asyncEvidence" to asyncEvidence,
+            "asyncByteBudgetPerFile" to if (asyncEvidence) PrivateDiagnosticWriter.DEFAULT_MAX_OUTSTANDING_BYTES else 0,
+            "physicalOutputProof" to false)
         var byteCount = 0L
         val capture = object : BaseAudioProcessor() {
             override fun onConfigure(format: AudioFormat): AudioFormat {
@@ -121,6 +130,7 @@ class PrivateQueueBoundaryTest {
         var firstInputBound = false
         val rawBindingSeen = java.util.concurrent.atomic.AtomicBoolean()
         val tracks = files.mapIndexed { i, f -> Track(f.toURI().toString(), "Private $i", durationMs = listOf(212171L,362636L,364401L)[i], fileName = f.name, relativePath = f.name) }
+        var playbackFailure: Throwable? = null
         try {
             if (queue) preferences.write(QueueSettings(preloadNext = preload))
             instrumentation.runOnMainSync {
@@ -221,21 +231,36 @@ class PrivateQueueBoundaryTest {
             assertEquals(2, arrivals)
             assertEquals("Rebuffered after initial readiness", 0, rebuffers)
             assertEquals("Reported underrun", 0, underruns)
+        } catch (failure: Throwable) {
+            playbackFailure = failure
+            throw failure
         } finally {
-            instrumentation.runOnMainSync { engine?.let { controller?.detach(it); it.release() }; job.cancel() }
-            runBlocking { job.join() }
-            db.close()
-            synchronized(captureOutput) { captureOutput.close() }
-            acceptedOutput?.close()
-            synchronized(events) {
+            var cleanupFailure: Throwable? = null
+            fun cleanup(action: () -> Unit) {
+                try { action() } catch (failure: Throwable) {
+                    val first = playbackFailure ?: cleanupFailure
+                    if (first != null) { if (first !== failure) first.addSuppressed(failure) }
+                    else cleanupFailure = failure
+                }
+            }
+            cleanup { instrumentation.runOnMainSync {
+                try { engine?.let { controller?.detach(it); it.release() } }
+                finally { job.cancel() }
+            } }
+            cleanup { runBlocking { job.join() } }
+            cleanup { db.close() }
+            cleanup { synchronized(captureOutput) { captureOutput.close() } }
+            cleanup { acceptedOutput?.close() }
+            cleanup { synchronized(events) {
                 // Keep diagnostic timing even when a codec/playback error exits before assertions.
                 if (traceOutput) event("trace-write-summary", "maximumDurationNs" to traceWriteMaxNs,
                     "slowCount" to traceWriteSlowCount, "first128" to org.json.JSONArray(traceWriteDelays))
                 val writer = eventWriter
                 eventWriter = null // A late native release callback may still append its evidence.
                 writer?.close()
-            }
-            if (queue) preferences.write(original)
+            } }
+            cleanup { if (queue) preferences.write(original) }
+            cleanupFailure?.let { throw it }
         }
     }
 }
