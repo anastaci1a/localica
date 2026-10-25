@@ -16,6 +16,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.playback.MediaEditAudioSink
 import io.github.anastaci1a.localica.playback.MediaEditTrim
+import io.github.anastaci1a.localica.playback.BoundaryDeclick
+import io.github.anastaci1a.localica.playback.BoundaryDeclickAudioProcessor
+import io.github.anastaci1a.localica.playback.BoundaryDeclickAudioSink
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,7 +60,7 @@ class MediaEditSinkLifecycleTest {
         }
     }
 
-    private class Harness : Closeable {
+    private class Harness(declickEnabled: (() -> Boolean)? = null) : Closeable {
         private val thread = HandlerThread("media-edit-sink-test").apply { start() }
         private val handler = Handler(thread.looper)
         private val capture = Capture()
@@ -69,7 +72,10 @@ class MediaEditSinkLifecycleTest {
         private val releasesComplete = CountDownLatch(1)
         private val sink = onSink {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            MediaEditAudioSink(DefaultAudioSink.Builder(context).setAudioProcessors(arrayOf(capture)).build())
+            val declick = declickEnabled?.let(::BoundaryDeclickAudioProcessor)
+            val processors = if (declick == null) arrayOf(capture) else arrayOf(declick, capture)
+            val native = MediaEditAudioSink(DefaultAudioSink.Builder(context).setAudioProcessors(processors).build())
+            (if (declick == null) native else BoundaryDeclickAudioSink(native, declick))
                 .also { sink ->
                     sink.setListener(object : AudioSink.Listener {
                         override fun onPositionDiscontinuity() {}
@@ -310,6 +316,47 @@ class MediaEditSinkLifecycleTest {
             val beginning = ramp(1707, 10000)
             h.feed(beginning, 0)
             assertArrayEquals(tail(beginning, 1600), h.finishAndRead())
+        }
+    }
+
+    @Test fun optionalDeclickReceivesOnlyPostTrimPcmAndPreservesEveryFrame() {
+        Harness { true }.use { h ->
+            val first = ShortArray(64) { 1000 }
+            val second = ShortArray(64) { 1200 }
+            h.streamOffset(0)
+            h.configure(48000, MediaEditTrim(48000, 1600))
+            h.feed(ShortArray(1600) { -30000 } + first, 0)
+            h.streamOffset(1_000_000)
+            h.configure(48000, MediaEditTrim(48000, 1600))
+            h.feed(ShortArray(1600) { 30000 } + second, 0)
+            val f = BoundaryDeclick.Pcm16Format(48000, 1)
+            val plan = BoundaryDeclick.plan(first.takeLast(8).toShortArray(), second, f, f, true)
+            assertTrue(plan.applied)
+            assertEquals(1001.toShort(), plan.output.first())
+            assertArrayEquals(first + plan.output, h.finishAndRead())
+        }
+    }
+
+    @Test fun disabledDeclickPreservesPostTrimBoundaryAndIntentionalSilenceExactly() {
+        Harness { false }.use { h ->
+            val first = ShortArray(64) { if (it in 20..30) 0 else 1000 }
+            val second = ShortArray(64) { 1200 }
+            h.streamOffset(0); h.configure(48000, MediaEditTrim(48000, 1600))
+            h.feed(ShortArray(1600) { -30000 } + first, 0)
+            h.streamOffset(1_000_000); h.configure(48000, MediaEditTrim(48000, 1600))
+            h.feed(ShortArray(1600) { 30000 } + second, 0)
+            assertArrayEquals(first + second, h.finishAndRead())
+        }
+    }
+
+    @Test fun explicitSeekFlushCannotSmoothAReplacementStreamAgainstTheOldTail() {
+        Harness { true }.use { h ->
+            val first = ShortArray(64) { 1000 }
+            val second = ShortArray(64) { 1200 }
+            h.streamOffset(0); h.configure(48000, null); h.feed(first, 0)
+            h.flush()
+            h.streamOffset(1_000_000); h.configure(48000, null); h.feed(second, 0)
+            assertArrayEquals(first + second, h.finishAndRead())
         }
     }
 }
