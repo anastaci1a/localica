@@ -78,11 +78,14 @@ class BrowseOptionsFaceContractTest {
                         assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action!!.invoke(layouts))
                         assertTrue(layouts.isNotEmpty())
                         layouts.forEach {
+                            val extents = if (it.hasVisualOverflow) "paragraphWidth=${it.multiParagraph.width} " +
+                                "lines=${(0 until it.lineCount).map { line -> it.getLineLeft(line) to it.getLineRight(line) }} " +
+                                "glyphs=${it.layoutInput.text.indices.map { offset -> it.getBoundingBox(offset) }} node=$bounds" else ""
                             assertFalse("Clipped $summary / $prefix / $scale / $w: size=${it.size} " +
                                 "constraints=${it.layoutInput.constraints} lines=${it.lineCount} " +
                                 "widthOverflow=${it.didOverflowWidth} heightOverflow=${it.didOverflowHeight} " +
                                 "font=${it.layoutInput.style.fontSize} leading=${it.layoutInput.style.lineHeight} " +
-                                "density=${it.layoutInput.density} owner=${sizes["$prefix-$index"]}", it.hasVisualOverflow)
+                                "density=${it.layoutInput.density} owner=${sizes["$prefix-$index"]} $extents", it.hasVisualOverflow)
                         }
                     }
                     assertTrue(text.fetchSemanticsNodes().isNotEmpty())
