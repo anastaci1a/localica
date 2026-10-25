@@ -192,7 +192,7 @@ class PopupEnvelopeTest {
         }
     }
 
-    @Test fun mainAndQueueEnvelopesStayStableAcrossAllSupportedDraftsAndWindowChanges() {
+    @Test fun mainAndQueueEnvelopesStayStableAcrossStructuralDraftsAndWindowChanges() {
         val main = io.github.anastaci1a.localica.navigation.BrowseRoute(io.github.anastaci1a.localica.navigation.MainTab.Library)
         val queue = io.github.anastaci1a.localica.navigation.BrowseRoute(
             io.github.anastaci1a.localica.navigation.MainTab.Queues,
@@ -227,10 +227,18 @@ class PopupEnvelopeTest {
             }
         } }
         val base = io.github.anastaci1a.localica.browse.BrowseStyle()
-        val drafts = io.github.anastaci1a.localica.browse.ListSize.densityOrder.map { base.copy(listSize = it) } +
-            (1..5).map { base.copy(presentation = io.github.anastaci1a.localica.browse.Presentation.Standard, itemsPerRow = it) } +
-            io.github.anastaci1a.localica.browse.ExtraInfo.entries.map { base.copy(extraInfo = it) } +
-            io.github.anastaci1a.localica.library.TrackSort.entries.map { base.copy(sort = it, ascending = false) }
+        // Exhaustive text shaping lives in BrowseOptionsFaceContractTest; declaration mapping
+        // is exhaustive on JVM. Mount each real host structure, including legacy summaries,
+        // rather than resetting two dialog/gesture owners for every label permutation.
+        val drafts = listOf(
+            base.copy(sort = io.github.anastaci1a.localica.library.TrackSort.Manual,
+                listSize = io.github.anastaci1a.localica.browse.ListSize.Tracklist,
+                extraInfo = io.github.anastaci1a.localica.browse.ExtraInfo.Inherited),
+            base.copy(presentation = io.github.anastaci1a.localica.browse.Presentation.Standard,
+                sort = io.github.anastaci1a.localica.library.TrackSort.Manual, itemsPerRow = 1),
+            base.copy(presentation = io.github.anastaci1a.localica.browse.Presentation.Standard,
+                sort = io.github.anastaci1a.localica.library.TrackSort.Count, itemsPerRow = 5),
+            base.copy(sort = io.github.anastaci1a.localica.library.TrackSort.Count, ascending = false))
         for ((w, h, font) in listOf(Triple(360.dp, 640.dp, 1f), Triple(400.dp, 240.dp, 1.5f), Triple(220.dp, 320.dp, 2f))) {
             for (caller in listOf(main, queue)) {
                 var expected: IntSize? = null

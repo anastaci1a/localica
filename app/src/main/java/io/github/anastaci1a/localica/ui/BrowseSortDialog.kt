@@ -73,9 +73,8 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
         BooleanPreference("Save only for this list", override) { override = it }
         if (overridden) ActionTextButton(onClick = onReset) { Text("Use list-type defaults") }
     }
-    val songs = route.collection != null || route.tab in setOf(MainTab.Songs, MainTab.MostPlayed) || route.filter == MediaKind.Song
-    val fields = if (songs) TrackSort.entries.filter { it != TrackSort.Count && (it != TrackSort.Manual || route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)) }
-        else TrackSort.entries.filterNot { it in setOf(TrackSort.Manual, TrackSort.Album, TrackSort.Folder) }
+    val declaration = browseOptionsDeclaration(route, mutableOrder != null, onRandomize != null, overridden, onReverseOrder != null)
+    val fields = declaration.sortFields
     GlassAlertDialog(onDismissRequest = onDismiss, modifier = Modifier.testTag("browse-options-dialog"), title = {
         Column {
             GlassChoices(listOf("Sort", "View"), tab, horizontal = true,
@@ -86,7 +85,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     }, text = {
         val pageProgress by animateFloatAsState(tab.toFloat(), tween(if (LocalReducedMotion.current) 0 else 140), label = "Browse options page")
         StablePopupBody(Modifier.testTag("browse-options-body"), measurement = {
-            BrowseOptionsMeasurement(route, fields, mutableOrder != null, onRandomize != null, overridden, shadowInset, onReverseOrder != null)
+            BrowseOptionsMeasurement(declaration, shadowInset)
         }) {
         Layout(modifier = Modifier.fillMaxWidth(), content = {
         repeat(2) { page ->
@@ -97,7 +96,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                 .scrollEdgeFade(scroll).controlVerticalScroll(scroll).padding(horizontal = shadowInset, vertical = shadowInset),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (page == 1) {
-                    ListViewFields(route, edited) { edited = it }
+                    ListViewFields(route, edited, declaration) { edited = it }
                     if (mutableOrder != null) scopeFields()
                 } else {
                     if (onRandomize != null) {
@@ -136,7 +135,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                     ChoicePreference("Sort by", edited.sort, fields, ::sortLabel, popup = true) { field ->
                         edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending)
                     }
-                    if (edited.sort != TrackSort.Manual) SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }
+                    if (!declaration.topology(edited).manual) SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }
                     if (failure) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
                 }
             }
@@ -152,7 +151,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
         }
         }
     }, footer = {
-        if (mutableOrder == null && (route.collection != null || route.search)) Column { scopeFields() }
+        if (declaration.footerScope) Column { scopeFields() }
     }, confirmButton = {
         ActionTextButton(enabled = !busy && (!applying || !applied && onApplySort != null), onClick = {
             if (applying) {
@@ -163,18 +162,8 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     }, dismissButton = { ActionTextButton(enabled = !busy, onClick = onDismiss) { Text(if (applying) "Close" else "Cancel") } },
         actionsMeasurement = if (mutableOrder != null) ({ BrowseOptionsActionsMeasurement() }) else null,
         widthMeasurement = {
-            BrowseOptionsWidthMeasurement(route, fields, mutableOrder != null, onRandomize != null, overridden, shadowInset, onReverseOrder != null)
+            BrowseOptionsWidthMeasurement(declaration, shadowInset)
         })
-}
-
-internal fun sortLabel(sort: TrackSort) = when (sort) {
-    TrackSort.Album -> "Album / disc / track"
-    TrackSort.AlbumArtist -> "Album Artist"
-    TrackSort.Added -> "Date added"
-    TrackSort.Modified -> "Date modified"
-    TrackSort.MostPlayed -> "Most played"
-    TrackSort.Count -> "Number of songs"
-    else -> sort.name
 }
 
 /** A single source surface for both destinations and their return transition. */
