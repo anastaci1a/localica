@@ -16,6 +16,21 @@ name: Prototype (not release certified)
         required: false
         default: ''
         type: string
+  workflow_call:
+    inputs:
+      affected_classes:
+        required: true
+        type: string
+      coverage_reason:
+        required: true
+        type: string
+      known_issues:
+        required: false
+        default: ''
+        type: string
+    secrets:
+      ANDROID_DEBUG_KEYSTORE:
+        required: true
 permissions:
   contents: read
 concurrency:
