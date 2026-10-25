@@ -41,19 +41,50 @@ class PrivateQueueBoundaryTest {
         val args = InstrumentationRegistry.getArguments()
         val input = args.getString("privateBoundaryInput")
         assumeTrue("Requires explicitly supplied private local files", input != null)
+        // Validate diagnostic parameters before creating/truncating any evidence output.
+        val durations = args.getString("privateTrackDurationsMs")?.let { value ->
+            val parts = value.split(',')
+            require(parts.size == 3) { "privateTrackDurationsMs requires exactly three comma-separated durations" }
+            parts.map { part ->
+                require(part.matches(Regex("[0-9]+"))) { "Track durations must be positive integer milliseconds" }
+                requireNotNull(part.toLongOrNull()?.takeIf { it > 0 }) { "Track duration is invalid or overflows Long" }
+            }
+        } ?: listOf(212171L, 362636L, 364401L)
+        fun booleanArgument(name: String, default: Boolean): Boolean = when (val value = args.getString(name)) {
+            null -> default
+            "true" -> true
+            "false" -> false
+            else -> throw IllegalArgumentException("$name must be the literal true or false, got $value")
+        }
+        val expectedFirstInputBinding = booleanArgument("privateExpectedFirstInputEditBinding", true)
+        val expectedRawBinding = booleanArgument("privateExpectedRawEditBinding", true)
+        val checkEditBindings = corrected || args.containsKey("privateExpectedFirstInputEditBinding") ||
+            args.containsKey("privateExpectedRawEditBinding")
+        val outputLabel = args.getString("privateOutputLabel")
+        require(outputLabel == null || outputLabel.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))) {
+            "privateOutputLabel must contain 1..80 ASCII letters/digits/underscores/hyphens and start with a letter/digit"
+        }
+        val traceOutput = booleanArgument("privateOutputTrace", false)
+        val asyncEvidence = booleanArgument("privateAsyncEvidence", false)
+        require(!asyncEvidence || traceOutput) { "Asynchronous evidence requires the explicit output trace" }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val root = File(input!!)
         val files = (0..2).map { File(root, "track$it.m4a") }
         files.forEach { assertTrue("Private input missing", it.isFile) }
-        val label = (if (corrected) "corrected-" else "") + if (queue) "queue-$preload" else "static-$preload"
-        val out = File(context.getExternalFilesDir(null), "private-boundary/$label").apply { mkdirs() }
+        val label = outputLabel ?: ((if (corrected) "corrected-" else "") + if (queue) "queue-$preload" else "static-$preload")
+        val out = File(context.getExternalFilesDir(null), "private-boundary/$label")
+        if (outputLabel != null) {
+            require(!out.exists()) { "Explicit privateOutputLabel must name fresh evidence; refusing overwrite" }
+            val parent = requireNotNull(out.parentFile)
+            check(parent.isDirectory || parent.mkdirs()) { "Cannot create evidence parent" }
+            check(out.mkdir()) { "Cannot exclusively create fresh evidence directory" }
+        } else {
+            out.mkdirs()
+        }
         val events = File(out, "events.jsonl")
         events.writeText("")
         val lateEvents = File(out, "late-events.jsonl").apply { writeText("") }
-        val traceOutput = args.getString("privateOutputTrace") == "true"
-        val asyncEvidence = args.getString("privateAsyncEvidence") == "true"
-        require(!asyncEvidence || traceOutput) { "Asynchronous evidence requires the explicit output trace" }
         fun evidenceOutput(file: File): java.io.OutputStream {
             val stream = FileOutputStream(file)
             return if (asyncEvidence) PrivateDiagnosticWriter(stream) else stream
@@ -94,7 +125,9 @@ class PrivateQueueBoundaryTest {
         val acceptedOutput = if (traceOutput) evidenceOutput(File(out, "accepted-output.pcm")).buffered(256 * 1024) else null
         event("diagnostic-config", "outputTrace" to traceOutput, "asyncEvidence" to asyncEvidence,
             "asyncByteBudgetPerFile" to if (asyncEvidence) PrivateDiagnosticWriter.DEFAULT_MAX_OUTSTANDING_BYTES else 0,
-            "physicalOutputProof" to false)
+            "physicalOutputProof" to false, "trackDurationsMs" to org.json.JSONArray(durations),
+            "checkEditBindings" to checkEditBindings,
+            "expectedFirstInputEditBinding" to expectedFirstInputBinding, "expectedRawEditBinding" to expectedRawBinding)
         var byteCount = 0L
         val capture = object : BaseAudioProcessor() {
             override fun onConfigure(format: AudioFormat): AudioFormat {
@@ -131,8 +164,15 @@ class PrivateQueueBoundaryTest {
         var done = false
         var firstInputSeen = false
         var firstInputBound = false
+        val rawFormatSeen = java.util.concurrent.atomic.AtomicBoolean()
         val rawBindingSeen = java.util.concurrent.atomic.AtomicBoolean()
-        val tracks = files.mapIndexed { i, f -> Track(f.toURI().toString(), "Private $i", durationMs = listOf(212171L,362636L,364401L)[i], fileName = f.name, relativePath = f.name) }
+        val tracks = files.mapIndexed { i, f -> Track(f.toURI().toString(), "Private $i", durationMs = durations[i], fileName = f.name, relativePath = f.name) }
+        fun assertEditBindings() {
+            assertTrue("Expected first-track input format callback", firstInputSeen)
+            assertEquals("First input edit binding", expectedFirstInputBinding, firstInputBound)
+            assertTrue("Expected an actual decoded RAW format callback", rawFormatSeen.get())
+            assertEquals("First decoded RAW edit binding", expectedRawBinding, rawBindingSeen.get())
+        }
         var playbackFailure: Throwable? = null
         try {
             if (queue) preferences.write(QueueSettings(preloadNext = preload))
@@ -145,7 +185,10 @@ class PrivateQueueBoundaryTest {
                         val sink = builder.build()
                         val traced = object : ForwardingAudioSink(sink) {
                             override fun configure(format: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
-                                if (format.customData is MediaEditTrim) rawBindingSeen.set(true)
+                                if (format.sampleMimeType == MimeTypes.AUDIO_RAW && !rawFormatSeen.get()) {
+                                    rawBindingSeen.set(format.customData is MediaEditTrim)
+                                    rawFormatSeen.set(true)
+                                }
                                 event("sink-configure", "rate" to format.sampleRate, "channels" to format.channelCount, "delay" to format.encoderDelay, "padding" to format.encoderPadding, "editBinding" to (format.customData is MediaEditTrim))
                                 super.configure(format, specifiedBufferSize, outputChannels)
                             }
@@ -205,9 +248,8 @@ class PrivateQueueBoundaryTest {
                 var result = false
                 instrumentation.runOnMainSync {
                     error?.let { throw AssertionError("Playback error", it) }
-                    if (corrected && firstInputSeen && engine!!.playbackState == Player.STATE_READY) {
-                        assertTrue("Expected corrected first input to carry its edit binding", firstInputBound)
-                        assertTrue("Expected decoded PCM to retain its edit binding", rawBindingSeen.get())
+                    if (checkEditBindings && firstInputSeen && engine!!.playbackState == Player.STATE_READY) {
+                        assertEditBindings()
                     }
                     result = condition()
                 }
@@ -231,6 +273,7 @@ class PrivateQueueBoundaryTest {
                 Thread.sleep(100)
             }
             event("summary", "arrivals" to arrivals, "rebuffers" to rebuffers, "underruns" to underruns, "bytes" to byteCount, "queue" to queue, "preload" to preload)
+            if (checkEditBindings) assertEditBindings()
             assertEquals(2, arrivals)
             assertEquals("Rebuffered after initial readiness", 0, rebuffers)
             assertEquals("Reported underrun", 0, underruns)
