@@ -5,6 +5,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -140,4 +142,82 @@ class HomeSelectionTest {
             interfaceStore.edit().clear().commit(); pinStore.edit().clear().commit(); browseStore.edit().clear().commit()
         }
     }
+
+    @Test fun constrainedHomeReturnsOnlyItsVerticalListAndPreservesThePinnedCarouselScope() {
+        val songs = (0..15).map { track(it.toString()) }
+        val snapshot = LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = songs)
+        val pins = songs.map { MediaRef(MediaKind.Song, it.id) }
+        val session = SessionSelection()
+        var opened = 0
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalSessionSelection provides session, LocalBrowseObscuredInset provides 64.dp) {
+                Box(Modifier.size(320.dp, 260.dp).testTag("home-return-host")) {
+                    PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), pins,
+                        {}, {}, { _, _ -> opened++ }, {}, { _, _ -> }, reducedMotion = true)
+                }
+            }
+        } }
+        compose.waitUntil(5000) { compose.runOnUiThread { session.visible.size == songs.size } }
+        val home = compose.onNodeWithTag("home-list")
+        val carousel = compose.onNodeWithTag("home-pins")
+        fun vertical() = home.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        fun horizontal() = carousel.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()
+        compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        carousel.performScrollToIndex(9)
+        val carouselPosition = horizontal()
+        assertTrue(carouselPosition > 0f)
+        assertEquals(0f, vertical(), 0f)
+        compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        home.performScrollToIndex(1)
+        assertTrue(vertical() > 0f)
+        val visibleSongs = compose.runOnIdle { session.visible.toList() }
+        compose.onNodeWithContentDescription("Return to top").assertIsDisplayed().performClick()
+        compose.waitUntil(5000) { vertical() == 0f }
+        assertEquals(carouselPosition, horizontal(), 0f)
+        compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(visibleSongs, session.visible)
+            assertNull(session.source)
+            assertFalse(session.active)
+            assertEquals(0, opened)
+        }
+    }
+
+    @Test fun scrolledHomeReturnHidesForInactivePlayerAndSelectionOwnership() {
+        val songs = (0..9).map { track(it.toString()) }
+        val snapshot = LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = songs)
+        val pins = songs.map { MediaRef(MediaKind.Song, it.id) }
+        val session = SessionSelection()
+        var active by mutableStateOf(true)
+        var playerOpen by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalSessionSelection provides session) {
+                Box(Modifier.size(320.dp, 240.dp)) {
+                    PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), pins,
+                        {}, {}, { _, _ -> }, {}, { _, _ -> }, reducedMotion = true,
+                        selectionVisible = active, playerOpen = playerOpen)
+                }
+            }
+        } }
+        compose.waitUntil(5000) { compose.runOnUiThread { session.visible.size == songs.size } }
+        val home = compose.onNodeWithTag("home-list")
+        home.performScrollToIndex(1)
+        fun position() = home.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val before = position()
+        assertTrue(before > 0f)
+        compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
+        compose.runOnIdle { active = false }
+        compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        assertEquals(before, position(), 0f)
+        compose.runOnIdle { active = true; playerOpen = true }
+        compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        assertEquals(before, position(), 0f)
+        compose.runOnIdle { playerOpen = false; session.select(null, listOf(SongRow(songs.first().id, songs.first()))) }
+        compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        assertEquals(before, position(), 0f)
+        compose.runOnIdle { session.clear() }
+        compose.onNodeWithContentDescription("Return to top").assertIsDisplayed().performClick()
+        compose.waitUntil(5000) { position() == 0f }
+    }
+
 }

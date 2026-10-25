@@ -15,6 +15,7 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.roundToInt
 
 /** A non-song caller proves transaction and lifted rendering do not require browser models. */
 class KeyedDragTest {
@@ -25,7 +26,7 @@ class KeyedDragTest {
     private lateinit var reorder: KeyedDragState<Entry, String>
     private var appearance = "at lift"
 
-    private fun fixture(optimisticCommit: Boolean = true) {
+    private fun fixture(optimisticCommit: Boolean = true, reducedMotion: Boolean = true, startDrag: Boolean = true) {
         compose.setContent { LocalicaTheme {
             val grid = rememberLazyGridState()
             val scope = rememberCoroutineScope()
@@ -42,12 +43,12 @@ class KeyedDragTest {
                         Box(Modifier.fillMaxWidth().height(52.dp)) { entry?.let { Text(it.name) } }
                     }
                 }
-                KeyedDragOverlay(reorder, reducedMotion = true, countDescription = { "Dragging $it queues" }) { entry, presentation ->
+                KeyedDragOverlay(reorder, reducedMotion = reducedMotion, countDescription = { "Dragging $it queues" }) { entry, presentation ->
                     Text("${entry.name}: $presentation", Modifier.testTag("lifted-${entry.id}"))
                 }
             }
         } }
-        compose.runOnIdle {
+        if (startDrag) compose.runOnIdle {
             val held = entries[1]
             assertTrue(reorder.begin(held, setOf(held.id), reorder.bounds().getValue(held.id).center))
         }
@@ -147,9 +148,14 @@ class KeyedDragTest {
     @Test fun standaloneCancelRetainsItsBottomMargin() {
         fixture()
         val margin = with(compose.density) { 20.dp.toPx() }
+        val offset = (-margin).roundToInt()
+        val drawn = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
         compose.runOnIdle {
             assertEquals(margin, reorder.cancelBottom, 0.01f)
-            assertEquals(reorder.viewportHeight - margin - reorder.cancelRadius, reorder.cancelCenter.y, 0.01f)
+            // Placement and hit testing share IntOffset, including negative half-pixel ties.
+            assertEquals(offset, reorder.cancelOffsetY)
+            assertEquals(reorder.viewportHeight + offset - reorder.cancelRadius, reorder.cancelCenter.y, 0.01f)
+            assertEquals((reorder.viewportHeight + offset).toFloat(), drawn.bottom, 0.01f)
         }
     }
 
@@ -178,6 +184,65 @@ class KeyedDragTest {
             reorder.move(reorder.cancelCenter)
             assertTrue(reorder.drag!!.overCancel)
         }
+    }
+
+    @Test fun enteringTargetUsesVisibleGeometryAndTracksAStationaryPointer() {
+        fixture(reducedMotion = false, startDrag = false)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            val held = entries[1]
+            assertTrue(reorder.begin(held, setOf(held.id), reorder.bounds().getValue(held.id).center))
+            assertFalse("No target from a prior gesture can be active", reorder.cancelInteractive)
+        }
+        compose.mainClock.advanceTimeBy(48)
+        val drawn = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle {
+            val motion = reorder.drag!!.cancelMotion!!
+            assertTrue(motion.progress in .001f.. .999f)
+            assertEquals(drawn.center.y, reorder.cancelCenter.y, 1.1f)
+            reorder.move(reorder.cancelCenter)
+            assertTrue("The displayed moving center accepts cancellation", reorder.drag!!.overCancel)
+            // Rise is smaller than the radius, so the two centers intentionally overlap.
+            // The upper edge of the resting circle distinguishes moving from stale bounds.
+            val restingTop = reorder.viewportHeight - reorder.cancelBottom - reorder.cancelRadius * 2f
+            reorder.move(Offset(reorder.cancelCenter.x, restingTop + 1f))
+            assertFalse("The not-yet-visible resting edge must not cancel", reorder.drag!!.overCancel)
+        }
+        compose.mainClock.advanceTimeBy(400)
+        compose.runOnIdle {
+            assertTrue("X rising under a stationary finger updates hover", reorder.drag!!.overCancel)
+            reorder.obscuredBottom += reorder.cancelRadius * 3f
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle {
+            assertFalse("Changing occupancy removes hover without another move", reorder.drag!!.overCancel)
+            reorder.move(reorder.cancelCenter)
+            assertTrue(reorder.drag!!.overCancel)
+            reorder.finish(true, true) { _, _, _ -> fail("Cancel cannot commit") }
+            assertFalse("A landing/removed X is immediately inactive", reorder.cancelInteractive)
+        }
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5000) { reorder.drag == null }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            val held = entries[1]
+            assertTrue(reorder.begin(held, setOf(held.id), reorder.bounds().getValue(held.id).center))
+            reorder.move(reorder.cancelCenter)
+            assertFalse("Fresh drag cannot inherit the old target", reorder.drag!!.overCancel)
+        }
+        compose.mainClock.advanceTimeBy(48)
+        compose.runOnIdle {
+            assertTrue(reorder.drag!!.cancelMotion!!.progress < 1f)
+            reorder.move(reorder.cancelCenter)
+            assertTrue(reorder.drag!!.overCancel)
+            reorder.viewportHeight = 40
+            reorder.cancelRadius = 20f
+            reorder.obscuredBottom = 100f
+            assertEquals("A tiny viewport cannot push the entering target below its clamp", 0f, reorder.cancelTravel, 0f)
+            assertEquals(20f, reorder.cancelCenter.y, .01f)
+            reorder.finish(true, true) { _, _, _ -> fail("Cancel cannot commit") }
+        }
+        compose.mainClock.autoAdvance = true
     }
 
 }

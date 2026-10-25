@@ -30,10 +30,20 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     val drag = state.drag ?: return
     val density = LocalDensity.current
     val view = LocalView.current
+    val cancelMotion = key(drag) { rememberFloatingControlMotion(!drag.dropping, reducedMotion) }
+    DisposableEffect(drag, cancelMotion) {
+        drag.cancelMotion = cancelMotion
+        onDispose { drag.cancelMotion = null }
+    }
+    // The target can move under a stationary finger as it enters or a panel yields.
+    LaunchedEffect(drag) {
+        snapshotFlow { Triple(state.cancelCenter, state.cancelRadius, state.cancelInteractive) }.collect { state.refreshCancelHover() }
+    }
     val cancelSize = minOf(with(density) { CompactControlSize.toPx() }, state.viewportHeight.toFloat()).coerceAtLeast(1f)
     SideEffect {
         state.cancelRadius = cancelSize / 2f
         state.cancelMargin = with(density) { cancelBottomMargin.toPx() }
+        state.cancelRise = with(density) { FloatingControlRise.toPx() }
         state.onCancelHover = { entering -> view.performHapticFeedback(if (entering)
             android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
     }
@@ -128,7 +138,8 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         DragCancelTarget(drag.overCancel, "move",
             Modifier.align(Alignment.BottomCenter)
                 // Read late-published panel occupancy during placement, as hit testing does.
-                .offset { IntOffset(0, -state.cancelBottom.roundToInt()) }
+                .offset { IntOffset(0, state.cancelOffsetY) }
+                .graphicsLayer { alpha = cancelMotion.alpha }
                 .size(with(density) { cancelSize.toDp() })
                 .zIndex(10f).testTag("cancel-drag"))
     }

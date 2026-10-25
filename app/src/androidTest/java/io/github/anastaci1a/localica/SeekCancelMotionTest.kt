@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
@@ -15,6 +16,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.navigation.InterfaceSettings
+import io.github.anastaci1a.localica.playback.PlaybackState
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -166,4 +169,93 @@ class SeekCancelMotionTest {
         seek.performTouchInput { down(center); moveTo(Offset(width * .8f, centerY)); cancel() }
         compose.runOnIdle { assertEquals("Second cancellation still cannot seek", 2, commits.size) }
     }
+    @Test fun modeledTargetTracksEntranceHostMovementAndInvalidatesEachGesture() {
+        val target = SeekCancelTargetState()
+        var value by mutableFloatStateOf(20f)
+        var inset by mutableStateOf(20.dp)
+        var shown by mutableStateOf(true)
+        val commits = mutableListOf<Float>()
+        compose.setContent { LocalicaTheme {
+            if (shown) Box(Modifier.fillMaxWidth().height(420.dp)) {
+                DisposableEffect(Unit) { onDispose { target.update(false) } }
+                PlayerSeekBar(value, { value = it }, 0f..100f, { commits += value }, true,
+                    Modifier.width(300.dp).height(40.dp).testTag("seek"),
+                    onCancel = { value = 20f }, liveValue = 20f,
+                    onDrag = { active, _ -> target.update(active) }, cancelTarget = { target.bounds })
+                if (target.active) SeekCancelTarget(target, false, inset, false)
+            }
+        } }
+        val seek = compose.onNodeWithTag("seek")
+        compose.mainClock.autoAdvance = false
+        seek.performTouchInput { down(center); moveBy(Offset(30f, 0f)) }
+        compose.mainClock.advanceTimeBy(64)
+        var first: Rect? = null
+        compose.runOnIdle {
+            first = target.bounds
+            assertNotNull(first)
+            assertTrue(target.motion!!.progress in .01f.. .99f)
+        }
+        val visible = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle {
+            assertEquals(visible.top, target.bounds!!.top, 1.1f)
+            assertEquals(visible.bottom, target.bounds!!.bottom, 1.1f)
+            inset += 60.dp
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val moved = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle {
+            assertEquals("Moving host clearance updates drawn and hit bounds together", moved.top, target.bounds!!.top, 1.1f)
+            assertTrue(moved.bottom < first!!.bottom - 20f)
+        }
+        seek.performTouchInput { cancel() }
+        compose.runOnIdle { assertNull("Removal immediately invalidates bounds", target.bounds); assertTrue(commits.isEmpty()) }
+        seek.performTouchInput { down(center); moveBy(Offset(30f, 0f)) }
+        compose.runOnIdle { assertNull("A new unplaced gesture cannot reuse the old rectangle", target.bounds) }
+        compose.mainClock.advanceTimeBy(64)
+        compose.runOnIdle { assertNotNull(target.bounds); shown = false }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertNull("Disposal invalidates the active target", target.bounds); assertTrue(commits.isEmpty()) }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun realPlayerSurfaceMovesHoverUnderStationaryFingerAndRejectsStaleConsecutiveScrubBounds() {
+        val commits = mutableListOf<Long>()
+        val playback = PlaybackState(connected = true, title = "Seek fixture", positionMs = 20000, durationMs = 100000)
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            PlayerSurface(playback, true, {}, InterfaceSettings(), remember { Animatable(1f) },
+                {}, { commits += it }, {}, {}, {}, {}, visual = PlayerVisual())
+        } } }
+        val seek = compose.onNodeWithContentDescription("Seek")
+        val seekBounds = seek.fetchSemanticsNode().boundsInRoot
+        compose.mainClock.autoAdvance = false
+        seek.performTouchInput { down(center); moveTo(Offset(width * .8f, centerY)) }
+        compose.mainClock.advanceTimeBy(64)
+        val first = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
+        // This point belongs to the resting target but is above the entering target.
+        val stationary = Offset(first.center.x, first.top - 1f) - seekBounds.topLeft
+        seek.performTouchInput { moveTo(stationary) }
+        compose.onNodeWithTag("cancel-seek").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Drag here to cancel"))
+        compose.mainClock.advanceTimeBy(400)
+        val settled = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
+        assertTrue("A newly appearing X must rise", settled.top < first.top - 1f)
+        compose.onNodeWithTag("cancel-seek").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Cancel seek"))
+        val oldCenter = settled.center - seekBounds.topLeft
+        // No composition between gestures: only synchronous invalidation can prevent
+        // the second release from accepting the preceding scrub's stale rectangle.
+        seek.performTouchInput {
+            up()
+            down(Offset(width * .3f, centerY)); moveTo(oldCenter); up()
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertEquals("First scrub cancels; the fresh unplaced target cannot cancel the second", 1, commits.size) }
+        compose.onNodeWithTag("cancel-seek").assertDoesNotExist()
+        seek.performTouchInput { down(center); moveTo(Offset(width * .8f, centerY)); cancel() }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertEquals("Pointer cancellation cannot seek", 1, commits.size) }
+        compose.onNodeWithTag("cancel-seek").assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
+    }
+
 }

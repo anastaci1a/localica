@@ -11,6 +11,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlin.math.roundToInt
 
 internal const val DropGapKey = "localica-drop-gap"
 
@@ -24,6 +25,7 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
     var pointer by mutableStateOf(point)
     var insertion by mutableIntStateOf(original.indexOfFirst { keyOf(it) in keys }.coerceAtLeast(0))
     var overCancel by mutableStateOf(false)
+    var cancelMotion by mutableStateOf<FloatingControlMotion?>(null)
     var dropping by mutableStateOf(false)
     var dropItems by mutableStateOf<List<T>?>(null)
     var destinations by mutableStateOf<Map<String, Rect>?>(null)
@@ -58,14 +60,22 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
     var viewportHeight by mutableIntStateOf(0)
     var viewportWidth by mutableIntStateOf(0)
     var obscuredBottom by mutableFloatStateOf(0f)
-    var cancelRadius = 0f
-    var cancelMargin = 0f
+    var cancelRadius by mutableFloatStateOf(0f)
+    var cancelMargin by mutableFloatStateOf(0f)
+    var cancelRise by mutableFloatStateOf(0f)
     // Occupancy can change after composition. Hit testing and placement must read
     // the same current inset, including the bounded selector's small-height clamp.
     val cancelBottom get() = (cancelMargin + obscuredBottom)
         .coerceIn(0f, (viewportHeight - cancelRadius * 2f).coerceAtLeast(0f))
     var onCancelHover: (Boolean) -> Unit = {}
-    val cancelCenter get() = Offset(viewportWidth / 2f, viewportHeight - cancelBottom - cancelRadius)
+    val cancelTravel get() = cancelRise.coerceAtMost((viewportHeight - cancelRadius * 2f).coerceAtLeast(0f))
+    val cancelOffsetY get() = (-cancelBottom + (drag?.cancelMotion?.offsetY(cancelTravel) ?: 0f)).roundToInt()
+    val cancelCenter get() = Offset(viewportWidth / 2f, viewportHeight - cancelRadius + cancelOffsetY)
+    val cancelInteractive get() = drag?.let { !it.dropping && it.cancelMotion?.interactive == true } == true
+    fun refreshCancelHover() { drag?.takeUnless { it.dropping }?.let { d ->
+        val hovering = cancelInteractive && (d.pointer - cancelCenter).getDistance() <= cancelRadius
+        if (hovering != d.overCancel) { d.overCancel = hovering; onCancelHover(hovering) }
+    } }
     fun rendered(fallback: List<T>): List<T?> = drag?.let { d ->
         d.dropItems ?: (d.remaining.take(d.insertion) + listOf(null) + d.remaining.drop(d.insertion))
     } ?: optimistic ?: fallback
@@ -88,9 +98,8 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
         return true
     }
     fun move(point: Offset) { drag?.takeUnless { it.dropping }?.let { it.pointer = point
-        val hovering = (point - cancelCenter).getDistance() <= cancelRadius
-        if (hovering != it.overCancel) { it.overCancel = hovering; onCancelHover(hovering) }
-        if (!hovering) updateInsertion(it) } }
+        refreshCancelHover()
+        if (!it.overCancel) updateInsertion(it) } }
     private fun updateInsertion(d: KeyedDrag<T, P>) {
         val visible = grid.layoutInfo.visibleItemsInfo
         val gap = visible.firstOrNull { it.key == DropGapKey }

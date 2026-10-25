@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.*
@@ -142,4 +143,107 @@ class ListBackTest {
         back()
         compose.runOnIdle { assertEquals(1, ordinaryBack) }
     }
+
+    @Test fun explicitTopTapKeepsItsCapturedStepWhileReadinessChangesTheAvailableAction() {
+        val ready = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val owner = Any()
+        var action by mutableStateOf(ListReturnAction.ScrollTop)
+        lateinit var submit: (ListReturnAction) -> Unit
+        val executed = mutableListOf<ListReturnAction>()
+        compose.setContent { LocalicaTheme {
+            submit = ListReturnActions(0, owner, true, false, action,
+                ready = { started.complete(Unit); ready.await() }, execute = { executed += it })
+        } }
+        compose.runOnIdle { submit(ListReturnAction.ScrollTop) }
+        compose.waitUntil(5000) { started.isCompleted }
+        compose.runOnIdle { action = ListReturnAction.ClearFilter }
+        compose.waitForIdle()
+        compose.runOnIdle { ready.complete(Unit) }
+        compose.waitUntil(5000) { compose.runOnUiThread { executed.isNotEmpty() } }
+        compose.runOnIdle { assertEquals(listOf(ListReturnAction.ScrollTop), executed) }
+    }
+
+    @Test fun explicitReturnRejectsStaleOwnerCallbacksBeforeSubmissionAndCancelsPendingReadiness() {
+        val ready = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var owner by mutableStateOf(Any())
+        lateinit var submit: (ListReturnAction) -> Unit
+        val executed = mutableListOf<Any>()
+        var submissions = 0
+        compose.setContent { LocalicaTheme {
+            val currentOwner = owner
+            submit = ListReturnActions(0, currentOwner, true, false, ListReturnAction.ScrollTop,
+                onSubmit = { submissions++ }, ready = { started.complete(Unit); ready.await() },
+                execute = { executed += currentOwner })
+        } }
+        val stale = compose.runOnIdle { submit.also { it(ListReturnAction.ScrollTop) } }
+        compose.waitUntil(5000) { started.isCompleted }
+        compose.runOnIdle { owner = Any() }
+        compose.waitForIdle()
+        compose.runOnIdle { stale(ListReturnAction.ScrollTop); ready.complete(Unit) }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(1, submissions); assertTrue(executed.isEmpty()); submit(ListReturnAction.ScrollTop) }
+        compose.waitUntil(5000) { compose.runOnUiThread { executed.size == 1 } }
+        compose.runOnIdle { assertEquals(2, submissions); assertSame(owner, executed.single()) }
+    }
+
+    @Test fun losingPageOwnershipCancelsExplicitReturnAndItsRetainedCallbackCannotSubmit() {
+        val ready = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val owner = Any()
+        var active by mutableStateOf(true)
+        lateinit var submit: (ListReturnAction) -> Unit
+        var submissions = 0
+        val executed = mutableListOf<ListReturnAction>()
+        compose.setContent { LocalicaTheme {
+            submit = ListReturnActions(0, owner, active, false, ListReturnAction.ScrollTop,
+                onSubmit = { submissions++ }, ready = { started.complete(Unit); ready.await() }, execute = { executed += it })
+        } }
+        val retained = compose.runOnIdle { submit.also { it(ListReturnAction.ScrollTop) } }
+        compose.waitUntil(5000) { started.isCompleted }
+        compose.runOnIdle { active = false }
+        compose.waitForIdle()
+        compose.runOnIdle { retained(ListReturnAction.ScrollTop); ready.complete(Unit) }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(1, submissions); assertTrue(executed.isEmpty()); active = true }
+        compose.waitForIdle()
+        compose.runOnIdle { submit(ListReturnAction.ScrollTop) }
+        compose.waitUntil(5000) { compose.runOnUiThread { executed.size == 1 } }
+        compose.runOnIdle { assertEquals(2, submissions); assertEquals(listOf(ListReturnAction.ScrollTop), executed) }
+    }
+
+
+    @Test fun modalTakeoverCancelsExplicitTopWaitingForReadinessAndDismissalAllowsAFreshClick() {
+        val ready = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val owner = Any()
+        var popup by mutableStateOf(false)
+        lateinit var rootOwner: ModalGestureScope
+        val executed = mutableListOf<ListReturnAction>()
+        compose.setContent { LocalicaTheme {
+            rootOwner = checkNotNull(LocalModalGestures.current)
+            val submit = ListReturnActions(0, owner, true, false, ListReturnAction.ScrollTop,
+                ready = { started.complete(Unit); ready.await() }, execute = { executed += it })
+            ReturnToPositionButton(true, "Return to top") { submit(ListReturnAction.ScrollTop) }
+            GlassMorphPopup(popup, rememberGlassAnchor(), { popup = false }, GlassPlacement.Center) {
+                Text("Modal takeover")
+            }
+        } }
+        val button = compose.onNodeWithContentDescription("Return to top")
+        button.performClick()
+        compose.waitUntil(5000) { started.isCompleted }
+        compose.runOnIdle { popup = true }
+        compose.waitUntil(5000) { compose.runOnUiThread { rootOwner.blocked } }
+        compose.runOnIdle { ready.complete(Unit) }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue("A modal must cancel the queued list step, not just current scrolling", executed.isEmpty()); popup = false }
+        compose.waitUntil(5000) { compose.runOnUiThread { !rootOwner.blocked } }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue("Dismissal must not resume the retired request", executed.isEmpty()) }
+        button.performClick()
+        compose.waitUntil(5000) { compose.runOnUiThread { executed.size == 1 } }
+        compose.runOnIdle { assertEquals(listOf(ListReturnAction.ScrollTop), executed) }
+    }
+
 }

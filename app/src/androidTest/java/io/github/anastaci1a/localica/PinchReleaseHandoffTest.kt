@@ -77,7 +77,8 @@ class PinchReleaseHandoffTest {
                     }
                 }
             } }
-            compose.waitUntil(5000) { compose.onAllNodesWithTag("media-release:0").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("media-release:73").assertIsDisplayed() }.isSuccess }
+            compose.waitForIdle()
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(70)
             val anchor = compose.onNodeWithTag("media-release:73")
