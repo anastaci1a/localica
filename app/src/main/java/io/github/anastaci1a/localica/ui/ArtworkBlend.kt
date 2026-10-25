@@ -23,9 +23,10 @@ internal val LocalArtworkTransition = staticCompositionLocalOf { ArtworkTransiti
 /** Keep an opaque outgoing frame. Interruptions flatten the visible composite once;
  * the blur uses a render effect or prepared textures, never a per-frame bitmap filter. */
 @Composable
-internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: Int, immediate: Boolean = false, opacityBlend: Boolean = false,
+internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: Int, immediate: Boolean = false, opacityBlend: Boolean = false, occurrence: Any? = null,
     content: @Composable (PlayerVisual) -> Unit) {
     val target = visual.copy(loading = false)
+    var acceptedOccurrence by remember { mutableStateOf(occurrence) }
     var outgoing by remember { mutableStateOf(target) }
     var incoming by remember { mutableStateOf(target) }
     var frozen by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -38,11 +39,14 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
     val currentDirection by rememberUpdatedState(LocalLayoutDirection.current)
     val reduced = LocalReducedMotion.current
     val blurThrough = !reduced && !opacityBlend && LocalArtworkTransition.current == ArtworkTransition.BlurThrough
-    LaunchedEffect(target, immediate, graphicsContext) {
-        if (immediate || target.contentKey != null && target.contentKey == incoming.contentKey) {
+    LaunchedEffect(target, visual.loading, occurrence, immediate, graphicsContext) {
+        // Loading carries the outgoing pixels, not a newly accepted visit.
+        if (visual.loading && !immediate) return@LaunchedEffect
+        if (immediate || occurrence == null && target.contentKey != null && target.contentKey == incoming.contentKey) {
+            acceptedOccurrence = occurrence
             frozen = null; frozenSoft = null; outgoing = target; incoming = target
             progress.snapTo(1f)
-        } else if (target != incoming) {
+        } else if (target != incoming || occurrence != acceptedOccurrence) {
             if (progress.value < 1f && layer.size.width > 0 && !layer.isReleased) {
                 val image = readback.capture(layer, graphicsContext, currentDensity, currentDirection)
                 val soft = if (Build.VERSION.SDK_INT < 31 && blurThrough) {
@@ -50,6 +54,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
                 } else null
                 frozen = image; frozenSoft = soft
             } else { frozen = null; frozenSoft = null; outgoing = incoming }
+            acceptedOccurrence = occurrence
             incoming = target
             progress.snapTo(0f)
             progress.animateTo(1f, tween(if (reduced) minOf(duration, 120) else duration, easing = LinearEasing))

@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
 import androidx.compose.ui.layout.ContentScale
@@ -83,19 +85,27 @@ internal fun PlayerArtworkFrame(visual: PlayerVisual, modifier: Modifier, shape:
 }
 
 /** Decoded pixels remain shared with ArtworkCache; only a few prepared visual bundles are retained. */
-internal object PlayerVisualCache {
+internal class PreparedPlayerVisualCache(private val provider: CoverProvider, budgetBytes: Int = 40 * 1024 * 1024) {
     private data class Key(val uri: String, val revision: Long)
-    private val cache = android.util.LruCache<Key, PlayerVisual>(4)
+    // Conservative byte accounting includes shared images per entry. Eviction never recycles
+    // bitmaps: the current frame, outgoing transition and library may still own references.
+    private val cache = object : android.util.LruCache<Key, PlayerVisual>(budgetBytes) {
+        override fun sizeOf(key: Key, value: PlayerVisual): Int =
+            listOfNotNull(value.artwork?.asAndroidBitmap(), value.softArtwork?.asAndroidBitmap(),
+                value.palette.wash, value.palette.softWash, value.palette.collectionWash)
+                .distinct().sumOf { it.allocationByteCount } + key.uri.length * 2 + 128
+    }
+    val retainedBytes: Int get() = cache.size()
+    private val preparation = Mutex()
     fun peek(uri: String): PlayerVisual? = cache.get(Key(uri, ArtworkCache.revision.value))
-    suspend fun read(context: android.content.Context, uri: String, provider: CoverProvider = EmbeddedCoverProvider): PlayerVisual {
+    suspend fun read(context: android.content.Context, uri: String): PlayerVisual = preparation.withLock {
         val key = Key(uri, ArtworkCache.revision.value)
-        if (provider === EmbeddedCoverProvider) cache.get(key)?.let { return it }
-        val bitmap = provider.load(context, listOf(uri), 768)
+        cache.get(key)?.let { return@withLock it }
+        val bitmap = try { provider.load(context, listOf(uri), 768) }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (_: Exception) { null }
         val result = if (bitmap == null) PlayerVisual() else {
             val image = bitmap.asImageBitmap()
-            val soft = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                blurGlassSnapshot(image, bitmap.width * .035f)
-            }
             val fingerprint = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                 val row = IntArray(bitmap.width)
@@ -106,12 +116,28 @@ internal object PlayerVisualCache {
                 }
                 digest.digest().joinToString("") { "%02x".format(it) }
             }
-            PlayerVisual(image, playerPalette(bitmap), softArtwork = soft, contentKey = fingerprint)
+            val shared = cache.snapshot().values.firstOrNull {
+                it.contentKey == fingerprint && it.artwork?.width == bitmap.width && it.artwork.height == bitmap.height
+            }
+            shared ?: run {
+                val soft = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    blurGlassSnapshot(image, bitmap.width * .035f)
+                }
+                PlayerVisual(image, playerPalette(bitmap), softArtwork = soft, contentKey = fingerprint)
+            }
         }
         currentCoroutineContext().ensureActive()
-        if (provider === EmbeddedCoverProvider && key.revision == ArtworkCache.revision.value) cache.put(key, result)
-        return result
+        if (key.revision == ArtworkCache.revision.value) cache.put(key, result)
+        result
     }
+}
+
+internal object PlayerVisualCache {
+    private val prepared = PreparedPlayerVisualCache(EmbeddedCoverProvider)
+    fun peek(uri: String) = prepared.peek(uri)
+    suspend fun read(context: android.content.Context, uri: String,
+        provider: CoverProvider = EmbeddedCoverProvider): PlayerVisual =
+        (if (provider === EmbeddedCoverProvider) prepared else PreparedPlayerVisualCache(provider)).read(context, uri)
 }
 
 @Composable
@@ -123,4 +149,17 @@ internal fun rememberNeighborArtwork(uri: String?): PlayerVisual? {
         value = if (uri == null) null else request to PlayerVisualCache.read(context, uri)
     }
     return prepared?.takeIf { it.first == request }?.second ?: uri?.let(PlayerVisualCache::peek)
+}
+
+/** Bounded, cancellable nearest-first preparation; transport ordering includes shuffle and repeats. */
+@Composable
+internal fun PreloadPlayerArtwork(uris: List<String>) {
+    val context = LocalContext.current.applicationContext
+    val revision by ArtworkCache.revision.collectAsState()
+    LaunchedEffect(uris, revision) {
+        for (uri in uris.distinct().take(8)) {
+            currentCoroutineContext().ensureActive()
+            PlayerVisualCache.read(context, uri)
+        }
+    }
 }
