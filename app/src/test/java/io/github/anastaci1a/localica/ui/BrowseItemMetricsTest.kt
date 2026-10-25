@@ -72,4 +72,16 @@ class BrowseItemMetricsTest {
             assertEquals(8f, m.artCorner, 0f)
         }
     }
+    @Test fun tracklistPreservesNumberedHybridWhileNormalRestoresCoverSubtitleLayout() {
+        val numbered = metrics(ListSize.Tracklist)
+        val normal = metrics(ListSize.Normal)
+        assertEquals(28, numbered.art)
+        assertFalse(numbered.trailing)
+        assertEquals(16, numbered.titleSize)
+        assertEquals(52, numbered.place(24, 40, 16).height)
+        assertTrue(normal.art > numbered.art)
+        assertEquals(64, normal.place(24, 40, 16).height)
+        assertEquals(numbered.art, metrics(ListSize.Tracklist, numbered = true).art)
+    }
+
 }

@@ -8,6 +8,7 @@ internal class BrowseArtworkScope {
     private var revision = ArtworkCache.revision.value
     private val visible = mutableMapOf<Any, Pair<List<String>, ArtworkCache.CachedArtwork>>()
     private var retained = emptyList<Pair<List<String>, ArtworkCache.CachedArtwork>>()
+    private var transition: MutableMap<List<String>, ArtworkCache.CachedArtwork>? = null
     var preview: ArtworkCache.CachedArtwork? = null
         private set
     private var active = false
@@ -18,7 +19,7 @@ internal class BrowseArtworkScope {
     private fun current() {
         if (revision != ArtworkCache.revision.value) {
             revision = ArtworkCache.revision.value
-            visible.clear(); retained = emptyList(); preview = null; prepared = null
+            visible.clear(); retained = emptyList(); transition = null; preview = null; prepared = null
         }
     }
     fun activate(value: Boolean) {
@@ -31,13 +32,27 @@ internal class BrowseArtworkScope {
     }
     fun peek(uris: List<String>): ArtworkCache.CachedArtwork? {
         current()
-        return (visible.values.asSequence() + retained.asSequence()).filter { it.first == uris }
+        return (visible.values.asSequence() + retained.asSequence() +
+            transition.orEmpty().asSequence().map { it.key to it.value }).filter { it.first == uris }
             .maxByOrNull { it.second.edge }?.second
     }
     fun hold(token: Any, uris: List<String>, artwork: ArtworkCache.CachedArtwork) {
         current(); visible[token] = uris to artwork
+        transition?.get(uris)?.let { previous ->
+            if (artwork.edge >= previous.edge) transition?.set(uris, artwork)
+        }
         // A recreated viewport replaces its frozen snapshot as its items mount.
         retained = retained.filterNot { it.first == uris }
+    }
+    /** Pin only the source viewport, not every row visited by a later scroll.
+     * A frozen tile atlas cannot seed a recreated MediaArtwork after LRU eviction. */
+    fun retainForTransition(): () -> Unit {
+        current()
+        val snapshot = visible.values.groupBy { it.first }.mapValues { (_, covers) ->
+            covers.maxBy { it.second.edge }.second
+        }.toMutableMap()
+        transition = snapshot
+        return { if (transition === snapshot) transition = null }
     }
     fun release(token: Any) {
         val cover = visible.remove(token)

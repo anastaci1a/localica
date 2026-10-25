@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -42,6 +44,67 @@ class BrowseInteractionTest {
         compose.onNodeWithContentDescription("Close selection").performClick()
         compose.onAllNodes(isToggleable()).assertCountEquals(0)
     }
+    @Test fun mutableSongDotsHoldSelectsBeforeReleaseWithoutOpeningActionsOrPlaying() {
+        val track = Track("missing", "Held", fileName = "tone.mp3", relativePath = "tone.mp3")
+        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Mix"), listOf(track))
+        val route = BrowseRoute(MainTab.Library, MediaRef(MediaKind.Playlist, playlist.id))
+        val session = SessionSelection()
+        var plays = 0
+        val preferences = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+        val original = preferences.read(route)
+        val originalOverride = preferences.overridden(route)
+        preferences.write(route, original.copy(presentation = Presentation.List, listSize = ListSize.Normal), originalOverride)
+        try {
+            compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalSessionSelection provides session) {
+                BrowserScreen(LibraryUiState(loading = false), PlaylistState(listOf(playlist), false),
+                    route, {}, {}, {}, { _, _, _ -> plays++ }, null, null, true, false)
+            } } }
+            compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for Held").fetchSemanticsNodes().isNotEmpty() }
+            val dots = compose.onNodeWithContentDescription("Actions for Held")
+            var held = false
+            try {
+                dots.performTouchInput { down(center); held = true; advanceEventTime(650); moveTo(center) }
+                compose.runOnIdle {
+                    assertTrue("Dots select while held, not on release", session.active)
+                    assertFalse("The new selection panel waits for the initiating dots pointer", session.panelVisible)
+                    assertEquals(listOf(playlist.entries.single().id), session.entries.map { it.row.id })
+                    assertEquals(0, plays)
+                }
+                compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
+                dots.performTouchInput { up(); held = false }
+                compose.runOnIdle { assertTrue(session.panelVisible); assertEquals(0, plays) }
+                compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
+                // Accessibility has no held pointer, so selection presents immediately.
+                compose.runOnIdle { session.clear() }
+                dots.performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
+                compose.runOnIdle { assertTrue(session.active); assertTrue(session.panelVisible) }
+            } finally { if (held) dots.performTouchInput { cancel() } }
+        } finally { preferences.write(route, original, originalOverride) }
+    }
+
+    @Test fun nonmutableSongDotsHoldOpensTheSameMenuAsATapWithoutPlaying() {
+        val track = Track("missing", "Held", fileName = "tone.mp3", relativePath = "tone.mp3")
+        val route = BrowseRoute(MainTab.Songs)
+        val preferences = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+        val original = preferences.read(route)
+        val originalOverride = preferences.overridden(route)
+        preferences.write(route, original.copy(presentation = Presentation.List, listSize = ListSize.Normal), originalOverride)
+        val session = SessionSelection()
+        var plays = 0
+        try {
+            compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalSessionSelection provides session) {
+                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")),
+                    tracks = listOf(track)), loading = false), PlaylistState(loading = false),
+                    route, {}, {}, {}, { _, _, _ -> plays++ }, null, null, true, false)
+            } } }
+            compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for Held").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("Actions for Held").performTouchInput { longClick() }
+            compose.onNodeWithText("Select song").assertIsDisplayed()
+            compose.onNodeWithText("Information").assertIsDisplayed()
+            compose.runOnIdle { assertFalse(session.active); assertEquals(0, plays) }
+        } finally { preferences.write(route, original, originalOverride) }
+    }
+
     @Test fun collectionOverridesInheritIndependentlyFromCatalogAndSearch() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()

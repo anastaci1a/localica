@@ -1,10 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import kotlin.math.max
 import kotlin.math.roundToInt
 import androidx.compose.animation.core.Animatable
@@ -14,6 +13,8 @@ import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.runtime.*
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -26,9 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 
-internal data class FrozenBrowseItem(val image: androidx.compose.ui.graphics.ImageBitmap,
-    val origin: androidx.compose.ui.unit.IntOffset, val size: androidx.compose.ui.unit.IntSize,
-    val highlight: RetainedCurrentSongHighlight? = null)
+private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: GraphicsLayer)
 
 internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0) {
     // LazyGrid places items on integer pixels but retains fractional scroll deltas.
@@ -51,6 +50,16 @@ internal class BrowsePinchMotion {
     var transaction = 0L
         private set
     var committed = false
+    var releaseArtwork: (() -> Unit)? = null
+    /** Retire ownership now, but keep decoded source pixels until rollback mounts. */
+    fun releaseArtworkAfterHandoff(scope: CoroutineScope) {
+        val release = releaseArtwork ?: return
+        releaseArtwork = null
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            try { withFrameNanos { }; withFrameNanos { } }
+            finally { release() }
+        }
+    }
     fun owns(generation: Long) = !disposed && transaction == generation && source != null
     fun failCapture() {
         // The preview has not been published. A held gesture can retire now;
@@ -72,6 +81,12 @@ internal class BrowsePinchMotion {
     var sourceColumns = 1
     val retained = mutableMapOf<Any, androidx.compose.ui.graphics.layer.GraphicsLayer>()
     val currentHighlights = mutableMapOf<Any, androidx.compose.ui.graphics.Color>()
+    val itemContent = mutableMapOf<Any, BrowsePinchContent>()
+    // Global drawing bypasses the row layer, so entry/reorder alpha must invalidate it too.
+    val itemAlpha = mutableStateMapOf<Any, Float>()
+    val artwork = mutableMapOf<Any, BrowsePinchLayer>()
+    val text = mutableMapOf<Any, BrowsePinchLayer>()
+    var viewportCoordinates: LayoutCoordinates? = null
     var anchorIndex = 0
     var anchorTop = 0f
     var rowHeight = 64f
@@ -79,6 +94,7 @@ internal class BrowsePinchMotion {
     var rightToLeft = false
     fun clearTransaction() {
         transaction++
+        releaseArtwork?.invoke(); releaseArtwork = null
         committed = false
         held = false; fingerProgress = 0f; capturing = false; captureProblem = false
         source = null; target = null; focusKey = null
@@ -102,6 +118,20 @@ internal class BrowsePinchMotion {
         return androidx.compose.ui.geometry.Size(sourceWidth + (target.width - sourceWidth) * p,
             sourceHeight + (target.height - sourceHeight) * p)
     }
+    /** Resolve ownership in the layer phase, not when composition installed the modifier.
+     * Retirement can invalidate an attached layer before recomposition removes it. */
+    fun contentTranslation(key: Any, index: Int, targetPosition: IntOffset, targetWidth: Int,
+        targetStyle: BrowseStyle, targetGeometry: BrowseCellGeometry, density: Float): Offset {
+        val source = visualSource ?: return Offset.Zero
+        val old = sourceBounds(key, index)
+        val p = progress.value.coerceIn(0f, 1f)
+        val alignment = if (rightToLeft) old.width - targetWidth else 0f
+        val gridInset = (targetGeometry.gridInset * density).roundToInt()
+        val sourceInset = (BrowseCellGeometry(sourceColumns).cardVerticalInset(source) * density).roundToInt()
+        val targetInset = (targetGeometry.cardVerticalInset(targetStyle) * density).roundToInt()
+        return Offset((old.left - targetPosition.x - gridInset + alignment) * (1f - p),
+            pinchContentTranslation(old.top, targetPosition.y.toFloat(), sourceInset, targetInset, p))
+    }
     fun sourceContentWidth(key: Any, index: Int = 0): Int {
         val geometry = BrowseCellGeometry(sourceColumns)
         val cellWidth = bounds[key]?.width?.toInt() ?: geometry.cellWidth(viewportWidth.toInt(), pixelDensity, index % sourceColumns)
@@ -119,6 +149,22 @@ internal class BrowsePinchMotion {
             anchorTop + ((index / sourceColumns) - (anchorIndex / sourceColumns) + 1) * rowHeight)
     }
 }
+
+/** A retired/capturing transaction leaves the live layout at its ordinary placement. */
+internal fun Modifier.pinchItemPlacement(motion: BrowsePinchMotion, grid: LazyGridState, key: Any,
+    index: Int, style: BrowseStyle, geometry: BrowseCellGeometry): Modifier = graphicsLayer {
+    val placed = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }
+    val translation = placed?.let {
+        motion.contentTranslation(key, index, it.offset, it.size.width, style, geometry, density)
+    } ?: Offset.Zero
+    translationX = translation.x
+    translationY = translation.y
+}
+
+/** The live cell is already laid out with target padding; restore source padding at p=0. */
+internal fun pinchContentTranslation(sourceStart: Float, targetStart: Float,
+    sourceInset: Int, targetInset: Int, progress: Float): Float =
+    (sourceStart - targetStart + sourceInset - targetInset) * (1f - progress.coerceIn(0f, 1f))
 
 /** Linear finger distance; returning to the starting span restores the source. */
 internal fun pinchProgress(scale: Float, outward: Boolean): Float =
@@ -184,6 +230,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     scope: CoroutineScope, reducedMotion: Boolean, onPreview: (BrowseStyle) -> Unit,
     onCommit: (BrowseStyle) -> Unit, onAnchor: (BrowseZoomAnchor?) -> Unit): Modifier {
     val captureLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val artwork = LocalBrowseArtwork.current
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     OnModalGestureCancellation {
         val source = motion.source
@@ -195,6 +242,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             motion.capture?.cancel(); motion.tracking?.cancel(); motion.settling?.cancel()
             // Retire the generation before callbacks can start another transaction.
             // Cancelled readback/settlement finally blocks must not clear a newer owner.
+            if (rollback) motion.releaseArtworkAfterHandoff(scope)
             motion.clearTransaction()
             if (rollback) {
                 onPreview(source)
@@ -212,7 +260,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             if (motion.held && !motion.capturing && !reducedMotion) {
                 motion.tracking?.cancel()
                 motion.tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                    motion.progress.animateTo(value, androidx.compose.animation.core.spring(1f, 1600f))
+                    motion.progress.animateTo(value, androidx.compose.animation.core.tween(100, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
                 }
             }
         },
@@ -245,9 +293,10 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             }
         }) { zoomIn, midpoint ->
         val next = style.zoomStep(zoomIn, with(density) { width.toDp().value },
-            albumSongs = route.collection?.kind == MediaKind.Album)
+            albumSongs = route.supportsTracklist())
         if (next != style && !motion.disposed && motion.source == null) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
+            motion.releaseArtwork = artwork?.retainForTransition()
             motion.capturing = true
             motion.source = style
             val generation = motion.transaction
@@ -295,22 +344,36 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                     // Freeze all visible drawings in one readback before destination
                     // reflow mutates nested layers. Pack with gutters so filtering a
                     // retained item never samples its neighbor in the atlas.
-                    val drawings = visible.mapNotNull { entry ->
-                        motion.retained[entry.key]?.takeUnless { it.isReleased || it.size.width == 0 || it.size.height == 0 }
-                            ?.let { entry.key to it }
-                    }
+                    val endpoints = visible.mapNotNull { entry ->
+                        motion.itemContent[entry.key]?.let { content ->
+                            val index = (entry.index - 1).coerceAtLeast(0)
+                            val targetGeometry = BrowseCellGeometry(motion.targetColumns)
+                            val targetWidth = targetGeometry.contentWidth(targetGeometry.cellWidth(width, density.density,
+                                index % motion.targetColumns), density.density)
+                            entry.key to FrozenBrowseContent(content.measure(style, motion.sourceColumns,
+                                motion.sourceContentWidth(entry.key, index)),
+                                content.measure(next, motion.targetColumns, targetWidth), content.foreground, content.secondary,
+                                motion.itemAlpha[entry.key] ?: 1f, content.textOpacity())
+                        }
+                    }.toMap()
+                    val drawings = visible.flatMap { entry ->
+                        listOfNotNull(motion.retained[entry.key]?.let { PinchCaptureDrawing(entry.key, 0, it) },
+                            motion.text[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 1, it) },
+                            motion.artwork[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 2, it) })
+                    }.filter { !it.layer.isReleased && it.layer.size.width > 0 && it.layer.size.height > 0 }
                     if (drawings.isNotEmpty()) {
-                        val atlasWidth = max(width, drawings.maxOf { it.second.size.width }) + 2
+                        val atlasWidth = max(width, drawings.maxOf { it.layer.size.width }) + 2
                         var x = 1; var y = 1; var rowHeight = 0
-                        val origins = drawings.map { (_, layer) ->
+                        val origins = drawings.map { drawing ->
+                            val layer = drawing.layer
                             if (x + layer.size.width + 1 > atlasWidth) { x = 1; y += rowHeight + 2; rowHeight = 0 }
                             androidx.compose.ui.unit.IntOffset(x, y).also {
                                 x += layer.size.width + 2; rowHeight = max(rowHeight, layer.size.height)
                             }
                         }
                         captureLayer.record(density, layoutDirection, androidx.compose.ui.unit.IntSize(atlasWidth, y + rowHeight + 1)) {
-                            drawings.forEachIndexed { i, (_, layer) ->
-                                translate(origins[i].x.toFloat(), origins[i].y.toFloat()) { drawLayer(layer) }
+                            drawings.forEachIndexed { i, drawing ->
+                                translate(origins[i].x.toFloat(), origins[i].y.toFloat()) { drawLayer(drawing.layer) }
                             }
                         }
                         // Keep the tint with the same source snapshot even if playback or
@@ -318,8 +381,14 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         val highlights = motion.currentHighlights.toMap()
                         val image = captureLayer.pinchSnapshot(density, layoutDirection)
                         if (!motion.owns(generation)) return@launch
-                        drawings.forEachIndexed { i, (key, layer) -> motion.frozen[key] = FrozenBrowseItem(image, origins[i], layer.size,
-                            highlights[key]?.let(::RetainedCurrentSongHighlight)) }
+                        fun parts(pass: Int) = drawings.withIndex().filter { it.value.pass == pass }.associate { (i, drawing) ->
+                            drawing.key to FrozenBrowsePart(image, origins[i], drawing.layer.size)
+                        }
+                        val text = parts(1); val art = parts(2)
+                        drawings.forEachIndexed { i, drawing -> if (drawing.pass == 0) {
+                            motion.frozen[drawing.key] = FrozenBrowseItem(image, origins[i], drawing.layer.size,
+                                highlights[drawing.key]?.let(::RetainedCurrentSongHighlight), endpoints[drawing.key], art[drawing.key], text[drawing.key])
+                        } }
                     }
                     if (motion.owns(generation)) onPreview(next)
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -334,84 +403,11 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 } finally { if (motion.owns(generation)) motion.capturing = false }
                 if (motion.owns(generation) && motion.held && !reducedMotion) {
                     motion.tracking = scope.launch {
-                        motion.progress.animateTo(motion.fingerProgress, androidx.compose.animation.core.spring(1f, 1600f))
+                        motion.progress.animateTo(motion.fingerProgress, androidx.compose.animation.core.tween(100, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
                     }
                 }
             }
             true
         } else false
-    }
-}
-
-/** Keep a bounded set of source drawings alive even when the destination virtualizes them out. */
-@Composable
-internal fun Modifier.retainPinchItem(key: Any, motion: BrowsePinchMotion,
-    highlight: androidx.compose.ui.graphics.Color? = null): Modifier {
-    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    SideEffect {
-        if (highlight == null) motion.currentHighlights.remove(key)
-        else motion.currentHighlights[key] = highlight
-    }
-    DisposableEffect(motion, key, layer) {
-        motion.retained[key] = layer
-        onDispose {
-            if (motion.retained[key] === layer) {
-                motion.retained.remove(key)
-                motion.currentHighlights.remove(key)
-            }
-        }
-    }
-    return drawWithContent {
-        // Keep one drawing owner through recognition, interpolation and release.
-        // In particular, do not reparent nested artwork layers for a single frame.
-        // The source tree stays intact while its asynchronous atlas readback runs.
-        // A newly attached row was not included in the atlas and still needs its
-        // first recording (for example if an already-running scroll exposes it).
-        if (!motion.capturing || layer.size.width == 0 || layer.size.height == 0)
-            layer.record { this@drawWithContent.drawContent() }
-        drawLayer(layer)
-    }
-}
-
-internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: LazyGridState, keys: List<String>): Modifier = drawWithContent {
-    drawContent()
-    if (motion.visualSource == null) return@drawWithContent
-    val visible = grid.layoutInfo.visibleItemsInfo
-    val liveKeys = visible.map { it.key }.toSet()
-    val p = motion.progress.value.coerceIn(0f, 1f)
-    val row = visible.firstOrNull { it.key != "browser-notice" } ?: return@drawWithContent
-    val rowIndex = keys.indexOf(row.key)
-    val targetHeight = max(row.size.height.toFloat(), 1f)
-    clipRect {
-        motion.bounds.forEach { (key, old) ->
-            if (key in liveKeys) return@forEach
-            val image = motion.frozen[key] ?: return@forEach
-            val index = keys.indexOf(key)
-            if (index < 0) return@forEach
-            val geometry = BrowseCellGeometry(motion.targetColumns)
-            val column = index % motion.targetColumns
-            val width = geometry.cellWidth(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
-            val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
-            val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
-            val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * targetHeight
-            val inset = (geometry.cardInset * motion.pixelDensity).roundToInt()
-            // A retained card is a source snapshot, not a destination row. Keep
-            // its aspect ratio and fade it reversibly while live content reflows.
-            val fit = minOf((width - 2 * inset).coerceAtLeast(0f) / image.size.width,
-                (targetHeight - 2 * inset).coerceAtLeast(0f) / image.size.height)
-            val factor = 1f + (fit - 1f) * p
-            val alpha = 1f - p * p * (3f - 2f * p)
-            translate(old.left + (x - old.left) * p + inset, old.top + (y - old.top) * p + inset) {
-                image.highlight?.let { highlight ->
-                    val originalSize = androidx.compose.ui.geometry.Size(image.size.width.toFloat(), image.size.height.toFloat())
-                    with(highlight.renderer) {
-                        draw(Rect(Offset.Zero, originalSize * factor), highlight.color, originalSize, alpha)
-                    }
-                }
-                scale(factor, factor, Offset.Zero) {
-                    drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = alpha)
-                }
-            }
-        }
     }
 }

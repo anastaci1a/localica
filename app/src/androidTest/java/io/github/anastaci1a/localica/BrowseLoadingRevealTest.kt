@@ -300,7 +300,7 @@ class BrowseLoadingRevealTest {
         assertEquals(rounded.width, circular.width)
     }
 
-    @Test fun gallerySkeletonMatchesReservedRowsWithTwoTitleLinesAndOneInfoPlaceholder() {
+    @Test fun gallerySkeletonUsesSingleLineShapesInsideMatchingMultilineReservation() {
         val style = BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 2)
         val geometry = BrowseCellGeometry(2)
         val reveal = BrowseLoadingReveal(columns = 1, initiallyComplete = false)
@@ -325,10 +325,17 @@ class BrowseLoadingRevealTest {
         fun bounds(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals("Skeleton and loaded row start with identical reserved geometry",
             bounds("skeleton-slot").height, bounds("reserved-slot").height, 1f)
-        assertEquals("Gallery loading reserves two title lines",
-            bounds("browse-text-${item.key}").height * 2f, bounds("browse-skeleton-title").height, 1f)
+        assertEquals("Gallery draws one title-line shape independently of its multiline row reservation",
+            bounds("browse-text-${item.key}").height, bounds("browse-skeleton-title").height, 1f)
         assertEquals("Information draws a one-line placeholder inside its larger reservation",
             bounds("browse-info-${item.key}").height, bounds("browse-skeleton-info").height, 1f)
+        for (part in listOf("title", "info")) {
+            val before = bounds("browse-skeleton-$part")
+            val after = bounds("browse-loading-$part-${item.key}")
+            assertEquals("$part shape keeps its height when the catalog becomes ready", before.height, after.height, 1f)
+            assertEquals("$part shape keeps its position within the reserved row",
+                before.top - bounds("skeleton-slot").top, after.top - bounds("reserved-slot").top, 1f)
+        }
         assertEquals(bounds("browse-skeleton-art").width, bounds("browse-art-${item.key}").width, 1f)
     }
 

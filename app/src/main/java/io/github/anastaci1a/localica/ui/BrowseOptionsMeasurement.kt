@@ -81,7 +81,7 @@ internal fun BrowseOptionsMeasurement(route: BrowseRoute, sortFields: List<Track
                 for (count in 1..5) SliderPreferenceFrame("Items per row: $count", null, null, null) {
                     Spacer(Modifier.fillMaxWidth().height(InterfaceSliderHeight))
                 }
-            } else ChoiceMeasurement("Size", ListSize.densityOrder.map { it.name }, popup = true)
+            } else ChoiceMeasurement("Size", route.listSizes().map { it.name }, popup = true)
             ChoiceMeasurement("Extra information", route.informationChoices().map(::extraInfoLabel), popup = true)
             if (!route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library))
                 BooleanPreferenceFrame("Quick-search box") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }

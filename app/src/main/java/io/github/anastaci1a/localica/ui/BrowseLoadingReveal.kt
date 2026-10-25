@@ -143,11 +143,12 @@ internal fun BrowseLoadingShape(modifier: Modifier, cornerPx: () -> Float, alpha
 internal fun BrowseLoadingItem(style: BrowseStyle, geometry: BrowseCellGeometry, showInformation: Boolean, artistOnly: Boolean = false) {
     val density = LocalDensity.current
     val corner = remember { mutableFloatStateOf(with(density) { 8.dp.toPx() }) }
-    val titleHeight = with(density) { style.browseTitleLine(geometry.columns).sp.roundToPx() } *
-        if (style.presentation == Presentation.List) 1 else 2
-    val infoLine = with(density) { MaterialTheme.typography.bodySmall.lineHeight.roundToPx() }
-    val infoHeight = if (showInformation) infoLine * if (style.presentation == Presentation.List) 1 else 2 else 0
-    Layout(modifier = Modifier.fillMaxWidth().testTag("browse-skeleton-item").padding(geometry.cardInset.dp), content = {
+    val galleryText = if (style.presentation != Presentation.List) rememberGalleryLoadingTextMetrics(style, geometry.columns) else null
+    val titleLine = galleryText?.titleLine ?: with(density) { style.browseTitleLine(geometry.columns).sp.roundToPx() }
+    val titleHeight = galleryText?.titleReservation ?: titleLine
+    val infoLine = galleryText?.informationLine ?: with(density) { MaterialTheme.typography.bodySmall.lineHeight.roundToPx() }
+    val infoHeight = if (showInformation) galleryText?.informationReservation ?: infoLine else 0
+    Layout(modifier = Modifier.fillMaxWidth().testTag("browse-skeleton-item").padding(horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp), content = {
         Box(Modifier.graphicsLayer {
             shape = if (artistOnly) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(corner.floatValue)
             clip = true
@@ -162,11 +163,14 @@ internal fun BrowseLoadingItem(style: BrowseStyle, geometry: BrowseCellGeometry,
         corner.floatValue = metrics.artCorner
         val infoWidth = metrics.loadingInformationWidth(showInformation)
         val titleWidth = metrics.titleWidth(infoWidth)
-        val placement = metrics.place(titleHeight, infoWidth, infoHeight)
+        // Gallery's visual placeholders describe one text line; keep the existing
+        // two-line row reservation separate so real multiline content is never clipped.
+        val placement = metrics.place(titleLine, infoWidth, if (showInformation) infoLine else 0)
+        val reservedHeight = metrics.place(titleHeight, infoWidth, infoHeight).height
         val art = children[0].measure(Constraints.fixed(metrics.art, metrics.art))
-        val title = children[1].measure(Constraints.fixed(titleWidth, titleHeight))
+        val title = children[1].measure(Constraints.fixed(titleWidth, titleLine))
         val info = children[2].measure(Constraints.fixed(infoWidth, if (showInformation) infoLine else 0))
-        layout(constraints.maxWidth, placement.height) {
+        layout(constraints.maxWidth, reservedHeight) {
             art.placeRelative(placement.artX, placement.artY)
             title.placeRelative(placement.titleX, placement.titleY)
             info.placeRelative(placement.infoX, placement.infoY)
@@ -178,16 +182,19 @@ internal fun BrowseLoadingItem(style: BrowseStyle, geometry: BrowseCellGeometry,
 internal fun BrowseLoadingViewport(style: BrowseStyle, geometry: BrowseCellGeometry,
     widthPx: Int, heightPx: Int, topInset: androidx.compose.ui.unit.Dp, showInformation: Boolean, artistOnly: Boolean = false) {
     val density = LocalDensity.current
+    val galleryText = if (style.presentation != Presentation.List) rememberGalleryLoadingTextMetrics(style, geometry.columns) else null
     val count = with(density) {
         val metrics = BrowseItemMetrics(style, geometry.columns, geometry.artworkWidth(widthPx, this.density), this.density, false)
-        val titleHeight = style.browseTitleLine(geometry.columns).sp.roundToPx() * metrics.lines
-        val infoHeight = if (showInformation) MaterialTheme.typography.bodySmall.lineHeight.roundToPx() * metrics.lines else 0
-        val pitch = metrics.place(titleHeight, 0, infoHeight).height + geometry.cardInset.dp.roundToPx() * 2
+        val titleHeight = galleryText?.titleReservation ?: style.browseTitleLine(geometry.columns).sp.roundToPx()
+        val infoHeight = if (showInformation) galleryText?.informationReservation ?: MaterialTheme.typography.bodySmall.lineHeight.roundToPx() else 0
+        val pitch = metrics.place(titleHeight, 0, infoHeight).height + geometry.cardVerticalInset(style).dp.roundToPx() * 2
         (ceil(heightPx.toFloat() / pitch.coerceAtLeast(1)).toInt() + 1) * geometry.columns
     }
-    LazyVerticalGrid(columns = GridCells.Fixed(geometry.columns), userScrollEnabled = false,
-        modifier = Modifier.fillMaxSize().testTag("browse-loading").semantics(mergeDescendants = true) { contentDescription = "Loading library" },
-        contentPadding = PaddingValues(start = geometry.gridInset.dp, end = geometry.gridInset.dp, top = topInset)) {
-        items(count) { BrowseLoadingItem(style, geometry, showInformation, artistOnly) }
+    CompositionLocalProvider(LocalGalleryLoadingTextMetrics provides galleryText) {
+        LazyVerticalGrid(columns = GridCells.Fixed(geometry.columns), userScrollEnabled = false,
+            modifier = Modifier.fillMaxSize().testTag("browse-loading").semantics(mergeDescendants = true) { contentDescription = "Loading library" },
+            contentPadding = PaddingValues(start = geometry.gridInset.dp, end = geometry.gridInset.dp, top = topInset)) {
+            items(count) { BrowseLoadingItem(style, geometry, showInformation, artistOnly) }
+        }
     }
 }
