@@ -14,6 +14,7 @@ class QueuePreferences(context: Context) {
         }.toMap(),
         maximum = preferences.getInt("maximum", 0).takeIf { it > 0 },
         preloadNext = preferences.getBoolean("preload-next", true),
+        boundaryDeclick = preferences.getBoolean("boundary-declick", false),
         shuffle = preferences.getBoolean("shuffle", false),
         repeat = preferences.enumValue<QueueRepeat>("repeat") ?: QueueRepeat.Off,
         previousBehavior = preferences.enumValue<PreviousBehavior>("previous-behavior")
@@ -37,6 +38,7 @@ class QueuePreferences(context: Context) {
         SongListView.entries.forEach { edit.putString("tap.${it.name}", settings.tapOverrides[it]?.name) }
         edit.putString("tap", settings.songTap.name).putString("switch-browse", settings.switching.name)
             .putInt("maximum", settings.maximum ?: 0).putBoolean("preload-next", settings.preloadNext)
+            .putBoolean("boundary-declick", settings.boundaryDeclick)
             .putString("previous-behavior", settings.previousBehavior.name).putInt("previous-threshold-seconds", settings.previousThresholdSeconds)
             .putBoolean("global-playback-modes", true).putBoolean("shuffle", settings.shuffle).putString("repeat", settings.repeat.name).apply()
     }

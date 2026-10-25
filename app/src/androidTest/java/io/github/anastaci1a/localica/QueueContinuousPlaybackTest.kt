@@ -57,6 +57,22 @@ import java.nio.ByteOrder
 @RunWith(AndroidJUnit4::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueContinuousPlaybackTest {
+    @Test fun productionQueueDefaultOffPreservesEveryPcmSample() = playSplitPcm(true, productionDeclick = false)
+
+    @Test fun productionQueueEnabledPreservesAlreadyContinuousPcm() = playSplitPcm(true, productionDeclick = true)
+
+    @Test fun productionQueueEnabledRepairsOnlyTheQualifiedNaturalBoundaryHeads() =
+        playSplitPcm(true, productionDeclick = true, syntheticSteps = true)
+
+    @Test fun productionQueueDefaultOffRetainsAacEditTrimming() =
+        playSplitPcm(true, "boundary-edit-list.m4a", productionDeclick = false)
+
+    @Test fun productionQueueEnabledRetainsRoundedAacTrimAndAlignment() =
+        playSplitPcm(true, "boundary-rounded-edit.m4a", productionDeclick = true)
+
+    @Test fun productionStaticEnabledRetainsRoundedAacTrimAndAlignmentControl() =
+        playSplitPcm(false, "boundary-rounded-edit.m4a", productionDeclick = true)
+
     @Test fun staticPlaylistPreservesSplitPcmControl() = playSplitPcm(throughQueue = false)
 
     @Test fun queueActorPreservesSplitPcmAcrossNaturalTransitions() = playSplitPcm(throughQueue = true)
@@ -106,7 +122,8 @@ class QueueContinuousPlaybackTest {
         } finally { capture.reset() }
     }
 
-    private fun playSplitPcm(throughQueue: Boolean, encodedFixture: String? = null) {
+    private fun playSplitPcm(throughQueue: Boolean, encodedFixture: String? = null,
+        productionDeclick: Boolean? = null, syntheticSteps: Boolean = false) {
         val rounded = encodedFixture?.startsWith("boundary-rounded-") == true
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -124,11 +141,24 @@ class QueueContinuousPlaybackTest {
         // The period does not divide the split length: duplicated/reordered segments are observable.
         // An intentional interior silence must survive, rather than being removed to mask a seam.
         val samples = ShortArray(SAMPLE_RATE * 3) { index ->
-            if (index in SAMPLE_RATE / 2 until SAMPLE_RATE / 2 + 256) 0
+            if (syntheticSteps) (1000 + 200 * (index / SAMPLE_RATE)).toShort()
+            else if (index in SAMPLE_RATE / 2 until SAMPLE_RATE / 2 + 256) 0
             else (((index % 997) - 498) * 40).toShort()
         }
         val expected = ByteBuffer.allocate(samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
-        samples.forEach(expected::putShort)
+        val expectedSamples = samples.copyOf()
+        if (syntheticSteps) {
+            val f = io.github.anastaci1a.localica.playback.BoundaryDeclick.Pcm16Format(SAMPLE_RATE, 1)
+            for (boundary in 1..2) {
+                val start = boundary * SAMPLE_RATE
+                val plan = io.github.anastaci1a.localica.playback.BoundaryDeclick.plan(
+                    samples.copyOfRange(start - 8, start), samples.copyOfRange(start, start + SAMPLE_RATE), f, f, true)
+                assertTrue("Synthetic join must exercise an actual qualified correction", plan.applied)
+                assertEquals((1001 + (boundary - 1) * 200).toShort(), plan.output.first())
+                plan.output.copyInto(expectedSamples, start)
+            }
+        }
+        expectedSamples.forEach(expected::putShort)
         fun checkPlayback() {
             probe.error?.let { throw AssertionError("Split PCM playback failed", it) }
             queues?.state?.value?.problem?.let { throw AssertionError("Queue playback failed: $it") }
@@ -159,7 +189,10 @@ class QueueContinuousPlaybackTest {
             }
             if (throughQueue) preferences.write(QueueSettings())
             instrumentation.runOnMainSync {
-                val renderers = object : DefaultRenderersFactory(context) {
+                val renderers = if (productionDeclick != null)
+                    io.github.anastaci1a.localica.playback.PlaybackRenderersFactory(context,
+                        boundaryDeclickEnabled = { productionDeclick }, afterBoundaryProcessors = arrayOf(capture))
+                else object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
                         enableAudioOutputPlaybackParams: Boolean): AudioSink = MediaEditAudioSink(DefaultAudioSink.Builder(context)
                         .setAudioOutputProvider(ContinuityOutputProvider(context))

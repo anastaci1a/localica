@@ -78,6 +78,19 @@ $$
 
 PTS and stream offset use microseconds. Flooring the edit permits less than one output frame of rounding. Ceiling the truncated PTS recovers its represented frame. Invalid units, unsupported decoded formats and arithmetic overflow fail through the audio sink's error contract. No SBR absence or decoded frames per access unit is inferred.
 
+## Optional boundary smoothing
+
+`BoundaryDeclickAudioProcessor` receives PCM after native encoder/edit trimming. `BoundaryDeclickSession` retains a copied tail and qualifies the first nonempty head of a new stream. The service reads the persisted choice through queue state. The [product contract](product.md#queues-and-playback) owns its default and user-visible limits.
+
+| Boundary | Handling |
+| --- | --- |
+| Identity | Each renderer stream-offset notification creates a new incarnation, even when offset values match. |
+| Drain | Complete the old processor stream before admitting new PCM after its pipeline flush. Repeated pre-input drains do not consume the join. |
+| Reset | Explicit seek, reset, release or unannounced discontinuity clears correction eligibility. |
+| Format | Supported PCM16 uses conservative per-channel amplitude, slope, transient and overshoot guards. Unsupported routes retain native handling. |
+
+`BoundaryDeclick` owns tunable limits. A rejected join passes through exactly. Processing withholds no samples and changes no timestamps. Synthetic sink tests establish lifecycle behavior; decoder/queue checks and physical listening provide separate evidence.
+
 ## File operations
 
 Use persisted Storage Access Framework tree grants without broad storage permission. Enumerate off Main; never interpret document IDs as filesystem paths. Scans and tag writes share a file-operation lock, but retain separate cancellation/recovery lifecycles.

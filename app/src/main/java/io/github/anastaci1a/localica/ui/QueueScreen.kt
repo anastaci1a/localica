@@ -204,6 +204,9 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
     } else {
         SettingsHeading("Playback")
         BooleanPreference("Preload next track", settings.preloadNext) { enabled -> onChange { it.copy(preloadNext = enabled) } }
+        BooleanPreference("Soften track boundary clicks", settings.boundaryDeclick) { enabled -> onChange { it.copy(boundaryDeclick = enabled) } }
+        Text("Off by default. May soften small clicks between tracks without overlap or changing their length. Does not remove pauses.",
+            style = MaterialTheme.typography.bodySmall)
         ChoicePreference("Previous button", settings.previousBehavior, PreviousBehavior.entries, { it.label() }) { behavior ->
             onChange { it.copy(previousBehavior = behavior) }
         }

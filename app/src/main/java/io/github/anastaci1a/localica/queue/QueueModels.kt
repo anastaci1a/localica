@@ -39,7 +39,7 @@ data class QueueSettings(val songTap: SongTap = SongTap.NewQueue, val switching:
     val maximum: Int? = null, val tapOverrides: Map<SongListView, SongTap> = emptyMap(),
     val preloadNext: Boolean = true, val shuffle: Boolean = false, val repeat: QueueRepeat = QueueRepeat.Off,
     val previousBehavior: PreviousBehavior = PreviousBehavior.RestartAfterThreshold, val previousThresholdSeconds: Int = 5,
-    val advancedRepeat: AdvancedRepeat? = null) {
+    val advancedRepeat: AdvancedRepeat? = null, val boundaryDeclick: Boolean = false) {
     fun tapFor(view: SongListView) = tapOverrides[view] ?: songTap
     fun restartOnPrevious(positionMs: Long) = when (previousBehavior) {
         PreviousBehavior.RestartAfterThreshold -> positionMs >= previousThresholdSeconds * 1000L

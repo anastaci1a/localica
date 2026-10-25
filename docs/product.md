@@ -26,6 +26,7 @@ A dependable offline Android player for audio on the device: Musicolet-inspired 
 | Retention | Unlimited by default. At an optional limit, propose the oldest inactive queue by name and confirm removal; allow alternatives/multiple choices and protect the active queue. Cancel leaves creation/playback unchanged. Support removing all except the current queue. |
 | Previous | Below five seconds, go to the previous song; otherwise restart. Settings: threshold 1–60 seconds, always previous, always restart. Without a previous song under the active traversal, restart. Preserve paused/playing state across app/system/headset controls. |
 | Continuity | Newer explicit Pause or Clear supersedes pending Play through readiness, suspended activation and temporary edit holds. Keep native focus suppression; it is not a manual Pause. Preload roughly five seconds of the actual next song under repeat/shuffle, enabled by default. Preserve intentional silence and encoder timing; no overlapping audio. Format/device limits are in [Build](build.md#compatibility-and-dependencies). |
+| Boundary clicks | Optional smoothing is off by default. Replace a bounded head prefix only at a qualified natural join. Preserve sample count, track length, intentional silence and files. Never overlap tracks or trim quiet tails. It does not repair pauses or guarantee inaudible joins. |
 
 Repeat and Shuffle are global persisted modes, initially off:
 
