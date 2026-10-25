@@ -96,7 +96,10 @@ export async function publish({evidenceDir, stateDir, runId, attempt, client,
     partial_line_bytes: partial.length, last_observation_index: lastIndex, ...extra});
   async function flush() {
     if (!pending.length) return;
-    const packet = {schema_version: 1, run_id: runId, attempt, ...manifest,
+    const {observed_failure_lines: snapshotCount, ...manifestIdentityAndTimes} = manifest;
+    const packet = {schema_version: 1, run_id: runId, attempt, ...manifestIdentityAndTimes,
+      observer_manifest_snapshot_count: snapshotCount,
+      publisher_observed_failure_lines: lastIndex,
       observations_provisional: true, test_verdict: 'not_determined',
       sequence: sequence + 1, failures: pending};
     const digest = createHash('sha256').update(JSON.stringify(packet, null, 2) + '\n').digest('hex');
