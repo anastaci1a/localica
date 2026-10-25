@@ -31,7 +31,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRange: ClosedFloatingPointRange<Float>,
     onValueChangeFinished: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier,
     cancelBounds: Rect? = null, onCancel: () -> Unit = {}, onDrag: (Boolean, Boolean) -> Unit = { _, _ -> },
-    liveValue: Float = value) {
+    liveValue: Float = value, cancelTarget: (() -> Rect?)? = null) {
     val ink = androidx.compose.material3.LocalContentColor.current
     val sink by rememberUpdatedState(rememberControlHaptics())
     val feedback = remember { SeekControlHaptics(ControlHaptics { sink.emit(it) }) }
@@ -48,8 +48,20 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
         seekCancelPreview(value, liveValue, wasOver)
     } else value
     val target by rememberUpdatedState(cancelBounds)
+    val liveTarget by rememberUpdatedState(cancelTarget)
+    var pointerInRoot by remember { mutableStateOf<Offset?>(null) }
     val report by rememberUpdatedState(onDrag)
     val cancel by rememberUpdatedState(onCancel)
+    // Entrance/occupancy can move X across a stationary finger. This observes the
+    // same live geometry as event-time release checks, without restarting Slider.
+    LaunchedEffect(Unit) {
+        snapshotFlow { pointerInRoot?.let { point -> (if (liveTarget != null) liveTarget?.invoke() else target)?.contains(point) == true } }
+            .collect { over -> if (over != null && over != wasOver) {
+                wasOver = over
+                feedback.pointer(over, genuineUp = false, cancelled = false)
+                report(true, over)
+            } }
+    }
     val touch = if (!enabled) Modifier else Modifier.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -61,13 +73,15 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
             previewGesture++
             previewActive = true
             report(true, false)
+            pointerInRoot = origin + down.position
             var released = false
             try {
                 do {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val change = event.changes.firstOrNull { it.id == down.id }
                     if (change != null) {
-                        val over = target?.contains(origin + change.position) == true
+                        pointerInRoot = origin + change.position
+                        val over = (if (liveTarget != null) liveTarget?.invoke() else target)?.contains(origin + change.position) == true
                         if (over != wasOver) {
                             wasOver = over
                         }
@@ -78,6 +92,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                         report(change.pressed, over)
                         released = !change.pressed
                         if (released) {
+                            pointerInRoot = null
                             if (cancelRelease) cancel()
                             // Keep touch-origin updates distinct from subsequent keyboard/TalkBack edits.
                             awaitPointerEvent(PointerEventPass.Final)
@@ -86,6 +101,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                     }
                 } while (!released && event.changes.any { it.pressed })
             } finally {
+                pointerInRoot = null
                 feedback.pointerFinal()
                 previewActive = false
                 report(false, false)

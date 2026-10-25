@@ -111,6 +111,10 @@ class PinchRetainedHighlightTest {
             val current = compose.onNodeWithTag("media-$playing")
             compose.waitUntil(5000) { compose.onAllNodesWithTag("media-$playing").fetchSemanticsNodes().isNotEmpty() }
             compose.waitForIdle()
+            // Begin this visual regression at its deliberate source viewport,
+            // after the queue's default current-occurrence follow has settled.
+            list.performScrollToIndex(0)
+            current.assertIsDisplayed()
             val scene = compose.onNodeWithTag("retained-scene")
             val sceneBounds = scene.fetchSemanticsNode().boundsInRoot
             val sourceBounds = current.fetchSemanticsNode().boundsInRoot
