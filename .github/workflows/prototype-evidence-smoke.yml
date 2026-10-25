@@ -1,0 +1,46 @@
+name: Isolated prototype evidence composition smoke
+'on':
+  push:
+    branches: [test/prototype-evidence-composition-20261025]
+permissions:
+  contents: read
+jobs:
+  composition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
+    - name: Install pinned publisher
+      run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+    - name: Observe synthetic failure while producer stays active
+      # Inherit the JS action's normal artifact runtime environment. Never extract
+      # or copy runtime credentials into a shell step or workflow output.
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+      with:
+        script: |
+          const {spawn} = require('node:child_process');
+          const fs = require('node:fs/promises');
+          const assert = require('node:assert/strict');
+          const child = spawn('python3', ['.github/test-evidence/supervise.py',
+            '--output', 'smoke-evidence', '--sha', context.sha, '--api', '26',
+            '--lane', 'prototype', '--run-id', String(context.runId),
+            '--attempt', process.env.GITHUB_RUN_ATTEMPT, '--', 'python3', '-u', '-c',
+            'import time; print("example.SyntheticTest > preservedFailure[smoke] FAILED", flush=True); time.sleep(45); raise SystemExit(7)'],
+            {stdio: 'inherit'});
+          const result = await new Promise((resolve, reject) => {
+            child.once('error', reject); child.once('exit', resolve);
+          });
+          assert.equal(result, 7);
+          const supervised = JSON.parse(await fs.readFile('smoke-evidence/supervision.json', 'utf8'));
+          assert.equal(supervised.observer_exit, 7);
+          assert.equal(supervised.publisher_exit, 0);
+          assert.equal(supervised.monitoring_complete, true);
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: prototype-composition-smoke-final
+        path: smoke-evidence/
+        if-no-files-found: error

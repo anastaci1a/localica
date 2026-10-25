@@ -1,0 +1,446 @@
+# Manual development builds only. Existing Android release gates remain unchanged.
+name: Prototype (not release certified)
+'on':
+  workflow_dispatch:
+    inputs:
+      affected_classes:
+        description: Comma-separated affected behavior test classes; IME, focus and contrast regressions are added automatically
+        required: true
+        type: string
+      coverage_reason:
+        description: What changed and why these classes cover it
+        required: true
+        type: string
+      known_issues:
+        description: Disclosed limitations; never waives a failing required check
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      affected_classes:
+        required: true
+        type: string
+      coverage_reason:
+        required: true
+        type: string
+      known_issues:
+        required: false
+        default: ''
+        type: string
+    secrets:
+      ANDROID_DEBUG_KEYSTORE:
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: prototype-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - name: Restore development signing key
+      env:
+        DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        KEYSTORE_PATH: ${{ runner.temp }}/localica-debug.keystore
+      run: |
+        test -n "$DEBUG_KEYSTORE"
+        printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
+        chmod 600 "$KEYSTORE_PATH"
+        echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+    - name: Build and check
+      run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=2
+    - name: Verify development signing certificate
+      run: |
+        expected=$(keytool -exportcert -alias androiddebugkey -keystore "$LOCALICA_DEBUG_KEYSTORE" -storepass android | sha256sum | cut -d ' ' -f 1)
+        actual=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+        test "$expected" = "$actual"
+    - name: Record verified APK checksum
+      working-directory: app/build/outputs/apk/debug
+      run: sha256sum app-debug.apk > app-debug.apk.sha256
+    - name: Record exact candidate provenance
+      env:
+        COVERAGE_REASON: ${{ inputs.coverage_reason }}
+        AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+      run: |-
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        python3 - <<'PYCODE'
+        import hashlib,json,os,pathlib,subprocess
+        apk=pathlib.Path('app/build/outputs/apk/debug/app-debug.apk')
+        certificate=subprocess.check_output([os.environ['ANDROID_HOME']+'/build-tools/35.0.0/apksigner','verify','--print-certs',str(apk)],text=True)
+        json.dump({'schema_version':1,'lane':'prototype','release_certified':False,'sha':os.environ['GITHUB_SHA'],'ref':os.environ['GITHUB_REF'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'apk_sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'signing_certificate':certificate,'requested_affected_classes':os.environ['AFFECTED_CLASSES'].split(','),'coverage_reason':os.environ['COVERAGE_REASON'],'native_test_apks':'independent same-SHA builds; see each focused job hash receipt'},open(apk.parent/'provenance.json','w'),indent=2)
+        PYCODE
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: prototype-build-internal-unvalidated
+        path: |-
+          app/build/outputs/apk/debug/app-debug.apk
+          app/build/outputs/apk/debug/app-debug.apk.sha256
+
+          app/build/outputs/apk/debug/provenance.json
+        if-no-files-found: error
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: prototype-build-reports
+        path: app/build/reports/
+    name: Prototype build, unit tests and lint
+  focused_26:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+      TEST_API: '26'
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
+    - name: Install pinned live evidence publisher
+      run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+    - name: Enable emulator acceleration
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+    - name: Make room for emulator userdata
+      run: |
+        # This Android job does not use the runner's preinstalled .NET SDKs.
+        sudo rm -rf /usr/share/dotnet
+        df -h "$HOME"
+    - name: Compile instrumentation APKs before starting emulator
+      run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+    - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      with:
+        api-level: 26
+        target: google_apis
+        arch: x86_64
+        profile: pixel_2
+        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
+        disable-animations: true
+        script: |
+          adb shell wm size reset
+          adb shell wm density reset
+          sleep 60
+          bash .github/run-prototype-tests.sh
+    - name: Capture host diagnostics on emulator failure
+      if: failure()
+      run: |
+        free -h
+        df -h
+        sudo dmesg --ctime | tail -100
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: prototype-focused-api-26
+        path: |-
+          app/build/reports/androidTests/
+          app/build/outputs/androidTest-results/
+          app/build/outputs/connected_android_test_additional_output/**/utility-popup-diagnostics/**
+          app/build/outputs/connected_android_test_additional_output/**/pinch-retained-highlight/**
+          app/build/outputs/connected_android_test_additional_output/**/popup-shadow-continuity/**
+          app/build/outputs/connected_android_test_additional_output/**/search-ime-motion/**
+          app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
+          app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
+          app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
+
+          prototype-evidence/
+        if-no-files-found: error
+    name: Prototype focused API 26
+  compatibility_26:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ github.sha }}
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - name: Restore existing development signing key
+      env:
+        DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        KEYSTORE_PATH: ${{ runner.temp }}/compatibility-debug.keystore
+      run: |
+        test -n "$DEBUG_KEYSTORE"
+        printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
+        chmod 600 "$KEYSTORE_PATH"
+        echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+    - name: Prepare isolated exact-SHA compatibility archives
+      run: python3 .github/compatibility/prepare.py
+    - name: Enable emulator acceleration and make room
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        sudo rm -rf /usr/share/dotnet
+    - name: Build and inspect private compatibility APKs sequentially
+      run: bash .github/compatibility/build.sh
+    - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      with:
+        api-level: 26
+        target: google_apis
+        arch: x86_64
+        profile: pixel_2
+        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
+        disable-animations: true
+        script: |
+          adb shell wm size reset
+          adb shell wm density reset
+          sleep 60
+          bash .github/compatibility/run.sh
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: prototype-compatibility-api-26
+        path: ${{ runner.temp }}/shuffle-compatibility/reports/
+        if-no-files-found: error
+    name: Prototype preserved-data compatibility API 26
+  focused_36:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+      TEST_API: '36'
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
+    - name: Install pinned live evidence publisher
+      run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+    - name: Enable emulator acceleration
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+    - name: Make room for emulator userdata
+      run: |
+        # This Android job does not use the runner's preinstalled .NET SDKs.
+        sudo rm -rf /usr/share/dotnet
+        df -h "$HOME"
+    - name: Compile instrumentation APKs before starting emulator
+      run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+    - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      with:
+        api-level: 36
+        target: default
+        arch: x86_64
+        profile: pixel_2
+        emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072
+        disable-animations: false
+        script: |
+          adb shell wm size 720x1280
+          adb shell wm density 280
+          sleep 60
+          bash .github/run-prototype-tests.sh
+    - name: Capture host diagnostics on emulator failure
+      if: failure()
+      run: |
+        free -h
+        df -h
+        sudo dmesg --ctime | tail -100
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: prototype-focused-api-36
+        path: |-
+          app/build/reports/androidTests/
+          app/build/outputs/androidTest-results/
+          app/build/outputs/connected_android_test_additional_output/**/utility-popup-diagnostics/**
+          app/build/outputs/connected_android_test_additional_output/**/pinch-retained-highlight/**
+          app/build/outputs/connected_android_test_additional_output/**/popup-shadow-continuity/**
+          app/build/outputs/connected_android_test_additional_output/**/search-ime-motion/**
+          app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
+          app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
+          app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
+
+          prototype-evidence/
+        if-no-files-found: error
+    name: Prototype focused API 36
+  compatibility_36:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ github.sha }}
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - name: Restore existing development signing key
+      env:
+        DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        KEYSTORE_PATH: ${{ runner.temp }}/compatibility-debug.keystore
+      run: |
+        test -n "$DEBUG_KEYSTORE"
+        printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
+        chmod 600 "$KEYSTORE_PATH"
+        echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+    - name: Prepare isolated exact-SHA compatibility archives
+      run: python3 .github/compatibility/prepare.py
+    - name: Enable emulator acceleration and make room
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        sudo rm -rf /usr/share/dotnet
+    - name: Build and inspect private compatibility APKs sequentially
+      run: bash .github/compatibility/build.sh
+    - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      with:
+        api-level: 36
+        target: default
+        arch: x86_64
+        profile: pixel_2
+        emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072
+        disable-animations: false
+        script: |
+          adb shell wm size 720x1280
+          adb shell wm density 280
+          sleep 60
+          bash .github/compatibility/run.sh
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: prototype-compatibility-api-36
+        path: ${{ runner.temp }}/shuffle-compatibility/reports/
+        if-no-files-found: error
+    name: Prototype preserved-data compatibility API 36
+  evidence:
+    name: Prototype evidence and delivery decision
+    if: ${{ always() }}
+    needs:
+    - build
+    - focused_26
+    - compatibility_26
+    - focused_36
+    - compatibility_36
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+    - name: Download available prototype evidence
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        pattern: prototype-*
+        path: evidence
+    - name: Record passed, failed and not-run checks
+      env:
+        CHECKS: ${{ toJSON(needs) }}
+        KNOWN_ISSUES: ${{ inputs.known_issues }}
+        AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+        COVERAGE_REASON: ${{ inputs.coverage_reason }}
+      run: |
+        python3 - <<'PYCODE'
+        import hashlib
+        import json
+        import os
+        import pathlib
+        import shutil
+
+        checks = json.loads(os.environ['CHECKS'])
+        status = {'success': 'passed', 'failure': 'failed', 'skipped': 'not-run', 'cancelled': 'cancelled'}
+        results = {key: status.get(value['result'], 'incomplete') for key, value in checks.items()}
+        root = pathlib.Path('evidence')
+        manifest = {
+            'schema_version': 1, 'lane': 'prototype', 'release_certified': False,
+            'sha': os.environ['GITHUB_SHA'], 'ref': os.environ['GITHUB_REF'],
+            'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+            'checks': results,
+            'requested_affected_classes': os.environ['AFFECTED_CLASSES'].split(','),
+            'required_regression_classes': ['io.github.anastaci1a.localica.SearchImeMotionTest', 'io.github.anastaci1a.localica.ListSearchTest', 'io.github.anastaci1a.localica.FrostedSurfaceTest'],
+            'coverage_reason': os.environ['COVERAGE_REASON'], 'known_issues': os.environ['KNOWN_ISSUES'],
+            'full_native_api_26': 'not-run', 'full_native_api_36': 'not-run',
+            'monitoring': 'Supervised observer and bounded live artifact publisher; inspect monitoring status separately from final XML',
+            'native_test_apks': 'Independent same-SHA builds, not asserted identical to canonical signed delivery APK',
+            'ready_for_prototype_delivery': False, 'validation_errors': [],
+            'focused_evidence': {}, 'compatibility_evidence': {},
+        }
+        errors = manifest['validation_errors']
+        canonical = root / 'prototype-build-internal-unvalidated'
+        apk = canonical / 'app-debug.apk'
+        canonical_valid = False
+        if apk.exists():
+            try:
+                provenance = json.loads((canonical / 'provenance.json').read_text())
+                digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+                assert provenance['sha'] == manifest['sha'] and provenance['apk_sha256'] == digest
+                assert provenance['run_id'] == manifest['run_id'] and provenance['run_attempt'] == manifest['run_attempt']
+                manifest['apk_sha256'] = digest
+                manifest['signing_certificate'] = provenance['signing_certificate']
+                canonical_valid = True
+            except (AssertionError, KeyError, ValueError, OSError) as error:
+                errors.append('Canonical APK provenance validation failed: ' + type(error).__name__)
+        expected = set(manifest['requested_affected_classes']) | set(manifest['required_regression_classes'])
+        for api in (26, 36):
+            focused = root / f'prototype-focused-api-{api}' / 'prototype-evidence'
+            receipt = focused / 'reconciled-tests.json'
+            if receipt.exists():
+                try:
+                    data = json.loads(receipt.read_text())
+                    assert data['sha'] == manifest['sha'] and str(data['api']) == str(api)
+                    assert set(data['selectors']) == expected and set(data['counts']) == expected
+                    assert all(value['passed'] > 0 and value['failed'] == 0 and value['errors'] == 0
+                               for value in data['counts'].values())
+                    data['independent_test_apk_hashes'] = (focused / 'test-input-apks.sha256').read_text()
+                    manifest['focused_evidence'][str(api)] = data
+                except (AssertionError, KeyError, ValueError, TypeError, OSError) as error:
+                    errors.append(f'Focused API {api} evidence is not passing: ' + type(error).__name__)
+            compatibility = root / f'prototype-compatibility-api-{api}' / 'provenance.json'
+            if compatibility.exists():
+                try:
+                    data = json.loads(compatibility.read_text())
+                    assert data['source_sha'] == manifest['sha']
+                    manifest['compatibility_evidence'][str(api)] = {
+                        'source_sha': data['source_sha'], 'private_variants_not_distributed': True}
+                except (AssertionError, KeyError, ValueError, OSError) as error:
+                    errors.append(f'Compatibility API {api} provenance validation failed: ' + type(error).__name__)
+        all_checks_passed = all(value == 'passed' for value in results.values())
+        complete = canonical_valid and len(manifest['focused_evidence']) == 2 and len(manifest['compatibility_evidence']) == 2
+        if all_checks_passed and not complete:
+            errors.append('Passed job statuses lack complete exact-SHA evidence; delivery blocked')
+        ready = all_checks_passed and complete and not errors
+        manifest['ready_for_prototype_delivery'] = ready
+        out = pathlib.Path('prototype-delivery')
+        out.mkdir()
+        if ready:
+            shutil.copy2(apk, out / 'localica-prototype-NOT-RELEASE-CERTIFIED.apk')
+            (out / 'localica-prototype-NOT-RELEASE-CERTIFIED.apk.sha256').write_text(
+                manifest['apk_sha256'] + '  localica-prototype-NOT-RELEASE-CERTIFIED.apk\n')
+        (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+            summary.write('## Prototype — not release certified\n' + (
+                'Required checks passed; prototype APK attached.' if ready else
+                'Not ready: no delivery APK packaged. See per-job evidence.') + '\n')
+        if errors:
+            raise SystemExit('Prototype evidence validation failed; see the held decision manifest')
+        PYCODE
+    - name: Upload explicit delivery decision and eligible APK
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: prototype-delivery-decision
+        path: prototype-delivery/
+        if-no-files-found: error
+      if: ${{ always() }}
