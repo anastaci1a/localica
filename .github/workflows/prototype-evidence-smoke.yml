@@ -1,0 +1,40 @@
+name: Isolated prototype evidence composition smoke
+'on':
+  push:
+    branches: [test/prototype-evidence-composition-20261025]
+permissions:
+  contents: read
+jobs:
+  composition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
+    - name: Install pinned publisher
+      run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+    - name: Observe synthetic failure while producer stays active
+      run: |
+        set +e
+        python3 .github/test-evidence/supervise.py --output smoke-evidence --sha "$GITHUB_SHA" --api 26 --lane prototype --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" -- python3 -u -c 'import time; print("example.SyntheticTest > preservedFailure[smoke] FAILED", flush=True); time.sleep(45); raise SystemExit(7)'
+        result=$?
+        set -e
+        test "$result" = 7
+        python3 - <<'PY'
+        import json
+        from pathlib import Path
+        root = Path('smoke-evidence')
+        supervised = json.loads((root/'supervision.json').read_text())
+        assert supervised['observer_exit'] == 7
+        assert supervised['publisher_exit'] == 0 and supervised['monitoring_complete']
+        observed = json.loads((root/'observed/manifest.json').read_text())
+        assert observed['child_returncode'] == 7 and observed['observed_failure_lines'] == 1
+        PY
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: prototype-composition-smoke-final
+        path: smoke-evidence/
+        if-no-files-found: error
