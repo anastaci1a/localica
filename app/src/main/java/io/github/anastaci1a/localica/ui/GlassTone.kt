@@ -5,6 +5,8 @@ import android.util.LruCache
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -45,13 +47,24 @@ private object ToneImages {
     }
 }
 
-@Composable internal fun rememberToneSnapshot(image: ImageBitmap?, tone: GlassTone): ImageBitmap? {
-    val cached = remember(image, tone) {
-        image?.takeIf { tone.trim > 0f }?.let { ToneImages.images.get(ToneImages.Key(it, tone)) }
+/** Retain completed positive-tone content while a replacement image/tone is prepared.
+ * The optional preparation seam is for deterministic state tests; ordinary callers keep
+ * the identical cache and Dispatchers.Default preparation path. No bitmap is recycled here.
+ */
+@Composable internal fun rememberToneSnapshot(image: ImageBitmap?, tone: GlassTone,
+    prepare: (suspend (ImageBitmap, GlassTone) -> ImageBitmap)? = null): ImageBitmap? {
+    val cached = remember(image, tone, prepare) {
+        image?.takeIf { tone.trim > 0f && prepare == null }?.let { ToneImages.images.get(ToneImages.Key(it, tone)) }
     }
-    var result by remember(image) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(image, tone) {
-        result = if (image == null || tone.trim == 0f) image else withContext(Dispatchers.Default) { ToneImages.get(image, tone) }
+    var result by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(image, tone, prepare) {
+        val replacement = if (image == null || tone.trim == 0f) image
+            else if (prepare != null) prepare(image, tone)
+            else withContext(Dispatchers.Default) { ToneImages.get(image, tone) }
+        // A suspended preparer may finish non-cancellable owned work after replacement.
+        // Its retired effect must never publish into the retained result.
+        currentCoroutineContext().ensureActive()
+        result = replacement
     }
     return if (image == null || tone.trim == 0f) image else cached ?: result ?: image
 }
