@@ -44,7 +44,7 @@ class QueueRandomizePlaybackTest {
             val randomized = after.state.library.active!!
             assertEquals("active-current", randomized.entries.first().id)
             assertEquals(expected, randomized.entries)
-            assertRandomizedQueue(queue, randomized)
+            assertOrderEdit(queue, randomized)
             assertEquals(before.state.library.queues.single { it.id == "inactive" },
                 after.state.library.queues.single { it.id == "inactive" })
             f.assertPlaybackPreserved(before, after)
@@ -64,9 +64,55 @@ class QueueRandomizePlaybackTest {
             val after = f.snapshot()
             val randomized = after.state.library.queues.single { it.id == inactive.id }
             assertEquals(expected, randomized.entries)
-            assertRandomizedQueue(inactive, randomized)
+            assertOrderEdit(inactive, randomized)
             assertEquals(inactive.positionMs, randomized.positionMs)
             assertEquals(randomized, f.db.queues().read().queues.single { it.id == inactive.id })
+            assertEquals(before.state.library.active!!.copy(positionMs = after.state.library.active!!.positionMs),
+                after.state.library.active)
+            assertEquals(before.timeline, after.timeline)
+            f.assertPlaybackPreserved(before, after)
+        }
+    }
+
+    @Test fun pausedActiveReverseKeepsTheSecondDuplicateAtItsReversedPositionAndPreservesPlayback() =
+        activeReverse(playing = false)
+
+    @Test fun playingActiveReverseKeepsTheSecondDuplicateAtItsReversedPositionAndPreservesPlayback() =
+        activeReverse(playing = true)
+
+    private fun activeReverse(playing: Boolean) {
+        for (shuffle in listOf(false, true)) fixture(shuffle, playing, ascending = true) { f ->
+            val before = f.snapshot()
+            val queue = before.state.library.active!!
+            assertEquals("active-current", queue.currentEntryId)
+            assertEquals(2, queue.entries.count { it.track.id == "duplicate" })
+            assertTrue(f.reverse(queue.id))
+            val after = f.snapshot()
+            val reversed = after.state.library.active!!
+            assertEquals(queue.entries.reversed(), reversed.entries)
+            // Unlike Randomize, Reverse must not pin the playing occurrence to the top.
+            assertNotEquals(reversed.currentEntryId, reversed.entries.first().id)
+            assertOrderEdit(queue, reversed)
+            assertEquals(before.state.library.queues.single { it.id == "inactive" },
+                after.state.library.queues.single { it.id == "inactive" })
+            f.assertPlaybackPreserved(before, after)
+            val stored = f.db.queues().read().active!!
+            assertEquals(reversed.copy(positionMs = stored.positionMs), stored)
+            f.assertPositionPreserved(before, f.snapshot(), stored.positionMs)
+        }
+    }
+
+    @Test fun inactiveReverseLeavesActivePlaybackAndTraversalAlone() {
+        for (shuffle in listOf(false, true)) fixture(shuffle, playing = true) { f ->
+            val before = f.snapshot()
+            val inactive = before.state.library.queues.single { it.id == "inactive" }
+            assertTrue(f.reverse(inactive.id))
+            val after = f.snapshot()
+            val reversed = after.state.library.queues.single { it.id == inactive.id }
+            assertEquals(inactive.entries.reversed(), reversed.entries)
+            assertOrderEdit(inactive, reversed)
+            assertEquals(inactive.positionMs, reversed.positionMs)
+            assertEquals(reversed, f.db.queues().read().queues.single { it.id == inactive.id })
             assertEquals(before.state.library.active!!.copy(positionMs = after.state.library.active!!.positionMs),
                 after.state.library.active)
             assertEquals(before.timeline, after.timeline)
@@ -81,7 +127,7 @@ class QueueRandomizePlaybackTest {
         return seed
     }
 
-    private fun assertRandomizedQueue(before: ListeningQueue, after: ListeningQueue) {
+    private fun assertOrderEdit(before: ListeningQueue, after: ListeningQueue) {
         assertEquals(before.entries.size, after.entries.size)
         assertEquals(before.entries.associateBy { it.id }, after.entries.associateBy { it.id })
         assertEquals(before.entries.groupingBy { it.track.id }.eachCount(),
@@ -123,6 +169,12 @@ class QueueRandomizePlaybackTest {
             return withTimeout(10_000) { done.await() }
         }
 
+        suspend fun reverse(id: String): Boolean {
+            val done = CompletableDeferred<Boolean>()
+            queues.reverse(id) { done.complete(it) }
+            return withTimeout(10_000) { done.await() }
+        }
+
         suspend fun assertPlaybackPreserved(before: Snapshot, after: Snapshot) {
             assertNull(after.state.problem)
             assertEquals(before.state.library.activeId, after.state.library.activeId)
@@ -160,7 +212,7 @@ class QueueRandomizePlaybackTest {
         }
     }
 
-    private fun fixture(shuffle: Boolean, playing: Boolean, action: suspend (Fixture) -> Unit) = runBlocking {
+    private fun fixture(shuffle: Boolean, playing: Boolean, ascending: Boolean = false, action: suspend (Fixture) -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val preferencesName = "randomize-${UUID.randomUUID()}"
@@ -183,7 +235,7 @@ class QueueRandomizePlaybackTest {
             val journey = QueueJourney.start(ids, "$id-first", JourneyModes.from(settings), Random(17))
                 .select("$id-current", ids, Random(18)).select("$id-middle", ids, Random(19)).copy(cursor = 1)
             val sorted = QueueEdits.sort(ListeningQueue(id = id, name = id, entries = entries,
-                currentEntryId = "$id-current", positionMs = 1234, journey = journey), TrackSort.Title, false)
+                currentEntryId = "$id-current", positionMs = 1234, journey = journey), TrackSort.Title, ascending)
             return sorted.copy(journey = journey.reconcile(sorted.entries.map { it.id },
                 sorted.currentEntryId, JourneyModes.from(settings)))
         }

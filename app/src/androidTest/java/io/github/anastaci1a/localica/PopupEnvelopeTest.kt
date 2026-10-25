@@ -213,12 +213,14 @@ class PopupEnvelopeTest {
                 Box(Modifier.width(width).height(height)) {
                     key(generation) {
                         val mutable = route == queue
+                        var ids by remember { mutableStateOf(listOf("a", "b")) }
                         BrowseSortDialog(route, draft, true, {}, { _, _ -> }, {},
-                            onRandomize = if (mutable) ({ done -> done(randomizeOk) }) else null,
+                            onRandomize = if (mutable) ({ done -> if (randomizeOk) ids = ids.reversed(); done(randomizeOk) }) else null,
+                            onReverseOrder = if (mutable) ({ done -> ids = ids.reversed(); done(io.github.anastaci1a.localica.library.SavedOrder(ids)) }) else null,
                             mutableOrder = if (mutable) io.github.anastaci1a.localica.library.SavedOrder(
                                 listOf("a", "b"), draft.sort, draft.ascending) else null,
-                            mutableOrderIds = if (mutable) listOf("a", "b") else null,
-                            onRevertOrder = if (mutable) ({ _, done -> done(true) }) else null,
+                            mutableOrderIds = if (mutable) ids else null,
+                            onRevertOrder = if (mutable) ({ checkpoint, done -> ids = checkpoint.physical; done(true) }) else null,
                             onApplySort = if (mutable) ({ _, _, done -> done(true) }) else null)
                     }
                 }
@@ -249,6 +251,11 @@ class PopupEnvelopeTest {
                     assertEquals(expected, compose.onNodeWithTag("browse-options-dialog").fetchSemanticsNode().size)
                     compose.onNodeWithText("Revert", substring = false).performScrollTo().performClick()
                     assertEquals(expected, compose.onNodeWithTag("browse-options-dialog").fetchSemanticsNode().size)
+                    repeat(2) {
+                        compose.onNodeWithText("Reverse", substring = false).performScrollTo().performClick()
+                        assertEquals(expected, compose.onNodeWithTag("browse-options-dialog").fetchSemanticsNode().size)
+                    }
+                    compose.onNodeWithText("Revert").assertDoesNotExist()
                     compose.runOnIdle { randomizeOk = false }
                     compose.onNodeWithText("Randomize", substring = false).performScrollTo().performClick()
                     compose.onNodeWithText("Couldn’t save this order. Try again.").performScrollTo().assertIsDisplayed()

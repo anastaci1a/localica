@@ -37,6 +37,8 @@ object PlaylistEdits {
         else playlist.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
     fun moveBefore(playlist: ManualPlaylist, ids: Set<String>, beforeId: String?) = reordered(playlist,
         OccurrenceMoves.before(playlist.entries, ids, beforeId) { it.id })
+    /** Reverse the current physical order, not the retained automatic-sort baseline. */
+    fun reverse(playlist: ManualPlaylist): ManualPlaylist = reordered(playlist, playlist.entries.reversed())
     fun randomize(playlist: ManualPlaylist): ManualPlaylist {
         val entries = playlist.entries.shuffled()
         return playlist.copy(entries = entries, order = SavedOrder(entries.map { it.id }))
