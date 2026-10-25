@@ -495,6 +495,12 @@ class QueueFollowingTest {
         try {
             if (original != "1") shell("settings put secure $key 1")
             assertEquals("1", shell("settings get secure $key"))
+            val keyboardSetup = mutableListOf<String>()
+            try {
+                prepareNativeDockedKeyboard(compose, keyboardSetup, ::shell)
+            } finally {
+                keyboardSetup.forEach { android.util.Log.i("QueueKeyboardSetup", it) }
+            }
             val fixture = fixture(initial = 95, text = "Following", search = true)
             val editor = compose.onNode(hasSetTextAction()).assertExists()
             val view = (editor.fetchSemanticsNode().root as ViewRootForTest).view
