@@ -30,7 +30,7 @@ const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'incomplete']);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function check(ok) { if (!ok) throw new Error('invalid_evidence'); }
 function text(value, pattern, max = 256) {
-  check(typeof value === 'string' && value.length <= max && pattern.test(value));
+  check(typeof value === 'string' && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value) && pattern.test(value));
   return value;
 }
 function integer(value, min = 0) { check(Number.isSafeInteger(value) && value >= min); return value; }
