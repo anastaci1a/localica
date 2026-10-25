@@ -55,11 +55,30 @@ class PrivateQueueBoundaryTest {
         // Buffer only this diagnostic path; timestamps and all failure assertions remain unchanged.
         var eventWriter = if (traceOutput) events.bufferedWriter(bufferSize = 64 * 1024) else null
         val started = SystemClock.elapsedRealtime()
-        fun event(kind: String, vararg values: Pair<String, Any?>) = synchronized(events) {
-            val item = JSONObject().put("kind", kind).put("elapsedMs", SystemClock.elapsedRealtime() - started)
-            values.forEach { (key, value) -> item.put(key, value ?: JSONObject.NULL) }
-            val line = item.toString() + "\n"
-            eventWriter?.write(line) ?: events.appendText(line)
+        val traceWriteDelays = mutableListOf<JSONObject>()
+        var traceWriteSlowCount = 0
+        var traceWriteMaxNs = 0L
+        fun event(kind: String, vararg values: Pair<String, Any?>) {
+            val entered = SystemClock.elapsedRealtimeNanos()
+            synchronized(events) {
+                val acquired = SystemClock.elapsedRealtimeNanos()
+                val item = JSONObject().put("kind", kind).put("elapsedMs", SystemClock.elapsedRealtime() - started)
+                values.forEach { (key, value) -> item.put(key, value ?: JSONObject.NULL) }
+                val line = item.toString() + "\n"
+                val writing = SystemClock.elapsedRealtimeNanos()
+                eventWriter?.write(line) ?: events.appendText(line)
+                val completed = SystemClock.elapsedRealtimeNanos()
+                if (traceOutput) {
+                    traceWriteMaxNs = maxOf(traceWriteMaxNs, completed - entered)
+                    if (completed - entered >= 50_000_000L) {
+                        traceWriteSlowCount++
+                        // Keep bounded evidence in memory, not a recursive log write on this thread.
+                        if (traceWriteDelays.size < 128) traceWriteDelays += JSONObject()
+                            .put("eventKind", kind).put("entryNs", entered).put("acquiredNs", acquired)
+                            .put("writingNs", writing).put("completedNs", completed)
+                    }
+                }
+            }
         }
         val captureOutput = FileOutputStream(File(out, "rendered.pcm"))
         val acceptedOutput = if (traceOutput) FileOutputStream(File(out, "accepted-output.pcm")).buffered(256 * 1024) else null
@@ -199,6 +218,10 @@ class PrivateQueueBoundaryTest {
                 Thread.sleep(100)
             }
             event("summary", "arrivals" to arrivals, "rebuffers" to rebuffers, "underruns" to underruns, "bytes" to byteCount, "queue" to queue, "preload" to preload)
+            if (traceOutput) synchronized(events) {
+                event("trace-write-summary", "maximumDurationNs" to traceWriteMaxNs,
+                    "slowCount" to traceWriteSlowCount, "first128" to org.json.JSONArray(traceWriteDelays))
+            }
             assertEquals(2, arrivals)
             assertEquals("Rebuffered after initial readiness", 0, rebuffers)
             assertEquals("Reported underrun", 0, underruns)
