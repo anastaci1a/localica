@@ -15,8 +15,6 @@ declare -A seen=()
 affected=0
 for name in "${selected[@]}" "$required" "$focus_regression" "$contrast_regression"; do
   grep -Fxq "$name" .github/prototype-risk-classes.txt || { echo "Class is not in the reviewed inventory: $name" >&2; exit 2; }
-  source_path="app/src/androidTest/java/${name//.//}"
-  [[ -f "$source_path.kt" || -f "$source_path.java" ]] || { echo "Missing instrumentation source: $name" >&2; exit 2; }
   [[ "$name" == "$required" || "$name" == "$focus_regression" || "$name" == "$contrast_regression" ]] || affected=1
   seen["$name"]=1
 done
@@ -32,10 +30,16 @@ selector=$(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort | paste -sd, -)
 [[ ! -e prototype-evidence ]] || { echo 'Refusing stale prototype evidence' >&2; exit 2; }
 mkdir prototype-evidence
 printf '%s\n' "$selector" > prototype-evidence/selectors.txt
+python3 .github/test-evidence/source_methods.py --classes "$selector" --output prototype-evidence/expected-methods.json
 printf 'candidate_sha=%s\napi=%s\nrelease_certified=false\n' "$GITHUB_SHA" "$TEST_API" > prototype-evidence/context.txt
 # These APKs are independently compiled test inputs, NOT the canonical signed delivery APK.
 sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > prototype-evidence/test-input-apks.sha256
 [[ -z $(find app/build/outputs/androidTest-results -name '*.xml' -print 2>/dev/null) ]] || { echo 'Refusing stale instrumentation XML' >&2; exit 2; }
+serial=${ANDROID_SERIAL:-emulator-5554}
+[[ "$serial" =~ ^emulator-[0-9]+$ ]] || { echo 'Require an explicit emulator serial' >&2; exit 2; }
+actual_api=$(adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')
+[[ "$actual_api" == "$TEST_API" ]] || { echo "Actual SDK $actual_api differs from requested $TEST_API" >&2; exit 2; }
+printf 'serial=%s\nactual_api=%s\n' "$serial" "$actual_api" >> prototype-evidence/context.txt
 source .github/prepare-device-tests.sh
 # Retain the setup's EXIT restoration trap; forward cancellation to the observer,
 # which owns its child process group, before restoration runs.
@@ -55,8 +59,8 @@ wait "$child"
 result=$?
 set -e
 [[ "$result" == 0 ]] || exit "$result"
-python3 - "$selector" <<'PYXML'
-import json, pathlib, sys, xml.etree.ElementTree as ET
+python3 - "$selector" "$required,$focus_regression,$contrast_regression" <<'PYXML'
+import hashlib, json, pathlib, sys, xml.etree.ElementTree as ET
 root = pathlib.Path('prototype-evidence')
 observed = json.loads((root/'live/observed/manifest.json').read_text())
 assert observed['status'] == 'completed' and observed['child_returncode'] == 0
@@ -67,6 +71,12 @@ counts = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in sele
 files = sorted(pathlib.Path('app/build/outputs/androidTest-results').rglob('*.xml'))
 assert files, 'No final instrumentation XML'
 identities = set()
+methods = {}
+source_bytes = (root/'expected-methods.json').read_bytes()
+source_inventory = json.loads(source_bytes)
+assert set(source_inventory['selectors']) == selected
+expected_methods = set(source_inventory['runtime_methods'])
+required = set(sys.argv[2].split(','))
 for file in files:
     tree = ET.parse(file)
     suites = [tree.getroot()] if tree.getroot().tag == 'testsuite' else tree.getroot().findall('.//testsuite')
@@ -82,10 +92,13 @@ for file in files:
             identities.add(identity)
             outcome = 'failed' if case.find('failure') is not None else 'errors' if case.find('error') is not None else 'skipped' if case.find('skipped') is not None else 'passed'
             counts[name][outcome] += 1
+            methods[name+'#'+case.attrib['name']] = outcome
         for attr, tag in [('failures','failure'), ('errors','error'), ('skipped','skipped')]:
             if attr in suite.attrib:
                 assert int(suite.attrib[attr]) == sum(c.find(tag) is not None for c in cases), 'Inconsistent XML '+attr
-result = {'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
+assert set(methods) == expected_methods, 'Missing or extra source-declared methods'
+assert all(counts[c]['skipped'] == 0 for c in required), 'Required regression methods cannot skip'
+result = {'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
 assert all(v['passed'] > 0 and v['failed'] == 0 and v['errors'] == 0 for v in counts.values()), 'Required class failed or had no passing tests'
 PYXML
