@@ -96,9 +96,12 @@ class ArtworkSwipeTest {
     }
 
     @Test fun preparedSmallerWashKeepsTheOriginalTextureCoordinates() {
-        val original = Bitmap.createBitmap(128, 320, Bitmap.Config.ARGB_8888)
+        // The sharp fixture uses the same normalized texture extent as production.
+        // Only the prepared soft endpoint is smaller; blur is irrelevant to alignment.
+        val original = Bitmap.createBitmap(ArtworkWash.WIDTH, ArtworkWash.HEIGHT, Bitmap.Config.ARGB_8888)
         val colors = listOf(Color.Red, Color.Green, Color.Blue, Color.Yellow)
-        for (y in 0 until 320) for (x in 0 until 128) original.setPixel(x, y, colors[y / 80].toArgb())
+        for (y in 0 until original.height) for (x in 0 until original.width)
+            original.setPixel(x, y, colors[y * colors.size / original.height].toArgb())
         val small = Bitmap.createScaledBitmap(original, 32, 80, false)
         val palette = PlayerPalette(Color.Black, Color.Black, Color.Black, wash = original, softWash = small)
         var softness by mutableFloatStateOf(0f)
@@ -111,13 +114,20 @@ class ArtworkSwipeTest {
         val before = compose.onNodeWithTag("wash").captureToImage().toPixelMap()
         compose.runOnIdle { softness = 1f }
         val after = compose.onNodeWithTag("wash").captureToImage().toPixelMap()
-        for (fraction in listOf(.1f, .35f, .65f, .9f)) {
+        // The wash starts at 50 - 200 / 4 = 0 dp and spans 500 dp, so its
+        // four bands change at 125, 250 and 375 dp in this 400 dp viewport.
+        for ((fraction, expected) in listOf(.1f to Color.Red, .35f to Color.Green,
+            .65f to Color.Blue, .9f to Color.Blue, .97f to Color.Yellow)) {
             val y = (before.height * fraction).toInt()
             val first = before[before.width / 2, y]
             val second = after[after.width / 2, y]
-            assertEquals(first.red, second.red, .02f)
-            assertEquals(first.green, second.green, .02f)
-            assertEquals(first.blue, second.blue, .02f)
+            val position = "Wash at viewport fraction $fraction"
+            assertEquals("$position sharp red", expected.red, first.red, .02f)
+            assertEquals("$position sharp green", expected.green, first.green, .02f)
+            assertEquals("$position sharp blue", expected.blue, first.blue, .02f)
+            assertEquals("$position keeps red when softened", first.red, second.red, .02f)
+            assertEquals("$position keeps green when softened", first.green, second.green, .02f)
+            assertEquals("$position keeps blue when softened", first.blue, second.blue, .02f)
         }
     }
 

@@ -26,7 +26,7 @@ internal fun ListViewFields(route: BrowseRoute, value: BrowseStyle, onChange: (B
                 valueRange = 1f..5f, steps = 3, modifier = Modifier.semantics {
                     contentDescription = "Items per row"; stateDescription = columns.toString()
                 })
-        } else ChoicePreference("Size", value.listSize, ListSize.densityOrder, { it.name }, popup = true) { onChange(value.copy(listSize = it)) }
+        } else ChoicePreference("Size", value.listSize, route.listSizes(), { it.name }, popup = true) { onChange(value.copy(listSize = it)) }
         ChoicePreference("Extra information", value.extraInfo, route.informationChoices(), ::extraInfoLabel, popup = true) { onChange(value.copy(extraInfo = it)) }
         if (!route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library))
             BooleanPreference("Quick-search box", value.quickSearch) { onChange(value.copy(quickSearch = it)) }

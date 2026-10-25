@@ -11,7 +11,8 @@ import kotlinx.coroutines.*
 
 @Immutable
 internal data class SongDragPresentation(val style: BrowseStyle, val cellGeometry: BrowseCellGeometry,
-    val colors: androidx.compose.material3.ColorScheme?, val ink: androidx.compose.ui.graphics.Color)
+    val colors: androidx.compose.material3.ColorScheme?, val ink: androidx.compose.ui.graphics.Color,
+    val indices: Map<String, Int> = emptyMap())
 
 /** Song-specific appearance and selection remain adapters around the shared drag transaction. */
 @Stable
@@ -21,7 +22,7 @@ internal class SongDragState(grid: LazyGridState, scope: CoroutineScope) :
     var cellGeometry = BrowseCellGeometry(1)
     var colors: androidx.compose.material3.ColorScheme? = null
     var ink = androidx.compose.ui.graphics.Color.Unspecified
-    override fun capturePresentation() = SongDragPresentation(style, cellGeometry, colors, ink)
+    public override fun capturePresentation() = SongDragPresentation(style, cellGeometry, colors, ink, items.mapIndexed { index, item -> item.key to index }.toMap())
 }
 
 /** Song selection adapts the shared whole-row long-press gesture. */

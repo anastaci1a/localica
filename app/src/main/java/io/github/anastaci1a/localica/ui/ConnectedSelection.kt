@@ -17,15 +17,18 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.toIntSize
 import kotlin.math.*
 
 internal data class SelectionRegion(val bounds: Rect)
 internal class SelectionEntry {
     var coordinates: LayoutCoordinates? = null
     var selected by mutableStateOf(false)
+    var visibility: () -> Float by mutableStateOf({ 0f })
     var visualSize by mutableStateOf<(Size) -> Size>({ it })
     var direction by mutableStateOf(LayoutDirection.Ltr)
 }
@@ -37,30 +40,37 @@ internal val LocalSelectionScene = staticCompositionLocalOf<SelectionScene?> { n
 
 /** Scrolling content and its lenses share a single clip, fade and overscroll transform. */
 @Composable
-internal fun SelectionViewport(modifier: Modifier = Modifier, content: @Composable (OverscrollEffect?) -> Unit) {
+internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
+    content: @Composable (OverscrollEffect?) -> Unit) {
     val overscroll = rememberOverscrollEffect()
     val events = remember(overscroll) { overscroll?.withoutVisualEffect() }
-    ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier)) {
+    ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier),
+        contentDrawing = contentDrawing) {
         content(events)
     }
 }
 
 /** Record content once and keep it sharp above the separately refracted backing. */
 @Composable
-internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
+    content: @Composable () -> Unit) {
     val scene = remember { SelectionScene() }
     val contentLayer = rememberGraphicsLayer()
+    val transitionLayer = rememberGraphicsLayer()
+    val visibilityLayer = rememberGraphicsLayer()
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val groups = remember { mutableListOf<SelectionGroupRenderer>() }
     DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
     val backing = LocalFrostedBackdrop.current
-    val hasSelection by remember { derivedStateOf { scene.regions.values.any { it.selected } } }
+    val hasSelection by remember { derivedStateOf { scene.regions.values.any { it.selected || it.visibility() > 0f } } }
     BackdropLease(backing.takeIf { hasSelection })
     val view = LocalView.current
     var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
     val geometry = remember { SelectionPathCache() }
     val grouping = remember { SelectionComponentCache() }
     val depth = LocalGlassAppearance.current.depth
+    val recordingDensity = LocalDensity.current
+    val recordingDirection = LocalLayoutDirection.current
     CompositionLocalProvider(LocalSelectionScene provides scene) {
         Box(modifier.onPlaced { coordinates = it }.drawWithContent {
             // Pager placement also moves unselected rows. Do not subscribe their
@@ -70,14 +80,16 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             // global bounds through a later callback and lagging one frame behind rows.
             scene.placement
             val host = coordinates ?: return@drawWithContent drawContent()
-            val regions = scene.regions.values.mapNotNull { entry ->
+            val visibleEntries = scene.regions.values.mapNotNull { entry ->
                 val item = entry.coordinates
-                if (!entry.selected || item == null || !item.isAttached) null else {
+                val visibility = entry.visibility().coerceIn(0f, 1f)
+                if (visibility <= 0f || item == null || !item.isAttached) null else {
                     val at = host.localPositionOf(item, Offset.Zero)
                     val measured = Size(item.size.width.toFloat(), item.size.height.toFloat())
-                    SelectionRegion(mediaItemBounds(measured, entry.visualSize(measured), entry.direction).translate(at))
+                    SelectionRegion(selectionRevealBounds(mediaItemBounds(measured, entry.visualSize(measured), entry.direction), visibility).translate(at)) to visibility
                 }
             }
+            val regions = visibleEntries.map { it.first }
             if (regions.isEmpty()) { drawContent(); return@drawWithContent }
             // Normalize translation: scrolling moves the cached shape instead of
             // rasterizing a distance field and uploading another texture every frame.
@@ -86,86 +98,101 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, content: @Com
             val path = geometry.path(local, MediaSelectionGap.toPx())
             val components = grouping.get(local, MediaSelectionGap.toPx())
             while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer())
-            if (Build.VERSION.SDK_INT >= 33) {
-                // This recording is read by the ordinary viewport and by every
-                // selected component's atlas. Rasterize it once: Auto would
-                // replay all visible text/artwork for each of those reads.
+            val transitioning = visibleEntries.any { it.second < 1f }
+            val recordContent = Build.VERSION.SDK_INT >= 33 || transitioning
+            // Record foreground once for every reader. Settled legacy lenses keep
+            // their original direct draw; only a transition needs both complete scenes.
+            if (recordContent) {
                 contentLayer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
                 contentLayer.record { this@drawWithContent.drawContent() }
-                translate(origin.x, origin.y) { clipPath(path, ClipOp.Difference) {
-                    translate(-origin.x, -origin.y) { drawLayer(contentLayer) }
-                } }
             }
-            components.forEachIndexed { index, component ->
-                val renderer = groups[index]
-                val groupOrigin = component.first().bounds.topLeft
-                val groupRegions = localLensRegions(component, groupOrigin)
-                val groupPath = renderer.path.path(groupRegions, MediaSelectionGap.toPx())
-                val absolute = origin + groupOrigin
-                val crop = groupPath.getBounds().translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
-                if (crop.isEmpty) return@forEachIndexed
+            fun DrawScope.selectedScene() {
                 if (Build.VERSION.SDK_INT >= 33) {
-                    val at = Offset(floor(crop.left), floor(crop.top))
-                    val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
-                    val source = backing?.takeUnless { it.layer.isReleased }
-                    val sourceOffset = at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero)
-                    // Only upload pixels this lens can reach. The ray model's bounded
-                    // entry/exit projection is below 2.1 spans, including maximum depth.
-                    val reach = groupPath.getBounds().size.minDimension * 1.05f + 2f
-                    val sampled = if (source == null) Rect.Zero else Rect(sourceOffset, visible).inflate(reach)
-                        .intersect(Rect(Offset.Zero, Size(source.size.width.toFloat(), source.size.height.toFloat())))
-                        .takeUnless { it.isEmpty } ?: Rect.Zero
-                    val sampleOrigin = Offset(floor(sampled.left), floor(sampled.top))
-                    val backdropSize = androidx.compose.ui.unit.IntSize(ceil(sampled.right - sampleOrigin.x).toInt(),
-                        ceil(sampled.bottom - sampleOrigin.y).toInt())
-                    val foregroundY = backdropSize.height + 2f
-                    val atlas = LensAtlas(visible, Size(backdropSize.width.toFloat(), backdropSize.height.toFloat()),
-                        sourceOffset - sampleOrigin, foregroundY)
-                    val extent = androidx.compose.ui.unit.IntSize(max(visible.width.toInt(), backdropSize.width + 2),
-                        foregroundY.toInt() + visible.height.toInt())
-                    val output = renderer.output
-                    output.renderEffect = requireNotNull(renderer.optics).effect(groupRegions, groupPath, MediaSelectionGap.toPx(), absolute - at, depth, atlas)
-                    output.clip = true
-                    output.record(size = glassLayerExtent(extent)) {
-                        clipRect(left = 1f, top = 1f, right = backdropSize.width + 1f, bottom = backdropSize.height + 1f) {
-                            if (source != null) translate(1f - sampleOrigin.x, 1f - sampleOrigin.y) { drawLayer(source.layer) }
-                        }
-                        clipRect(top = foregroundY) { translate(-at.x, foregroundY - at.y) { drawLayer(contentLayer) } }
-                    }
-                    translate(absolute.x, absolute.y) { clipPath(groupPath) {
-                        translate(at.x - absolute.x, at.y - absolute.y) { drawLayer(output) }
-                    } }
-                } else {
-                    renderer.shape.update(groupRegions, groupPath, MediaSelectionGap.toPx())
-                    val shape = renderer.shape.geometry ?: return@forEachIndexed
-                    val source = backing
-                    val image = source?.snapshot
-                    if (image != null) translate(absolute.x, absolute.y) { clipPath(groupPath) {
-                        with(renderer.mesh) { draw(shape, image, source.size, absolute + host.backdropPosition(view) - source.origin, depth,
-                            field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map, lighting = false) }
+                    translate(origin.x, origin.y) { clipPath(path, ClipOp.Difference) {
+                        translate(-origin.x, -origin.y) { drawLayer(contentLayer) }
                     } }
                 }
-            }
-            if (Build.VERSION.SDK_INT < 33) {
-                drawContent()
                 components.forEachIndexed { index, component ->
                     val renderer = groups[index]
-                    val shape = renderer.shape.geometry ?: return@forEachIndexed
-                    val absolute = origin + component.first().bounds.topLeft
-                    val groupPath = renderer.path.path(localLensRegions(component, component.first().bounds.topLeft), MediaSelectionGap.toPx())
-                    translate(absolute.x, absolute.y) { clipPath(groupPath) {
-                        with(renderer.mesh) { draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth,
-                            field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map) }
-                    } }
+                    val groupOrigin = component.first().bounds.topLeft
+                    val groupRegions = localLensRegions(component, groupOrigin)
+                    val groupPath = renderer.path.path(groupRegions, MediaSelectionGap.toPx())
+                    val absolute = origin + groupOrigin
+                    val crop = groupPath.getBounds().translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
+                    if (crop.isEmpty) return@forEachIndexed
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        val at = Offset(floor(crop.left), floor(crop.top))
+                        val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
+                        val source = backing?.takeUnless { it.layer.isReleased }
+                        val sourceOffset = at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero)
+                        // Only upload pixels this lens can reach. The ray model's bounded
+                        // entry/exit projection is below 2.1 spans, including maximum depth.
+                        val reach = groupPath.getBounds().size.minDimension * 1.05f + 2f
+                        val sampled = if (source == null) Rect.Zero else Rect(sourceOffset, visible).inflate(reach)
+                            .intersect(Rect(Offset.Zero, Size(source.size.width.toFloat(), source.size.height.toFloat())))
+                            .takeUnless { it.isEmpty } ?: Rect.Zero
+                        val sampleOrigin = Offset(floor(sampled.left), floor(sampled.top))
+                        val backdropSize = androidx.compose.ui.unit.IntSize(ceil(sampled.right - sampleOrigin.x).toInt(),
+                            ceil(sampled.bottom - sampleOrigin.y).toInt())
+                        val foregroundY = backdropSize.height + 2f
+                        val atlas = LensAtlas(visible, Size(backdropSize.width.toFloat(), backdropSize.height.toFloat()),
+                            sourceOffset - sampleOrigin, foregroundY)
+                        val extent = androidx.compose.ui.unit.IntSize(max(visible.width.toInt(), backdropSize.width + 2),
+                            foregroundY.toInt() + visible.height.toInt())
+                        val output = renderer.output
+                        output.renderEffect = requireNotNull(renderer.optics).effect(groupRegions, groupPath, MediaSelectionGap.toPx(), absolute - at, depth, atlas)
+                        output.clip = true
+                        output.record(recordingDensity, recordingDirection, glassLayerExtent(extent)) {
+                            clipRect(left = 1f, top = 1f, right = backdropSize.width + 1f, bottom = backdropSize.height + 1f) {
+                                if (source != null) translate(1f - sampleOrigin.x, 1f - sampleOrigin.y) { drawLayer(source.layer) }
+                            }
+                            clipRect(top = foregroundY) { translate(-at.x, foregroundY - at.y) { drawLayer(contentLayer) } }
+                        }
+                        translate(absolute.x, absolute.y) { clipPath(groupPath) {
+                            translate(at.x - absolute.x, at.y - absolute.y) { drawLayer(output) }
+                        } }
+                    } else {
+                        renderer.shape.update(groupRegions, groupPath, MediaSelectionGap.toPx())
+                        val shape = renderer.shape.geometry ?: return@forEachIndexed
+                        val source = backing
+                        val image = source?.snapshot
+                        if (image != null) translate(absolute.x, absolute.y) { clipPath(groupPath) {
+                            with(renderer.mesh) { draw(shape, image, source.size, absolute + host.backdropPosition(view) - source.origin, depth,
+                                field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map, lighting = false) }
+                        } }
+                    }
+                }
+                if (Build.VERSION.SDK_INT < 33) {
+                    if (recordContent) drawLayer(contentLayer) else this@drawWithContent.drawContent()
+                    components.forEachIndexed { index, component ->
+                        val renderer = groups[index]
+                        val shape = renderer.shape.geometry ?: return@forEachIndexed
+                        val absolute = origin + component.first().bounds.topLeft
+                        val groupPath = renderer.path.path(localLensRegions(component, component.first().bounds.topLeft), MediaSelectionGap.toPx())
+                        translate(absolute.x, absolute.y) { clipPath(groupPath) {
+                            with(renderer.mesh) { draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth,
+                                field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map) }
+                        } }
+                    }
+                }
+                components.forEachIndexed { index, component ->
+                    val offset = origin + component.first().bounds.topLeft
+                    val groupPath = groups[index].path.path(localLensRegions(component, component.first().bounds.topLeft), MediaSelectionGap.toPx())
+                    translate(offset.x, offset.y) { drawGlassRim(groupPath.getBounds(), (MediaSelectionGap * 1.5f).toPx(), groupPath) }
                 }
             }
-            components.forEachIndexed { index, component ->
-                val offset = origin + component.first().bounds.topLeft
-                val groupPath = groups[index].path.path(localLensRegions(component, component.first().bounds.topLeft), MediaSelectionGap.toPx())
-                translate(offset.x, offset.y) { drawGlassRim(groupPath.getBounds(), (MediaSelectionGap * 1.5f).toPx(), groupPath) }
+            if (!transitioning) selectedScene() else {
+                // DrawScope.record in Compose 1.8 redirects the node scope to itself
+                // as Density. Procedural dp/mesh reads then recurse; these recordings
+                // need their own scope with the immutable composition density instead.
+                transitionLayer.record(recordingDensity, recordingDirection, size.toIntSize()) { selectedScene() }
+                visibilityLayer.record(recordingDensity, recordingDirection, size.toIntSize()) {
+                    drawSelectionVisibilityMask(visibleEntries.map { it.first.bounds to it.second }, MediaSelectionGap.toPx())
+                }
+                drawSelectionTransition(contentLayer, transitionLayer, visibilityLayer)
             }
 
-        }) { content() }
+        }.then(contentDrawing)) { content() }
     }
 }
 
@@ -261,7 +288,10 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
     val direction = LocalLayoutDirection.current
     val token = remember { Any() }
     val entry = remember { SelectionEntry() }
+    val visibility = androidx.compose.animation.core.animateFloatAsState(if (isSelected && !partial) 1f else 0f,
+        selectionMotionSpec(LocalReducedMotion.current), label = "Selection lens visibility")
     SideEffect {
+        entry.visibility = { visibility.value }
         entry.visualSize = visualSize
         entry.direction = direction
         val selected = isSelected && !partial
@@ -274,6 +304,6 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         if (partial) stateDescription = "Partially selected"
     }.onPlaced {
         entry.coordinates = it
-        if (entry.selected) androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 }
+        if (entry.selected || entry.visibility() > 0f) androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 }
     }
 }

@@ -51,13 +51,61 @@ class WorkflowPersistenceTest {
         val original = prefs.read(route)
         val overridden = prefs.overridden(route)
         try {
-            for (size in ListSize.densityOrder) {
+            for (size in route.listSizes()) {
                 prefs.write(route, original.copy(listSize = size, extraInfo = ExtraInfo.Artist), false)
                 val restored = BrowsePreferences(context).read(route)
                 assertEquals(size, restored.listSize)
                 assertEquals(ExtraInfo.Artist, restored.extraInfo)
             }
         } finally { prefs.write(route, original, overridden) }
+    }
+
+    @Test fun albumNormalMigratesOnceToTracklistWithoutChangingOtherListsOrExplicitNewNormal() {
+        val context = tracklistContext()
+        val store = context.getSharedPreferences("browse-style", 0)
+        store.edit().clear().putBoolean("shared-catalog-scopes", true)
+            .putString("contents.Album.list-size", "Normal")
+            .putString("contents.Album.Album.3:old.sort", "Title")
+            .putString("contents.Album.Album.3:old.list-size", "Normal")
+            .putString("contents.Album.Album.5:large.sort", "Title")
+            .putString("contents.Album.Album.5:large.list-size", "Large")
+            .putString("contents.Playlist.list-size", "Normal").commit()
+        val album = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "old"))
+        try {
+            val prefs = BrowsePreferences(context)
+            assertEquals(ListSize.Tracklist, prefs.read(album).listSize)
+            assertEquals(ListSize.Tracklist, prefs.read(album.copy(collection = MediaRef(MediaKind.Album, "new"))).listSize)
+            assertEquals(ListSize.Large, prefs.read(album.copy(collection = MediaRef(MediaKind.Album, "large"))).listSize)
+            assertEquals(ListSize.Normal, prefs.read(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, "p"))).listSize)
+            prefs.write(album, prefs.read(album).copy(listSize = ListSize.Normal), true)
+            assertEquals(ListSize.Normal, BrowsePreferences(context).read(album).listSize)
+            prefs.reset(album)
+            assertEquals(ListSize.Tracklist, prefs.read(album).listSize)
+        } finally { store.edit().clear().commit() }
+    }
+
+    @Test fun tracklistPersistsForMutableCollectionsWithoutLeakingThroughSharedSearchDefaults() {
+        val context = tracklistContext()
+        val store = context.getSharedPreferences("browse-style", 0)
+        store.edit().clear().commit()
+        try {
+            val prefs = BrowsePreferences(context)
+            val queue = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "density"))
+            for (size in ListSize.densityOrder) {
+                prefs.write(queue, BrowseStyle(listSize = size), true)
+                assertEquals(size, BrowsePreferences(context).read(queue).listSize)
+            }
+            val scoped = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "album"), search = true)
+            val global = BrowseRoute(MainTab.Library, search = true, globalSearch = true)
+            prefs.write(scoped, BrowseStyle(listSize = ListSize.Tracklist), false)
+            assertEquals(ListSize.Tracklist, BrowsePreferences(context).read(scoped).listSize)
+            assertEquals(ListSize.Normal, BrowsePreferences(context).read(global).listSize)
+        } finally { store.edit().clear().commit() }
+    }
+
+    private fun tracklistContext(): Context = object : android.content.ContextWrapper(ApplicationProvider.getApplicationContext<Context>()) {
+        override fun getSharedPreferences(name: String, mode: Int) =
+            baseContext.getSharedPreferences("tracklist-test-$name", mode)
     }
 
     @Test fun sortedOccurrencesAndManualBaselineSurviveReopeningBothStores() = runBlocking {

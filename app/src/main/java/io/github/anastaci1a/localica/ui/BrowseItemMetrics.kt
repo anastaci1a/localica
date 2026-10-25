@@ -22,7 +22,7 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
     val lines = if (gallery) 2 else 1
     val art = when {
         gallery -> width
-        numbered -> px(28).coerceAtMost(width)
+        numbered || style.listSize == ListSize.Tracklist -> px(28).coerceAtMost(width)
         style.listSize in setOf(ListSize.Small, ListSize.Smallest) -> 0
         style.listSize == ListSize.Compact -> {
             // Preserve the 56 dp inner row and 64 dp pitch. Match Normal's gap/art

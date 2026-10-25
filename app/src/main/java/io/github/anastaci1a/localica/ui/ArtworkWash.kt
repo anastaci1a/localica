@@ -6,33 +6,64 @@ import kotlin.math.*
 
 /** Small, static texture: cover coordinates span y=0..1, with color continuation on both ends. */
 internal object ArtworkWash {
-    const val WIDTH = 128
-    const val HEIGHT = 320
+    // The reveal band needs more than the small palette-analysis thumbnail.
+    // Keep the prepared texture bounded; low-frequency blur retains its original density.
+    const val WIDTH = 256
+    const val HEIGHT = WIDTH * 5 / 2
+    const val BLUR_WIDTH = 128
     const val TOP = -0.25f
 
     fun create(cover: Bitmap): Bitmap {
-        val pixels = IntArray(WIDTH * HEIGHT) { i ->
-            val x = (i % WIDTH + 0.5f) / WIDTH
-            val y = (i / WIDTH + 0.5f) / WIDTH + TOP
-            // Extend the nearby artwork, with broad curved drift instead of repeated edge stripes.
-            val beyond = max(0f, y - 1f)
-            val sourceY = when {
-                y < 0f -> -y * 0.35f
-                y > 1f -> 1f - 0.42f * (1f - exp(-beyond))
-                else -> y
+        fun continuation(width: Int): IntArray {
+            // Normalized cover coordinates are stretched back to its actual aspect
+            // by the drawing matrix; square preparation bounds extreme aspect ratios.
+            val sampled = Bitmap.createScaledBitmap(cover, width, width, true)
+            val source = IntArray(width * width)
+            sampled.getPixels(source, 0, width, 0, 0, width, width)
+            if (sampled !== cover) sampled.recycle()
+            return IntArray(width * width * 5 / 2) { i ->
+                val x = (i % width + 0.5f) / width
+                val y = (i / width + 0.5f) / width + TOP
+                // Continue nearby artwork with curved drift, not repeated edge stripes.
+                val beyond = max(0f, y - 1f)
+                val sourceY = when {
+                    y < 0f -> -y * 0.35f
+                    y > 1f -> 1f - 0.42f * (1f - exp(-beyond))
+                    else -> y
+                }
+                val sourceX = x + sin(x * PI.toFloat() * 2f + beyond * 1.7f) * min(0.14f, beyond * 0.1f)
+                val color = source[(sourceY * width).toInt().coerceIn(0, width - 1) * width +
+                    (sourceX * width).toInt().coerceIn(0, width - 1)]
+                val a = Color.alpha(color) / 255f
+                Color.rgb((Color.red(color) * a + 36 * (1 - a)).toInt(),
+                    (Color.green(color) * a + 43 * (1 - a)).toInt(), (Color.blue(color) * a + 52 * (1 - a)).toInt())
             }
-            val sourceX = x + sin(x * PI.toFloat() * 2f + beyond * 1.7f) * min(0.14f, beyond * 0.1f)
-            val color = cover.getPixel((sourceX * cover.width).toInt().coerceIn(0, cover.width - 1),
-                (sourceY * cover.height).toInt().coerceIn(0, cover.height - 1))
-            // Composite transparent artwork onto a neutral base before filtering.
-            val a = Color.alpha(color) / 255f
-            Color.rgb((Color.red(color) * a + 36 * (1 - a)).toInt(),
-                (Color.green(color) * a + 43 * (1 - a)).toInt(), (Color.blue(color) * a + 52 * (1 - a)).toInt())
         }
-        val levels = listOf(pixels) + listOf(2, 5, 12, 24).map { radius ->
-            var blurred = pixels
-            repeat(3) { blurred = boxBlur(blurred, WIDTH, HEIGHT, radius) }
+        val pixels = continuation(WIDTH)
+        // Only the sharp reveal band needs higher density. Keep all twelve blur
+        // passes at the original bounded resolution instead of quadrupling work.
+        val coarse = continuation(BLUR_WIDTH)
+        val levels = listOf(2, 5, 12, 24).map { radius ->
+            var blurred = coarse
+            repeat(3) { blurred = boxBlur(blurred, BLUR_WIDTH, BLUR_WIDTH * 5 / 2, radius) }
             blurred
+        }
+        fun blurredPixel(level: Int, x: Int, y: Int): Int {
+            val colors = levels[level - 1]
+            val sx = (x + .5f) * BLUR_WIDTH / WIDTH - .5f
+            val sy = (y + .5f) * BLUR_WIDTH / WIDTH - .5f
+            val x0 = floor(sx).toInt(); val y0 = floor(sy).toInt()
+            val fx = sx - x0; val fy = sy - y0
+            fun at(dx: Int, dy: Int) = colors[(y0 + dy).coerceIn(0, BLUR_WIDTH * 5 / 2 - 1) * BLUR_WIDTH +
+                (x0 + dx).coerceIn(0, BLUR_WIDTH - 1)]
+            val a = at(0, 0); val b = at(1, 0); val c = at(0, 1); val d = at(1, 1)
+            fun channel(shift: Int): Int {
+                fun value(color: Int) = (color ushr shift and 255).toFloat()
+                val top = value(a) + (value(b) - value(a)) * fx
+                val bottom = value(c) + (value(d) - value(c)) * fx
+                return (top + (bottom - top) * fy).roundToInt().coerceIn(0, 255)
+            }
+            return Color.rgb(channel(16), channel(8), channel(0))
         }
         val output = IntArray(pixels.size) { i ->
             val x = (i % WIDTH + 0.5f) / WIDTH
@@ -43,7 +74,8 @@ internal object ArtworkWash {
             val low = depth.toInt().coerceIn(0, 4)
             val high = min(4, low + 1)
             val t = depth - low
-            val c1 = levels[low][i]; val c2 = levels[high][i]
+            val c1 = if (low == 0) pixels[i] else blurredPixel(low, i % WIDTH, i / WIDTH)
+            val c2 = if (high == 0) pixels[i] else blurredPixel(high, i % WIDTH, i / WIDTH)
             fun channel(a: Int, b: Int) = (a + (b - a) * t).roundToInt().coerceIn(0, 255)
             Color.rgb(channel(Color.red(c1), Color.red(c2)), channel(Color.green(c1), Color.green(c2)),
                 channel(Color.blue(c1), Color.blue(c2)))

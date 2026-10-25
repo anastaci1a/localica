@@ -42,7 +42,11 @@ internal fun FloatingReturnToPositionButton(up: Boolean, label: String, visible:
     val motion = rememberFloatingControlMotion(visible, reducedMotion)
     val rise = with(LocalDensity.current) { FloatingControlRise.toPx() }
     if (motion.retained) Box(modifier.offset { IntOffset(0, motion.offsetY(rise).roundToInt()) }
-        .graphicsLayer { alpha = motion.alpha }) {
+        .graphicsLayer {
+            alpha = motion.alpha
+            val scale = .92f + .08f * motion.progress
+            scaleX = scale; scaleY = scale
+        }) {
         ReturnToPositionButton(up, label, visible = motion.interactive, onClick = onClick)
     }
 }
