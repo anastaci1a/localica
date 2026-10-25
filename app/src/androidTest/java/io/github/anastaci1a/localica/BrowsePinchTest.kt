@@ -131,6 +131,7 @@ class BrowsePinchTest {
         val old = prefs.read(route)
         val session = SessionSelection()
         prefs.write(route, BrowseStyle(sort = TrackSort.Manual), false)
+        pinchTraceEnabled = true
         try {
             compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalSessionSelection provides session) {
                 BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
@@ -141,6 +142,10 @@ class BrowsePinchTest {
             val list = compose.onNodeWithTag("browser-list")
             val viewport = list.fetchSemanticsNode().boundsInRoot
             val y = item.center.y - viewport.top
+            val rootView = (list.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+            compose.runOnUiThread {
+                android.util.Log.i("BrowsePinchTrace", "fixture density=${context.resources.displayMetrics.density} item=$item viewport=$viewport localY=$y windowFocused=${rootView.hasWindowFocus()} spans=50..100px")
+            }
             list.performTouchInput {
                 down(0, Offset(centerX - 50, y)); down(1, Offset(centerX + 50, y))
             }
@@ -152,7 +157,7 @@ class BrowsePinchTest {
             waitForView("List, Large")
             assertFalse(session.active)
             compose.onNodeWithTag("drop-gap").assertDoesNotExist()
-        } finally { prefs.write(route, old, false) }
+        } finally { pinchTraceEnabled = false; prefs.write(route, old, false) }
     }
 
     @Test fun heldPinchChangesArtworkGeometryBeforeRelease() {
