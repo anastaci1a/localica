@@ -1,0 +1,27 @@
+name: Prototype candidate (not release certified)
+'on':
+  push:
+    branches: [test/prototype-candidate-20261025]
+permissions:
+  contents: read
+jobs:
+  prototype:
+    uses: ./.github/workflows/prototype.yml
+    with:
+      affected_classes: io.github.anastaci1a.localica.ToneSnapshotContinuityTest
+      coverage_reason: >-
+        Exercise the isolated prototype pipeline on the consolidation base plus
+        prepared-tone continuity and diagnostics. Deterministic tone-state cases
+        accompany mandatory IME, search-focus and contrast coverage on both APIs.
+        Complete native suites are not run by this lane.
+      known_issues: >-
+        Dev69 full run40226680680 failed API36 ListSearch focus and API26 contrast.
+        Search cause remains unresolved despite focused passes. An initial API26
+        fallback-readiness timeout is preserved and unexplained; later strict
+        observed checks passed. Tone retention repairs a demonstrated transient,
+        not a proven historical cause. Physical album seam acceptance remains open.
+        Fresh artwork-preload, artist, source-menu and optional declick work are
+        separate and not included. This APK is a prototype, not release certified;
+        parent owns delivery and no shipping approval is inferred.
+    secrets:
+      ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
