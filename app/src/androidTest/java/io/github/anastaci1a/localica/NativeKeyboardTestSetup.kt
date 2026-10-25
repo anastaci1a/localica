@@ -27,7 +27,9 @@ internal fun prepareNativeDockedKeyboard(
     compose.runOnUiThread {
         root = FrameLayout(compose.activity).apply { isFocusableInTouchMode = true }
         insetObserver = createSearchImeObserver(compose.activity, observation)
-        root.addView(insetObserver, FrameLayout.LayoutParams(0, 0))
+        // Observe the window beyond removal of the synthetic editing content.
+        // An observer inside root would detach before that final input-session handoff.
+        (compose.activity.window.decorView as ViewGroup).addView(insetObserver, ViewGroup.LayoutParams(0, 0))
         editor = EditText(compose.activity).apply { setSingleLine() }
         root.addView(editor, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
@@ -39,6 +41,7 @@ internal fun prepareNativeDockedKeyboard(
         keyboardSetup += "${SystemClock.uptimeMillis()} $label " + compose.runOnUiThread {
             val insets = ViewCompat.getRootWindowInsets(editor)
             "focused=${editor.isFocused} windowFocused=${editor.hasWindowFocus()} " +
+                "editorActive=${input.isActive(editor)} rootActive=${input.isActive(root)} acceptingText=${input.isAcceptingText} " +
                 "visible=${insets?.isVisible(WindowInsetsCompat.Type.ime())} " +
                 "ime=${insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom} " +
                 "navigation=${insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom} " +
@@ -112,13 +115,38 @@ internal fun prepareNativeDockedKeyboard(
         } finally {
             try {
                 compose.runOnUiThread {
-                    disposeSearchImeObserver(insetObserver)
                     (root.parent as? ViewGroup)?.removeView(root)
                     assertEquals("The Compose test rule requires an empty activity content host", 0,
                         compose.activity.findViewById<ViewGroup>(android.R.id.content).childCount)
                 }
+                record("native-editor-removed-retirement-start")
+                // A hidden IME does not prove the served editor's InputConnection is gone.
+                // Public isActive/isAcceptingText checks precede the next measured editor.
+                // The still-mounted observer also sees hide/animation callbacks caused by removal.
+                compose.waitUntil(5000) {
+                    compose.runOnUiThread {
+                        val view = compose.activity.window.decorView
+                        val insets = ViewCompat.getRootWindowInsets(view)
+                        !input.isActive(editor) && !input.isActive(root) && !input.isAcceptingText &&
+                            observation.complete(view.hasWindowFocus(), insets)
+                    }
+                }
+                record("native-editor-retired")
             } catch (removal: Throwable) {
-                if (failure != null) failure.addSuppressed(removal) else throw removal
+                record("native-editor-retirement-failed")
+                if (failure != null) failure.addSuppressed(removal) else {
+                    failure = removal
+                    throw removal
+                }
+            } finally {
+                try {
+                    compose.runOnUiThread {
+                        disposeSearchImeObserver(insetObserver)
+                        (insetObserver.parent as? ViewGroup)?.removeView(insetObserver)
+                    }
+                } catch (observerCleanup: Throwable) {
+                    if (failure != null) failure.addSuppressed(observerCleanup) else throw observerCleanup
+                }
             }
         }
     }
