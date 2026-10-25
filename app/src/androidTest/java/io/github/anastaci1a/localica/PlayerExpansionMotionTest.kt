@@ -247,19 +247,77 @@ class PlayerExpansionMotionTest {
             sampleProgress(1f)
             val full = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
             val fullTitle = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
-            val backgroundHeight = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot().height.value
+            val fullHost = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot()
+            val backgroundHeight = fullHost.height.value
             val rawHeight = if (artworkLayout == ArtworkLayout.FullBackground) full.width.value / aspect else full.height.value
             val compatible = full.top.value + rawHeight <= fullTitle.top.value
+            sampleProgress(0f)
+            val mini = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
+            val miniTitle = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
+            val miniHost = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot()
+            // PlayerSurface offsets both nodes inside this exact host. Title scaling
+            // anchors at (0,0); no lyrics/scroll/cover swipe is active in this fixture.
+            // Subtract each endpoint's own host, never mix window and local coordinates.
+            val fullTop = (full.top - fullHost.top).value
+            val fullTitleTop = (fullTitle.top - fullHost.top).value
+            val miniTop = (mini.top - miniHost.top).value
+            val miniTitleTop = (miniTitle.top - miniHost.top).value
+            assertEquals("Measured mini title matches the helper's delivered reference", 7f, miniTitleTop, 1f)
+            assertEquals("Native mini endpoint width", 32f, mini.width.value, .5f)
+            assertEquals("Native mini endpoint height", 32f, mini.height.value, .5f)
+            val clearance = playerArtworkClearance(fullTop, rawHeight, fullTitleTop, miniTop, 32f)
+            if (compatible) assertTrue("A compatible native endpoint has an interior clearance", clearance > 0f && clearance < 1f)
+            else assertEquals("Constrained native endpoint retains the production fallback", 0f, clearance, 0f)
+
+            // Locate a half-grown interior with the production map, not a fixed progress grid.
+            var low = clearance
+            var high = 1f
+            repeat(24) {
+                val midpoint = (low + high) / 2f
+                if (playerArtworkSizeProgress(midpoint, clearance) < .5f) low = midpoint else high = midpoint
+            }
+            val interior = (low + high) / 2f
+            val beforeClearance: Float?
+            val afterClearance: Float?
+            val forward: List<Float>
+            if (compatible) {
+                // The derivative of presented title-minus-mini-bottom includes the
+                // unchanged 48dp artwork bow. Use it ONLY to choose a three-physical-
+                // pixel bracket; native geometry below must establish the actual sides.
+                val relativeSpeed = fullTitleTop - miniTitleTop - fullTop + miniTop + 48f * (1f - 2f * clearance)
+                assertTrue("Clearance crosses in the expected native direction", relativeSpeed > 0f)
+                val bracket = minOf(3f / compose.density.density / relativeSpeed,
+                    clearance / 2f, (1f - clearance) / 2f)
+                val before = clearance - bracket
+                val after = clearance + bracket
+                beforeClearance = before
+                afterClearance = after
+                forward = listOf(0f, before, clearance, after, interior, 1f).distinct().sorted()
+            } else {
+                beforeClearance = null
+                afterClearance = null
+                forward = listOf(0f, interior, 1f)
+            }
             val snapshots = mutableMapOf<Float, androidx.compose.ui.unit.DpRect>()
-            for (p in listOf(0f, .02f, .05f, .08f, .12f, .16f, .2f, .3f, .5f, .8f, 1f,
-                .8f, .5f, .3f, .2f, .16f, .12f, .08f, .05f, .02f, 0f)) {
+            for (p in forward + forward.dropLast(1).asReversed()) {
                 sampleProgress(p)
                 val art = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
                 val title = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
                 val context = "layout=$artworkLayout aspect=$aspect reduced=$reduce p=$p " +
                     "reverse=${snapshots.containsKey(p)} compatible=$compatible full=$full title=$title art=$art"
-                evidence.appendText("$context\n")
+                evidence.appendText("$context clearance=$clearance before=$beforeClearance after=$afterClearance interior=$interior\n")
                 if (compatible) {
+                    val miniBottomGap = art.top + 32.dp - title.top
+                    if (p == beforeClearance) {
+                        assertTrue("Native pre-clearance frame remains below the title: $context", miniBottomGap > 0.dp)
+                        assertEquals("Pre-boundary cover remains mini width", 32f, art.width.value, .5f)
+                        assertEquals("Pre-boundary cover remains mini height", 32f, art.height.value, .5f)
+                    }
+                    if (p == clearance) assertEquals("Native clearance matches measured host coordinates: $context",
+                        0f, miniBottomGap.value, 1f)
+                    if (p == afterClearance) assertTrue("Native post-clearance frame clears the title: $context", miniBottomGap <= 0.dp)
+                    if (p == interior) assertTrue("Native interior actually grows before the expanded endpoint: $context",
+                        art.width > 33.dp || art.height > 33.dp)
                     if (art.top + 32.dp > title.top + 1.dp) {
                         assertEquals("Retain mini width before clearing title", 32f, art.width.value, .5f)
                         assertEquals("Retain mini height before clearing title", 32f, art.height.value, .5f)
