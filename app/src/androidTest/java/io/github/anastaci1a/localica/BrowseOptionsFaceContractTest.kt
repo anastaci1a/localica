@@ -77,15 +77,34 @@ class BrowseOptionsFaceContractTest {
                         val layouts = mutableListOf<TextLayoutResult>()
                         assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action!!.invoke(layouts))
                         assertTrue(layouts.isNotEmpty())
-                        layouts.forEach {
-                            val extents = if (it.hasVisualOverflow) "paragraphWidth=${it.multiParagraph.width} " +
-                                "lines=${(0 until it.lineCount).map { line -> it.getLineLeft(line) to it.getLineRight(line) }} " +
-                                "glyphs=${it.layoutInput.text.indices.map { offset -> it.getBoundingBox(offset) }} node=$bounds" else ""
-                            assertFalse("Clipped $summary / $prefix / $scale / $w: size=${it.size} " +
-                                "constraints=${it.layoutInput.constraints} lines=${it.lineCount} " +
-                                "widthOverflow=${it.didOverflowWidth} heightOverflow=${it.didOverflowHeight} " +
-                                "font=${it.layoutInput.style.fontSize} leading=${it.layoutInput.style.lineHeight} " +
-                                "density=${it.layoutInput.density} owner=${sizes["$prefix-$index"]} $extents", it.hasVisualOverflow)
+                        layouts.forEach { result ->
+                            val context = "$summary / $prefix / $scale / $w: node=${node.size} " +
+                                "layout=${result.size} paragraphWidth=${result.multiParagraph.width}"
+                            assertEquals("Use the final measured text node: $context", node.size, result.size)
+                            assertFalse("No omitted text lines: $context", result.didOverflowHeight)
+                            assertTrue("Nonempty native text layout: $context", result.lineCount > 0)
+                            // A cached paragraph may retain a wider allocation than the final
+                            // node (observed 210px paragraph / 124px line and glyphs). Its
+                            // didOverflowWidth alone does not establish visible clipping.
+                            // Check final line/visible-character geometry instead, without
+                            // changing row containment, width, font or truncation rules.
+                            for (line in 0 until result.lineCount) {
+                                assertFalse("No ellipsis: $context", result.isLineEllipsized(line))
+                                assertTrue("Line left fits: $context", result.getLineLeft(line) >= 0f)
+                                assertTrue("Line right fits: $context", result.getLineRight(line) <= node.size.width)
+                                assertTrue("Line top fits: $context", result.getLineTop(line) >= 0f)
+                                assertTrue("Line bottom fits: $context", result.getLineBottom(line) <= node.size.height)
+                            }
+                            result.layoutInput.text.forEachIndexed { offset, character ->
+                                // Trailing wrap whitespace has no visible ink.
+                                if (!character.isWhitespace()) {
+                                    val glyph = result.getBoundingBox(offset)
+                                    assertTrue("Glyph left fits: $context / $offset / $glyph", glyph.left >= 0f)
+                                    assertTrue("Glyph right fits: $context / $offset / $glyph", glyph.right <= node.size.width)
+                                    assertTrue("Glyph top fits: $context / $offset / $glyph", glyph.top >= 0f)
+                                    assertTrue("Glyph bottom fits: $context / $offset / $glyph", glyph.bottom <= node.size.height)
+                                }
+                            }
                         }
                     }
                     assertTrue(text.fetchSemanticsNodes().isNotEmpty())
