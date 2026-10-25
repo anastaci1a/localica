@@ -56,6 +56,7 @@ A workflow dispatch may supply `risk_classes` as up to 20 comma-separated fully 
 - Android 8+; MP3 and AAC/M4A are primary formats, with WAV/FLAC/Ogg/Opus using available device decoders. No decoder extensions. Boundary tests check decoded samples, MP3 waveform alignment and transition buffering; sample counts alone are insufficient.
 - FLAC tests require a decoder; stock Android supplies one from API 27.
 - The [AAC edit-list correction](structure.md#aac-edit-list-trimming) covers bounded shortened-sample and rounded-endpoint layouts. Unsupported M4A timing retains native behavior.
+- Private-file diagnostics are opt-in. Keep inputs and decoded audio private and untracked. Record observer costs and native output failures separately from sample comparisons; none proves physical speaker continuity.
 - Only the measured [Android 8 MP3 padding failure](https://github.com/anastaci1a/localica/issues/30) is skipped after playback checks. Other failures remain fatal.
 - Media3 stays pinned to 1.10.1 pending a stable [MP3 trimming fix](https://github.com/androidx/media/issues/3425); rerun waveform checks before upgrading.
 - Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its source archive with releases. To replace it, build the source with Maven, replace `implementation(libs.jaudiotagger)` with the local JAR, and rebuild under your signing key. Localica remains MIT licensed.

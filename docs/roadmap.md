@@ -4,7 +4,8 @@
 
 - Review the [Liquid Glass specification](liquid-glass/specification.md) on the user’s phone: depth response, interrupted gestures, large collections and material handoffs.
 - Validate [rendering performance](https://github.com/anastaci1a/localica/issues/167), especially queue scrolling and player expansion; emulator measurements do not establish physical-device frame rates. Reproduce [intermittent manual-scroll jitter](https://github.com/anastaci1a/localica/issues/150).
-- Revisit [selection entrance motion](https://github.com/anastaci1a/localica/issues/107) separately. Preserve accessibility, playback continuity and older-Android support throughout.
+- Validate [selection appearance and reversal](https://github.com/anastaci1a/localica/issues/107) on physical devices, preserving accessibility and reduced motion.
+- Verify [AAC track boundaries](https://github.com/anastaci1a/localica/issues/28) on physical output. Decoded sample equality does not establish seamless speaker playback.
 
 ## Deferred capabilities
 
