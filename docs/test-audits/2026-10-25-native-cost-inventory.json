@@ -1,0 +1,350 @@
+{
+  "schema_version": 1,
+  "audited_source_sha": "16ff1a4634ee2a7ac3563e02e1ed86b7379ba759",
+  "inventory_source_sha": "fcc6001d9f6a60e45c4f8f098530d9ea9b4bfb0f",
+  "inventory": {
+    "native_test_methods": 1037,
+    "native_test_bearing_files": 213,
+    "semantic_review": "targeted, not exhaustive"
+  },
+  "baseline_run_url": "https://github.com/anastaci1a/localica/actions/runs/40208893739",
+  "measurement": "JUnit XML suite seconds, not complete job or workflow elapsed time",
+  "historical_suites": [
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/39997142703",
+      "source_sha": "a6ac40f17a197d9fff0e31ee24e2594e7aa20379",
+      "api": 26,
+      "tests": 852,
+      "skipped": 8,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 2475.679,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/39997142703",
+      "source_sha": "a6ac40f17a197d9fff0e31ee24e2594e7aa20379",
+      "api": 36,
+      "tests": 853,
+      "skipped": 1,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 2550.496,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40008036718",
+      "source_sha": "8a987295dc3bcd5c1211992be3ce5be1a9185b1a",
+      "api": 26,
+      "tests": 857,
+      "skipped": 8,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 3219.436,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40008036718",
+      "source_sha": "8a987295dc3bcd5c1211992be3ce5be1a9185b1a",
+      "api": 36,
+      "tests": 858,
+      "skipped": 1,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 2184.991,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40057885494",
+      "source_sha": "1ffcee6192787f9873900d83773e1eb68dbd833c",
+      "api": 26,
+      "tests": 891,
+      "skipped": 18,
+      "failures": 1,
+      "errors": 0,
+      "suite_seconds": 2892.651,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40057885494",
+      "source_sha": "1ffcee6192787f9873900d83773e1eb68dbd833c",
+      "api": 36,
+      "tests": 892,
+      "skipped": 11,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 2985.741,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40063396284",
+      "source_sha": "dbfdecf11cb7fab7bccc20d3a372f4c561a8511f",
+      "api": 26,
+      "tests": 497,
+      "skipped": 5,
+      "failures": 1,
+      "errors": 0,
+      "suite_seconds": 1794.378,
+      "complete": false
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40063396284",
+      "source_sha": "dbfdecf11cb7fab7bccc20d3a372f4c561a8511f",
+      "api": 36,
+      "tests": 892,
+      "skipped": 11,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 2964.911,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40117081143",
+      "source_sha": "8549200561ad89b0c96f1eb720d98fb6ad7c542d",
+      "api": 26,
+      "tests": 894,
+      "skipped": 18,
+      "failures": 9,
+      "errors": 0,
+      "suite_seconds": 3378.464,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40117081143",
+      "source_sha": "8549200561ad89b0c96f1eb720d98fb6ad7c542d",
+      "api": 36,
+      "tests": 895,
+      "skipped": 11,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 3006.864,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40128551012",
+      "source_sha": "f5825785358707ea0630ff8fc8bcb3324a808990",
+      "api": 26,
+      "tests": 894,
+      "skipped": 18,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 3132.825,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40128551012",
+      "source_sha": "f5825785358707ea0630ff8fc8bcb3324a808990",
+      "api": 36,
+      "tests": 895,
+      "skipped": 11,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 3019.907,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40135620323",
+      "source_sha": "29d0d094dbda3e06cd796d6810344a891e4e7205",
+      "api": 26,
+      "tests": 906,
+      "skipped": 18,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 2494.192,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40135620323",
+      "source_sha": "29d0d094dbda3e06cd796d6810344a891e4e7205",
+      "api": 36,
+      "tests": 907,
+      "skipped": 11,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 2457.996,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40208893739",
+      "source_sha": "fcc6001d9f6a60e45c4f8f098530d9ea9b4bfb0f",
+      "api": 26,
+      "tests": 1036,
+      "skipped": 18,
+      "failures": 0,
+      "errors": 0,
+      "suite_seconds": 3028.299,
+      "complete": true
+    },
+    {
+      "run_url": "https://github.com/anastaci1a/localica/actions/runs/40208893739",
+      "source_sha": "fcc6001d9f6a60e45c4f8f098530d9ea9b4bfb0f",
+      "api": 36,
+      "tests": 1037,
+      "skipped": 11,
+      "failures": 1,
+      "errors": 0,
+      "suite_seconds": 3326.674,
+      "complete": true
+    }
+  ],
+  "limitations": [
+    "Counts include skipped cases; native inventory does not equal executed counts on each API.",
+    "Run40063396284 API26 stopped after RenderThread SIGSEGV; its suite time is partial.",
+    "Different SHAs and growing case counts prevent attribution of historical duration changes to a single optimization.",
+    "No after-change native timing or realized savings is established by this audit."
+  ],
+  "cost_scope_measurement": "Whole affected methods or classes in baseline XML; upper bounds only, not realized savings. Do not sum overlapping scopes.",
+  "affected_cost_scopes": [
+    {
+      "id": "utility_diagnostic",
+      "scope": "UtilityPopupRenderDiagnosticTest",
+      "api26_seconds": 140.611,
+      "api36_seconds": 95.447,
+      "category": "diagnostic_lane",
+      "retained_coverage": "Lean acknowledgment/reopen/ownership/disposal regression still required",
+      "overlaps": []
+    },
+    {
+      "id": "queue_comparators",
+      "scope": "QueueInitialSaveWorkTest + QueueInsertPreparationBenchmarkTest + QueueSqlCountBenchmarkTest",
+      "api26_seconds": 30.727,
+      "api36_seconds": 16.222,
+      "category": "diagnostic_lane",
+      "retained_coverage": "Keep production DAO correctness and no-journey initial save",
+      "overlaps": []
+    },
+    {
+      "id": "endpoint_pumps",
+      "scope": "GlassOriginPreparationTest five methods + LyricsHeaderActionsTest one + SettingsLinkMorphTest both + GlassMorphTest low-damping rebound",
+      "api26_seconds": 138.96,
+      "api36_seconds": 120.599,
+      "category": "endpoint_batching",
+      "retained_coverage": "Keep exact horizons, intermediate assertions, native yields and readiness",
+      "overlaps": [
+        "lyrics_header_export"
+      ]
+    },
+    {
+      "id": "pressure_axis",
+      "scope": "GlassPressureTest four axisRelease methods",
+      "api26_seconds": 58.553,
+      "api36_seconds": 51.894,
+      "category": "native_sampling",
+      "retained_coverage": "All axis/damping/API configurations and rendered witnesses remain",
+      "overlaps": []
+    },
+    {
+      "id": "popup_matrix",
+      "scope": "PopupEnvelopeTest#mainAndQueueEnvelopesStayStableAcrossAllSupportedDraftsAndWindowChanges",
+      "api26_seconds": 89.626,
+      "api36_seconds": 98.414,
+      "category": "setup_navigation",
+      "retained_coverage": "37 distinct drafts and all caller/window/page measurements remain",
+      "overlaps": []
+    },
+    {
+      "id": "player_geometry",
+      "scope": "PlayerExpansionMotionTest#artworkWaitsForPresentedTitleClearanceAndCollapseRetracesCompatibleSizing",
+      "api26_seconds": 57.028,
+      "api36_seconds": 35.33,
+      "category": "native_sampling",
+      "retained_coverage": "Retain actual drawn title-clearance, boundary, reverse and mode/aspect witnesses",
+      "overlaps": []
+    },
+    {
+      "id": "switch_export",
+      "scope": "SwitchTapOpticsTest all three methods",
+      "api26_seconds": 32.173,
+      "api36_seconds": 27.827,
+      "category": "export_gating",
+      "retained_coverage": "Pixel and frame-readiness assertions retained; implementation de3c208a not native-timed",
+      "overlaps": []
+    },
+    {
+      "id": "shadow_pump_export",
+      "scope": "PopupShadowContinuityTest two rendered reversal methods",
+      "api26_seconds": 92.109,
+      "api36_seconds": 51.144,
+      "category": "endpoint_batching_and_export",
+      "retained_coverage": "Same captures, reversal times, gradient thresholds and draw acknowledgments remain",
+      "overlaps": []
+    },
+    {
+      "id": "lyrics_header_export",
+      "scope": "LyricsHeaderActionsTest#realHeaderSplitsBeforeOwnershipAndRejoinsAfterReturn",
+      "api26_seconds": 24.22,
+      "api36_seconds": 19.256,
+      "category": "export_gating",
+      "retained_coverage": "Same method already included in endpoint_pumps",
+      "overlaps": [
+        "endpoint_pumps"
+      ]
+    },
+    {
+      "id": "playback_replacement",
+      "scope": "ContinuousPlaybackTest PCM and full-frame AAC methods",
+      "api26_seconds": 5.451,
+      "api36_seconds": 5.626,
+      "category": "conditional_replacement",
+      "retained_coverage": "Verify output-provider equivalence; keep newer static controls, controller variants, MP3 and FLAC",
+      "overlaps": []
+    },
+    {
+      "id": "host_utilities",
+      "scope": "NativeImeVisibilityTest + PrivateDiagnosticWriterTest",
+      "api26_seconds": 0.078,
+      "api36_seconds": 0.085,
+      "category": "native_to_jvm",
+      "retained_coverage": "Move all 11 assertions-bearing methods one-for-one; negligible runtime",
+      "overlaps": []
+    }
+  ],
+  "baseline_jobs": [
+    {
+      "name": "build",
+      "job_url": "https://github.com/anastaci1a/localica/actions/runs/40208893739/job/121215680453",
+      "started_at": "2026-10-25T15:51:11Z",
+      "completed_at": "2026-10-25T16:00:15Z",
+      "conclusion": "success",
+      "elapsed_seconds": 544
+    },
+    {
+      "name": "compatibility (26)",
+      "job_url": "https://github.com/anastaci1a/localica/actions/runs/40208893739/job/121215680637",
+      "started_at": "2026-10-25T15:51:11Z",
+      "completed_at": "2026-10-25T16:05:03Z",
+      "conclusion": "success",
+      "elapsed_seconds": 832
+    },
+    {
+      "name": "device-tests (36)",
+      "job_url": "https://github.com/anastaci1a/localica/actions/runs/40208893739/job/121215680644",
+      "started_at": "2026-10-25T15:51:11Z",
+      "completed_at": "2026-10-25T16:53:07Z",
+      "conclusion": "failure",
+      "elapsed_seconds": 3716
+    },
+    {
+      "name": "compatibility (36)",
+      "job_url": "https://github.com/anastaci1a/localica/actions/runs/40208893739/job/121215680650",
+      "started_at": "2026-10-25T15:51:11Z",
+      "completed_at": "2026-10-25T16:05:00Z",
+      "conclusion": "success",
+      "elapsed_seconds": 829
+    },
+    {
+      "name": "device-tests (26)",
+      "job_url": "https://github.com/anastaci1a/localica/actions/runs/40208893739/job/121215680677",
+      "started_at": "2026-10-25T15:51:11Z",
+      "completed_at": "2026-10-25T16:47:53Z",
+      "conclusion": "success",
+      "elapsed_seconds": 3402
+    }
+  ],
+  "baseline_job_accounting": {
+    "device_jobs_runner_minutes": 118.63333333333334,
+    "parallel_device_jobs_elapsed_seconds_excluding_queue": 3716,
+    "all_nonskipped_jobs_runner_minutes": 155.38333333333333,
+    "note": "Observed job durations, not rounded billable minutes; build and compatibility are not native suite execution."
+  }
+}
