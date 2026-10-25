@@ -62,6 +62,13 @@ class PinchReleaseHandoffTest {
         val queueState = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
         var stage by mutableIntStateOf(0)
         lateinit var view: View
+        var drawObserver: android.view.ViewTreeObserver? = null
+        var drawCount = 0
+        var lastDrawNs = 0L
+        val drawListener = android.view.ViewTreeObserver.OnDrawListener {
+            drawCount++
+            lastDrawNs = android.os.SystemClock.elapsedRealtimeNanos()
+        }
         var pointersDown = false
         prefs.write(route, initial, false)
         try {
@@ -79,6 +86,9 @@ class PinchReleaseHandoffTest {
             } }
             compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("media-release:73").assertIsDisplayed() }.isSuccess }
             compose.waitForIdle()
+            compose.runOnUiThread {
+                drawObserver = view.viewTreeObserver.also { it.addOnDrawListener(drawListener) }
+            }
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(70)
             val anchor = compose.onNodeWithTag("media-release:73")
@@ -103,7 +113,16 @@ class PinchReleaseHandoffTest {
                 }
             }
             fun presentedCenter(): Float {
-                val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
+                fun phase(name: String) = compose.runOnUiThread {
+                    android.util.Log.i("PinchCapturePhase",
+                        "phase=$name ns=${android.os.SystemClock.elapsedRealtimeNanos()} stage=$stage " +
+                            "clock=${compose.mainClock.currentTime} outward=$outward cancelled=$cancelled gallery=$gallery " +
+                            "attached=${view.isAttachedToWindow} shown=${view.isShown} focus=${view.hasWindowFocus()} " +
+                            "draws=$drawCount lastDrawNs=$lastDrawNs")
+                }
+                phase("begin")
+                val pixels = try { capturePresentedPopupPixels(compose, scene, stage) { view } }
+                    finally { phase("end") }
                 if (gallery && stage in setOf(0, 1, 2, 6, 12, 22) &&
                     InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
                     val directory = reviewDirectory
@@ -209,6 +228,9 @@ class PinchReleaseHandoffTest {
             try {
                 if (pointersDown) compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
             } finally {
+                compose.runOnUiThread {
+                    drawObserver?.takeIf { it.isAlive }?.removeOnDrawListener(drawListener)
+                }
                 compose.mainClock.autoAdvance = true
                 prefs.write(route, original, overridden)
             }

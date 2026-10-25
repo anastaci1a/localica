@@ -124,8 +124,9 @@ class QueueFollowingTest {
     @Before fun configureNativeInputWindow() {
         compose.activityRule.scenario.onActivity {
             // This search editor is in the activity, not a resize-configured popup.
-            // Match MainActivity: legacy PAN can change visible insets without
-            // applying a new snapshot, leaving the independent IME observer stale.
+            // Match MainActivity's edge-to-edge content as well as its resize contract.
+            // A fitted test decor can consume the IME bottom while reporting it visible.
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it.window, false)
             it.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             assertEquals("Direct search uses the production native resize contract",
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
