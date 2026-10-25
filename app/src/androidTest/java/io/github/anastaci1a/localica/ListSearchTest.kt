@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -14,13 +17,27 @@ import org.junit.Test
 class ListSearchTest {
     @get:Rule val compose = createComposeRule()
     @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
+    private var lastRoot = ""
+    private fun trace(message: String) {
+        android.util.Log.i("ListSearchReopen", "${android.os.SystemClock.uptimeMillis()} $message")
+    }
 
     private fun awaitSearchFocus() {
         // Window focus arrives outside Compose's animation clock. Assert the editor's
         // state directly: a visible IME isn't guaranteed to appear in the accessibility
         // window list. GlassPressureTest separately exercises IME-owned Back via insets.
-        compose.waitUntil(5000) {
-            compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
+        var lastCount = -1
+        try {
+            compose.waitUntil(5000) {
+                val count = compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size
+                if (count != lastCount) { trace("focusedEditors=$count root=$lastRoot"); lastCount = count }
+                count == 1
+            }
+        } catch (failure: Throwable) {
+            runCatching {
+                trace("focusTimeout editors=${compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().size} popups=${compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().size} root=$lastRoot")
+            }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
         }
     }
 
@@ -43,9 +60,18 @@ class ListSearchTest {
             fileName = "$n.mp3", relativePath = "$n.mp3") }
         try {
             BrowseSchedulerWatchdog.phase("install list search fixture")
-            compose.setContent { LocalicaTheme { LocalicaScreen(
+            compose.setContent { LocalicaTheme { CompositionLocalProvider(
+                LocalTextEditingObservation provides { trace("text $it") },
+                LocalSearchEditTrace provides { trace("editor $it") }
+            ) {
+                val root = LocalView.current
+                SideEffect {
+                    val value = "activityView=${System.identityHashCode(root)} window=${System.identityHashCode(root.windowToken)} focus=${root.hasWindowFocus()} attached=${root.isAttachedToWindow} shown=${root.isShown}"
+                    if (lastRoot != value) { lastRoot = value; trace(value) }
+                }
+                LocalicaScreen(
                 LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaybackState(connected = true),
-                {}, {}, {}, {}, {}, {}) } }
+                {}, {}, {}, {}, {}, {}) } } }
             BrowseSchedulerWatchdog.phase("await initial album")
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 000").fetchSemanticsNodes().isNotEmpty() }
             repeat(3) { pass ->

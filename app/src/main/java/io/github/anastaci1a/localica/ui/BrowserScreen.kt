@@ -142,6 +142,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         (WindowInsets.ime.getBottom(density) > 0 || WindowInsets.imeAnimationSource.getBottom(density) > 0)
     var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
     LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing, reportSearchOpening, scopedEditor?.focused) {
+        searchEditTrace?.invoke("autofocus decision key=${route.key.hashCode()} request=$focusRequest consumed=$focusedRequest once=$focusedOnce ready=$panelReady window=$windowFocused closing=$keyboardClosing player=$playerOpen editor=${scopedEditor?.let { System.identityHashCode(it) }} active=${scopedEditor?.active} focused=${scopedEditor?.focused}")
         // Dialog attachment and IME focus happen outside Compose's animation clock.
         // Do not consume an autofocus request while the returning window still owns input.
         if (!panelReady || !windowFocused || keyboardClosing) return@LaunchedEffect
@@ -149,6 +150,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             withFrameNanos { } // Wait until the field is attached.
             if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
             focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
+            searchEditTrace?.invoke("autofocus requested key=${route.key.hashCode()} request=$focusRequest editor=${scopedEditor?.let { System.identityHashCode(it) }}")
             restoreResultsFocus = false
             reportSearchOpening?.invoke(true)
         } else if (restoreResultsFocus && !playerOpen) {
