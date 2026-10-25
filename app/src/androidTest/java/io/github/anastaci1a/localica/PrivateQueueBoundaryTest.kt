@@ -74,7 +74,12 @@ class PrivateQueueBoundaryTest {
                 if (!inputBuffer.hasRemaining()) return
                 val data = ByteArray(inputBuffer.remaining())
                 inputBuffer.get(data)
+                val captureWriteStart = SystemClock.elapsedRealtimeNanos()
                 synchronized(captureOutput) { captureOutput.write(data); byteCount += data.size }
+                val captureWriteDuration = SystemClock.elapsedRealtimeNanos() - captureWriteStart
+                if (traceOutput && captureWriteDuration >= 50_000_000L)
+                    event("capture-write-delay", "entryNs" to captureWriteStart,
+                        "durationNs" to captureWriteDuration, "bytes" to data.size, "capturedBytes" to byteCount)
                 replaceOutputBuffer(data.size).put(data).flip()
             }
             override fun onFlush() { event("processor-flush", "bytes" to byteCount) }
