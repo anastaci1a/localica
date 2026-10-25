@@ -1,12 +1,17 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -25,7 +30,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     onPin: (MediaRef) -> Unit, onMove: (MediaRef, Int) -> Unit, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, selectionVisible: Boolean = true,
     listBackEnabled: Boolean = false,
-    playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null, queues: io.github.anastaci1a.localica.queue.QueueController? = null) {
+    playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null, queues: io.github.anastaci1a.localica.queue.QueueController? = null,
+    playerOpen: Boolean = false) {
     val sorts = rememberBrowseSortSnapshot()
     val cache = LocalBrowsePresentationCache.current
     val cached = remember(library.snapshot, playlists.playlists, pins, cache, sorts) { cache?.home(library.snapshot, playlists.playlists, pins, sorts) }
@@ -50,15 +56,19 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val artworkTransit = remember { ArtworkTransit() }
     val carousel = androidx.compose.foundation.lazy.rememberLazyListState()
+    val surroundingBackdrop = LocalFrostedBackdrop.current
+    val listBackdrop = rememberFrostedBackdrop(items to surroundingBackdrop?.fallback,
+        enabled = songs.isNotEmpty(), dark = surroundingBackdrop?.dark == true, retainRaster = false)
     val refreshBackdrop = LocalBackdropRefresh.current
     LaunchedEffect(items, scroll.isScrollInProgress, carousel.isScrollInProgress) {
         if (!scroll.isScrollInProgress && !carousel.isScrollInProgress) {
             kotlinx.coroutines.delay(150)
             refreshBackdrop()
+            listBackdrop.refresh()
         }
     }
     val returnOwner = remember(library.snapshot, playlists.playlists, pins) { Any() }
-    ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible, listBackEnabled && !session.active,
+    val returnToList = ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible && !playerOpen && !session.active, listBackEnabled && !session.active,
         listReturnAction(scroll.canScrollBackward, scroll.isScrollInProgress, false), ready = {}, execute = { action ->
             if (action == ListReturnAction.ScrollTop) artworkTransit.during(!reducedMotion &&
                 scroll.firstVisibleItemIndex > scroll.layoutInfo.visibleItemsInfo.size * 2) {
@@ -66,7 +76,15 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             }
         })
     CompositionLocalProvider(LocalArtworkTransit provides artworkTransit) {
-    LazyColumn(Modifier.fillMaxSize().controlScrollParent(scroll, ControlScrollAxis.Vertical), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
+    Box(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().controlScrollParent(scroll, ControlScrollAxis.Vertical)
+        .pointerInput(scroll) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                returnToList.cancel()
+            }
+        }
+        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
@@ -100,6 +118,15 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 })
             } }
         } } }
+    }
+    CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
+        FloatingReturnToPositionButton(up = true, label = "Return to top",
+            visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward,
+            reducedMotion = reducedMotion,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBrowseObscuredInset.current)) {
+            returnToList(ListReturnAction.ScrollTop)
+        }
+    }
     }
     }
     info?.let { track -> SongInformation(track, { info = null }, { editTags?.invoke(listOf(track)) {} }, folders = library.snapshot.folders) { action ->

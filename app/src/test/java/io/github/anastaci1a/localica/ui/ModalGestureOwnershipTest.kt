@@ -34,6 +34,23 @@ class ModalGestureOwnershipTest {
         assertTrue("Retained exit drawing does not keep a live input surface", popup.blocked)
     }
 
+    @Test fun modalDismissalPublishesAvailabilityToAListMountedWhileBlocked() = runTest {
+        val windows = Windows(backgroundScope)
+        val popup = windows.modal()
+        popup.activate()
+        androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+        var availabilityChanges = 0
+        val observer = androidx.compose.runtime.snapshots.SnapshotStateObserver { it() }
+        observer.start()
+        try {
+            observer.observeReads(Any(), { availabilityChanges++ }) { assertTrue(windows.root.blocked) }
+            popup.deactivate()
+            androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+            assertEquals(1, availabilityChanges)
+            assertFalse(windows.root.blocked)
+        } finally { observer.stop(); observer.clear() }
+    }
+
     @Test fun activationTakesOverBeforeTheNewNativeWindowAttaches() = runTest {
         val windows = Windows(backgroundScope)
         val popup = windows.modal(attached = false)

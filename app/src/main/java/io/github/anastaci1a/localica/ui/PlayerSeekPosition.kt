@@ -78,7 +78,8 @@ internal fun PlayerSeekControls(playback: PlaybackState, onSeek: (Long) -> Unit,
     playbackVisit: String? = null, cancelBounds: Rect? = null,
     onDrag: (Boolean, Boolean) -> Unit = { _, _ -> },
     onSeekRequest: ((Long, String?) -> Long)? = null,
-    position: PlayerSeekPosition = rememberPlayerSeekPosition(playback, playbackVisit)) {
+    position: PlayerSeekPosition = rememberPlayerSeekPosition(playback, playbackVisit),
+    cancelTarget: (() -> Rect?)? = null) {
     // A same-file repeat/duplicate visit is still a new playback generation. Recreate
     // the gesture too: a trailing callback from the old media must not seek the new one.
     key(position) {
@@ -90,7 +91,7 @@ internal fun PlayerSeekControls(playback: PlaybackState, onSeek: (Long) -> Unit,
             } },
             enabled = playback.connected && playback.problem == null && (playback.durationMs ?: 0) > 0,
             modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = "Seek" },
-            cancelBounds = cancelBounds, onCancel = position::cancel,
+            cancelBounds = cancelBounds, cancelTarget = cancelTarget, onCancel = position::cancel,
             liveValue = playback.positionMs.toFloat(), onDrag = onDrag)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatTime(value.toLong()), style = MaterialTheme.typography.labelSmall)

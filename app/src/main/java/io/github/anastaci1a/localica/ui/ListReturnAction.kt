@@ -12,6 +12,13 @@ internal fun listReturnAction(scrolled: Boolean, scrolling: Boolean, filtered: B
     else -> ListReturnAction.None
 }
 
+/** Preserve the callable action while exposing physical/modal takeover cancellation. */
+internal class ListReturnCommand(private val submit: (ListReturnAction) -> Unit,
+    private val onCancel: () -> Unit) : (ListReturnAction) -> Unit {
+    override fun invoke(action: ListReturnAction) = submit(action)
+    fun cancel() = onCancel()
+}
+
 /** One list owns one command. Losing its route/query owner cancels both readiness and motion. */
 internal class ListReturnExecutor(private val scope: CoroutineScope) {
     private var job: Job? = null

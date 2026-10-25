@@ -7,7 +7,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 /** Shared list step only. The tab caller, not Back, owns any preceding root navigation. */
 @Composable
 internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEnabled: Boolean,
-    action: ListReturnAction, onSubmit: () -> Unit = {}, ready: suspend () -> Unit, execute: suspend (ListReturnAction) -> Unit) {
+    action: ListReturnAction, onSubmit: () -> Unit = {}, ready: suspend () -> Unit, execute: suspend (ListReturnAction) -> Unit): ListReturnCommand {
     val scope = rememberCoroutineScope()
     val executor = remember(scope) { ListReturnExecutor(scope) }
     val currentOwner by rememberUpdatedState(owner)
@@ -18,9 +18,11 @@ internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEn
     val currentSubmit by rememberUpdatedState(onSubmit)
     var consumed by rememberSaveable { mutableIntStateOf(0) }
     DisposableEffect(owner, active) { onDispose { executor.cancel() } }
+    OnModalGestureCancellation { executor.cancel() }
     fun submit(captured: ListReturnAction?) {
-        currentSubmit()
         val token = owner
+        if (!currentActive || currentOwner !== token) return
+        currentSubmit()
         executor.submit({ currentActive && currentOwner === token }, { currentReady() },
             { captured ?: currentAction }, { currentExecute(it) })
     }
@@ -36,4 +38,7 @@ internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEn
         // Capture this press's step; readiness must not turn a scroll request into filter clearing.
         submit(action)
     }
+    // Visible controls use a captured step, just like Back. Readiness cannot turn
+    // a return-to-top tap into clearing the list's filter.
+    return ListReturnCommand({ submit(it) }, executor::cancel)
 }

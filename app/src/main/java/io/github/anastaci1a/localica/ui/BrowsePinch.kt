@@ -30,7 +30,12 @@ internal data class FrozenBrowseItem(val image: androidx.compose.ui.graphics.Ima
     val origin: androidx.compose.ui.unit.IntOffset, val size: androidx.compose.ui.unit.IntSize,
     val highlight: RetainedCurrentSongHighlight? = null)
 
-internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0)
+internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0) {
+    // LazyGrid places items on integer pixels but retains fractional scroll deltas.
+    // Quantize the absolute target once; feeding its residual back each frame dithers.
+    fun correction(itemTop: Int, itemHeight: Int): Float =
+        (itemTop - (top - itemHeight * fraction).roundToInt()).toFloat()
+}
 
 @Stable
 internal class BrowsePinchMotion {
