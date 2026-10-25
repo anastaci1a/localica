@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OBSERVER = Path(os.environ.get('LOCALICA_OBSERVER_TEST_SOURCE', ROOT/'.github/test-evidence/observe.py'))
 REQUIRED = 'io.github.anastaci1a.localica.SearchImeMotionTest'
 FOCUS = 'io.github.anastaci1a.localica.ListSearchTest'
+CONTRAST = 'io.github.anastaci1a.localica.FrostedSurfaceTest'
 AFFECTED = 'io.github.anastaci1a.localica.QueueRecoveryTest'
 SHA = 'f'*40
 
@@ -25,8 +26,8 @@ class RunnerContract(unittest.TestCase):
         for d in ['.github/test-evidence', 'bin', 'app/src/androidTest/java/io/github/anastaci1a/localica', 'app/build/outputs/apk/debug', 'app/build/outputs/apk/androidTest/debug']:
             (self.root/d).mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT/'.github/run-prototype-tests.sh', self.root/'runner.sh')
-        (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+AFFECTED+'\n')
-        for cls in [REQUIRED,FOCUS,AFFECTED]:
+        (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+CONTRAST+'\n'+AFFECTED+'\n')
+        for cls in [REQUIRED,FOCUS,CONTRAST,AFFECTED]:
             (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).touch()
         for apk in ['app/build/outputs/apk/debug/app-debug.apk','app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk']:
             (self.root/apk).write_bytes(b'apk')
@@ -88,16 +89,16 @@ for i,cls in enumerate(classes):
     def test_duplicate_selectors_deduplicate(self):
         self.run_case(AFFECTED_CLASSES=AFFECTED+','+AFFECTED)
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertEqual(3,len(args[-1].split('=',1)[1].split(',')))
+        self.assertEqual(4,len(args[-1].split('=',1)[1].split(',')))
 
     def test_focused_only_and_restoration(self):
         self.run_case()
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(1,args.count('connectedDebugAndroidTest'))
-        self.assertEqual(set(args[-1].split('=',1)[1].split(',')),{REQUIRED,FOCUS,AFFECTED})
+        self.assertEqual(set(args[-1].split('=',1)[1].split(',')),{REQUIRED,FOCUS,CONTRAST,AFFECTED})
         self.assertEqual('setup\nrestore\n',(self.root/'lifecycle').read_text())
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
-        self.assertEqual({REQUIRED,FOCUS,AFFECTED},set(evidence['counts']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,AFFECTED},set(evidence['counts']))
         self.assertFalse(evidence['release_certified'])
 
     def test_publisher_failure_holds_success(self):
@@ -178,7 +179,7 @@ class WorkflowContract(unittest.TestCase):
             if not missing:
                 for api in (26,36):
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
-                    (focused/'reconciled-tests.json').write_text(json.dumps({'sha':SHA,'api':str(api),'selectors':[REQUIRED,FOCUS,AFFECTED],'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in (REQUIRED,FOCUS,AFFECTED)}}))
+                    (focused/'reconciled-tests.json').write_text(json.dumps({'sha':SHA,'api':str(api),'selectors':[REQUIRED,FOCUS,CONTRAST,AFFECTED],'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)}}))
                     if contradictory:
                         data=json.loads((focused/'reconciled-tests.json').read_text());data['counts'][REQUIRED]['failed']=1
                         (focused/'reconciled-tests.json').write_text(json.dumps(data))
