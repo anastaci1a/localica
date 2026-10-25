@@ -238,8 +238,8 @@
       "scope": "PopupEnvelopeTest#mainAndQueueEnvelopesStayStableAcrossAllSupportedDraftsAndWindowChanges",
       "api26_seconds": 89.626,
       "api36_seconds": 98.414,
-      "category": "setup_navigation",
-      "retained_coverage": "37 distinct drafts and all caller/window/page measurements remain",
+      "category": "structural_matrix_replacement",
+      "retained_coverage": "24 representative native dialog mounts across four live topologies and all six caller/window cases, exhaustive native shared-face labels including legacy/fallback selections, and production-used JVM declaration mapping",
       "overlaps": []
     },
     {
@@ -346,5 +346,52 @@
     "parallel_device_jobs_elapsed_seconds_excluding_queue": 3716,
     "all_nonskipped_jobs_runner_minutes": 155.38333333333333,
     "note": "Observed job durations, not rounded billable minutes; build and compatibility are not native suite execution."
+  },
+  "structural_envelope_proposal": {
+    "source_sha": "16ff1a4634ee2a7ac3563e02e1ed86b7379ba759",
+    "status": "source-proven partition; implementation and runtime validation not performed",
+    "overlaps_cost_scope": "popup_matrix",
+    "baseline_full_dialog_mounts": 228,
+    "proposed_full_dialog_mounts": 24,
+    "mounts_removed": 204,
+    "retained_callers": 2,
+    "retained_window_font_cases": 3,
+    "live_topologies": [
+      "List + Manual",
+      "List + non-Manual",
+      "gallery + Manual",
+      "gallery + non-Manual"
+    ],
+    "window_font_cases": [
+      {
+        "width_dp": 360,
+        "height_dp": 640,
+        "font_scale": 1.0
+      },
+      {
+        "width_dp": 400,
+        "height_dp": 240,
+        "font_scale": 1.5
+      },
+      {
+        "width_dp": 220,
+        "height_dp": 320,
+        "font_scale": 2.0
+      }
+    ],
+    "original_rows_for_production_used_jvm_mapping": 38,
+    "native_face_coverage": "All actual size/info/sort labels and five slider titles; text wrapping, live/inert dimensions, containment/overflow and legacy/fallback labels remain native.",
+    "legacy_selection_probes": [
+      "Main size Tracklist",
+      "Main sort Manual",
+      "Main sort Album",
+      "Main sort Folder",
+      "Queue sort Count",
+      "Queue information Inherited"
+    ],
+    "retained_queue_actions": "One complete randomize/revert/two-reversals/failure sequence per window, including no-Revert and error/Close reachability",
+    "runtime_savings_seconds": null,
+    "limitation": "204 fewer mounts is not an 89.5 percent runtime saving. Same whole-method bound as popup_matrix; do not add again. Retained declaration measurement and added native face probes still cost time.",
+    "repeated_tab_gestures_removed": 408
   }
 }
