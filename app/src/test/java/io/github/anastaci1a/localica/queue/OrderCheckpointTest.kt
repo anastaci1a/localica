@@ -8,13 +8,13 @@ import org.junit.Test
 class OrderCheckpointTest {
     private fun track(id: String) = Track(id, id, fileName = "$id.mp3", relativePath = "$id.mp3")
 
-    @Test fun repeatedRandomizationsRestorePhysicalAndManualOrdersIndependently() {
+    @Test fun repeatedReversalsAndRandomizationsRestorePhysicalAndManualOrdersIndependently() {
         val initial = QueueEdits.create(listOf(track("C"), track("A"), track("A"), track("B")), 2, "Mix")
         val opening = QueueEdits.sort(initial, TrackSort.Title, false).copy(positionMs = 1234)
         val checkpoint = OrderCheckpoint.capture(opening.entries.map { it.id }, opening.order)
         var edited = opening
         repeat(4) {
-            edited = QueueEdits.randomize(edited, true, kotlin.random.Random(it))
+            edited = QueueEdits.reverse(QueueEdits.randomize(QueueEdits.reverse(edited), true, kotlin.random.Random(it)))
             assertEquals(edited.entries.map { it.id }, edited.order.manual)
         }
         val ids = edited.entries.map { it.id }
@@ -36,10 +36,9 @@ class OrderCheckpointTest {
             listOf(track("C"), track("A"), track("A"), track("B")))
         val opening = PlaylistEdits.sort(original, TrackSort.Title, false)
         val checkpoint = OrderCheckpoint.capture(opening.entries.map { it.id }, opening.order)
-        val reversed = opening.entries.reversed()
-        val randomized = opening.copy(entries = reversed, order = SavedOrder(reversed.map { it.id }))
+        val reversed = PlaylistEdits.reverse(opening)
         val removed = original.entries[1].id
-        val current = PlaylistEdits.append(PlaylistEdits.remove(randomized, setOf(removed)), listOf(track("A"), track("New")))
+        val current = PlaylistEdits.append(PlaylistEdits.remove(reversed, setOf(removed)), listOf(track("A"), track("New")))
             .let { list -> list.copy(name = "Current name", coverUri = "current", modifiedAt = 42,
                 entries = list.entries.map { it.copy(track = it.track.copy(playCount = 3), sourcePlaylistId = "origin") }) }
         val restored = PlaylistEdits.revertOrder(current, checkpoint)

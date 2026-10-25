@@ -417,6 +417,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         editOrder(queueId, complete) { queue ->
             QueueEdits.randomize(queue, queue.id == state.value.library.activeId, random)
         }
+    fun reverse(queueId: String, complete: (Boolean) -> Unit = {}) =
+        reverseOrder(queueId) { complete(it != null) }
+    internal fun reverseOrder(queueId: String, complete: (OrderCommit?) -> Unit) =
+        editOrder(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.reverse(queue) } }
     fun applySort(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
         applySortOrder(queueId, method, ascending) { complete(it != null) }
     internal fun applySortOrder(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (OrderCommit?) -> Unit) =

@@ -232,7 +232,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             orderScroll.cancel()
             onDispose { lifetime[0] = false }
         }
-        fun orderAction(followCurrent: Boolean, done: (Boolean) -> Unit,
+        fun orderAction(followCurrent: Boolean, done: (OrderCommit?) -> Unit,
             action: ((OrderCommit?) -> Unit) -> Unit) {
             val token = orderScroll.begin(orderOwner, route)
             positionedPlaying = true
@@ -241,7 +241,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     receipt?.changed == true,
                     receipt?.let { BrowseOrderGeneration(token.route.collection!!, it.revision, it.order) },
                     receipt?.currentEntryId.takeIf { followCurrent }, followCurrent = followCurrent)
-                done(receipt != null)
+                done(receipt)
             }
         }
         val mutableRows = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
@@ -252,18 +252,22 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         commitStyle(value)
     }, { preferences.reset(route); commitStyle(preferences.read(route)) }, initialView,
         onRandomize = when {
-            mutableQueue != null && queues != null -> ({ done -> orderAction(false, done) { queues.randomizeOrder(mutableQueue.id, it) } })
-            mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, done) { playlistController.randomizeOrder(mutablePlaylist.id, it) } })
+            mutableQueue != null && queues != null -> ({ done -> orderAction(false, { done(it != null) }) { queues.randomizeOrder(mutableQueue.id, it) } })
+            mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, { done(it != null) }) { playlistController.randomizeOrder(mutablePlaylist.id, it) } })
+            else -> null
+        }, onReverseOrder = when {
+            mutableQueue != null && queues != null -> ({ done -> orderAction(true, { done(it?.order) }) { queues.reverseOrder(mutableQueue.id, it) } })
+            mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, { done(it?.order) }) { playlistController.reverseOrder(mutablePlaylist.id, it) } })
             else -> null
         }, mutableOrder = savedOrder, manualNeedsRestore = savedOrder != null && savedOrder.manual != physicalOrder,
         mutableOrderRows = mutableRows, orderSnapshot = library.snapshot,
         mutableOrderIds = physicalOrder, onRevertOrder = when {
-            mutableQueue != null && queues != null -> ({ checkpoint, done -> orderAction(true, done) { queues.revertOrderWithCommit(mutableQueue.id, checkpoint, it) } })
+            mutableQueue != null && queues != null -> ({ checkpoint, done -> orderAction(true, { done(it != null) }) { queues.revertOrderWithCommit(mutableQueue.id, checkpoint, it) } })
             mutablePlaylist != null && playlistController != null -> ({ checkpoint, done -> orderScroll.cancel(); playlistController.revertOrder(mutablePlaylist.id, checkpoint, done) })
             else -> null
         },
         onApplySort = when {
-            mutableQueue != null && queues != null -> ({ method, ascending, done -> orderAction(true, done) { queues.applySortOrder(mutableQueue.id, method, ascending, it) } })
+            mutableQueue != null && queues != null -> ({ method, ascending, done -> orderAction(true, { done(it != null) }) { queues.applySortOrder(mutableQueue.id, method, ascending, it) } })
             mutablePlaylist != null && playlistController != null -> ({ method, ascending, done -> orderScroll.cancel(); playlistController.applySort(mutablePlaylist.id, method, ascending, done) })
             else -> null
         }) }

@@ -164,7 +164,7 @@ class BrowseOrderViewportTest {
     private fun action(label: String) {
         compose.waitUntil(5000) { runCatching { compose.onNodeWithText(label).assertIsEnabled() }.isSuccess }
         val control = compose.onNodeWithText(label)
-        if (label == "Randomize" || label == "Revert") control.performScrollTo()
+        if (label in setOf("Randomize", "Reverse", "Revert")) control.performScrollTo()
         control.performClick()
     }
     private fun waitForAction(label: String) {
@@ -246,6 +246,56 @@ class BrowseOrderViewportTest {
         assertCurrentAtInset(fixture)
         assertEquals(1234L, fixture.queue.positionMs)
         compose.onNodeWithText("Revert").assertDoesNotExist()
+    }
+
+    @Test fun activeQueueReverseUsesCommittedOccurrenceAndTwoReversalsHideRevert() = fixture { fixture ->
+        val opening = fixture.queue
+        list.performScrollToIndex(85)
+        openSort(); action("Reverse")
+        compose.waitUntil(5000) { fixture.queue.entries == opening.entries.reversed() }
+        assertCurrentAtInset(fixture)
+        assertEquals(currentId, fixture.queue.currentEntryId)
+        assertEquals(1234L, fixture.queue.positionMs)
+        assertNotEquals(currentId, fixture.queue.entries.first().id)
+        compose.onNodeWithText("Revert").assertExists()
+        action("Reverse")
+        compose.waitUntil(5000) { fixture.queue.entries == opening.entries }
+        assertCurrentAtInset(fixture)
+        compose.onNodeWithText("Revert").assertDoesNotExist()
+        assertEquals(opening, fixture.queue)
+    }
+
+    @Test fun inactiveQueueReverseReturnsToTopWithoutSwitchingPlayback() = fixture(active = false) { fixture ->
+        val opening = fixture.queue
+        list.performScrollToIndex(85)
+        openSort(); action("Reverse")
+        compose.waitUntil(5000) { fixture.queue.entries == opening.entries.reversed() }
+        assertTop(fixture, "Reverse")
+        assertEquals("other", fixture.queues!!.state.value.library.activeId)
+        action("Revert")
+        compose.waitUntil(5000) { fixture.queue.entries == opening.entries }
+        compose.onNodeWithText("Revert").assertDoesNotExist()
+        assertTop(fixture, "Revert")
+    }
+
+    @Test fun playlistReverseWaitsForItsCommittedPresentationThenReturnsToTop() {
+        val queries = QueryDispatcher()
+        fixture(queue = false, queries = queries) { fixture ->
+            val opening = fixture.playlist
+            list.performScrollToIndex(80)
+            val before = position()
+            queries.held = true
+            openSort(); action("Reverse")
+            compose.waitUntil(5000) { fixture.playlist.entries == opening.entries.reversed() }
+            val pending = nextQuery(queries)
+            waitForAction("Close")
+            assertEquals("Reverse must not scroll the obsolete presentation", before, position(), 0f)
+            action("Close")
+            compose.mainClock.advanceTimeBy(1000)
+            assertEquals(before, position(), 0f)
+            pending.run()
+            assertTop()
+        }
     }
 
     @Test fun inactiveQueueApplyRandomizeAndRevertReturnToTop() = fixture(active = false) { fixture ->

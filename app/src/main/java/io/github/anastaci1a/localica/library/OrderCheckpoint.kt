@@ -6,6 +6,9 @@ data class OrderCheckpoint(val physical: List<String>, val saved: SavedOrder) {
     fun reconcile(ids: List<String>) = OrderCheckpoint(
         SavedOrder(physical).reconcile(ids).manual, saved.reconcile(ids))
 
+    /** Membership changes alone do not offer a restore that would leave the order unchanged. */
+    fun differsFrom(ids: List<String>): Boolean = SavedOrder(physical).reconcile(ids).manual != ids
+
     companion object {
         fun capture(ids: List<String>, saved: SavedOrder) =
             OrderCheckpoint(ids.toList(), saved.copy(manual = saved.manual.toList()))

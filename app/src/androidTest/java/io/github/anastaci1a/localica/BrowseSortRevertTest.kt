@@ -25,7 +25,7 @@ class BrowseSortRevertTest {
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
             BrowseSortDialog(route, BrowseStyle(), false, {}, { _, _ -> }, {},
                 onRandomize = { done ->
-                    if (!failRandomize) { ids = ids.reversed(); order = SavedOrder(ids) }
+                    if (!failRandomize) { ids = ids.drop(1) + ids.first(); order = SavedOrder(ids) }
                     done(!failRandomize)
                 }, mutableOrder = order, mutableOrderIds = ids,
                 onRevertOrder = { checkpoint, done ->
@@ -87,9 +87,85 @@ class BrowseSortRevertTest {
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
         compose.onNodeWithText("Revert").assertDoesNotExist()
+        val reopened = OrderCheckpoint.capture(ids, order)
         compose.onNodeWithText("Randomize").performScrollTo().performClick()
-        compose.runOnIdle { pending.last()(true) }
+        compose.runOnIdle { ids = ids.reversed(); order = SavedOrder(ids); pending.last()(true) }
         compose.onNodeWithText("Revert").performClick()
-        compose.runOnIdle { assertEquals(OrderCheckpoint.capture(ids, order), reverted) }
+        compose.runOnIdle { assertEquals(reopened, reverted) }
+    }
+
+    @Test fun reverseTogglesRevertFromOpeningOrderAndRetainsRandomizeBaselineAndRowAlignment() {
+        val opening = OrderCheckpoint(listOf("a", "b", "c", "d"),
+            SavedOrder(listOf("d", "c", "b", "a"), TrackSort.Title, false))
+        var ids by mutableStateOf(opening.physical)
+        var order by mutableStateOf(opening.saved)
+        var failReverse = false
+        val restored = mutableListOf<OrderCheckpoint>()
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+            BrowseSortDialog(route, BrowseStyle(), false, {}, { _, _ -> }, {},
+                onRandomize = { done -> ids = ids.drop(1) + ids.first(); order = SavedOrder(ids); done(true) },
+                onReverseOrder = { done ->
+                    if (!failReverse) { ids = ids.reversed(); order = SavedOrder(ids) }
+                    done(order.takeUnless { failReverse })
+                }, mutableOrder = order, mutableOrderIds = ids,
+                onRevertOrder = { checkpoint, done ->
+                    restored += checkpoint
+                    val current = checkpoint.reconcile(ids)
+                    ids = current.physical; order = current.saved; done(true)
+                })
+        } } }
+        compose.onNodeWithText("Revert").assertDoesNotExist()
+        compose.onNodeWithText("Reverse").performScrollTo().performClick()
+        compose.onNodeWithText("Revert").assertExists()
+        compose.onNodeWithText("Randomize").performScrollTo()
+        val randomize = compose.onNodeWithText("Randomize").fetchSemanticsNode().boundsInRoot
+        val revert = compose.onNodeWithText("Revert").fetchSemanticsNode().boundsInRoot
+        val reverse = compose.onNodeWithText("Reverse").fetchSemanticsNode().boundsInRoot
+        assertEquals(randomize.center.y, revert.center.y, 1f)
+        assertTrue("Revert remains to the right of Randomize", revert.left >= randomize.right)
+        assertTrue("Reverse follows below Randomize", reverse.top >= randomize.bottom)
+        assertEquals("Reverse aligns with Randomize", randomize.left, reverse.left, 1f)
+        compose.onNodeWithText("Reverse").performScrollTo().performClick()
+        compose.onNodeWithText("Revert").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(opening.physical, ids) }
+        compose.onNodeWithText("Randomize").performScrollTo().performClick()
+        val randomized = ids
+        repeat(2) {
+            compose.onNodeWithText("Reverse").performScrollTo().performClick()
+            compose.onNodeWithText("Revert").assertExists()
+        }
+        compose.runOnIdle { assertEquals(randomized, ids); failReverse = true }
+        compose.onNodeWithText("Reverse").performScrollTo().performClick()
+        compose.onNodeWithText("Couldn’t save this order. Try again.").assertExists()
+        compose.runOnIdle { assertEquals(randomized, ids); failReverse = false }
+        compose.onNodeWithText("Revert").performScrollTo().performClick()
+        compose.onNodeWithText("Revert").assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(listOf(opening), restored)
+            assertEquals(opening.physical, ids)
+            assertEquals(opening.saved, order)
+        }
+    }
+
+    @Test fun unchangedAndMembershipOnlyCompletionsDoNotExposeRevert() {
+        var ids by mutableStateOf(listOf("a"))
+        var order by mutableStateOf(SavedOrder(ids, TrackSort.Title, false))
+        var reverseCalls = 0
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+            BrowseSortDialog(route, BrowseStyle(), false, {}, { _, _ -> }, {},
+                onRandomize = { it(true) },
+                onReverseOrder = { reverseCalls++; it(order) },
+                mutableOrder = order, mutableOrderIds = ids, onRevertOrder = { _, done -> done(true) })
+        } } }
+        compose.onNodeWithText("Reverse").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Randomize").performScrollTo().performClick()
+        compose.onNodeWithText("Revert").assertDoesNotExist()
+        compose.runOnIdle { ids = listOf("a", "new"); order = order.reconcile(ids) }
+        compose.onNodeWithText("Reverse").performScrollTo().assertIsEnabled()
+        compose.onNodeWithText("Revert").assertDoesNotExist()
+        compose.runOnIdle { ids = emptyList(); order = order.reconcile(ids) }
+        compose.onNodeWithText("Reverse").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Revert").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0, reverseCalls) }
     }
 }
