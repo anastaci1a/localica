@@ -218,10 +218,6 @@ class PrivateQueueBoundaryTest {
                 Thread.sleep(100)
             }
             event("summary", "arrivals" to arrivals, "rebuffers" to rebuffers, "underruns" to underruns, "bytes" to byteCount, "queue" to queue, "preload" to preload)
-            if (traceOutput) synchronized(events) {
-                event("trace-write-summary", "maximumDurationNs" to traceWriteMaxNs,
-                    "slowCount" to traceWriteSlowCount, "first128" to org.json.JSONArray(traceWriteDelays))
-            }
             assertEquals(2, arrivals)
             assertEquals("Rebuffered after initial readiness", 0, rebuffers)
             assertEquals("Reported underrun", 0, underruns)
@@ -232,6 +228,9 @@ class PrivateQueueBoundaryTest {
             synchronized(captureOutput) { captureOutput.close() }
             acceptedOutput?.close()
             synchronized(events) {
+                // Keep diagnostic timing even when a codec/playback error exits before assertions.
+                if (traceOutput) event("trace-write-summary", "maximumDurationNs" to traceWriteMaxNs,
+                    "slowCount" to traceWriteSlowCount, "first128" to org.json.JSONArray(traceWriteDelays))
                 val writer = eventWriter
                 eventWriter = null // A late native release callback may still append its evidence.
                 writer?.close()
