@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -69,6 +70,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     libraryFilters: LibraryFilters = LibraryFilters(), onFilterSettings: () -> Unit = {},
     popupDismiss: (() -> Unit)? = null, scopedEditor: ScopedSearchEditorSession? = null, focusRequest: Int = 0, sortOrigin: GlassAnchor? = null,
     queryDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default, onBack: () -> Unit = {},
+    queueOpeningRequest: Long = 0,
     onAppearance: (androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color) -> Unit = { _, _ -> }) {
     val searchEditTrace = LocalSearchEditTrace.current
     if (searchEditTrace != null && route.search) {
@@ -168,10 +170,22 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             onRoute(route.copy(filter = null))
         }
     }
+    val touchExploration = remember(context) { (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE)
+        as? android.view.accessibility.AccessibilityManager)?.isTouchExplorationEnabled == true }
+    val playbackFollow = androidx.compose.runtime.saveable.rememberSaveable(route.key, route.collection,
+        saver = androidx.compose.runtime.saveable.Saver<QueuePlaybackFollowCoordinator, Any>(
+            save = { arrayListOf(it.attached, it.consumedOpeningRequest) },
+            restore = { QueuePlaybackFollowCoordinator.restoreState(it) })) {
+        QueuePlaybackFollowCoordinator(!touchExploration)
+    }
+    val unfilteredOpening = !route.search && !route.globalSearch && route.text.isBlank() && route.filter == null && !localSearchOpen
     val browse = rememberBrowsePresentation(library.snapshot, playlists.playlists, queueState.library.queues,
         libraryFilters, route, style, reducedMotion, queryDispatcher, sorts,
         sourcesReady = browseCatalogReady(route, library.loading, playlists.loading, queueState.loading, libraryFilters),
-        animateArrival = route.search || route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist))
+        animateArrival = route.search || route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist),
+        queueOpeningRequest = queueOpeningRequest.takeIf { unfilteredOpening &&
+            (it > playbackFollow.consumedOpeningRequest || it > 0 && playbackFollow.request?.initialPosition == true) } ?: 0,
+        queueOpeningOccurrence = playingEntryId)
     val presentation = browse.current
     val loadedResult = presentation?.result
     val displayedStyle = presentation?.style ?: style
@@ -227,13 +241,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         // Request the same absolute offset before changed keys can auto-anchor/clamp.
         if (request != null) gridState.requestScrollToItem(0, request.scrollOffset)
         selectedAlbums = ids
-    }
-    val touchExploration = remember(context) { (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE)
-        as? android.view.accessibility.AccessibilityManager)?.isTouchExplorationEnabled == true }
-    val playbackFollow = androidx.compose.runtime.saveable.rememberSaveable(route.key, route.collection,
-        saver = androidx.compose.runtime.saveable.Saver<QueuePlaybackFollowCoordinator, Boolean>(
-            save = { it.attached }, restore = { QueuePlaybackFollowCoordinator(it) })) {
-        QueuePlaybackFollowCoordinator(!touchExploration)
     }
     val scrollOwnership = remember { BrowseScrollOwnership() }
     val modalOwner = LocalModalGestures.current
@@ -527,10 +534,26 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val followEligible = followAvailable && !listContact
     val latestFollowEligible by rememberUpdatedState(followEligible)
     val latestFollowOwner by rememberUpdatedState(followOwner)
+    val initialOpening = queueOpeningRequest > playbackFollow.consumedOpeningRequest || playbackFollow.request?.initialPosition == true
+    val initialEligible = route.collection?.kind == MediaKind.Queue && unfilteredOpening &&
+        playingEntryId != null && (selectionVisible && !playerOpen || initialOpening) &&
+        !session.active && !localSearchOpen && reorder.drag == null && pinchMotion.source == null && zoomAnchor == null &&
+        !sorting && !collectionMenu && orderScroll.request == null && !listContact && !modalBlocked && modalOwner?.blocked != true
+    val initialTarget = playbackFollow.initialTarget(playingEntryId, followOwner, initialEligible, queueOpeningRequest)
+    val initialIndex = initialTarget?.takeIf { presentation?.route == route }?.let { target ->
+        result.items.indexOfFirst { it.row?.id == target }.takeIf { it >= 0 }?.plus(1)
+    }
     SideEffect {
+        if (!unfilteredOpening) playbackFollow.consumeOpening(queueOpeningRequest)
+        if (initialTarget != null && initialIndex != null) {
+            // Public lazy admission targets the next measurement, before these rows
+            // are placed/drawn. Never turn an opening into a frame-delayed ease.
+            gridState.requestScrollToItem(initialIndex, -latestTopInset.roundToInt())
+            playbackFollow.positionedInitially(initialTarget, followOwner, queueOpeningRequest)
+        }
         playbackFollow.observe(playingEntryId.takeIf { route.collection?.kind == MediaKind.Queue },
             followOwner, followEligible && !modalBlocked && modalOwner?.blocked != true, modalOwner?.generation,
-            automatic = !route.search)
+            automatic = !route.search, openingRequest = queueOpeningRequest, initialEligible = initialEligible)
     }
     fun userScroll() {
         artistFilterRange.interrupt()
@@ -602,6 +625,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val playbackRequest = playbackFollow.request
     LaunchedEffect(playbackRequest) {
         val request = playbackRequest ?: return@LaunchedEffect
+        if (request.initialPosition) return@LaunchedEffect // Owned by pre-measure opening placement above.
         if (!playbackFollow.bind(request, kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]!!)) return@LaunchedEffect
         fun owns() = playbackFollow.request === request && latestFollowEligible &&
             request.owner === latestFollowOwner && modalOwner?.blocked != true &&

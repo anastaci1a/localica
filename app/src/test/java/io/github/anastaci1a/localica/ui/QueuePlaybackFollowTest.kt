@@ -15,6 +15,88 @@ class QueuePlaybackFollowTest {
     private fun QueuePlaybackFollowCoordinator.observe(target: String? = "first", eligible: Boolean = true,
         owner: Any = this@QueuePlaybackFollowTest.owner, generation: Long = 0) = observe(target, owner, eligible, generation)
 
+    @Test fun initialPlacementConsumesAdmissionWithoutChangingLaterTransitionEasing() {
+        val state = QueuePlaybackFollowCoordinator()
+        assertEquals("first", state.initialTarget("first", owner, true, 0))
+        state.positionedInitially("first", owner, 0)
+        state.observe()
+        assertNull(state.request)
+        assertNull(state.initialTarget("first", owner, true, 0))
+        state.observe("second")
+        assertFalse(state.request!!.initialPosition)
+        assertEquals("second", state.request!!.occurrenceId)
+    }
+
+    @Test fun freshDetachedOpenPositionsCurrentButRecreationDoesNotReplayOrReattach() {
+        val state = QueuePlaybackFollowCoordinator(false, openingRequest = 1)
+        assertEquals("second", state.initialTarget("second", owner, true, 2))
+        state.positionedInitially("second", owner, 2)
+        assertFalse(state.attached)
+        assertEquals(2L, state.consumedOpeningRequest)
+        state.observe("third")
+        assertNull(state.request)
+        val restored = QueuePlaybackFollowCoordinator(state.attached, state.consumedOpeningRequest)
+        assertNull(restored.initialTarget("third", owner, true, 2))
+        restored.observe("third")
+        assertNull(restored.request)
+        assertFalse(restored.attached)
+        assertEquals("third", restored.initialTarget("third", owner, true, 3))
+    }
+
+    @Test fun coldOpeningWaitsForExactRowsWithoutAdmittingMotionAndUserTakeoverConsumesIt() {
+        val state = QueuePlaybackFollowCoordinator(false)
+        state.observe("first", owner, false, 0, openingRequest = 1, initialEligible = true)
+        val pending = state.request!!
+        assertTrue(pending.initialPosition)
+        repeat(3) {
+            state.observe("first", owner, false, 0, openingRequest = 1, initialEligible = true)
+            assertSame(pending, state.request)
+        }
+        assertEquals("first", state.initialTarget("first", owner, true, 1))
+        assertEquals("latest", state.initialTarget("latest", owner, true, 1))
+        assertEquals("latest", state.initialTarget("latest", Any(), true, 1))
+        state.userScroll()
+        assertNull(state.initialTarget("first", owner, true, 1))
+        state.observe("first", owner, true, 0, openingRequest = 1)
+        assertNull(state.request)
+        assertFalse(state.attached)
+    }
+
+    @Test fun attachedRecreationKeepsViewportWithoutAnOpenButFutureTransitionsStillFollow() {
+        val state = QueuePlaybackFollowCoordinator(true, openingRequest = 4, restored = true)
+        assertNull(state.initialTarget("restored-current", owner, true, 4))
+        state.observe("restored-current", owner, true, 0, openingRequest = 4)
+        assertNull(state.request)
+        assertTrue(state.attached)
+        state.observe("next-current", owner, true, 0, openingRequest = 4)
+        assertEquals("next-current", state.request?.occurrenceId)
+        assertFalse(state.request!!.initialPosition)
+        assertEquals("next-current", state.initialTarget("next-current", owner, true, 5))
+    }
+
+    @Test fun savedAdmissionRestoresLegacyAttachmentAndCurrentEpochWithoutReplayingAnOpening() {
+        val legacy = requireNotNull(QueuePlaybackFollowCoordinator.restoreState(false))
+        assertFalse(legacy.attached)
+        assertNull(legacy.initialTarget("current", owner, true, 0))
+        val current = requireNotNull(QueuePlaybackFollowCoordinator.restoreState(arrayListOf(true, 7L)))
+        assertTrue(current.attached)
+        assertEquals(7L, current.consumedOpeningRequest)
+        assertNull(current.initialTarget("current", owner, true, 7))
+        assertEquals("current", current.initialTarget("current", owner, true, 8))
+    }
+
+    @Test fun initialPlacementRequiresOwnershipAndSearchNeverAdmitsOrReplaysAnAutomaticOpening() {
+        val state = QueuePlaybackFollowCoordinator()
+        assertNull(state.initialTarget("first", owner, false, 1))
+        assertNull(state.initialTarget(null, owner, true, 1))
+        state.observe("first", owner, true, 0, automatic = false, openingRequest = 1)
+        assertNull(state.request)
+        assertEquals(1L, state.consumedOpeningRequest)
+        assertNull(state.initialTarget("first", owner, true, 1))
+        assertTrue(state.returnToCurrent("first", owner, true, 0))
+        assertFalse(state.request!!.initialPosition)
+    }
+
     @Test fun initiallyAttachedQueueRequestsItsExactCurrentOccurrence() {
         val state = QueuePlaybackFollowCoordinator()
         state.observe()
