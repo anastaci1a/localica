@@ -44,7 +44,6 @@ class ListSearchTest {
         preferences.write(route, BrowseStyle(quickSearch = true), false)
         val frames = mutableListOf<SlotFrame>()
         val placedFrames = mutableListOf<SearchMorphSample>()
-        var row: LayoutCoordinates? = null
         var slot = 0f
         val tracks = (0..20).map { Track("slot:$it", "Song ${it.toString().padStart(3, '0')}",
             fileName = "$it.mp3", relativePath = "$it.mp3") }
@@ -65,20 +64,19 @@ class ListSearchTest {
                     }
                 }
             } }
-            val song = compose.onNodeWithText("Song 000")
             compose.waitUntil(5000) { compose.onAllNodesWithText("Song 000").fetchSemanticsNodes().isNotEmpty() }
-            val baseline = song.fetchSemanticsNode().boundsInRoot.top
-            row = song.fetchSemanticsNode().layoutInfo.coordinates
+            fun rowNode() = compose.onNodeWithTag("media-${tracks.first().id}", useUnmergedTree = true)
+            val baseline = rowNode().fetchSemanticsNode().boundsInRoot.top
             compose.mainClock.autoAdvance = false
             fun advanceObservedFrame() {
                 compose.mainClock.advanceTimeByFrame()
                 // A popup placement callback can precede the other window's layout.
                 // Pair both real geometries after the same controlled frame drains.
                 compose.waitForIdle()
+                val coordinates = rowNode().fetchSemanticsNode().layoutInfo.coordinates
                 compose.runOnUiThread {
-                    row?.takeIf { it.isAttached }?.let { coordinates ->
-                        placedFrames.lastOrNull()?.let { frames += SlotFrame(it, coordinates.positionInRoot().y) }
-                    }
+                    assertTrue("Each frame measures the current mounted occurrence", coordinates.isAttached)
+                    placedFrames.lastOrNull()?.let { frames += SlotFrame(it, coordinates.positionInRoot().y) }
                 }
             }
             fun pumpUntil(predicate: () -> Boolean) = compose.waitUntil(5000) {
@@ -130,7 +128,7 @@ class ListSearchTest {
                 advanceObservedFrame()
                 compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty()
             }
-            assertEquals("Final restoration keeps the exact original row position", baseline, song.fetchSemanticsNode().boundsInRoot.top, 1.1f)
+            assertEquals("Final restoration keeps the exact original row position", baseline, rowNode().fetchSemanticsNode().boundsInRoot.top, 1.1f)
             val observed = compose.runOnUiThread { frames.toList() }
             val placements = compose.runOnUiThread { placedFrames.toList() }
             assertTrue("Observe real frames before native placement ownership", placements.any { it.opening && it.placementBottom == null && it.flight?.opening == true })
