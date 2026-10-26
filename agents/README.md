@@ -23,6 +23,12 @@ Read the relevant page in the [documentation map](../docs/README.md) before edit
 
 Follow [development and final validation](../docs/build.md#development-and-final-validation). The Localica lead initiates focused local checks. Freeze a complete candidate before full validation; coordinate parallel comparisons and any cancellation with the parent and run owner.
 
+## Agent communication
+
+Use `sessionsation` from PATH with a fresh target: Steer Submit while the recipient is active, immediate Submit while idle. Never Queue, replay an accepted input or substitute a new session for recovery of an existing attachment.
+
+Send short prose with file/module references, without diffs, code, file contents or attachments. Separate longer messages into paragraphs. Enclose each message in `-- INCOMING MSG: <sender_session_name> --` and `-- MSG END (<actual_UTC_ISO_timestamp>) --`, with one blank line between each delimiter and the body.
+
 ## Issues and commits
 
 - [GitHub Issues](https://github.com/anastaci1a/localica/issues) track bugs/actionable work. Use the [bug](../.github/ISSUE_TEMPLATE/bug_report.md) or [feature](../.github/ISSUE_TEMPLATE/feature_request.md) template, including for CLI/API submissions; omit irrelevant optional fields.
