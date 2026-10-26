@@ -19,7 +19,12 @@ jobs:
         suite is claimed by this explicitly uncertified development lane.
       known_issues: >-
         Original comparison40255001797 and dev71 attempts40314182315/40316556722
-        remain failed evidence. This run must independently pass every selected
+        remain failed evidence. The historical unexpected first-open Search
+        dismissal is not causally explained; unchanged strict61-method contexts
+        passed both APIs after the slot-phase repair and observation-only hook.
+        Header packing reduced allocation and passed those contexts without
+        establishing the historical missing-callback cause. This run must
+        independently pass every selected
         source method and mandatory sentinel; known issues never waive a failure.
         Earlier full-suite DocumentsUI focus/presented-pixel failures remain
         unexplained and those full suites are not rerun here. Phone queue latency,
