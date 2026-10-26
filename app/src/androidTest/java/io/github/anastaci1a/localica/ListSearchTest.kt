@@ -81,12 +81,19 @@ class ListSearchTest {
                     placedFrames.lastOrNull()?.let { frames += SlotFrame(it, coordinates.positionInRoot().y) }
                 }
             }
-            fun pumpUntil(endpoint: Boolean = false, predicate: () -> Boolean) = compose.waitUntil(5000) {
-                // Endpoint-only waits have no intervening gesture or observation
-                // requirement. Bound native yields to four virtual frames while
-                // preserving all actual placement callbacks and the same deadline.
-                advanceObservedFrame(if (endpoint && !reduced) 4 else 1)
-                compose.runOnUiThread(predicate)
+            fun pumpUntil(endpoint: Boolean = false, predicate: () -> Boolean) {
+                val previousAutoAdvance = compose.mainClock.autoAdvance
+                // As at the final return below, this endpoint has no intervening
+                // gesture. Let the normal clock settle its springs rather than
+                // throttling virtual time through repeated native/semantics yields.
+                // Every real placement callback, predicate and wall deadline remains.
+                if (endpoint) compose.mainClock.autoAdvance = true
+                try {
+                    compose.waitUntil(5000) {
+                        advanceObservedFrame(if (endpoint) 0 else 1)
+                        compose.runOnUiThread(predicate)
+                    }
+                } finally { compose.mainClock.autoAdvance = previousAutoAdvance }
             }
             fun last() = frames.lastOrNull()?.sample
             fun open() {
