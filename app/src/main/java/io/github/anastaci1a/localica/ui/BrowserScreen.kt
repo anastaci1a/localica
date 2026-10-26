@@ -369,19 +369,23 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val surroundingBackdrop = LocalFrostedBackdrop.current
     val hasSongItems = result.items.any { it.row != null }
-    val needsListBackdrop = (hasSongItems || showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
+    val needsListBackdrop = (artDetail || hasSongItems || showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
         (route.collection == null && route.tab in setOf(MainTab.Library, MainTab.Playlists)))
     val listBackdrop = rememberFrostedBackdrop(presentation to surroundingBackdrop?.fallback,
         needsListBackdrop, dark = if (artDetail) !lightCollection else surroundingBackdrop?.dark == true,
         // Floating controls sample narrow regions. Let their clips cull rows
         // instead of rasterizing the entire scrolling viewport a second time.
         retainRaster = false)
+    val backdropBacking = if (artDetail) collectionSource else surroundingBackdrop
+    val backdropScene = rememberBrowseBackdropScene(listBackdrop, backdropBacking,
+        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback), gridState.isScrollInProgress)
+    val maskedBackdrop = (showSearchPill || showFilters) && !artDetail
+    val viewportBackdrop = if (needsListBackdrop) rememberBrowseBackdropLayer(backdropScene, maskedBackdrop) else null
     val refreshBackdrop = LocalBackdropRefresh.current
     LaunchedEffect(presentation, gridState.isScrollInProgress) {
         if (!gridState.isScrollInProgress) {
             kotlinx.coroutines.delay(150)
             refreshBackdrop()
-            if (needsListBackdrop) listBackdrop.refresh()
             if (artDetail) collectionSource.refresh()
         }
     }
@@ -722,10 +726,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     sourceOrder = dragSourceOrder, routeKey = route, commit = moveSongs)
                 // Floating controls sample the finished scrolling scene, including
                 // its fade and selection/overscroll transforms, never the raw grid.
-                .then(if (needsListBackdrop) Modifier.recordFrostedBackdrop(listBackdrop, if (artDetail) collectionSource else surroundingBackdrop)
+                .then(if (needsListBackdrop) Modifier.recordBrowseBackdropLayer(backdropScene, requireNotNull(viewportBackdrop), backdropBacking)
                     .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
                 .graphicsLayer { alpha = if (artDetail || (skeletonReveal && !queryPending)) 1f else browse.reveal.value }
-                .then(if ((showSearchPill || showFilters) && !artDetail) Modifier.listTopFade() else Modifier),
+                .then(if (maskedBackdrop) Modifier.listTopFade() else Modifier)
+                .then(if (maskedBackdrop && viewportBackdrop != null) Modifier.browseBackdropMaskWitness(backdropScene, viewportBackdrop) else Modifier),
                 contentDrawing = Modifier.pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
@@ -964,10 +969,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
 
-    if (artDetail) CollectionToolbar(gridState, reorder.viewportWidth, route.title.orEmpty(), collectionMenuAnchor,
-        onBack, { view -> collectionView = view; collectionMenu = true }) {
-        if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel(initialView = collectionView) }
+    if (artDetail) CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
+        CollectionToolbar(gridState, reorder.viewportWidth, route.title.orEmpty(), collectionMenuAnchor,
+            onBack, { view -> collectionView = view; collectionMenu = true }, backdropScene) {
+            if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel(initialView = collectionView) }
+        }
     }
+    if (needsListBackdrop) BrowseBackdropRecording(backdropScene, backdropBacking)
     } } }
 
     if (showSearchPill || localSearchOpen || searchAnchor.hidden) {
