@@ -70,10 +70,9 @@ class ArtistAlbumFilterRangeTest {
         }
         fun settle() { repeat(40) { frame() } }
         fun choose(name: String) {
-            phase("choose-$name-all")
-            compose.onNodeWithText("All albums").performScrollTo().performClick()
             phase("choose-$name-target")
-            compose.onNodeWithText(name).performScrollTo().performClick()
+            // Short tap owns the complete subset; do not reset/filter or scroll first.
+            compose.onNodeWithText(name).assertIsDisplayed().performClick()
             phase("choose-$name-complete")
         }
         fun scrollBy(dp: Float) {
