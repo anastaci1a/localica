@@ -27,6 +27,8 @@ import org.junit.Test
  * Each callback observes committed in-memory SQLite and the native timeline before accepting
  * completion; this is not independent pre-callback-entry proof or disk/crash-durability evidence.
  * Its separately reported validation cost is INCLUDED in CallbackCompleted/total, never subtracted.
+ * Occurrences default to13000; queueOrderRoomEntries optionally selects4..13000 while the real
+ * Room library remains13000 tracks. All per-case counts and invariants remain exact.
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueOrderRoomTimingTest {
@@ -37,6 +39,13 @@ class QueueOrderRoomTimingTest {
     }
 
     private suspend fun exercise() {
+        val requestedEntries = InstrumentationRegistry.getArguments().getString("queueOrderRoomEntries")
+        require(requestedEntries == null || Regex("[1-9][0-9]{0,4}").matches(requestedEntries)) {
+            "queueOrderRoomEntries must be an unsigned decimal count"
+        }
+        val occurrenceCount = requestedEntries?.toInt() ?: 13_000
+        require(occurrenceCount in 4..13_000) { "queueOrderRoomEntries must be in4..13000" }
+        val selectedIndex = occurrenceCount / 2
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val name = "queue-order-room-${UUID.randomUUID()}"
@@ -92,13 +101,13 @@ class QueueOrderRoomTimingTest {
                 val storedTracks = store.current().tracks
                 assertEquals(13_000, storedTracks.size)
                 val duplicate = storedTracks.single { it.id == "synthetic-0" }
-                val entries = List(13_000) { index ->
+                val entries = List(occurrenceCount) { index ->
                     QueueEntry("occurrence-$index", duplicate, "synthetic-origin")
                 }
                 val ids = entries.map { it.id }
-                val current = ids[6500]
+                val current = ids[selectedIndex]
                 val journey = QueueJourney.start(ids, ids.first(), JourneyModes.from(settings), Random(11))
-                    .select(current, ids, Random(12)).select(ids[6501], ids, Random(13)).copy(cursor = 1)
+                    .select(current, ids, Random(12)).select(ids[selectedIndex + 1], ids, Random(13)).copy(cursor = 1)
                 val queue = ListeningQueue(name = "Synthetic duplicates", entries = entries,
                     currentEntryId = current, positionMs = 1234, journey = journey)
                 queueDb.queues().save(QueueLibrary(), QueueLibrary(listOf(queue), queue.id))
@@ -129,8 +138,8 @@ class QueueOrderRoomTimingTest {
                 assertEquals(1234L, native.currentPosition)
                 requireNotNull(queues.state.value.library.active)
             }
-            assertEquals(13_000, opening.entries.size)
-            assertEquals(13_000, opening.entries.map { it.id }.toSet().size)
+            assertEquals(occurrenceCount, opening.entries.size)
+            assertEquals(occurrenceCount, opening.entries.map { it.id }.toSet().size)
             assertTrue("All occurrences retain the exact duplicate metadata",
                 opening.entries.all { it.track == opening.entries.first().track })
             val openingJourney = requireNotNull(opening.journey)
@@ -197,7 +206,7 @@ class QueueOrderRoomTimingTest {
                 remaining(deadline)
                 // Keep partial/failure reports too. This contains only aggregate scalar evidence.
                 Log.i("QueueOrderRoomTiming", "operation=$reportedOperation actualRoomQueue=true actualRoomLibrary=true " +
-                    "storage=inMemory evidence=callback-observed " +
+                    "storage=inMemory evidence=callback-observed requestedOccurrences=$occurrenceCount " +
                     "nativeApiReturnIsAudioReadiness=false callbackValidationNanos=${callbackNanos.get()} " +
                     "validationIncludedInStages=true $report " +
                     "saveAssociation=invocation-entry-in-command-window commandCausality=unproven " +
@@ -216,9 +225,9 @@ class QueueOrderRoomTimingTest {
                 assertEquals(0L, elapsed.first())
                 assertTrue("Stage observations are monotonic", elapsed.zipWithNext().all { (a, b) -> b >= a })
                 assertTrue(requireNotNull(report.totalNanos) >= elapsed.last())
-                assertEquals(13_000, report.counts.queueEntries)
+                assertEquals(occurrenceCount, report.counts.queueEntries)
                 assertEquals(13_000, report.counts.libraryTracks)
-                assertEquals(13_000, requireNotNull(report.counts.templatesReused) + requireNotNull(report.counts.templatesBuilt))
+                assertEquals(occurrenceCount, requireNotNull(report.counts.templatesReused) + requireNotNull(report.counts.templatesBuilt))
                 assertTrue("Every activation checks current fixture grants", grantReads.get() > readsBefore)
                 assertTrue("Callback stage includes validation overhead",
                     requireNotNull(report.durationNanos(QueueOrderTiming.Stage.MainNativeApiReturned,
