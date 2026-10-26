@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -72,7 +73,36 @@ class ArtistAlbumFilterRangeTest {
         fun choose(name: String) {
             phase("choose-$name-target")
             // Short tap owns the complete subset; do not reset/filter or scroll first.
-            compose.onNodeWithText(name).assertIsDisplayed().performClick()
+            val before = compose.mainClock.currentTime
+            val node = compose.onNodeWithText(name).assertIsDisplayed().fetchSemanticsNode()
+            val view = (node.root as ViewRootForTest).view
+            val point = compose.runOnUiThread {
+                assertTrue(view.isAttachedToWindow && view.hasWindowFocus())
+                val location = IntArray(2).also(view::getLocationOnScreen)
+                val visible = android.graphics.Rect()
+                assertTrue(view.getGlobalVisibleRect(visible))
+                val x = location[0] + node.boundsInRoot.center.x
+                val y = location[1] + node.boundsInRoot.center.y
+                assertTrue(x >= visible.left && x < visible.right && y >= visible.top && y < visible.bottom)
+                x to y
+            }
+            val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+            val down = android.os.SystemClock.uptimeMillis()
+            fun send(action: Int) {
+                val event = android.view.MotionEvent.obtain(down, android.os.SystemClock.uptimeMillis(),
+                    action, point.first, point.second, 0)
+                event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                try { assertTrue(automation.injectInputEvent(event, true)) }
+                finally { event.recycle() }
+            }
+            var held = false
+            try {
+                send(android.view.MotionEvent.ACTION_DOWN)
+                held = true
+                send(android.view.MotionEvent.ACTION_UP)
+                held = false
+            } finally { if (held) send(android.view.MotionEvent.ACTION_CANCEL) }
+            assertEquals("Native album contact must not advance the paused motion clock", before, compose.mainClock.currentTime)
             phase("choose-$name-complete")
         }
         fun scrollBy(dp: Float) {
