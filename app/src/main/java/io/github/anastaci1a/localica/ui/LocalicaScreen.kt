@@ -211,8 +211,14 @@ fun LocalicaScreen(
     LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
-    PreloadPlayerArtwork(queueController?.artworkPreloadUris().orEmpty())
-    val neighbors = queueController?.artworkNeighbors().orEmpty()
+    val artworkQueue = queues.library.active
+    val preloadUris = remember(queueController, artworkQueue?.id, artworkQueue?.entries, artworkQueue?.journey) {
+        queueController?.artworkPreloadUris().orEmpty()
+    }
+    PreloadPlayerArtwork(preloadUris)
+    val neighbors = remember(queueController, artworkQueue?.id, artworkQueue?.entries, artworkQueue?.journey) {
+        queueController?.artworkNeighbors().orEmpty()
+    }
     val journey = queues.library.active?.journey
     val nextVisual = rememberNeighborArtwork(neighbors.getOrNull(0))
     val previousVisual = rememberNeighborArtwork(neighbors.getOrNull(1))
