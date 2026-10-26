@@ -31,6 +31,17 @@ data class QueueJourney(
     val previous: QueueVisit? get() = history.getOrNull(cursor - 1)
     val next: QueueVisit? get() = history.getOrNull(cursor + 1) ?: future.firstOrNull()
 
+    /** Nearest legacy visits first; schema-7 ordered identities remain inert. */
+    fun artworkWindow(radius: Int = 4): List<QueueVisit> {
+        require(radius in 0..4)
+        val visits = window()
+        val center = visits.indexOfFirst { it.token == current?.token }
+        if (center < 0) return emptyList()
+        return (1..radius).flatMap { distance ->
+            listOfNotNull(visits.getOrNull(center + distance), visits.getOrNull(center - distance))
+        }
+    }
+
     /** Bound the player timeline without discarding durable history. */
     fun window(): List<QueueVisit> {
         val start = (cursor - 64).coerceAtLeast(0)
