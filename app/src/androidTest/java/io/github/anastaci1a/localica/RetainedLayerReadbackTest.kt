@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.anastaci1a.localica.ui.ReadbackStage
 import io.github.anastaci1a.localica.ui.RetainedLayerReadback
+import io.github.anastaci1a.localica.ui.LayerReadbackObservation
+import io.github.anastaci1a.localica.ui.captureObserved
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -39,6 +41,70 @@ import org.junit.Test
 /** Genuine layer recording, retained ownership and pixel readback across caller cancellation. */
 class RetainedLayerReadbackTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun observedCaptureKeepsCancelledLeaseAndIgnoresDiagnosticFailure() {
+        val f = fixture()
+        val events = mutableListOf<LayerReadbackObservation>()
+        val stages = mutableListOf<ReadbackStage>()
+        val owner = RetainedLayerReadback { stages += it }
+        var source: OwnedSource? = null
+        var parent: GraphicsLayer? = null
+        var image: ImageBitmap? = null
+        var failure: Throwable? = null
+        var published = false
+        var job: Job? = null
+        try {
+            compose.runOnIdle {
+                val owned = ownedSource(f, Color.Red).also { source = it }
+                job = f.scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    val caller = currentCoroutineContext().job
+                    try {
+                        owner.captureObserved(owned.layer, f.context, f.density, f.direction,
+                            observe = { event ->
+                                events += event
+                                if (event.stage == "parent-created") error("Diagnostic failure only")
+                            }) { retained ->
+                            parent = retained
+                            coroutineScope {
+                                val native = async(start = CoroutineStart.UNDISPATCHED) { retained.toImageBitmap() }
+                                try {
+                                    assertNativeRoute(native.isCompleted)
+                                    caller.cancel()
+                                    owned.release()
+                                    assertFalse(retained.isReleased)
+                                    assertEquals(listOf(ReadbackStage.ACQUIRED), stages)
+                                    native.await().also { image = it }
+                                } finally { native.await() }
+                            }
+                        }
+                        published = true
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: Throwable) { failure = error }
+                }
+            }
+            compose.waitUntil(5000) { job?.isCompleted == true }
+            compose.runOnIdle {
+                assertNull(failure)
+                assertTrue(requireNotNull(job).isCancelled)
+                assertFalse(published)
+                assertOpaquePixels(requireNotNull(image), Color.Red)
+                assertTrue(requireNotNull(parent).isReleased)
+                assertEquals(listOf("parent-created", "record-returned-copy-invoked", "copy-returned",
+                    "release-invoked", "release-returned"), events.map { it.stage })
+                assertEquals(1, events.map { it.parent }.toSet().size)
+                assertTrue(events.all { it.source == System.identityHashCode(requireNotNull(source).layer) })
+                assertTrue(events.subList(1, 4).all { it.parentWidth == 64 && it.parentHeight == 64 })
+                assertFalse(events.first().sourceReleased)
+                assertTrue(events[2].sourceReleased)
+                assertTrue(events.last().parentReleased)
+                assertEquals(listOf(ReadbackStage.ACQUIRED, ReadbackStage.COPIED, ReadbackStage.RELEASED), stages)
+            }
+        } finally {
+            compose.runOnUiThread { job?.cancel() }
+            compose.waitUntil(5000) { job?.isCompleted != false }
+            compose.runOnUiThread { source?.release() }
+        }
+    }
 
     private class Fixture {
         var redVisible by mutableStateOf(true)

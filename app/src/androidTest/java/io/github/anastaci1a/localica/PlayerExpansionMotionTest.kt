@@ -53,6 +53,7 @@ class PlayerExpansionMotionTest {
             previousObserver?.invoke(scene, mounted)
         } }
         CompositionLocalProvider(LocalGraphicsContext provides observation,
+            LocalLayerReadbackObservation provides { event -> trace("readback:$event") },
             LocalLyricsBackdropObserver provides observer, content = content)
     }
     private val state = PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000)

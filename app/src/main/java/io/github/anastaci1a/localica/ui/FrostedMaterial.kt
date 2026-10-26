@@ -105,6 +105,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     val layer = rememberGraphicsLayer()
     val source = remember(layer) { FrostedBackdrop(layer, dark) }
     val graphicsContext = LocalGraphicsContext.current
+    val readbackObservation by rememberUpdatedState(LocalLayerReadbackObservation.current)
     val currentDensity by rememberUpdatedState(LocalDensity.current)
     val currentDirection by rememberUpdatedState(LocalLayoutDirection.current)
     // An unreferenced scene needs a display list, not another full-window raster.
@@ -138,7 +139,12 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                     if (source.layer.isReleased || source.layer.size.width <= 0 || source.layer.size.height <= 0) return false
                     // Draw readiness does not own native lifetime: the retained lease remains
                     // protected through completion even when this generation is cancelled.
-                    val snapshot = source.readback.capture(source.layer, graphicsContext, currentDensity, currentDirection)
+                    val observation = readbackObservation
+                    val snapshot = if (observation == null)
+                        source.readback.capture(source.layer, graphicsContext, currentDensity, currentDirection)
+                    else source.readback.captureObserved(source.layer, graphicsContext, currentDensity, currentDirection,
+                        observe = { event -> observation("scene=${System.identityHashCode(source)} request=$request " +
+                            "published=${source.snapshotReadbackRequest} nonAtomic=true $event") })
                     if (ticket != null && !ticket.isCurrent()) return false
                     val fallback = withContext(Dispatchers.Default) { scatterSnapshot(snapshot) }
                     if (ticket != null && !ticket.isCurrent()) return false
