@@ -155,7 +155,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             // the cheaper half-resolution recording during the same morph.
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
-            FilteredBackdrop(Modifier.matchParentSize(), source, location::position, resolution, padding,
+            FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
                 homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds) { extent, resolution, flatWeight ->
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
@@ -214,14 +214,17 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 images.forEach { (image, amount) -> samples += Triple(backing, image, amount) }
             }
             samples(source, sourceImages, 1f - home); samples(homeSource, homeImages, home)
+            val registrations = samples.map { it.first }.distinct().associateWith { backing ->
+                location.registrationTo(backing.location) ?: return@Canvas
+            }
             val blending = samples.size > 1
             if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
             with(mesh.value) {
                 samples.forEachIndexed { index, (backing, image, amount) ->
-                    draw(shape, image, backing.size, location.position() - backing.origin, depth, refraction,
+                    draw(shape, image, backing.size, Offset.Zero, depth, refraction,
                         amount, lighting = false, additive = index > 0, flattening = flattening,
                         field = outline?.let { frame -> { point -> frame.opticalField(point) } }, fieldKey = outline,
-                        outlines = outline?.bodies)
+                        outlines = outline?.bodies, registration = registrations.getValue(backing))
                 }
                 if (blending) drawContext.canvas.restore()
                 draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth, refraction, flattening = flattening, tone = tone,
