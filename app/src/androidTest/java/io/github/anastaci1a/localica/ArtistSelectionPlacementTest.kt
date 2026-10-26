@@ -193,7 +193,7 @@ class ArtistSelectionPlacementTest {
             if (mode == Check.Single) {
                 val selected = visibleBodies(draw.layout).singleOrNull { it.key == 2 }?.clipped
                 if (selected == null) {
-                    assertTrue("No stale glass remains in the viewport when selection leaves", actual.isEmpty())
+                    assertTrue("No stale glass remains in the viewport when selection leaves: draw=$draw", actual.isEmpty())
                 } else {
                     assertEquals("Exactly one live selected album", 1, actual.size)
                     val body = actual.single()
