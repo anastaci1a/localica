@@ -19,6 +19,11 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.ceil
 
+/** Passive observation of the actual modern Canvas sampling choice. */
+internal data class HomeBackdropSamplingFrame(val footprint: HomeBackdropFootprint?,
+    val cornersInSource: List<Offset>?, val averaged: Boolean, val weight: Float)
+internal val LocalHomeBackdropSamplingObserver = staticCompositionLocalOf<((HomeBackdropSamplingFrame) -> Unit)?> { null }
+
 /** Allocation dimensions only. Optical bounds and clipping retain their exact size. */
 internal fun glassLayerExtent(size: IntSize): IntSize {
     fun capacity(value: Int) = if (value <= 0) 0 else ((value + 63) / 64) * 64
@@ -31,7 +36,9 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     resolution: Float, padding: Float = 0f, homeSource: FrostedBackdrop? = null,
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
+    homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
+    val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     BackdropLease(source)
     BackdropLease(homeSource?.takeUnless { it === source })
     val layer = rememberGraphicsLayer()
@@ -58,20 +65,33 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
         val viewportBounds = Rect(Offset.Zero, size)
         val homeToLocal = homeSource?.location?.registrationTo(location)
         if (blend > 0f && homeToLocal == null) return@Canvas
-        // homeBounds describes the trigger's screen footprint, not the current local viewport.
-        val homeFootprint = homeBounds?.invoke()?.takeUnless { it.isEmpty }
-        if (homeFootprint != null && !listOf(homeFootprint.left, homeFootprint.top,
-                homeFootprint.right, homeFootprint.bottom).all { it.isFinite() }) return@Canvas
-        val homeToFootprint = if (homeFootprint != null) homeSource?.location?.registrationToScreen()
-            ?.followedBy(BackdropRegistration.create(1f, 0f, 0f, 1f, -homeFootprint.left, -homeFootprint.top)!!)
-            else homeToLocal
-        val homeExtent = homeFootprint?.size ?: size
+        // A measured trigger retains its actual affine basis, independently of morph geometry.
+        // Only callers without a physical trigger use the legacy logical bounds.
+        val footprint = homeFootprint?.invoke()
+        if (blend > 0f && homeFootprint != null && footprint == null) return@Canvas
+        val legacyBounds = if (homeFootprint == null) homeBounds?.invoke()?.takeUnless { it.isEmpty } else null
+        if (legacyBounds != null && !listOf(legacyBounds.left, legacyBounds.top,
+                legacyBounds.right, legacyBounds.bottom).all { it.isFinite() }) return@Canvas
+        val homeToScreen = homeSource?.location?.registrationToScreen()
+        val homeToFootprint = when {
+            footprint != null -> footprint.sourceToLocal(homeToScreen)
+            legacyBounds != null -> homeToScreen?.followedBy(
+                BackdropRegistration.create(1f, 0f, 0f, 1f, -legacyBounds.left, -legacyBounds.top)!!)
+            else -> homeToLocal
+        }
+        if (blend > 0f && homeToFootprint == null) return@Canvas
+        val homeExtent = footprint?.size ?: legacyBounds?.size ?: size
         if (!homeExtent.width.isFinite() || !homeExtent.height.isFinite() ||
             homeExtent.width <= 0f || homeExtent.height <= 0f) return@Canvas
+        val homeCorners = if (footprint != null) footprint.cornersInSource(homeToScreen)
+            else homeToFootprint?.inverse()?.corners(Rect(Offset.Zero, homeExtent))
         val flatSource = homeSource == null && averageRenderer != null && source.canAverage(localToSource.corners(viewportBounds))
-        val flatHome = averageRenderer != null && homeSource != null && homeToFootprint?.inverse()?.let {
-            homeSource.canAverage(it.corners(Rect(Offset.Zero, homeExtent)))
-        } == true
+        val flatHome = averageRenderer != null && homeSource != null && homeCorners?.let(homeSource::canAverage) == true
+        samplingObserver?.let { observer ->
+            androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                observer(HomeBackdropSamplingFrame(footprint, homeCorners, flatHome, blend))
+            }
+        }
         val flatWeight = (if (flatSource) 1f - blend else 0f) + (if (flatHome) blend else 0f)
         val entirelyFlat = flatWeight >= 1f
         val viewport = size

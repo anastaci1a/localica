@@ -46,6 +46,13 @@ import kotlin.math.roundToInt
 internal class GlassAnchor {
     val contact = GlassContact()
     val searchSlot = SearchSlotMotion()
+    val samplingLocation = BackdropLocation()
+    fun samplingFootprint(): HomeBackdropFootprint? {
+        val coordinates = samplingLocation.coordinates?.takeIf { it.isAttached } ?: return null
+        return HomeBackdropFootprint.create(
+            Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()),
+            samplingLocation.registrationToScreen())
+    }
     var triggerMounted = false
     var restoredDrawn = false
     var bounds by mutableStateOf(Rect.Zero)
@@ -77,7 +84,7 @@ internal fun rememberGlassAnchor(): GlassAnchor {
     val density = LocalDensity.current
     val clearance = with(density) { LocalBrowseObscuredInset.current.toPx() }
     SideEffect { anchor.source = source; anchor.quiet = true; anchor.contextual = true; anchor.bottomClearance = clearance; anchor.face = null }
-    return onGloballyPositioned {
+    return backdropLocation(anchor.samplingLocation).onGloballyPositioned {
         anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
         val location = IntArray(2)
         view.getLocationOnScreen(location)
@@ -96,7 +103,7 @@ internal fun GlassAnchor.captureInk() {
 internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
     val view = LocalView.current
     DisposableEffect(anchor) { anchor.triggerMounted = true; onDispose { anchor.triggerMounted = false } }
-    return then(GlassDepthMarker(anchor)).onGloballyPositioned {
+    return then(GlassDepthMarker(anchor)).backdropLocation(anchor.samplingLocation).onGloballyPositioned {
         anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
         if (anchor.contextual) {
             val location = IntArray(2)
@@ -160,6 +167,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var present by remember { mutableStateOf(false) }
     var readyWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var origin by remember { mutableStateOf(Rect.Zero) }
+    var originFootprint by remember { mutableStateOf<HomeBackdropFootprint?>(null) }
+    var measuredHome by remember { mutableStateOf(false) }
     var source by remember { mutableStateOf<FrostedBackdrop?>(null) }
     var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var dismissalAttempt by remember { mutableIntStateOf(0) }
@@ -240,6 +249,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // Reclaim its prepared surface before suspending or exposing the trigger.
                 present = true; anchor.modalPresent = true; anchor.contact.modal = true
                 anchor.hidden = true; anchor.shadowInModal = true
+                originFootprint = anchor.samplingFootprint()
+                measuredHome = anchor.samplingLocation.coordinates != null
                 source?.refresh()
                 originPreparation?.settle(true, reduced, speed)
             } else {
@@ -247,7 +258,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // Let the prepared origin reach final placement before capture.
                 if (originPreparation != null) withFrameNanos { }
                 if (!present && anchor.bounds == Rect.Zero) withFrameNanos { }
-                if (!present) { origin = anchor.bounds; source = ambientSource ?: anchor.source }
+                if (!present) {
+                    origin = anchor.bounds; source = ambientSource ?: anchor.source
+                    originFootprint = anchor.samplingFootprint()
+                    measuredHome = anchor.samplingLocation.coordinates != null
+                }
                 source?.refresh()
                 present = true; anchor.modalPresent = true; anchor.contact.modal = true
                 // A new or interrupted unready window still needs measured frames.
@@ -594,6 +609,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
                                     homeSource = anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
                                     homeBounds = { if (visible) origin else anchor.bounds },
+                                    homeFootprint = if (!measuredHome) null else ({
+                                        if (visible) originFootprint
+                                        else if (anchor.samplingLocation.coordinates?.isAttached == true) anchor.samplingFootprint()
+                                        else originFootprint
+                                    }),
                                     cornerRadius = radius, frostProgress = p, panelProgress = p, panelDark = dark,
                                     // Material and popup foreground share the resolved page polarity,
                                     // including explicit overrides and detached dialogs. The trigger's
