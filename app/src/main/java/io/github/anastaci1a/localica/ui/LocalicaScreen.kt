@@ -59,7 +59,6 @@ fun LocalicaScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val session: SessionSelection = androidx.lifecycle.viewmodel.compose.viewModel()
-    val editTags = LocalTagEdit.current
     val browseSorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
     var settings by remember { mutableStateOf(preferences.read()) }
@@ -177,7 +176,7 @@ fun LocalicaScreen(
         queueOpen = false; expanded = false; songInfo = false
         navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
     }
-    fun playerAction(action: PlayerAction) {
+    fun playerAction(action: PlayerAction, editTags: ((List<Track>, (Boolean) -> Unit) -> Unit)? = null) {
         val track = indexedTrack ?: return
         when (action) {
             PlayerAction.Info, PlayerAction.Count -> songInfo = true
@@ -359,6 +358,7 @@ fun LocalicaScreen(
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
+            val editTags = presentedTagEdit()
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
@@ -366,7 +366,7 @@ fun LocalicaScreen(
                 PlayerAction.Lyrics -> if (lyricsOpen) "Hide lyrics" else "Show lyrics"
                 PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
-            } }, ::playerAction, { customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
+            } }, { playerAction(it, editTags) }, { customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
                 lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
                 onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
@@ -421,13 +421,14 @@ fun LocalicaScreen(
     GlassPanelTheme(if (playerVisible) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White) {
     if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
     if (customizeActions) PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false }, settings.reducedMotion)
-    if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { songInfo = false }, { playerAction(PlayerAction.Edit) }, folders = library.snapshot.folders, onAction = ::playerAction)
+    if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) })
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
+        val editTags = presentedTagEdit()
         Column(Modifier.fillMaxWidth().controlVerticalScroll(rememberScrollState()).padding(16.dp)) {
             PlayerAction.entries.filterNot { it == PlayerAction.More }
-                .forEach { action -> ActionTextButton(onClick = { playerMore = false; playerAction(action) }) { Text(action.label) } }
+                .forEach { action -> ActionTextButton(onClick = { playerMore = false; playerAction(action, editTags) }) { Text(action.label) } }
         }
     }
     QueueDialogs(queues, queueController)

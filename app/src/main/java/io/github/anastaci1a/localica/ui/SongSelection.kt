@@ -44,7 +44,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     onRemove: (((Boolean) -> Unit) -> Unit)? = null, removeLabel: String = "Remove from playlist",
     onAll: (() -> Unit)? = null, onRange: (() -> Unit)? = null, onCollapse: (() -> Unit)? = null) {
     var menu by remember { mutableStateOf(false) }
-    val editTags = LocalTagEdit.current
+    val editTags = presentedTagEdit()
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val chosen = rows.filter { it.id in selected }
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

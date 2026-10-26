@@ -27,9 +27,13 @@ internal val LocalArtworkEdit = staticCompositionLocalOf<((Track) -> Unit)?> { n
 @Composable
 internal fun TagEditorHost(controller: TagEditingController, content: @Composable () -> Unit) {
     val state by controller.state.collectAsState()
-    CompositionLocalProvider(LocalTagEdit provides controller::open, LocalArtworkEdit provides controller::openArtwork) { content() }
-    if (state.tracks.isNotEmpty() && !state.background) key(state.sessionId) { TagEditorDialog(state, controller) }
-    if (state.jobsVisible) TagJobsDialog(state, controller)
+    val launches = remember(controller) { TagEditorLaunches({ controller.state.value }, controller::open, controller::openArtwork) }
+    CompositionLocalProvider(LocalTagEdit provides launches.editTags, LocalArtworkEdit provides launches.editArtwork,
+        LocalTagEditorLaunches provides launches) { content() }
+    TagEditorPresentationScope(launches.presentation(state.sessionId).takeIf { state.tracks.isNotEmpty() }) {
+        if (state.tracks.isNotEmpty() && !state.background) key(state.sessionId) { TagEditorDialog(state, controller) }
+        if (state.jobsVisible) TagJobsDialog(state, controller)
+    }
     var recoveryDismissed by remember(state.recovery) { mutableStateOf(false) }
     if (state.recovery != null && !recoveryDismissed && state.tracks.isEmpty()) GlassAlertDialog(
         onDismissRequest = { recoveryDismissed = true }, title = { Text("Interrupted tag edit") },
