@@ -21,7 +21,8 @@ import kotlin.math.ceil
 
 /** Passive observation of the actual modern Canvas sampling choice. */
 internal data class HomeBackdropSamplingFrame(val footprint: HomeBackdropFootprint?,
-    val cornersInSource: List<Offset>?, val averaged: Boolean, val weight: Float)
+    val cornersInSource: List<Offset>?, val averaged: Boolean, val weight: Float,
+    val sourceAverageSamples: Int = 0, val homeAverageSamples: Int = 0)
 internal val LocalHomeBackdropSamplingObserver = staticCompositionLocalOf<((HomeBackdropSamplingFrame) -> Unit)?> { null }
 
 /** Allocation dimensions only. Optical bounds and clipping retain their exact size. */
@@ -39,6 +40,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
+    val materialObserver by rememberUpdatedState(LocalMaterialAverageSamplingObserver.current)
     BackdropLease(source)
     BackdropLease(homeSource?.takeUnless { it === source })
     val layer = rememberGraphicsLayer()
@@ -46,7 +48,9 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     val home = if (primary != null) rememberGraphicsLayer() else null
     val canUseAverage = average != null && (source.materialOnly || homeSource?.materialOnly == true)
     val averageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
-    val rawAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
+    // Contributor masks differ; their mutable shader uniforms must never share one renderer.
+    val sourceAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
+    val homeAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
     val averageSource = if (average != null && source.materialOnly) rememberGraphicsLayer() else null
     val averageHome = if (average != null && homeSource?.materialOnly == true) rememberGraphicsLayer() else null
     layer.clip = true
@@ -85,11 +89,21 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
             homeExtent.width <= 0f || homeExtent.height <= 0f) return@Canvas
         val homeCorners = if (footprint != null) footprint.cornersInSource(homeToScreen)
             else homeToFootprint?.inverse()?.corners(Rect(Offset.Zero, homeExtent))
-        val flatSource = homeSource == null && averageRenderer != null && source.canAverage(localToSource.corners(viewportBounds))
-        val flatHome = averageRenderer != null && homeSource != null && homeCorners?.let(homeSource::canAverage) == true
+        fun coverage(backing: FrostedBackdrop, extent: Size, mapping: BackdropRegistration?) =
+            materialAverageCoverage(backing.materialOnly && !backing.layer.isReleased, backing.recorded,
+                backing.size.width.toFloat(), backing.size.height.toFloat(), backing.materialCorner, extent, mapping)
+        val sourceCoverage = if (averageRenderer != null && source.materialOnly) coverage(source, viewportBounds.size, localToSource) else null
+        val homeCoverage = if (averageRenderer != null && homeSource?.materialOnly == true)
+            coverage(homeSource, homeExtent, homeToFootprint?.inverse()) else null
+        val flatSource = sourceCoverage?.status == MaterialAverageCoverageStatus.SAMPLED
+        val flatHome = homeCoverage?.status == MaterialAverageCoverageStatus.SAMPLED
+        // A trusted material contributor never silently becomes detailed or borrows parent text.
+        if (source.materialOnly && blend < 1f && !flatSource ||
+            homeSource?.materialOnly == true && blend > 0f && !flatHome) return@Canvas
         samplingObserver?.let { observer ->
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
-                observer(HomeBackdropSamplingFrame(footprint, homeCorners, flatHome, blend))
+                observer(HomeBackdropSamplingFrame(footprint, homeCorners, flatHome, blend,
+                    sourceCoverage?.validCount ?: 0, homeCoverage?.validCount ?: 0))
             }
         }
         val flatWeight = (if (flatSource) 1f - blend else 0f) + (if (flatHome) blend else 0f)
@@ -104,18 +118,32 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
                 }
             }
         }
+        if (flatSource && averageSource != null && sourceAverageRenderer != null) {
+            averageSource.renderEffect = sourceAverageRenderer.effect(validMask = requireNotNull(sourceCoverage).validMask)
+            averageSource.record(size = IntSize(8, 8)) { crop(source) }
+        }
+        if (flatHome && averageHome != null && homeSource != null && homeAverageRenderer != null) {
+            averageHome.renderEffect = homeAverageRenderer.effect(validMask = requireNotNull(homeCoverage).validMask)
+            averageHome.record(size = IntSize(8, 8)) { crop(homeSource, true) }
+        }
+        androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+            if (flatSource && blend < 1f) materialObserver?.invoke(MaterialAverageSamplingFrame(false,
+                System.identityHashCode(source), null, requireNotNull(sourceCoverage).validCount, 1f - blend))
+            if (flatHome && blend > 0f) materialObserver?.invoke(MaterialAverageSamplingFrame(false,
+                System.identityHashCode(homeSource), null, requireNotNull(homeCoverage).validCount, blend))
+        }
         if (entirelyFlat && averageRenderer != null && average != null && android.os.Build.VERSION.SDK_INT >= 33) {
             layer.renderEffect = averageRenderer.effect(average)
             if (blend > 0f && blend < 1f && primary != null && home != null && homeSource != null) {
-                primary.record(size = IntSize(8, 8)) { crop(source) }
-                home.record(size = IntSize(8, 8)) { crop(homeSource, true) }
+                primary.record(size = IntSize(8, 8)) { drawLayer(requireNotNull(averageSource)) }
+                home.record(size = IntSize(8, 8)) { drawLayer(requireNotNull(averageHome)) }
                 primary.alpha = 1f - blend; home.alpha = blend
                 home.blendMode = androidx.compose.ui.graphics.BlendMode.Plus
             }
             layer.record(size = IntSize(8, 8)) {
-                if (blend >= 1f && homeSource != null) crop(homeSource, true)
+                if (blend >= 1f && homeSource != null) drawLayer(requireNotNull(averageHome))
                 else if (blend > 0f && primary != null && home != null) { drawLayer(primary); drawLayer(home) }
-                else crop(source)
+                else drawLayer(requireNotNull(averageSource))
             }
             scale(viewport.width / 8f, viewport.height / 8f, Offset.Zero) { drawLayer(layer) }
             return@Canvas
@@ -127,16 +155,6 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
         layer.renderEffect = effect(Size(extent.width.toFloat(), extent.height.toFloat()), r, flatWeight)
         // A morph keeps its averaged home source while gradually admitting the detailed
         // destination. Endpoint appearance and return handoff use the same color mapping.
-        if (android.os.Build.VERSION.SDK_INT >= 33 && rawAverageRenderer != null) {
-            if (flatSource && averageSource != null) {
-                averageSource.renderEffect = rawAverageRenderer.effect()
-                averageSource.record(size = IntSize(8, 8)) { crop(source) }
-            }
-            if (flatHome && averageHome != null && homeSource != null) {
-                averageHome.renderEffect = rawAverageRenderer.effect()
-                averageHome.record(size = IntSize(8, 8)) { crop(homeSource, true) }
-            }
-        }
         fun androidx.compose.ui.graphics.drawscope.DrawScope.scene(backing: FrostedBackdrop, isHome: Boolean = false) {
             val flat = if (isHome && flatHome) averageHome else if (!isHome && flatSource) averageSource else null
             if (flat != null) {

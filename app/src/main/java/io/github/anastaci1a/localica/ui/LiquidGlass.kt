@@ -122,6 +122,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val frost = frostProgress.coerceIn(0f, 1f)
     val panel = panelProgress.coerceIn(0f, 1f)
     val tone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
+    val materialAverageObserver by rememberUpdatedState(LocalMaterialAverageSamplingObserver.current)
     val coatingDark = panelDark ?: dark
     val anchor = modifier.glassSurfaceAnchor()
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
@@ -180,6 +181,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         if (visible && Build.VERSION.SDK_INT < 33) {
         val endpointTone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
         @Composable fun prepared(backing: FrostedBackdrop?): List<ImageBitmap?> {
+            // Material-only contributors use their current paired software publication directly.
+            // No detailed mesh endpoint, asynchronous tone replacement or old-source color enters it.
+            if (backing?.materialOnly == true) return emptyList()
             val clear = backing?.glassFallback ?: backing?.snapshot
             val frosted = backing?.fallback ?: clear
             // Morphs blend fixed prepared endpoints; progress must never schedule
@@ -191,6 +195,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         }
         val sourceImages = prepared(source)
         val homeImages = prepared(homeSource)
+        val materialRasters = listOfNotNull(source, homeSource).distinct().filter { it.materialOnly }
+            .associateWith { MaterialAverageRaster.current(it) }
         Canvas(Modifier.matchParentSize()) {
             val outline = silhouette?.frame(size)
             val shape = outline?.geometry ?: LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, size),
@@ -204,6 +210,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val samples = mutableListOf<Triple<FrostedBackdrop, ImageBitmap, Float>>()
             fun samples(backing: FrostedBackdrop?, imagesByRole: List<ImageBitmap?>, weight: Float) {
                 if (backing == null || weight <= 0f) return
+                if (backing.materialOnly) {
+                    backing.fallback?.let { samples += Triple(backing, it, weight) }
+                    return
+                }
                 val images = linkedMapOf<ImageBitmap, Float>()
                 fun add(image: ImageBitmap?, amount: Float) {
                     if (image != null && amount > 0f) images[image] = (images[image] ?: 0f) + amount * weight
@@ -218,11 +228,30 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val registrations = samples.map { it.first }.distinct().associateWith { backing ->
                 location.registrationTo(backing.location) ?: return@Canvas
             }
+            if (source?.materialOnly == true && home < 1f && materialRasters[source]?.isCurrent() != true ||
+                homeSource?.materialOnly == true && home > 0f && materialRasters[homeSource]?.isCurrent() != true) return@Canvas
+            val materialColors = samples.map { it.first }.distinct().filter { it.materialOnly }.associateWith { backing ->
+                val raster = materialRasters[backing] ?: return@Canvas
+                val coverage = materialAverageCoverage(backing.materialOnly && !backing.layer.isReleased,
+                    backing.recorded, backing.size.width.toFloat(), backing.size.height.toFloat(),
+                    backing.materialCorner, size, registrations.getValue(backing))
+                val color = raster.color(coverage, backing.size, endpointTone) ?: return@Canvas
+                coverage to color
+            }
             val blending = samples.size > 1
             if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
             with(mesh.value) {
                 samples.forEachIndexed { index, (backing, image, amount) ->
-                    draw(shape, image, backing.size, Offset.Zero, depth, refraction,
+                    val material = materialColors[backing]
+                    if (material != null) {
+                        drawRect(material.second, alpha = amount,
+                            blendMode = if (index > 0) BlendMode.Plus else BlendMode.SrcOver)
+                        androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                            materialAverageObserver?.invoke(MaterialAverageSamplingFrame(true,
+                                System.identityHashCode(backing), materialRasters.getValue(backing)!!.publication,
+                                material.first.validCount, amount))
+                        }
+                    } else draw(shape, image, backing.size, Offset.Zero, depth, refraction,
                         amount, lighting = false, additive = index > 0, flattening = flattening,
                         field = outline?.let { frame -> { point -> frame.opticalField(point) } }, fieldKey = outline,
                         outlines = outline?.bodies, registration = registrations.getValue(backing))
