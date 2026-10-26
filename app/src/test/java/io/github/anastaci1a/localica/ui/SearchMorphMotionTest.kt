@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.runtime.snapshots.SnapshotStateObserver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -10,6 +12,107 @@ import org.junit.Test
 class SearchMorphMotionTest {
     private val home = Rect(20f, 100f, 380f, 140f)
     private val raised = Rect(12f, 350f, 388f, 450f)
+
+    @Test fun slotLookaheadAndActualMeasurementRequestTheirOwnMatchingAnchor() {
+        val owner = SearchSlotLayout()
+        assertEquals(12, owner.measure(true, .4f, 12, 80f).anchorOffset)
+        assertEquals(null, owner.measure(true, .4f, 12, 80f).anchorOffset)
+        assertEquals(12, owner.measure(false, .4f, 12, 80f).anchorOffset)
+        assertEquals(null, owner.measure(false, .4f, 12, 80f).anchorOffset)
+        owner.measure(true, .8f, 12, 80f)
+        assertEquals(.8f, owner.fraction(true), 0f)
+        assertEquals(.4f, owner.fraction(false), 0f)
+    }
+
+    @Test fun reducedSlotRestorationRequestsTheHeaderBeforeMeasuringItsFullHeight() {
+        val owner = SearchSlotLayout()
+        for (fraction in listOf(0f, 1f, 0f, 1f, 0f)) {
+            for (lookahead in listOf(true, false)) {
+                val measured = owner.measure(lookahead, fraction, 0, 98f)
+                assertEquals(0, measured.anchorOffset)
+                assertEquals(fraction, measured.fraction, 0f)
+                assertEquals(fraction, owner.fraction(lookahead), 0f)
+            }
+        }
+    }
+
+    @Test fun slotMeasurementReversalsKeepTheOriginalOffsetAndExactOwnerFraction() {
+        val owner = SearchSlotLayout()
+        for (fraction in listOf(0f, .6f, .3f, .8f, 1f, .25f, 0f)) {
+            val measured = owner.measure(false, fraction, 17, 81f)
+            assertEquals(17, measured.anchorOffset)
+            assertEquals(fraction, measured.fraction, 0f)
+            assertEquals(null, owner.measure(false, fraction, 17, 81f).anchorOffset)
+        }
+    }
+
+    @Test fun changingOwnedOffsetOrVacancyRequiresANewMeasurementAnchor() {
+        val owner = SearchSlotLayout()
+        assertEquals(0, owner.measure(false, .5f, 0, 98f).anchorOffset)
+        assertEquals(14, owner.measure(false, .5f, 14, 98f).anchorOffset)
+        assertEquals(14, owner.measure(false, .5f, 14, 84f).anchorOffset)
+        assertEquals(null, owner.measure(false, .5f, 14, 84f).anchorOffset)
+    }
+
+    @Test fun scrolledOrUnownedSlotCannotRequestAnAnchorAndReacquisitionIsFresh() {
+        val owner = SearchSlotLayout()
+        for (lookahead in listOf(true, false)) {
+            assertEquals(null, owner.measure(lookahead, .5f, -1, 98f).anchorOffset)
+            assertEquals(null, owner.measure(lookahead, .5f, 0, 0f).anchorOffset)
+            assertEquals(0, owner.measure(lookahead, .5f, 0, 98f).anchorOffset)
+            assertEquals(null, owner.measure(lookahead, .5f, -1, 98f).anchorOffset)
+            assertEquals(0, owner.measure(lookahead, .5f, 0, 98f).anchorOffset)
+        }
+    }
+
+    @Test fun speculativeSlotPassCannotOverwriteTheActualPlacedFraction() {
+        val owner = SearchSlotLayout()
+        val actual = owner.measure(false, .6f, 0, 98f)
+        owner.place(false, actual)
+        val speculative = owner.measure(true, 0f, 0, 98f)
+        owner.place(true, speculative)
+        assertEquals(.6f, owner.placedFraction, 0f)
+        val restored = owner.measure(false, 0f, 0, 98f)
+        assertEquals(.6f, owner.placedFraction, 0f)
+        owner.place(false, restored)
+        assertEquals(0f, owner.placedFraction, 0f)
+    }
+
+    @Test fun slotPlacementUsesItsCapturedMeasurementRatherThanALaterRead() {
+        val owner = SearchSlotLayout()
+        val measured = owner.measure(false, .2f, 0, 98f)
+        owner.measure(false, .8f, 0, 98f)
+        owner.place(false, measured)
+        assertEquals(.2f, owner.placedFraction, 0f)
+        assertEquals(.8f, owner.fraction(false), 0f)
+    }
+
+    @Test fun slotMotionInvalidatesGridAndCachedHeaderBeforeTheirNextTraversal() {
+        val motion = SearchSlotMotion()
+        val token = motion.begin()
+        val owner = SearchSlotLayout()
+        val invalidated = mutableListOf<String>()
+        val observer = SnapshotStateObserver { it() }
+        observer.start()
+        try {
+            observer.observeReads("grid", { invalidated += it }) {
+                owner.measure(false, motion.fraction, 0, 98f)
+            }
+            observer.observeReads("header", { invalidated += it }) {
+                motion.fraction
+                owner.fraction(false)
+            }
+            motion.settle(token, 1f)
+            Snapshot.sendApplyNotifications()
+            assertEquals(setOf("grid", "header"), invalidated.toSet())
+            assertEquals(0f, owner.fraction(false), 0f)
+            assertEquals(0, owner.measure(false, motion.fraction, 0, 98f).anchorOffset)
+            assertEquals(1f, owner.fraction(false), 0f)
+            invalidated.clear()
+            Snapshot.sendApplyNotifications()
+            assertTrue("Capturing a traversal does not enqueue another state mutation", invalidated.isEmpty())
+        } finally { observer.stop(); observer.clear() }
+    }
 
     @Test fun slotDoesNotMoveForShapeGrowthBeforePlacementOwnsTheBottom() {
         val owner = SearchSlotMotion()
