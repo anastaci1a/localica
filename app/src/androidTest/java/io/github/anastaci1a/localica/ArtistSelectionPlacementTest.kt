@@ -108,13 +108,14 @@ class ArtistSelectionPlacementTest {
                             scene.lastDrawnRegions.map { it.bounds.translate(current.viewport.topLeft).intersect(current.viewport) }
                                 .filterNot { it.isEmpty }.sortedBy { it.left })
                     }
-                }, observePlacement = { scroll.layoutInfo; hostDraws++; Unit }) {
+                }, observePlacement = { scroll.layoutInfo; hostDraws++; Unit },
+                visibleItemKeys = { scroll.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.key } }) {
                 scene = requireNotNull(LocalSelectionScene.current)
                 LazyRow(Modifier.onPlaced { rowCoordinates = it }, state = scroll, overscrollEffect = events,
                     contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items((0..19).toList(), key = { it }) { index ->
                         DisposableEffect(index) { onDispose { placed.remove(index) } }
-                        Box(Modifier.width(80.dp).height(96.dp).selectionLens(allSelected || index == 2, false)
+                        Box(Modifier.width(80.dp).height(96.dp).selectionLens(allSelected || index == 2, false, itemKey = index)
                             .onPlaced { placed[index] = it }.testTag("album-$index"))
                     }
                 }
