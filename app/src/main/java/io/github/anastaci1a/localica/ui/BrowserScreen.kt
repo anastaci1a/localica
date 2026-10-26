@@ -338,26 +338,29 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         searchAnchor.source?.refresh()
         modalBackdrop?.refresh()
     }
-    val searchSlotFraction = searchAnchor.searchSlot.fraction
-    val lastSlotLayout = remember { floatArrayOf(Float.NaN) }
-    SideEffect {
-        if (searchOriginalOffset >= 0 && searchVacancy > 0f) {
-            if (lastSlotLayout[0] != searchSlotFraction) {
-                // Keep the same owned header anchor through zero visible height.
-                // Otherwise lazy key retention anchors the first song instead, hiding
-                // the returning spacer until the terminal offset restoration jumps.
-                gridState.requestScrollToItem(0, searchOriginalOffset)
-                lastSlotLayout[0] = searchSlotFraction
-            }
-        } else lastSlotLayout[0] = Float.NaN
+    val searchSlotLayoutOwner = remember { SearchSlotLayout() }
+    // Reconcile the owned header before LazyGrid measures its children. A later
+    // composition request can otherwise let the restored spacer retain a song key
+    // as its scroll anchor. The request schedules, never forces, remeasurement.
+    val searchSlotGridLayout = Modifier.layout { measurable, constraints ->
+        val lookahead = isLookingAhead
+        val measure = searchSlotLayoutOwner.measure(lookahead, searchAnchor.searchSlot.fraction,
+            searchOriginalOffset, searchVacancy)
+        measure.anchorOffset?.let { gridState.requestScrollToItem(0, it) }
+        val child = measurable.measure(constraints)
+        layout(child.width, child.height) {
+            searchSlotLayoutOwner.place(lookahead, measure)
+            child.placeRelative(0, 0)
+        }
     }
-    // Placement reads its animation during layout, so the vacated list slot must
-    // read that same owner during measurement rather than a composition later.
     val searchSlotLayoutObserver = LocalSearchSlotLayoutObserver.current
-    val measuredSlotFraction = remember { floatArrayOf(0f) }
     val searchSlotLayout = Modifier.layout { measurable, constraints ->
-        val fraction = searchAnchor.searchSlot.fraction
-        measuredSlotFraction[0] = fraction
+        // Dirty parent and cached spacer from the same animation mutation, before
+        // traversal; a state write during parent measurement would notify too late.
+        searchAnchor.searchSlot.fraction
+        // Use this pass's captured owner, not a speculative lookahead value or a
+        // separately sampled animation frame after the anchor request.
+        val fraction = searchSlotLayoutOwner.fraction(isLookingAhead)
         val height = (restoredSearchSlotHeight - searchVacancy * fraction)
             .roundToInt().coerceIn(constraints.minHeight, constraints.maxHeight)
         val child = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
@@ -821,6 +824,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 contentDrawing = Modifier.onPlaced { pinchHeader?.viewport = it }
                     .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
+                .then(if (showSearchPill) searchSlotGridLayout else Modifier)
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
                 .nestedScroll(userScrollConnection)
                 .onPreviewKeyEvent { event ->
@@ -950,7 +954,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry)).onGloballyPositioned {
                                 reorder.itemCoordinates[item.key] = it
                                 if (itemIndex == 0) searchSlotLayoutObserver?.invoke(
-                                    SearchSlotLayoutSample(measuredSlotFraction[0], it.positionInRoot().y))
+                                    SearchSlotLayoutSample(searchSlotLayoutOwner.placedFraction, it.positionInRoot().y))
                                 val origin = it.positionInRoot() - reorder.viewportOrigin
                                 loadingCell?.place(origin.x / density.density,
                                     (origin.y - with(density) { (if (showFilters || showSearchPill) pillSlotHeight else 0.dp).toPx() }) / density.density)
