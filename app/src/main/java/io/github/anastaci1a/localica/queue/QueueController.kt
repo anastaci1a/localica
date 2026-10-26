@@ -28,7 +28,20 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                       private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
                       private val readers: NativeReaders = NativeReaders(),
                       private val sortSnapshot: suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot = { library.snapshots.first() },
-                      private val mediaItemFactory: (String, Track, String?) -> MediaItem = ::queueMediaItem) {
+                      private val mediaItemFactory: (String, Track, String?) -> MediaItem = ::queueMediaItem,
+                      diagnoseOrders: Boolean = false) {
+    /** Debug diagnostics only; the sink runs off the actor after its terminal callback. */
+    internal var orderTimingObserver: ((String, QueueOrderTiming.Report) -> Unit)? = if (diagnoseOrders) {
+        { operation, report -> android.util.Log.i("QueueOrderTiming", "operation=$operation $report"); Unit }
+    } else null
+    private fun reportOrderTiming(operation: String, timing: QueueOrderTiming?, outcome: QueueOrderTiming.Outcome) {
+        val report = timing?.finish(outcome) ?: return
+        val observer = orderTimingObserver ?: return
+        scope.launch(Dispatchers.IO) {
+            try { observer(operation, report) }
+            catch (_: Exception) { android.util.Log.w("QueueOrderTiming", "Diagnostic sink failed") }
+        }
+    }
     private val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
     private val commandJob: Job
     private val intents = PlaybackIntents()
@@ -422,27 +435,29 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     internal fun randomizeOrder(queueId: String, complete: (OrderCommit?) -> Unit) =
         randomizeOrder(queueId, kotlin.random.Random.Default, complete)
     internal fun randomizeOrder(queueId: String, random: kotlin.random.Random, complete: (OrderCommit?) -> Unit) =
-        editOrder(queueId, complete) { queue ->
+        editOrder(queueId, complete, "randomize") { queue ->
             QueueEdits.randomize(queue, queue.id == state.value.library.activeId, random)
         }
     fun reverse(queueId: String, complete: (Boolean) -> Unit = {}) =
         reverseOrder(queueId) { complete(it != null) }
     internal fun reverseOrder(queueId: String, complete: (OrderCommit?) -> Unit) =
-        editOrder(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.reverse(queue) } }
+        editOrder(queueId, complete, "reverse") { queue -> withContext(Dispatchers.Default) { QueueEdits.reverse(queue) } }
     fun applySort(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (Boolean) -> Unit = {}) =
         applySortOrder(queueId, method, ascending) { complete(it != null) }
     internal fun applySortOrder(queueId: String, method: io.github.anastaci1a.localica.library.TrackSort, ascending: Boolean, complete: (OrderCommit?) -> Unit) =
-        editOrder(queueId, complete) { queue ->
+        editOrder(queueId, complete, "sort") { queue ->
             val snapshot = if (method == io.github.anastaci1a.localica.library.TrackSort.Manual) null else sortSnapshot()
             withContext(Dispatchers.Default) { QueueEdits.sort(queue, method, ascending, snapshot) }
         }
     fun revertOrder(queueId: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (Boolean) -> Unit = {}) =
         revertOrderWithCommit(queueId, checkpoint) { complete(it != null) }
     internal fun revertOrderWithCommit(queueId: String, checkpoint: io.github.anastaci1a.localica.library.OrderCheckpoint, complete: (OrderCommit?) -> Unit) =
-        editOrder(queueId, complete) { queue -> withContext(Dispatchers.Default) { QueueEdits.revertOrder(queue, checkpoint) } }
-    private fun editOrder(queueId: String, complete: (OrderCommit?) -> Unit, edit: suspend (ListeningQueue) -> ListeningQueue) {
+        editOrder(queueId, complete, "revert") { queue -> withContext(Dispatchers.Default) { QueueEdits.revertOrder(queue, checkpoint) } }
+    private fun editOrder(queueId: String, complete: (OrderCommit?) -> Unit, operation: String,
+        edit: suspend (ListeningQueue) -> ListeningQueue) {
         var before: ListeningQueue? = null
-        editQueue(queueId, complete = { success ->
+        val timing = orderTimingObserver?.let { QueueOrderTiming(System::nanoTime) }
+        editQueue(queueId, orderTiming = timing, orderOperation = operation, complete = { success ->
             val library = state.value.library
             val after = library.queues.firstOrNull { it.id == queueId }
             val previous = before
@@ -459,14 +474,32 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             ) else null)
         }) { current -> before = current; edit(current) }
     }
-    private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {}, edit: suspend (ListeningQueue) -> ListeningQueue) = submit {
+    private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {},
+        orderTiming: QueueOrderTiming? = null, orderOperation: String = "other",
+        edit: suspend (ListeningQueue) -> ListeningQueue) = submit {
+        orderTiming?.mark(QueueOrderTiming.Stage.ActorStarted)
+        var outcome = QueueOrderTiming.Outcome.Failure
         try {
-        capture()
-        val active = state.value.library.queues.firstOrNull { it.id == (queueId ?: state.value.library.activeId) } ?: return@submit complete(false)
+        capture(orderTiming)
+        val active = state.value.library.queues.firstOrNull { it.id == (queueId ?: state.value.library.activeId) }
+        if (active == null) {
+            complete(false)
+            orderTiming?.mark(QueueOrderTiming.Stage.CallbackCompleted)
+            return@submit
+        }
+        orderTiming?.recordCounts(queueEntries = active.entries.size)
         save(state.value.library.update(edit(active)))
-        if (active.id == state.value.library.activeId) activate(null)
+        orderTiming?.mark(QueueOrderTiming.Stage.DurableEditSaved)
+        if (active.id == state.value.library.activeId) activate(null, orderTiming = orderTiming)
         complete(true)
-        } catch (failure: Exception) { complete(false); throw failure }
+        orderTiming?.mark(QueueOrderTiming.Stage.CallbackCompleted)
+        outcome = QueueOrderTiming.Outcome.Success
+        } catch (failure: Exception) {
+            if (failure is CancellationException) outcome = QueueOrderTiming.Outcome.Cancelled
+            complete(false)
+            orderTiming?.mark(QueueOrderTiming.Stage.CallbackCompleted)
+            throw failure
+        } finally { reportOrderTiming(orderOperation, orderTiming, outcome) }
     }
     /** Explicit full replacement, including resets/restoration. */
     fun settings(value: QueueSettings) = settings { value }
@@ -939,9 +972,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             }
         }
     }
-    private suspend fun capture() {
+    private suspend fun capture(orderTiming: QueueOrderTiming? = null) {
         captureNativeState()
         syncTimeline()
+        orderTiming?.mark(QueueOrderTiming.Stage.CursorCaptured)
         persist(state.value.library)
     }
     private suspend fun save(next: QueueLibrary) {
@@ -987,7 +1021,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     private suspend fun activate(play: Boolean?, seek: Boolean = false, refreshLocations: Boolean = true,
-        recordIntent: Boolean = true) {
+        recordIntent: Boolean = true, orderTiming: QueueOrderTiming? = null) {
         if (play != null && recordIntent) intents.propose(commandRevision, play, currentSource(state.value.library.active))
         val revision = commandRevision.takeIf { play != null && recordIntent }
         val attached = player ?: return
@@ -1007,16 +1041,29 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             // Keep the original explicit PlayNow/tap bypass; ordinary activations still
             // collect the current snapshot even when its index can be reused.
             val snapshot = if (refreshLocations) library.snapshots.first() else null
+            if (snapshot != null) {
+                orderTiming?.mark(QueueOrderTiming.Stage.FreshSnapshot)
+                orderTiming?.recordCounts(libraryTracks = snapshot.tracks.size)
+            }
             val currentLibrary = if (snapshot == null) emptyMap()
                 else if (previousCatalog != null && previousCatalog.snapshot === snapshot) previousCatalog.index
                 else snapshot.tracks.associateBy { it.id }
             val tracks = library.playableTracks(queue.entries.map { currentLibrary[it.track.id] ?: it.track })
             val reusable = previousCatalog?.takeIf { it.queueId == queue.id }?.occurrences.orEmpty()
+            var reused = 0
+            var built = 0
             val occurrences = queue.entries.zip(tracks).associate { (entry, track) ->
                 val old = reusable[entry.id]
-                entry.id to if (old != null && old.track == track && old.sourcePlaylistId == entry.sourcePlaylistId) old
-                    else ResolvedOccurrence(track, entry.sourcePlaylistId, mediaItemFactory(entry.id, track, entry.sourcePlaylistId))
+                entry.id to if (old != null && old.track == track && old.sourcePlaylistId == entry.sourcePlaylistId) {
+                    if (orderTiming != null) reused++
+                    old
+                } else {
+                    if (orderTiming != null) built++
+                    ResolvedOccurrence(track, entry.sourcePlaylistId, mediaItemFactory(entry.id, track, entry.sourcePlaylistId))
+                }
             }
+            orderTiming?.recordCounts(queueEntries = queue.entries.size, templatesReused = reused, templatesBuilt = built)
+            orderTiming?.mark(QueueOrderTiming.Stage.GrantsTemplates)
             val catalog = ActivationCatalog(snapshot ?: previousCatalog?.snapshot,
                 if (snapshot != null) currentLibrary else previousCatalog?.index.orEmpty(), queue.id, occurrences)
             catalog to queue.entries.map { occurrences.getValue(it.id).item }
@@ -1031,6 +1078,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         timeline.resolve(queue.id, items)
         syncTimeline(seek)
         if (play != null || intents.pending() != null) applyNativeIntent(attached, revision, play ?: nativePlayIntent(attached))
+        orderTiming?.mark(QueueOrderTiming.Stage.MainNativeApiReturned)
     }
 }
 
