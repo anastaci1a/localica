@@ -51,6 +51,23 @@ abstract class QueueDao {
     @Query("DELETE FROM queue_cycle_members WHERE queueId = :queueId AND cycle = :cycle AND entryId IN (:entries)")
     protected abstract suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>)
     @Insert protected abstract suspend fun insertEntries(entries: List<EntryRecord>)
+    /** Authoritative-before saves may change only order; qualify every row by its queue owner. */
+    protected open suspend fun updateEntryOrdinals(queueId: String, entryIds: List<String>): Int {
+        val owner = checkNotNull(database) { "A database is required for concrete ordinal writes" }
+        check(owner.inTransaction()) { "Ordinal writes require the owning save transaction" }
+        return owner.compileStatement("UPDATE OR ABORT queue_entries SET ordinal = ? WHERE id = ? AND queueId = ?").use { statement ->
+            var matched = 0
+            for ((ordinal, id) in entryIds.withIndex()) {
+                statement.bindLong(1, ordinal.toLong())
+                statement.bindString(2, id)
+                statement.bindString(3, queueId)
+                val changed = statement.executeUpdateDelete()
+                check(changed in 0..1) { "Unexpected saved occurrence row count" }
+                matched += changed
+            }
+            matched
+        }
+    }
     @Query("DELETE FROM queue_entries WHERE queueId = :id") protected abstract suspend fun clearEntries(id: String)
     @Query("DELETE FROM queues WHERE id = :id") protected abstract suspend fun deleteQueue(id: String)
 
@@ -65,7 +82,7 @@ abstract class QueueDao {
         return QueueLibrary(queues, readActive()?.queueId?.takeIf { id -> queues.any { it.id == id } })
     }
 
-    /** Cursor updates write only queue metadata; edits replace only the changed queue's entries. */
+    /** Cursor updates keep metadata small; exact reorders preserve occurrence payloads in place. */
     @Transaction open suspend fun save(before: QueueLibrary, after: QueueLibrary) {
         before.queues.filter { old -> after.queues.none { it.id == old.id } }.forEach { deleteQueue(it.id) }
         for ((ordinal, queue) in after.queues.withIndex()) {
@@ -82,8 +99,14 @@ abstract class QueueDao {
             }
             if (previous?.journey != queue.journey) saveJourney(queue.id, previous?.journey, queue.journey)
             if (previous?.entries != queue.entries) {
-                clearEntries(queue.id)
-                insertEntries(queueEntryRecords(queue.id, queue.entries))
+                val ordinalOnly = previous != null && queueEntryOrderEligible(previous.entries, queue.entries)
+                val matched = if (ordinalOnly) updateEntryOrdinals(queue.id, queue.entries.map { it.id }) else null
+                check(matched == null || matched in 0..queue.entries.size) { "Unexpected saved occurrence count" }
+                // Includes stationary rows: a missing middle occurrence must trigger complete repair too.
+                if (matched != queue.entries.size) {
+                    clearEntries(queue.id)
+                    insertEntries(queueEntryRecords(queue.id, queue.entries))
+                }
             }
         }
         upsertActive(ActiveQueueRecord(queueId = after.activeId))
