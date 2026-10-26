@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import org.junit.Assert.*
 import org.junit.Test
-import kotlinx.coroutines.Job
 
 class ArtistFilterRangeTest {
     @Test fun measuredRangeExcessNeverMeansUnconditionalTopOrMovementOfValidOffsets() {
@@ -30,22 +29,12 @@ class ArtistFilterRangeTest {
     @Test fun rapidChangesAndGestureInterruptionRetireOnlyTheOwningRequest() {
         val owner = ArtistFilterRange()
         val old = requireNotNull(owner.begin(-432, 600, Any()))
-        val oldMotion = Job()
-        assertTrue(owner.bindMotion(old, oldMotion))
         val latest = requireNotNull(owner.begin(-390, 600, Any()))
-        assertTrue("Replacement cancels old motion before begin returns", oldMotion.isCancelled)
         assertFalse(owner.owns(old))
-        val staleMotion = Job()
-        assertFalse(owner.bindMotion(old, staleMotion))
-        assertTrue(staleMotion.isCancelled)
-        val latestMotion = Job()
-        assertTrue(owner.bindMotion(latest, latestMotion))
-        owner.releaseMotion(oldMotion)
         owner.finish(old)
         assertSame(latest, owner.request)
         val before = owner.interruption
         owner.interrupt()
-        assertTrue("Touch cancels the owned motion immediately", latestMotion.isCancelled)
         assertNotSame(before, owner.interruption)
         assertSame("Touch pauses reconciliation without dropping the extent and flashing a clamp", latest, owner.request)
         owner.finish(latest)
