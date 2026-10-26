@@ -4,6 +4,40 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TextEditingImeSessionTest {
+    @Test fun inputTraceUsesOneMonotonicCoroutineIdAcrossMultipleConnections() {
+        val events = mutableListOf<String>()
+        val trace = TextEditingInputTrace { events += it }
+        val first = trace.start()
+        trace.created(first)
+        trace.created(first)
+        trace.retire(first)
+        val second = trace.start()
+        assertTrue(second > first)
+        assertEquals(listOf("inputSession phase=start generation=$first",
+            "inputSession phase=create generation=$first", "inputSession phase=create generation=$first",
+            "inputSession phase=retire generation=$first", "inputSession phase=start generation=$second"), events)
+    }
+
+    @Test fun inputTraceRetirementCannotRelabelANewerOrDelayedConnection() {
+        val events = mutableListOf<String>()
+        val trace = TextEditingInputTrace { events += it }
+        val old = trace.start()
+        val current = trace.start()
+        trace.retire(old)
+        trace.created(current)
+        trace.created(old)
+        assertEquals("inputSession phase=create generation=$current", events[3])
+        assertEquals("inputSession phase=create generation=$old", events[4])
+    }
+
+    @Test fun inputTraceConsumerFailureCannotInterruptInputOrRetirement() {
+        val trace = TextEditingInputTrace { error("Diagnostic consumer failure") }
+        val generation = trace.start()
+        trace.created(generation)
+        trace.retire(generation)
+        assertTrue(trace.start() > generation)
+    }
+
     private fun TextEditingImeSession.frame(current: Int, source: Int, target: Int,
         visible: Boolean = true, empty: Boolean = true, focused: Boolean = true,
         windowFocused: Boolean = true) = shouldEnd(focused, windowFocused, visible,
