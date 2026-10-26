@@ -332,6 +332,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     Dialog(onDismissRequest = dismissNow, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
+        if (placement == GlassPlacement.Search) PreserveSearchImeState(window)
         val reportSearchOpening = remember(window, searchOpeningGeneration) {
             val generation = searchOpeningGeneration
             { requested: Boolean ->
