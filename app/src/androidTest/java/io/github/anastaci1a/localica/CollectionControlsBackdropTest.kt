@@ -73,7 +73,33 @@ class CollectionControlsBackdropTest {
         assertNull("The aggregate never samples itself", retained.source.parent?.takeIf { it === retained.source })
         assertTrue("One viewport and one gradient, not controls", retained.layers.all { it.source !== retained.source })
         if (Build.VERSION.SDK_INT < 33) {
-            compose.waitUntil(10_000) { retained.source.snapshot != null }
+            try {
+                compose.waitUntil(10_000) { retained.source.snapshot != null }
+            } catch (failure: Throwable) {
+                val diagnosticFailure = runCatching {
+                    val context = androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                        buildString {
+                            append("Initial legacy snapshot wait failed; post-timeout/wait-failure, non-atomic instrumentation-thread observations (not native draw/copy completion): ")
+                            val source = retained.source
+                            append("consumers=${source.consumers} request=${source.readbackRequest} publishedRequest=${source.snapshotReadbackRequest}")
+                            append(" measuredSize=${source.size} recorded=${source.recorded} released=${source.layer.isReleased}")
+                            append(" abort=${source.lastReadbackAbort} progress=${source.lastReadbackProgress}")
+                            append(" barrierPresent=${source.readbackBarrier != null} sceneBarrier=${source.readbackBarrier === retained.readback}")
+                            append(" drawBarrierPending=${source.readbackBarrier?.isPending} (not native-copy pending)")
+                            retained.layers.toList().forEachIndexed { index, producer ->
+                                val content = producer.source
+                                append(" producer[$index] id=${System.identityHashCode(producer)} outer=${producer.outer} mask=${producer.mask}")
+                                append(" measuredSize=${content.size} recorded=${content.recorded} released=${content.layer.isReleased}")
+                            }
+                        }
+                    }
+                    failure.addSuppressed(IllegalStateException(context))
+                    android.util.Log.e("CollectionBackdropTimeout", context)
+                }.exceptionOrNull()
+                if (diagnosticFailure != null && diagnosticFailure !== failure)
+                    runCatching { failure.addSuppressed(diagnosticFailure) }
+                throw failure
+            }
             assertPaired(retained)
         }
         // No song rows is still a collection page with a real header and top gradient.
