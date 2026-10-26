@@ -51,6 +51,7 @@ internal class BrowsePinchMotion {
     var disposed = false
     var capturing by mutableStateOf(false)
     var readbackPending by mutableStateOf(false)
+    val recordingFrozen: Boolean get() = capturing || readbackPending
     var destinationReady by mutableStateOf(false)
     var header: CollectionPinchHeader? = null
     var captureProblem = false

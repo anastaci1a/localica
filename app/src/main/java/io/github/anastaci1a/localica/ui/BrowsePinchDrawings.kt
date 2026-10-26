@@ -60,7 +60,7 @@ internal fun Modifier.retainPinchItem(key: Any, motion: BrowsePinchMotion,
         // The source tree stays intact while its asynchronous atlas readback runs.
         // A newly attached row was not included in the atlas and still needs its
         // first recording (for example if an already-running scroll exposes it).
-        if (!motion.capturing || layer.size.width == 0 || layer.size.height == 0)
+        if (!motion.recordingFrozen || layer.size.width == 0 || layer.size.height == 0)
             layer.record { this@drawWithContent.drawContent() }
         drawLayer(layer)
     }
@@ -84,7 +84,7 @@ private fun Modifier.retainPinchPass(key: Any, motion: BrowsePinchMotion, upper:
         onDispose { if (pass[key] === recording) pass.remove(key) }
     }
     return onGloballyPositioned { recording.coordinates = it }.drawWithContent {
-        if (!motion.capturing || layer.size.width == 0 || layer.size.height == 0)
+        if (!motion.recordingFrozen || layer.size.width == 0 || layer.size.height == 0)
             layer.record { this@drawWithContent.drawContent() }
         // Standalone row/geometry previews have no viewport compositor.
         if (motion.viewportCoordinates?.isAttached != true) drawLayer(layer)
