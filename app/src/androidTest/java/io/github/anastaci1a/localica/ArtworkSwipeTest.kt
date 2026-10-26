@@ -221,7 +221,7 @@ class ArtworkSwipeTest {
         compose.onNodeWithTag("player-neighbor-artwork", true).assertDoesNotExist()
     }
 
-    @Test fun diagonalCoverSwipesKeepOwnershipAndEqualArtworkDoesNotAnimateOnSkip() {
+    @Test fun diagonalCoverSwipesKeepOwnershipAndSameArtworkVisitsRenderTheComposite() {
         var visit by mutableStateOf("A")
         var current by mutableStateOf(red.copy(contentKey = "same-pixels"))
         var queueOpens = 0
@@ -241,8 +241,16 @@ class ArtworkSwipeTest {
         compose.runOnIdle { visit = "same-album"; current = visual(Color.Red).copy(contentKey = "same-pixels") }
         compose.mainClock.advanceTimeBy(160)
         compose.onNodeWithTag("player-neighbor-artwork", true).assertDoesNotExist()
-        val cover = compose.onNodeWithTag("player-artwork", true).captureToImage().toPixelMap()
-        assertTrue(cover[cover.width / 2, cover.height / 2].red > .95f)
+        // Equal-cover visits now retain their full blur/fade, so both frames exist.
+        // Sample the presented composite at the same artwork center, not one frame.
+        val area = compose.onNodeWithTag("artwork-gesture", true).fetchSemanticsNode().boundsInRoot
+        val composite = compose.onNodeWithTag("player-background-space", true)
+        val bounds = composite.fetchSemanticsNode().boundsInRoot
+        val cover = composite.captureToImage().toPixelMap()
+        val x = (area.center.x - bounds.left).toInt()
+        val y = (area.center.y - bounds.top).toInt()
+        assertTrue(x in 0 until cover.width && y in 0 until cover.height)
+        assertTrue(cover[x, y].red > .95f)
         compose.mainClock.autoAdvance = true
     }
 
