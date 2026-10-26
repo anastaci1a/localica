@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.ImageBitmap
@@ -20,6 +21,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.PinchPublicationExpired
 import io.github.anastaci1a.localica.ui.PinchReadback
+import io.github.anastaci1a.localica.ui.BrowsePinchMotion
+import io.github.anastaci1a.localica.ui.retainPinchItem
+import io.github.anastaci1a.localica.ui.retainPinchText
+import io.github.anastaci1a.localica.ui.retainPinchArtwork
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -76,6 +81,50 @@ class PinchReadbackLifetimeTest {
 
     @Test fun cancelledCallerCannotReleasePendingAtlasOrPublishAndASecondReadIsRejected() = heldRead(true)
     @Test fun expiredPublicationKeepsPendingLeasesAndRemainsDistinctFromCancellation() = heldRead(false)
+
+    @Test fun expiredTransactionCannotRerecordPendingSourcePasses() {
+        val motion = BrowsePinchMotion()
+        var color by mutableStateOf(Color.Green)
+        val records = IntArray(3)
+        val recordedColors = arrayOfNulls<Color>(3)
+        var traversals = 0
+        compose.setContent {
+            Box(Modifier.size(64.dp).drawWithContent {
+                color // Real content invalidation, without an extra draw request.
+                drawContent()
+                traversals++
+            }) {
+                for (pass in 0..2) {
+                    val retained = when (pass) {
+                        0 -> Modifier.retainPinchItem("pending-item", motion)
+                        1 -> Modifier.retainPinchText("pending-text", motion)
+                        else -> Modifier.retainPinchArtwork("pending-art", motion)
+                    }
+                    Box(retained.size(32.dp).drawWithContent {
+                        records[pass]++; recordedColors[pass] = color
+                        drawRect(color)
+                    })
+                }
+            }
+        }
+        compose.waitUntil(5000) { records.all { it > 0 } }
+        val before = records.copyOf()
+        val beforeTraversal = traversals
+        compose.runOnIdle {
+            motion.capturing = true; motion.readbackPending = true
+            motion.clearTransaction() // The actual publication-expiry retirement path.
+            color = Color.Red
+        }
+        compose.waitUntil(5000) { traversals > beforeTraversal }
+        compose.runOnIdle {
+            assertArrayEquals("Retired publication cannot mutate leased source recordings", before, records)
+            assertTrue(recordedColors.all { it == Color.Green })
+            assertTrue(motion.readbackPending)
+            motion.finishReadback()
+        }
+        compose.waitUntil(5000) { records.indices.all { records[it] > before[it] } }
+        compose.runOnIdle { assertTrue(recordedColors.all { it == Color.Red }) }
+    }
 
     @Test fun elapsedDeadlineRejectsACompletedCopyBeforeItsHandlerCanRun() {
         val f = fixture()
