@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
@@ -33,6 +34,8 @@ class ArtistSelectionPlacementTest {
         var width by mutableStateOf(280.dp)
         var allSelected by mutableStateOf(false)
         var draws = 0
+        var contactHeld = false
+        var primaryFailure: Throwable? = null
         compose.setContent { LocalicaTheme {
             scroll = androidx.compose.foundation.lazy.rememberLazyListState()
             scope = rememberCoroutineScope()
@@ -73,6 +76,7 @@ class ArtistSelectionPlacementTest {
         try {
             val row = compose.onNodeWithTag("album-viewport")
             val start = requireNotNull(frame())
+            contactHeld = true
             row.performTouchInput { down(center); moveBy(Offset(-30f, 0f), delayMillis = 32) }
             val first = requireNotNull(frame())
             assertTrue("Real drag moves album and selected glass together", first.left < start.left)
@@ -87,6 +91,7 @@ class ArtistSelectionPlacementTest {
                 repeat(4) { moveBy(Offset(-20f, 0f), delayMillis = 16) }
                 up()
             }
+            contactHeld = false
             val positions = mutableSetOf<Pair<Int, Int>>()
             var sawFling = false
             repeat(12) {
@@ -125,26 +130,57 @@ class ArtistSelectionPlacementTest {
                     node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag)
                         ?.let { it.startsWith("album-") && it != "album-viewport" } == true
                 }
-                val expected = compose.onAllNodes(matcher).fetchSemanticsNodes().map { it.boundsInRoot.intersect(viewport) }
+                val nodes = compose.onAllNodes(matcher).fetchSemanticsNodes()
+                val expected = nodes.map { it.boundsInRoot.intersect(viewport) }
                     .filterNot { it.isEmpty }.sortedBy { it.left }
-                val actual = compose.runOnIdle { scene.lastDrawnRegions.map { it.bounds.translate(viewport.topLeft).intersect(viewport) }
-                    .filterNot { it.isEmpty }.sortedBy { it.left } }
+                val nodeDetails = nodes.map { node ->
+                    val layout = node.layoutInfo
+                    "id=${node.id} tag=${node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag)} " +
+                        "placed=${layout.isPlaced} attached=${layout.isAttached} deactivated=${layout.isDeactivated} " +
+                        "density=${layout.density.density} raw=${node.boundsInRoot} clipped=${node.boundsInRoot.intersect(viewport)}"
+                }
+                val observation = compose.runOnIdle {
+                    Triple(scene.lastDrawnRegions.map { it.bounds.translate(viewport.topLeft).intersect(viewport) }
+                        .filterNot { it.isEmpty }.sortedBy { it.left },
+                        "draws=$draws lazy=${scroll.layoutInfo.visibleItemsInfo.map { "${it.key}:${it.offset}:${it.size}" }}",
+                        scene.regions.values.map { entry ->
+                            val coordinates = entry.coordinates?.takeIf { it.isAttached }
+                            "selected=${entry.selected} visibility=${entry.visibility()} attached=${coordinates != null} " +
+                                "origin=${coordinates?.positionInRoot()} size=${coordinates?.size}"
+                        })
+                }
+                val actual = observation.first
                 assertTrue("All mode exercises multiple visible album bodies", expected.size > 1)
-                assertEquals("All-mode bodies at viewport=$viewport expected=$expected actual=$actual", expected.size, actual.size)
+                assertEquals("All-mode bodies at viewport=$viewport expected=$expected actual=$actual " +
+                    "nodes=$nodeDetails ${observation.second} entries=${observation.third}", expected.size, actual.size)
                 expected.zip(actual).forEach { (item, glass) ->
                     assertEquals(item.left, glass.left, 1f); assertEquals(item.right, glass.right, 1f)
                     assertEquals(item.top, glass.top, 1f); assertEquals(item.bottom, glass.bottom, 1f)
                 }
             }
             allFrame()
+            contactHeld = true
             row.performTouchInput { down(center); moveBy(Offset(-40f, 0f), delayMillis = 32) }
             allFrame()
             row.performTouchInput { moveBy(Offset(24f, 0f), delayMillis = 32) }
             allFrame()
             row.performTouchInput { advanceEventTime(128); up() }
+            contactHeld = false
             allFrame()
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
         } finally {
+            // A failed assertion can occur during an acquired drag. Release that
+            // contact before unpausing animation and ActivityScenario teardown.
+            compose.mainClock.autoAdvance = false
+            val cleanup = runCatching {
+                if (contactHeld) compose.onNodeWithTag("album-viewport").performTouchInput { cancel() }
+            }.exceptionOrNull()
             compose.mainClock.autoAdvance = true
+            if (cleanup != null) {
+                if (primaryFailure != null) primaryFailure.addSuppressed(cleanup) else throw cleanup
+            }
         }
     }
 }
