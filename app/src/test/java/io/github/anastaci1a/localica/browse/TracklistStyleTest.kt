@@ -6,12 +6,17 @@ import org.junit.Test
 
 class TracklistStyleTest {
     @Test fun tracklistIsAvailableInAlbumAndMutableContentsNotCatalogs() {
+        val order = listOf(ListSize.Smallest, ListSize.Small, ListSize.Tracklist, ListSize.Compact, ListSize.Normal, ListSize.Large)
+        assertEquals(order, ListSize.densityOrder)
+        assertEquals(listOf("Compact", "Normal", "Large", "Small", "Smallest", "Tracklist"), ListSize.entries.map { it.name })
         for (kind in listOf(MediaKind.Album, MediaKind.Playlist, MediaKind.Queue)) {
             val route = BrowseRoute(MainTab.Library, MediaRef(kind, "collection"))
-            assertEquals(ListSize.densityOrder, route.listSizes())
+            assertEquals(order, route.listSizes())
         }
-        for (tab in listOf(MainTab.Library, MainTab.Albums, MainTab.Artists, MainTab.Songs))
+        for (tab in listOf(MainTab.Library, MainTab.Albums, MainTab.Artists, MainTab.Songs)) {
             assertFalse(BrowseRoute(tab).listSizes().contains(ListSize.Tracklist))
+            assertEquals(order.filter { it != ListSize.Tracklist }, BrowseRoute(tab).listSizes())
+        }
         val album = BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, "album"))
         assertEquals(ListSize.Tracklist, album.defaultListSize())
         assertEquals(ListSize.Normal, BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "q")).defaultListSize())

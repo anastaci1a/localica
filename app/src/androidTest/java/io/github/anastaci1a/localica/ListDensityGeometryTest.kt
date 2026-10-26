@@ -87,14 +87,17 @@ class ListDensityGeometryTest {
             density = LocalDensity.current.density
             LookaheadScope {
                 Column(Modifier.width(360.dp)) {
-                    for (entry in listOf(item, second)) Box(Modifier.fillMaxWidth().padding(4.dp)) {
+                    val geometry = BrowseCellGeometry(1)
+                    val style = BrowseStyle(listSize = size, extraInfo = ExtraInfo.Artist)
+                    for (entry in listOf(item, second)) Box(Modifier.fillMaxWidth().testTag("density-row-${entry.key}")
+                        .padding(horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp)) {
                         BrowseItemLayout(entry, BrowseStyle(listSize = size, extraInfo = ExtraInfo.Artist),
-                            BrowseCellGeometry(1), this@LookaheadScope, true, menu = {})
+                            geometry, this@LookaheadScope, true, menu = {})
                     }
                 }
             }
         } }
-        for (mode in listOf(ListSize.Normal, ListSize.Large, ListSize.Compact)) {
+        for (mode in listOf(ListSize.Normal, ListSize.Large, ListSize.Compact, ListSize.Smallest)) {
             compose.runOnIdle { size = mode }
             compose.waitForIdle()
             val firstArt = bounds("art")
@@ -102,6 +105,15 @@ class ListDensityGeometryTest {
             if (mode == ListSize.Compact) {
                 assertEquals("Compact row pitch is unchanged", 64 * density, secondArt.top - firstArt.top, 2f)
                 assertTrue(firstArt.width > 32 * density)
+            } else if (mode == ListSize.Smallest) {
+                val firstRow = compose.onNodeWithTag("density-row-${item.key}").fetchSemanticsNode().boundsInRoot
+                val secondRow = compose.onNodeWithTag("density-row-${second.key}").fetchSemanticsNode().boundsInRoot
+                val expectedPitch = (40 * density).roundToInt() + 2 * (1.2f * density).roundToInt()
+                assertEquals("Smallest keeps its inner row and halves its former 2.4dp outer padding",
+                    expectedPitch.toFloat(), firstRow.height, 1f)
+                assertEquals(expectedPitch.toFloat(), secondRow.top - firstRow.top, 1f)
+                assertEquals("Consecutive rows have no additional spacing", firstRow.bottom, secondRow.top, 1f)
+                assertEquals(0f, firstArt.width, 0f)
             } else {
                 assertEquals("Normal/Large inter-cover gap is halved", 12 * density, secondArt.top - firstArt.bottom, 2f)
             }

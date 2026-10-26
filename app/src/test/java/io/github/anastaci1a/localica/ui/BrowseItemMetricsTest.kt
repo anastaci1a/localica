@@ -50,6 +50,11 @@ class BrowseItemMetricsTest {
     }
 
     @Test fun denseTextOnlyAndNumberedRowsRetainAccessiblePitchAndGrowForLargeText() {
+        val geometry = BrowseCellGeometry(1)
+        assertEquals(1.2f, geometry.cardVerticalInset(BrowseStyle(listSize = ListSize.Smallest)), .00001f)
+        for (size in ListSize.entries.filter { it != ListSize.Smallest })
+            assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(listSize = size)), 0f)
+        assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(presentation = Presentation.Standard, listSize = ListSize.Smallest)), 0f)
         for ((size, height) in listOf(ListSize.Compact to 56, ListSize.Small to 48, ListSize.Smallest to 40)) {
             val m = metrics(size)
             assertEquals(height, m.place(20, 0, 16).height)
@@ -81,6 +86,8 @@ class BrowseItemMetricsTest {
         assertEquals(52, numbered.place(24, 40, 16).height)
         assertTrue(normal.art > numbered.art)
         assertEquals(64, normal.place(24, 40, 16).height)
+        val normalPlacement = normal.place(24, 40, 16)
+        assertEquals(normalPlacement.titleY + 24, normalPlacement.infoY)
         assertEquals(numbered.art, metrics(ListSize.Tracklist, numbered = true).art)
     }
 

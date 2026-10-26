@@ -10,7 +10,7 @@ enum class SongGrouping(val label: String) { None("None"), Artist("Artist"), Alb
 // Names are persisted; density order is explicit so existing values stay compatible.
 enum class ListSize { Compact, Normal, Large, Small, Smallest, Tracklist;
     val trailingInformation get() = this == Compact || this == Small || this == Smallest
-    companion object { val densityOrder = listOf(Smallest, Small, Compact, Tracklist, Normal, Large) }
+    companion object { val densityOrder = listOf(Smallest, Small, Tracklist, Compact, Normal, Large) }
 }
 data class BrowseStyle(val sort: TrackSort = TrackSort.Title, val ascending: Boolean = true,
     val presentation: Presentation = Presentation.List, val extraInfo: ExtraInfo = ExtraInfo.Automatic,
