@@ -41,8 +41,8 @@ internal class LensMeshRenderer {
     // drawVertices is hardware-supported only from API 29. Older devices execute
     // the same mesh into a retained raster, then composite it normally. Never turn
     // off hardware acceleration for the whole app or retain another optical style.
-    private data class RasterKey(val generation: Int, val image: ImageBitmap?, val size: IntSize,
-        val offset: Offset, val lighting: Boolean)
+    private data class RasterKey(val generation: Int, val image: ImageBitmap?,
+        val sampling: BackdropSampleMapping, val lighting: Boolean)
     private val rasters = object : LinkedHashMap<RasterKey, Bitmap>(4, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<RasterKey, Bitmap>) = size > 4
     }
@@ -50,7 +50,8 @@ internal class LensMeshRenderer {
     fun DrawScope.draw(shape: LensGeometry, snapshot: ImageBitmap?, sourceSize: IntSize,
         sourceOffset: Offset, depth: Float, power: Float = 1f, alpha: Float = 1f,
         field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false,
-        flattening: Float = 0f, tone: GlassTone = GlassTone(), outlines: List<RoundRect>? = null) {
+        flattening: Float = 0f, tone: GlassTone = GlassTone(), outlines: List<RoundRect>? = null,
+        registration: BackdropRegistration? = null) {
         val next = listOf(shape, density, fieldKey ?: Unit, outlines ?: Unit)
         val geometryChanged = geometryKey != next
         if (geometryChanged) {
@@ -82,12 +83,15 @@ internal class LensMeshRenderer {
         scenePaint.shader = snapshot?.let { shaders.getOrPut(it) {
             BitmapShader(it.asAndroidBitmap(), Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
         } }
+        val sampling = BackdropSampleMapping(sourceSize,
+            if (snapshot == null || registration != null) Offset.Zero else sourceOffset,
+            registration.takeIf { snapshot != null })
         if (snapshot != null) {
-            val sx = snapshot.width.toFloat() / sourceSize.width.coerceAtLeast(1)
-            val sy = snapshot.height.toFloat() / sourceSize.height.coerceAtLeast(1)
+            val imageSize = IntSize(snapshot.width, snapshot.height)
             for (i in texture.indices step 2) {
-                texture[i] = (vertices[i] + rays[i] + sourceOffset.x) * sx
-                texture[i + 1] = (vertices[i + 1] + rays[i + 1] + sourceOffset.y) * sy
+                val sample = sampling.texture(Offset(vertices[i] + rays[i], vertices[i + 1] + rays[i + 1]), imageSize)
+                texture[i] = sample.x
+                texture[i + 1] = sample.y
             }
         }
         fun render(canvas: android.graphics.Canvas, opacity: Float, textureIndices: ShortArray = indices) {
@@ -108,7 +112,7 @@ internal class LensMeshRenderer {
                 render(canvas.nativeCanvas, alpha)
             }
             else {
-                val key = RasterKey(generation, snapshot, sourceSize, if (snapshot == null) Offset.Zero else sourceOffset, lighting)
+                val key = RasterKey(generation, snapshot, sampling, lighting)
                 val image = rasters.getOrPut(key) {
                     Bitmap.createBitmap(ceil(shape.bounds.width).toInt().coerceAtLeast(1),
                         ceil(shape.bounds.height).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888).also {

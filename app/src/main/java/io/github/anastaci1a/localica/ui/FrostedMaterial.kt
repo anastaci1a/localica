@@ -13,11 +13,10 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -25,6 +24,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -76,12 +76,51 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
     var coordinates: LayoutCoordinates? = null
     var windowOffset by mutableStateOf(Offset.Zero)
     var placement by mutableIntStateOf(0)
+    var transformRevision by mutableIntStateOf(0)
     var fallback by mutableStateOf(Offset.Zero)
     fun position(): Offset {
         placement
         val previous = fallback
         return coordinates?.takeIf { it.isAttached }?.let { it.positionInRoot() + windowOffset } ?: previous
     }
+
+    /** Source-local to consumer-local. Never substitute a translation for an invalid basis. */
+    fun registrationTo(consumer: BackdropLocation): BackdropRegistration? {
+        placement; consumer.placement
+        transformRevision; consumer.transformRevision
+        val source = coordinates?.takeIf { it.isAttached } ?: return null
+        val target = consumer.coordinates?.takeIf { it.isAttached } ?: return null
+        if (source.findRootCoordinates() === target.findRootCoordinates()) {
+            return BackdropRegistration.fromMapping(source.size.width.toFloat(), source.size.height.toFloat()) {
+                target.localPositionOf(source, it)
+            }
+        }
+        // Separate Compose windows share the existing screen frame, not a layout ancestor.
+        val sourceToScreen = registrationToScreen() ?: return null
+        val screenToTarget = consumer.registrationToScreen()?.inverse() ?: return null
+        return sourceToScreen.followedBy(screenToTarget)
+    }
+
+    fun registrationToScreen(): BackdropRegistration? {
+        placement
+        transformRevision
+        val attached = coordinates?.takeIf { it.isAttached } ?: return null
+        val offset = windowOffset
+        return BackdropRegistration.fromMapping(attached.size.width.toFloat(), attached.size.height.toFloat()) {
+            attached.localToRoot(it) + offset
+        }
+    }
+}
+
+/** Canvas consumes the same source-local basis used for coverage and crop selection. */
+internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistration, draw: DrawScope.() -> Unit) {
+    val matrix = Matrix(floatArrayOf(
+        registration.xx, registration.yx, 0f, 0f,
+        registration.xy, registration.yy, 0f, 0f,
+        0f, 0f, 1f, 0f,
+        registration.tx, registration.ty, 0f, 1f
+    ))
+    withTransform({ transform(matrix) }, draw)
 }
 
 @Composable internal fun Modifier.backdropLocation(location: BackdropLocation): Modifier {
@@ -95,6 +134,8 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
             view.getLocationOnScreen(screen)
             location.windowOffset = Offset(screen[0].toFloat(), screen[1].toFloat())
             location.fallback = it.positionInRoot() + location.windowOffset
+            // A layer-only scale can change the basis while leaving both origin and size fixed.
+            androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { location.transformRevision++ }
         }
 }
 
@@ -219,8 +260,9 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             source.layer.record(size = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent) {
                 clipRect(right = viewport.width, bottom = viewport.height) {
                 if (backing != null && !backing.layer.isReleased) {
-                    val offset = backing.origin - source.origin
-                    clipRect { translate(offset.x, offset.y) { drawLayer(backing.layer) } }
+                    backing.location.registrationTo(source.location)?.let { registration ->
+                        clipRect { withBackdropRegistration(registration) { drawLayer(backing.layer) } }
+                    }
                 }
                 this@drawWithContent.drawContent()
                 }
@@ -263,12 +305,15 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
         if (source != null) {
             if (Build.VERSION.SDK_INT >= 33) {
                 val blur = with(LocalDensity.current) { 22.dp.toPx() }
-                FilteredBackdrop(Modifier.matchParentSize(), source, location::position, .5f, blur * 1.5f) { _, resolution, _ ->
+                FilteredBackdrop(Modifier.matchParentSize(), source, location, .5f, blur * 1.5f) { _, resolution, _ ->
                     toneRenderer?.effect(tone, blur * resolution)
                 }
             } else Canvas(Modifier.matchParentSize()) {
-                val offset = source.origin - location.position()
-                translate(offset.x, offset.y) { tonedFallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) } }
+                source.location.registrationTo(location)?.let { registration ->
+                    withBackdropRegistration(registration) {
+                        tonedFallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) }
+                    }
+                }
             }
         }
         Canvas(Modifier.matchParentSize()) {
