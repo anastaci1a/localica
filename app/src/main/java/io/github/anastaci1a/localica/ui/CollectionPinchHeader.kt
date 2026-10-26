@@ -233,7 +233,7 @@ internal fun Modifier.collectionPinchHeader(owner: CollectionPinchHeader, style:
             translationX = offset.x; translationY = offset.y
         }.drawWithContent {
             val request = owner.captureRequest
-            if (!owner.motion.capturing || owner.recordedRequest != request || layer.size == IntSize.Zero) {
+            if ((!owner.motion.readbackPending && (!owner.motion.capturing || owner.recordedRequest != request)) || layer.size == IntSize.Zero) {
                 layer.record { this@drawWithContent.drawContent() }
                 owner.recordedRequest = request
             }
