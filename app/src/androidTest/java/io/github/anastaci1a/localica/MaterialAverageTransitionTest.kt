@@ -79,7 +79,7 @@ class MaterialAverageTransitionTest {
         fixture.stage(2) { fixture.replacement = true }
         fixture.awaitPublication(oldSnapshot)
         val replaced = fixture.captureOnce()
-        fixture.verifyRoutes(0f)
+        fixture.verifyRoutes(0f, replaced)
         assertRed(fixture.pixel(replaced, .3f, .5f))
         if (Build.VERSION.SDK_INT < 33) compose.runOnIdle {
             assertFalse("Previous completed raster is retired after replacement", requireNotNull(retired).isCurrent())
@@ -409,14 +409,21 @@ class MaterialAverageTransitionTest {
 
         fun currentRoutes() = routes.filter { it.first == stage.get() }.map { it.second }
 
-        fun verifyRoutes(homeWeight: Float) = compose.runOnIdle {
+        fun verifyRoutes(homeWeight: Float, capturedPixels: PixelMap? = null) = compose.runOnIdle {
+            // Message-only values from the existing capture and existing UI synchronization.
+            // No new capture, frame, invalidation or timing change is used to satisfy routing.
+            val pixelEvidence = capturedPixels?.let { pixels -> runCatching {
+                val point = sceneCoordinates.localPositionOf(lensCoordinates, Offset(
+                    lensCoordinates.size.width * .3f, lensCoordinates.size.height * .5f))
+                "existingInterior=${pixels[point.x.roundToInt(), point.y.roundToInt()]}"
+            }.getOrElse { "existingInteriorUnavailable=${it.javaClass.simpleName}" } } ?: "not supplied"
             val expected = mutableListOf(Triple(destination, sourceCoordinates, 1f - homeWeight))
             if (withHome) expected += Triple(home, homeCoordinates, homeWeight)
             val observed = currentRoutes()
             for ((source, coordinates, contribution) in expected) {
                 val frames = observed.filter { it.sourceIdentity == System.identityHashCode(source) }
                 if (contribution == 0f) { assertTrue("Zero-weight contributor not sampled", frames.isEmpty()); continue }
-                assertTrue("Actual Canvas reports active contributor", frames.isNotEmpty())
+                assertTrue("Actual Canvas reports active contributor; stage=${stage.get()} $pixelEvidence", frames.isNotEmpty())
                 val latest = frames.last()
                 assertEquals(Build.VERSION.SDK_INT < 33, latest.legacy)
                 assertEquals(contribution, latest.weight, .0001f)

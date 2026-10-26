@@ -184,9 +184,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         if (visible && Build.VERSION.SDK_INT < 33) {
         val endpointTone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
         @Composable fun prepared(backing: FrostedBackdrop?): List<ImageBitmap?> {
-            // Material-only contributors use their current paired software publication directly.
-            // No detailed mesh endpoint, asynchronous tone replacement or old-source color enters it.
-            if (backing?.materialOnly == true) return emptyList()
+            // Keep the four detailed roles structurally valid even while provenance changes
+            // between composition and draw. Material averaging selects its separate paired raster.
             val clear = backing?.glassFallback ?: backing?.snapshot
             val frosted = backing?.fallback ?: clear
             // Morphs blend fixed prepared endpoints; progress must never schedule
