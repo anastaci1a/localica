@@ -143,7 +143,7 @@ internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, sou
 
 @Composable
 internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: String, anchor: GlassAnchor,
-    onBack: () -> Unit, onOptions: (Boolean) -> Unit, menu: @Composable () -> Unit) {
+    onBack: () -> Unit, onOptions: (Boolean) -> Unit, backdropScene: BrowseBackdropScene? = null, menu: @Composable () -> Unit) {
     val fade = remember(grid, width) { derivedStateOf {
         val header = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "browser-notice" }
         val cover = width.toFloat().coerceAtLeast(1f)
@@ -152,9 +152,12 @@ internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: 
     } }
     val titled by remember(fade) { derivedStateOf { fade.value >= .1f } }
     val surface = MaterialTheme.colorScheme.surface
-    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(100.dp).drawBehind {
-        drawRect(Brush.verticalGradient(listOf(surface.copy(alpha = .7f * fade.value), Color.Transparent)))
-    })
+    val gradient = if (backdropScene != null) rememberBrowseBackdropLayer(backdropScene) else null
+    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(100.dp)
+        .then(if (backdropScene != null && gradient != null) Modifier.recordBrowseBackdropLayer(backdropScene, gradient) else Modifier)
+        .drawBehind {
+            drawRect(Brush.verticalGradient(listOf(surface.copy(alpha = .7f * fade.value), Color.Transparent)))
+        })
     Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         ActionIcon(R.drawable.ic_back, "Back", onClick = onBack)
