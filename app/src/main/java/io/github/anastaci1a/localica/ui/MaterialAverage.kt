@@ -4,24 +4,22 @@ import android.graphics.RuntimeShader
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 
 /** Eligibility is provenance plus coverage, never guessed from a few similar pixels.
  * Foreground-containing recordings (lists, artwork and modal contents) stay optical. */
 internal fun FrostedBackdrop.canAverage(origin: Offset, extent: Size): Boolean {
-    if (!materialOnly || !recorded || extent.width <= 0f || extent.height <= 0f) return false
-    val local = origin - this.origin
-    // Conservatively exclude the rounded corners of the panel's recording.
-    val inset = materialCorner.coerceAtMost(minOf(size.width, size.height) / 2f)
-    fun inside(x: Float, y: Float): Boolean {
-        if (x < 0f || y < 0f || x > size.width || y > size.height) return false
-        val dx = (inset - x).coerceAtLeast(0f) + (x - (size.width - inset)).coerceAtLeast(0f)
-        val dy = (inset - y).coerceAtLeast(0f) + (y - (size.height - inset)).coerceAtLeast(0f)
-        return dx * dx + dy * dy <= inset * inset
-    }
-    return inside(local.x, local.y) && inside(local.x + extent.width, local.y) &&
-        inside(local.x, local.y + extent.height) && inside(local.x + extent.width, local.y + extent.height)
+    if (extent.width <= 0f || extent.height <= 0f) return false
+    val toLocal = location.registrationToScreen()?.inverse() ?: return false
+    return canAverage(toLocal.corners(Rect(origin, extent)))
+}
+
+/** All footprint corners are in the recording's local pixels, including scale and shear. */
+internal fun FrostedBackdrop.canAverage(localCorners: List<Offset>): Boolean {
+    return materialOnly && recorded && backdropContainsFootprint(
+        size.width.toFloat(), size.height.toFloat(), materialCorner, localCorners)
 }
 
 internal data class MaterialAverageStyle(val whiteTint: Float, val tone: GlassTone)
