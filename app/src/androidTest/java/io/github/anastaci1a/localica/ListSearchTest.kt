@@ -118,7 +118,7 @@ class ListSearchTest {
             } else {
                 compose.waitUntil(5000) {
                     advanceObservedFrame()
-                    compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty()
+                    compose.onAllNodesWithTag("list-search-popup", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
                 }
                 open()
             }
@@ -126,7 +126,9 @@ class ListSearchTest {
             beginReturn()
             compose.waitUntil(5000) {
                 advanceObservedFrame()
-                compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty()
+                // Merged semantics retire immediately on dismissal; the unmerged
+                // body remains mounted until the real return owner reaches its end.
+                compose.onAllNodesWithTag("list-search-popup", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
             }
             assertEquals("Final restoration keeps the exact original row position", baseline, rowNode().fetchSemanticsNode().boundsInRoot.top, 1.1f)
             val observed = compose.runOnUiThread { frames.toList() }
