@@ -1,6 +1,5 @@
 package io.github.anastaci1a.localica
 
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
@@ -10,10 +9,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.runner.RunWith
 
 /** Synthetic streams only. Latch deadlines are failure bounds, not throughput assertions. */
-@RunWith(AndroidJUnit4::class)
 class PrivateDiagnosticWriterTest {
     private class GateSink(
         private val writeFailure: IOException? = null,
