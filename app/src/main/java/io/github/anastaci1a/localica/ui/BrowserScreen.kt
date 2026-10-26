@@ -393,7 +393,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     else -> gridState.scrollToItem(index + 1, -anchor.top)
                 }
                 headerPhase("position-measured")
-                gridState.scroll {
+                gridState.scroll(if (pinchMotion.held) MutatePriority.UserInput else MutatePriority.Default) {
                     fun correctAnchor() {
                         val layout = gridState.layoutInfo
                         when (anchor.edge) {
