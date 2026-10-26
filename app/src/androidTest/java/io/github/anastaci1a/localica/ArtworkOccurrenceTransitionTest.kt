@@ -119,7 +119,7 @@ class ArtworkOccurrenceTransitionTest {
                     for (x in frame.width / 5 until frame.width * 4 / 5 step 5) {
                         val color = frame[x, y]
                         assertEquals("Cold-to-ready reveal stays opaque", 1f, color.alpha, .001f)
-                        assertTrue("Cold-to-ready reveal cannot expose the white backing", color.red < .8f && color.green < .8f && color.blue < .8f)
+                        assertTrue("Cold-to-ready reveal cannot expose the white backing (delta=$delta, pixel=($x,$y), color=$color)", color.red < .8f && color.green < .8f && color.blue < .8f)
                     }
             }
             val settled = pixels()
