@@ -7,6 +7,12 @@ internal class CollectionScroll {
     private var top = 0f
     private var headerHeight = 0
 
+    /** A measured pinch frame owns this coordinate until its verified handoff. */
+    fun presented(value: Float, items: List<Item>) {
+        top = value
+        previous = items
+    }
+
     fun update(items: List<Item>, atStart: Boolean): Float {
         if (items.isEmpty()) return top
         val header = items.firstOrNull { it.key == "browser-notice" }
