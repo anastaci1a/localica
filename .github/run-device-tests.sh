@@ -31,6 +31,26 @@ install_live_signals() {
     trap 'stop_live_child INT 130' INT
   fi
 }
+capture_native_failure() {
+  local lane=$1 folder status serial
+  serial=${LOCALICA_GUARD_SERIAL:-${ANDROID_SERIAL:-}}
+  [[ "$serial" =~ ^emulator-[0-9]+$ ]] || { echo 'Native failure context unavailable: no explicit emulator serial' >&2; return 0; }
+  folder="$live_reports/$lane/android-state"
+  mkdir "$folder" || { echo 'Native failure context unavailable: cannot create fresh evidence directory' >&2; return 0; }
+  # Read only, before emulator shutdown/owned package restoration. Never dismiss
+  # another app's error window or infer that its crash caused the test failure.
+  printf '%s\n' "$serial" > "$folder/device.txt"
+  timeout 10 adb -s "$serial" logcat -b crash -d -v threadtime > "$folder/crash-buffer.txt" 2>&1
+  status=$?
+  printf 'crash-buffer=%s\n' "$status" > "$folder/status.txt"
+  timeout 10 adb -s "$serial" shell dumpsys -t 5 window windows > "$folder/windows.txt" 2>&1
+  status=$?
+  printf 'windows=%s\n' "$status" >> "$folder/status.txt"
+  timeout 10 adb -s "$serial" shell dumpsys -t 5 activity activities > "$folder/activities.txt" 2>&1
+  status=$?
+  printf 'activities=%s\n' "$status" >> "$folder/status.txt"
+  return 0
+}
 run_native() {
   local lane=$1 result label
   shift
@@ -42,6 +62,7 @@ run_native() {
   wait "$child"
   result=$?
   child=''
+  if [[ "$result" != 0 ]]; then capture_native_failure "$lane"; fi
   return "$result"
 }
 verify_empty_preflight() {
