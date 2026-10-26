@@ -27,7 +27,9 @@ Follow [development and final validation](../docs/build.md#development-and-final
 
 Use `sessionsation` from PATH with a fresh target: Steer Submit while the recipient is active, immediate Submit while idle. Never Queue, replay an accepted input or substitute a new session for recovery of an existing attachment.
 
-Send short prose with file/module references, without diffs, code, file contents or attachments. Separate longer messages into paragraphs. Enclose each message in `-- INCOMING MSG: <sender_session_name> --` and `-- MSG END (<actual_UTC_ISO_timestamp>) --`, with one blank line between each delimiter and the body.
+Send short prose with file/module references, without diffs, code, file contents or attachments. Separate longer messages into paragraphs.
+
+**Sessionsation only:** enclose messages in `-- INCOMING MSG: <sender_session_name> --` and `-- MSG END (<actual_UTC_ISO_timestamp>) --`, with one blank line between each delimiter and the body. GitHub comments and other online communication use ordinary prose without this envelope; a short session-name signature such as `–localica-lead` is fine.
 
 ## Issues and commits
 
