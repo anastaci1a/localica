@@ -1,0 +1,30 @@
+name: Dev71 first-batch prototype (not release certified)
+'on':
+  push:
+    branches: [test/dev71-apk1-prototype-20261026]
+permissions:
+  contents: read
+jobs:
+  prototype:
+    uses: ./.github/workflows/prototype.yml
+    with:
+      affected_classes: io.github.anastaci1a.localica.QueueOrderActionAdmissionTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.ArtistCollectionActionsTest,io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest,io.github.anastaci1a.localica.ArtworkSwipeTest,io.github.anastaci1a.localica.CollectionControlsBackdropTest,io.github.anastaci1a.localica.LyricsReturnBackdropTest,io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest,io.github.anastaci1a.localica.PinchReadbackLifetimeTest,io.github.anastaci1a.localica.PinchReleaseHandoffTest,io.github.anastaci1a.localica.RetainedLayerReadbackTest,io.github.anastaci1a.localica.ArtistSelectionPlacementTest
+      coverage_reason: >-
+        First-batch Queue admission and exact opening, attached playback durability,
+        artist scope/selection/range, immediate player growth, artwork readiness and
+        occurrence transitions, actual-content controls, and header pinch/readback
+        ownership. Mandatory complete Search IME, ListSearch and contrast classes
+        are added by the existing runner. Complete JVM/lint/build/signature and
+        both preserved-data compatibility chains remain required. No full native
+        suite is claimed by this explicitly uncertified development lane.
+      known_issues: >-
+        Original comparison40255001797 and dev71 attempts40314182315/40316556722
+        remain failed evidence. This run must independently pass every selected
+        source method and mandatory sentinel; known issues never waive a failure.
+        Earlier full-suite DocumentsUI focus/presented-pixel failures remain
+        unexplained and those full suites are not rerun here. Phone queue latency,
+        acoustic seams and universal native callback delivery are not established
+        by emulator results. APK2/3 feedback remains separate. This is not release
+        certification or a claim that every reported physical symptom is resolved.
+    secrets:
+      ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
