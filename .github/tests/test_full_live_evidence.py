@@ -78,6 +78,10 @@ if a[:2]!=['-s','emulator-5554']:""")
         if any((live/lane).exists() and not (live/lane/'supervision.json').exists() for lane in ('preflight','full')):done(98,'Restoration raced supervisor')
         s['restoreSawTerminal']=bool(manifests)
         if s['restoreExit']:done(s['restoreExit'])""")
+        adb = adb.replace("if a==['get-serialno']:", """if a==['logcat','-b','crash','-d','-v','threadtime']:done(out='Synthetic external process crash\\n')
+if a==['shell','dumpsys','-t','5','window','windows']:done(out='Synthetic focused error window\\n')
+if a==['shell','dumpsys','-t','5','activity','activities']:done(out='Synthetic resumed activity\\n')
+if a==['get-serialno']:""")
         scripts = {'adb': adb, 'gradlew': GRADLE, 'node': NODE,
                    'git': '#!/usr/bin/env bash\nprintf "%s\\n" "'+SHA+'"\n'}
         for name, text in scripts.items():
@@ -125,6 +129,16 @@ if a[:2]!=['-s','emulator-5554']:""")
         self.assertEqual(0, self.state['enabled'])
         self.assertEqual('', self.state['token'])
         self.assertEqual(2, self.state['mutations'])
+
+    def test_test_failure_keeps_read_only_external_crash_and_window_context(self):
+        self.state['gradleExits'] = [7]
+        self.run_runner(7)
+        folder = self.root/'native-live-evidence/full/android-state'
+        self.assertIn('Synthetic external process crash', (folder/'crash-buffer.txt').read_text())
+        self.assertIn('Synthetic focused error window', (folder/'windows.txt').read_text())
+        self.assertIn('Synthetic resumed activity', (folder/'activities.txt').read_text())
+        self.assertEqual('crash-buffer=0\nwindows=0\nactivities=0\n', (folder/'status.txt').read_text())
+        self.assert_restored()
         self.assertTrue(self.state['restoreSawTerminal'])
 
     def test_full_is_unfiltered_and_monitoring_complete_before_restore(self):
