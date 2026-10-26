@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -11,10 +12,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.font.FontFamily
@@ -30,6 +34,9 @@ import kotlinx.coroutines.flow.filterNotNull
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /** Actual Text pixels and the ordinary glass consumer, without another readback path. */
 class CollectionControlsBackdropTest {
@@ -86,14 +93,22 @@ class CollectionControlsBackdropTest {
         var scene: BrowseBackdropScene? = null
         var firstSnapshot: ImageBitmap? = null
         var moving = false
+        var scrollState: ScrollState? = null
+        var pixelDensity = 0f
+        var rootView: android.view.View? = null
         compose.setContent { LocalicaTheme {
             val scroll = rememberScrollState()
+            val density = LocalDensity.current.density
+            val view = LocalView.current
             val source = rememberFrostedBackdrop(Unit, dark = true, glassBlur = 0f, retainRaster = false, whiteTint = 0f)
             val page = rememberBrowseBackdropScene(source, null, Unit, scroll.isScrollInProgress)
             val viewport = rememberBrowseBackdropLayer(page, masked = true)
             SideEffect {
                 scene = page
                 moving = scroll.isScrollInProgress
+                scrollState = scroll
+                pixelDensity = density
+                rootView = view
             }
             LaunchedEffect(source) {
                 snapshotFlow { source.snapshot }.filterNotNull().collect { if (firstSnapshot == null) firstSnapshot = it }
@@ -143,15 +158,68 @@ class CollectionControlsBackdropTest {
                 moving && (Build.VERSION.SDK_INT >= 33 && page.layers.single().outer >= 0 ||
                     page.source.snapshot?.let { it !== before && page.source.lensSnapshot === it && chroma(it, true) > .01f } == true)
             }
+            // CPU preparation can finish after this predicate's last clock tick.
+            // Commit its image into the consumer composition, then await native draw.
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
             if (Build.VERSION.SDK_INT < 33) assertPaired(page)
             // The real drag remains acquired; no finger-up or settled refresh has run.
             assertTrue("The observation is during scrolling, not a settled refresh", moving)
+            val lensBounds = compose.onNodeWithTag("content-lens").fetchSemanticsNode().boundsInRoot
+            fun state(label: String) = compose.runOnUiThread {
+                val source = page.source
+                "$label scrollPx=${scrollState?.value} density=$pixelDensity lensRoot=$lensBounds " +
+                    "sourceOrigin=${source.origin} sourceSize=${source.size} " +
+                    "snapshot=${source.snapshot?.let(System::identityHashCode)} " +
+                    "lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} " +
+                    "request=${source.readbackRequest} published=${source.snapshotReadbackRequest} draws=${source.snapshotDraws}"
+            }
+            android.util.Log.i("CollectionBackdropFrame", state("pre-final-capture"))
+            val finalImage = compose.onNodeWithTag("content-lens").captureToImage()
+            val sourceImage = compose.runOnUiThread { page.source.snapshot }
+            val projected = compose.runOnUiThread {
+                val screen = IntArray(2)
+                requireNotNull(rootView).getLocationOnScreen(screen)
+                val source = page.source
+                val xScale = sourceImage?.width?.toFloat()?.div(source.size.width.coerceAtLeast(1)) ?: 1f
+                val yScale = sourceImage?.height?.toFloat()?.div(source.size.height.coerceAtLeast(1)) ?: 1f
+                val left = lensBounds.left.roundToInt() + screen[0] - source.origin.x
+                val top = lensBounds.top.roundToInt() + screen[1] - source.origin.y
+                Rect((left + finalImage.width / 4) * xScale, (top + finalImage.height / 4) * yScale,
+                    (left + finalImage.width * 3 / 4) * xScale, (top + finalImage.height * 3 / 4) * yScale)
+            }
+            val finalChroma = chroma(finalImage, true)
+            android.util.Log.i("CollectionBackdropFrame", state("post-final-capture") +
+                " finalSize=${finalImage.width}x${finalImage.height} " +
+                "finalRoi=[${finalImage.width / 4},${finalImage.height / 4},${finalImage.width * 3 / 4},${finalImage.height * 3 / 4}] " +
+                "unrefractedSourceRoi=$projected " +
+                "observedSource=${sourceImage?.let(System::identityHashCode)} sourceImageSize=${sourceImage?.width}x${sourceImage?.height} " +
+                "sourceMagenta=${sourceImage?.let { chroma(it, true) }} " +
+                "sourceGreen=${sourceImage?.let { chroma(it, false) }} " +
+                "projectedSourceMagenta=${sourceImage?.let { regionChroma(it, projected) }} " +
+                "finalMagenta=$finalChroma finalGreen=${chroma(finalImage, false)}")
             assertTrue("The moving native lens must include the newly revealed magenta glyphs",
-                chroma(compose.onNodeWithTag("content-lens").captureToImage(), true) > .01f)
+                finalChroma > .01f)
         } finally {
             if (contact) compose.onNodeWithTag("content-scroll").performTouchInput { up() }
             compose.mainClock.autoAdvance = true
         }
+    }
+
+    /** Diagnostic projection only, not a claim about the lens's optical displacement. */
+    private fun regionChroma(image: ImageBitmap, region: Rect): Float? {
+        val pixels = image.toPixelMap()
+        val left = floor(region.left).toInt().coerceIn(0, pixels.width)
+        val right = ceil(region.right).toInt().coerceIn(0, pixels.width)
+        val top = floor(region.top).toInt().coerceIn(0, pixels.height)
+        val bottom = ceil(region.bottom).toInt().coerceIn(0, pixels.height)
+        if (left >= right || top >= bottom) return null
+        var sum = 0f
+        for (y in top until bottom) for (x in left until right) {
+            val color = pixels[x, y]
+            sum += (minOf(color.red, color.blue) - color.green).coerceAtLeast(0f)
+        }
+        return sum / ((right - left) * (bottom - top))
     }
 
     private fun assertPaired(scene: BrowseBackdropScene) {
