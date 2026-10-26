@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.runtime.*
-import kotlinx.coroutines.Job
 
 /** Own a short-lived real scroll extent while the NEW filtered content is measured.
  * A visible artist header supplies the exact old pixel offset; no row-height estimate is used.
@@ -13,33 +12,15 @@ import kotlinx.coroutines.Job
         private set
     var interruption by mutableStateOf(Any())
         private set
-    private var motion: Job? = null
-
-    private fun cancelMotion() {
-        motion?.cancel()
-        motion = null
-    }
 
     fun begin(headerTop: Int?, viewport: Int, previousLayout: Any): Request? {
-        // Retire the old animation before publishing replacement rows/scroll extent.
-        cancelMotion()
         val scroll = headerTop?.let { (-it.toLong()).coerceAtLeast(0) }
         request = if (scroll == null || viewport <= 0 || scroll + viewport > Int.MAX_VALUE) null
             else Request(scroll.toInt(), (scroll + viewport).toInt(), previousLayout)
         return request
     }
     fun owns(value: Request) = request === value
-    fun interrupt() {
-        cancelMotion()
-        if (request != null) interruption = Any()
-    }
-    fun bindMotion(value: Request, job: Job): Boolean {
-        if (!owns(value)) { job.cancel(); return false }
-        if (motion !== job) cancelMotion()
-        motion = job
-        return true
-    }
-    fun releaseMotion(job: Job) { if (motion === job) motion = null }
+    fun interrupt() { if (request != null) interruption = Any() }
     fun finish(value: Request) { if (owns(value)) request = null }
 
     companion object {

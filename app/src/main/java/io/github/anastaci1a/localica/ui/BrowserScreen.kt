@@ -565,16 +565,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (!artistFilterRange.owns(request)) return@LaunchedEffect
         val guard = layout.visibleItemsInfo.firstOrNull { it.key == ArtistFilterRange.GuardKey }
         val excess = ArtistFilterRange.excess(guard?.offset?.y, layout.viewportEndOffset, layout.afterContentPadding)
-        if (excess < 0f) {
-            val motion = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]!!
-            if (!artistFilterRange.bindMotion(request, motion)) return@LaunchedEffect
-            try {
-                scrollOwnership.during {
-                    if (latestReducedMotion) gridState.scroll { scrollBy(excess) }
-                    else gridState.animateScrollBy(excess, androidx.compose.animation.core.tween(
-                        durationMillis = 280, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
-                }
-            } finally { artistFilterRange.releaseMotion(motion) }
+        if (excess < 0f) scrollOwnership.during {
+            if (latestReducedMotion) gridState.scroll { scrollBy(excess) }
+            else gridState.animateScrollBy(excess, androidx.compose.animation.core.tween(
+                durationMillis = 280, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
         }
         // Removing the reserve now exposes only the new real range; valid offsets never moved.
         artistFilterRange.finish(request)
