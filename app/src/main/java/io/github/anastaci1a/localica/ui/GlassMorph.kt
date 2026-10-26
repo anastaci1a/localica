@@ -45,6 +45,7 @@ import kotlin.math.roundToInt
 @Stable
 internal class GlassAnchor {
     val contact = GlassContact()
+    val searchSlot = SearchSlotMotion()
     var triggerMounted = false
     var restoredDrawn = false
     var bounds by mutableStateOf(Rect.Zero)
@@ -180,10 +181,20 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var searchShapeStarted by remember { mutableStateOf(false) }
     var searchOpeningPositioned by remember { mutableStateOf(false) }
     val searchOpeningBottom = remember { Animatable(0f) }
+    var searchSlotToken by remember { mutableLongStateOf(0L) }
+    var searchSlotTravel by remember { mutableStateOf<SearchSlotTravel?>(null) }
+    var searchSlotReturnFrom by remember { mutableFloatStateOf(0f) }
     fun beginSearchReturn() {
         if (placement == GlassPlacement.Search && searchFlight?.opening != false) {
             val from = searchMotion.rendered.takeIf { it.width > 0f } ?: origin
             searchFlight = SearchMorphFlight(from, progress.value.coerceIn(0f, 1f), opening = false)
+            val returning = requireNotNull(searchFlight)
+            val token = anchor.searchSlot.begin()
+            searchSlotToken = token
+            val fromFraction = anchor.searchSlot.fraction
+            searchSlotTravel = null
+            searchSlotReturnFrom = fromFraction
+            anchor.searchSlot.bind(token) { fromFraction * (1f - returning.fraction(progress.value)) }
             searchFocusRequest = null
         }
     }
@@ -208,6 +219,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
         if (placement == GlassPlacement.Search) {
             if (visible) {
+                searchSlotToken = anchor.searchSlot.begin()
+                searchSlotTravel = null
                 searchOpeningGeneration++
                 searchFocusRequest = null
                 searchFallbackReady = false
@@ -274,6 +287,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             searchFlight = null
         }
         if (!visible) {
+            if (placement == GlassPlacement.Search) anchor.searchSlot.settle(searchSlotToken, 0f)
             // The underlying window must draw its restored trigger before the modal
             // disappears. Keep the identical returned surface across that handoff.
             anchor.restoredDrawn = false
@@ -298,7 +312,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         while (android.os.SystemClock.uptimeMillis() < deadline) withFrameNanos { }
         searchFallbackReady = true
     }
-    DisposableEffect(anchor) { onDispose { anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false } }
+    DisposableEffect(anchor) { onDispose {
+        if (placement == GlassPlacement.Search) { val token = anchor.searchSlot.begin(); anchor.searchSlot.settle(token, 0f) }
+        anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false
+    } }
     if (!present) return
     // The full-scene recording can span pages with different ink. Its material
     // metadata must not override an explicit trigger. Detached menus instead
@@ -323,6 +340,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
         DisposableEffect(window) {
             modalWindow = window
+            if (placement == GlassPlacement.Search) searchSlotToken = anchor.searchSlot.renew()
             searchFocusRequest = null
             // We draw our own animated scrim. A zero-alpha native dim layer still
             // blocks touches as an untrusted occluder during return on Android 16.
@@ -331,6 +349,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             onDispose {
                 if (readyWindow === window) readyWindow = null
                 if (modalWindow === window) {
+                    if (placement == GlassPlacement.Search) searchSlotToken = anchor.searchSlot.renew()
                     modalWindow = null
                     searchFocusRequest = null
                 }
@@ -415,17 +434,23 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }
                 val ownsOpeningPosition = searchOpeningOwnsPosition(searchOpeningPositioned, imeHeight, nativeIme,
                     windowFocused, searchFocusRequest, searchFallbackReady)
-                LaunchedEffect(placement, visible, searchTarget, searchFlight, ownsOpeningPosition, searchShapeStarted,
+                LaunchedEffect(placement, visible, searchTarget, searchFlight, ownsOpeningPosition, searchShapeStarted, window,
                     childPanels.intValue, reduced, speed) {
                     if (placement == GlassPlacement.Search && visible && searchFlight?.opening == true &&
                         searchShapeStarted && childPanels.intValue == 0 && searchTarget.height > 0f &&
                         ownsOpeningPosition) {
+                        if (modalWindow !== window) return@LaunchedEffect
                         if (!searchOpeningPositioned) {
                             searchOpeningBottom.snapTo(searchMotion.rendered.takeIf { it.height > 0f }?.bottom ?: origin.bottom)
                             searchOpeningPositioned = true
                         }
+                        val token = searchSlotToken
+                        val travel = SearchSlotTravel(anchor.searchSlot.fraction, searchOpeningBottom.value, searchTarget.bottom)
+                        searchSlotTravel = travel
+                        anchor.searchSlot.bind(token) { travel.fraction(searchOpeningBottom.value) }
                         if (reduced) searchOpeningBottom.snapTo(searchTarget.bottom)
                         else searchOpeningBottom.animateTo(searchTarget.bottom, searchBottomSpring(speed))
+                        if (modalWindow === window) anchor.searchSlot.settle(token, 1f)
                     }
                 }
                 LaunchedEffect(placement, visible, searchTarget, searchFlight, imeHeight, imeSettled, childPanels.intValue, reduced, speed) {
@@ -496,6 +521,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val openingBottom = searchOpeningBottom.value.takeIf {
                     searchOpeningPositioned && visible && searchFlight?.opening == true
                 }
+                val slotFraction = if (placement == GlassPlacement.Search) anchor.searchSlot.fraction else 0f
+                val slotTravel = searchSlotTravel
+                val slotReturnFrom = searchSlotReturnFrom
                 val flightRect = (flight?.let {
                     if (it.opening && visible) it.openingRectangle(p, searchOpeningShape.value, openingBottom, availableHeight.toFloat())
                     else it.rectangle(p, anchor.bounds)
@@ -534,7 +562,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             searchMotion.observer?.invoke(SearchMorphSample(p, visible, bounds,
                                 flight, if (visible) searchTarget else anchor.bounds,
                                 imeHeight, imeSource, imeTarget, openingBottom, searchOpeningShape.value.takeIf { flight?.opening == true }, availableHeight.toFloat(),
-                                surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused))
+                                surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused,
+                                slotFraction = slotFraction, slotTravel = slotTravel, slotReturnFrom = slotReturnFrom))
                         }
                     }.drawWithContent {
                         // Match the trigger's draw-space deformation. A layout-layer

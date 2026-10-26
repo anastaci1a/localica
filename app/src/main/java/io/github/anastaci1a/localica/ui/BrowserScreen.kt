@@ -315,19 +315,29 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             else -> null
         }) }
 
-    val vacancyProgress = remember { androidx.compose.animation.core.Animatable(if (localSearchOpen) 1f else 0f) }
-    val motionSpeed = LocalMotionSpeed.current
-    LaunchedEffect(localSearchOpen, reducedMotion, motionSpeed) {
-        if (reducedMotion) vacancyProgress.snapTo(if (localSearchOpen) 1f else 0f)
-        else vacancyProgress.animateTo(if (localSearchOpen) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = .86f, stiffness = 420f * motionSpeed * motionSpeed))
-        if (!localSearchOpen && searchOriginalOffset >= 0) {
-            scrollOwnership.during { gridState.scrollToItem(0, searchOriginalOffset) }
+    LaunchedEffect(localSearchOpen, searchAnchor) {
+        snapshotFlow { searchAnchor.searchSlot.fraction }.first { it == if (localSearchOpen) 1f else 0f }
+        if (!localSearchOpen) {
+            if (searchOriginalOffset >= 0) scrollOwnership.during { gridState.scrollToItem(0, searchOriginalOffset) }
             searchOriginalOffset = -1; searchVacancy = 0f
         }
         searchAnchor.source?.refresh()
         modalBackdrop?.refresh()
     }
-    val searchSlotHeight = (pillSlotHeight - with(density) { (searchVacancy * vacancyProgress.value.coerceIn(0f, 1f)).toDp() }).coerceAtLeast(0.dp)
+    val searchSlotFraction = searchAnchor.searchSlot.fraction
+    val lastSlotLayout = remember { floatArrayOf(Float.NaN) }
+    SideEffect {
+        if (searchOriginalOffset >= 0 && searchVacancy > 0f) {
+            if (lastSlotLayout[0] != searchSlotFraction) {
+                // Keep the same owned header anchor through zero visible height.
+                // Otherwise lazy key retention anchors the first song instead, hiding
+                // the returning spacer until the terminal offset restoration jumps.
+                gridState.requestScrollToItem(0, searchOriginalOffset)
+                lastSlotLayout[0] = searchSlotFraction
+            }
+        } else lastSlotLayout[0] = Float.NaN
+    }
+    val searchSlotHeight = (pillSlotHeight - with(density) { (searchVacancy * searchSlotFraction).toDp() }).coerceAtLeast(0.dp)
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
@@ -810,8 +820,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
                                 if (artistDetail && showSearchPill) Box(Modifier.fillMaxWidth().height(searchSlotHeight).clipToBounds()) {
                                     ListSearchPill("Search " + (route.title ?: route.tab.label), {
-                                        searchOriginalOffset = if (gridState.firstVisibleItemIndex == 0) gridState.firstVisibleItemScrollOffset else -1
-                                        searchVacancy = with(density) { pillSlotHeight.toPx() }
+                                        if (searchVacancy == 0f && searchOriginalOffset < 0) {
+                                            searchOriginalOffset = if (gridState.firstVisibleItemIndex == 0) gridState.firstVisibleItemScrollOffset else -1
+                                            searchVacancy = with(density) { pillSlotHeight.toPx() }
+                                        }
                                         localSearch = freshSearch(); localFocusRequest++; localSearchOpen = true
                                     }, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
                                 }
@@ -925,7 +937,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     { onRoute(route.copy(filter = it)) }, onFilterSettings)
             }
             if (showSearchPill && !artDetail) ListSearchPill("Search "+ (route.title ?: route.tab.label), {
-                if (gridState.firstVisibleItemIndex == 0) {
+                // A reversal keeps the same original vacancy/offset until the actual
+                // return reaches home; do not capture a partly collapsed replacement.
+                if (searchVacancy == 0f && searchOriginalOffset < 0 && gridState.firstVisibleItemIndex == 0) {
                     searchOriginalOffset = gridState.firstVisibleItemScrollOffset
                     searchVacancy = (with(density) { pillSlotHeight.toPx() } - searchOriginalOffset).coerceAtLeast(0f)
                 }
