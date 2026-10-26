@@ -129,12 +129,18 @@ class ListSearchTest {
             }
             pumpUntil(endpoint = true) { last()?.let { it.opening && it.progress >= .999f && it.slotFraction == 1f } == true }
             beginReturn()
-            compose.waitUntil(5000) {
-                advanceObservedFrame(if (reduced) 1 else 4)
-                // Merged semantics retire immediately on dismissal; the unmerged
-                // body remains mounted until the real return owner reaches its end.
-                compose.onAllNodesWithTag("list-search-popup", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
-            }
+            // No gesture remains to interrupt this final endpoint. Let the normal
+            // test clock settle instead of making native traversal cost throttle
+            // virtual spring time. The wall deadline and real disposal remain strict.
+            compose.mainClock.autoAdvance = true
+            try {
+                compose.waitUntil(5000) {
+                    compose.waitForIdle()
+                    // Merged semantics retire on dismissal; the unmerged body
+                    // remains mounted until the real return owner reaches its end.
+                    compose.onAllNodesWithTag("list-search-popup", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
+                }
+            } finally { compose.mainClock.autoAdvance = false }
             assertEquals("Final restoration keeps the exact original row position", baseline, rowNode().fetchSemanticsNode().boundsInRoot.top, 1.1f)
             val observed = compose.runOnUiThread { frames.toList() }
             val placements = compose.runOnUiThread { placedFrames.toList() }
@@ -145,7 +151,7 @@ class ListSearchTest {
             for (sample in rootLayouts)
                 assertEquals("Row uses the placement owner's fraction measured in its own traversal: $sample",
                     baseline - slot * sample.fraction, sample.rowTop, 1.1f)
-            var wasOpening = false
+            var heldFlight: SearchMorphFlight? = null
             var heldFraction = 0f
             // Keep every callback for owner/trajectory assertions, including those
             // between root-window traversals that cannot pair a new row rectangle.
@@ -153,7 +159,12 @@ class ListSearchTest {
                 val flight = sample.flight
                 val bottom = sample.placementBottom
                 val travel = sample.slotTravel
-                if (sample.opening && !wasOpening) heldFraction = sample.slotFraction
+                // A native-window renewal or interrupted-return preview can start
+                // another opening flight before the visible flag changes.
+                if (sample.opening && flight?.opening == true && flight != heldFlight) {
+                    heldFraction = sample.slotFraction
+                    heldFlight = flight
+                }
                 if (sample.opening && flight?.opening == true && bottom == null)
                     assertEquals("Shape growth preserves vacancy until native placement owns travel", heldFraction, sample.slotFraction, 0f)
                 if (sample.opening && bottom != null && travel != null)
@@ -161,7 +172,7 @@ class ListSearchTest {
                 if (!sample.opening && flight != null)
                     assertEquals("Reverse the actual captured return flight", sample.slotReturnFrom * (1f - flight.fraction(sample.progress)), sample.slotFraction, .0001f)
                 if (reduced) assertTrue("Reduced motion has only placement endpoints", sample.slotFraction == 0f || sample.slotFraction == 1f)
-                wasOpening = sample.opening
+                if (!sample.opening) heldFlight = null
             }
             if (!reduced) {
                 assertTrue(observed.any { it.sample.opening && it.sample.slotFraction in .1f.. .9f })
