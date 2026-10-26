@@ -30,6 +30,8 @@ Final build and native commands, run only after candidate freeze:
 
 Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-frame, interruption and disposal assertions. Repeated utility-popup optical recording is opt-in with `utilityPopupOpticalDiagnostics=true`; the three mandatory scene methods still run by default. Successful SwitchTap frame exports require `switchTapOpticsReview=true`; pixel checks and bounded failure evidence remain enabled. Select diagnostic methods explicitly, never with a wildcard exclusion that might remove correctness tests.
 
+Build-report artifacts include raw JVM XML under `jvm-xml/<run>/testDebugUnitTest`, including when tests fail.
+
 Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [emulator configuration](#ci-and-signing). Physical-device review supplements automation. Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only fixtures never ship in the app.
 
 ### Coordinated local and hosted comparison
