@@ -513,7 +513,7 @@ class NestedGlassRegistrationTest {
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { open = true }
-            compose.advanceMorphOpening(1200, anchor) { popupView }
+            compose.advanceMorphOpening(4000, anchor) { popupView }
             compose.runOnIdle {
                 assertTrue(anchor.hidden && anchor.modalPresent)
                 assertEquals(1f, anchor.contact.expansion.value, 0f)
@@ -540,6 +540,9 @@ class NestedGlassRegistrationTest {
             }
             // Observe a fixed native-frame horizon, never poll until the desired mapping appears.
             repeat(40) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            // The observation window is not a new, shorter spring deadline.
+            // Use the existing fixture's 4s unobserved endpoint budget for disposal.
+            compose.mainClock.advanceTimeBy(4000); compose.waitForIdle()
             compose.runOnIdle {
                 if (Build.VERSION.SDK_INT >= 33) {
                     val samples = draws.filter { it.first && it.second.weight > 0f }.map { it.second }
