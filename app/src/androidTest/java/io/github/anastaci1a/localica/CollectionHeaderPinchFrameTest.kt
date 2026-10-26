@@ -56,7 +56,7 @@ class CollectionHeaderPinchFrameTest {
         val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF102030.toInt()) }
         val artwork = BrowseArtworkScope().apply {
             tracks.forEach { hold(it.id, listOf(it.uri), ArtworkCache.CachedArtwork(bitmap, 512)) }
-            keepVisual(tracks.first().uri, PlayerVisual(bitmap.asImageBitmap(), playerPalette(bitmap)))
+            keepVisual(tracks.first().uri, PlayerVisual(bitmap.asImageBitmap(), kotlinx.coroutines.runBlocking { playerPalette(bitmap) }))
         }
         val frames = mutableListOf<CollectionHeaderFrame>()
         var density = 0f

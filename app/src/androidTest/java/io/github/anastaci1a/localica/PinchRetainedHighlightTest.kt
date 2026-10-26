@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -44,17 +43,19 @@ class PinchRetainedHighlightTest {
     @Test fun snapshotPreservesTranslucentInkAndPaddedRows() {
         var captured: PixelMap? = null
         compose.setContent {
-            val layer = rememberGraphicsLayer()
-            LaunchedEffect(layer) {
+            val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
+            val readback = remember { PinchReadback() }
+            LaunchedEffect(graphics, readback) {
                 val density = Density(1f)
                 // An odd width exercises ImageReader row-stride padding on API 26.
-                layer.record(density, LayoutDirection.Ltr, IntSize(13, 7)) {
-                    repeat(7) { row ->
-                        drawRect(Color(1f, row / 8f, .25f, .13f),
-                            topLeft = Offset(0f, row.toFloat()), size = androidx.compose.ui.geometry.Size(13f, 1f))
+                captured = readback.capture(graphics, density, LayoutDirection.Ltr) { layer ->
+                    layer.record(density, LayoutDirection.Ltr, IntSize(13, 7)) {
+                        repeat(7) { row ->
+                            drawRect(Color(1f, row / 8f, .25f, .13f),
+                                topLeft = Offset(0f, row.toFloat()), size = androidx.compose.ui.geometry.Size(13f, 1f))
+                        }
                     }
-                }
-                captured = layer.pinchSnapshot(density, LayoutDirection.Ltr).toPixelMap()
+                }.toPixelMap()
             }
         }
         compose.waitUntil(5000) { captured != null }
