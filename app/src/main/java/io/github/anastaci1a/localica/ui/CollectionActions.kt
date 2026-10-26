@@ -21,8 +21,8 @@ import kotlinx.coroutines.*
     onInformation: ((io.github.anastaci1a.localica.library.Track) -> Unit)? = null,
     containingSource: MediaRef? = null, onRemove: (() -> Unit)? = null,
     selection: SessionSelection? = LocalSessionSelection.current,
+    onInformationPresented: ((io.github.anastaci1a.localica.library.Track, TagEditorPresentation) -> Unit)? = null,
     extra: @Composable () -> Unit = {}) {
-    val editTags = LocalTagEdit.current
     val selectionTarget = item.selectionTarget(containingSource)
     var adding by remember { mutableStateOf(false) }
     var queuePicker by remember { mutableStateOf(false) }
@@ -36,8 +36,13 @@ import kotlinx.coroutines.*
     val context = LocalContext.current
     fun act(action: SongTap) { onDismiss(); queues?.act(item.songs.map { it.track }, action, item.songs.map { it.sourcePlaylistId }) }
     GlassMenu(visible, anchor, onDismiss) {
+        val editTags = presentedTagEdit()
+        val presentation = currentTagEditorPresentation()
         item.row?.let { row ->
-            ActionMenuItem("Information", enabled = onInformation != null, onClick = { onDismiss(); onInformation?.invoke(row.track) })
+            ActionMenuItem("Information", enabled = onInformationPresented != null || onInformation != null, onClick = {
+                onDismiss()
+                if (onInformationPresented != null) onInformationPresented(row.track, presentation) else onInformation?.invoke(row.track)
+            })
             if (editTags != null) ActionMenuItem("Edit tags", onClick = { onDismiss(); editTags(listOf(row.track)) {} })
         }
         if (item.row == null && editTags != null) ActionMenuItem("Edit tags", enabled = item.songs.isNotEmpty(),
