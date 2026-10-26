@@ -93,22 +93,22 @@ class SwitchTapOpticsTest {
                 compose.mainClock.advanceTimeBy(at - elapsed); elapsed = at
                 val visibleBackdrop = capture("tap-$mode-$faster-$at", "tap")
                 if (at == 160L) assertTrue("Automatic travel must retain a refracted backdrop band ($mode, faster=$faster)", visibleBackdrop > 10)
-                capture("held-$mode-$faster-$at", "held")
+                recordProfile("held-$mode-$faster-$at", "held")
             }
             compose.runOnIdle { assertTrue(tapped); assertTrue(held) }
             compose.onNodeWithText("tap switch").performClick()
             compose.mainClock.advanceTimeBy(48)
-            capture("reverse-$mode-$faster", "tap")
+            recordProfile("reverse-$mode-$faster", "tap")
             compose.mainClock.advanceTimeBy(1000)
             compose.runOnIdle { assertFalse(tapped); assertTrue(held) }
             capture("settled-off-$mode-$faster", "tap")
             capture("settled-on-$mode-$faster", "held")
             heldSwitch.performTouchInput { down(Offset(width - 8f, centerY)) }
             compose.mainClock.advanceTimeBy(320)
-            capture("held-on-$mode-$faster", "held")
+            recordProfile("held-on-$mode-$faster", "held")
             heldSwitch.performTouchInput { moveTo(Offset(8f, centerY), delayMillis = 64) }
             compose.mainClock.advanceTimeBy(240)
-            capture("held-drag-$mode-$faster", "held")
+            recordProfile("held-drag-$mode-$faster", "held")
             heldSwitch.performTouchInput { up() }
             compose.mainClock.advanceTimeBy(1000)
             compose.runOnIdle { assertFalse(held) }
@@ -154,13 +154,13 @@ class SwitchTapOpticsTest {
             compose.waitForIdle()
             compose.onNodeWithText("Popup switch").assertIsDisplayed()
             compose.mainClock.autoAdvance = false
-            capture("popup-$opening-idle", "popup-switch")
+            recordProfile("popup-$opening-idle", "popup-switch")
             compose.onAllNodesWithTag("settings-switch", useUnmergedTree = true)[0]
                 .performTouchInput { down(center); advanceEventTime(8); up() }
             for (frame in 0..5) {
                 compose.mainClock.advanceTimeBy(32)
                 android.util.Log.i("SwitchTapOptics", "popup-$opening-$frame backingRecorded=${material?.recorded} raster=${material?.snapshot != null} consumers=${material?.consumers}")
-                capture("popup-$opening-$frame", "popup-switch")
+                recordProfile("popup-$opening-$frame", "popup-switch")
                 if (frame == 2) compose.onNodeWithText("Popup switch").performClick()
             }
             compose.mainClock.advanceTimeBy(1000)
@@ -234,7 +234,17 @@ class SwitchTapOpticsTest {
         }
     }
 
-    private fun capture(label: String, tag: String): Int {
+    private fun capture(label: String, tag: String): Int = requireNotNull(captureFrame(label, tag, true))
+
+    // These sites consume no metric and trigger none of captureFrame's pixel-value checks.
+    // Unit return prevents accidentally treating an unmeasured value as a measurement.
+    private fun recordProfile(label: String, tag: String) {
+        check(label.startsWith("popup-") || label.startsWith("reverse-") ||
+            label.startsWith("held-") && !label.startsWith("held-ready"))
+        captureFrame(label, tag, exportReviewFrames)
+    }
+
+    private fun captureFrame(label: String, tag: String, measureOptics: Boolean): Int? {
         compose.runOnIdle { stage = stage % 30 + 1 }
         val host = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
         val sample = if (tag == "popup-switch") IntOffset(host.width.toInt() / 2, 2) else IntOffset(2, 2)
@@ -248,6 +258,10 @@ class SwitchTapOpticsTest {
         val halfTrack = 16f * pixelDensity // Track drawing stays 32 dp even when row constraints shorten the control.
         val left = (control.left - host.left - control.height / 4).toInt().coerceAtLeast(0)
         val right = (control.right - host.left + control.height / 4).toInt().coerceAtMost(pixels.width)
+        if (!measureOptics) {
+            android.util.Log.i("SwitchTapOptics", "$label clock=${compose.mainClock.currentTime} opticalMetrics=not_requested backingRecorded=$recorded raster=$rasterReady size=${pixels.width}x${pixels.height}")
+            return null
+        }
         var green = 0; var outsideGreen = 0; var white = 0
         for (y in 0 until pixels.height) for (x in left until right) {
             val c = pixels[x, y]
