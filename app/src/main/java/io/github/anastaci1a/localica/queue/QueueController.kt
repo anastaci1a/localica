@@ -9,6 +9,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.anastaci1a.localica.library.LibraryRepository
+import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.playback.NativeReaders
 import io.github.anastaci1a.localica.playback.RecoveryAdmission
 import io.github.anastaci1a.localica.library.documentIdentity
@@ -26,7 +27,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                       private val library: LibraryRepository,
                       private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
                       private val readers: NativeReaders = NativeReaders(),
-                      private val sortSnapshot: suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot = { library.snapshots.first() }) {
+                      private val sortSnapshot: suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot = { library.snapshots.first() },
+                      private val mediaItemFactory: (String, Track, String?) -> MediaItem = ::queueMediaItem) {
     private val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
     private val commandJob: Job
     private val intents = PlaybackIntents()
@@ -35,6 +37,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     val state = mutable.asStateFlow()
     private var player: Player? = null
     private val timeline = QueueTimeline()
+    private data class ResolvedOccurrence(val track: Track, val sourcePlaylistId: String?, val item: MediaItem)
+    private data class ActivationCatalog(val snapshot: LibrarySnapshot?, val index: Map<String, Track>,
+        val queueId: String, val occurrences: Map<String, ResolvedOccurrence>)
+    // Actor-owned, bounded to the latest library index and one active queue. URI/grant
+    // resolution remains fresh; only exact immutable inputs authorize template reuse.
+    private var activationCatalog: ActivationCatalog? = null
     private var syncingTimeline = false
     private data class Arrival(val queueId: String, val token: String)
     /** Only synchronous normalization may create this value; publication consumes its exact source state. */
@@ -994,12 +1002,28 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             attached.stop(); attached.clearMediaItems(); applyPlaybackModes(timelineChanged = true)
             return
         }
-        val items = withContext(Dispatchers.IO) {
-            val currentLibrary = if (refreshLocations) library.snapshots.first().tracks.associateBy { it.id } else emptyMap()
+        val previousCatalog = activationCatalog
+        val prepared = withContext(Dispatchers.IO) {
+            // Keep the original explicit PlayNow/tap bypass; ordinary activations still
+            // collect the current snapshot even when its index can be reused.
+            val snapshot = if (refreshLocations) library.snapshots.first() else null
+            val currentLibrary = if (snapshot == null) emptyMap()
+                else if (previousCatalog != null && previousCatalog.snapshot === snapshot) previousCatalog.index
+                else snapshot.tracks.associateBy { it.id }
             val tracks = library.playableTracks(queue.entries.map { currentLibrary[it.track.id] ?: it.track })
-            queue.entries.zip(tracks) { entry, track -> queueMediaItem(entry.id, track, entry.sourcePlaylistId) }
+            val reusable = previousCatalog?.takeIf { it.queueId == queue.id }?.occurrences.orEmpty()
+            val occurrences = queue.entries.zip(tracks).associate { (entry, track) ->
+                val old = reusable[entry.id]
+                entry.id to if (old != null && old.track == track && old.sourcePlaylistId == entry.sourcePlaylistId) old
+                    else ResolvedOccurrence(track, entry.sourcePlaylistId, mediaItemFactory(entry.id, track, entry.sourcePlaylistId))
+            }
+            val catalog = ActivationCatalog(snapshot ?: previousCatalog?.snapshot,
+                if (snapshot != null) currentLibrary else previousCatalog?.index.orEmpty(), queue.id, occurrences)
+            catalog to queue.entries.map { occurrences.getValue(it.id).item }
         }
         if (player !== attached) return
+        activationCatalog = prepared.first
+        val items = prepared.second
         // An ordinary edit may resolve locations while the decoder advances to its prepared next song.
         if (!seek && loadedQueueId == queue.id) mutable.update { it.copy(library = capturedLibrary(attached)) }
         val latest = state.value.library.active ?: return
