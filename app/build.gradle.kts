@@ -73,3 +73,17 @@ dependencies {
     androidTestImplementation(libs.coroutines.test)
     debugImplementation(libs.compose.test.manifest)
 }
+
+// Preserve raw host XML in the existing build-report artifact, including failed tests.
+val jvmEvidenceTag = providers.environmentVariable("LOCALICA_TEST_EVIDENCE_TAG")
+    .orElse(providers.environmentVariable("GITHUB_RUN_ID")).orElse("local")
+val archiveDebugUnitXml = tasks.register<org.gradle.api.tasks.Copy>("archiveDebugUnitXml") {
+    from(layout.buildDirectory.dir("test-results/testDebugUnitTest")) { include("*.xml") }
+    into(jvmEvidenceTag.flatMap { tag ->
+        require(tag.matches(Regex("[A-Za-z0-9_-]{1,100}"))) { "Invalid JVM evidence tag" }
+        layout.buildDirectory.dir("reports/jvm-xml/$tag/testDebugUnitTest")
+    })
+}
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    if (name == "testDebugUnitTest") finalizedBy(archiveDebugUnitXml)
+}
