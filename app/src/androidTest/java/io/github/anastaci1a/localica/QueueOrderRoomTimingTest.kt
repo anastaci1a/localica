@@ -51,6 +51,9 @@ class QueueOrderRoomTimingTest {
         var primaryFailure: Throwable? = null
         var unloggedReport: Pair<String, QueueOrderTiming.Report>? = null
         var normalReportsLogged = 0
+        val saveWindows = linkedMapOf<String, RoomSaveWindow>() // Only the three named commands.
+        val loggedSaveWindows = mutableSetOf<String>()
+        var observedDao: TimingRoomQueueDao? = null
         try {
             check(directory.mkdirs()) { "Could not create the owned fixture directory" }
             val audio = File(directory, "queue-tone.mp3")
@@ -101,10 +104,11 @@ class QueueOrderRoomTimingTest {
                 queueDb.queues().save(QueueLibrary(), QueueLibrary(listOf(queue), queue.id))
                 queue
             }
+            val timedDao = TimingRoomQueueDao(queueDb.queues()).also { observedDao = it }
             val queues = withContext(Dispatchers.Main) {
                 val native = ExoPlayer.Builder(context).build().apply { volume = 0f; playWhenReady = false }
                 player = native
-                QueueController(queueDb.queues(), preferences, library, actor).also { queues ->
+                QueueController(timedDao, preferences, library, actor).also { queues ->
                     queues.orderTimingObserver = { operation, report ->
                         reportCount.incrementAndGet()
                         check(reports.trySend(operation to report).isSuccess) { "Timing report was not retained" }
@@ -143,11 +147,15 @@ class QueueOrderRoomTimingTest {
                 val callbackCalls = AtomicInteger()
                 val callbackNanos = AtomicLong()
                 val callbackFailure = AtomicReference<Throwable?>()
+                val saveWindow = RoomSaveWindow()
+                check(saveWindows.put(operation, saveWindow) == null) { "Command window already exists" }
                 withTimeout(remaining(deadline)) {
                     withContext(Dispatchers.Main) {
+                        timedDao.openWindow(saveWindow)
                         submit { commit ->
                             val callbackEnteredAt = System.nanoTime()
                             try {
+                                timedDao.closeWindow(RoomSaveWindow.End.CallbackEntry, saveWindow)
                                 assertEquals("One completion callback per command", 1, callbackCalls.incrementAndGet())
                                 assertTrue("Order command must succeed", commit != null)
                                 val actual = requireNotNull(queues.state.value.library.active)
@@ -191,7 +199,10 @@ class QueueOrderRoomTimingTest {
                 Log.i("QueueOrderRoomTiming", "operation=$reportedOperation actualRoomQueue=true actualRoomLibrary=true " +
                     "storage=inMemory evidence=callback-observed " +
                     "nativeApiReturnIsAudioReadiness=false callbackValidationNanos=${callbackNanos.get()} " +
-                    "validationIncludedInStages=true $report")
+                    "validationIncludedInStages=true $report " +
+                    "saveAssociation=invocation-entry-in-command-window commandCausality=unproven " +
+                    "priorQueuedWorkMayBeIncluded=true roomSave=${saveWindows[reportedOperation]?.snapshot() ?: "unavailable"}")
+                loggedSaveWindows += reportedOperation
                 unloggedReport = null
                 normalReportsLogged++
                 callbackFailure.get()?.let { throw it }
@@ -238,6 +249,7 @@ class QueueOrderRoomTimingTest {
                         if (cleanupFailure == null) cleanupFailure = failure else cleanupFailure!!.addSuppressed(failure)
                     }
                 }
+                attempt { observedDao?.closeWindow(RoomSaveWindow.End.FailureCleanup) }
                 val owner = actor.coroutineContext[Job]!!
                 attempt { withTimeout(10_000) { owner.cancelAndJoin() } }
                 // Cancellation/timeout alone is not termination. Parent completion includes the
@@ -269,7 +281,10 @@ class QueueOrderRoomTimingTest {
                     fun logAvailable(available: Pair<String, QueueOrderTiming.Report>) {
                         Log.w("QueueOrderRoomTiming", "operation=${available.first} evidence=failure-cleanup-terminal " +
                             "storage=inMemory nativeApiReturnIsAudioReadiness=false " +
-                            "callbackValidationNanos=unavailable validationIncludedInStages=true ${available.second}")
+                            "callbackValidationNanos=unavailable validationIncludedInStages=true ${available.second} " +
+                            "saveAssociation=invocation-entry-in-command-window commandCausality=unproven " +
+                            "priorQueuedWorkMayBeIncluded=true roomSave=${saveWindows[available.first]?.snapshot() ?: "unavailable"}")
+                        loggedSaveWindows += available.first
                         availableReportsLogged++
                     }
                     // Preserve a report received just before a deadline/assertion failed to log it.
@@ -279,6 +294,11 @@ class QueueOrderRoomTimingTest {
                     // later publications remain possible and their channel stays owned and open.
                     repeat(reportCount.get()) {
                         reports.tryReceive().getOrNull()?.let(::logAvailable)
+                    }
+                    saveWindows.filterKeys { it !in loggedSaveWindows }.forEach { (operation, window) ->
+                        Log.w("QueueOrderRoomTiming", "operation=$operation terminalEvidence=unavailable-at-observation " +
+                            "saveAssociation=invocation-entry-in-command-window commandCausality=unproven " +
+                            "priorQueuedWorkMayBeIncluded=true roomSave=${window.snapshot()}")
                     }
                     Log.w("QueueOrderRoomTiming", "failureCleanupEvidence normalReportsLogged=$normalReportsLogged " +
                         "availableUnconsumedReportsLogged=$availableReportsLogged observerCalls=${reportCount.get()} " +
@@ -329,4 +349,157 @@ class QueueOrderRoomTimingTest {
         assertEquals(0f, player.volume, 0f)
         // No STATE_READY assertion here: synchronous native API return is not decoder/audio readiness.
     }
+}
+
+/** Scalar aggregates only. A save belongs to the window active at invocation entry, even if it
+ * finishes after closure. Prior queued actor work can enter this window; this is not causality.
+ * Change-detection cost is measured separately, excluded from the delegate-call wall time but
+ * included in the existing controller stages. Snapshot counts describe observations, not SQL rows.
+ * Measured sums retain partial evidence (null means none). Complete totals additionally require a
+ * closed window and every relevant endpoint; missing samples and pending saves remain explicit.
+ */
+private class RoomSaveWindow {
+    enum class End { CallbackEntry, FailureCleanup }
+    data class Summary(val invocations: Long, val succeeded: Long, val threw: Long, val pending: Long,
+        val classifiedCalls: Long, val entriesChangedCalls: Long, val orderChangedCalls: Long,
+        val journeyChangedCalls: Long, val timedCalls: Long, val untimedCompletedCalls: Long,
+        val measuredSaveNanos: Long?, val completeSaveNanos: Long?, val unclassifiedCalls: Long,
+        val measuredChangeDetectionNanos: Long?, val completeChangeDetectionNanos: Long?,
+        val observationFailures: Long, val closedAt: End?,
+        val observationsComplete: Boolean)
+
+    private var invocations = 0L
+    private var succeeded = 0L
+    private var threw = 0L
+    private var classified = 0L
+    private var entriesChanged = 0L
+    private var orderChanged = 0L
+    private var journeyChanged = 0L
+    private var timed = 0L
+    private var saveNanos = 0L
+    private var detectionNanos = 0L
+    private var failures = 0L
+    private var ended: End? = null
+
+    @Synchronized fun entered() { invocations++ }
+    @Synchronized fun closed(end: End) { ended = end }
+    @Synchronized fun observationFailed() { failures++ }
+    @Synchronized fun classified(entries: Boolean, order: Boolean, journey: Boolean, elapsed: Long) {
+        val total = Math.addExact(detectionNanos, elapsed)
+        classified++
+        if (entries) entriesChanged++
+        if (order) orderChanged++
+        if (journey) journeyChanged++
+        detectionNanos = total
+    }
+    @Synchronized fun completed(success: Boolean, elapsed: Long?) {
+        if (success) succeeded++ else threw++
+        if (elapsed != null) {
+            val total = Math.addExact(saveNanos, elapsed)
+            timed++
+            saveNanos = total
+        }
+    }
+    @Synchronized fun snapshot(): Summary {
+        val completed = succeeded + threw
+        return Summary(invocations, succeeded, threw, invocations - completed, classified,
+            entriesChanged, orderChanged, journeyChanged, timed, completed - timed,
+            saveNanos.takeIf { timed > 0 },
+            saveNanos.takeIf { ended != null && timed > 0 && timed == invocations && completed == invocations },
+            invocations - classified, detectionNanos.takeIf { classified > 0 },
+            detectionNanos.takeIf { ended != null && classified > 0 && classified == invocations }, failures, ended,
+            ended != null && completed == invocations && classified == invocations && timed == completed && failures == 0L)
+    }
+}
+
+/** Same high-level delegation boundary as PreparedQueueDao; Room still owns every transaction.
+ * No input graph or per-invocation record survives save(). read() is never a measured save.
+ */
+private class TimingRoomQueueDao(private val delegate: QueueDao) : QueueDao() {
+    private var active: RoomSaveWindow? = null
+    @Synchronized fun openWindow(window: RoomSaveWindow) {
+        check(active == null) { "A save observation window is already open" }
+        active = window
+    }
+    @Synchronized fun closeWindow(end: RoomSaveWindow.End, expected: RoomSaveWindow? = null) {
+        if (expected == null || active === expected) {
+            active?.closed(end)
+            active = null
+        }
+    }
+    @Synchronized private fun enterWindow() = active?.also { it.entered() }
+
+    override suspend fun read() = delegate.read()
+    override suspend fun save(before: QueueLibrary, after: QueueLibrary) {
+        val window = enterWindow()
+        if (window == null) { delegate.save(before, after); return }
+        var diagnosticFailure: Throwable? = null
+        fun observe(action: () -> Unit) {
+            try { action() } catch (failure: Throwable) {
+                window.observationFailed()
+                val earlier = diagnosticFailure
+                if (earlier == null) diagnosticFailure = failure
+                else if (!suppressDistinct(earlier, failure)) window.observationFailed()
+            }
+        }
+        observe {
+            val start = System.nanoTime()
+            var entries = false
+            var order = false
+            var journey = false
+            for (next in after.queues) {
+                val previous = before.queues.firstOrNull { it.id == next.id }
+                entries = entries || previous?.entries != next.entries
+                order = order || previous?.order != next.order
+                journey = journey || previous == null || previous.journey != next.journey
+            }
+            if (before.queues.any { previous -> after.queues.none { it.id == previous.id } }) {
+                entries = true; order = true; journey = true
+            }
+            val elapsed = System.nanoTime() - start
+            check(elapsed >= 0) { "Change-detection clock is invalid" }
+            window.classified(entries, order, journey, elapsed)
+        }
+        var startedAt: Long? = null
+        observe { startedAt = System.nanoTime() }
+        var daoFailure: Throwable? = null
+        try { delegate.save(before, after) } catch (failure: Throwable) { daoFailure = failure }
+        var elapsed: Long? = null
+        observe {
+            val endedAt = System.nanoTime()
+            startedAt?.let { start ->
+                elapsed = (endedAt - start).also { check(it >= 0) { "Save boundary clock is invalid" } }
+            }
+        }
+        observe { window.completed(daoFailure == null, elapsed) }
+        // Observation problems never prevent the delegate call or replace its exact Throwable.
+        // After delegate success they fail this diagnostic, qualified as observation failures.
+        daoFailure?.let { primary ->
+            diagnosticFailure?.let { if (!suppressDistinct(primary, it)) window.observationFailed() }
+            throw primary
+        }
+        diagnosticFailure?.let { throw it }
+    }
+
+    private fun suppressDistinct(primary: Throwable, secondary: Throwable): Boolean = try {
+        if (primary !== secondary && primary.suppressed.none { it === secondary }) primary.addSuppressed(secondary)
+        true
+    } catch (_: Throwable) { false }
+
+    override suspend fun readQueues(): List<StoredQueue> = error("Use delegated read")
+    override suspend fun readActive(): ActiveQueueRecord? = error("Use delegated read")
+    override suspend fun upsertQueue(queue: QueueRecord): Unit = error("Use delegated save")
+    override suspend fun updateQueueMetadata(queue: QueueMetadataRecord): Int = error("Use delegated save")
+    override suspend fun upsertActive(active: ActiveQueueRecord): Unit = error("Use delegated save")
+    override suspend fun upsertJourney(journey: JourneyRecord): Unit = error("Use delegated save")
+    override suspend fun clearJourney(id: String): Unit = error("Use delegated save")
+    override suspend fun upsertVisits(visits: List<VisitRecord>): Unit = error("Use delegated save")
+    override suspend fun updateVisits(visits: List<VisitRecord>): Int = error("Use delegated save")
+    override suspend fun upsertCycleMembers(members: List<CycleMemberRecord>): Unit = error("Use delegated save")
+    override suspend fun updateCycleMembers(members: List<CycleMemberRecord>): Int = error("Use delegated save")
+    override suspend fun deleteVisits(queueId: String, tokens: List<String>): Unit = error("Use delegated save")
+    override suspend fun deleteCycleMembers(queueId: String, cycle: Long, entries: List<String>): Unit = error("Use delegated save")
+    override suspend fun insertEntries(entries: List<EntryRecord>): Unit = error("Use delegated save")
+    override suspend fun clearEntries(id: String): Unit = error("Use delegated save")
+    override suspend fun deleteQueue(id: String): Unit = error("Use delegated save")
 }
