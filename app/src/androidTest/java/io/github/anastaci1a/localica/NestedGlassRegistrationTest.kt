@@ -452,6 +452,115 @@ class NestedGlassRegistrationTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
+    @Test fun detachedTriggerReturnRetainsItsLastMeasuredFootprintInsteadOfTheOpeningBasis() {
+        var open by mutableStateOf(false)
+        var mounted by mutableStateOf(true)
+        var moved by mutableStateOf(false)
+        var returning by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        lateinit var source: FrostedBackdrop
+        lateinit var producer: LayoutCoordinates
+        lateinit var trigger: LayoutCoordinates
+        var popupView: View? = null
+        val draws = mutableListOf<Pair<Boolean, HomeBackdropSamplingFrame>>()
+        fun nativeCorners(): List<Offset> = listOf(Offset.Zero,
+            Offset(trigger.size.width.toFloat(), 0f),
+            Offset(trigger.size.width.toFloat(), trigger.size.height.toFloat()),
+            Offset(0f, trigger.size.height.toFloat())).map {
+                producer.screenToLocal(trigger.localToScreen(it))
+            }
+        fun assertCorners(expected: List<Offset>, actual: List<Offset>) {
+            assertEquals(4, actual.size)
+            expected.zip(actual).forEach { (a, b) ->
+                assertEquals(a.x, b.x, .04f); assertEquals(a.y, b.y, .04f)
+            }
+        }
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(
+            LocalReducedMotion provides false, LocalMotionSpeed provides 1f,
+            LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f,
+                contrast = 0f, shadowStrength = 0f)) {
+            Box(Modifier.size(320.dp, 400.dp)) {
+                source = rememberFrostedBackdrop(Unit, enabled = false, dark = false, retainRaster = false)
+                SideEffect { source.materialOnly = true; source.materialCorner = 0f }
+                Box(Modifier.offset(16.dp, 32.dp).size(200.dp, 150.dp)) {
+                    Canvas(Modifier.fillMaxSize().onGloballyPositioned { producer = it }
+                        .recordFrostedBackdrop(source)) { drawRect(Color(0xFF547D91)) }
+                    CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides source) {
+                        anchor = rememberGlassAnchor()
+                        if (mounted) LiquidGlassSurface(Modifier
+                            .offset(if (moved) 90.dp else 110.dp, if (moved) 100.dp else 95.dp)
+                            .size(180.dp, 100.dp).graphicsLayer {
+                                scaleX = if (moved) .55f else .4f
+                                scaleY = if (moved) .3f else .5f
+                                transformOrigin = TransformOrigin(0f, 0f)
+                            }.onGloballyPositioned { trigger = it }.glassAnchor(anchor),
+                            pressFeedback = false, shadow = false)
+                        val returnPhase = returning
+                        CompositionLocalProvider(LocalHomeBackdropSamplingObserver provides { frame ->
+                            Snapshot.withoutReadObservation { draws += returnPhase to frame }
+                        }) {
+                            GlassMorphPopup(open, anchor, { open = false }) {
+                                popupView = LocalView.current
+                                Box(Modifier.size(216.dp, 180.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        } } }
+        compose.waitForIdle()
+        val original = compose.runOnIdle { nativeCorners() }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { open = true }
+            compose.advanceMorphOpening(1200, anchor) { popupView }
+            compose.runOnIdle {
+                assertTrue(anchor.hidden && anchor.modalPresent)
+                assertEquals(1f, anchor.contact.expansion.value, 0f)
+                moved = true
+            }
+            repeat(2) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            val last = compose.runOnIdle {
+                assertTrue(trigger.isAttached && producer.isAttached)
+                val actual = nativeCorners()
+                assertNotEquals("The trigger moved before disposal", original, actual)
+                val cached = requireNotNull(anchor.lastSamplingFootprint)
+                assertCorners(actual, requireNotNull(cached.cornersInSource(source.location.registrationToScreen())))
+                actual
+            }
+            compose.runOnIdle { mounted = false }
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+            compose.runOnIdle {
+                assertFalse("Actual trigger coordinates are detached", trigger.isAttached)
+                assertFalse(anchor.triggerMounted)
+                assertTrue("The sampled producer remains live", source.recorded && !source.layer.isReleased)
+                assertCorners(last, requireNotNull(anchor.lastSamplingFootprint)
+                    .cornersInSource(source.location.registrationToScreen())!!)
+                returning = true; open = false
+            }
+            // Observe a fixed native-frame horizon, never poll until the desired mapping appears.
+            repeat(40) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            compose.runOnIdle {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    val samples = draws.filter { it.first && it.second.weight > 0f }.map { it.second }
+                    assertTrue("Detached return has actual positive-weight Canvas choices", samples.isNotEmpty())
+                    samples.forEach { frame ->
+                        assertTrue(frame.averaged)
+                        assertTrue(frame.weight.isFinite() && frame.weight <= 1f)
+                        assertCorners(last, requireNotNull(frame.cornersInSource))
+                        assertCorners(last, requireNotNull(frame.footprint)
+                            .cornersInSource(source.location.registrationToScreen())!!)
+                    }
+                } else {
+                    assertTrue("API26 has no modern Canvas averaging witness", draws.isEmpty())
+                    android.util.Log.i("MorphHomeFootprint", "detached return: API26 last measured producer/window metadata only; no sampling/pixel-consumption proof")
+                }
+                assertFalse(anchor.hidden || anchor.modalPresent || anchor.shadowInModal)
+            }
+            compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     private fun verifyPopupRegistration(phase: String, source: FrostedBackdrop,
         material: FrostedBackdrop?, complete: FrostedBackdrop?, location: BackdropLocation?): Float = compose.runOnIdle {
         val panel = requireNotNull(material) { "$phase material was not mounted" }
