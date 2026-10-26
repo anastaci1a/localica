@@ -62,12 +62,12 @@ internal class MaterialAverageRenderer {
     fun effect(style: MaterialAverageStyle = MaterialAverageStyle(0f, GlassTone()), validMask: Long = -1L): RenderEffect {
         require(validMask != 0L) { "An average requires current valid material samples" }
         if (style == previous && validMask == previousMask) return requireNotNull(cached)
-        previous = style
-        previousMask = validMask
         shader.setFloatUniform("whiteTint", style.whiteTint)
         shader.setFloatUniform("tone", style.tone.trim, style.tone.weight, if (style.tone.lightInk) 1f else 0f)
-        shader.setFloatUniform("coverage", *FloatArray(64) { index -> if (validMask and (1L shl index) != 0L) 1f else 0f })
+        shader.setFloatUniform("coverage", FloatArray(64) { index -> if (validMask and (1L shl index) != 0L) 1f else 0f })
         shader.setFloatUniform("coverageCount", java.lang.Long.bitCount(validMask).toFloat())
-        return android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene").asComposeRenderEffect().also { cached = it }
+        return android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene").asComposeRenderEffect().also {
+            previous = style; previousMask = validMask; cached = it
+        }
     }
 }
