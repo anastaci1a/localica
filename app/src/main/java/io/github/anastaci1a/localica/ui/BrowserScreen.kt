@@ -5,6 +5,8 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateBounds
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.stopScroll
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -381,6 +383,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         try {
             if (index >= 0) scrollOwnership.during {
                 headerPhase("position-request")
+                // Recognition already owns and consumes the two-finger contact.
+                // Retire the grid's earlier drag/fling mutation before requesting
+                // this pinch's measured anchor. Unheld restoration keeps normal priority.
+                if (pinchMotion.held) gridState.stopScroll(MutatePriority.UserInput)
                 when (anchor.edge) {
                     -1 -> gridState.scrollToItem(0)
                     1 -> gridState.scrollToItem((gridState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
@@ -420,6 +426,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     } while (pinchMotion.source != null || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
                 }
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            headerPhase("mutation-cancelled type=${cancelled.javaClass.simpleName}")
+            throw cancelled
         } finally {
             headerPhase("retired active=${kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive}")
             if (zoomAnchor == anchor) zoomAnchor = null
