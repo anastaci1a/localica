@@ -176,6 +176,9 @@ class MaterialAverageTransitionTest {
                     destination.snapshot != null && destination.fallback != null &&
                         destination.snapshotReadbackRequest == destination.readbackRequest &&
                         (previousSnapshot == null || destination.snapshot !== previousSnapshot) &&
+                        // The foreground negative uses the existing detailed role, which is
+                        // prepared after publication. With neutral tint/blur its identity is exact.
+                        (!foreground || destination.lensSnapshot === destination.snapshot) &&
                         (!withHome || home.snapshot != null && home.fallback != null &&
                             home.snapshotReadbackRequest == home.readbackRequest)
                 }
