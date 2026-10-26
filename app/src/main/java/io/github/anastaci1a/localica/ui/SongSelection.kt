@@ -16,9 +16,27 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.foundation.lazy.LazyListState
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
+
+/** Passive in-host drawing witness; it neither invalidates drawing nor captures pixels. */
+internal data class PlaylistSelectionDrawSource(val scene: SelectionScene, val state: LazyListState,
+    val viewport: LayoutCoordinates, val content: LayoutCoordinates,
+    val rows: Map<String, LayoutCoordinates>, val chosen: List<String>, val view: android.view.View,
+    val hostDraws: () -> Int)
+internal val LocalPlaylistSelectionDrawObserver = staticCompositionLocalOf<((PlaylistSelectionDrawSource) -> Unit)?> { null }
+private class PlaylistSelectionProbe {
+    var scene: SelectionScene? = null
+    var viewport: LayoutCoordinates? = null
+    var content: LayoutCoordinates? = null
+    val rows = mutableMapOf<String, LayoutCoordinates>()
+    var hostDraws = 0
+}
 
 @Composable
 internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSelection: (Set<String>) -> Unit,
@@ -90,6 +108,10 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
         }
     }
     val duplicate = name.isNotBlank() && !PlaylistEdits.nameAvailable(state.playlists, name)
+    val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+    val probe = remember { PlaylistSelectionProbe() }
+    val observer = LocalPlaylistSelectionDrawObserver.current
+    val observe by rememberUpdatedState(observer)
     val valid = controller != null && !saving && !state.loading && !duplicate && (name.isNotBlank() || chosen.isNotEmpty())
     fun add() {
         if (!valid) return
@@ -102,13 +124,34 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }))
             if (duplicate) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
-            SelectionViewport(Modifier.fillMaxWidth().heightIn(max = 320.dp)) { overscroll ->
-            val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
-            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().scrollEdgeFade(scroll), state = scroll, overscrollEffect = overscroll) {
+            val selectionView = androidx.compose.ui.platform.LocalView.current
+            SelectionViewport(Modifier.fillMaxWidth().heightIn(max = 320.dp).scrollEdgeFade(scroll)
+                .testTag("playlist-selection-viewport")
+                .then(if (observer == null) Modifier else Modifier.onPlaced { probe.viewport = it }),
+                observePlacement = { scroll.layoutInfo; if (observer != null) probe.hostDraws++; Unit },
+                visibleItemKeys = { scroll.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.key } },
+                contentDrawing = if (observer == null) Modifier else Modifier.drawWithContent {
+                    drawContent()
+                    val scene = probe.scene
+                    val viewport = probe.viewport
+                    val content = probe.content
+                    if (scene != null && viewport?.isAttached == true && content?.isAttached == true)
+                        androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                            observe?.invoke(PlaylistSelectionDrawSource(scene, scroll, viewport, content, probe.rows, chosen, selectionView) { probe.hostDraws })
+                        }
+                }) { overscroll ->
+            val scene = LocalSelectionScene.current
+            SideEffect { probe.scene = scene }
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth()
+                .then(if (observer == null) Modifier else Modifier.onPlaced { probe.content = it }),
+                state = scroll, overscrollEffect = overscroll) {
                 items(sortedPlaylists.size, key = { sortedPlaylists[it].id }) { index ->
                     val playlist = sortedPlaylists[index]
                     val selected = playlist.id in chosen
-                    Row(Modifier.fillMaxWidth().semantics { this.selected = selected }.selectionLens(selected, false)
+                    if (observer != null) DisposableEffect(playlist.id) { onDispose { probe.rows.remove(playlist.id) } }
+                    Row(Modifier.fillMaxWidth().semantics { this.selected = selected }.selectionLens(selected, false, itemKey = playlist.id)
+                        .testTag("playlist-selection-${playlist.id}")
+                        .then(if (observer == null) Modifier else Modifier.onPlaced { probe.rows[playlist.id] = it })
                         .then(Modifier.combinedClickable(enabled = !saving, onClick = {
                             chosen = if (selected) chosen - playlist.id else chosen + playlist.id
                         })).padding(vertical = 8.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically,

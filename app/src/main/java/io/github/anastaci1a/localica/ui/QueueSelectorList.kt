@@ -19,8 +19,24 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.onPlaced
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.queue.ListeningQueue
+
+/** Same in-host witness as the playlist adapter; no screenshot or redraw request. */
+internal data class QueueSelectionDrawSource(val scene: SelectionScene, val state: LazyGridState,
+    val viewport: LayoutCoordinates, val content: LayoutCoordinates,
+    val rows: Map<String, LayoutCoordinates>, val browsedId: String?, val view: android.view.View,
+    val hostDraws: () -> Int)
+internal val LocalQueueSelectionDrawObserver = staticCompositionLocalOf<((QueueSelectionDrawSource) -> Unit)?> { null }
+private class QueueSelectionProbe {
+    var scene: SelectionScene? = null
+    var viewport: LayoutCoordinates? = null
+    var content: LayoutCoordinates? = null
+    val rows = mutableMapOf<String, LayoutCoordinates>()
+    var hostDraws = 0
+}
 
 private data class QueueDragPresentation(val browsedId: String?, val playingId: String?, val isPlaying: Boolean,
     val numbers: Map<String, Int>)
@@ -34,6 +50,10 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
     val panelReady = LocalGlassPanelReady.current
     val playingIndex = queues.indexOfFirst { it.id == playingId }.coerceAtLeast(0)
     val grid = rememberLazyGridState(initialFirstVisibleItemIndex = playingIndex)
+    val probe = remember { QueueSelectionProbe() }
+    val observer = LocalQueueSelectionDrawObserver.current
+    val observe by rememberUpdatedState(observer)
+    val selectionView = androidx.compose.ui.platform.LocalView.current
     LaunchedEffect(enabled) { if (enabled) grid.requestScrollToItem(playingIndex) }
     val scope = rememberCoroutineScope()
     val presentation by rememberUpdatedState(QueueDragPresentation(browsedId, playingId, isPlaying,
@@ -68,10 +88,25 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
             val key = reorder.itemCoordinates.entries.firstOrNull { (_, row) -> row.containsPoint() }?.key
             queues.firstOrNull { it.id == key && actions[key]?.containsPoint() != true }
         }, commit = commit)) {
-        SelectionViewport { overscroll ->
+        SelectionViewport(Modifier.then(if (observer == null) Modifier else Modifier.onPlaced { probe.viewport = it }),
+            observePlacement = { grid.layoutInfo; if (observer != null) probe.hostDraws++; Unit },
+            visibleItemKeys = { grid.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.key } },
+            contentDrawing = if (observer == null) Modifier else Modifier.drawWithContent {
+                drawContent()
+                val scene = probe.scene
+                val viewport = probe.viewport
+                val content = probe.content
+                if (scene != null && viewport?.isAttached == true && content?.isAttached == true)
+                    androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                        observe?.invoke(QueueSelectionDrawSource(scene, grid, viewport, content, probe.rows, browsedId, selectionView) { probe.hostDraws })
+                    }
+            }) { overscroll ->
+            val scene = LocalSelectionScene.current
+            SideEffect { probe.scene = scene }
             LazyVerticalGrid(columns = GridCells.Fixed(1), state = grid,
                 modifier = Modifier.testTag("queue-selector-grid").selectableGroup().padding(horizontal = 8.dp)
-                    .controlScrollParent(grid, ControlScrollAxis.Vertical), overscrollEffect = overscroll) {
+                    .controlScrollParent(grid, ControlScrollAxis.Vertical)
+                    .then(if (observer == null) Modifier else Modifier.onPlaced { probe.content = it }), overscrollEffect = overscroll) {
                 items(reorder.rendered(queues), key = { it?.id ?: DropGapKey }) { queue ->
                     if (queue == null) {
                         Spacer(Modifier.fillMaxWidth().height(with(density) { (reorder.drag?.cardSize?.height ?: 0f).toDp() }))
@@ -84,11 +119,12 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
                             .graphicsLayer { alpha = reorder.drag?.takeIf { it.dropping && queue.id in it.keys }?.handoff?.value ?: 1f }
                             .onGloballyPositioned { reorder.itemCoordinates[queue.id] = it }) {
                             DisposableEffect(queue.id) { onDispose {
-                                reorder.itemCoordinates.remove(queue.id); actions.remove(queue.id)
+                                reorder.itemCoordinates.remove(queue.id); actions.remove(queue.id); probe.rows.remove(queue.id)
                             } }
                             QueueSelectorRow(displayed, presentation.numbers[queue.id] ?: 0, queue.id == browsedId,
                                 queue.id == playingId, isPlaying, reducedMotion, interactive,
                                 actionsModifier = Modifier.onGloballyPositioned { actions[queue.id] = it },
+                                selectionPlacement = if (observer == null) Modifier else Modifier.onPlaced { probe.rows[queue.id] = it },
                                 onSelect = { onSelect(queue.id) }, onRename = { onRename(queue.id) }, onDelete = { onDelete(queue.id) },
                                 onOffset = { onOffset(queue.id, it) })
                         }
@@ -108,9 +144,11 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
 @Composable
 private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean, playing: Boolean,
     isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, actionsModifier: Modifier = Modifier,
+    selectionPlacement: Modifier = Modifier,
     onSelect: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit, onOffset: (Int) -> Unit) {
     Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
-        modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false).testTag("queue-row-${queue.id}")) {
+        modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false, itemKey = queue.id)
+            .then(selectionPlacement).testTag("queue-row-${queue.id}")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ReorderHandle("Reorder ${queue.name}", onOffset, Modifier.testTag("queue-handle-${queue.id}"), enabled)
             Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
