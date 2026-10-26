@@ -40,6 +40,9 @@ internal const val RaisedGlassDepthScale = 1.3f
 internal const val BottomPillDepthScale = .72f
 internal val MiniArtworkSize = 32.dp
 
+/** Test-only draw control; the default leaves every surface's rim unchanged. */
+internal val LocalGlassRimOpacityForDiagnostics = staticCompositionLocalOf<() -> Float> { { 1f } }
+
 @Stable
 internal class GlassContact {
     var pressed by mutableStateOf(false)
@@ -116,6 +119,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
     val appearance = LocalGlassAppearance.current.normalized()
+    val diagnosticRimOpacity = LocalGlassRimOpacityForDiagnostics.current
     // The page owns ink polarity. A control never flips independently as content
     // scrolls beneath it, and no GPU readback is needed to choose its foreground.
     val dark = inkOverride?.let { it.luminance() > .5f } ?: (source?.dark == true)
@@ -239,12 +243,13 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             if (panel > 0f) drawFrostCoating(coatingDark, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
+            val rimOpacity = diagnosticRimOpacity()
             drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f,
-                path = outline?.path, tone = tone, opacity = 1f - splitRim)
+                path = outline?.path, tone = tone, opacity = (1f - splitRim) * rimOpacity)
             if (outline != null && splitRim > 0f) outline.bodies.forEach { part ->
                 clipRect(part.left, part.top, part.right, part.bottom) {
                     drawGlassRim(androidx.compose.ui.geometry.Rect(part.left, part.top, part.right, part.bottom),
-                        part.height / 2f, path = outline.path, tone = tone, opacity = splitRim)
+                        part.height / 2f, path = outline.path, tone = tone, opacity = splitRim * rimOpacity)
                 }
             }
 
