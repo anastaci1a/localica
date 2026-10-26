@@ -1,12 +1,16 @@
-package io.github.anastaci1a.localica.queue
+package io.github.anastaci1a.localica
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.library.TrackSnapshot
+import io.github.anastaci1a.localica.queue.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
 
 /** SQL transaction rollback and owner isolation belong to QueueEntryOrdinalPersistenceTest. */
+@RunWith(AndroidJUnit4::class)
 class QueueEntryOrdinalWorkTest {
     private fun queue(): ListeningQueue {
         val song = Track("content://song", "Song", fileName = "song.mp3", relativePath = "song.mp3")
