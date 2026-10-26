@@ -50,7 +50,8 @@ class PinchReleaseHandoffTest {
         val initial = if (gallery) BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5, listSize = ListSize.Large)
             else BrowseStyle(listSize = if (outward) ListSize.Tracklist else ListSize.Normal)
         val target = if (gallery) { if (outward) "Gallery, 4 columns" else "List, Large" }
-            else if (outward) "List, Normal" else "List, Tracklist"
+            // Compact is now adjacent to both source views in the requested order.
+            else "List, Compact"
         val tracks = (0..159).map { index -> Track("release:$index", "Song ${index.toString().padStart(3, '0')}",
             fileName = "$index.mp3", relativePath = "$index.mp3") }
         // Keep query identity stable when the presentation marker invalidates drawing.
@@ -215,7 +216,7 @@ class PinchReleaseHandoffTest {
                 assertTrue("Artwork edge $edge cannot jump at handoff: $values",
                     values.zipWithNext().all { (a, b) -> kotlin.math.abs(b - a) <= range * .25f + 3f })
             }
-            assertEquals(if (cancelled || gallery) initial.listSize else if (outward) ListSize.Normal else ListSize.Tracklist,
+            assertEquals(if (cancelled || gallery) initial.listSize else ListSize.Compact,
                 prefs.read(route).listSize)
             if (gallery && !cancelled) {
                 assertEquals(if (outward) Presentation.Standard else Presentation.List, prefs.read(route).presentation)
