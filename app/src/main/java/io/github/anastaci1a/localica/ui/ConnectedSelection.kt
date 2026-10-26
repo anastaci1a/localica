@@ -35,17 +35,20 @@ internal class SelectionEntry {
 @Stable internal class SelectionScene {
     val regions = mutableStateMapOf<Any, SelectionEntry>()
     var placement by mutableIntStateOf(0)
+    // Last geometry actually submitted by the host draw, not copied placement callbacks.
+    // Plain state for source/native regression inspection; never drives composition or animation.
+    var lastDrawnRegions: List<SelectionRegion> = emptyList()
 }
 internal val LocalSelectionScene = staticCompositionLocalOf<SelectionScene?> { null }
 
 /** Scrolling content and its lenses share a single clip, fade and overscroll transform. */
 @Composable
 internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
-    content: @Composable (OverscrollEffect?) -> Unit) {
+    observePlacement: () -> Unit = {}, content: @Composable (OverscrollEffect?) -> Unit) {
     val overscroll = rememberOverscrollEffect()
     val events = remember(overscroll) { overscroll?.withoutVisualEffect() }
     ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier),
-        contentDrawing = contentDrawing) {
+        contentDrawing = contentDrawing, observePlacement = observePlacement) {
         content(events)
     }
 }
@@ -53,7 +56,7 @@ internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Mo
 /** Record content once and keep it sharp above the separately refracted backing. */
 @Composable
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
-    content: @Composable () -> Unit) {
+    observePlacement: () -> Unit = {}, content: @Composable () -> Unit) {
     val scene = remember { SelectionScene() }
     val contentLayer = rememberGraphicsLayer()
     val transitionLayer = rememberGraphicsLayer()
@@ -75,7 +78,13 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
         Box(modifier.onPlaced { coordinates = it }.drawWithContent {
             // Pager placement also moves unselected rows. Do not subscribe their
             // otherwise reusable display lists to the selection geometry clock.
-            if (!hasSelection) return@drawWithContent drawContent()
+            if (!hasSelection) {
+                scene.lastDrawnRegions = emptyList()
+                return@drawWithContent drawContent()
+            }
+            // Lazy scrolling can update retained child layers without replacing LayoutCoordinates.
+            // Subscribe THIS drawing to its owner's layout result, then read live coordinates.
+            observePlacement()
             // Placement runs before drawing; query live coordinates instead of copying
             // global bounds through a later callback and lagging one frame behind rows.
             scene.placement
@@ -90,6 +99,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 }
             }
             val regions = visibleEntries.map { it.first }
+            scene.lastDrawnRegions = regions
             if (regions.isEmpty()) { drawContent(); return@drawWithContent }
             // Normalize translation: scrolling moves the cached shape instead of
             // rasterizing a distance field and uploading another texture every frame.
