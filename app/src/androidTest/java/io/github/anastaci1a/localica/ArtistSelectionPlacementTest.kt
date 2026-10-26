@@ -81,7 +81,12 @@ class ArtistSelectionPlacementTest {
             val reverse = requireNotNull(frame())
             assertTrue("Reversal follows the finger rather than an eased old offset", reverse.left > first.left)
             assertTrue("Scroll invalidates the selection host drawing", compose.runOnIdle { draws } > drawBeforeReverse)
-            row.performTouchInput { moveBy(Offset(-80f, 0f), delayMillis = 16); up() }
+            row.performTouchInput {
+                // Keep recent MOVE samples contiguous after frame() advances the event clock.
+                // Compose 1.8.2 needs three velocity samples with gaps no greater than 40 ms.
+                repeat(4) { moveBy(Offset(-20f, 0f), delayMillis = 16) }
+                up()
+            }
             val positions = mutableSetOf<Pair<Int, Int>>()
             var sawFling = false
             repeat(12) {
