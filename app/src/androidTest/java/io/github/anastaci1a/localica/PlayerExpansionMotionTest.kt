@@ -8,11 +8,15 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsContext
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.unit.*
@@ -30,11 +34,26 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import java.lang.ref.WeakReference
+import java.util.concurrent.atomic.AtomicLong
 
 class PlayerExpansionMotionTest {
     @get:Rule val compose = createComposeRule()
     private fun trace(phase: String) {
         Log.i("PlayerExpansionPhase", "ns=${SystemClock.elapsedRealtimeNanos()} thread=${Thread.currentThread().name} phase=$phase")
+    }
+    @Composable
+    private fun ObservePlayerGraphics(label: () -> String, content: @Composable () -> Unit) {
+        val original = LocalGraphicsContext.current
+        val currentLabel by rememberUpdatedState(label)
+        val previousObserver by rememberUpdatedState(LocalLyricsBackdropObserver.current)
+        val observation = remember(original) { PlayerGraphicsObservation(original, { currentLabel() }, ::trace) }
+        val observer: (LyricsBackdropScene, Boolean) -> Unit = remember(observation) { { scene, mounted ->
+            observation.scene(scene, mounted)
+            previousObserver?.invoke(scene, mounted)
+        } }
+        CompositionLocalProvider(LocalGraphicsContext provides observation,
+            LocalLyricsBackdropObserver provides observer, content = content)
     }
     private val state = PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000)
     private val visual = PlayerVisual(Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply {
@@ -61,7 +80,7 @@ class PlayerExpansionMotionTest {
         var reducedMotion by mutableStateOf(false)
         lateinit var scope: CoroutineScope
         var fingerDown = false
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+        compose.setContent { ObservePlayerGraphics({ "$contentTag layout=$layout progress=${progress.value} expanded=$expanded reduced=$reducedMotion" }) { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             DisposableEffect(Unit) {
                 trace("composition-enter:$contentTag")
                 onDispose { trace("composition-dispose:$contentTag") }
@@ -70,7 +89,7 @@ class PlayerExpansionMotionTest {
             PlayerSurface(state.copy(trackId = track.id, trackUri = track.uri), expanded, { expanded = it },
                 InterfaceSettings(artworkLayout = layout, reducedMotion = reducedMotion), progress, {}, {}, {}, {}, {}, {},
                 lyricsOpen = true, track = track, visual = visual) { Text("Album-only action") }
-        } } }
+        } } } }
         try {
             for (artworkLayout in ArtworkLayout.entries) {
                 trace("layout-begin:$contentTag:$artworkLayout")
@@ -208,6 +227,7 @@ class PlayerExpansionMotionTest {
         data class Frame(val progress: Float, val layout: ArtworkLayout, val aspect: Float, val reduced: Boolean)
         var drawnFrame: Frame? = null
         compose.setContent {
+            ObservePlayerGraphics({ "artwork-matrix layout=$layout progress=${progress.value} reduced=$reduced" }) {
             val frame = Frame(progress.value, layout, selectedVisual.palette.aspect, reduced)
             LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
                 BoxWithConstraints(Modifier.fillMaxSize().drawWithContent {
@@ -219,6 +239,7 @@ class PlayerExpansionMotionTest {
                         progress, {}, {}, {}, {}, {}, {}, visual = selectedVisual)
                 }
             } }
+            }
         }
         fun sampleProgress(p: Float) {
             compose.runOnIdle {
@@ -333,12 +354,12 @@ class PlayerExpansionMotionTest {
     @Test fun artworkSeekAndActionsHaveSeparateScreenSpaceMotionBetweenTitleAndTransport() {
         val progress = Animatable(0f)
         lateinit var scope: CoroutineScope
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+        compose.setContent { ObservePlayerGraphics({ "separate-motion progress=${progress.value}" }) { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             scope = rememberCoroutineScope()
             PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = visual) {
                 Text("Album-only action")
             }
-        } } }
+        } } } }
         val tags = listOf("player-title", "player-seek-row", "player-actions-row")
         fun tops() = tags.map { compose.onNodeWithTag(it, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top } +
             compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot.top
@@ -367,12 +388,12 @@ class PlayerExpansionMotionTest {
         var lyricsMode by mutableStateOf(false)
         lateinit var scope: CoroutineScope
         var pixelsPerDp = 0f
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+        compose.setContent { ObservePlayerGraphics({ "unchanged-references lyrics=$lyrics progress=${progress.value}" }) { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             scope = rememberCoroutineScope()
             pixelsPerDp = androidx.compose.ui.platform.LocalDensity.current.density
             PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {},
                 lyricsOpen = lyricsMode, visual = visual) { Text("Album-only action") }
-        } } }
+        } } } }
         fun snap(p: Float) {
             compose.runOnIdle {
                 val update = scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(p) }
@@ -419,4 +440,69 @@ class PlayerExpansionMotionTest {
             snapshots[p] = actual
         }
     }
+}
+
+/** Public LocalGraphicsContext routing only, not a census of framework/native layers.
+ * Weak scene references and immutable retired metadata do not retain readback leases.
+ * No disposal action releases or delays a layer: the original owner remains responsible. */
+private class PlayerGraphicsObservation(private val original: GraphicsContext,
+    private val label: () -> String, private val emit: (String) -> Unit) : GraphicsContext by original {
+    private val sequence = AtomicLong()
+    @Volatile private var scenes = emptyList<WeakReference<LyricsBackdropScene>>()
+    @Volatile private var retired = emptyList<String>()
+    private val lastObserved = mutableMapOf<Int, List<String>>()
+
+    fun scene(scene: LyricsBackdropScene, mounted: Boolean) {
+        runCatching { Snapshot.withoutReadObservation {
+            val id = System.identityHashCode(scene)
+            val metadata = metadata(scene)
+            val live = scenes.filter { it.get()?.let { current -> current !== scene || mounted } == true }
+            scenes = if (mounted && live.none { it.get() === scene }) live + WeakReference(scene) else live
+            if (!mounted) {
+                retired = metadata
+                lastObserved.remove(id)
+            }
+            if (!mounted || lastObserved[id] != metadata) {
+                if (mounted) lastObserved[id] = metadata
+                val event = sequence.incrementAndGet()
+                emit("graphics:$event scene-observed mounted=$mounted ${label()}")
+                metadata.forEach { emit("graphics:$event observed $it") }
+            }
+        } }
+    }
+
+    override fun createGraphicsLayer(): GraphicsLayer {
+        val layer = original.createGraphicsLayer()
+        record("create-return", layer)
+        return layer
+    }
+
+    override fun releaseGraphicsLayer(layer: GraphicsLayer) {
+        record("release-before", layer)
+        original.releaseGraphicsLayer(layer)
+        record("release-return", layer)
+    }
+
+    private fun record(operation: String, layer: GraphicsLayer) {
+        // Logging failures must not replace an original create/release result or exception.
+        runCatching { Snapshot.withoutReadObservation {
+            val event = sequence.incrementAndGet()
+            emit("graphics:$event $operation context=${System.identityHashCode(original)} layer=${System.identityHashCode(layer)} released=${layer.isReleased} ${label()}")
+            scenes.mapNotNull { it.get() }.forEach { scene ->
+                metadata(scene).forEach { emit("graphics:$event live $it") }
+            }
+            // These are explicitly the last unmounted observations, not current status.
+            retired.forEach { emit("graphics:$event last-unmounted $it") }
+        } }
+    }
+
+    private fun metadata(scene: LyricsBackdropScene): List<String> {
+        val id = System.identityHashCode(scene)
+        return listOf("scene=$id composite ${source(scene.source)}") + scene.layers.map { producer ->
+            "scene=$id producer=${System.identityHashCode(producer)} recordedRequest=${producer.recordedReadbackRequest} maskedRequest=${producer.maskedReadbackRequest} ${source(producer.source)}"
+        }
+    }
+
+    private fun source(source: FrostedBackdrop): String =
+        "source=${System.identityHashCode(source)} layer=${System.identityHashCode(source.layer)} request=${source.readbackRequest} snapshotRequest=${source.snapshotReadbackRequest} recorded=${source.recorded} released=${source.layer.isReleased} size=${source.size} snapshot=${source.snapshot?.let { System.identityHashCode(it) }}"
 }
