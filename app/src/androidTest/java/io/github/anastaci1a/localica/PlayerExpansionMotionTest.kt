@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
@@ -233,6 +234,15 @@ class PlayerExpansionMotionTest {
                 assertEquals("Growth evidence belongs to this progress", p, requireNotNull(growth).expansion, 0f)
             }
         }
+        fun presentedTitleBounds(): DpRect {
+            val coordinates = compose.onNodeWithTag("player-title", true).fetchSemanticsNode().layoutInfo.coordinates
+            return compose.runOnUiThread {
+                // The layout modifier scales the child layer. Unclipped test bounds
+                // retain that child's unscaled size; measure its transformed rectangle.
+                val bounds = coordinates.findRootCoordinates().localBoundingBoxOf(coordinates, clipBounds = false)
+                with(compose.density) { DpRect(bounds.left.toDp(), bounds.top.toDp(), bounds.right.toDp(), bounds.bottom.toDp()) }
+            }
+        }
         val evidence = File(playerMotionOutputDirectory(), "artwork-size-frames.txt")
         evidence.writeText("")
         var admitted = 0
@@ -252,7 +262,7 @@ class PlayerExpansionMotionTest {
             val backgroundHeight = fullHost.height.value
             sampleProgress(0f)
             val mini = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
-            val miniTitle = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
+            val miniTitle = presentedTitleBounds()
             val miniHost = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot()
             assertEquals("Measured mini title keeps its delivered reference", 7f, (miniTitle.top - miniHost.top).value, 1f)
             assertEquals("Native mini endpoint width", 32f, mini.width.value, .5f)
@@ -265,7 +275,7 @@ class PlayerExpansionMotionTest {
                 val observed = requireNotNull(growth)
                 val source = observed.trajectory.single { it.expansion == p }
                 val art = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
-                val title = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
+                val title = presentedTitleBounds()
                 val host = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot()
                 val context = "layout=$artworkLayout aspect=$aspect reduced=$reduce p=$p art=$art title=$title"
                 evidence.appendText(context + " curve=" + observed.curve + " source=" + source + "\n")
