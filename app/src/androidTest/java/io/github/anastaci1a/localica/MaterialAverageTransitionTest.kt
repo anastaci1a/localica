@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -288,8 +289,28 @@ class MaterialAverageTransitionTest {
         }
 
         fun pixel(pixels: PixelMap): Color {
-            val point = compose.runOnIdle { rootCoordinates.localPositionOf(consumerCoordinates,
-                Offset(consumerCoordinates.size.width / 2f, consumerCoordinates.size.height / 2f)) }
+            val point = compose.runOnIdle {
+                val center = rootCoordinates.localPositionOf(consumerCoordinates,
+                    Offset(consumerCoordinates.size.width / 2f, consumerCoordinates.size.height / 2f))
+                if (phase.get() == 1) runCatching {
+                    val reference = rootCoordinates.localPositionOf(consumerCoordinates,
+                        Offset(consumerCoordinates.size.width / 2f, consumerCoordinates.size.height * 1.5f))
+                    val screen = IntArray(2).also { view.getLocationOnScreen(it) }
+                    android.util.Log.i("MaterialHomePolicy", "sameCapture phase=1 postCaptureNonAtomicMetadata=true " +
+                        "actual=${pixels[center.x.roundToInt(), center.y.roundToInt()]} sample=$center " +
+                        "whiteReference=${pixels[reference.x.roundToInt(), reference.y.roundToInt()]} reference=$reference " +
+                        "crop=${pixels.width}x${pixels.height} cropRootOrigin=${rootCoordinates.localToRoot(Offset.Zero)} root=${rootCoordinates.size} " +
+                        "viewScreen=${screen.toList()} focused=${view.hasWindowFocus()} attached=${view.isAttachedToWindow} " +
+                        "window=${System.identityHashCode(view.windowToken)} homeMounted=$homeMounted " +
+                        "homeRecorded=${home.recorded} homeReleased=${home.layer.isReleased} " +
+                        "homeRequest=${home.readbackRequest} homePublished=${home.snapshotReadbackRequest} " +
+                        "destinationRecorded=${destination.recorded} destinationReleased=${destination.layer.isReleased} " +
+                        "destinationRequest=${destination.readbackRequest} destinationPublished=${destination.snapshotReadbackRequest}")
+                }.onFailure { failure -> runCatching {
+                    android.util.Log.w("MaterialHomePolicy", "Same-capture context unavailable: ${failure.javaClass.simpleName}")
+                } }
+                center
+            }
             val x = point.x.roundToInt(); val y = point.y.roundToInt()
             assertTrue("Actual placed center fits native capture", x in 0 until pixels.width && y in 0 until pixels.height)
             return pixels[x, y]
@@ -312,6 +333,11 @@ class MaterialAverageTransitionTest {
         assertTrue("Expected actual red content, got $color", color.red > .8f && color.blue < .15f && color.green < .15f)
     }
 
+    private class PrimaryRouteWitness(val source: FrostedBackdrop, val layer: Any, val parent: FrostedBackdrop?,
+        val view: View, val window: Any, val root: LayoutCoordinates, val nativeRoot: LayoutCoordinates, val producer: LayoutCoordinates,
+        val consumer: LayoutCoordinates, val sourceLocation: LayoutCoordinates?, val signature: List<Any?>,
+        val frame: MaterialAverageSamplingFrame, val capture: PixelMap)
+
     private inner class Fixture(val withHome: Boolean) {
         var weight by mutableFloatStateOf(0f)
         var scale by mutableFloatStateOf(1f)
@@ -327,12 +353,15 @@ class MaterialAverageTransitionTest {
         private lateinit var lensCoordinates: LayoutCoordinates
         private lateinit var view: View
         private var cornerPixels = 0f
+        private val appearance = GlassAppearance(blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)
+        private var verifiedPrimary: PrimaryRouteWitness? = null
+        private var latestCapture: PixelMap? = null
+        private var latestCaptureStage = -1
 
         fun mount() {
             compose.setContent { LocalicaTheme {
                 view = LocalView.current
-                CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
-                    blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f),
+                CompositionLocalProvider(LocalGlassAppearance provides appearance,
                     LocalMaterialAverageSamplingObserver provides { routes += stage.get() to it }) {
                     destination = rememberFrostedBackdrop(replacement to foreground, dark = false, glassBlur = 0f, whiteTint = 0f)
                     home = rememberFrostedBackdrop(Unit, dark = false, glassBlur = 0f, whiteTint = 0f)
@@ -404,7 +433,10 @@ class MaterialAverageTransitionTest {
             } finally {
                 compose.runOnIdle { if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(listener) }
             }
-            return capturePopupPixels(compose, compose.onNodeWithTag("average-transition-scene")) { view }
+            val pixels = capturePopupPixels(compose, compose.onNodeWithTag("average-transition-scene")) { view }
+            latestCapture = pixels
+            latestCaptureStage = stage.get()
+            return pixels
         }
 
         fun currentRoutes() = routes.filter { it.first == stage.get() }.map { it.second }
@@ -423,8 +455,10 @@ class MaterialAverageTransitionTest {
             for ((source, coordinates, contribution) in expected) {
                 val frames = observed.filter { it.sourceIdentity == System.identityHashCode(source) }
                 if (contribution == 0f) { assertTrue("Zero-weight contributor not sampled", frames.isEmpty()); continue }
-                assertTrue("Actual Canvas reports active contributor; stage=${stage.get()} $pixelEvidence", frames.isNotEmpty())
-                val latest = frames.last()
+                val retained = if (frames.isEmpty()) retainedPrimary(source, contribution, capturedPixels) else null
+                assertTrue("Active contributor requires fresh route or strictly equivalent retained modern choice; stage=${stage.get()} $pixelEvidence",
+                    frames.isNotEmpty() || retained != null)
+                val latest = frames.lastOrNull() ?: requireNotNull(retained).frame
                 assertEquals(Build.VERSION.SDK_INT < 33, latest.legacy)
                 assertEquals(contribution, latest.weight, .0001f)
                 val count = independentValidCount(coordinates)
@@ -432,20 +466,70 @@ class MaterialAverageTransitionTest {
                 assertEquals("Independent placed-coordinate mask", count, latest.validSamples)
                 if (Build.VERSION.SDK_INT < 33) assertEquals(source.snapshotReadbackRequest, requireNotNull(latest.publication))
                 else assertNull(latest.publication)
+                if (Build.VERSION.SDK_INT >= 33 && stage.get() == 1 && !withHome && !replacement && !foreground &&
+                    source === destination && contribution == 1f && weight == 0f) {
+                    assertTrue(view.isAttachedToWindow && sourceCoordinates.isAttached && lensCoordinates.isAttached && sceneCoordinates.isAttached)
+                    assertTrue(source.materialOnly && source.recorded && !source.layer.isReleased)
+                    assertFalse("Verified primary role", latest.home)
+                    verifiedPrimary = PrimaryRouteWitness(source, source.layer, source.parent, view,
+                        requireNotNull(view.windowToken), sceneCoordinates, sourceCoordinates.findRootCoordinates(), sourceCoordinates, lensCoordinates,
+                        source.location.coordinates, primarySignature(), latest, requireNotNull(latestCapture))
+                }
             }
         }
 
-        private fun independentValidCount(source: LayoutCoordinates): Int {
+        private fun retainedPrimary(source: FrostedBackdrop, contribution: Float, currentCapture: PixelMap?): PrimaryRouteWitness? {
+            // Only this method's content-only blue-to-red stage is eligible, never motion/legacy/provenance.
+            if (Build.VERSION.SDK_INT < 33 || stage.get() != 2 || withHome || !replacement || foreground ||
+                source !== destination || contribution != 1f || weight != 0f) return null
+            val previous = verifiedPrimary ?: return null
+            assertNotNull("Retained choice requires the SAME current native capture", currentCapture)
+            assertSame(latestCapture, currentCapture)
+            assertEquals(stage.get(), latestCaptureStage)
+            assertNotSame("Replacement must not reuse the prior pixels", previous.capture, currentCapture)
+            assertSame(previous.source, source); assertSame(previous.layer, source.layer)
+            assertSame(previous.parent, source.parent); assertSame(previous.view, view)
+            assertSame(previous.window, view.windowToken)
+            assertSame(previous.root, sceneCoordinates); assertSame(previous.producer, sourceCoordinates)
+            assertSame(previous.nativeRoot, sourceCoordinates.findRootCoordinates())
+            assertSame(previous.nativeRoot, lensCoordinates.findRootCoordinates())
+            assertSame(previous.consumer, lensCoordinates); assertSame(previous.sourceLocation, source.location.coordinates)
+            assertTrue(view.isAttachedToWindow && sceneCoordinates.isAttached && sourceCoordinates.isAttached && lensCoordinates.isAttached)
+            assertTrue(source.materialOnly && source.recorded && !source.layer.isReleased)
+            assertEquals("Full stable input basis/grid/mask/style, not merely sample count", previous.signature, primarySignature())
+            android.util.Log.i("MaterialAverageWitness", "retained-modern-primary-choice stage=2 " +
+                "contentChanged=true freshObserver=false sameCurrentCapture=true validSamples=${previous.frame.validSamples}")
+            return previous
+        }
+
+        private fun primarySignature(): List<Any?> {
+            val origin = IntArray(2).also { view.getLocationOnScreen(it) }
+            val extent = lensCoordinates.size
+            val basis = listOf(Offset.Zero, Offset(extent.width.toFloat(), 0f),
+                Offset(0f, extent.height.toFloat()), Offset(extent.width.toFloat(), extent.height.toFloat()))
+            return listOf(destination.size, destination.layer.size, sourceCoordinates.size, extent, sceneCoordinates.size,
+                destination.materialOnly, destination.recorded, destination.dark, destination.materialCorner,
+                cornerPixels, appearance, weight, scale, foreground, origin.toList(),
+                // Public independent root and source-local bases also reject common-ancestor motion.
+                basis.map { lensCoordinates.localToRoot(it) },
+                listOf(sourceCoordinates.localToRoot(Offset.Zero), sourceCoordinates.localToRoot(Offset(sourceCoordinates.size.width.toFloat(), 0f)),
+                    sourceCoordinates.localToRoot(Offset(0f, sourceCoordinates.size.height.toFloat()))),
+                basis.map { sourceCoordinates.localPositionOf(lensCoordinates, it) }, independentGrid(sourceCoordinates))
+        }
+
+        private fun independentValidCount(source: LayoutCoordinates): Int = independentGrid(source).count { it.second }
+
+        private fun independentGrid(source: LayoutCoordinates): List<Pair<Offset, Boolean>> {
             val width = source.size.width.toDouble(); val height = source.size.height.toDouble()
             val radius = cornerPixels.toDouble().coerceAtMost(minOf(width, height) / 2)
-            return (0 until 64).count { index ->
+            return (0 until 64).map { index ->
                 val local = Offset(lensCoordinates.size.width * ((index % 8 + .5f) / 8f),
                     lensCoordinates.size.height * ((index / 8 + .5f) / 8f))
                 val point = source.localPositionOf(lensCoordinates, local)
                 val x = point.x.toDouble(); val y = point.y.toDouble()
                 val dx = maxOf(radius - x, 0.0, x - (width - radius))
                 val dy = maxOf(radius - y, 0.0, y - (height - radius))
-                x >= 0 && y >= 0 && x <= width && y <= height && dx * dx + dy * dy <= radius * radius
+                point to (x >= 0 && y >= 0 && x <= width && y <= height && dx * dx + dy * dy <= radius * radius)
             }
         }
 
