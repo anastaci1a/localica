@@ -76,7 +76,8 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
 /** Low-frequency artwork colors and fixed fine grain give a matte surface without a blur dependency. */
 @Composable
 internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifier, fullArtBlend: Float = 0f,
-    artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f, tone: GlassTone = GlassTone()) {
+    artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f, tone: GlassTone = GlassTone(),
+    artTopReader: (() -> Float)? = null) {
     val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone)?.asAndroidBitmap()
     val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone)?.asAndroidBitmap()
     val washPaint = remember(wash) {
@@ -103,7 +104,7 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
             center = Offset(size.width * 0.1f, size.height * 0.4f), radius = size.width * 1.2f))
         if (washPaint != null && fullArtBlend > 0f && artHeight > 0f) {
             washMatrix.setScale((artWidth.takeIf { it > 0f } ?: size.width) / ArtworkWash.WIDTH, artHeight / ArtworkWash.WIDTH)
-            washMatrix.postTranslate(artLeft, artTop + artHeight * ArtworkWash.TOP)
+            washMatrix.postTranslate(artLeft, (artTopReader?.invoke() ?: artTop) + artHeight * ArtworkWash.TOP)
             washPaint.shader.setLocalMatrix(washMatrix)
             washPaint.alpha = (255 * fullArtBlend).toInt().coerceIn(0, 255)
             drawIntoCanvas { it.nativeCanvas.drawRect(0f, 0f, size.width, size.height, washPaint) }
