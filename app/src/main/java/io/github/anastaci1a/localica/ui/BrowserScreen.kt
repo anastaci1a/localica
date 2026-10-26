@@ -23,6 +23,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.graphicsLayer
@@ -347,7 +348,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         } else lastSlotLayout[0] = Float.NaN
     }
-    val searchSlotHeight = (pillSlotHeight - with(density) { (searchVacancy * searchSlotFraction).toDp() }).coerceAtLeast(0.dp)
+    // Placement reads its animation during layout, so the vacated list slot must
+    // read that same owner during measurement rather than a composition later.
+    val searchSlotLayout = Modifier.layout { measurable, constraints ->
+        val height = (restoredSearchSlotHeight - searchVacancy * searchAnchor.searchSlot.fraction)
+            .roundToInt().coerceIn(constraints.minHeight, constraints.maxHeight)
+        val child = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+        layout(child.width, height) { child.placeRelative(0, 0) }
+    }
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
@@ -831,7 +839,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                         else onPlay(result.rows.shuffled(), 0, result.scope)
                                     })
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
-                                if (artistDetail && showSearchPill) Box(Modifier.fillMaxWidth().height(searchSlotHeight)
+                                if (artistDetail && showSearchPill) Box(Modifier.fillMaxWidth().then(searchSlotLayout)
                                     .onSizeChanged { measuredSearchSlotHeight = it.height }.clipToBounds()) {
                                     ListSearchPill("Search " + (route.title ?: route.tab.label), {
                                         if (searchVacancy == 0f && searchOriginalOffset < 0) {
@@ -843,7 +851,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 }
                             }
                         }
-                        if (!artDetail && (showSearchPill || showFilters)) Spacer(Modifier.height(if (showSearchPill) searchSlotHeight else pillSlotHeight)
+                        if (!artDetail && (showSearchPill || showFilters)) Spacer((if (showSearchPill) searchSlotLayout else Modifier.height(pillSlotHeight))
                             .then(if (showSearchPill) Modifier.onSizeChanged { measuredSearchSlotHeight = it.height } else Modifier))
                         LibraryNotice(library)
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
