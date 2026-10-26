@@ -72,6 +72,7 @@ class ArtistAlbumFilterRangeTest {
         fun settle() { repeat(40) { frame() } }
         fun choose(name: String) {
             phase("choose-$name-target")
+            val previousTop = top()
             // Short tap owns the complete subset; do not reset/filter or scroll first.
             val before = compose.mainClock.currentTime
             val node = compose.onNodeWithText(name).assertIsDisplayed().fetchSemanticsNode()
@@ -103,6 +104,9 @@ class ArtistAlbumFilterRangeTest {
                 held = false
             } finally { if (held) send(android.view.MotionEvent.ACTION_CANCEL) }
             assertEquals("Native album contact must not advance the paused motion clock", before, compose.mainClock.currentTime)
+            // Publish the input's selection on its first Compose frame, and verify
+            // that this very frame retains the old offset rather than hiding a clamp.
+            assertEquals("Selection publication retains its first-frame offset", previousTop, frame(), 1f)
             compose.onNodeWithText(name).assertIsSelected()
             compose.onNodeWithText("All albums").assertIsNotSelected()
             phase("choose-$name-complete")
