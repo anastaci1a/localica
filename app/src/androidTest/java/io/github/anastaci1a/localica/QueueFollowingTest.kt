@@ -171,6 +171,9 @@ class QueueFollowingTest {
         compose.setContent { LocalicaTheme {
             val holder = rememberSaveableStateHolder()
             val view = LocalView.current
+            // Match the draw witness to the composition that admitted its children.
+            val drawnOpening = fixture.openingRequest
+            val drawnOccurrence = fixture.playing
             val rowInset = with(LocalDensity.current) { BrowseCellGeometry(1).cardVerticalInset(style).dp.roundToPx().toFloat() }
             CompositionLocalProvider(LocalSessionSelection provides fixture.selection, LocalSongDragHost provides fixture.dragHost,
                 LocalBrowsePresentationCache provides fixture.presentationCache.takeIf { firstDraws != null }) {
@@ -185,9 +188,9 @@ class QueueFollowingTest {
                     }
                     // ANY real row opens the witness, so a wrong old row records
                     // target=null. Loading-only grids do not impersonate row drawing.
-                    if (viewport != null && actualRows.isNotEmpty() && firstDraws.none { it.opening == fixture.openingRequest }) {
-                        val target = actualRows.singleOrNull { it.config.getOrNull(SemanticsProperties.TestTag) == "media-${fixture.playing}" }
-                        firstDraws.add(InitialQueueDraw(fixture.openingRequest, fixture.playing,
+                    if (viewport != null && actualRows.isNotEmpty() && firstDraws.none { it.opening == drawnOpening }) {
+                        val target = actualRows.singleOrNull { it.config.getOrNull(SemanticsProperties.TestTag) == "media-$drawnOccurrence" }
+                        firstDraws.add(InitialQueueDraw(drawnOpening, drawnOccurrence,
                             viewport.boundsInRoot, target?.boundsInRoot, rowInset))
                     }
                 })) {
