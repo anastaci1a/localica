@@ -87,17 +87,18 @@ class ListSearchTest {
             }
             fun last() = frames.lastOrNull()?.sample
             fun open() {
-                compose.onNodeWithTag("list-search-pill").performTouchInput { click(center) }
+                // The returning face hides its trigger from merged accessibility
+                // semantics while the underlying real pointer target remains owned.
+                compose.onNodeWithTag("list-search-pill", useUnmergedTree = true).performTouchInput { click(center) }
                 compose.waitUntil(5000) {
                     advanceObservedFrame()
                     compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
                 }
             }
             fun beginReturn() {
-                // Native Back first dismisses the keyboard, then the actual popup.
+                // Empty search closes on the IME-owned Back itself. A second Back
+                // would target the underlying Activity after input ownership retires.
                 compose.awaitSearchImeHandoff(requireShownBeforeAction = true) { pressSystemBack() }
-                compose.awaitExpectedWindowFocus(compose.onNodeWithTag("list-search-popup"))
-                pressSystemBack()
             }
             open()
             fun openingWitness() = frames.firstOrNull { frame -> frame.sample.let {
