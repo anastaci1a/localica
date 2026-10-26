@@ -10,6 +10,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -29,6 +30,8 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 class ArtworkOccurrenceTransitionTest {
@@ -39,28 +42,53 @@ class ArtworkOccurrenceTransitionTest {
         var visual by mutableStateOf(PlayerVisual(loading = true))
         var visit by mutableStateOf("cold")
         var emptyFramesAreLoading = true
+        // Both subjects stay mounted. Each request is acknowledged only after the
+        // selected subtree draws, including repeat captures of the same subject.
+        data class DrawRequest(val reference: Boolean, val drawn: CountDownLatch = CountDownLatch(1))
+        val drawRequest = mutableStateOf(DrawRequest(reference = false))
         val shape = RoundedCornerShape(16.dp)
         compose.setContent { LocalicaTheme {
             MaterialTheme(colorScheme = darkColorScheme(surfaceContainer = Color(0xFF223344), onSurface = Color.White)) {
                 CompositionLocalProvider(LocalReducedMotion provides false, LocalLoadingShimmer provides shimmer,
                     LocalLoadingShimmerActivity provides null) {
-                    Column(Modifier.background(Color.White)) {
-                        ArtworkBlend(visual, Modifier.size(144.dp).testTag("cold-blend"), 600, occurrence = visit) { frame ->
+                    Box(Modifier.size(144.dp).background(Color.White).testTag("cold-blend")) {
+                        ArtworkBlend(visual, Modifier.matchParentSize().testTag("gradient-actual").drawWithContent {
+                            val request = drawRequest.value
+                            if (!request.reference) { drawContent(); request.drawn.countDown() }
+                        }, 600, occurrence = visit) { frame ->
                             SideEffect { if (frame.artwork == null) emptyFramesAreLoading = emptyFramesAreLoading && frame.loading }
                             PlayerArtworkFrame(frame, Modifier.fillMaxSize(), shape, ContentScale.Crop)
                         }
-                        Box(Modifier.size(144.dp).testTag("gradient-reference").clip(shape)) {
+                        Box(Modifier.matchParentSize().testTag("gradient-reference").clip(shape).drawWithContent {
+                            val request = drawRequest.value
+                            if (request.reference) { drawContent(); request.drawn.countDown() }
+                        }) {
                             ArtworkPlaceholder(true, Modifier.fillMaxSize(), showIcon = false)
                         }
                     }
                 }
             }
         } }
-        fun pixels() = compose.onNodeWithTag("cold-blend").captureToImage().toPixelMap()
+        fun selectDraw(reference: Boolean) {
+            val request = DrawRequest(reference)
+            compose.runOnUiThread { drawRequest.value = request }
+            // Wait on the test thread for a real draw, without pumping the Compose clock.
+            assertTrue("The selected gradient subject must draw before capture", request.drawn.await(5, TimeUnit.SECONDS))
+        }
+        fun pixels(reference: Boolean = false): androidx.compose.ui.graphics.PixelMap {
+            selectDraw(reference)
+            val host = compose.onNodeWithTag("cold-blend")
+            val bounds = host.fetchSemanticsNode().boundsInRoot
+            assertEquals("Actual pixels share the host's screen origin and size", bounds,
+                compose.onNodeWithTag("gradient-actual").fetchSemanticsNode().boundsInRoot)
+            assertEquals("Reference pixels share the host's screen origin and size", bounds,
+                compose.onNodeWithTag("gradient-reference").fetchSemanticsNode().boundsInRoot)
+            return host.captureToImage().toPixelMap()
+        }
         fun assertGradient() {
             compose.onNodeWithContentDescription("No artwork").assertDoesNotExist()
             val actual = pixels()
-            val expected = compose.onNodeWithTag("gradient-reference").captureToImage().toPixelMap()
+            val expected = try { pixels(reference = true) } finally { selectDraw(reference = false) }
             for (y in actual.height / 5 until actual.height * 4 / 5 step 3)
                 for (x in actual.width / 5 until actual.width * 4 / 5 step 3) {
                     assertEquals("Cold blend/frame pixels match the shared icon-free gradient", expected[x, y], actual[x, y])
