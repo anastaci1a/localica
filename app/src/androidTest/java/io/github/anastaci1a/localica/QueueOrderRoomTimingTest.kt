@@ -49,6 +49,8 @@ class QueueOrderRoomTimingTest {
         var libraryDatabase: LibraryDatabase? = null
         var player: ExoPlayer? = null
         var primaryFailure: Throwable? = null
+        var unloggedReport: Pair<String, QueueOrderTiming.Report>? = null
+        var normalReportsLogged = 0
         try {
             check(directory.mkdirs()) { "Could not create the owned fixture directory" }
             val audio = File(directory, "queue-tone.mp3")
@@ -181,13 +183,17 @@ class QueueOrderRoomTimingTest {
                     }
                     completed.await()
                 }
-                val (reportedOperation, report) = withTimeout(remaining(deadline)) { reports.receive() }
+                val (reportedOperation, report) = withTimeout(remaining(deadline)) {
+                    reports.receive().also { unloggedReport = it }
+                }
                 remaining(deadline)
                 // Keep partial/failure reports too. This contains only aggregate scalar evidence.
                 Log.i("QueueOrderRoomTiming", "operation=$reportedOperation actualRoomQueue=true actualRoomLibrary=true " +
                     "storage=inMemory evidence=callback-observed " +
                     "nativeApiReturnIsAudioReadiness=false callbackValidationNanos=${callbackNanos.get()} " +
                     "validationIncludedInStages=true $report")
+                unloggedReport = null
+                normalReportsLogged++
                 callbackFailure.get()?.let { throw it }
                 assertTrue("Timing report belongs to this command", reportedOperation == operation)
                 assertEquals("Exactly one terminal report per command", expectedReports, reportCount.get())
@@ -219,7 +225,8 @@ class QueueOrderRoomTimingTest {
             // Drain all owned observer jobs before checking for an extra terminal publication.
             withTimeout(10_000) { actor.coroutineContext[Job]!!.cancelAndJoin() }
             assertEquals(3, reportCount.get())
-            assertTrue("No duplicate timing reports remain", reports.tryReceive().isFailure)
+            assertTrue("No duplicate timing reports remain",
+                reports.tryReceive().also { unloggedReport = it.getOrNull() }.isFailure)
         } catch (failure: Throwable) {
             primaryFailure = failure
             throw failure
@@ -231,14 +238,53 @@ class QueueOrderRoomTimingTest {
                         if (cleanupFailure == null) cleanupFailure = failure else cleanupFailure!!.addSuppressed(failure)
                     }
                 }
-                attempt { withTimeout(10_000) { actor.coroutineContext[Job]!!.cancelAndJoin() } }
-                var released = player == null
-                attempt { withContext(Dispatchers.Main) { player?.release(); released = true } }
-                attempt { withContext(Dispatchers.IO) { queueDatabase?.close() } }
-                attempt { withContext(Dispatchers.IO) { libraryDatabase?.close() } }
-                reports.close()
-                attempt { context.deleteSharedPreferences(name) }
-                if (released) attempt { check(!directory.exists() || directory.deleteRecursively()) { "Owned fixture cleanup failed" } }
+                val owner = actor.coroutineContext[Job]!!
+                attempt { withTimeout(10_000) { owner.cancelAndJoin() } }
+                // Cancellation/timeout alone is not termination. Parent completion includes the
+                // observer children; the timeout cannot impose a hard deadline on blocked native work.
+                val terminated = owner.isCompleted
+                if (terminated) {
+                    var released = player == null
+                    attempt { withContext(Dispatchers.Main) { player?.release(); released = true } }
+                    attempt { withContext(Dispatchers.IO) { queueDatabase?.close() } }
+                    attempt { withContext(Dispatchers.IO) { libraryDatabase?.close() } }
+                    attempt { reports.close() }
+                    attempt { context.deleteSharedPreferences(name) }
+                    if (released) attempt { check(!directory.exists() || directory.deleteRecursively()) { "Owned fixture cleanup failed" } }
+                    else attempt {
+                        Log.w("QueueOrderRoomTiming", "cleanup=unverified-native-release ownedFixtureRetained=true " +
+                            "actorObserverTerminationVerified=true")
+                    }
+                } else {
+                    attempt { error("Actor/observer termination unverified; owned resources retained") }
+                    attempt {
+                        Log.w("QueueOrderRoomTiming", "cleanup=unverified destructiveCleanupSkipped=true " +
+                            "playerRetained=${player != null} queueDatabaseRetained=${queueDatabase != null} " +
+                            "libraryDatabaseRetained=${libraryDatabase != null} reportChannelRetained=true " +
+                            "ownedPreferencesAndFixtureRetained=true")
+                    }
+                }
+                if (primaryFailure != null || cleanupFailure != null) attempt {
+                    var availableReportsLogged = 0
+                    fun logAvailable(available: Pair<String, QueueOrderTiming.Report>) {
+                        Log.w("QueueOrderRoomTiming", "operation=${available.first} evidence=failure-cleanup-terminal " +
+                            "storage=inMemory nativeApiReturnIsAudioReadiness=false " +
+                            "callbackValidationNanos=unavailable validationIncludedInStages=true ${available.second}")
+                        availableReportsLogged++
+                    }
+                    // Preserve a report received just before a deadline/assertion failed to log it.
+                    // Never replay normal records, and never fabricate a partial report for timeout.
+                    unloggedReport?.let { logAvailable(it); unloggedReport = null }
+                    // Bound this observation by the calls already seen. If termination is unverified,
+                    // later publications remain possible and their channel stays owned and open.
+                    repeat(reportCount.get()) {
+                        reports.tryReceive().getOrNull()?.let(::logAvailable)
+                    }
+                    Log.w("QueueOrderRoomTiming", "failureCleanupEvidence normalReportsLogged=$normalReportsLogged " +
+                        "availableUnconsumedReportsLogged=$availableReportsLogged observerCalls=${reportCount.get()} " +
+                        "additionalTerminalEvidence=unavailable-at-observation " +
+                        "actorObserverTerminationVerified=$terminated laterEvidencePossible=${!terminated}")
+                }
                 cleanupFailure?.let { if (primaryFailure == null) throw it else primaryFailure!!.addSuppressed(it) }
             }
         }
