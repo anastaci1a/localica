@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -35,10 +36,14 @@ import io.github.anastaci1a.localica.library.LibraryGroup
 internal fun collectionIsLight(visual: PlayerVisual): Boolean = visual.palette.isLight()
 
 @Composable
-internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: Modifier = Modifier) {
+internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: Modifier = Modifier,
+    pinchHeader: CollectionPinchHeader? = null) {
     val light = collectionIsLight(visual)
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val pictureTop = WindowInsets.statusBars.getTop(density) + artTop * if (LocalReducedMotion.current) 1f else .65f
+    val inset = WindowInsets.statusBars.getTop(density)
+    val parallax = if (LocalReducedMotion.current) 1f else .65f
+    val pictureTop = inset + artTop * parallax
+    SideEffect { pinchHeader?.heroInset = inset.toFloat(); pinchHeader?.parallax = parallax }
     BoxWithConstraints(modifier.then(Modifier.clipToBounds())) {
         val imageHeight = maxWidth
         // Browsing keeps its established dimmed continuation; the full player opts
@@ -51,6 +56,7 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
         Box(Modifier.matchParentSize().background(if (light) Color.White.copy(alpha = .58f) else Color.Black.copy(alpha = .16f)))
         visual.artwork?.let { image ->
             Image(image, null, Modifier.offset(y = with(density) { pictureTop.toDp() }).fillMaxWidth().height(imageHeight)
+                .onPlaced { pinchHeader?.observeArtwork(it) }
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
                     drawContent()
                     drawRect(Brush.verticalGradient(0f to Color.Transparent, .035f to Color.Black,
@@ -130,25 +136,35 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
 /** Scroll-driven decoration owns its frame reads; the collection/query tree stays stable. */
 @Composable
 internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, source: FrostedBackdrop,
-    reducedMotion: Boolean, modifier: Modifier) {
+    reducedMotion: Boolean, modifier: Modifier, pinchHeader: CollectionPinchHeader? = null) {
     val scroll = remember(grid) { CollectionScroll() }
-    val top = scroll.update(grid.layoutInfo.visibleItemsInfo.map {
+    val items = grid.layoutInfo.visibleItemsInfo.map {
         CollectionScroll.Item(it.key, it.index, it.offset.y, it.size.height)
-    }, grid.firstVisibleItemIndex == 0)
-    ArtworkBlend(visual, modifier.recordFrostedBackdrop(source),
+    }
+    val ordinary = scroll.update(items, grid.firstVisibleItemIndex == 0)
+    pinchHeader?.ordinaryTop = ordinary
+    pinchHeader?.presentedTop()?.let { scroll.presented(it, items) }
+    val top = pinchHeader?.heroTop() ?: ordinary
+    val heroProgress = pinchHeader?.motion?.progress?.value ?: 1f
+    ArtworkBlend(visual, modifier.onPlaced { pinchHeader?.background = it }.recordFrostedBackdrop(source).drawWithContent {
+        drawContent()
+        pinchHeader?.observeHero(top, heroProgress)
+    },
         duration = if (reducedMotion) 120 else 240, opacityBlend = true) { frame ->
-        CollectionBackdrop(frame, top, Modifier.fillMaxSize())
+        CollectionBackdrop(frame, top, Modifier.fillMaxSize(), pinchHeader)
     }
 }
 
 @Composable
 internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: String, anchor: GlassAnchor,
-    onBack: () -> Unit, onOptions: (Boolean) -> Unit, backdropScene: BrowseBackdropScene? = null, menu: @Composable () -> Unit) {
-    val fade = remember(grid, width) { derivedStateOf {
+    onBack: () -> Unit, onOptions: (Boolean) -> Unit, backdropScene: BrowseBackdropScene? = null,
+    pinchHeader: CollectionPinchHeader? = null, menu: @Composable () -> Unit) {
+    val fade = remember(grid, width, pinchHeader) { derivedStateOf {
         val header = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "browser-notice" }
+        val presentedTop = pinchHeader?.presentedTop()
         val cover = width.toFloat().coerceAtLeast(1f)
-        if (header == null && grid.firstVisibleItemIndex > 0) 1f
-        else ((-(header?.offset?.y ?: 0) - cover * .65f) / (cover * .35f)).coerceIn(0f, 1f)
+        if (presentedTop == null && header == null && grid.firstVisibleItemIndex > 0) 1f
+        else ((-(presentedTop ?: header?.offset?.y?.toFloat() ?: 0f) - cover * .65f) / (cover * .35f)).coerceIn(0f, 1f)
     } }
     val titled by remember(fade) { derivedStateOf { fade.value >= .1f } }
     val surface = MaterialTheme.colorScheme.surface

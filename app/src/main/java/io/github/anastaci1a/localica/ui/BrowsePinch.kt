@@ -3,6 +3,8 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.ModifierLocalBeyondBoundsLayout
+import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -27,7 +29,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 
-private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: GraphicsLayer)
+private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: GraphicsLayer,
+    val size: androidx.compose.ui.unit.IntSize = layer.size)
+private object PinchHeaderCaptureKey
 
 internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0) {
     // LazyGrid places items on integer pixels but retains fractional scroll deltas.
@@ -46,11 +50,26 @@ internal class BrowsePinchMotion {
     var settling: kotlinx.coroutines.Job? = null
     var disposed = false
     var capturing by mutableStateOf(false)
+    var readbackPending by mutableStateOf(false)
+    var destinationReady by mutableStateOf(false)
+    var header: CollectionPinchHeader? = null
     var captureProblem = false
     var transaction = 0L
         private set
     var committed = false
+    var takeover = false
     var releaseArtwork: (() -> Unit)? = null
+    private val releaseAfterRead = mutableListOf<() -> Unit>()
+    fun finishReadback() {
+        readbackPending = false
+        val releases = releaseAfterRead.toList()
+        releaseAfterRead.clear()
+        var failure: Throwable? = null
+        releases.forEach { release -> try { release() } catch (caught: Throwable) {
+            if (failure == null) failure = caught else failure!!.addSuppressed(caught)
+        } }
+        failure?.let { throw it }
+    }
     /** Retire ownership now, but keep decoded source pixels until rollback mounts. */
     fun releaseArtworkAfterHandoff(scope: CoroutineScope) {
         val release = releaseArtwork ?: return
@@ -93,10 +112,17 @@ internal class BrowsePinchMotion {
     var viewportWidth = 1f
     var rightToLeft = false
     fun clearTransaction() {
+        if (readbackPending) {
+            releaseArtwork?.let { releaseAfterRead.add(it) }; releaseArtwork = null
+            header?.detachPin()?.let { releaseAfterRead.add(it) }
+        }
+        header?.clear()
         transaction++
         releaseArtwork?.invoke(); releaseArtwork = null
         committed = false
+        takeover = false
         held = false; fingerProgress = 0f; capturing = false; captureProblem = false
+        destinationReady = false
         source = null; target = null; focusKey = null
         focusTop = 0; focusFraction = 0f; focusEdge = 0
         bounds = emptyMap(); frozen.clear()
@@ -151,8 +177,11 @@ internal class BrowsePinchMotion {
 }
 
 /** A retired/capturing transaction leaves the live layout at its ordinary placement. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 internal fun Modifier.pinchItemPlacement(motion: BrowsePinchMotion, grid: LazyGridState, key: Any,
-    index: Int, style: BrowseStyle, geometry: BrowseCellGeometry): Modifier = graphicsLayer {
+    index: Int, style: BrowseStyle, geometry: BrowseCellGeometry): Modifier = modifierLocalConsumer {
+        ModifierLocalBeyondBoundsLayout.current?.let { motion.header?.beyond = it }
+    }.graphicsLayer {
     val placed = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }
     val translation = placed?.let {
         motion.contentTranslation(key, index, it.offset, it.size.width, style, geometry, density)
@@ -229,12 +258,50 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     route: BrowseRoute, gridState: LazyGridState, width: Int, density: Density,
     scope: CoroutineScope, reducedMotion: Boolean, onPreview: (BrowseStyle) -> Unit,
     onCommit: (BrowseStyle) -> Unit, onAnchor: (BrowseZoomAnchor?) -> Unit): Modifier {
-    val captureLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val graphicsContext = androidx.compose.ui.platform.LocalGraphicsContext.current
+    val readback = remember { PinchReadback() }
     val artwork = LocalBrowseArtwork.current
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    suspend fun restoreHeaderSource(generation: Long, source: BrowseStyle) {
+        val header = motion.header ?: return
+        if (!motion.owns(generation)) return
+        motion.progress.snapTo(0f)
+        header.beginHandoff(false)
+        onPreview(source)
+        motion.focusKey?.let { key ->
+            onAnchor(BrowseZoomAnchor(route, source, key, checkNotNull(motion.bounds[key]).top.toInt(), 0f, motion.focusEdge))
+        }
+        header.awaitHandoff()
+    }
     OnModalGestureCancellation {
         val source = motion.source
         if (source != null) {
+            val header = motion.header
+            if (header != null && !motion.capturing) {
+                if (!motion.committed && !motion.takeover) {
+                    val generation = motion.transaction
+                    motion.takeover = true; motion.held = false
+                    val capturing = motion.capture
+                    val settling = motion.settling
+                    capturing?.cancel(); settling?.cancel(); motion.tracking?.cancel()
+                    motion.settling = scope.launch {
+                        try {
+                            capturing?.join(); settling?.join()
+                            if (!motion.owns(generation)) return@launch
+                            motion.progress.snapTo(0f)
+                            header.beginHandoff(false)
+                            onPreview(source)
+                            motion.focusKey?.let { key ->
+                                val top = checkNotNull(motion.bounds[key]).top.toInt()
+                                onAnchor(BrowseZoomAnchor(route, source, key, top, 0f, motion.focusEdge))
+                            }
+                            header.awaitHandoff()
+                        } finally { if (motion.owns(generation)) motion.clearTransaction() }
+                    }
+                }
+                // A committed release still owns its verified destination handoff.
+                return@OnModalGestureCancellation
+            }
             val rollback = !motion.committed
             val anchor = motion.focusKey?.let {
                 BrowseZoomAnchor(route, source, it, motion.focusTop, motion.focusFraction, motion.focusEdge)
@@ -242,7 +309,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             motion.capture?.cancel(); motion.tracking?.cancel(); motion.settling?.cancel()
             // Retire the generation before callbacks can start another transaction.
             // Cancelled readback/settlement finally blocks must not clear a newer owner.
-            if (rollback) motion.releaseArtworkAfterHandoff(scope)
+            if (rollback && !motion.readbackPending) motion.releaseArtworkAfterHandoff(scope)
             motion.clearTransaction()
             if (rollback) {
                 onPreview(source)
@@ -254,10 +321,10 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
         motion.disposed = false
         onDispose { motion.dispose() }
     }
-    return pinchToChangeView(enabled && motion.source == null, gestureKey = route.key,
+    return pinchToChangeView(enabled && motion.source == null && !motion.readbackPending, gestureKey = route.key,
         onProgress = { value ->
             if (motion.held) motion.fingerProgress = value
-            if (motion.held && !motion.capturing && !reducedMotion) {
+            if (motion.held && !motion.capturing && motion.destinationReady && !reducedMotion) {
                 motion.tracking?.cancel()
                 motion.tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                     motion.progress.animateTo(value, androidx.compose.animation.core.tween(100, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
@@ -278,24 +345,31 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
                         else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
                         if (destination != null) {
+                            motion.header?.beginHandoff(commit)
                             if (cancelled) onPreview(destination) else {
                                 // A takeover after persistence only retires retained drawings;
                                 // it must not undo an already completed, genuine release.
                                 motion.committed = true
                                 onCommit(destination)
                             }
-                            motion.focusKey?.let { onAnchor(BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge)) }
+                            motion.focusKey?.let {
+                                val sourceTop = motion.bounds[it]?.top
+                                onAnchor(if (!commit && motion.header != null && sourceTop != null)
+                                    BrowseZoomAnchor(route, destination, it, sourceTop.toInt(), 0f, motion.focusEdge)
+                                else BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge))
+                            }
                         }
-                        // Keep retained drawings through the source-layout handoff.
-                        withFrameNanos { }; withFrameNanos { }
-                    } finally { if (motion.owns(generation)) motion.clearTransaction() }
+                        if (motion.header != null) motion.header?.awaitHandoff()
+                        else { withFrameNanos { }; withFrameNanos { } }
+                    } finally { if (motion.owns(generation) && !motion.takeover) motion.clearTransaction() }
                 }
             }
         }) { zoomIn, midpoint ->
         val next = style.zoomStep(zoomIn, with(density) { width.toDp().value },
             albumSongs = route.supportsTracklist())
-        if (next != style && !motion.disposed && motion.source == null) {
+        if (next != style && !motion.disposed && motion.source == null && !motion.readbackPending) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
+            if (motion.header != null && visible.isEmpty()) return@pinchToChangeView false
             motion.releaseArtwork = artwork?.retainForTransition()
             motion.capturing = true
             motion.source = style
@@ -304,6 +378,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             motion.targetColumns = galleryColumns(next.presentation, with(density) { width.toDp().value }, next.itemsPerRow)
             motion.held = true
             motion.fingerProgress = 0f
+            motion.destinationReady = false
             motion.viewportWidth = width.toFloat()
             motion.rightToLeft = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
             motion.pixelDensity = density.density
@@ -317,7 +392,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 motion.anchorIndex = first.index - 1; motion.anchorTop = first.offset.y.toFloat()
                 motion.rowHeight = first.size.height.toFloat()
             }
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { motion.progress.snapTo(if (reducedMotion) 1f else 0f) }
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { motion.progress.snapTo(0f) }
             val nearest = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }.minByOrNull {
                 val x = it.offset.x + sourceInset + it.size.width / 2f - midpoint.x
                 val y = it.offset.y + it.size.height / 2f - midpoint.y
@@ -336,11 +411,22 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 motion.focusFraction = ((midpoint.y - nearest.offset.y) / nearest.size.height.coerceAtLeast(1)).coerceIn(0f, 1f)
                 motion.focusKey = nearest.key
                 motion.focusTop = (nearest.offset.y + nearest.size.height * motion.focusFraction).toInt()
-                onAnchor(BrowseZoomAnchor(route, next, nearest.key, motion.focusTop, motion.focusFraction, motion.focusEdge))
             }
             motion.capture = scope.launch {
+                var previewPublished = false
                 try {
                     motion.frozen.clear()
+                    motion.header?.let { header ->
+                        header.viewport = motion.viewportCoordinates
+                        header.begin(generation, style, next)
+                        // No native read has begun: this preparation wait can still
+                        // cancel normally. Pinning keeps the offscreen producer mounted.
+                        kotlinx.coroutines.withTimeout(3000) {
+                            while (header.recordedRequest != header.captureRequest || header.layer?.size == androidx.compose.ui.unit.IntSize.Zero) {
+                                withFrameNanos { }
+                            }
+                        }
+                    }
                     // Freeze all visible drawings in one readback before destination
                     // reflow mutates nested layers. Pack with gutters so filtering a
                     // retained item never samples its neighbor in the atlas.
@@ -356,49 +442,75 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                                 motion.itemAlpha[entry.key] ?: 1f, content.textOpacity())
                         }
                     }.toMap()
-                    val drawings = visible.flatMap { entry ->
+                    val drawings = (visible.flatMap { entry ->
                         listOfNotNull(motion.retained[entry.key]?.let { PinchCaptureDrawing(entry.key, 0, it) },
                             motion.text[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 1, it) },
                             motion.artwork[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 2, it) })
-                    }.filter { !it.layer.isReleased && it.layer.size.width > 0 && it.layer.size.height > 0 }
+                    } + listOfNotNull(motion.header?.layer?.let { PinchCaptureDrawing(PinchHeaderCaptureKey, 3, it) }))
+                        .filter { !it.layer.isReleased && it.size.width > 0 && it.size.height > 0 }
                     if (drawings.isNotEmpty()) {
-                        val atlasWidth = max(width, drawings.maxOf { it.layer.size.width }) + 2
+                        val atlasWidth = max(width, drawings.maxOf { it.size.width }) + 2
                         var x = 1; var y = 1; var rowHeight = 0
                         val origins = drawings.map { drawing ->
-                            val layer = drawing.layer
-                            if (x + layer.size.width + 1 > atlasWidth) { x = 1; y += rowHeight + 2; rowHeight = 0 }
+                            val size = drawing.size
+                            if (x + size.width + 1 > atlasWidth) { x = 1; y += rowHeight + 2; rowHeight = 0 }
                             androidx.compose.ui.unit.IntOffset(x, y).also {
-                                x += layer.size.width + 2; rowHeight = max(rowHeight, layer.size.height)
-                            }
-                        }
-                        captureLayer.record(density, layoutDirection, androidx.compose.ui.unit.IntSize(atlasWidth, y + rowHeight + 1)) {
-                            drawings.forEachIndexed { i, drawing ->
-                                translate(origins[i].x.toFloat(), origins[i].y.toFloat()) { drawLayer(drawing.layer) }
+                                x += size.width + 2; rowHeight = max(rowHeight, size.height)
                             }
                         }
                         // Keep the tint with the same source snapshot even if playback or
                         // virtualization changes the live rows during readback.
                         val highlights = motion.currentHighlights.toMap()
-                        val image = captureLayer.pinchSnapshot(density, layoutDirection)
+                        motion.readbackPending = true
+                        val image = try {
+                            readback.capture(graphicsContext, density, layoutDirection, onDeadline = {
+                                if (motion.owns(generation)) { onAnchor(null); motion.clearTransaction() }
+                            }) { atlas ->
+                                atlas.record(density, layoutDirection, androidx.compose.ui.unit.IntSize(atlasWidth, y + rowHeight + 1)) {
+                                    drawings.forEachIndexed { i, drawing ->
+                                        translate(origins[i].x.toFloat(), origins[i].y.toFloat()) { drawLayer(drawing.layer) }
+                                    }
+                                }
+                            }
+                        } finally { motion.finishReadback() }
                         if (!motion.owns(generation)) return@launch
                         fun parts(pass: Int) = drawings.withIndex().filter { it.value.pass == pass }.associate { (i, drawing) ->
-                            drawing.key to FrozenBrowsePart(image, origins[i], drawing.layer.size)
+                            drawing.key to FrozenBrowsePart(image, origins[i], drawing.size)
                         }
                         val text = parts(1); val art = parts(2)
                         drawings.forEachIndexed { i, drawing -> if (drawing.pass == 0) {
-                            motion.frozen[drawing.key] = FrozenBrowseItem(image, origins[i], drawing.layer.size,
+                            motion.frozen[drawing.key] = FrozenBrowseItem(image, origins[i], drawing.size,
                                 highlights[drawing.key]?.let(::RetainedCurrentSongHighlight), endpoints[drawing.key], art[drawing.key], text[drawing.key])
                         } }
+                        motion.header?.freeze(checkNotNull(parts(3)[PinchHeaderCaptureKey]))
                     }
-                    if (motion.owns(generation)) onPreview(next)
+                    if (motion.owns(generation)) {
+                        motion.capturing = false
+                        onPreview(next)
+                        previewPublished = true
+                        motion.focusKey?.let { onAnchor(BrowseZoomAnchor(route, next, it, motion.focusTop, motion.focusFraction, motion.focusEdge)) }
+                        motion.header?.let { header ->
+                            check(kotlinx.coroutines.withTimeoutOrNull(3000) { header.awaitDestination(); true } == true) {
+                                "Header target did not supply anchor-corrected geometry before preview expiry"
+                            }
+                        }
+                        motion.destinationReady = true
+                        if (reducedMotion) motion.progress.snapTo(1f)
+                    }
+                } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
+                    android.util.Log.w("BrowsePinch", "Header source drawing was not acknowledged before native submission", timeout)
+                    if (motion.owns(generation)) { onAnchor(null); motion.failCapture() }
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     if (motion.owns(generation)) { onAnchor(null); motion.failCapture() }
                     throw cancelled
                 } catch (failure: Exception) {
                     android.util.Log.w("BrowsePinch", "Source capture failed; retaining the original view", failure)
                     if (motion.owns(generation)) {
-                        onAnchor(null)
-                        motion.failCapture()
+                        if (previewPublished && motion.header != null && !motion.takeover) {
+                            motion.held = false
+                            restoreHeaderSource(generation, style)
+                            if (motion.owns(generation)) motion.clearTransaction()
+                        } else { onAnchor(null); motion.failCapture() }
                     }
                 } finally { if (motion.owns(generation)) motion.capturing = false }
                 if (motion.owns(generation) && motion.held && !reducedMotion) {
