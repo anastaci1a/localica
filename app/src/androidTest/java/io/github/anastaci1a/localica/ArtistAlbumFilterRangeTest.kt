@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
@@ -57,6 +58,7 @@ class ArtistAlbumFilterRangeTest {
             compose.mainClock.autoAdvance = false
             settle()
             phase("initial-settle-end")
+            prepareVisibleAlbums()
         }
         fun top() = compose.onNodeWithTag("browse-full-span").getUnclippedBoundsInRoot().top.value -
             compose.onNodeWithTag("browser-list").getUnclippedBoundsInRoot().top.value
@@ -70,25 +72,73 @@ class ArtistAlbumFilterRangeTest {
             return top().also { phase("frame-$index-complete") }
         }
         fun settle() { repeat(40) { frame() } }
+        private fun SemanticsNodeInteraction.unclippedPixels(): Rect = getUnclippedBoundsInRoot().let {
+            Rect(it.left.value * density, it.top.value * density, it.right.value * density, it.bottom.value * density)
+        }
+        private fun assertContactArea(name: String, chip: Rect, visible: Rect) {
+            // A nonempty clipped semantic rectangle can be only one physical pixel.
+            // Require an interior contact patch, including at least half the chip's height.
+            val minimumSide = 24f * density
+            assertTrue("Native $name contact needs substantial visible area: chip=$chip visible=$visible",
+                visible.width >= minimumSide && visible.height >= maxOf(minimumSide, chip.height / 2f))
+        }
+        private fun prepareVisibleAlbums() {
+            // Setup only: measure the complete chips, not their clipped one-pixel remnants.
+            // One real scroll and a bounded frame budget; never retry contacts/selection.
+            phase("prepare-albums-begin")
+            val names = listOf("Ten songs", "One song")
+            val viewport = compose.onNodeWithTag("browser-list").unclippedPixels()
+            val chips = names.map { compose.onNodeWithText(it).unclippedPixels() }
+            val clearance = 24f * density
+            val firstTop = chips.minOf { it.top }
+            val lastBottom = chips.maxOf { it.bottom }
+            assertTrue("Complete album chips must fit the measured viewport: chips=$chips viewport=$viewport",
+                lastBottom - firstTop <= viewport.height - 2f * clearance)
+            val correction = when {
+                lastBottom > viewport.bottom - clearance -> lastBottom - (viewport.bottom - clearance)
+                firstTop < viewport.top + clearance -> firstTop - (viewport.top + clearance)
+                else -> 0f
+            }
+            if (correction != 0f) {
+                scrollBy(correction / density)
+                settle()
+            }
+            val placedViewport = compose.onNodeWithTag("browser-list").unclippedPixels()
+            names.forEach { name ->
+                val target = compose.onNodeWithText(name)
+                val chip = target.unclippedPixels()
+                val visible = chip.intersect(target.fetchSemanticsNode().boundsInRoot).intersect(placedViewport)
+                assertTrue("Setup must expose the complete chip vertically: $name chip=$chip viewport=$placedViewport",
+                    chip.top >= placedViewport.top + clearance - 1f && chip.bottom <= placedViewport.bottom - clearance + 1f)
+                assertContactArea(name, chip, visible)
+                android.util.Log.i("ArtistRangeFixture", "prepared-target=$name unclipped=$chip viewport=$placedViewport visible=$visible correction=$correction")
+            }
+            phase("prepare-albums-complete")
+        }
         fun choose(name: String) {
             phase("choose-$name-target")
             val previousTop = top()
             // Short tap owns the complete subset; do not reset/filter or scroll first.
             val before = compose.mainClock.currentTime
-            val node = compose.onNodeWithText(name).assertIsDisplayed().fetchSemanticsNode()
-            val viewport = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
-            val visibleTarget = node.boundsInRoot.intersect(viewport)
-            assertFalse("The native contact needs visible chip area: target=${node.boundsInRoot} viewport=$viewport", visibleTarget.isEmpty)
+            val target = compose.onNodeWithText(name).assertIsDisplayed()
+            val chip = target.unclippedPixels()
+            val node = target.fetchSemanticsNode()
+            val viewport = compose.onNodeWithTag("browser-list").unclippedPixels()
+            val visibleTarget = chip.intersect(node.boundsInRoot).intersect(viewport)
+            assertContactArea(name, chip, visibleTarget)
             val view = (node.root as ViewRootForTest).view
             val point = compose.runOnUiThread {
                 assertTrue(view.isAttachedToWindow && view.hasWindowFocus())
                 val location = IntArray(2).also(view::getLocationOnScreen)
                 val visible = android.graphics.Rect()
                 assertTrue(view.getGlobalVisibleRect(visible))
-                val x = location[0] + visibleTarget.center.x
-                val y = location[1] + visibleTarget.center.y
+                val screenTarget = visibleTarget.translate(Offset(location[0].toFloat(), location[1].toFloat()))
+                    .intersect(Rect(visible.left.toFloat(), visible.top.toFloat(), visible.right.toFloat(), visible.bottom.toFloat()))
+                assertContactArea(name, chip, screenTarget)
+                val x = screenTarget.center.x
+                val y = screenTarget.center.y
                 assertTrue(x >= visible.left && x < visible.right && y >= visible.top && y < visible.bottom)
-                android.util.Log.i("ArtistRangeFixture", "native-target=$name node=${node.boundsInRoot} viewport=$viewport visible=$visibleTarget screen=($x,$y) viewVisible=$visible")
+                android.util.Log.i("ArtistRangeFixture", "native-target=$name unclipped=$chip node=${node.boundsInRoot} viewport=$viewport visible=$visibleTarget screen=($x,$y) viewVisible=$visible")
                 x to y
             }
             val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
@@ -127,7 +177,7 @@ class ArtistAlbumFilterRangeTest {
             val viewport = compose.onNodeWithTag("browser-list").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
             scrollBy(header - viewport + 240f)
             settle()
-            compose.onNodeWithText("One song").performScrollTo().assertIsDisplayed()
+            prepareVisibleAlbums()
             return top()
         }
         fun close() { compose.mainClock.autoAdvance = true; preferences.reset(route) }
