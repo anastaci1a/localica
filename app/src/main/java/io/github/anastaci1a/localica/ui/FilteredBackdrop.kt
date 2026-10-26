@@ -118,11 +118,11 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
                 }
             }
         }
-        if (flatSource && averageSource != null && sourceAverageRenderer != null) {
+        if (android.os.Build.VERSION.SDK_INT >= 33 && flatSource && averageSource != null && sourceAverageRenderer != null) {
             averageSource.renderEffect = sourceAverageRenderer.effect(validMask = requireNotNull(sourceCoverage).validMask)
             averageSource.record(size = IntSize(8, 8)) { crop(source) }
         }
-        if (flatHome && averageHome != null && homeSource != null && homeAverageRenderer != null) {
+        if (android.os.Build.VERSION.SDK_INT >= 33 && flatHome && averageHome != null && homeSource != null && homeAverageRenderer != null) {
             averageHome.renderEffect = homeAverageRenderer.effect(validMask = requireNotNull(homeCoverage).validMask)
             averageHome.record(size = IntSize(8, 8)) { crop(homeSource, true) }
         }
