@@ -45,7 +45,8 @@ class LocalicaApplication : Application() {
     }
     val queues by lazy {
         QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6, QueueDatabase.MIGRATION_6_7).build().queues(),
-            QueuePreferences(this), library, readers = nativeReaders, sortSnapshot = ::liveSortSnapshot)
+            QueuePreferences(this), library, readers = nativeReaders, sortSnapshot = ::liveSortSnapshot,
+            diagnoseOrders = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
     }
     private suspend fun liveSortSnapshot() = withContext(Dispatchers.Default) {
         combine(library.snapshots, statistics.counts) { snapshot, counts -> counts.applyTo(snapshot) }.first()

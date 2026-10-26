@@ -632,6 +632,10 @@ class PlaybackIntentTest {
     }
 
     @Test fun attachedOrderEditsReuseOnlyTheUnchangedLibraryIndexAndCurrentVisit() = fixture(duplicateOccurrences = true) {
+        val timingReports = kotlinx.coroutines.channels.Channel<Pair<String, QueueOrderTiming.Report>>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+        withContext(Dispatchers.Main) {
+            queues.orderTimingObserver = { operation, report -> timingReports.trySend(operation to report); Unit }
+        }
         val indexed = CountingTracks(listOf(track))
         store.snapshot = LibrarySnapshot(tracks = indexed)
         suspend fun reverse() {
@@ -672,6 +676,21 @@ class PlaybackIntentTest {
             assertEquals(restored.currentEntryId, player.currentMediaItem?.mediaId)
             assertEquals("origin-0", player.currentMediaItem?.mediaMetadata?.extras?.getString("sourcePlaylistId"))
         }
+        val reports = withTimeout(5000) { List(4) { timingReports.receive() } }
+        // Diagnostic jobs are independent of actor admission; their delivery order
+        // is deliberately not another command-completion contract.
+        assertEquals(mapOf("reverse" to 2, "randomize" to 1, "revert" to 1), reports.groupingBy { it.first }.eachCount())
+        reports.forEach { (_, report) ->
+            assertEquals(QueueOrderTiming.Outcome.Success, report.outcome)
+            assertTrue(report.clockValid)
+            val stages = QueueOrderTiming.Stage.entries.map { requireNotNull(report.elapsedNanos(it)) }
+            assertTrue("Every completed stage is monotonic", stages.zipWithNext().all { (a, b) -> b >= a })
+            assertTrue(requireNotNull(report.totalNanos) >= stages.last())
+            assertEquals(3, report.counts.queueEntries)
+            assertEquals(1, report.counts.libraryTracks)
+            assertEquals(3, requireNotNull(report.counts.templatesReused) + requireNotNull(report.counts.templatesBuilt))
+        }
+        timingReports.close()
     }
 
     @Test fun attachedOrderCacheRechecksGrantsAndInvalidatesChangedMetadata() {
