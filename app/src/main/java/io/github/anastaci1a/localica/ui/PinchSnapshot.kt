@@ -27,7 +27,8 @@ import kotlinx.coroutines.ensureActive
 /** Compose ui-graphics 1.8.2's LayerSnapshotV22/Image.toBitmap converts
  * premultiplied ImageReader bytes as straight colors, attenuating translucent decorations twice. Keep their original bytes
  * and honor row padding while freezing the source atlas. */
-private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, direction: LayoutDirection): ImageBitmap {
+private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, direction: LayoutDirection,
+    onPhase: (String) -> Unit): ImageBitmap {
     if (Build.VERSION.SDK_INT >= 28) return toImageBitmap()
     val width = size.width
     val height = size.height
@@ -38,8 +39,10 @@ private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, d
             var postAttempted = false
             var producerFailure: Throwable? = null
             reader.setOnImageAvailableListener({ available ->
+                onPhase("legacy-image-callback")
                 try {
                     available.acquireLatestImage()?.use { image ->
+                        onPhase("legacy-image-acquired")
                         if (continuation.isActive) {
                             producerFailure?.let { throw it }
                             val plane = image.planes[0]
@@ -57,6 +60,7 @@ private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, d
                             packed.rewind()
                             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                             bitmap.copyPixelsFromBuffer(packed)
+                            onPhase("legacy-pixels-copied")
                             continuation.resume(bitmap.asImageBitmap())
                         }
                     }
@@ -65,6 +69,7 @@ private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, d
                 }
             }, Handler(Looper.getMainLooper()))
             try {
+                onPhase("legacy-post-start")
                 val canvas = surface.lockHardwareCanvas()
                 try {
                     canvas.drawColor(android.graphics.Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
@@ -76,8 +81,10 @@ private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, d
                     // image callback, rather than closing a potentially queued draw.
                     postAttempted = true
                     surface.unlockCanvasAndPost(canvas)
+                    onPhase("legacy-post-returned")
                 }
             } catch (failure: Throwable) {
+                onPhase("legacy-post-failed:${failure.javaClass.simpleName}")
                 if (postAttempted) producerFailure = failure
                 else if (continuation.isActive) continuation.resumeWithException(failure)
             }
@@ -102,7 +109,8 @@ internal class PinchReadback(private val now: () -> Long = { android.os.SystemCl
 
     suspend fun capture(context: GraphicsContext, density: Density, direction: LayoutDirection,
         timeoutMillis: Long = 3000, onDeadline: () -> Unit = {},
-        copy: suspend (GraphicsLayer) -> ImageBitmap = { it.premultipliedPinchSnapshot(density, direction) },
+        onPhase: (String) -> Unit = {},
+        copy: suspend (GraphicsLayer) -> ImageBitmap = { it.premultipliedPinchSnapshot(density, direction, onPhase) },
         record: (GraphicsLayer) -> Unit): ImageBitmap {
         check(Looper.myLooper() == Looper.getMainLooper())
         require(timeoutMillis > 0)
@@ -113,6 +121,7 @@ internal class PinchReadback(private val now: () -> Long = { android.os.SystemCl
         try {
             return completion.capture(acquire = { context.createGraphicsLayer() }, read = { atlas ->
                 record(atlas)
+                onPhase("atlas-recorded")
                 caller.ensureActive()
                 val started = now()
                 val handler = Handler(Looper.getMainLooper())
@@ -120,11 +129,13 @@ internal class PinchReadback(private val now: () -> Long = { android.os.SystemCl
                 var deadlineFailure: Throwable? = null
                 val deadline = Runnable {
                     expired = true
+                    onPhase("publication-expired")
                     deadlineFailure = runCatching(onDeadline).exceptionOrNull()
                 }
                 handler.postDelayed(deadline, timeoutMillis)
                 try {
                     val image = retained.capture(atlas, context, density, direction, copy)
+                    onPhase("native-copy-returned")
                     caller.ensureActive() // External cancellation remains cancellation, not expiry.
                     // A synchronous native copy may occupy Main until after expiry,
                     // before the Handler gets a chance to run its stale-publication policy.

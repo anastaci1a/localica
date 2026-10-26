@@ -458,7 +458,9 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         val highlights = motion.currentHighlights.toMap()
                         motion.readbackPending = true
                         val image = try {
-                            readback.capture(graphicsContext, density, layoutDirection, onDeadline = {
+                            readback.capture(graphicsContext, density, layoutDirection, onPhase = { phase ->
+                                if (motion.header?.observer != null) android.util.Log.i("PinchAtlas", "phase=$phase generation=$generation")
+                            }, onDeadline = {
                                 if (motion.owns(generation)) { onAnchor(null); motion.clearTransaction() }
                             }) { atlas ->
                                 atlas.record(density, layoutDirection, atlasLayout.size) {
