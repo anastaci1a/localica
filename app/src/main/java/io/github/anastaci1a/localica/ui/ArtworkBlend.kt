@@ -20,6 +20,10 @@ import kotlinx.coroutines.withContext
 
 internal val LocalArtworkTransition = staticCompositionLocalOf { ArtworkTransition.BlurThrough }
 
+private data class ArtworkBlendState(val incoming: PlayerVisual, val occurrence: Any?,
+    val outgoing: PlayerVisual = incoming, val frozen: ImageBitmap? = null, val frozenSoft: ImageBitmap? = null,
+    val progress: Animatable<Float, AnimationVector1D> = Animatable(1f))
+
 /** Keep an opaque outgoing frame. Interruptions flatten the visible composite once;
  * the blur uses a render effect or prepared textures, never a per-frame bitmap filter. */
 @Composable
@@ -27,12 +31,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
     content: @Composable (PlayerVisual) -> Unit) {
     // Cold frames must remain gradient-only, including as the outgoing reveal frame.
     val target = visual.copy(loading = visual.loading && visual.artwork == null)
-    var acceptedOccurrence by remember { mutableStateOf(occurrence) }
-    var outgoing by remember { mutableStateOf(target) }
-    var incoming by remember { mutableStateOf(target) }
-    var frozen by remember { mutableStateOf<ImageBitmap?>(null) }
-    var frozenSoft by remember { mutableStateOf<ImageBitmap?>(null) }
-    val progress = remember { Animatable(1f) }
+    var blend by remember { mutableStateOf(ArtworkBlendState(target, occurrence)) }
     val layer = rememberGraphicsLayer()
     val readback = remember(layer) { RetainedLayerReadback() }
     val graphicsContext = LocalGraphicsContext.current
@@ -41,35 +40,40 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
     val reduced = LocalReducedMotion.current
     val blurThrough = !reduced && !opacityBlend && LocalArtworkTransition.current == ArtworkTransition.BlurThrough
     LaunchedEffect(target, visual.loading, occurrence, immediate, graphicsContext) {
+        val previous = blend
         // Loading carries the outgoing pixels, not a newly accepted visit.
         if (visual.loading && !immediate) {
-            if (incoming.artwork == null && outgoing.artwork == null && frozen == null) {
-                outgoing = target; incoming = target
-                progress.snapTo(1f)
+            if (previous.incoming.artwork == null && previous.outgoing.artwork == null && previous.frozen == null) {
+                blend = ArtworkBlendState(target, previous.occurrence)
             }
             return@LaunchedEffect
         }
-        if (immediate || occurrence == null && target.contentKey != null && target.contentKey == incoming.contentKey) {
-            acceptedOccurrence = occurrence
-            frozen = null; frozenSoft = null; outgoing = target; incoming = target
-            progress.snapTo(1f)
-        } else if (target != incoming || occurrence != acceptedOccurrence) {
-            if (progress.value < 1f && layer.size.width > 0 && !layer.isReleased) {
+        if (immediate || occurrence == null && target.contentKey != null && target.contentKey == previous.incoming.contentKey) {
+            blend = ArtworkBlendState(target, occurrence)
+        } else if (target != previous.incoming || occurrence != previous.occurrence) {
+            var outgoing = previous.incoming
+            var frozen: ImageBitmap? = null
+            var frozenSoft: ImageBitmap? = null
+            if (previous.progress.value < 1f && layer.size.width > 0 && !layer.isReleased) {
                 val image = readback.capture(layer, graphicsContext, currentDensity, currentDirection)
                 val soft = if (Build.VERSION.SDK_INT < 31 && blurThrough) {
                     withContext(Dispatchers.Default) { blurGlassSnapshot(image, minOf(image.width, image.height) * .045f) }
                 } else null
+                outgoing = previous.outgoing
                 frozen = image; frozenSoft = soft
-            } else { frozen = null; frozenSoft = null; outgoing = incoming }
-            acceptedOccurrence = occurrence
-            incoming = target
-            progress.snapTo(0f)
-            progress.animateTo(1f, tween(if (reduced) minOf(duration, 120) else duration, easing = LinearEasing))
-            frozen = null; frozenSoft = null; outgoing = incoming
+            }
+            // Admit the image tree and its own clock together. Previously mounted
+            // draw closures keep their old opacity until this outgoing tree is composed.
+            val next = ArtworkBlendState(target, occurrence, outgoing, frozen, frozenSoft, Animatable(0f))
+            blend = next
+            next.progress.animateTo(1f, tween(if (reduced) minOf(duration, 120) else duration, easing = LinearEasing))
+            if (blend === next) blend = next.copy(outgoing = next.incoming, frozen = null, frozenSoft = null)
         }
     }
-    val transitioning by remember(immediate) { derivedStateOf { !immediate && progress.value < 1f } }
-    fun phase() = if (immediate) 1f else progress.value
+    // Capture one immutable bundle in both composition and every draw/layer closure.
+    val composed = blend
+    val transitioning by remember(composed, immediate) { derivedStateOf { !immediate && composed.progress.value < 1f } }
+    fun phase() = if (immediate) 1f else composed.progress.value
     fun smooth(value: Float) = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
     fun blur() = if (blurThrough) phase().let { smooth(2f * minOf(it, 1f - it)) } else 0f
     fun reveal() = if (blurThrough) smooth((phase() - .35f) / .3f) else smooth(phase())
@@ -97,7 +101,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
             drawLayer(layer)
         } else drawContent()
     }) {
-        if (transitioning) Box(Modifier.matchParentSize().clearAndSetSemantics {}) { Frame(outgoing, frozen, frozenSoft) }
-        Box(Modifier.matchParentSize().graphicsLayer { alpha = reveal() }) { Frame(if (immediate) target else incoming) }
+        if (transitioning) Box(Modifier.matchParentSize().clearAndSetSemantics {}) { Frame(composed.outgoing, composed.frozen, composed.frozenSoft) }
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = reveal() }) { Frame(if (immediate) target else composed.incoming) }
     }
 }
