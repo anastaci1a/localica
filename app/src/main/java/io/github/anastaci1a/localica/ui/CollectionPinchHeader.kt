@@ -65,7 +65,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     private var targetBounds: Rect? = null
     private var heroDrawTop: Float? = null
     private var heroDrawProgress: Float? = null
-    private var heroArtworkTop: Float? = null
+    private var artworkCoordinates: LayoutCoordinates? = null
     var heroInset = 0f
     var parallax = .65f
 
@@ -181,8 +181,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     fun presentedTop(): Float? = frame()?.presented?.top
     fun observeHero(top: Float, progress: Float) { heroDrawTop = top; heroDrawProgress = progress }
     fun observeArtwork(coordinates: LayoutCoordinates) {
-        val background = background?.takeIf { it.isAttached } ?: return
-        heroArtworkTop = background.localPositionOf(coordinates, Offset.Zero).y
+        artworkCoordinates = coordinates
     }
     fun translation(): Offset = frame()?.liveOffset?.let { Offset(it.x, it.y) } ?: Offset.Zero
     fun heroTop(): Float? {
@@ -201,6 +200,13 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         val observer = observer ?: return
         val frame = frame() ?: return
         val anchor = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == motion.focusKey }
+        // The artwork can be outside the clipped viewport and skip drawing.
+        // Query its live layer transform here rather than retaining its last draw sample.
+        val heroArtworkTop = background?.takeIf { it.isAttached }?.let { parent ->
+            artworkCoordinates?.takeIf { it.isAttached }?.let {
+                parent.localPositionOf(it, Offset.Zero).y
+            }
+        }
         observer(CollectionHeaderFrame(checkNotNull(generation), motion.progress.value, frame.presented.compose(),
             coordinates?.takeIf { it.isAttached }?.let(::rect), heroDrawTop, frame.destinationReady, endpointStyle != null,
             sourceBounds, targetBounds, drawn, heroDrawProgress, frozen,

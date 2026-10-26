@@ -43,7 +43,6 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
     val inset = WindowInsets.statusBars.getTop(density)
     val parallax = if (LocalReducedMotion.current) 1f else .65f
     fun pictureTop() = inset + (pinchHeader?.heroTop() ?: artTop) * parallax
-    val artworkCoordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     SideEffect { pinchHeader?.heroInset = inset.toFloat(); pinchHeader?.parallax = parallax }
     BoxWithConstraints(modifier.then(Modifier.clipToBounds())) {
         val imageHeight = maxWidth
@@ -59,9 +58,8 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
         visual.artwork?.let { image ->
             Image(image, null, Modifier.fillMaxWidth().height(imageHeight)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; translationY = pictureTop() }
-                .onPlaced { artworkCoordinates[0] = it }.drawWithContent {
+                .onPlaced { pinchHeader?.observeArtwork(it) }.drawWithContent {
                     drawContent()
-                    artworkCoordinates[0]?.let { pinchHeader?.observeArtwork(it) }
                     drawRect(Brush.verticalGradient(0f to Color.Transparent, .035f to Color.Black,
                         .58f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
                 }, contentScale = ContentScale.Crop)
