@@ -146,10 +146,14 @@ internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, sou
     pinchHeader?.ordinaryTop = ordinary
     pinchHeader?.presentedTop()?.let { scroll.presented(it, items) }
     val top = pinchHeader?.heroTop() ?: ordinary
-    ArtworkBlend(visual, modifier.onPlaced { pinchHeader?.background = it }.recordFrostedBackdrop(source).drawWithContent {
+    ArtworkBlend(visual, modifier.onPlaced { pinchHeader?.background = it }.drawWithContent {
+        // Read outside the cached scene recording: header progress also owns
+        // background invalidation when the source image itself is unchanged.
+        val presentedTop = pinchHeader?.heroTop() ?: top
+        val progress = pinchHeader?.motion?.progress?.value
         drawContent()
-        if (pinchHeader != null) pinchHeader.observeHero(pinchHeader.heroTop() ?: top, pinchHeader.motion.progress.value)
-    },
+        if (pinchHeader != null && progress != null) pinchHeader.observeHero(presentedTop, progress)
+    }.recordFrostedBackdrop(source),
         duration = if (reducedMotion) 120 else 240, opacityBlend = true) { frame ->
         CollectionBackdrop(frame, top, Modifier.fillMaxSize(), pinchHeader)
     }
