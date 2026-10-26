@@ -10,13 +10,17 @@ import androidx.compose.ui.unit.LayoutDirection
 
 internal enum class ReadbackStage { ACQUIRED, COPIED, RELEASED }
 
+// Keep the suspend call out of a default-argument lambda: Kotlin's continuation
+// lowering can fail for that lambda during a clean module compilation.
+private suspend fun copyLayerBitmap(layer: GraphicsLayer): ImageBitmap = layer.toImageBitmap()
+
 /** A recorded parent retains its source's native content until the copy completes. */
 internal class RetainedLayerReadback(private val onStage: ((ReadbackStage) -> Unit)? = null) {
     private val completion = ReadbackCompletion()
 
     suspend fun capture(source: GraphicsLayer, graphicsContext: GraphicsContext, density: Density,
         layoutDirection: LayoutDirection,
-        copy: suspend (GraphicsLayer) -> ImageBitmap = { it.toImageBitmap() }): ImageBitmap {
+        copy: suspend (GraphicsLayer) -> ImageBitmap = ::copyLayerBitmap): ImageBitmap {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Layer readbacks belong to the owning UI thread" }
         return completion.capture(
             acquire = {
