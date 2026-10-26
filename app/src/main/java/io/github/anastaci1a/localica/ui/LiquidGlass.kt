@@ -106,6 +106,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     body: () -> GlassShape = { GlassShape() }, panelProgress: Float = 0f, panelDark: Boolean? = null, depthScale: Float = modifier.glassDepthScale(),
     homeSource: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
+    homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     silhouette: GlassSilhouette? = null, sharedContact: GlassContact? = null,
     contactPresentation: (() -> GlassShape)? = null,
     content: (@Composable BoxScope.() -> Unit)? = null) {
@@ -156,7 +157,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
-                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds) { extent, resolution, flatWeight ->
+                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint) { extent, resolution, flatWeight ->
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
