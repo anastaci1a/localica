@@ -25,7 +25,8 @@ internal val LocalArtworkTransition = staticCompositionLocalOf { ArtworkTransiti
 @Composable
 internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: Int, immediate: Boolean = false, opacityBlend: Boolean = false, occurrence: Any? = null,
     content: @Composable (PlayerVisual) -> Unit) {
-    val target = visual.copy(loading = false)
+    // Cold frames must remain gradient-only, including as the outgoing reveal frame.
+    val target = visual.copy(loading = visual.loading && visual.artwork == null)
     var acceptedOccurrence by remember { mutableStateOf(occurrence) }
     var outgoing by remember { mutableStateOf(target) }
     var incoming by remember { mutableStateOf(target) }
@@ -41,7 +42,13 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
     val blurThrough = !reduced && !opacityBlend && LocalArtworkTransition.current == ArtworkTransition.BlurThrough
     LaunchedEffect(target, visual.loading, occurrence, immediate, graphicsContext) {
         // Loading carries the outgoing pixels, not a newly accepted visit.
-        if (visual.loading && !immediate) return@LaunchedEffect
+        if (visual.loading && !immediate) {
+            if (incoming.artwork == null && outgoing.artwork == null && frozen == null) {
+                outgoing = target; incoming = target
+                progress.snapTo(1f)
+            }
+            return@LaunchedEffect
+        }
         if (immediate || occurrence == null && target.contentKey != null && target.contentKey == incoming.contentKey) {
             acceptedOccurrence = occurrence
             frozen = null; frozenSoft = null; outgoing = target; incoming = target
@@ -75,7 +82,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
             } else null
         }) {
             if (image != null) Canvas(Modifier.matchParentSize()) { drawImage(image, dstSize = IntSize(size.width.toInt(), size.height.toInt())) }
-            else content(frame)
+            else content(if (visual.loading && frame.artwork == null) frame.copy(loading = true) else frame)
             if (Build.VERSION.SDK_INT < 31 && blurThrough && transitioning) Box(Modifier.matchParentSize().graphicsLayer { alpha = blur() }.clearAndSetSemantics {}) {
                 if (soft != null) Canvas(Modifier.matchParentSize()) { drawImage(soft, dstSize = IntSize(size.width.toInt(), size.height.toInt())) }
                 else if (image == null && frame.softArtwork != null) content(frame.copy(artwork = frame.softArtwork))
