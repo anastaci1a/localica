@@ -130,10 +130,13 @@ class ArtistSelectionPlacementTest {
                     node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag)
                         ?.let { it.startsWith("album-") && it != "album-viewport" } == true
                 }
-                val nodes = compose.onAllNodes(matcher).fetchSemanticsNodes()
+                val allNodes = compose.onAllNodes(matcher).fetchSemanticsNodes()
+                // Prefetched semantics can be attached with origin-zero bounds
+                // even though that item was never placed into the viewport.
+                val nodes = allNodes.filter { it.layoutInfo.isPlaced }
                 val expected = nodes.map { it.boundsInRoot.intersect(viewport) }
                     .filterNot { it.isEmpty }.sortedBy { it.left }
-                val nodeDetails = nodes.map { node ->
+                val nodeDetails = allNodes.map { node ->
                     val layout = node.layoutInfo
                     "id=${node.id} tag=${node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag)} " +
                         "placed=${layout.isPlaced} attached=${layout.isAttached} deactivated=${layout.isDeactivated} " +
@@ -142,7 +145,8 @@ class ArtistSelectionPlacementTest {
                 val observation = compose.runOnIdle {
                     Triple(scene.lastDrawnRegions.map { it.bounds.translate(viewport.topLeft).intersect(viewport) }
                         .filterNot { it.isEmpty }.sortedBy { it.left },
-                        "draws=$draws lazy=${scroll.layoutInfo.visibleItemsInfo.map { "${it.key}:${it.offset}:${it.size}" }}",
+                        scroll.layoutInfo.visibleItemsInfo.map { it.key }.toSet() to
+                            "draws=$draws lazy=${scroll.layoutInfo.visibleItemsInfo.map { "${it.key}:${it.offset}:${it.size}" }}",
                         scene.regions.values.map { entry ->
                             val coordinates = entry.coordinates?.takeIf { it.isAttached }
                             "selected=${entry.selected} visibility=${entry.visibility()} attached=${coordinates != null} " +
@@ -150,9 +154,16 @@ class ArtistSelectionPlacementTest {
                         })
                 }
                 val actual = observation.first
+                val placedKeys = nodes.filterNot { it.boundsInRoot.intersect(viewport).isEmpty }.map {
+                    requireNotNull(it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag))
+                        .removePrefix("album-").toInt()
+                }.toSet()
+                assertEquals("Placed visible album identities match the native lazy layout: $nodeDetails",
+                    observation.second.first, placedKeys)
+                assertTrue("Every placed album stays attached", nodes.all { it.layoutInfo.isAttached && !it.layoutInfo.isDeactivated })
                 assertTrue("All mode exercises multiple visible album bodies", expected.size > 1)
                 assertEquals("All-mode bodies at viewport=$viewport expected=$expected actual=$actual " +
-                    "nodes=$nodeDetails ${observation.second} entries=${observation.third}", expected.size, actual.size)
+                    "nodes=$nodeDetails ${observation.second.second} entries=${observation.third}", expected.size, actual.size)
                 expected.zip(actual).forEach { (item, glass) ->
                     assertEquals(item.left, glass.left, 1f); assertEquals(item.right, glass.right, 1f)
                     assertEquals(item.top, glass.top, 1f); assertEquals(item.bottom, glass.bottom, 1f)
