@@ -93,7 +93,10 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         return checkNotNull(checkNotNull(beyond) { "Collection header has no public beyond-bounds provider" }
             .layout(BeyondBoundsLayout.LayoutDirection.Before) {
                 copyPlaced(requireTicket = true) ?: run {
-                    check(hasMoreContent) { "No current placed collection header for $style request=$ticket" }
+                    check(hasMoreContent) {
+                        "No current placed collection header for $style request=$ticket placedRequest=$placedRequest " +
+                            "placedStyle=$placedStyle attached=${coordinates?.isAttached} mounted=$mounted pinned=${pin != null}"
+                    }
                     null
                 }
             }) { "Public header measurement produced no geometry" }
@@ -112,7 +115,15 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         captureRequest++
         revision++
     }
-    fun freeze(part: FrozenBrowsePart) { frozen = part; revision++ }
+    fun freeze(part: FrozenBrowsePart) {
+        check(!motion.readbackPending) { "Header pixels cannot replace a pending native lease" }
+        frozen = part
+        // The completed image now owns the source pixels. Keeping the old live
+        // header pinned through reflow suppresses the fresh offscreen placement
+        // needed by the destination's public beyond-bounds measurement.
+        pin?.release(); pin = null
+        revision++
+    }
     suspend fun awaitDestination() = target.await()
     suspend fun awaitHandoff() = handed.await()
     fun beginHandoff(commit: Boolean) {
@@ -128,8 +139,9 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         if (endpointStyle != null && style != endpointStyle || endpointStyle == null && style != targetStyle) return
         val measured = runCatching { measure(style) }.getOrElse {
             val problem = it.message ?: it.javaClass.simpleName
-            if (lastMeasurementProblem != problem) android.util.Log.w("CollectionHeaderPinch", problem)
-            lastMeasurementProblem = problem
+            val kind = problem.substringBefore(" request=")
+            if (lastMeasurementProblem != kind) android.util.Log.w("CollectionHeaderPinch", problem)
+            lastMeasurementProblem = kind
             return
         }
         lastMeasurementProblem = null
