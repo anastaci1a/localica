@@ -42,7 +42,8 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
     val density = androidx.compose.ui.platform.LocalDensity.current
     val inset = WindowInsets.statusBars.getTop(density)
     val parallax = if (LocalReducedMotion.current) 1f else .65f
-    val pictureTop = inset + artTop * parallax
+    fun pictureTop() = inset + (pinchHeader?.heroTop() ?: artTop) * parallax
+    val artworkCoordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     SideEffect { pinchHeader?.heroInset = inset.toFloat(); pinchHeader?.parallax = parallax }
     BoxWithConstraints(modifier.then(Modifier.clipToBounds())) {
         val imageHeight = maxWidth
@@ -52,13 +53,15 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
         PlayerBackdrop(palette.copy(top = lerp(palette.top, Color.Black, .4f),
             middle = lerp(palette.middle, Color.Black, .4f), bottom = lerp(palette.bottom, Color.Black, .4f),
             wash = palette.collectionWash ?: palette.wash), Modifier.fillMaxSize(), fullArtBlend = 1f,
-            artHeight = with(density) { imageHeight.toPx() }, artTop = pictureTop, softness = 1f)
+            artHeight = with(density) { imageHeight.toPx() }, artTop = inset + artTop * parallax,
+            softness = 1f, artTopReader = ::pictureTop)
         Box(Modifier.matchParentSize().background(if (light) Color.White.copy(alpha = .58f) else Color.Black.copy(alpha = .16f)))
         visual.artwork?.let { image ->
-            Image(image, null, Modifier.offset(y = with(density) { pictureTop.toDp() }).fillMaxWidth().height(imageHeight)
-                .onPlaced { pinchHeader?.observeArtwork(it) }
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+            Image(image, null, Modifier.fillMaxWidth().height(imageHeight)
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; translationY = pictureTop() }
+                .onPlaced { artworkCoordinates[0] = it }.drawWithContent {
                     drawContent()
+                    artworkCoordinates[0]?.let { pinchHeader?.observeArtwork(it) }
                     drawRect(Brush.verticalGradient(0f to Color.Transparent, .035f to Color.Black,
                         .58f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
                 }, contentScale = ContentScale.Crop)
@@ -145,10 +148,9 @@ internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, sou
     pinchHeader?.ordinaryTop = ordinary
     pinchHeader?.presentedTop()?.let { scroll.presented(it, items) }
     val top = pinchHeader?.heroTop() ?: ordinary
-    val heroProgress = pinchHeader?.motion?.progress?.value ?: 1f
     ArtworkBlend(visual, modifier.onPlaced { pinchHeader?.background = it }.recordFrostedBackdrop(source).drawWithContent {
         drawContent()
-        pinchHeader?.observeHero(top, heroProgress)
+        if (pinchHeader != null) pinchHeader.observeHero(pinchHeader.heroTop() ?: top, pinchHeader.motion.progress.value)
     },
         duration = if (reducedMotion) 120 else 240, opacityBlend = true) { frame ->
         CollectionBackdrop(frame, top, Modifier.fillMaxSize(), pinchHeader)
