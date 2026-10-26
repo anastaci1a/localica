@@ -78,14 +78,21 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     private fun measure(style: BrowseStyle, retain: Boolean = false): Rect {
         val ticket = ++request
         val mounted = grid.layoutInfo.visibleItemsInfo.any { it.key == "browser-notice" }
+        fun copyPlaced(requireTicket: Boolean): Rect? {
+            val placedCoordinates = coordinates
+            if (placedStyle != style || placedCoordinates?.isAttached != true ||
+                requireTicket && placedRequest != ticket) return null
+            val copied = rect(placedCoordinates)
+            if (retain && pin == null) pin = checkNotNull(pinnable) { "Header cannot retain its composed source" }.pin()
+            return copied
+        }
+        // A visible first item needs no extra layout. The public beyond-bounds
+        // provider can return without visiting its block when there is no Before
+        // extent; its absence is not evidence that this placed header is missing.
+        if (mounted) copyPlaced(requireTicket = false)?.let { return it }
         return checkNotNull(checkNotNull(beyond) { "Collection header has no public beyond-bounds provider" }
             .layout(BeyondBoundsLayout.LayoutDirection.Before) {
-                val placedCoordinates = coordinates
-                if (placedStyle == style && placedCoordinates?.isAttached == true && (mounted || placedRequest == ticket)) {
-                    val copied = rect(placedCoordinates)
-                    if (retain && pin == null) pin = checkNotNull(pinnable) { "Header cannot retain its composed source" }.pin()
-                    copied
-                } else {
+                copyPlaced(requireTicket = true) ?: run {
                     check(hasMoreContent) { "No current placed collection header for $style request=$ticket" }
                     null
                 }
