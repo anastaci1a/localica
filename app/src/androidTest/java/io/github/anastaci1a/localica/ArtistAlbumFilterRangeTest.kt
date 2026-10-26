@@ -76,15 +76,19 @@ class ArtistAlbumFilterRangeTest {
             // Short tap owns the complete subset; do not reset/filter or scroll first.
             val before = compose.mainClock.currentTime
             val node = compose.onNodeWithText(name).assertIsDisplayed().fetchSemanticsNode()
+            val viewport = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
+            val visibleTarget = node.boundsInRoot.intersect(viewport)
+            assertFalse("The native contact needs visible chip area: target=${node.boundsInRoot} viewport=$viewport", visibleTarget.isEmpty)
             val view = (node.root as ViewRootForTest).view
             val point = compose.runOnUiThread {
                 assertTrue(view.isAttachedToWindow && view.hasWindowFocus())
                 val location = IntArray(2).also(view::getLocationOnScreen)
                 val visible = android.graphics.Rect()
                 assertTrue(view.getGlobalVisibleRect(visible))
-                val x = location[0] + node.boundsInRoot.center.x
-                val y = location[1] + node.boundsInRoot.center.y
+                val x = location[0] + visibleTarget.center.x
+                val y = location[1] + visibleTarget.center.y
                 assertTrue(x >= visible.left && x < visible.right && y >= visible.top && y < visible.bottom)
+                android.util.Log.i("ArtistRangeFixture", "native-target=$name node=${node.boundsInRoot} viewport=$viewport visible=$visibleTarget screen=($x,$y) viewVisible=$visible")
                 x to y
             }
             val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
