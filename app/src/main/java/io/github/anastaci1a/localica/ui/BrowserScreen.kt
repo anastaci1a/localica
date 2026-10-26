@@ -85,6 +85,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val modalBackdrop = LocalModalBackdrop.current
     var searchVacancy by androidx.compose.runtime.saveable.rememberSaveable { mutableFloatStateOf(0f) }
     var searchOriginalOffset by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(-1) }
+    var measuredSearchSlotHeight by remember { mutableIntStateOf(-1) }
     fun freshSearch() = NavigationState(route.tab, mapOf(route.tab to listOf(route.copy(search = true,
         text = "", queryCommitted = false, key = java.util.UUID.randomUUID().toString()))))
     var localSearch by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
@@ -315,10 +316,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             else -> null
         }) }
 
-    LaunchedEffect(localSearchOpen, searchAnchor) {
+    val restoredSearchSlotHeight = with(density) { pillSlotHeight.roundToPx() }
+    LaunchedEffect(localSearchOpen, searchAnchor, showSearchPill, restoredSearchSlotHeight) {
         snapshotFlow { searchAnchor.searchSlot.fraction }.first { it == if (localSearchOpen) 1f else 0f }
         if (!localSearchOpen) {
-            if (searchOriginalOffset >= 0) scrollOwnership.during { gridState.scrollToItem(0, searchOriginalOffset) }
+            if (searchOriginalOffset >= 0) {
+                if (showSearchPill && searchVacancy > 0f) {
+                    // A zero fraction can precede the root's restored measurement.
+                    // Keep the owned header request alive until that layout exists;
+                    // scrolling a still-zero-height header would anchor the first song.
+                    snapshotFlow { measuredSearchSlotHeight }.first { it == restoredSearchSlotHeight }
+                }
+                scrollOwnership.during { gridState.scrollToItem(0, searchOriginalOffset) }
+            }
             searchOriginalOffset = -1; searchVacancy = 0f
         }
         searchAnchor.source?.refresh()
@@ -821,7 +831,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                         else onPlay(result.rows.shuffled(), 0, result.scope)
                                     })
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
-                                if (artistDetail && showSearchPill) Box(Modifier.fillMaxWidth().height(searchSlotHeight).clipToBounds()) {
+                                if (artistDetail && showSearchPill) Box(Modifier.fillMaxWidth().height(searchSlotHeight)
+                                    .onSizeChanged { measuredSearchSlotHeight = it.height }.clipToBounds()) {
                                     ListSearchPill("Search " + (route.title ?: route.tab.label), {
                                         if (searchVacancy == 0f && searchOriginalOffset < 0) {
                                             searchOriginalOffset = if (gridState.firstVisibleItemIndex == 0) gridState.firstVisibleItemScrollOffset else -1
@@ -832,7 +843,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 }
                             }
                         }
-                        if (!artDetail && (showSearchPill || showFilters)) Spacer(Modifier.height(if (showSearchPill) searchSlotHeight else pillSlotHeight))
+                        if (!artDetail && (showSearchPill || showFilters)) Spacer(Modifier.height(if (showSearchPill) searchSlotHeight else pillSlotHeight)
+                            .then(if (showSearchPill) Modifier.onSizeChanged { measuredSearchSlotHeight = it.height } else Modifier))
                         LibraryNotice(library)
                         playlists.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
