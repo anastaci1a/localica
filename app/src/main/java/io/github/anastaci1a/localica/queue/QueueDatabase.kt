@@ -83,8 +83,7 @@ abstract class QueueDao {
             if (previous?.journey != queue.journey) saveJourney(queue.id, previous?.journey, queue.journey)
             if (previous?.entries != queue.entries) {
                 clearEntries(queue.id)
-                insertEntries(queue.entries.mapIndexed { index, entry ->
-                    EntryRecord(entry.id, queue.id, index, TrackSnapshot.encode(entry.track), entry.sourcePlaylistId) })
+                insertEntries(queueEntryRecords(queue.id, queue.entries))
             }
         }
         upsertActive(ActiveQueueRecord(queueId = after.activeId))
