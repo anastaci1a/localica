@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.os.Build
 import android.view.View
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -29,6 +30,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
+import kotlin.math.pow
 
 /** Route evidence plus native pixels; neither certifies ancestor clipping or live legacy pixels. */
 class MaterialAverageTransitionTest {
@@ -98,6 +100,208 @@ class MaterialAverageTransitionTest {
         if (Build.VERSION.SDK_INT < 33) compose.runOnIdle {
             assertNull("Foreground provenance has no material raster", MaterialAverageRaster.current(fixture.destination))
             assertFalse(requireNotNull(retired).isCurrent())
+        }
+    }
+
+    @Test fun requestedHomeWaitsForItsProducerAndKeepsCapturedBasisAfterConsumerMoves() {
+        val fixture = HomePolicyFixture()
+        fixture.mount()
+        fixture.ready(homeRequired = false)
+        val unavailable = fixture.capture()
+        assertTrue("An unmounted requested home must not report a destination fallback", fixture.events().isEmpty())
+        assertFalse("No home recording exists yet", compose.runOnIdle { fixture.home.recorded })
+        fixture.assertChannels(Color.White, fixture.pixel(unavailable), "Missing home leaves the explicit white host")
+
+        fixture.change(2) { fixture.homeMounted = true }
+        fixture.ready(homeRequired = true)
+        val mounted = fixture.capture()
+        fixture.verify(homeWeight = 1f, captured = false)
+        fixture.assertChannels(fixture.expected(0.0, 1.0, 0.0), fixture.pixel(mounted), "Current home readiness")
+        compose.runOnIdle { fixture.freezeHome() }
+
+        fixture.change(3) { fixture.consumerLeft = 40; fixture.consumerScale = .6f; fixture.weight = .6f }
+        fixture.ready(homeRequired = true)
+        val blended = fixture.capture()
+        fixture.verify(homeWeight = .6f, captured = true)
+        fixture.assertChannels(fixture.expected(0.0, .6, .4), fixture.pixel(blended), "Post-blend nonneutral mapping")
+
+        fixture.change(4) { fixture.destinationMounted = false; fixture.weight = 1f }
+        fixture.ready(homeRequired = true)
+        compose.runOnIdle { assertFalse("Destination placement is genuinely detached", fixture.destinationCoordinates.isAttached) }
+        val homeOnly = fixture.capture()
+        fixture.verify(homeWeight = 1f, captured = true)
+        fixture.assertChannels(fixture.expected(0.0, 1.0, 0.0), fixture.pixel(homeOnly), "Pure captured home survives destination detachment")
+    }
+
+    private inner class HomePolicyFixture {
+        var homeMounted by mutableStateOf(false)
+        var destinationMounted by mutableStateOf(true)
+        var consumerLeft by mutableIntStateOf(120)
+        var consumerScale by mutableFloatStateOf(1f)
+        var weight by mutableFloatStateOf(1f)
+        private var captured by mutableStateOf<HomeBackdropFootprint?>(null)
+        private var capturedPoints: List<Offset>? = null
+        private val phase = AtomicInteger(1)
+        private val observed = ConcurrentLinkedQueue<Pair<Int, MaterialAverageSamplingFrame>>()
+        lateinit var home: FrostedBackdrop
+        private lateinit var destination: FrostedBackdrop
+        lateinit var destinationCoordinates: LayoutCoordinates
+        private lateinit var homeCoordinates: LayoutCoordinates
+        private lateinit var consumerCoordinates: LayoutCoordinates
+        private lateinit var rootCoordinates: LayoutCoordinates
+        private lateinit var view: View
+        private var radius = 0f
+
+        fun mount() {
+            compose.setContent { LocalicaTheme {
+                view = LocalView.current
+                radius = with(androidx.compose.ui.platform.LocalDensity.current) { 16.dp.toPx() }
+                CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = .3f,
+                    contrast = .2f, contrastWeight = 2f, shadowStrength = 0f),
+                    LocalMaterialAverageSamplingObserver provides { observed += phase.get() to it }) {
+                    home = rememberFrostedBackdrop(Unit, dark = false, glassBlur = 0f, whiteTint = 0f)
+                    destination = rememberFrostedBackdrop(Unit, dark = false, glassBlur = 0f, whiteTint = 0f)
+                    SideEffect {
+                        home.materialOnly = true; home.materialCorner = radius
+                        destination.materialOnly = true; destination.materialCorner = radius
+                    }
+                    Box(Modifier.size(300.dp, 220.dp).background(Color.White).testTag("home-policy-scene")
+                        .onGloballyPositioned { rootCoordinates = it }) {
+                        if (destinationMounted) Canvas(Modifier.offset(40.dp, 40.dp).size(120.dp, 100.dp)
+                            .clip(RoundedCornerShape(16.dp)).onGloballyPositioned { destinationCoordinates = it }
+                            .recordFrostedBackdrop(destination)) { drawRect(Color.Blue) }
+                        if (homeMounted) Canvas(Modifier.offset(40.dp, 40.dp).size(120.dp, 100.dp)
+                            .clip(RoundedCornerShape(16.dp)).onGloballyPositioned { homeCoordinates = it }
+                            .recordFrostedBackdrop(home)) {
+                            drawRect(Color.Red)
+                            drawRect(Color.Green, Offset(size.width / 2f, 0f),
+                                androidx.compose.ui.geometry.Size(size.width / 2f, size.height))
+                        }
+                        LiquidGlassSurface(Modifier.offset(consumerLeft.dp, 65.dp).size(120.dp, 50.dp)
+                            .graphicsLayer { scaleX = consumerScale; scaleY = .9f }
+                            .onGloballyPositioned { consumerCoordinates = it }, source = destination,
+                            homeSource = home, homeWeight = { weight },
+                            homeFootprint = captured?.let { frozen -> { frozen } },
+                            cornerRadius = 10.dp, refraction = 0f, pressFeedback = false, shadow = false)
+                    }
+                }
+            } }
+            compose.waitForIdle()
+        }
+
+        fun change(value: Int, action: () -> Unit) {
+            compose.runOnIdle { observed.clear(); phase.set(value); action() }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+
+        fun ready(homeRequired: Boolean) {
+            compose.waitUntil(5000) {
+                fun published(source: FrostedBackdrop) = source.recorded && source.snapshot != null && source.fallback != null &&
+                    source.snapshotReadbackRequest == source.readbackRequest
+                if (Build.VERSION.SDK_INT < 33) (!destinationMounted || published(destination)) && (!homeRequired || published(home))
+                else (!destinationMounted || destination.recorded) && (!homeRequired || home.recorded)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+
+        fun freezeHome() {
+            val width = consumerCoordinates.size.width.toFloat()
+            val height = consumerCoordinates.size.height.toFloat()
+            val screenOrigin = IntArray(2)
+            view.getLocationOnScreen(screenOrigin)
+            val toScreen = requireNotNull(BackdropRegistration.fromMapping(width, height) {
+                consumerCoordinates.localToRoot(it) + Offset(screenOrigin[0].toFloat(), screenOrigin[1].toFloat())
+            })
+            capturedPoints = pointsIn(homeCoordinates).toList()
+            captured = requireNotNull(HomeBackdropFootprint.create(androidx.compose.ui.geometry.Size(width, height), toScreen))
+            val actualCorners = listOf(Offset.Zero, Offset(width, 0f), Offset(width, height), Offset(0f, height))
+                .map { homeCoordinates.localPositionOf(consumerCoordinates, it) }
+            val reported = requireNotNull(requireNotNull(captured).cornersInSource(home.location.registrationToScreen()))
+            actualCorners.zip(reported).forEach { (actual, mapped) ->
+                assertEquals(actual.x, mapped.x, .01f); assertEquals(actual.y, mapped.y, .01f)
+            }
+            assertTrue("Captured footprint includes only the real green half when valid",
+                requireNotNull(capturedPoints).filter { inside(it, homeCoordinates) }.all { it.x > homeCoordinates.size.width / 2f })
+        }
+
+        private fun pointsIn(source: LayoutCoordinates) = (0 until 64).map { index ->
+            source.localPositionOf(consumerCoordinates, Offset(consumerCoordinates.size.width * ((index % 8 + .5f) / 8f),
+                consumerCoordinates.size.height * ((index / 8 + .5f) / 8f)))
+        }
+
+        private fun inside(point: Offset, source: LayoutCoordinates): Boolean {
+            val width = source.size.width.toDouble(); val height = source.size.height.toDouble()
+            val r = radius.toDouble().coerceAtMost(minOf(width, height) / 2)
+            val x = point.x.toDouble(); val y = point.y.toDouble()
+            val dx = maxOf(r - x, 0.0, x - (width - r)); val dy = maxOf(r - y, 0.0, y - (height - r))
+            return x >= 0 && y >= 0 && x <= width && y <= height && dx * dx + dy * dy <= r * r
+        }
+
+        fun events() = observed.filter { it.first == phase.get() }.map { it.second }
+
+        fun verify(homeWeight: Float, captured: Boolean) = compose.runOnIdle {
+            val draws = events()
+            val homePoints = if (captured) requireNotNull(capturedPoints) else pointsIn(homeCoordinates)
+            val homeCount = homePoints.count { inside(it, homeCoordinates) }
+            assertTrue("Home uses a partially covered recording", homeCount in 1..63)
+            val homeFrame = draws.lastOrNull { it.home }
+            assertNotNull("Requested home produced route evidence", homeFrame)
+            homeFrame!!
+            assertEquals(System.identityHashCode(home), homeFrame.sourceIdentity)
+            assertEquals(homeWeight, homeFrame.weight, .0001f)
+            assertEquals(homeCount, homeFrame.validSamples)
+            assertEquals(Build.VERSION.SDK_INT < 33, homeFrame.legacy)
+            if (Build.VERSION.SDK_INT < 33) assertEquals(home.snapshotReadbackRequest, requireNotNull(homeFrame.publication))
+            else assertNull(homeFrame.publication)
+            if (homeWeight < 1f) {
+                val primary = requireNotNull(draws.lastOrNull { !it.home })
+                val primaryCount = pointsIn(destinationCoordinates).count { inside(it, destinationCoordinates) }
+                assertEquals(64, primaryCount)
+                assertNotEquals("Captured/current masks must genuinely differ", homeCount, primaryCount)
+                assertTrue("Current home crop differs from the immutable captured crop",
+                    pointsIn(homeCoordinates) != homePoints)
+                assertEquals(primaryCount, primary.validSamples)
+                assertEquals(System.identityHashCode(destination), primary.sourceIdentity)
+                assertEquals(1f - homeWeight, primary.weight, .0001f)
+                if (Build.VERSION.SDK_INT < 33) assertEquals(destination.snapshotReadbackRequest, requireNotNull(primary.publication))
+            } else assertTrue("Pure home neither samples nor requires destination placement", draws.none { !it.home })
+        }
+
+        fun expected(red: Double, green: Double, blue: Double): Color {
+            val luma = .2126 * red + .7152 * green + .0722 * blue
+            // Independent algebraic form, away from the shader's epsilon endpoints.
+            val tint = .3 * (1.0 - luma) / (1.0 - .3 * luma)
+            fun mapped(value: Double): Float {
+                val lifted = value + (1.0 - value) * tint
+                return (lifted + .2 * (1.0 - lifted).pow(2)).toFloat()
+            }
+            return Color(mapped(red), mapped(green), mapped(blue))
+        }
+
+        fun assertChannels(expected: Color, actual: Color, label: String) {
+            assertEquals("$label red", expected.red, actual.red, .06f)
+            assertEquals("$label green", expected.green, actual.green, .06f)
+            assertEquals("$label blue", expected.blue, actual.blue, .06f)
+            assertEquals("$label opaque", 1f, actual.alpha, .01f)
+        }
+
+        fun pixel(pixels: PixelMap): Color {
+            val point = compose.runOnIdle { rootCoordinates.localPositionOf(consumerCoordinates,
+                Offset(consumerCoordinates.size.width / 2f, consumerCoordinates.size.height / 2f)) }
+            val x = point.x.roundToInt(); val y = point.y.roundToInt()
+            assertTrue("Actual placed center fits native capture", x in 0 until pixels.width && y in 0 until pixels.height)
+            return pixels[x, y]
+        }
+
+        fun capture(): PixelMap {
+            val drawn = CountDownLatch(1)
+            val listener = android.view.ViewTreeObserver.OnDrawListener { drawn.countDown() }
+            compose.runOnIdle { view.viewTreeObserver.addOnDrawListener(listener); view.postInvalidateOnAnimation() }
+            try { assertTrue("Native home-policy draw", drawn.await(5, TimeUnit.SECONDS)) }
+            finally { compose.runOnIdle { if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(listener) } }
+            return capturePopupPixels(compose, compose.onNodeWithTag("home-policy-scene")) { view }
         }
     }
 
