@@ -130,7 +130,7 @@ class ArtistSelectionPlacementTest {
                 val actual = compose.runOnIdle { scene.lastDrawnRegions.map { it.bounds.translate(viewport.topLeft).intersect(viewport) }
                     .filterNot { it.isEmpty }.sortedBy { it.left } }
                 assertTrue("All mode exercises multiple visible album bodies", expected.size > 1)
-                assertEquals(expected.size, actual.size)
+                assertEquals("All-mode bodies at viewport=$viewport expected=$expected actual=$actual", expected.size, actual.size)
                 expected.zip(actual).forEach { (item, glass) ->
                     assertEquals(item.left, glass.left, 1f); assertEquals(item.right, glass.right, 1f)
                     assertEquals(item.top, glass.top, 1f); assertEquals(item.bottom, glass.bottom, 1f)
