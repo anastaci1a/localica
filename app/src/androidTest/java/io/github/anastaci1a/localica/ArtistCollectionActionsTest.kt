@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -54,9 +55,16 @@ class ArtistCollectionActionsTest {
                 }
             } }
             fun albums(chosen: List<String>) {
-                compose.onNodeWithText("All albums").performScrollTo().performClick()
+                compose.onNode(hasScrollToIndexAction() and
+                    SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+                    .performScrollToIndex(0)
+                val carousel = compose.onNode(hasScrollToIndexAction() and
+                    SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
+                carousel.performScrollToNode(hasText("All albums"))
+                compose.onNodeWithText("All albums").performClick()
                 for ((index, name) in chosen.withIndex()) {
-                    val album = compose.onNodeWithText(name).performScrollTo()
+                    carousel.performScrollToNode(hasText(name))
+                    val album = compose.onNodeWithText(name)
                     if (index == 0) album.performClick() else album.performTouchInput { longClick() }
                 }
             }
