@@ -197,9 +197,16 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
                 completed.drop(checked).forEach { (draw, fading, validate) -> if (validate) verify(draw, fading) }
                 checked = completed.size
                 val last = requireNotNull(completed.lastOrNull()) { "A real in-host drawing witness is required" }.first
-                // A static frame may reuse its witness; changed native geometry may not.
-                assertEquals("Current public native geometry has a matching host draw",
-                    current.layout.copy(scrolling = last.layout.scrolling), last.layout)
+                // An already empty lens needs no new host draw while unselected
+                // rows scroll. Still prove from current native keys, placement and
+                // visibility that no selected or departing lens should be present.
+                // Reentry and every nonempty output retain the exact draw witness.
+                if (current.regions.isEmpty() && last.regions.isEmpty()) {
+                    verify(current, departing)
+                } else {
+                    assertEquals("Current public native geometry has a matching host draw; currentRegions=${current.regions} lastRegions=${last.regions}",
+                        current.layout.copy(scrolling = last.layout.scrolling), last.layout)
+                }
                 assertEquals("No newly started selected-host draw lacks its witness", current.hostDraws, last.hostDraws)
                 verify(last, departing)
             }
