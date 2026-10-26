@@ -176,9 +176,10 @@ internal fun BrowseRoute.resolveListSize(value: ListSize?) =
     value?.takeUnless { it == ListSize.Tracklist && !supportsTracklist() } ?: defaultListSize()
 
 /** Album dense rows retain their numbers; Normal is ordinary cover/subtitle presentation everywhere. */
-internal fun BrowseStyle.trackNumberLabel(albumNumber: String?, index: Int): String? = when {
+internal fun BrowseStyle.trackNumberLabel(albumNumber: String?, index: Int, mutablePosition: Int? = null): String? = when {
     presentation != Presentation.List -> null
-    listSize == ListSize.Tracklist -> albumNumber ?: (index + 1).toString()
-    listSize in setOf(ListSize.Smallest, ListSize.Small, ListSize.Compact) -> albumNumber
+    listSize == ListSize.Tracklist -> albumNumber ?: mutablePosition?.takeIf { it > 0 }?.toString() ?: (index + 1).toString()
+    listSize in setOf(ListSize.Smallest, ListSize.Small) -> albumNumber ?: mutablePosition?.takeIf { it > 0 }?.toString()
+    listSize == ListSize.Compact -> albumNumber
     else -> null
 }
