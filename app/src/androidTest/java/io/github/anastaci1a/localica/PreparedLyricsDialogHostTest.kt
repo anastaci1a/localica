@@ -194,13 +194,9 @@ class PreparedLyricsDialogHostTest {
         prepare()
         nativeClick(sourceButton)
         await { sourceClicks == 1 }
-        val backReceipt = device.pressBack()
-        val backObservation = "post-call nonAtomicInstrumentationSample=true receipt=$backReceipt " +
-            "sourceBacks=$sourceBacks childBacks=$childBacks modalBacks=$modalBacks " +
-            "sourceFocus=${caller.hasWindowFocus()} preparedFocus=${host.composeView.hasWindowFocus()} " +
-            "sourceAttached=${caller.isAttachedToWindow} preparedAttached=${host.composeView.isAttachedToWindow}"
-        android.util.Log.i("PreparedLyricsBack", backObservation)
-        assertTrue(backObservation, backReceipt)
+        // pressBack() additionally waits for a content-change event. This source handler
+        // deliberately changes only its counter; assert the real system action's admission.
+        pressSystemBack()
         await { sourceBacks == 1 }
         compose.runOnIdle {
             assertEquals(0, modalClicks)
