@@ -697,6 +697,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (popupDismiss == null || route.text.isNotBlank()) BoxWithConstraints(Modifier.weight(1f).pointerInput(orderScroll, playbackFollow) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                // Retire automatic range motion before LazyGrid can acquire this
+                // contact as a stop-fling drag and swallow an album-chip click.
+                artistFilterRange.interrupt()
                 listContact = true
                 orderScroll.cancel()
                 returnToList.cancel()
