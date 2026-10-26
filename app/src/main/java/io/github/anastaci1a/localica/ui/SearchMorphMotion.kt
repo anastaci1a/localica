@@ -137,3 +137,7 @@ internal data class SearchMorphSample(
     val slotReturnFrom: Float = 0f,
 )
 internal val LocalSearchMorphObserver = staticCompositionLocalOf<((SearchMorphSample) -> Unit)?> { null }
+
+/** Root-window layout evidence; popup callbacks belong to a different traversal. */
+internal data class SearchSlotLayoutSample(val fraction: Float, val rowTop: Float)
+internal val LocalSearchSlotLayoutObserver = staticCompositionLocalOf<((SearchSlotLayoutSample) -> Unit)?> { null }
