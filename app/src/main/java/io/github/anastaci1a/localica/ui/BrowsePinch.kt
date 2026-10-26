@@ -449,15 +449,10 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                     } + listOfNotNull(motion.header?.layer?.let { PinchCaptureDrawing(PinchHeaderCaptureKey, 3, it) }))
                         .filter { !it.layer.isReleased && it.size.width > 0 && it.size.height > 0 }
                     if (drawings.isNotEmpty()) {
-                        val atlasWidth = max(width, drawings.maxOf { it.size.width }) + 2
-                        var x = 1; var y = 1; var rowHeight = 0
-                        val origins = drawings.map { drawing ->
-                            val size = drawing.size
-                            if (x + size.width + 1 > atlasWidth) { x = 1; y += rowHeight + 2; rowHeight = 0 }
-                            androidx.compose.ui.unit.IntOffset(x, y).also {
-                                x += size.width + 2; rowHeight = max(rowHeight, size.height)
-                            }
-                        }
+                        val atlasLayout = packPinchAtlas(drawings.map { it.size }, width)
+                        val origins = atlasLayout.origins
+                        if (motion.header?.observer != null) android.util.Log.i("PinchAtlas",
+                            "width=${atlasLayout.size.width} height=${atlasLayout.size.height} regions=${drawings.size}")
                         // Keep the tint with the same source snapshot even if playback or
                         // virtualization changes the live rows during readback.
                         val highlights = motion.currentHighlights.toMap()
@@ -466,7 +461,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                             readback.capture(graphicsContext, density, layoutDirection, onDeadline = {
                                 if (motion.owns(generation)) { onAnchor(null); motion.clearTransaction() }
                             }) { atlas ->
-                                atlas.record(density, layoutDirection, androidx.compose.ui.unit.IntSize(atlasWidth, y + rowHeight + 1)) {
+                                atlas.record(density, layoutDirection, atlasLayout.size) {
                                     drawings.forEachIndexed { i, drawing ->
                                         translate(origins[i].x.toFloat(), origins[i].y.toFloat()) { drawLayer(drawing.layer) }
                                     }
