@@ -64,10 +64,11 @@ class BrowsePinchMotionTest {
         for (p in listOf(0f, .3f, .8f, 1f, .5f, 0f)) {
             motion.progress.snapTo(p)
             assertEquals(16f * (1f - p), placed().x, .001f)
-            assertEquals(-43f * (1f - p), placed().y, .001f)
+            // Halved Smallest padding is 1.2dp: 2px here versus Small's 8px.
+            assertEquals(-46f * (1f - p), placed().y, .001f)
         }
         assertEquals("Insets use the live layer density, even if capture used another density",
-            Offset(16f, -45f), motion.contentTranslation("song", 0, position, 300, target, geometry, 3f))
+            Offset(16f, -48f), motion.contentTranslation("song", 0, position, 300, target, geometry, 3f))
         // Rollback retires at p=0, not only at the committed target's p=1.
         motion.clearTransaction()
         assertEquals(Offset.Zero, placed())
