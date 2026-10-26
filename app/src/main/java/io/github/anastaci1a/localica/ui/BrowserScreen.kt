@@ -350,8 +350,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     // Placement reads its animation during layout, so the vacated list slot must
     // read that same owner during measurement rather than a composition later.
+    val searchSlotLayoutObserver = LocalSearchSlotLayoutObserver.current
+    val measuredSlotFraction = remember { floatArrayOf(0f) }
     val searchSlotLayout = Modifier.layout { measurable, constraints ->
-        val height = (restoredSearchSlotHeight - searchVacancy * searchAnchor.searchSlot.fraction)
+        val fraction = searchAnchor.searchSlot.fraction
+        measuredSlotFraction[0] = fraction
+        val height = (restoredSearchSlotHeight - searchVacancy * fraction)
             .roundToInt().coerceIn(constraints.minHeight, constraints.maxHeight)
         val child = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
         layout(child.width, height) { child.placeRelative(0, 0) }
@@ -915,6 +919,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp)
                                 .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry)).onGloballyPositioned {
                                 reorder.itemCoordinates[item.key] = it
+                                if (itemIndex == 0) searchSlotLayoutObserver?.invoke(
+                                    SearchSlotLayoutSample(measuredSlotFraction[0], it.positionInRoot().y))
                                 val origin = it.positionInRoot() - reorder.viewportOrigin
                                 loadingCell?.place(origin.x / density.density,
                                     (origin.y - with(density) { (if (showFilters || showSearchPill) pillSlotHeight else 0.dp).toPx() }) / density.density)
