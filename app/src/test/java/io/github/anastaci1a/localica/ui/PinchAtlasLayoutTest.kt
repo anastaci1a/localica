@@ -33,6 +33,11 @@ class PinchAtlasLayoutTest {
         assertTrue("Use a two-dimensional allocation", layout.size.width > 1082)
         assertTrue("Avoid the old over-eight-thousand-pixel strip", layout.size.height < 8192)
         assertTrue(layout.size.width < 8192)
+        val fragments = listOf(IntSize(1080, 2135)) + List(75) { IntSize(216, 180) }
+        val packed = verify(fragments, 1080)
+        val occupied = fragments.sumOf { (it.width.toLong() + 2) * (it.height.toLong() + 2) }
+        assertTrue("A tall header must not reserve empty width across its whole height",
+            packed.size.width.toLong() * packed.size.height <= occupied * 5 / 4)
     }
 
     @Test fun mixedRegionsRetainInputIdentityAndDeterministicGutters() {
