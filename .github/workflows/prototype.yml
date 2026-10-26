@@ -160,6 +160,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/**/pinch-retained-highlight/**
           app/build/outputs/connected_android_test_additional_output/**/popup-shadow-continuity/**
           app/build/outputs/connected_android_test_additional_output/**/search-ime-motion/**
+          app/build/outputs/connected_android_test_additional_output/**/search-slot-frames/**
           app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
           app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
           app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
@@ -290,6 +291,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/**/pinch-retained-highlight/**
           app/build/outputs/connected_android_test_additional_output/**/popup-shadow-continuity/**
           app/build/outputs/connected_android_test_additional_output/**/search-ime-motion/**
+          app/build/outputs/connected_android_test_additional_output/**/search-slot-frames/**
           app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
           app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
           app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
