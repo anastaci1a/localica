@@ -11,7 +11,8 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.activity.ComponentActivity
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.browse.*
@@ -25,7 +26,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ListSearchTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
     private var lastRoot = ""
     private var lastMorph = ""
@@ -35,7 +36,7 @@ class ListSearchTest {
 
     private data class SlotFrame(val sample: SearchMorphSample, val rowTop: Float)
 
-    private fun slotFrames(reduced: Boolean) {
+    private fun slotFrames(reduced: Boolean) = withDockedSlotKeyboard {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val route = BrowseRoute(MainTab.Songs, key = "search-slot-frames")
         val preferences = BrowsePreferences(context)
@@ -82,12 +83,18 @@ class ListSearchTest {
                     compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
                 }
             }
+            fun beginReturn() {
+                // Native Back first dismisses the keyboard, then the actual popup.
+                compose.awaitSearchImeHandoff { pressSystemBack() }
+                compose.awaitExpectedWindowFocus(compose.onNodeWithTag("list-search-popup"))
+                pressSystemBack()
+            }
             open()
             pumpUntil { last()?.let { it.opening && it.placementBottom != null &&
                 if (reduced) it.slotFraction == 1f else it.slotFraction in .1f.. .8f } == true }
             val owned = compose.runOnUiThread { requireNotNull(last()) }
-            assertTrue("Placement must use this popup's actual focused native IME", owned.windowFocused && owned.ime > 0 && owned.nativeIme > 0)
-            pressSystemBack()
+            assertTrue("Placement must use this popup's actual focused native IME: $owned", owned.windowFocused && owned.ime > 0 && owned.nativeIme > 0)
+            beginReturn()
             if (!reduced) {
                 pumpUntil { last()?.let { !it.opening && it.slotFraction > .01f && it.slotFraction < owned.slotFraction } == true }
                 // A fresh contact during the existing return must retain the original vacancy.
@@ -100,7 +107,7 @@ class ListSearchTest {
                 open()
             }
             pumpUntil { last()?.let { it.opening && it.progress >= .999f && it.slotFraction == 1f } == true }
-            pressSystemBack()
+            beginReturn()
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
                 compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty()
@@ -132,6 +139,38 @@ class ListSearchTest {
         } finally {
             compose.mainClock.autoAdvance = true
             preferences.write(route, previous, false)
+        }
+    }
+    private fun withDockedSlotKeyboard(block: () -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        fun shell(command: String): String = instrumentation.uiAutomation.executeShellCommand(command).use {
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() }
+        }
+        val key = "show_ime_with_hard_keyboard"
+        val original = shell("settings get secure $key")
+        check(original == "null" || original.matches(Regex("-?[0-9]+")))
+        val scales = listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale")
+            .associateWith { shell("settings get global $it") }
+        check(scales.values.all { it == "null" || it.toFloatOrNull() != null })
+        val setup = mutableListOf<String>()
+        try {
+            compose.activityRule.scenario.onActivity {
+                androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it.window, false)
+                it.window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            }
+            shell("settings put secure $key 1")
+            assertEquals("1", shell("settings get secure $key"))
+            scales.keys.forEach { shell("settings put global $it 1"); assertEquals(1f, shell("settings get global $it").toFloat(), 0f) }
+            prepareNativeDockedKeyboard(compose, setup, ::shell)
+            block()
+        } finally {
+            setup.forEach { android.util.Log.i("ListSearchSlotSetup", it) }
+            if (original == "null") shell("settings delete secure $key") else shell("settings put secure $key $original")
+            assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
+            scales.forEach { (name, value) ->
+                if (value == "null") shell("settings delete global $name") else shell("settings put global $name $value")
+                assertEquals("Restore native animation scale $name", value, shell("settings get global $name"))
+            }
         }
     }
     private fun trace(message: String) {
