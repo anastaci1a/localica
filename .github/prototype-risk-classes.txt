@@ -134,7 +134,6 @@ io.github.anastaci1a.localica.PopupScrollEdgesTest
 io.github.anastaci1a.localica.PopupShadowContinuityTest
 io.github.anastaci1a.localica.PreparedQueuePlaybackTest
 io.github.anastaci1a.localica.PreviousPlaybackTest
-io.github.anastaci1a.localica.PrivateDiagnosticWriterTest
 io.github.anastaci1a.localica.PrivateQueueBoundaryTest
 io.github.anastaci1a.localica.QuarantinedSourceReopenTest
 io.github.anastaci1a.localica.QueueBrowsingTest
