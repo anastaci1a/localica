@@ -24,6 +24,10 @@ import java.util.UUID
 class ArtistAlbumFilterRangeTest {
     @get:Rule val compose = createComposeRule()
     private inner class Fixture {
+        private var observedFrame = 0
+        private fun phase(value: String) {
+            android.util.Log.i("ArtistRangeFixture", "phase=$value uptime=${android.os.SystemClock.uptimeMillis()}")
+        }
         var reduced by mutableStateOf(false)
         var density = 1f
         val name = "Range "+UUID.randomUUID().toString().take(8)
@@ -34,8 +38,10 @@ class ArtistAlbumFilterRangeTest {
         val route = BrowseRoute(MainTab.Artists, MediaRef(MediaKind.Artist, artist.id), name)
         val preferences = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         init {
+            phase("preferences")
             preferences.write(route, BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal,
                 sort = TrackSort.Title, ascending = true), true)
+            phase("mount-begin")
             compose.setContent { LocalicaTheme {
                 density = LocalDensity.current.density
                 CompositionLocalProvider(LocalReducedMotion provides reduced) {
@@ -46,19 +52,34 @@ class ArtistAlbumFilterRangeTest {
                     }
                 }
             } }
+            phase("mount-end")
             compose.mainClock.autoAdvance = false
             settle()
+            phase("initial-settle-end")
         }
         fun top() = compose.onNodeWithTag("browse-full-span").getUnclippedBoundsInRoot().top.value -
             compose.onNodeWithTag("browser-list").getUnclippedBoundsInRoot().top.value
-        fun frame(): Float { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); return top() }
+        fun frame(): Float {
+            val index = ++observedFrame
+            phase("frame-$index-advance")
+            compose.mainClock.advanceTimeByFrame()
+            phase("frame-$index-idle")
+            compose.waitForIdle()
+            phase("frame-$index-bounds")
+            return top().also { phase("frame-$index-complete") }
+        }
         fun settle() { repeat(40) { frame() } }
         fun choose(name: String) {
+            phase("choose-$name-all")
             compose.onNodeWithText("All albums").performScrollTo().performClick()
+            phase("choose-$name-target")
             compose.onNodeWithText(name).performScrollTo().performClick()
+            phase("choose-$name-complete")
         }
         fun scrollBy(dp: Float) {
+            phase("scroll-begin")
             compose.onNodeWithTag("browser-list").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, dp * density) }
+            phase("scroll-end")
         }
         fun largeAtExcessOffset(): Float {
             choose("Ten songs"); settle()
