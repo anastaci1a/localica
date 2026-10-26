@@ -116,4 +116,55 @@ class QueueDatabaseTest {
             assertEquals(reordered, db.queues().read())
         } finally { db.close() }
     }
+    @Test fun repeatedTrackEncodingPreservesDistinctOccurrencesAndSameIdMetadataReplacements() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+        val first = Track("content://fixture/first", "First", id = "same-track-id", fileName = "first.mp3",
+            relativePath = "first.mp3", album = "Album", artist = "Artist", durationMs = 23456,
+            comment = "Retain metadata", composer = "Composer", modifiedAt = 1234,
+            locations = listOf(TrackLocation("root", "content://fixture/first", "first.mp3")))
+        val other = first.copy(title = "Other metadata with the same ID", uri = "content://fixture/other")
+        val entries = listOf(QueueEntry("one", first, "origin-one"), QueueEntry("two", first.copy(), "origin-two"),
+            QueueEntry("three", other, "origin-three"), QueueEntry("four", first, null))
+        val ids = entries.map { it.id }
+        val queue = ListeningQueue(name = "Repeated snapshots", entries = entries, currentEntryId = "two", positionMs = 2345,
+            journey = QueueJourney.start(ids, "two", JourneyModes()))
+        var saved = QueueLibrary(listOf(queue), queue.id)
+        suspend fun rows() = db.queues().readQueues().single().entries.sortedBy { it.ordinal }
+        try {
+            db.queues().save(QueueLibrary(), saved)
+            val original = rows()
+            assertEquals(ids, original.map { it.id })
+            assertEquals(listOf("origin-one", "origin-two", "origin-three", null), original.map { it.sourcePlaylistId })
+            assertEquals(original[0].track, original[1].track)
+            assertEquals(original[0].track, original[3].track)
+            assertNotEquals("Same ID must not merge different metadata", original[0].track, original[2].track)
+            assertEquals(entries.map { it.track }, original.map { TrackSnapshot.decode(it.track) })
+            assertEquals(saved, db.queues().read())
+
+            val reversedEntries = entries.reversed()
+            val reversed = saved.update(queue.copy(entries = reversedEntries, order = SavedOrder(reversedEntries.map { it.id })))
+            db.queues().save(saved, reversed); saved = reversed
+            assertEquals(reversedEntries.map { it.id }, rows().map { it.id })
+            val originalPayloads = original.associate { it.id to it.track }
+            assertTrue("Order replacement preserves exact original payload bytes", rows().all { it.track == originalPayloads[it.id] })
+            assertEquals(saved, db.queues().read())
+
+            val replacement = first.copy(title = "Updated", uri = "content://fixture/updated", durationMs = 31415,
+                locations = listOf(TrackLocation("new-root", "content://fixture/updated", "updated.mp3")))
+            val updatedEntries = reversedEntries.map { if (it.id == "two") it.copy(track = replacement) else it }
+            val updated = saved.update(saved.active!!.copy(entries = updatedEntries))
+            db.queues().save(saved, updated)
+            val finalRows = rows().associateBy { it.id }
+            assertEquals(replacement, TrackSnapshot.decode(finalRows.getValue("two").track))
+            assertNotEquals(originalPayloads.getValue("two"), finalRows.getValue("two").track)
+            for (id in listOf("one", "three", "four")) assertEquals(originalPayloads.getValue(id), finalRows.getValue(id).track)
+            assertEquals("origin-two", finalRows.getValue("two").sourcePlaylistId)
+            assertEquals(updated, db.queues().read())
+            assertEquals("two", updated.active!!.currentEntryId)
+            assertEquals(2345L, updated.active!!.positionMs)
+            assertEquals(queue.journey, updated.active!!.journey)
+        } finally { db.close() }
+    }
+
 }
