@@ -163,6 +163,7 @@ class CollectionHeaderPinchFrameTest {
                 assertTrue("Every observed transaction has an endpoint-verified handoff", transaction.any { !it.drawn && it.handoff })
             }
         } finally {
+            android.util.Log.i("CollectionHeaderFrames", "artist=$artist frames=${frames.size} last=${frames.takeLast(3)}")
             compose.mainClock.autoAdvance = false
             if (held) { compose.onNodeWithTag("browser-list").performTouchInput { cancel() }; held = false }
             compose.mainClock.autoAdvance = true

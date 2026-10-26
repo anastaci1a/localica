@@ -367,17 +367,26 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     SideEffect { pinchMotion.header = pinchHeader; pinchHeader?.observer = headerFrameObserver }
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
+        fun headerPhase(phase: String) {
+            if (pinchHeader != null && headerFrameObserver != null) android.util.Log.i("CollectionHeaderAnchor",
+                "phase=$phase anchor=${zoomAnchor != null} pending=$queryPending " +
+                    "styleMatches=${zoomAnchor?.style == displayedStyle} rows=${result.items.size} " +
+                    "capturing=${pinchMotion.capturing} held=${pinchMotion.held}")
+        }
+        headerPhase("admission")
         val anchor = zoomAnchor ?: return@LaunchedEffect
         if (anchor.route != route) { zoomAnchor = null; return@LaunchedEffect }
         if (queryPending || displayedStyle != anchor.style) return@LaunchedEffect
         val index = result.items.indexOfFirst { it.key == anchor.key }
         try {
             if (index >= 0) scrollOwnership.during {
+                headerPhase("position-request")
                 when (anchor.edge) {
                     -1 -> gridState.scrollToItem(0)
                     1 -> gridState.scrollToItem((gridState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
                     else -> gridState.scrollToItem(index + 1, -anchor.top)
                 }
+                headerPhase("position-measured")
                 gridState.scroll {
                     fun correctAnchor() {
                         val layout = gridState.layoutInfo
@@ -398,6 +407,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     // and correct before yielding a frame of coarse top alignment.
                     // Both this correction and the continuing loop own the same scroll.
                     correctAnchor()
+                    headerPhase("anchor-corrected")
                     pinchHeader?.anchorCorrected(displayedStyle)
                     val start = withFrameNanos { it }
                     do {
@@ -410,7 +420,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     } while (pinchMotion.source != null || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
                 }
             }
-        } finally { if (zoomAnchor == anchor) zoomAnchor = null }
+        } finally {
+            headerPhase("retired active=${kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive}")
+            if (zoomAnchor == anchor) zoomAnchor = null
+        }
     }
     val surroundingBackdrop = LocalFrostedBackdrop.current
     val hasSongItems = result.items.any { it.row != null }
