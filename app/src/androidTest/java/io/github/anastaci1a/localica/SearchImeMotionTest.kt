@@ -468,6 +468,16 @@ class SearchImeMotionTest {
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
             opened()
             assertEquals("Fallback finishes before any native keyboard request", 0, compose.runOnUiThread { samples.last().ime })
+            // Endpoint proximity does not prove that the opening owner has handed
+            // off. Keep input deferred until the phase this regression exercises.
+            val endpoint = compose.runOnUiThread { samples.last() }
+            advanceUntil(virtualTimeoutMillis = springDuration(0f,
+                maxOf(endpoint.destination.bottom, endpoint.bounds.bottom), pixels = true) + 256L) {
+                samples.lastOrNull()?.let { it.opening && it.progress == 1f && it.flight == null && it.ime == 0 } == true
+            }
+            compose.runOnUiThread { samples.last() }.let {
+                assertRect("Fallback handoff completes before releasing native input", it.destination, it.bounds)
+            }
             compose.runOnUiThread { keyboardAllowed = true }
             awaitDockedKeyboard()
             repeat(40) { compose.mainClock.advanceTimeBy(32); compose.waitForIdle() }
