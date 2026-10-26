@@ -44,6 +44,7 @@ class ListSearchTest {
         preferences.write(route, BrowseStyle(quickSearch = true), false)
         val frames = mutableListOf<SlotFrame>()
         val placedFrames = mutableListOf<SearchMorphSample>()
+        val rootFrames = mutableListOf<SearchSlotLayoutSample>()
         var slot = 0f
         val tracks = (0..20).map { Track("slot:$it", "Song ${it.toString().padStart(3, '0')}",
             fileName = "$it.mp3", relativePath = "$it.mp3") }
@@ -54,6 +55,7 @@ class ListSearchTest {
                 val snapshot = remember { LibrarySnapshot(folders = listOf(FolderSelection("slot-root", "Music")), tracks = tracks) }
                 SideEffect { slot = with(density) { slotHeight.toPx() } }
                 CompositionLocalProvider(LocalReducedMotion provides reduced,
+                    LocalSearchSlotLayoutObserver provides { rootFrames += it },
                     LocalSearchMorphObserver provides { sample ->
                         placedFrames += sample
                     }) {
@@ -68,10 +70,10 @@ class ListSearchTest {
             fun rowNode() = compose.onNodeWithTag("media-${tracks.first().id}", useUnmergedTree = true)
             val baseline = rowNode().fetchSemanticsNode().boundsInRoot.top
             compose.mainClock.autoAdvance = false
-            fun advanceObservedFrame() {
-                compose.mainClock.advanceTimeByFrame()
-                // A popup placement callback can precede the other window's layout.
-                // Pair both real geometries after the same controlled frame drains.
+            fun advanceObservedFrame(count: Int = 1) {
+                repeat(count) { compose.mainClock.advanceTimeByFrame() }
+                // Keep cross-window observations for lifecycle witnesses. Geometry
+                // equality uses the independently stamped root layout below.
                 compose.waitForIdle()
                 val coordinates = rowNode().fetchSemanticsNode().layoutInfo.coordinates
                 compose.runOnUiThread {
@@ -79,8 +81,11 @@ class ListSearchTest {
                     placedFrames.lastOrNull()?.let { frames += SlotFrame(it, coordinates.positionInRoot().y) }
                 }
             }
-            fun pumpUntil(predicate: () -> Boolean) = compose.waitUntil(5000) {
-                advanceObservedFrame()
+            fun pumpUntil(endpoint: Boolean = false, predicate: () -> Boolean) = compose.waitUntil(5000) {
+                // Endpoint-only waits have no intervening gesture or observation
+                // requirement. Bound native yields to four virtual frames while
+                // preserving all actual placement callbacks and the same deadline.
+                advanceObservedFrame(if (endpoint && !reduced) 4 else 1)
                 compose.runOnUiThread(predicate)
             }
             fun last() = frames.lastOrNull()?.sample
@@ -122,10 +127,10 @@ class ListSearchTest {
                 }
                 open()
             }
-            pumpUntil { last()?.let { it.opening && it.progress >= .999f && it.slotFraction == 1f } == true }
+            pumpUntil(endpoint = true) { last()?.let { it.opening && it.progress >= .999f && it.slotFraction == 1f } == true }
             beginReturn()
             compose.waitUntil(5000) {
-                advanceObservedFrame()
+                advanceObservedFrame(if (reduced) 1 else 4)
                 // Merged semantics retire immediately on dismissal; the unmerged
                 // body remains mounted until the real return owner reaches its end.
                 compose.onAllNodesWithTag("list-search-popup", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
@@ -134,8 +139,12 @@ class ListSearchTest {
             val observed = compose.runOnUiThread { frames.toList() }
             val placements = compose.runOnUiThread { placedFrames.toList() }
             assertTrue("Observe real frames before native placement ownership", placements.any { it.opening && it.placementBottom == null && it.flight?.opening == true })
-            for ((sample, top) in observed)
-                assertEquals("Row and placed popup must use the same vacancy: $sample", baseline - slot * sample.slotFraction, top, 1.1f)
+            val rootLayouts = compose.runOnUiThread { rootFrames.toList() }
+            assertTrue("Observe underlying window layouts", rootLayouts.size > 2)
+            assertTrue("Root layout observes the fully vacated slot", rootLayouts.any { it.fraction == 1f })
+            for (sample in rootLayouts)
+                assertEquals("Row uses the placement owner's fraction measured in its own traversal: $sample",
+                    baseline - slot * sample.fraction, sample.rowTop, 1.1f)
             var wasOpening = false
             var heldFraction = 0f
             // Keep every callback for owner/trajectory assertions, including those
@@ -164,7 +173,8 @@ class ListSearchTest {
             check(directory.isDirectory || directory.mkdirs())
             val output = java.io.File(directory, "${if (reduced) "reduced" else "normal"}-${android.os.SystemClock.elapsedRealtimeNanos()}.txt")
             output.writeText("PLACED CALLBACKS\n" + compose.runOnUiThread { placedFrames.toList() }.joinToString("\n") +
-                "\nCOHERENT FRAME OBSERVATIONS\n" + observed.joinToString("\n") { "rowTop=${it.rowTop} ${it.sample}" })
+                "\nROOT LAYOUT OBSERVATIONS\n" + compose.runOnUiThread { rootFrames.toList() }.joinToString("\n") +
+                "\nCROSS-WINDOW CALLBACK OBSERVATIONS\n" + observed.joinToString("\n") { "rowTop=${it.rowTop} ${it.sample}" })
             android.util.Log.i("ListSearchSlotFrames", "reduced=$reduced frames=${observed.size} trace=${output.name}")
             observed.takeLast(24).forEach { android.util.Log.i("ListSearchSlotFrames", "rowTop=${it.rowTop} ${it.sample}") }
             compose.mainClock.autoAdvance = true
