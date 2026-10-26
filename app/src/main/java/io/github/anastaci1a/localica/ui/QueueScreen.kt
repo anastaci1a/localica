@@ -32,7 +32,7 @@ import io.github.anastaci1a.localica.library.SongListView
 fun QueueScreen(state: QueueUiState, controller: QueueController?, library: LibraryUiState = LibraryUiState(loading = false),
     playlists: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(loading = false),
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null,
-    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null, listBackEnabled: Boolean = false, playerOpen: Boolean = false) {
+    enabled: Boolean = true, pins: List<MediaRef> = emptyList(), onPin: (MediaRef) -> Unit = {}, scrollToTopRequest: Int = 0, reducedMotion: Boolean = false, selectionVisible: Boolean = true, isPlaying: Boolean = false, onOpen: (io.github.anastaci1a.localica.browse.BrowserItem) -> Unit = {}, onMinimize: (() -> Unit)? = null, listBackEnabled: Boolean = false, playerOpen: Boolean = false, openingRequest: Long = 0) {
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
@@ -74,7 +74,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         BrowserScreen(library, playlists, route, { browsing = browsing.update(it) }, onOpen, {}, { rows, index, _ ->
             rows.getOrNull(index)?.let { controller?.selectEntry(it.id) }
         }, controller, playlistController, enabled, playerOpen, pins, onPin, sorting, { sorting = false }, state,
-            playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId, header = {
+            playingEntryId = active?.takeIf { it.id == state.library.activeId }?.currentEntryId,
+            queueOpeningRequest = openingRequest, header = {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         onMinimize?.let { ActionIcon(R.drawable.ic_down, "Minimize queue", onClick = it) }

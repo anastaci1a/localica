@@ -27,6 +27,56 @@ import org.junit.Test
 class QueueDragAnchorTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun freshDirectOpeningAcquiresOnceBeforeItsFirstChangedFrameAndKeepsIdentityThroughReversal() {
+        val progress = Animatable(.55f)
+        val openings = mutableListOf<Pair<Long, Float>>()
+        val settlements = mutableListOf<Boolean>()
+        var slop = 0f
+        var step = 0f
+        compose.setContent { LocalicaTheme {
+            slop = LocalViewConfiguration.current.touchSlop
+            step = with(LocalDensity.current) { 16.dp.toPx() }
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                QueueSurface(progress, InterfaceSettings(), { settlements += it },
+                    onOpeningContact = { openings += compose.mainClock.currentTime to progress.value }) {
+                    Box(Modifier.weight(1f).fillMaxWidth())
+                }
+            }
+        } }
+        val root = compose.onRoot()
+        val origin = root.fetchSemanticsNode().boundsInRoot.topLeft
+        var finger = compose.onNodeWithContentDescription("Close queue").fetchSemanticsNode().boundsInRoot.center - origin
+        var held = false
+        compose.mainClock.autoAdvance = false
+        try {
+            val initial = progress.value
+            root.performTouchInput { down(finger) }
+            held = true
+            fun move(dy: Float) {
+                finger += Offset(0f, dy)
+                root.performTouchInput { moveTo(finger, delayMillis = 32) }
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+            }
+            move(-slop - step)
+            assertTrue("Fresh upward acquisition must actually open the partly closed drawer", progress.value > initial)
+            assertEquals("Exactly one opening is admitted before release", 1, openings.size)
+            assertEquals("Event precedes the first opening progress mutation", initial, openings.single().second, 0f)
+            assertTrue("Acquisition is not deferred until settlement", settlements.isEmpty())
+            repeat(2) { move(-step) }
+            repeat(2) { move(step) }
+            repeat(2) { move(-step) }
+            assertEquals("A held opening contact cannot mint another event on reversal", 1, openings.size)
+            assertTrue(settlements.isEmpty())
+            root.performTouchInput { advanceEventTime(200); up() }
+            held = false
+            compose.runOnIdle { assertEquals(1, settlements.size); assertEquals(1, openings.size) }
+        } finally {
+            if (held) root.performTouchInput { cancel() }
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
     @Test fun handleRetainsItsAnchorAcrossFramesPauseAndReversal() = heldPull(fromHandle = true)
     @Test fun freshTopListPullRetainsItsAnchorAcrossFramesPauseAndReversal() = heldPull(fromHandle = false)
     @Test fun freshTopGalleryPullRetainsItsAnchorAcrossFramesPauseAndReversal() =
@@ -81,6 +131,7 @@ class QueueDragAnchorTest {
         var slop = 0f
         var step = 0f
         var pointersDown = false
+        val openingFrames = mutableListOf<Long>()
         val trace = java.util.Collections.synchronizedList(mutableListOf<String>())
         fun record(event: String) {
             val line = "uptime=${android.os.SystemClock.uptimeMillis()} clock=${compose.mainClock.currentTime} $event"
@@ -96,7 +147,10 @@ class QueueDragAnchorTest {
                 slop = LocalViewConfiguration.current.touchSlop
                 step = with(LocalDensity.current) { 16.dp.toPx() }
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    QueueSurface(progress, InterfaceSettings(), { settlements += it }) {
+                    QueueSurface(progress, InterfaceSettings(), { settlements += it },
+                        onOpeningContact = {
+                            openingFrames += compose.mainClock.currentTime
+                        }) {
                         // Use the actual queue BrowserScreen, with its grid, overscroll,
                         // selection and pinch observers, rather than a bare LazyColumn.
                         Box(Modifier.weight(1f)) {
@@ -180,6 +234,7 @@ class QueueDragAnchorTest {
                 assertEquals(1f, progress.value, .001f)
                 root.performTouchInput { advanceEventTime(200); up() }
                 pointersDown = false
+                assertTrue("A list-owned closing contact cannot mint an opening", openingFrames.isEmpty())
                 return
             }
             // Account for touch slop exactly once. The initial acquisition is not the
@@ -212,6 +267,7 @@ class QueueDragAnchorTest {
                 compose.mainClock.autoAdvance = true
                 compose.waitForIdle()
                 assertEquals(1, settlements.size)
+                assertTrue("A nested closing acquisition retains identity through both endpoints", openingFrames.isEmpty())
                 return
             }
             val samples = mutableListOf<String>()
@@ -225,6 +281,7 @@ class QueueDragAnchorTest {
                 assertTrue("Keep this regression away from endpoint clamping", progress.value > 0f && progress.value < 1f)
             }
             repeat(4) { move(step); assertAnchor("down-$it") }
+            assertTrue("Closing-only contact must not reset initial placement", openingFrames.isEmpty())
             root.performTouchInput { advanceEventTime(320) }
             repeat(20) {
                 compose.mainClock.advanceTimeByFrame()
@@ -232,7 +289,9 @@ class QueueDragAnchorTest {
             }
             move(step); assertAnchor("resume")
             repeat(3) { move(-step); assertAnchor("reverse-$it") }
+            assertTrue("A closing-acquired contact keeps that identity through reversal", openingFrames.isEmpty())
             repeat(3) { move(step); assertAnchor("return-$it") }
+            assertTrue("Closing ownership cannot mint an opening on later direction changes", openingFrames.isEmpty())
             root.performTouchInput { advanceEventTime(200); up() }
             pointersDown = false
             compose.mainClock.autoAdvance = true

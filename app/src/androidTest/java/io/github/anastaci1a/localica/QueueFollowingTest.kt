@@ -11,10 +11,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -23,7 +28,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowsePreferences
+import io.github.anastaci1a.localica.browse.BrowseCellGeometry
 import io.github.anastaci1a.localica.browse.BrowseStyle
+import io.github.anastaci1a.localica.browse.LibraryFilters
 import io.github.anastaci1a.localica.browse.Presentation
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
@@ -106,8 +113,10 @@ class QueueFollowingTest {
         var mounted by mutableStateOf(true)
         var modal by mutableStateOf(false)
         var topRequest by mutableIntStateOf(0)
+        var openingRequest by mutableLongStateOf(0)
         val selection = SessionSelection()
         val dragHost = SongDragHost()
+        val presentationCache = BrowsePresentationCache()
         var playCalls = 0
         var routeChanges = 0
         val queue get() = queueState.library.queues.single()
@@ -147,29 +156,52 @@ class QueueFollowingTest {
 
     private fun fixture(initial: Int = 45, reducedMotion: Boolean = true, queueScreen: Boolean = false,
         active: Boolean = true, text: String = "", search: Boolean = false,
-        mounted: Boolean = true, modal: Boolean = false, style: BrowseStyle = BrowseStyle(quickSearch = false)): Fixture {
+        mounted: Boolean = true, modal: Boolean = false, style: BrowseStyle = BrowseStyle(quickSearch = false),
+        openingRequest: Long = 0, awaitReady: Boolean = true, firstDraws: MutableList<InitialQueueDraw>? = null): Fixture {
         val queue = ListeningQueue(id = "following", name = "Following queue", entries = entries,
             currentEntryId = entries[initial].id)
         val library = LibraryUiState(LibrarySnapshot(tracks = entries.map { it.track }.distinctBy { it.id }), loading = false)
         val fixture = Fixture(queue, route.copy(text = text, search = search, queryCommitted = search), active, library).also {
             it.mounted = mounted; it.modal = modal
+            it.openingRequest = openingRequest
         }
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         BrowsePreferences(context).write(route, style.copy(quickSearch = false), true)
         // Stable source identities matter: incidental fixture recomposition must not fabricate queries.
         compose.setContent { LocalicaTheme {
             val holder = rememberSaveableStateHolder()
-            CompositionLocalProvider(LocalSessionSelection provides fixture.selection, LocalSongDragHost provides fixture.dragHost) {
-                Box(Modifier.fillMaxSize()) {
+            val view = LocalView.current
+            val rowInset = with(LocalDensity.current) { BrowseCellGeometry(1).cardVerticalInset(style).dp.roundToPx().toFloat() }
+            CompositionLocalProvider(LocalSessionSelection provides fixture.selection, LocalSongDragHost provides fixture.dragHost,
+                LocalBrowsePresentationCache provides fixture.presentationCache.takeIf { firstDraws != null }) {
+                Box(Modifier.fillMaxSize().then(if (firstDraws == null) Modifier else Modifier.drawWithContent {
+                    drawContent()
+                    val nodes = (view as ViewRootForTest).semanticsOwner.getAllSemanticsNodes(mergingEnabled = false)
+                    val viewport = nodes.singleOrNull { it.config.getOrNull(SemanticsProperties.TestTag) == "browser-list" }
+                    val actualRows = if (viewport == null) emptyList() else nodes.filter { node ->
+                        val bounds = node.boundsInRoot
+                        node.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("media-") == true &&
+                            bounds.width > 0f && bounds.height > 0f && bounds.overlaps(viewport.boundsInRoot)
+                    }
+                    // ANY real row opens the witness, so a wrong old row records
+                    // target=null. Loading-only grids do not impersonate row drawing.
+                    if (viewport != null && actualRows.isNotEmpty() && firstDraws.none { it.opening == fixture.openingRequest }) {
+                        val target = actualRows.singleOrNull { it.config.getOrNull(SemanticsProperties.TestTag) == "media-${fixture.playing}" }
+                        firstDraws.add(InitialQueueDraw(fixture.openingRequest, fixture.playing,
+                            viewport.boundsInRoot, target?.boundsInRoot, rowInset))
+                    }
+                })) {
                     if (fixture.mounted) holder.SaveableStateProvider(fixture.route.key) {
                         if (queueScreen) QueueScreen(fixture.queueState, null, fixture.library, fixture.playlists,
-                            selectionVisible = fixture.active, isPlaying = false, reducedMotion = reducedMotion)
+                            selectionVisible = fixture.active, isPlaying = false, reducedMotion = reducedMotion,
+                            playerOpen = fixture.playerOpen, openingRequest = fixture.openingRequest)
                         else BrowserScreen(fixture.library, fixture.playlists, fixture.route,
                             { fixture.routeChanges++; fixture.route = it }, {}, {}, { _, _, _ -> fixture.playCalls++ }, null, null,
                             true, fixture.playerOpen, queueState = fixture.queueState,
                             playingTrackId = fixture.queue.entries.firstOrNull { it.id == fixture.playing }?.track?.id,
                             playingEntryId = fixture.playing, selectionVisible = fixture.active,
-                            reducedMotion = reducedMotion, scrollToTopRequest = fixture.topRequest, queryDispatcher = queries)
+                            reducedMotion = reducedMotion, scrollToTopRequest = fixture.topRequest, queryDispatcher = queries,
+                            queueOpeningRequest = fixture.openingRequest)
                     } else Text("Another route")
                     ForegroundSongDragOverlay(fixture.dragHost)
                 }
@@ -178,11 +210,108 @@ class QueueFollowingTest {
                 ActionTextButton({ fixture.modal = false }) { Text("Dismiss follow test modal") }
             }
         } }
-        if (mounted) {
+        if (mounted && awaitReady) {
             compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
             if (active && text.isEmpty() && !search && !modal) awaitCurrent(initial)
         }
         return fixture
+    }
+
+    private data class InitialQueueDraw(val opening: Long, val occurrence: String?, val viewport: Rect, val target: Rect?, val rowInset: Float)
+
+    private fun assertFirstQueueDraw(draws: MutableList<InitialQueueDraw>, opening: Long, index: Int) {
+        assertFirstQueueDraw(draws, opening, entries[index].id)
+    }
+
+    private fun assertFirstQueueDraw(draws: MutableList<InitialQueueDraw>, opening: Long, occurrence: String) {
+        compose.waitUntil(5000) { compose.runOnUiThread { draws.any { it.opening == opening } } }
+        compose.runOnUiThread {
+            val first = draws.first { it.opening == opening }
+            assertEquals(occurrence, first.occurrence)
+            val target = requireNotNull(first.target) { "First drawn queue must already contain the exact occurrence: $first" }
+            assertTrue("Current occurrence must be placed on the first row draw", target.height > 0f)
+            assertEquals("No post-opening catch-up from an earlier viewport", first.viewport.top + first.rowInset, target.top, 1f)
+            assertTrue(target.bottom <= first.viewport.bottom)
+        }
+    }
+
+    @Test fun coldAndWarmExplicitQueueOpenDrawCurrentFirstWithoutReattachingDetachedIntent() {
+        val draws = mutableListOf<InitialQueueDraw>()
+        queries.held = true
+        val fixture = fixture(reducedMotion = false, awaitReady = false, firstDraws = draws)
+        val coldQuery = queries.next()
+        compose.runOnUiThread { assertTrue("No actual row draw before the cold query completes", draws.isEmpty()) }
+        coldQuery.run()
+        queries.release()
+        assertFirstQueueDraw(draws, 0, 45)
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val preferences = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+            assertNotNull("The reopening source has a completed warm presentation", fixture.presentationCache.get(
+                fixture.library.snapshot, fixture.playlists.playlists, fixture.queueState.library.queues,
+                LibraryFilters(), fixture.route, preferences.read(fixture.route), preferences.sortSnapshot()))
+        }
+        list.performScrollToIndex(15)
+        currentReturn.assertIsDisplayed()
+        compose.runOnIdle { fixture.mounted = false }
+        list.assertDoesNotExist()
+        // Keep the producer held while reopening an independently verified warm source.
+        queries.held = true
+        compose.runOnIdle { fixture.openingRequest = 2; fixture.mounted = true }
+        assertFirstQueueDraw(draws, 2, 45)
+        queries.release()
+        currentReturn.assertIsDisplayed()
+        val opened = position()
+        compose.runOnIdle { fixture.publish(95) }
+        compose.waitForIdle()
+        assertEquals("Explicit opening must not reset detached ongoing-follow intent", opened, position(), 0f)
+        row(95).assertDoesNotExist()
+        currentReturn.assertIsDisplayed()
+    }
+
+    @Test fun queueScreenFirstRevealPrepositionsBeforeVisibleOwnershipAndReopensAtTheNewCurrent() {
+        val draws = mutableListOf<InitialQueueDraw>()
+        val fixture = fixture(queueScreen = true, active = false, reducedMotion = false,
+            openingRequest = 1, awaitReady = false, firstDraws = draws)
+        // Models the first finger-led QueueSurface reveal, before settle(true).
+        assertFirstQueueDraw(draws, 1, 45)
+        compose.runOnIdle { fixture.active = true }
+        compose.runOnIdle { fixture.publish(95) }
+        awaitCurrent(95)
+        compose.runOnIdle { fixture.mounted = false }
+        list.assertDoesNotExist()
+        compose.runOnIdle { fixture.openingRequest = 2; fixture.mounted = true }
+        assertFirstQueueDraw(draws, 2, 95)
+        currentReturn.assertDoesNotExist()
+    }
+
+    @Test fun rapidReopenDrawsAnOccurrenceAbsentFromRetainedRowsBeforeTheHeldQueryCanPublish() {
+        val draws = mutableListOf<InitialQueueDraw>()
+        val fixture = fixture(reducedMotion = false, firstDraws = draws)
+        val fresh = QueueEntry("rapid-new-occurrence", entries[5].track, sourcePlaylistId = "synthetic-origin")
+        queries.held = true
+        compose.runOnIdle {
+            fixture.active = false
+            val queue = fixture.queue
+            val changed = queue.entries.toMutableList().also { it.add(60, fresh) }
+            fixture.queueState = fixture.queueState.copy(library = fixture.queueState.library.update(
+                queue.copy(entries = changed, currentEntryId = fresh.id)))
+            fixture.playing = fresh.id
+        }
+        compose.waitForIdle()
+        val obsolete = queries.next()
+        compose.onNodeWithTag("media-${fresh.id}").assertDoesNotExist()
+        compose.runOnIdle { fixture.openingRequest = 2; fixture.active = true }
+        // The producer is STILL held: neither eventual readiness nor a late scroll can pass.
+        assertFirstQueueDraw(draws, 2, fresh.id)
+        val positioned = position()
+        val firstBounds = compose.onNodeWithTag("media-${fresh.id}").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        obsolete.run()
+        queries.release()
+        compose.waitForIdle()
+        assertEquals("Obsolete publication cannot move the opening viewport", positioned, position(), 0f)
+        assertEquals(firstBounds, compose.onNodeWithTag("media-${fresh.id}").assertIsDisplayed().fetchSemanticsNode().boundsInRoot)
+        compose.runOnIdle { assertEquals(0, fixture.playCalls); assertEquals(0, fixture.routeChanges) }
     }
 
     @Test fun browserDefaultsToFollowingTheExactCurrentOccurrence() {

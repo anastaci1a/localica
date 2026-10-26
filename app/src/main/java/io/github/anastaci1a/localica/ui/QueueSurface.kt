@@ -49,7 +49,8 @@ internal val CollapsedQueueHeight = 64.dp
 @Composable
 internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>, settings: InterfaceSettings,
     onSettled: (Boolean) -> Unit, playerProgress: () -> Float = { 1f },
-    onDragTrace: ((String) -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    onDragTrace: ((String) -> Unit)? = null, onOpeningContact: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -66,6 +67,10 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
     // Optional test diagnostics observe existing callbacks without adding a pointer node.
     // A stationary pointer observer would itself change Compose's hit-path dispatch.
     val currentTrace by rememberUpdatedState(onDragTrace)
+    val currentOpeningContact by rememberUpdatedState(onOpeningContact)
+    // Contact ownership is fixed by its first directed delta, not later reversal.
+    // This input-only flag adds no geometry state or new pointer observer.
+    val directDirectionAcquired = remember { booleanArrayOf(false) }
     val scrollOwnership = remember { ScrollGestureOwnership() }
     val currentDistance by rememberUpdatedState(distance)
     val currentDensity by rememberUpdatedState(density.density)
@@ -162,6 +167,11 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         .draggable(rememberDraggableState { dy ->
             currentTrace?.invoke("direct-delta dy=$dy start=$start delta=$delta progress=${progress.value}")
             delta += dy
+            if (!directDirectionAcquired[0] && dy != 0f) {
+                directDirectionAcquired[0] = true
+                if (dy < 0f && (start - delta / distance).coerceIn(0f, 1f) > progress.value)
+                    currentOpeningContact?.invoke()
+            }
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 progress.snapTo((start - delta / distance).coerceIn(0f, 1f))
                 currentTrace?.invoke("direct-applied delta=$delta progress=${progress.value}")
@@ -169,6 +179,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         }, Orientation.Vertical, onDragStarted = { position ->
             currentTrace?.invoke("direct-start position=$position progress=${progress.value}")
             progress.stop(); start = progress.value; delta = 0f
+            directDirectionAcquired[0] = false
         }, onDragStopped = { velocity ->
             currentTrace?.invoke("direct-stop velocity=$velocity delta=$delta progress=${progress.value}")
             settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f))
@@ -179,7 +190,11 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
-            Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") { settle(progress.value < .5f) }
+            Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") {
+                val open = progress.value < .5f
+                if (open) currentOpeningContact?.invoke()
+                settle(open)
+            }
                 .semantics { contentDescription = if (!shown) "Open queue" else "Close queue" }) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .38f), RoundedCornerShape(2.dp)))
