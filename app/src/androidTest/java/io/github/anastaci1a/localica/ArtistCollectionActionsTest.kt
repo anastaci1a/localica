@@ -35,6 +35,9 @@ class ArtistCollectionActionsTest {
             fileName = "$it.mp3", relativePath = "$it.mp3") }
         val snapshot = LibrarySnapshot(tracks = tracks)
         val artist = LibraryViews.groups(snapshot, view, LibraryQuery()).single()
+        // Queue publication must not mint a new route and discard the chosen album scope.
+        val route = BrowseRoute(tab, MediaRef(kind, artist.id), "Artist",
+            querySort = TrackSort.Title, queryAscending = true)
         lateinit var controller: QueueController
         try {
             preferences.write(QueueSettings(shuffle = true))
@@ -45,7 +48,7 @@ class ArtistCollectionActionsTest {
                 val queueState by controller.state.collectAsState()
                 CompositionLocalProvider(LocalSessionSelection provides session) {
                     BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(),
-                        BrowseRoute(tab, MediaRef(kind, artist.id), "Artist", querySort = TrackSort.Title, queryAscending = true), {}, {}, {}, { _, _, _ -> },
+                        route, {}, {}, {}, { _, _, _ -> },
                         controller, null, true, false, queueState = queueState, reducedMotion = true,
                         queryDispatcher = Dispatchers.Unconfined)
                 }
