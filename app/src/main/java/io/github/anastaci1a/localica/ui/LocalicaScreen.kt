@@ -136,6 +136,15 @@ fun LocalicaScreen(
     val playerCoversBrowse by remember { derivedStateOf { progress.value >= .5f } }
     val playerFullyOpen by remember { derivedStateOf { progress.value >= .99f } }
     val queueVisible by remember { derivedStateOf { queueProgress.value > 0f } }
+    var queueOpeningRequest by rememberSaveable { mutableLongStateOf(0) }
+    // QueueSurface removes its body at the closed endpoint. Keep intent/viewport
+    // outside that conditional lifetime; a later explicit epoch owns repositioning.
+    val queueDrawerState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    fun openQueue() {
+        // User events own openings; restoring/cancelling an animation never does.
+        if (!queueOpen) queueOpeningRequest++
+        queueOpen = true
+    }
     LaunchedEffect(queues.playerRequest) {
         if (queues.playerRequest != consumedRequest) {
             consumedRequest = queues.playerRequest
@@ -338,7 +347,7 @@ fun LocalicaScreen(
             Column(Modifier.controlVerticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }
         } }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
-            onToggle, onSeek, onPrevious, onNext, { queueOpen = true }, { expanded = false },
+            onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
@@ -358,10 +367,13 @@ fun LocalicaScreen(
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         GlassPanelTheme(playerLightInk) {
         PlayerClippedOverlay({ progress.value }, bottomChrome) {
-        QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value }) {
-            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) { QueueScreen(queues, queueController, library,
+        QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
+            onOpeningContact = { queueOpeningRequest++ }) {
+            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
+            queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
-                selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded) } }
+                selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded,
+                openingRequest = queueOpeningRequest) } } }
             SelectionPanelVisibility(session.panelVisible && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist)

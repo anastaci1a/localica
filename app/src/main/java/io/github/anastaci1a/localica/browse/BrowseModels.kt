@@ -38,8 +38,24 @@ data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: S
     val rows: List<SongRow> get() = items.mapNotNull { it.row }
 }
 
-/** UI-independent complete result snapshots, evaluated off the main thread. */
+/** UI-independent complete result snapshots; general queries run off Main. */
 object BrowseQueries {
+    private fun queueRows(queue: ListeningQueue, snapshot: LibrarySnapshot, currentTracks: Map<String, Track>) =
+        queue.entries.map { SongRow(it.id, currentTracks[it.track.id] ?:
+            it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), it.sourcePlaylistId) }
+
+    /** Opening-only physical queue projection: O(library tracks + selected queue entries).
+     * No other queue catalog, sort or searchable-text preparation is performed.
+     */
+    internal fun openingQueue(snapshot: LibrarySnapshot, queue: ListeningQueue, route: BrowseRoute,
+        occurrenceId: String): BrowseResult? {
+        if (route.search || route.globalSearch || route.text.isNotBlank() || route.filter != null ||
+            route.collection != MediaRef(MediaKind.Queue, queue.id) || queue.entries.none { it.id == occurrenceId }) return null
+        val rows = queueRows(queue, snapshot, snapshot.tracks.associateBy { it.id })
+        return BrowseResult(rows.map { row -> BrowserItem(MediaRef(MediaKind.Song, row.track.id),
+            row.track.title, row.track.artist ?: row.track.albumArtist, listOf(row), row) }, scope(route))
+    }
+
     private data class Catalog(val snapshot: LibrarySnapshot, val playlists: List<ManualPlaylist>,
         val queues: List<ListeningQueue>, val route: BrowseRoute, val query: LibraryQuery,
         val kinds: Set<MediaKind>, val sorts: BrowseSortSnapshot, val result: BrowseResult, val search: List<String>)
@@ -147,7 +163,7 @@ object BrowseQueries {
             MediaKind.Playlist -> playlistItems()
             MediaKind.Queue -> {
                 queues.map { queue -> BrowserItem(MediaRef(MediaKind.Queue, queue.id), queue.name,
-                    songCountLabel(queue.entries.size), queue.entries.map { SongRow(it.id, currentTracks[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), it.sourcePlaylistId) }) }
+                    songCountLabel(queue.entries.size), queueRows(queue, snapshot, currentTracks)) }
             }
             else -> groups(kind)
         }
