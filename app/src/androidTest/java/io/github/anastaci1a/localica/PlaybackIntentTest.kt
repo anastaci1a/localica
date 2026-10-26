@@ -26,6 +26,7 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Real actor/native playback; only restore/URI scheduling and continuity predicates are controlled. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -630,7 +631,145 @@ class PlaybackIntentTest {
         rejected()
     }
 
-    private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false, test: suspend Fixture.() -> Unit) = runBlocking {
+    @Test fun attachedOrderEditsReuseOnlyTheUnchangedLibraryIndexAndCurrentVisit() = fixture(duplicateOccurrences = true) {
+        val indexed = CountingTracks(listOf(track))
+        store.snapshot = LibrarySnapshot(tracks = indexed)
+        suspend fun reverse() {
+            val done = CompletableDeferred<Boolean>()
+            queues.reverse(first.id) { done.complete(it) }
+            assertTrue(withTimeout(5000) { done.await() })
+        }
+        reverse() // Warm this exact immutable snapshot, not the fixture's empty library.
+        val reads = indexed.reads.get()
+        assertEquals(1, reads)
+        val native = withContext(Dispatchers.Main) { requireNotNull(player.currentMediaItem) }
+        val opening = queues.state.value.library.active!!
+        val checkpoint = OrderCheckpoint.capture(opening.entries.map { it.id }, opening.order)
+        val collections = store.collections.get()
+        val builds = itemBuilds.get()
+        reverse()
+        assertEquals(opening.entries.reversed(), queues.state.value.library.active!!.entries)
+        val randomized = CompletableDeferred<Boolean>()
+        queues.randomize(first.id, kotlin.random.Random(7)) { randomized.complete(it) }
+        assertTrue(withTimeout(5000) { randomized.await() })
+        val randomOrder = queues.state.value.library.active!!
+        assertEquals(opening.entries.map { it.id }.toSet(), randomOrder.entries.map { it.id }.toSet())
+        assertEquals(opening.currentEntryId, randomOrder.entries.first().id)
+        val reverted = CompletableDeferred<Boolean>()
+        queues.revertOrder(first.id, checkpoint) { reverted.complete(it) }
+        assertTrue(withTimeout(5000) { reverted.await() })
+        val restored = queues.state.value.library.active!!
+        assertEquals(opening.entries, restored.entries)
+        assertEquals(opening.currentEntryId, restored.currentEntryId)
+        assertEquals(opening.positionMs, restored.positionMs)
+        assertEquals("An unchanged immutable library must not be reindexed per order command", reads, indexed.reads.get())
+        assertEquals("Unchanged per-occurrence templates must not be reconstructed", builds, itemBuilds.get())
+        assertTrue("Fresh source collection is retained even on index hits", store.collections.get() >= collections + 3)
+        withContext(Dispatchers.Main) {
+            assertEquals(native.queueVisit, player.currentMediaItem?.queueVisit)
+            assertSame("The unchanged current visit keeps its exact decorated item; future visits may legitimately change",
+                native, player.currentMediaItem)
+            assertEquals(restored.currentEntryId, player.currentMediaItem?.mediaId)
+            assertEquals("origin-0", player.currentMediaItem?.mediaMetadata?.extras?.getString("sourcePlaylistId"))
+        }
+    }
+
+    @Test fun attachedOrderCacheRechecksGrantsAndInvalidatesChangedMetadata() {
+        val permissions = MutablePermissions()
+        fixture(duplicateOccurrences = true, permissions = permissions) {
+            val alternate = second.entries.single().track.uri
+            val resolved = track.copy(locations = listOf(TrackLocation("root-one", track.uri, "one.mp3"),
+                TrackLocation("root-two", alternate, "two.mp3")))
+            val indexed = CountingTracks(listOf(resolved))
+            store.snapshot = LibrarySnapshot(tracks = indexed)
+            suspend fun reverse() {
+                val done = CompletableDeferred<Boolean>()
+                queues.reverse(first.id) { done.complete(it) }
+                assertTrue(withTimeout(5000) { done.await() })
+            }
+            reverse()
+            assertEquals(1, indexed.reads.get())
+            val probes = permissions.reads.get()
+            val builds = itemBuilds.get()
+            withContext(Dispatchers.Main) { assertEquals(track.uri, player.currentMediaItem?.localConfiguration?.uri.toString()) }
+            permissions.first = false
+            reverse() // Same snapshot identity: the grant authority changed independently.
+            assertEquals(1, indexed.reads.get())
+            assertTrue("Index reuse must never bypass fresh grant selection", permissions.reads.get() > probes)
+            assertEquals("All three independently identified occurrences need fresh URI templates", builds + 3, itemBuilds.get())
+            withContext(Dispatchers.Main) {
+                assertEquals(alternate, player.currentMediaItem?.localConfiguration?.uri.toString())
+                assertEquals(first.currentEntryId, player.currentMediaItem?.mediaId)
+                assertEquals("origin-0", player.currentMediaItem?.mediaMetadata?.extras?.getString("sourcePlaylistId"))
+            }
+            val updated = CountingTracks(listOf(resolved.copy(title = "Fresh title", artist = "Fresh artist")))
+            store.snapshot = LibrarySnapshot(tracks = updated)
+            reverse()
+            assertEquals("A new snapshot owns a new index", 1, updated.reads.get())
+            assertEquals("Changed metadata invalidates each occurrence template", builds + 6, itemBuilds.get())
+            withContext(Dispatchers.Main) {
+                assertEquals("Fresh title", player.currentMediaItem?.mediaMetadata?.title.toString())
+                assertEquals("Fresh artist", player.currentMediaItem?.mediaMetadata?.artist.toString())
+                assertEquals(alternate, player.currentMediaItem?.localConfiguration?.uri.toString())
+            }
+        }
+    }
+
+    @Test fun cachedAttachedOrdersStillWaitForDurableAndUriCompletionAndRespectRecovery() = fixture(duplicateOccurrences = true) {
+        store.snapshot = LibrarySnapshot(tracks = listOf(track))
+        val warmed = CompletableDeferred<Boolean>()
+        queues.reverse(first.id) { warmed.complete(it) }
+        assertTrue(withTimeout(5000) { warmed.await() })
+        val opening = queues.state.value.library.active!!
+        val saved = dao.gateNextSave()
+        val done = CompletableDeferred<Boolean>()
+        queues.reverse(first.id) { done.complete(it) }
+        withTimeout(5000) { saved.entered.await() }
+        assertFalse("No acknowledgement while durable save is held", done.isCompleted)
+        assertEquals(opening.entries, queues.state.value.library.active!!.entries)
+        val uri = store.gateNextSnapshot()
+        saved.release.complete(Unit)
+        withTimeout(5000) { uri.entered.await() }
+        assertFalse("A populated cache cannot acknowledge before fresh URI resolution/native sync", done.isCompleted)
+        assertEquals(opening.entries.reversed(), queues.state.value.library.active!!.entries)
+        uri.release.complete(Unit)
+        assertTrue(withTimeout(5000) { done.await() })
+        withContext(Dispatchers.Main) {
+            assertEquals(first.currentEntryId, player.currentMediaItem?.mediaId)
+            assertEquals(track.uri, player.currentMediaItem?.localConfiguration?.uri.toString())
+        }
+        readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+        awaitMain { player.engine.mediaItemCount == 0 && queues.state.value.problem != null }
+        val requests = player.trueRequests
+        val builds = itemBuilds.get()
+        val blocked = CompletableDeferred<Boolean>()
+        queues.reverse(first.id) { blocked.complete(it) }
+        assertTrue(withTimeout(5000) { blocked.await() }) // Durable order may change; playback stays blocked.
+        withContext(Dispatchers.Main) {
+            assertEquals(0, player.engine.mediaItemCount)
+            assertFalse(player.engine.playWhenReady)
+            assertEquals(requests, player.trueRequests)
+            assertEquals("Recovery admission precedes even cached template preparation", builds, itemBuilds.get())
+        }
+        queues.withFileRecovery(track.id) { readers.publishRecovery(RecoveryAdmission.Clear) }
+        assertPlayback(false)
+    }
+
+    private class CountingTracks(private val values: List<Track>) : AbstractList<Track>() {
+        val reads = AtomicInteger()
+        override val size get() = values.size
+        override fun get(index: Int): Track { reads.incrementAndGet(); return values[index] }
+    }
+    private class MutablePermissions : FolderPermissions {
+        @Volatile var first = true
+        val reads = AtomicInteger()
+        override fun hasReadAccess(uri: String): Boolean { reads.incrementAndGet(); return uri != "root-one" || first }
+        override fun acquire(uri: String) = Unit
+        override fun release(uri: String) = Unit
+    }
+
+    private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false,
+        duplicateOccurrences: Boolean = false, permissions: FolderPermissions? = null, test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val id = java.util.UUID.randomUUID().toString()
@@ -638,19 +777,24 @@ class PlaybackIntentTest {
         val file = File(directory, "queue-tone.mp3")
         instrumentation.context.assets.open(file.name).use { input -> file.outputStream().use(input::copyTo) }
         val track = Track(Uri.fromFile(file).toString(), "First", fileName = file.name, relativePath = file.name)
-        val first = ListeningQueue(name = "First", entries = listOf(QueueEntry(track = track)))
+        val first = ListeningQueue(name = "First", entries = if (duplicateOccurrences)
+            (0..2).map { QueueEntry("duplicate-$it", track, "origin-$it") } else listOf(QueueEntry(track = track)))
         val secondFile = File(directory, "second.mp3").also { file.copyTo(it) }
         val secondUri = Uri.fromFile(secondFile).toString()
         val second = ListeningQueue(name = "Second", entries = listOf(QueueEntry(track = track.copy(uri = secondUri, id = secondUri))))
         val dao = IntentDao(QueueLibrary(listOf(first, second), first.id), if (blockRestore) Gate() else null)
         val store = IntentStore()
-        val library = LibraryRepository(store, TreeScanner(AndroidDocuments(context)), PersistedFolderPermissions(context.contentResolver))
+        val library = LibraryRepository(store, TreeScanner(AndroidDocuments(context)), permissions ?: PersistedFolderPermissions(context.contentResolver))
         val preferences = QueuePreferences(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences("intent-$id", mode)
         })
         val actor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val readers = NativeReaders()
-        val queues = QueueController(dao, preferences, library, actor, readers)
+        val itemBuilds = AtomicInteger()
+        val queues = QueueController(dao, preferences, library, actor, readers, mediaItemFactory = { entryId, resolved, origin ->
+            itemBuilds.incrementAndGet()
+            queueMediaItem(entryId, resolved, origin)
+        })
         val players = mutableListOf<RecordingPlayer>()
         suspend fun player() = withContext(Dispatchers.Main) {
             RecordingPlayer(ExoPlayer.Builder(context)
@@ -659,7 +803,7 @@ class PlaybackIntentTest {
         }
         val native = player()
         val attached = if (rawPlayer) native.engine else native
-        val fixture = Fixture(this, actor, queues, dao, store, native, QueueTransportPlayer(attached, queues), first, second, track, file, readers, library, ::player)
+        val fixture = Fixture(this, actor, queues, dao, store, native, QueueTransportPlayer(attached, queues), first, second, track, file, readers, library, itemBuilds, ::player)
         var primaryFailure: Throwable? = null
         try {
             if (!blockRestore) fixture.awaitMain { !queues.state.value.loading }
@@ -697,7 +841,8 @@ class PlaybackIntentTest {
 
     private class Fixture(scope: CoroutineScope, val actor: CoroutineScope, val queues: QueueController, val dao: IntentDao, val store: IntentStore,
         val player: RecordingPlayer, val controls: QueueTransportPlayer, val first: ListeningQueue, val second: ListeningQueue,
-        val track: Track, val file: File, val readers: NativeReaders, val library: LibraryRepository, val newPlayer: suspend () -> RecordingPlayer) : CoroutineScope by scope {
+        val track: Track, val file: File, val readers: NativeReaders, val library: LibraryRepository,
+        val itemBuilds: AtomicInteger, val newPlayer: suspend () -> RecordingPlayer) : CoroutineScope by scope {
         suspend fun withHeldEdit(trackId: String, action: suspend () -> Unit) {
             val entered = CompletableDeferred<Unit>()
             val finish = CompletableDeferred<Unit>()
@@ -756,11 +901,13 @@ class PlaybackIntentTest {
         suspend fun await() { entered.complete(Unit); release.await() }
     }
     private class IntentStore : LibraryStore {
+        @Volatile var snapshot: LibrarySnapshot? = null
+        val collections = AtomicInteger()
         private val next = AtomicReference<Gate?>()
         private val gates = mutableListOf<Gate>()
         fun gateNextSnapshot() = Gate().also { check(next.compareAndSet(null, it)); gates.add(it) }
         fun release() { gates.forEach { it.release.complete(Unit) } }
-        override val snapshots = flow { next.getAndSet(null)?.await(); emit(LibrarySnapshot()) }
+        override val snapshots = flow { collections.incrementAndGet(); next.getAndSet(null)?.await(); emit(snapshot ?: LibrarySnapshot()) }
         override suspend fun current() = LibrarySnapshot()
         override suspend fun replaceRoot(result: ScanResult) = Unit
         override suspend fun removeRoot(uri: String) = Unit

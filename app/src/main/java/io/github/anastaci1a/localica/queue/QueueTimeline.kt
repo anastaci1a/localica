@@ -16,9 +16,15 @@ internal class QueueTimeline {
     private val decorated = mutableMapOf<String, MediaItem>()
 
     fun resolve(id: String, items: List<MediaItem>) {
+        val next = items.associateBy { it.mediaId }
+        if (queueId != id) decorated.clear()
+        else decorated.entries.removeAll { (_, item) ->
+            // A visit can survive physical reordering. Reuse its decoration only
+            // while the exact resolved occurrence template is still authoritative.
+            templates[item.mediaId] == null || templates[item.mediaId] !== next[item.mediaId]
+        }
         queueId = id
-        templates = items.associateBy { it.mediaId }
-        decorated.clear()
+        templates = next
     }
 
     fun contains(queue: ListeningQueue) = queueId == queue.id && queue.entries.all { it.id in templates }
