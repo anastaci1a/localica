@@ -26,11 +26,11 @@ import io.github.anastaci1a.localica.browse.*
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: BrowseCellGeometry,
-    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0, loadingReveal: BrowseLoadingCell? = null, artistOnlyLoading: Boolean = false) {
+    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0, loadingReveal: BrowseLoadingCell? = null, artistOnlyLoading: Boolean = false, mutablePosition: Int? = null) {
     val gallery = style.presentation != Presentation.List
     val from = pinch?.visualSource
     val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
-    val measureItem = rememberBrowseItemMeasure(item, trackNumber, showInformation, inheritedInformation, itemIndex)
+    val measureItem = rememberBrowseItemMeasure(item, trackNumber, showInformation, inheritedInformation, itemIndex, mutablePosition)
     val foreground = androidx.compose.material3.LocalContentColor.current
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     if (pinch != null) {
@@ -59,8 +59,8 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     fun trailing(value: BrowseStyle) = value.presentation == Presentation.List && value.listSize.trailingInformation
     val titleSize by animateFloatAsState(style.browseTitleSize(geometry.columns).toFloat(), tween(duration), label = "Browse title size")
     val titleLine by animateFloatAsState(style.browseTitleLine(geometry.columns).toFloat(), tween(duration), label = "Browse title line")
-    fun numbered(value: BrowseStyle) = value.trackNumberLabel(trackNumber, itemIndex) != null
-    val numberLabel = style.trackNumberLabel(trackNumber, itemIndex) ?: from?.trackNumberLabel(trackNumber, itemIndex)
+    fun numbered(value: BrowseStyle) = value.trackNumberLabel(trackNumber, itemIndex, mutablePosition) != null
+    val numberLabel = style.trackNumberLabel(trackNumber, itemIndex, mutablePosition) ?: from?.trackNumberLabel(trackNumber, itemIndex, mutablePosition)
     var retainedNumberLabel by remember(item.key) { mutableStateOf(numberLabel) }
     SideEffect { if (numberLabel != null) retainedNumberLabel = numberLabel }
     val numberAlpha = browseViewAlpha(numbered(style), from?.let(::numbered), progress, reducedMotion)

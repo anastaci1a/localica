@@ -161,13 +161,15 @@ class ListDensityGeometryTest {
     @Test fun tracklistNumbersAndOrdinaryNormalHaveSeparateStableEndpoints() {
         var size by mutableStateOf(ListSize.Tracklist)
         var albumNumber by mutableStateOf<String?>("12")
+        var mutablePosition by mutableStateOf<Int?>(null)
         var density = 1f
         compose.setContent { LocalicaTheme {
             density = LocalDensity.current.density
             LookaheadScope {
                 Box(Modifier.width(328.dp)) {
                     BrowseItemLayout(item, BrowseStyle(listSize = size, extraInfo = ExtraInfo.Artist),
-                        BrowseCellGeometry(1), this@LookaheadScope, true, menu = {}, trackNumber = albumNumber, itemIndex = 4)
+                        BrowseCellGeometry(1), this@LookaheadScope, true, menu = {}, trackNumber = albumNumber, itemIndex = 4,
+                        mutablePosition = mutablePosition)
                 }
             }
         } }
@@ -187,6 +189,21 @@ class ListDensityGeometryTest {
         compose.waitForIdle()
         compose.onNodeWithText("5").assertDoesNotExist()
         assertTrue(bounds("art").width > 28 * density)
+        for (mode in listOf(ListSize.Smallest, ListSize.Small)) {
+            compose.runOnIdle { mutablePosition = 46; size = mode }
+            compose.waitForIdle()
+            compose.onNodeWithText("46").assertIsDisplayed()
+            compose.onNodeWithText("5").assertDoesNotExist()
+            assertEquals(28 * density, bounds("art").width, 1f)
+            compose.runOnIdle { mutablePosition = 96 }
+            compose.waitForIdle()
+            compose.onNodeWithText("96").assertIsDisplayed()
+            compose.onNodeWithText("46").assertDoesNotExist()
+        }
+        compose.runOnIdle { size = ListSize.Normal }
+        compose.waitForIdle()
+        compose.onNodeWithText("96").assertDoesNotExist()
+        assertTrue("Normal keeps the artist below its title", bounds("info").top >= bounds("text").bottom - 1f)
     }
 
     @Test fun liftedTracklistKeepsCapturedOccurrenceNumberAfterLiveRowsChange() {
@@ -198,7 +215,8 @@ class ListDensityGeometryTest {
             drag = remember { SongDragState(grid, scope) }
             captured?.let { presentation -> LookaheadScope {
                 BrowseItemLayout(item, presentation.style, presentation.cellGeometry, this@LookaheadScope,
-                    true, menu = {}, itemIndex = presentation.indices.getValue(item.key))
+                    true, menu = {}, itemIndex = presentation.indices.getValue(item.key),
+                    mutablePosition = presentation.mutablePositions[item.key])
             } }
         } }
         compose.runOnIdle {
@@ -208,6 +226,14 @@ class ListDensityGeometryTest {
             drag.items = listOf(item)
         }
         compose.onNodeWithText("2").assertIsDisplayed()
+        compose.onNodeWithText("1").assertDoesNotExist()
+        compose.runOnIdle {
+            drag.style = BrowseStyle(listSize = ListSize.Small)
+            drag.mutablePositions = mapOf(item.key to 46)
+            captured = drag.capturePresentation()
+            drag.mutablePositions = mapOf(item.key to 1)
+        }
+        compose.onNodeWithText("46").assertIsDisplayed()
         compose.onNodeWithText("1").assertDoesNotExist()
     }
 

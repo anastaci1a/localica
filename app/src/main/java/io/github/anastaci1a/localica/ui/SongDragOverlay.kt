@@ -20,7 +20,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
                     CompositionLocalProvider(LocalContentColor provides presentation.ink.takeUnless { it == Color.Unspecified }
                         .let { it ?: LocalContentColor.current }) {
                         BrowseItemLayout(item, presentation.style, presentation.cellGeometry, this@LookaheadScope, true, menu = { },
-                            itemIndex = presentation.indices[item.key] ?: 0)
+                            itemIndex = presentation.indices[item.key] ?: 0, mutablePosition = presentation.mutablePositions[item.key])
                     }
                 }
             }

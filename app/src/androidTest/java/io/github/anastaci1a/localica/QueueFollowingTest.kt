@@ -195,6 +195,30 @@ class QueueFollowingTest {
         compose.runOnIdle { assertEquals(0, fixture.playCalls); assertEquals(0, fixture.routeChanges) }
     }
 
+    @Test fun filteredMutableDenseRowsKeepOccurrencePositionsAcrossQueueAndPlaylist() {
+        val style = BrowseStyle(sort = TrackSort.Manual, listSize = io.github.anastaci1a.localica.browse.ListSize.Smallest)
+        val fixture = fixture(initial = 95, active = false, text = "Repeated current", search = true, style = style)
+        val preferences = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+        for (playlist in listOf(false, true)) {
+            if (playlist) compose.runOnIdle {
+                val next = fixture.route.copy(collection = MediaRef(MediaKind.Playlist, "positions"), key = "position-playlist-route")
+                fixture.playlists = PlaylistState(playlists = listOf(ManualPlaylist(id = "positions", name = "Positions",
+                    entries = entries.map { SongRow(it.id, it.track) })), loading = false)
+                preferences.write(next, style, true)
+                fixture.route = next
+            }
+            for (size in listOf(io.github.anastaci1a.localica.browse.ListSize.Smallest, io.github.anastaci1a.localica.browse.ListSize.Small)) {
+                compose.runOnIdle { preferences.write(fixture.route, style.copy(listSize = size), true) }
+                compose.waitUntil(5000) { runCatching { row(95).assertIsDisplayed() }.isSuccess }
+                for (index in listOf(5, 45, 95)) {
+                    compose.onNode(hasText((index + 1).toString()) and
+                        hasAnyAncestor(hasTestTag("media-${entries[index].id}")), useUnmergedTree = true).assertIsDisplayed()
+                }
+                row(0).assertDoesNotExist()
+            }
+        }
+    }
+
     @Test fun externalCurrentPublicationsFollowBothDirectionsWithoutStartingPlayback() {
         val fixture = fixture()
         // Natural completion, manual skip and headset transport publish this same occurrence state.

@@ -42,5 +42,17 @@ class TracklistStyleTest {
             assertEquals("12", BrowseStyle(listSize = size).trackNumberLabel("12", 2))
             assertNull(BrowseStyle(listSize = size).trackNumberLabel(null, 2))
         }
+        // Filtering changes the displayed index, not the mutable occurrence's position.
+        for (size in listOf(ListSize.Smallest, ListSize.Small, ListSize.Tracklist)) {
+            val style = BrowseStyle(listSize = size)
+            assertEquals("46", style.trackNumberLabel(null, 0, mutablePosition = 46))
+            assertEquals("46", style.trackNumberLabel(null, 2, mutablePosition = 46))
+            assertEquals("96", style.trackNumberLabel(null, 2, mutablePosition = 96))
+            assertEquals("12", style.trackNumberLabel("12", 2, mutablePosition = 46))
+            assertNull(style.copy(presentation = Presentation.Standard).trackNumberLabel(null, 2, 46))
+        }
+        for (size in listOf(ListSize.Compact, ListSize.Normal, ListSize.Large))
+            assertNull(BrowseStyle(listSize = size).trackNumberLabel(null, 2, mutablePosition = 46))
+        assertNull(BrowseStyle(listSize = ListSize.Small).trackNumberLabel(null, 2, mutablePosition = 0))
     }
 }
