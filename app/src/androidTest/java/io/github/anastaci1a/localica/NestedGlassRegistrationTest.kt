@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -291,6 +292,163 @@ class NestedGlassRegistrationTest {
             compose.mainClock.advanceTimeBy(1200)
             compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
             compose.runOnIdle { assertFalse("Source trigger is restored after retained popup retirement", anchor.hidden) }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun scaledTriggerHomeUsesCapturedOpeningAndCurrentReturnFootprintsWithoutChangingLogicalBounds() {
+        var open by mutableStateOf(false)
+        var fitX by mutableFloatStateOf(.4f)
+        var fitY by mutableFloatStateOf(.5f)
+        var left by mutableStateOf(110.dp)
+        var top by mutableStateOf(95.dp)
+        lateinit var source: FrostedBackdrop
+        lateinit var anchor: GlassAnchor
+        lateinit var producer: LayoutCoordinates
+        lateinit var trigger: LayoutCoordinates
+        var popupView: View? = null
+        var phase by mutableStateOf("opening")
+        data class Draw(val phase: String, val frame: HomeBackdropSamplingFrame,
+            val currentCorners: List<Offset>)
+        val draws = mutableListOf<Draw>()
+        fun corners(width: Float, height: Float) = listOf(Offset.Zero, Offset(width, 0f),
+            Offset(width, height), Offset(0f, height))
+        fun nativeCorners() = corners(trigger.size.width.toFloat(), trigger.size.height.toFloat()).map {
+            producer.screenToLocal(trigger.localToScreen(it))
+        }
+        fun assertCorners(label: String, expected: List<Offset>, actual: List<Offset>) {
+            assertEquals("$label four corners", 4, actual.size)
+            expected.zip(actual).forEach { (a, b) ->
+                assertEquals("$label x", a.x, b.x, .04f)
+                assertEquals("$label y", a.y, b.y, .04f)
+            }
+        }
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(
+            LocalReducedMotion provides false, LocalMotionSpeed provides 1f,
+            LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f,
+                contrast = 0f, shadowStrength = 0f)) {
+            Box(Modifier.size(320.dp, 400.dp)) {
+                // A real display-list producer, not a bitmap or an alternate readback.
+                // API26 exercises its registration only; no CPU snapshot is requested.
+                source = rememberFrostedBackdrop(Unit, enabled = false, dark = false, retainRaster = false)
+                SideEffect { source.materialOnly = true; source.materialCorner = 0f }
+                Box(Modifier.offset(16.dp, 32.dp).size(200.dp, 150.dp)) {
+                    Canvas(Modifier.fillMaxSize().onGloballyPositioned { producer = it }
+                        .recordFrostedBackdrop(source)) { drawRect(Color(0xFF547D91)) }
+                    CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides source) {
+                        anchor = rememberGlassAnchor()
+                        LiquidGlassSurface(Modifier.offset(left, top).size(180.dp, 100.dp)
+                            .graphicsLayer {
+                                scaleX = fitX; scaleY = fitY
+                                transformOrigin = TransformOrigin(0f, 0f)
+                            }.onGloballyPositioned { trigger = it }.glassAnchor(anchor)
+                            .testTag("scaled-home-trigger"), pressFeedback = false, shadow = false)
+                        val composedPhase = phase
+                        CompositionLocalProvider(LocalHomeBackdropSamplingObserver provides { frame ->
+                            Snapshot.withoutReadObservation { draws += Draw(composedPhase, frame, nativeCorners()) }
+                        }) {
+                            GlassMorphPopup(open, anchor, { open = false }) {
+                                popupView = LocalView.current
+                                Box(Modifier.size(216.dp, 180.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        } } }
+        compose.waitForIdle()
+        fun producerFootprint(label: String): List<Offset> = compose.runOnIdle {
+            assertTrue("$label live producer", source.recorded && !source.layer.isReleased)
+            assertTrue("$label explicitly material only", source.materialOnly)
+            assertTrue(producer.isAttached && trigger.isAttached)
+            assertEquals(trigger.size.width.toFloat(), anchor.bounds.width, .02f)
+            assertEquals(trigger.size.height.toFloat(), anchor.bounds.height, .02f)
+            val at = trigger.localToScreen(Offset.Zero)
+            assertEquals("$label logical anchor origin x", at.x, anchor.bounds.left, .04f)
+            assertEquals("$label logical anchor origin y", at.y, anchor.bounds.top, .04f)
+            val actual = nativeCorners()
+            val extent = Size(producer.size.width.toFloat(), producer.size.height.toFloat())
+            fun inside(point: Offset) = point.x >= 0f && point.y >= 0f && point.x <= extent.width && point.y <= extent.height
+            assertTrue("$label all actual scaled corners fit the producer", actual.all(::inside))
+            val legacy = listOf(anchor.bounds.topLeft, anchor.bounds.topRight,
+                anchor.bounds.bottomRight, anchor.bounds.bottomLeft).map(producer::screenToLocal)
+            assertTrue("$label legacy unscaled logical footprint demonstrably overruns", legacy.any { !inside(it) })
+            val registration = requireNotNull(anchor.samplingLocation.registrationToScreen())
+            assertCorners("$label real trigger sampling metadata", actual,
+                corners(trigger.size.width.toFloat(), trigger.size.height.toFloat()).map {
+                    producer.screenToLocal(registration.map(it))
+                })
+            android.util.Log.i("MorphHomeFootprint", "$label producerSize=${source.size} recorded=${source.recorded} released=${source.layer.isReleased} logical=${anchor.bounds} actual=$actual legacy=$legacy")
+            actual
+        }
+        val openingCorners = producerFootprint("initial")
+        val logicalSize = compose.runOnIdle { anchor.bounds.size }
+        val expansionOwner = anchor.contact.expansion
+        fun verifyDraws(label: String, opening: Boolean) = compose.runOnIdle {
+            if (Build.VERSION.SDK_INT >= 33) {
+                // Observe all positive-weight choices after a fixed frame budget;
+                // never poll until averaging happens or select only passing frames.
+                val phaseDraws = draws.filter { it.phase == label }
+                phaseDraws.forEach { assertTrue("$label finite bounded draw weight", it.frame.weight.isFinite() && it.frame.weight in 0f..1f) }
+                val observed = phaseDraws.filter { it.frame.weight > 0f }
+                assertTrue("$label has an actual home sampling Canvas witness", observed.isNotEmpty())
+                for (draw in observed) {
+                    val footprint = requireNotNull(draw.frame.footprint)
+                    val expected = if (opening) openingCorners else draw.currentCorners
+                    assertTrue("$label actual draw chooses material averaging", draw.frame.averaged)
+                    assertTrue("$label home weight is bounded", draw.frame.weight <= 1f)
+                    assertEquals(logicalSize.width, footprint.size.width.toFloat(), .02f)
+                    assertEquals(logicalSize.height, footprint.size.height.toFloat(), .02f)
+                    assertCorners("$label chosen corners", expected, requireNotNull(draw.frame.cornersInSource))
+                    assertCorners("$label chosen immutable affine footprint", expected,
+                        corners(footprint.size.width.toFloat(), footprint.size.height.toFloat()).map {
+                            producer.screenToLocal(footprint.localToScreen.map(it))
+                        })
+                }
+            } else {
+                assertTrue("API26 has no modern FilteredBackdrop averaging witness", draws.isEmpty())
+                android.util.Log.i("MorphHomeFootprint", "$label API26 producer/anchor/window evidence only; no averaged-home or pixel-consumption claim")
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { open = true }
+            compose.advanceMorphOpening(128, anchor) { popupView }
+            compose.runOnIdle {
+                val view = requireNotNull(popupView)
+                assertTrue("Actual native popup owns a ready window", view.isAttachedToWindow && view.isLaidOut && view.hasWindowFocus())
+                assertTrue(anchor.modalPresent && anchor.hidden && anchor.shadowInModal)
+                assertTrue("Opening remains the real intermediate morph", expansionOwner.value > 0f && expansionOwner.value < 1f)
+            }
+            val window = requireNotNull(popupView)
+            verifyDraws("opening", opening = true)
+            compose.runOnIdle { phase = "opening-moved"; fitX = .55f; fitY = .3f; left = 90.dp; top = 100.dp }
+            repeat(2) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            val moved = producerFootprint("opening-moved")
+            assertNotEquals("Live trigger genuinely moved after opening capture", openingCorners, moved)
+            verifyDraws("opening-moved", opening = true)
+            compose.runOnIdle { phase = "return"; open = false }
+            compose.mainClock.advanceTimeBy(80)
+            compose.waitForIdle()
+            verifyDraws("return", opening = false)
+            compose.runOnIdle { phase = "return-moved"; fitX = .35f; fitY = .6f; left = 120.dp; top = 85.dp }
+            repeat(2) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            val returned = producerFootprint("return-moved")
+            assertNotEquals("Return must follow another genuine trigger basis", moved, returned)
+            verifyDraws("return-moved", opening = false)
+            val before = expansionOwner.value
+            compose.mainClock.advanceTimeBy(80)
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertSame("Scale changes/reversal preserve the same expansion owner", expansionOwner, anchor.contact.expansion)
+                assertSame("Reversal retains its actual native popup", window, popupView)
+                assertTrue("Original morph continues returning without a new clock", expansionOwner.value < before)
+                assertEquals("Sampling never replaces logical morph dimensions", logicalSize, anchor.bounds.size)
+            }
+            compose.mainClock.advanceTimeBy(1200)
+            compose.onNodeWithTag("glass-morph-surface").assertDoesNotExist()
+            compose.runOnIdle { assertFalse(anchor.hidden || anchor.modalPresent || anchor.shadowInModal) }
+            verifyDraws("return-moved", opening = false)
+            producerFootprint("restored")
         } finally { compose.mainClock.autoAdvance = true }
     }
 
