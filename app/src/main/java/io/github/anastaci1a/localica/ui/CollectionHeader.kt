@@ -3,6 +3,8 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -23,6 +25,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -83,9 +87,11 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
 @Composable
 internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<String>, onSelection: (List<String>) -> Unit) {
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+    val haptics = rememberControlHaptics()
+    val indication = LocalIndication.current
     Column(Modifier.fillMaxWidth()) {
         Text("Albums", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
-        SelectionViewport(Modifier.fillMaxWidth()) { overscroll ->
+        SelectionViewport(Modifier.fillMaxWidth(), observePlacement = { scroll.layoutInfo; Unit }) { overscroll ->
         LazyRow(Modifier.modalScroll(scroll).nestedScroll(HorizontalGestureOwner), state = scroll, overscrollEffect = overscroll,
             contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "all-albums") {
@@ -98,10 +104,18 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
                 }
             }
             items(albums, key = { it.id }) { album ->
-                val selected = album.id in selectedIds
-                Column(Modifier.width(136.dp).selectionLens(selected, false).toggleable(selected, role = Role.Checkbox, onValueChange = {
-                    onSelection(if (selected) selectedIds - album.id else selectedIds + album.id)
-                }).semantics { this.selected = selected }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                val selected = ArtistAlbumSelection.shownSelected(selectedIds, album.id)
+                Column(Modifier.width(136.dp).selectionLens(selected, false).combinedClickable(
+                    interactionSource = null, indication = indication, role = Role.Checkbox,
+                    hapticFeedbackEnabled = false, onClickLabel = "Select only this album",
+                    onClick = { onSelection(ArtistAlbumSelection.only(album.id)) },
+                    onLongClickLabel = "Toggle album selection", onLongClick = {
+                        haptics.emit(ControlHaptic.Strong)
+                        onSelection(ArtistAlbumSelection.toggle(selectedIds, album.id, albums.map { it.id }))
+                    }).semantics {
+                        this.selected = selected
+                        toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
+                    }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     MediaArtwork(listOfNotNull(album.tracks.firstOrNull()?.uri), Modifier.size(112.dp))
                     Text(album.title, Modifier.padding(top = 8.dp), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
