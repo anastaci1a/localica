@@ -96,11 +96,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val lyricsResult = if (lyricsOpen || lyricProgress > 0f) rememberLyrics(track) else null
     val sourcesAnchor = rememberGlassAnchor()
     LaunchedEffect(lyricsOpen, expanded) { if (!lyricsOpen || !expanded) sourcesVisible = false }
-    val editArtwork = LocalArtworkEdit.current
     var viewing by remember { mutableStateOf(false) }
     var artworkMenu by remember { mutableStateOf(false) }
     var configureTap by remember { mutableStateOf(false) }
-    fun artworkAction(value: ArtworkAction) { when (value) {
+    fun artworkAction(value: ArtworkAction, editArtwork: ((Track) -> Unit)?) { when (value) {
         ArtworkAction.Lyrics -> onLyrics(!lyricsOpen)
         ArtworkAction.Menu -> artworkMenu = true
         ArtworkAction.View -> viewing = true
@@ -273,6 +272,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = surfaceFrame.shape, color = Color.Transparent, contentColor = foreground) {
+        val editArtwork = presentedArtworkEdit()
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
@@ -321,12 +321,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).testTag("artwork-gesture")
                 .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
                     onClickLabel = settings.artworkTap.label,
-                    onClick = { artworkAction(settings.artworkTap) },
+                    onClick = { artworkAction(settings.artworkTap, editArtwork) },
                     onLongClickLabel = settings.artworkHold.label,
-                    onLongClick = { artworkAction(settings.artworkHold) }) else Modifier)) {
+                    onLongClick = { artworkAction(settings.artworkHold, editArtwork) }) else Modifier)) {
                 GlassMenu(artworkMenu, rememberGlassAnchor(), { artworkMenu = false }) {
+                    val menuEditArtwork = presentedArtworkEdit()
                     ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
-                    if (editArtwork != null && track != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; editArtwork(track) })
+                    if (menuEditArtwork != null && track != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; menuEditArtwork(track) })
                     ActionMenuItem("Configure tap action", onClick = { artworkMenu = false; configureTap = true })
                 }
             }
