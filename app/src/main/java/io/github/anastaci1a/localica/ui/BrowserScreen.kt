@@ -24,6 +24,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.grid.*
@@ -339,6 +340,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val searchSlotHeight = (pillSlotHeight - with(density) { (searchVacancy * searchSlotFraction).toDp() }).coerceAtLeast(0.dp)
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
+    val pinchHeader = if (artDetail) remember(pinchMotion, gridState) { CollectionPinchHeader(pinchMotion, gridState) } else null
+    val headerFrameObserver = LocalCollectionHeaderFrameObserver.current
+    SideEffect { pinchMotion.header = pinchHeader; pinchHeader?.observer = headerFrameObserver }
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
         val anchor = zoomAnchor ?: return@LaunchedEffect
@@ -372,10 +376,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     // and correct before yielding a frame of coarse top alignment.
                     // Both this correction and the continuing loop own the same scroll.
                     correctAnchor()
+                    pinchHeader?.anchorCorrected(displayedStyle)
                     val start = withFrameNanos { it }
                     do {
                         val now = withFrameNanos { it }
                         correctAnchor()
+                        pinchHeader?.anchorCorrected(displayedStyle)
                     // The same anchor owns preview AND release settlement. Ending it at
                     // finger-up lets onRelease recreate it and expose the initial coarse
                     // scrollToItem placement before fractional correction on the next frame.
@@ -687,7 +693,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         LocalEmptySearchBack provides popupDismiss?.takeIf { route.text.isBlank() }) {
     Box(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())) {
     if (artDetail) CollectionBackground(hero, gridState, collectionSource, reducedMotion,
-        Modifier.matchParentSize())
+        Modifier.matchParentSize(), pinchHeader)
     Column(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
         .then(if (searchAnchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)) {
@@ -768,7 +774,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .graphicsLayer { alpha = if (artDetail || (skeletonReveal && !queryPending)) 1f else browse.reveal.value }
                 .then(if (maskedBackdrop) Modifier.listTopFade() else Modifier)
                 .then(if (maskedBackdrop && viewportBackdrop != null) Modifier.browseBackdropMaskWitness(backdropScene, viewportBackdrop) else Modifier),
-                contentDrawing = Modifier.pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
+                contentDrawing = Modifier.onPlaced { pinchHeader?.viewport = it }
+                    .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = Modifier.fillMaxSize()
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
                 .nestedScroll(userScrollConnection)
@@ -811,7 +818,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
-                    Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")) {
+                    Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")
+                        .then(if (pinchHeader != null) Modifier.collectionPinchHeader(pinchHeader, displayedStyle) else Modifier)) {
                         if (artDetail) {
                             CompositionLocalProvider(LocalFrostedBackdrop provides collectionSource) {
                                 CollectionHeader(route.title ?: seededCollection?.title.orEmpty(), if (artistDetail) null else (sourceResult.rows.firstOrNull()?.track ?: seededCollection?.songs?.firstOrNull()?.track)?.let { it.albumArtist ?: it.artist },
@@ -1012,7 +1020,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
     if (artDetail) CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
         CollectionToolbar(gridState, reorder.viewportWidth, route.title.orEmpty(), collectionMenuAnchor,
-            onBack, { view -> collectionView = view; collectionMenu = true }, backdropScene) {
+            onBack, { view -> collectionView = view; collectionMenu = true }, backdropScene, pinchHeader) {
             if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel(initialView = collectionView) }
         }
     }
