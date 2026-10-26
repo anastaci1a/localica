@@ -103,6 +103,8 @@ class ArtistAlbumFilterRangeTest {
                 held = false
             } finally { if (held) send(android.view.MotionEvent.ACTION_CANCEL) }
             assertEquals("Native album contact must not advance the paused motion clock", before, compose.mainClock.currentTime)
+            compose.onNodeWithText(name).assertIsSelected()
+            compose.onNodeWithText("All albums").assertIsNotSelected()
             phase("choose-$name-complete")
         }
         fun scrollBy(dp: Float) {
