@@ -37,6 +37,104 @@ import java.util.concurrent.atomic.AtomicReference
 class ArtworkOccurrenceTransitionTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun supersedingUndrawnVisitsPreserveTheLastDrawnCoverInsteadOfAnOlderRecording() {
+        fun cover(key: String, color: Int): PlayerVisual {
+            val image = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }.asImageBitmap()
+            return PlayerVisual(image, softArtwork = runBlocking { blurGlassSnapshot(image, 6f) }, contentKey = key)
+        }
+        val red = cover("red", android.graphics.Color.RED)
+        val blue = cover("blue", android.graphics.Color.BLUE)
+        val green = cover("green", android.graphics.Color.GREEN)
+        val yellow = cover("yellow", android.graphics.Color.YELLOW)
+        var visual by mutableStateOf(red)
+        var visit by mutableStateOf("red-visit")
+        data class DrawRequest(val allowContent: Boolean, val observed: CountDownLatch = CountDownLatch(1))
+        val drawRequest = mutableStateOf(DrawRequest(true))
+        val allowedDraws = java.util.concurrent.atomic.AtomicInteger()
+        // Observe public content lifetimes, including the legacy soft-image copies.
+        val mountedFrames = mutableMapOf<Any, String>()
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides false) {
+            Box(Modifier.size(144.dp).background(Color.White).testTag("record-provenance")) {
+                ArtworkBlend(visual, Modifier.fillMaxSize().drawWithContent {
+                    val request = drawRequest.value
+                    if (request.allowContent) { drawContent(); allowedDraws.incrementAndGet() }
+                    request.observed.countDown()
+                }, 1000, occurrence = visit) { frame ->
+                    val owner = remember { Any() }
+                    val key = requireNotNull(frame.contentKey)
+                    DisposableEffect(owner, key) {
+                        mountedFrames[owner] = key
+                        onDispose { mountedFrames.remove(owner) }
+                    }
+                    Image(requireNotNull(frame.artwork), null, Modifier.fillMaxSize())
+                }
+            }
+        } } }
+        fun setDrawing(allowContent: Boolean) {
+            val request = DrawRequest(allowContent)
+            compose.runOnUiThread { drawRequest.value = request }
+            assertTrue("The public draw gate must acknowledge its requested state", request.observed.await(5, TimeUnit.SECONDS))
+        }
+        fun mounted() = compose.runOnUiThread { mountedFrames.values.toSet() }
+        fun awaitIncoming(key: String) {
+            compose.waitUntil(5000) {
+                // Native readback can complete between frames; stop at the first
+                // composition exposing this incoming image, not after an arbitrary delay.
+                compose.mainClock.advanceTimeByFrame()
+                key in mounted()
+            }
+        }
+        fun pixels(): androidx.compose.ui.graphics.PixelMap {
+            val heldTime = compose.mainClock.currentTime
+            setDrawing(true)
+            val captured = compose.onNodeWithTag("record-provenance").captureToImage().toPixelMap()
+            assertEquals("Capturing a drawn frame must not advance its animation", heldTime, compose.mainClock.currentTime)
+            return captured
+        }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnUiThread { visual = blue; visit = "blue-visit" }
+            awaitIncoming("blue")
+            compose.mainClock.advanceTimeBy(500)
+            val recorded = pixels()
+            val middle = recorded[recorded.width / 2, recorded.height / 2]
+            assertTrue("A real mixed transition must have drawn before its recording can become stale: $middle",
+                middle.red > .1f && middle.blue > .1f && middle.green < .05f)
+            assertEquals(setOf("red", "blue"), mounted())
+
+            // Skip the blend's entire draw path while animation/composition settle.
+            // The old nonzero recording is therefore not refreshed by late transition frames.
+            setDrawing(false)
+            val recordedDrawCount = allowedDraws.get()
+            compose.mainClock.advanceTimeBy(1200)
+            compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); mounted() == setOf("blue") }
+            assertEquals("Settling behind the gate cannot record another composite", recordedDrawCount, allowedDraws.get())
+            val settled = pixels()
+            val settledCenter = settled[settled.width / 2, settled.height / 2]
+            assertEquals("The later directly drawn cover is actually blue", Color.Blue, settledCenter)
+            assertNotEquals("The last presented cover differs from the earlier recorded mixture", middle, settledCenter)
+
+            setDrawing(false)
+            val lastPresentedDrawCount = allowedDraws.get()
+            compose.runOnUiThread { visual = green; visit = "green-undrawn-visit" }
+            awaitIncoming("green")
+            assertTrue("Green must be admitted while blue is still its outgoing composition", "blue" in mounted())
+            assertEquals("Green has never entered the blend's draw/record path", lastPresentedDrawCount, allowedDraws.get())
+            compose.runOnUiThread { visual = yellow; visit = "yellow-superseding-visit" }
+            awaitIncoming("yellow")
+            assertEquals("Supersession is admitted before any replacement composite records", lastPresentedDrawCount, allowedDraws.get())
+
+            // This is the first presented animation-clock frame after yellow's
+            // admission. Repeated native draws during capture remain at that same time.
+            val firstSuperseding = pixels()
+            assertTrue("The new admission must really reach drawing", allowedDraws.get() > lastPresentedDrawCount)
+            for (y in settled.height / 5 until settled.height * 4 / 5 step 5)
+                for (x in settled.width / 5 until settled.width * 4 / 5 step 5)
+                    assertEquals("First superseding pixels retain the last drawn cover, not an old recording at ($x,$y)",
+                        settled[x, y], firstSuperseding[x, y])
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun coldBlendAndFrameUseOnlyTheSharedGradientThenRetainReadyPixelsDuringReplacement() {
         val shimmer = mutableStateOf(.2f)
         var visual by mutableStateOf(PlayerVisual(loading = true))
