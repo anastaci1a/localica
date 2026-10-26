@@ -95,6 +95,42 @@ internal class SearchSlotMotion {
     }
 }
 
+/** One grid traversal owns its anchor request and spacer measurement together. */
+internal data class SearchSlotMeasure(val fraction: Float, val anchorOffset: Int?)
+
+internal class SearchSlotLayout {
+    private data class Anchor(val fraction: Float, val offset: Int, val vacancy: Float)
+    private class Pass {
+        var fraction = 0f
+        var anchor: Anchor? = null
+    }
+    private val lookahead = Pass()
+    private val actual = Pass()
+    var placedFraction = 0f
+        private set
+
+    private fun pass(isLookingAhead: Boolean) = if (isLookingAhead) lookahead else actual
+
+    /** Call before measuring the grid, not from its already-measuring header. */
+    fun measure(isLookingAhead: Boolean, fraction: Float, originalOffset: Int, vacancy: Float): SearchSlotMeasure {
+        val current = pass(isLookingAhead)
+        val captured = fraction.coerceIn(0f, 1f)
+        current.fraction = captured
+        val anchor = if (originalOffset >= 0 && vacancy > 0f) Anchor(captured, originalOffset, vacancy) else null
+        val request = anchor?.offset?.takeIf { anchor != current.anchor }
+        current.anchor = anchor
+        return SearchSlotMeasure(captured, request)
+    }
+
+    /** The spacer observes the original motion for invalidation, then consumes this pass. */
+    fun fraction(isLookingAhead: Boolean): Float = pass(isLookingAhead).fraction
+
+    /** Speculative measurement/placement never relabels the actual row witness. */
+    fun place(isLookingAhead: Boolean, measure: SearchSlotMeasure) {
+        if (!isLookingAhead) placedFraction = measure.fraction
+    }
+}
+
 /** Rebase on retargeting before changing the destination; no jump or guessed duration. */
 internal data class SearchSlotTravel(val fromFraction: Float, val fromBottom: Float, val toBottom: Float) {
     fun fraction(bottom: Float): Float {
