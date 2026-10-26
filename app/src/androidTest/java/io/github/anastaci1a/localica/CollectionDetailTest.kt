@@ -123,14 +123,14 @@ class CollectionDetailTest {
         compose.onNodeWithText("First album").performClick()
         compose.onNodeWithContentDescription("Play selected albums").performClick()
         assertEquals(setOf("First album"), played.map { it.album }.toSet())
-        compose.onNodeWithText("Second album").performScrollTo().performClick()
+        compose.onNodeWithText("Second album").performScrollTo().performTouchInput { longClick() }
         compose.onNodeWithText("First album").assertIsSelected()
         compose.onNodeWithText("Second album").assertIsSelected()
         compose.onNodeWithContentDescription("Play selected albums").performClick()
         assertEquals(6, played.size)
-        compose.onNodeWithText("First album").performClick()
-        compose.onNodeWithText("Second album").performClick()
-        compose.onNodeWithText("All albums").assertIsSelected()
+        compose.onNodeWithText("First album").performScrollTo().performTouchInput { longClick() }
+        compose.onNodeWithText("Second album").performScrollTo().performTouchInput { longClick() }
+        compose.onNodeWithText("All albums").performScrollTo().assertIsSelected()
         compose.onNodeWithContentDescription("Play selected albums").performClick()
         assertEquals(6, played.size)
     }

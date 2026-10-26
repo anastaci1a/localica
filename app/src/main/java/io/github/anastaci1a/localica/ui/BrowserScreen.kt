@@ -218,6 +218,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var collectionMenu by remember { mutableStateOf(false) }
     val collectionMenuAnchor = rememberGlassAnchor()
     val gridState = rememberLazyGridState()
+    val artistFilterRange = remember(route.key) { ArtistFilterRange() }
+    fun chooseArtistAlbums(ids: List<String>) {
+        if (ids == selectedAlbums) return
+        val layout = gridState.layoutInfo
+        val header = layout.visibleItemsInfo.firstOrNull { it.key == "browser-notice" }
+        val request = artistFilterRange.begin(header?.offset?.y, layout.viewportSize.height, layout)
+        // Request the same absolute offset before changed keys can auto-anchor/clamp.
+        if (request != null) gridState.requestScrollToItem(0, request.scrollOffset)
+        selectedAlbums = ids
+    }
     val touchExploration = remember(context) { (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE)
         as? android.view.accessibility.AccessibilityManager)?.isTouchExplorationEnabled == true }
     val playbackFollow = androidx.compose.runtime.saveable.rememberSaveable(route.key, route.collection,
@@ -523,6 +533,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             automatic = !route.search)
     }
     fun userScroll() {
+        artistFilterRange.interrupt()
         orderScroll.cancel()
         returnToList.cancel()
         playbackFollow.userScroll()
@@ -535,6 +546,32 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (modalOwner?.blocked != true && generation == modalOwner?.generation) action()
         }
         return true
+    }
+    val filterRangeRequest = artistFilterRange.request
+    val filterRangeViewport by remember(gridState) { derivedStateOf { gridState.layoutInfo.viewportSize } }
+    LaunchedEffect(filterRangeRequest, artistFilterRange.interruption, listContact, selectionVisible,
+        playerOpen, modalBlocked, latestReducedMotion, displayedStyle, pinchMotion.source, zoomAnchor,
+        result.items, filterRangeViewport, obscuredInset, density.density, density.fontScale) {
+        val request = filterRangeRequest ?: return@LaunchedEffect
+        if (listContact || !selectionVisible || playerOpen || modalBlocked || pinchMotion.source != null || zoomAnchor != null) return@LaunchedEffect
+        // A touch/fling/key scroll owns its full mutation before any range reconciliation.
+        withFrameNanos { }
+        snapshotFlow { gridState.isScrollInProgress }.first { !it }
+        val layout = snapshotFlow { gridState.layoutInfo }.first { measured ->
+            measured !== request.previousLayout && measured.totalItemsCount == result.items.size + 2 &&
+                measured.visibleItemsInfo.all { item -> item.key == "browser-notice" ||
+                    item.key == ArtistFilterRange.GuardKey || result.items.getOrNull(item.index - 1)?.key == item.key }
+        }
+        if (!artistFilterRange.owns(request)) return@LaunchedEffect
+        val guard = layout.visibleItemsInfo.firstOrNull { it.key == ArtistFilterRange.GuardKey }
+        val excess = ArtistFilterRange.excess(guard?.offset?.y, layout.viewportEndOffset, layout.afterContentPadding)
+        if (excess < 0f) scrollOwnership.during {
+            if (latestReducedMotion) gridState.scroll { scrollBy(excess) }
+            else gridState.animateScrollBy(excess, androidx.compose.animation.core.tween(
+                durationMillis = 280, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+        }
+        // Removing the reserve now exposes only the new real range; valid offsets never moved.
+        artistFilterRange.finish(request)
     }
     val latestUserScroll by rememberUpdatedState(::userScroll)
     val userScrollConnection = remember {
@@ -735,7 +772,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                         if (queues != null) queues.randomizedQueue(result.rows.map { it.track }, route.title ?: "Collection", result.rows.map { it.sourcePlaylistId })
                                         else onPlay(result.rows.shuffled(), 0, result.scope)
                                     })
-                                if (artistDetail) ArtistAlbumChoices(albums, validAlbums) { selectedAlbums = it }
+                                if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
                                 if (artistDetail && showSearchPill) Box(Modifier.fillMaxWidth().height(searchSlotHeight).clipToBounds()) {
                                     ListSearchPill("Search " + (route.title ?: route.tab.label), {
                                         searchOriginalOffset = if (gridState.firstVisibleItemIndex == 0) gridState.firstVisibleItemScrollOffset else -1
@@ -837,6 +874,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
                     }
                 }
+                artistFilterRange.request?.let { request ->
+                    item(key = ArtistFilterRange.GuardKey, span = { GridItemSpan(maxLineSpan) }) {
+                        Spacer(Modifier.height(with(density) { request.reservePx.toDp() })
+                            .testTag("artist-filter-range-reserve"))
+                    }
+                }
             }
             }
             }
@@ -899,7 +942,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val anchor = rememberGlassAnchor()
                     var open by remember { mutableStateOf(false) }
                     ActionIcon(R.drawable.ic_ellipsis, if (playlist != null) "Playlist actions" else if (artistDetail) "Artist actions" else "Album actions", anchor = anchor) { open = true }
-                    CollectionActions(open, anchor, BrowserItem(requireNotNull(route.collection), playlist?.name ?: route.title.orEmpty(), null, sourceResult.rows, coverUri = playlist?.coverUri),
+                    CollectionActions(open, anchor, collectionActionTarget(requireNotNull(route.collection), playlist?.name ?: route.title.orEmpty(), result, playlist?.coverUri),
                         playlists, playlistController, queues, pins, onPin, { open = false },
                         onDeleted = { onRoute(route.copy(collection = null, title = null)) },
                         onRenamed = { onRoute(route.copy(title = it)) })
