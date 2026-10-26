@@ -98,7 +98,6 @@ io.github.anastaci1a.localica.MediaEditSinkLifecycleTest
 io.github.anastaci1a.localica.MetadataRefreshJournalTest
 io.github.anastaci1a.localica.MissingLyricsMotionTest
 io.github.anastaci1a.localica.ModalGestureTakeoverTest
-io.github.anastaci1a.localica.NativeImeVisibilityTest
 io.github.anastaci1a.localica.NativeReaderAdmissionTest
 io.github.anastaci1a.localica.NavbarHapticsTest
 io.github.anastaci1a.localica.NavigationSettingsTest
