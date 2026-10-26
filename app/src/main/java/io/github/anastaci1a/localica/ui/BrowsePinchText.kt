@@ -38,14 +38,14 @@ internal data class BrowsePinchEndpoint(
 /** One endpoint measurer serves live cells and source cells virtualized by reflow. */
 @Composable
 internal fun rememberBrowseItemMeasure(item: BrowserItem, trackNumber: String?,
-    showInformation: Boolean, inherited: Map<MediaKind, BrowseStyle>, index: Int = 0): (BrowseStyle, Int, Int) -> BrowsePinchEndpoint {
+    showInformation: Boolean, inherited: Map<MediaKind, BrowseStyle>, index: Int = 0, mutablePosition: Int? = null): (BrowseStyle, Int, Int) -> BrowsePinchEndpoint {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val titleStyle = MaterialTheme.typography.titleMedium
     val infoStyle = MaterialTheme.typography.bodySmall
     val numberStyle = MaterialTheme.typography.bodyMedium
     fun endpoint(value: BrowseStyle, columns: Int, width: Int): BrowsePinchEndpoint {
-        val label = value.trackNumberLabel(trackNumber, index)
+        val label = value.trackNumberLabel(trackNumber, index, mutablePosition)
         val numbered = label != null
         val metrics = BrowseItemMetrics(value, columns, width, density.density, numbered)
         val info = if (showInformation) item.information(value, inherited)?.let {
@@ -65,7 +65,7 @@ internal fun rememberBrowseItemMeasure(item: BrowserItem, trackNumber: String?,
                 metrics.menu, menuHeight, menuX, menuY, height, metrics.artCorner, number, !numbered && metrics.art > 0)
         }
     }
-    return remember(item, density, titleStyle, infoStyle, numberStyle, trackNumber, index, showInformation, inherited, measurer) {
+    return remember(item, density, titleStyle, infoStyle, numberStyle, trackNumber, index, mutablePosition, showInformation, inherited, measurer) {
         { style, columns, width -> endpoint(style, columns, width) }
     }
 }
