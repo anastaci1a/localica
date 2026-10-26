@@ -187,7 +187,9 @@ class ListSearchTest {
             }
         } finally {
             val observed = compose.runOnUiThread { frames.toList() }
-            val directory = java.io.File(requireNotNull(context.getExternalFilesDir(null)), "search-slot-frames")
+            val additional = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                ?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+            val directory = java.io.File(additional ?: requireNotNull(context.getExternalFilesDir(null)), "search-slot-frames")
             check(directory.isDirectory || directory.mkdirs())
             val output = java.io.File(directory, "${if (reduced) "reduced" else "normal"}-${android.os.SystemClock.elapsedRealtimeNanos()}.txt")
             output.writeText("PLACED CALLBACKS\n" + compose.runOnUiThread { placedFrames.toList() }.joinToString("\n") +

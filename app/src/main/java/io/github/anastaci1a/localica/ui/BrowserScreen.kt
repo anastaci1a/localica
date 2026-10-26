@@ -331,7 +331,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     // scrolling a still-zero-height header would anchor the first song.
                     snapshotFlow { measuredSearchSlotHeight }.first { it == restoredSearchSlotHeight }
                 }
-                scrollOwnership.during { gridState.scrollToItem(0, searchOriginalOffset) }
+                // The measured-height acknowledgment can resume this coroutine
+                // during layout. Queue the exact anchor for the next measure;
+                // scrollToItem would synchronously force a reentrant layout.
+                scrollOwnership.during { gridState.requestScrollToItem(0, searchOriginalOffset) }
             }
             searchOriginalOffset = -1; searchVacancy = 0f
         }
