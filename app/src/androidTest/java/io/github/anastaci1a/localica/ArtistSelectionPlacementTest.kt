@@ -36,6 +36,7 @@ class ArtistSelectionPlacementTest {
         var draws = 0
         var contactHeld = false
         var primaryFailure: Throwable? = null
+        fun phase(value: String) { android.util.Log.i("ArtistPlacementPhase", value) }
         compose.setContent { LocalicaTheme {
             scroll = androidx.compose.foundation.lazy.rememberLazyListState()
             scope = rememberCoroutineScope()
@@ -76,6 +77,7 @@ class ArtistSelectionPlacementTest {
         try {
             val row = compose.onNodeWithTag("album-viewport")
             val start = requireNotNull(frame())
+            phase("initial-frame")
             contactHeld = true
             row.performTouchInput { down(center); moveBy(Offset(-30f, 0f), delayMillis = 32) }
             val first = requireNotNull(frame())
@@ -85,6 +87,7 @@ class ArtistSelectionPlacementTest {
             val reverse = requireNotNull(frame())
             assertTrue("Reversal follows the finger rather than an eased old offset", reverse.left > first.left)
             assertTrue("Scroll invalidates the selection host drawing", compose.runOnIdle { draws } > drawBeforeReverse)
+            phase("drag-and-reversal")
             row.performTouchInput {
                 // Keep recent MOVE samples contiguous after frame() advances the event clock.
                 // Compose 1.8.2 needs three velocity samples with gaps no greater than 40 ms.
@@ -102,6 +105,7 @@ class ArtistSelectionPlacementTest {
                 }
             }
             assertTrue("Release exercises native fling progression", sawFling && positions.size > 1)
+            phase("fling-complete")
             fun jump(index: Int) {
                 val completed = CompletableDeferred<Unit>()
                 compose.runOnUiThread { scope.launch { try { scroll.scrollToItem(index); completed.complete(Unit) }
@@ -121,6 +125,7 @@ class ArtistSelectionPlacementTest {
             compose.runOnIdle { width = 280.dp }
             frame()
             // All mode uses every visible cover body; retain the same frame registration contract.
+            phase("offscreen-reentry-and-resize-complete")
             compose.runOnIdle { allSelected = true }
             compose.mainClock.advanceTimeBy(500)
             fun allFrame() {
@@ -170,18 +175,23 @@ class ArtistSelectionPlacementTest {
                 }
             }
             allFrame()
+            phase("all-mode-initial")
             contactHeld = true
             row.performTouchInput { down(center); moveBy(Offset(-40f, 0f), delayMillis = 32) }
             allFrame()
+            phase("all-mode-drag")
             row.performTouchInput { moveBy(Offset(24f, 0f), delayMillis = 32) }
             allFrame()
+            phase("all-mode-reversal")
             row.performTouchInput { advanceEventTime(128); up() }
             contactHeld = false
             allFrame()
+            phase("body-complete")
         } catch (failure: Throwable) {
             primaryFailure = failure
             throw failure
         } finally {
+            phase("cleanup-start held=$contactHeld failure=${primaryFailure?.javaClass?.simpleName}")
             // A failed assertion can occur during an acquired drag. Release that
             // contact before unpausing animation and ActivityScenario teardown.
             compose.mainClock.autoAdvance = false
@@ -189,6 +199,7 @@ class ArtistSelectionPlacementTest {
                 if (contactHeld) compose.onNodeWithTag("album-viewport").performTouchInput { cancel() }
             }.exceptionOrNull()
             compose.mainClock.autoAdvance = true
+            phase("cleanup-complete error=${cleanup?.javaClass?.simpleName}")
             if (cleanup != null) {
                 if (primaryFailure != null) primaryFailure.addSuppressed(cleanup) else throw cleanup
             }
