@@ -11,6 +11,89 @@ class SearchMorphMotionTest {
     private val home = Rect(20f, 100f, 380f, 140f)
     private val raised = Rect(12f, 350f, 388f, 450f)
 
+    @Test fun slotDoesNotMoveForShapeGrowthBeforePlacementOwnsTheBottom() {
+        val owner = SearchSlotMotion()
+        owner.begin()
+        for (p in listOf(0f, .2f, .8f, 1f)) {
+            assertTrue(SearchMorphFlight(home, 0f, true).openingRectangle(p, raised, null).height >= home.height)
+            assertEquals(0f, owner.fraction, 0f)
+        }
+    }
+
+    @Test fun slotReadsTheActualPlacementStateInBothTravelDirections() {
+        for (end in listOf(450f, 50f)) {
+            val owner = SearchSlotMotion()
+            val token = owner.begin()
+            var bottom = home.bottom
+            val travel = SearchSlotTravel(0f, bottom, end)
+            owner.bind(token) { travel.fraction(bottom) }
+            for (step in 0..20) {
+                val fraction = step / 20f
+                bottom = home.bottom + (end - home.bottom) * fraction
+                assertEquals(fraction, owner.fraction, .00001f)
+            }
+        }
+    }
+
+    @Test fun slotReturnAndInterruptedReopeningRetainTheirExactCurrentFraction() {
+        val owner = SearchSlotMotion()
+        owner.settle(owner.begin(), .6f)
+        val closing = owner.begin()
+        val flight = SearchMorphFlight(raised, .8f, false)
+        var p = .8f
+        owner.bind(closing) { .6f * (1f - flight.fraction(p)) }
+        p = .4f
+        assertEquals(.3f, owner.fraction, .00001f)
+        val opening = owner.begin()
+        var bottom = 300f
+        val travel = SearchSlotTravel(owner.fraction, bottom, 500f)
+        owner.bind(opening) { travel.fraction(bottom) }
+        assertEquals(.3f, owner.fraction, .00001f)
+        bottom = 400f
+        assertEquals(.65f, owner.fraction, .00001f)
+        owner.settle(closing, 0f)
+        assertEquals(.65f, owner.fraction, .00001f)
+    }
+
+    @Test fun slotLateResizeRebasesWithoutChangingItsCurrentFraction() {
+        val owner = SearchSlotMotion()
+        val token = owner.begin()
+        var bottom = 200f
+        val first = SearchSlotTravel(0f, 100f, 500f)
+        owner.bind(token) { first.fraction(bottom) }
+        val next = SearchSlotTravel(owner.fraction, bottom, 350f)
+        owner.bind(token) { next.fraction(bottom) }
+        assertEquals(.25f, owner.fraction, 0f)
+        bottom = 350f
+        assertEquals(1f, owner.fraction, 0f)
+    }
+
+    @Test fun slotWindowReplacementRejectsOldWritersWithoutResettingTravel() {
+        val owner = SearchSlotMotion()
+        val old = owner.begin()
+        var fraction = .4f
+        owner.bind(old) { fraction }
+        val replacement = owner.renew()
+        owner.settle(old, 0f)
+        owner.bind(old) { 0f }
+        assertEquals(.4f, owner.fraction, 0f)
+        fraction = .7f
+        assertEquals(.7f, owner.fraction, 0f)
+        owner.settle(replacement, 1f)
+        assertEquals(1f, owner.fraction, 0f)
+    }
+
+    @Test fun zeroDistanceReducedAndOvershootingSlotEndpointsRemainBounded() {
+        assertEquals(1f, SearchSlotTravel(.2f, 100f, 100f).fraction(100f), 0f)
+        val owner = SearchSlotMotion()
+        owner.settle(owner.begin(), 1f)
+        assertEquals(1f, owner.fraction, 0f)
+        owner.settle(owner.begin(), 0f)
+        assertEquals(0f, owner.fraction, 0f)
+        assertEquals(0f, SearchSlotTravel(0f, 100f, 500f).fraction(50f), 0f)
+        assertEquals(1f, SearchSlotTravel(0f, 100f, 500f).fraction(550f), 0f)
+    }
+
     @Test fun inheritedImeCannotStartTravelBeforeThePopupHasItsOwnNativeInsets() {
         assertFalse(searchOpeningOwnsPosition(false, 600, 0, true, true, false))
         assertFalse(searchOpeningOwnsPosition(false, 600, 600, false, true, false))

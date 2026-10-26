@@ -2,11 +2,21 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.browse.*
+import io.github.anastaci1a.localica.playlist.PlaylistState
+import kotlinx.coroutines.Dispatchers
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
@@ -19,6 +29,111 @@ class ListSearchTest {
     @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
     private var lastRoot = ""
     private var lastMorph = ""
+
+    @Test fun searchSlotUsesPlacedTravelThroughNativeReadinessAndInterruptedReturn() = slotFrames(false)
+    @Test fun reducedSearchSlotUsesTheSameNativePlacementEndpoints() = slotFrames(true)
+
+    private data class SlotFrame(val sample: SearchMorphSample, val rowTop: Float)
+
+    private fun slotFrames(reduced: Boolean) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val route = BrowseRoute(MainTab.Songs, key = "search-slot-frames")
+        val preferences = BrowsePreferences(context)
+        val previous = preferences.read(route)
+        preferences.write(route, BrowseStyle(quickSearch = true), false)
+        val frames = mutableListOf<SlotFrame>()
+        var row: LayoutCoordinates? = null
+        var slot = 0f
+        val tracks = (0..20).map { Track("slot:$it", "Song ${it.toString().padStart(3, '0')}",
+            fileName = "$it.mp3", relativePath = "$it.mp3") }
+        try {
+            compose.setContent { LocalicaTheme {
+                val density = LocalDensity.current
+                val slotHeight = listPillSlotHeight()
+                val snapshot = remember { LibrarySnapshot(folders = listOf(FolderSelection("slot-root", "Music")), tracks = tracks) }
+                SideEffect { slot = with(density) { slotHeight.toPx() } }
+                CompositionLocalProvider(LocalReducedMotion provides reduced,
+                    LocalSearchMorphObserver provides { sample ->
+                        row?.takeIf { it.isAttached }?.let { coordinates ->
+                            frames += SlotFrame(sample, coordinates.positionInRoot().y)
+                        }
+                    }) {
+                    Box(Modifier.fillMaxSize()) {
+                        BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, {}, {},
+                            { _, _, _ -> }, null, null, true, false, reducedMotion = reduced,
+                            queryDispatcher = Dispatchers.Unconfined)
+                    }
+                }
+            } }
+            val song = compose.onNodeWithText("Song 000")
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Song 000").fetchSemanticsNodes().isNotEmpty() }
+            val baseline = song.fetchSemanticsNode().boundsInRoot.top
+            row = song.fetchSemanticsNode().layoutInfo.coordinates
+            compose.mainClock.autoAdvance = false
+            fun pumpUntil(predicate: () -> Boolean) = compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnUiThread(predicate)
+            }
+            fun last() = frames.lastOrNull()?.sample
+            fun open() {
+                compose.onNodeWithTag("list-search-pill").performTouchInput { click(center) }
+                compose.waitUntil(5000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
+                }
+            }
+            open()
+            pumpUntil { last()?.let { it.opening && it.placementBottom != null &&
+                if (reduced) it.slotFraction == 1f else it.slotFraction in .1f.. .8f } == true }
+            val owned = compose.runOnUiThread { requireNotNull(last()) }
+            assertTrue("Placement must use this popup's actual focused native IME", owned.windowFocused && owned.ime > 0 && owned.nativeIme > 0)
+            pressSystemBack()
+            if (!reduced) {
+                pumpUntil { last()?.let { !it.opening && it.slotFraction > .01f && it.slotFraction < owned.slotFraction } == true }
+                // A fresh contact during the existing return must retain the original vacancy.
+                open()
+            } else {
+                compose.waitUntil(5000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty()
+                }
+                open()
+            }
+            pumpUntil { last()?.let { it.opening && it.progress >= .999f && it.slotFraction == 1f } == true }
+            pressSystemBack()
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty()
+            }
+            assertEquals("Final restoration keeps the exact original row position", baseline, song.fetchSemanticsNode().boundsInRoot.top, 1.1f)
+            val observed = compose.runOnUiThread { frames.toList() }
+            assertTrue("Observe real frames before native placement ownership", observed.any { it.sample.opening && it.sample.placementBottom == null && it.sample.flight?.opening == true })
+            var wasOpening = false
+            var heldFraction = 0f
+            for ((sample, top) in observed) {
+                val flight = sample.flight
+                val bottom = sample.placementBottom
+                val travel = sample.slotTravel
+                if (sample.opening && !wasOpening) heldFraction = sample.slotFraction
+                assertEquals("Row and placed popup must use the same vacancy: $sample", baseline - slot * sample.slotFraction, top, 1.1f)
+                if (sample.opening && flight?.opening == true && bottom == null)
+                    assertEquals("Shape growth preserves vacancy until native placement owns travel", heldFraction, sample.slotFraction, 0f)
+                if (sample.opening && bottom != null && travel != null)
+                    assertEquals("Use actual bottom travel, not another timer", travel.fraction(bottom), sample.slotFraction, .0001f)
+                if (!sample.opening && flight != null)
+                    assertEquals("Reverse the actual captured return flight", sample.slotReturnFrom * (1f - flight.fraction(sample.progress)), sample.slotFraction, .0001f)
+                if (reduced) assertTrue("Reduced motion has only placement endpoints", sample.slotFraction == 0f || sample.slotFraction == 1f)
+                wasOpening = sample.opening
+            }
+            if (!reduced) {
+                assertTrue(observed.any { it.sample.opening && it.sample.slotFraction in .1f.. .9f })
+                assertTrue(observed.any { !it.sample.opening && it.sample.slotFraction in .01f.. .99f })
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            preferences.write(route, previous, false)
+        }
+    }
     private fun trace(message: String) {
         android.util.Log.i("ListSearchReopen", "${android.os.SystemClock.uptimeMillis()} $message")
     }
