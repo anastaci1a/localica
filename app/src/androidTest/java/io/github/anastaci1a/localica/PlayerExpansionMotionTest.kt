@@ -498,9 +498,29 @@ private class PlayerGraphicsObservation(private val original: GraphicsContext,
 
     private fun metadata(scene: LyricsBackdropScene): List<String> {
         val id = System.identityHashCode(scene)
-        return listOf("scene=$id composite ${source(scene.source)}") + scene.layers.map { producer ->
+        val result = (listOf("scene=$id composite ${source(scene.source)}") + scene.layers.map { producer ->
             "scene=$id producer=${System.identityHashCode(producer)} recordedRequest=${producer.recordedReadbackRequest} maskedRequest=${producer.maskedReadbackRequest} ${source(producer.source)}"
+        }).toMutableList()
+        // Public, non-atomic metadata only: recorded is sticky, not a fresh draw
+        // acknowledgement or native retention proof. Keep no graph after this call.
+        val seen = mutableListOf(scene.source)
+        var child = scene.source
+        for (depth in 1..8) {
+            val parent = child.parent
+            if (parent == null) {
+                result += "scene=$id parentChainEnd depth=$depth parent=null"
+                return result
+            }
+            if (seen.any { it === parent }) {
+                result += "scene=$id parentChainCycle depth=$depth fromSource=${System.identityHashCode(child)} source=${System.identityHashCode(parent)}"
+                return result
+            }
+            result += "scene=$id parentDepth=$depth fromSource=${System.identityHashCode(child)} nonAtomicMetadata ${source(parent)}"
+            seen += parent
+            child = parent
         }
+        result += "scene=$id parentChainBound limit=8 remaining=${child.parent != null}"
+        return result
     }
 
     private fun source(source: FrostedBackdrop): String =
