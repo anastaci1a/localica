@@ -4,6 +4,10 @@ import androidx.compose.animation.core.AnimationVector4D
 import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -46,7 +50,7 @@ internal fun searchPanelTarget(origin: Offset, availableWidth: Float, availableH
 
 /** Complete window-space geometry; animated IME padding cannot move a captured flight. */
 internal data class SearchMorphFlight(val from: Rect, val startingProgress: Float, val opening: Boolean) {
-    private fun fraction(progress: Float): Float {
+    internal fun fraction(progress: Float): Float {
         val remaining = if (opening) 1f - startingProgress else startingProgress
         val traveled = if (opening) progress - startingProgress else startingProgress - progress
         return if (remaining <= .0001f) 1f else (traveled / remaining).coerceIn(0f, 1f)
@@ -62,6 +66,41 @@ internal data class SearchMorphFlight(val from: Rect, val startingProgress: Floa
         val height = shaped.height.coerceAtMost(maxHeight)
         val top = placementBottom?.minus(height) ?: from.top
         return Rect(shaped.left, top, shaped.right, top + height)
+    }
+}
+
+/** Vacancy follows the existing placement state; this owner has no clock or animation. */
+internal class SearchSlotMotion {
+    private var generation = 0L
+    private var retained by mutableFloatStateOf(0f)
+    private var reader by mutableStateOf<(() -> Float)?>(null)
+    val fraction: Float get() = (reader?.invoke() ?: retained).coerceIn(0f, 1f)
+
+    fun begin(): Long {
+        val current = fraction
+        generation++
+        reader = null
+        retained = current
+        return generation
+    }
+    fun bind(token: Long, value: () -> Float) {
+        if (token == generation) reader = value
+    }
+    /** Native-window replacement retires old writers without inventing another clock. */
+    fun renew(): Long = ++generation
+    fun settle(token: Long, value: Float) {
+        if (token != generation) return
+        reader = null
+        retained = value.coerceIn(0f, 1f)
+    }
+}
+
+/** Rebase on retargeting before changing the destination; no jump or guessed duration. */
+internal data class SearchSlotTravel(val fromFraction: Float, val fromBottom: Float, val toBottom: Float) {
+    fun fraction(bottom: Float): Float {
+        val distance = toBottom - fromBottom
+        val traveled = if (kotlin.math.abs(distance) <= .0001f) 1f else ((bottom - fromBottom) / distance).coerceIn(0f, 1f)
+        return (fromFraction + (1f - fromFraction) * traveled).coerceIn(0f, 1f)
     }
 }
 
@@ -92,5 +131,9 @@ internal data class SearchMorphSample(
     val surfaceOpacity: Float = 1f,
     val nativeIme: Int = ime,
     val windowFocused: Boolean = true,
+    /** Same reader used by the underlying list, sampled with this placed geometry. */
+    val slotFraction: Float = 0f,
+    val slotTravel: SearchSlotTravel? = null,
+    val slotReturnFrom: Float = 0f,
 )
 internal val LocalSearchMorphObserver = staticCompositionLocalOf<((SearchMorphSample) -> Unit)?> { null }
