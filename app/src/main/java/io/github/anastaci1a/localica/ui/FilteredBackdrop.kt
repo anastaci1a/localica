@@ -5,12 +5,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.ceil
@@ -23,14 +27,13 @@ internal fun glassLayerExtent(size: IntSize): IntSize {
 
 /** Filter only a bounded low-resolution backing; sharp foregrounds never enter this pass. */
 @Composable
-internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origin: () -> Offset,
+internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
     resolution: Float, padding: Float = 0f, homeSource: FrostedBackdrop? = null,
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
     BackdropLease(source)
     BackdropLease(homeSource?.takeUnless { it === source })
-    val currentOrigin by rememberUpdatedState(origin)
     val layer = rememberGraphicsLayer()
     val primary = if (homeSource != null) rememberGraphicsLayer() else null
     val home = if (primary != null) rememberGraphicsLayer() else null
@@ -47,21 +50,37 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
         // first recording explicitly: GraphicsLayer.size is not snapshot state,
         // and returning before drawLayer otherwise installs no dependency.
         if (!source.recorded || source.layer.isReleased || source.layer.size.width <= 0) return@Canvas
+        if (size.width <= 0f || size.height <= 0f) return@Canvas
         val blend = if (homeSource != null && !homeSource.layer.isReleased && homeSource.layer.size.width > 0)
             homeWeight().coerceIn(0f, 1f) else 0f
-        val at = currentOrigin()
-        val homeFootprint = homeBounds?.invoke()?.takeUnless { it.isEmpty } ?: androidx.compose.ui.geometry.Rect(at, size)
-        val flatSource = homeSource == null && averageRenderer != null && source.canAverage(at, size)
-        val flatHome = averageRenderer != null && homeSource?.canAverage(homeFootprint.topLeft, homeFootprint.size) == true
+        val sourceToLocal = source.location.registrationTo(location) ?: return@Canvas
+        val localToSource = sourceToLocal.inverse() ?: return@Canvas
+        val viewportBounds = Rect(Offset.Zero, size)
+        val homeToLocal = homeSource?.location?.registrationTo(location)
+        if (blend > 0f && homeToLocal == null) return@Canvas
+        // homeBounds describes the trigger's screen footprint, not the current local viewport.
+        val homeFootprint = homeBounds?.invoke()?.takeUnless { it.isEmpty }
+        if (homeFootprint != null && !listOf(homeFootprint.left, homeFootprint.top,
+                homeFootprint.right, homeFootprint.bottom).all { it.isFinite() }) return@Canvas
+        val homeToFootprint = if (homeFootprint != null) homeSource?.location?.registrationToScreen()
+            ?.followedBy(BackdropRegistration.create(1f, 0f, 0f, 1f, -homeFootprint.left, -homeFootprint.top)!!)
+            else homeToLocal
+        val homeExtent = homeFootprint?.size ?: size
+        if (!homeExtent.width.isFinite() || !homeExtent.height.isFinite() ||
+            homeExtent.width <= 0f || homeExtent.height <= 0f) return@Canvas
+        val flatSource = homeSource == null && averageRenderer != null && source.canAverage(localToSource.corners(viewportBounds))
+        val flatHome = averageRenderer != null && homeSource != null && homeToFootprint?.inverse()?.let {
+            homeSource.canAverage(it.corners(Rect(Offset.Zero, homeExtent)))
+        } == true
         val flatWeight = (if (flatSource) 1f - blend else 0f) + (if (flatHome) blend else 0f)
         val entirelyFlat = flatWeight >= 1f
         val viewport = size
         fun androidx.compose.ui.graphics.drawscope.DrawScope.crop(backing: FrostedBackdrop, isHome: Boolean = false) {
-            val footprint = if (isHome) homeFootprint else androidx.compose.ui.geometry.Rect(at, viewport)
+            val registration = (if (isHome) homeToFootprint else sourceToLocal) ?: return
+            val footprint = if (isHome) homeExtent else viewport
             clipRect(right = 8f, bottom = 8f) {
                 scale(8f / footprint.width, 8f / footprint.height, Offset.Zero) {
-                    val delta = backing.origin - footprint.topLeft
-                    translate(delta.x, delta.y) { drawLayer(backing.layer) }
+                    withBackdropRegistration(registration) { drawLayer(backing.layer) }
                 }
             }
         }
@@ -110,15 +129,20 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, origi
                 val chain = mutableListOf<FrostedBackdrop>()
                 var item: FrostedBackdrop? = backing
                 while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
+                val backingToLocal = (if (isHome) homeToLocal else sourceToLocal) ?: return@scale
+                val boundary = backingToLocal.corners(Rect(0f, 0f, backing.size.width.toFloat(), backing.size.height.toFloat()))
+                val inside = Path().apply {
+                    moveTo(boundary[0].x, boundary[0].y)
+                    boundary.drop(1).forEach { lineTo(it.x, it.y) }
+                    close()
+                }
                 chain.asReversed().forEach { scene ->
                     if (scene.recorded && !scene.layer.isReleased) {
-                        val delta = scene.origin - currentOrigin() + Offset(padding, padding)
-                        if (scene === backing) translate(delta.x, delta.y) { drawLayer(scene.layer) }
-                        else {
-                            val inside = backing.origin - currentOrigin() + Offset(padding, padding)
-                            clipRect(inside.x, inside.y, inside.x + backing.size.width, inside.y + backing.size.height,
-                                androidx.compose.ui.graphics.ClipOp.Difference) {
-                                translate(delta.x, delta.y) { drawLayer(scene.layer) }
+                        val registration = if (scene === backing) backingToLocal else scene.location.registrationTo(location)
+                        if (registration != null) translate(padding, padding) {
+                            if (scene === backing) withBackdropRegistration(registration) { drawLayer(scene.layer) }
+                            else clipPath(inside, ClipOp.Difference) {
+                                withBackdropRegistration(registration) { drawLayer(scene.layer) }
                             }
                         }
                     }
