@@ -61,6 +61,8 @@ set -e
 [[ "$result" == 0 ]] || exit "$result"
 python3 - "$selector" "$required,$focus_regression,$contrast_regression" <<'PYXML'
 import hashlib, json, pathlib, sys, xml.etree.ElementTree as ET
+if not __debug__:
+    raise RuntimeError('Strict prototype reconciliation refuses Python optimization')
 root = pathlib.Path('prototype-evidence')
 observed = json.loads((root/'live/observed/manifest.json').read_text())
 assert observed['status'] == 'completed' and observed['child_returncode'] == 0
@@ -77,6 +79,12 @@ source_inventory = json.loads(source_bytes)
 assert set(source_inventory['selectors']) == selected
 expected_methods = set(source_inventory['runtime_methods'])
 required = set(sys.argv[2].split(','))
+nested_registration = 'io.github.anastaci1a.localica.NestedGlassRegistrationTest'
+nested_assumption = nested_registration+'#scaledMaterialCoverageAveragesOnlyItsVisibleFootprint'
+# Exact reason observed in the preserved API26 native assumption receipt. A bare
+# skipped element or a nearby Android-version message is not equivalent evidence.
+nested_reason = 'org.junit.AssumptionViolatedException: Material averaging is the Android 13+ adapter'
+nested_skips = []
 for file in files:
     tree = ET.parse(file)
     suites = [tree.getroot()] if tree.getroot().tag == 'testsuite' else tree.getroot().findall('.//testsuite')
@@ -93,12 +101,33 @@ for file in files:
             outcome = 'failed' if case.find('failure') is not None else 'errors' if case.find('error') is not None else 'skipped' if case.find('skipped') is not None else 'passed'
             counts[name][outcome] += 1
             methods[name+'#'+case.attrib['name']] = outcome
+            if name == nested_registration and outcome == 'skipped':
+                skipped = case.findall('skipped')
+                message = skipped[0].attrib.get('message', '')
+                text = ''.join(skipped[0].itertext())
+                reasons = [value.strip() for value in (message, text) if value.strip()]
+                qualified = (str(observed['api']) == '26' and
+                             name+'#'+case.attrib['name'] == nested_assumption and
+                             len(skipped) == 1 and bool(reasons) and
+                             all(value == nested_reason for value in reasons))
+                nested_skips.append({'identity': name+'#'+case.attrib['name'], 'api': str(observed['api']),
+                    'message': message, 'text': text, 'reason': reasons[0] if len(set(reasons)) == 1 else None,
+                    'skip_elements': len(skipped), 'qualified': qualified,
+                    'rule': 'Exact original method, API26 and observed Android13-adapter reason'})
         for attr, tag in [('failures','failure'), ('errors','error'), ('skipped','skipped')]:
             if attr in suite.attrib:
                 assert int(suite.attrib[attr]) == sum(c.find(tag) is not None for c in cases), 'Inconsistent XML '+attr
 assert set(methods) == expected_methods, 'Missing or extra source-declared methods'
 assert all(counts[c]['skipped'] == 0 for c in required), 'Required regression methods cannot skip'
+if nested_registration in selected:
+    (root/'nested-registration-skips.json').write_text(json.dumps({'selector': nested_registration,
+        'sha': observed['sha'], 'api': observed['api'], 'allowed_identity': nested_assumption,
+        'allowed_api': '26', 'required_reason': nested_reason, 'skips': nested_skips}, indent=2)+'\n')
+    if not all(skip['qualified'] for skip in nested_skips):
+        raise AssertionError('Unqualified NestedGlassRegistrationTest skip')
 result = {'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
+if nested_registration in selected:
+    result['qualified_nested_registration_skips'] = nested_skips
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
 assert all(v['passed'] > 0 and v['failed'] == 0 and v['errors'] == 0 for v in counts.values()), 'Required class failed or had no passing tests'
 PYXML

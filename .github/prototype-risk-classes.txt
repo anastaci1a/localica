@@ -107,6 +107,7 @@ io.github.anastaci1a.localica.MissingLyricsMotionTest
 io.github.anastaci1a.localica.ModalGestureTakeoverTest
 io.github.anastaci1a.localica.NativeReaderAdmissionTest
 io.github.anastaci1a.localica.NavbarHapticsTest
+io.github.anastaci1a.localica.NestedGlassRegistrationTest
 io.github.anastaci1a.localica.NavigationSettingsTest
 io.github.anastaci1a.localica.NavigationTest
 io.github.anastaci1a.localica.OrderCommitPersistenceTest
@@ -137,6 +138,7 @@ io.github.anastaci1a.localica.PlaylistCompletionTest
 io.github.anastaci1a.localica.PlaylistCoverActionTest
 io.github.anastaci1a.localica.PlaylistDatabaseTest
 io.github.anastaci1a.localica.PlaylistDestinationUiTest
+io.github.anastaci1a.localica.PlaylistSelectionPlacementTest
 io.github.anastaci1a.localica.PopupEnvelopeTest
 io.github.anastaci1a.localica.PopupScrollEdgesTest
 io.github.anastaci1a.localica.PopupShadowContinuityTest
@@ -168,6 +170,7 @@ io.github.anastaci1a.localica.QueueReorderCommandTest
 io.github.anastaci1a.localica.QueueRestoreTest
 io.github.anastaci1a.localica.QueueReusePlaybackTest
 io.github.anastaci1a.localica.QueueScrollOwnershipTest
+io.github.anastaci1a.localica.QueueSelectionPlacementTest
 io.github.anastaci1a.localica.QueueSelectorDragTest
 io.github.anastaci1a.localica.QueueSqlCountBenchmarkTest
 io.github.anastaci1a.localica.QueuedSettingsTest

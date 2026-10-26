@@ -15,6 +15,11 @@ REQUIRED = 'io.github.anastaci1a.localica.SearchImeMotionTest'
 FOCUS = 'io.github.anastaci1a.localica.ListSearchTest'
 CONTRAST = 'io.github.anastaci1a.localica.FrostedSurfaceTest'
 AFFECTED = 'io.github.anastaci1a.localica.QueueRecoveryTest'
+REGISTRATION = 'io.github.anastaci1a.localica.NestedGlassRegistrationTest'
+PLAYLIST_SELECTION = 'io.github.anastaci1a.localica.PlaylistSelectionPlacementTest'
+QUEUE_SELECTION = 'io.github.anastaci1a.localica.QueueSelectionPlacementTest'
+AVERAGING_METHOD = 'scaledMaterialCoverageAveragesOnlyItsVisibleFootprint'
+AVERAGING_REASON = 'org.junit.AssumptionViolatedException: Material averaging is the Android 13+ adapter'
 SHA = 'f'*40
 
 
@@ -69,12 +74,22 @@ if mode=='exit7': sys.exit(7)
 if mode=='silent': sys.exit(0)
 if mode=='observed': print(classes[0]+' > regression[emulator-5554 - 16] FAILED',flush=True)
 root=pathlib.Path('app/build/outputs/androidTest-results/connected/debug');root.mkdir(parents=True,exist_ok=True)
+source=json.loads(pathlib.Path('prototype-evidence/expected-methods.json').read_text())
 for i,cls in enumerate(classes):
     if mode=='missing-class' and i==1: continue
-    suite=E.Element('testsuite',tests='1')
-    case=E.SubElement(suite,'testcase',classname=cls,name='regression')
-    if mode=='xml-failure' and i==0:E.SubElement(case,'failure')
-    if mode=='all-skipped' and i==0:E.SubElement(case,'skipped')
+    names=[identity.split('#',1)[1] for identity in source['runtime_methods'] if identity.split('#',1)[0]==cls]
+    # The omission contract deliberately writes extra declared methods without
+    # teaching the fake Gradle process to discover them.
+    if mode!='registration' and cls.endswith('QueueRecoveryTest'): names=['regression']
+    suite=E.Element('testsuite',tests=str(len(names)))
+    for name in names:
+        case=E.SubElement(suite,'testcase',classname=cls,name=name)
+        if mode=='xml-failure' and i==0:E.SubElement(case,'failure')
+        if mode=='all-skipped' and i==0:E.SubElement(case,'skipped')
+        if cls==os.environ.get('SKIP_CLASS') and name==os.environ.get('SKIP_METHOD'):
+            skipped=E.SubElement(case,'skipped')
+            if os.environ.get('SKIP_MESSAGE_PRESENT','1')=='1': skipped.set('message',os.environ.get('SKIP_REASON',''))
+            if os.environ.get('SKIP_TEXT'): skipped.text=os.environ['SKIP_TEXT']
     if mode=='bad-count':suite.set('tests','2')
     E.ElementTree(suite).write(root/('TEST-'+str(i)+'.xml'))
 ''')
@@ -102,6 +117,98 @@ for i,cls in enumerate(classes):
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         self.assertEqual({REQUIRED,FOCUS,CONTRAST,AFFECTED},set(evidence['counts']))
         self.assertFalse(evidence['release_certified'])
+
+    def registration_fixture(self):
+        # Actual reviewed selectors and real source declarations go through the
+        # production shell wrapper/parser. Only adb/Gradle/setup/publication stub.
+        shutil.copyfile(ROOT/'.github/prototype-risk-classes.txt', self.root/'.github/prototype-risk-classes.txt')
+        for cls in (REGISTRATION, PLAYLIST_SELECTION, QUEUE_SELECTION):
+            relative=Path('app/src/androidTest/java')/Path(cls.replace('.','/')+'.kt')
+            shutil.copyfile(ROOT/relative,self.root/relative)
+        self.env.update(AFFECTED_CLASSES=','.join((REGISTRATION,PLAYLIST_SELECTION,QUEUE_SELECTION)),MODE='registration')
+
+    def test_three_real_registration_and_selection_classes_are_admitted(self):
+        self.registration_fixture()
+        self.run_case()
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        for cls in (REGISTRATION,PLAYLIST_SELECTION,QUEUE_SELECTION): self.assertIn(cls,evidence['selectors'])
+        self.assertEqual(6,len([identity for identity in evidence['methods'] if identity.startswith(REGISTRATION+'#')]))
+        self.assertEqual(1,len([identity for identity in evidence['methods'] if identity.startswith(PLAYLIST_SELECTION+'#')]))
+        self.assertEqual(1,len([identity for identity in evidence['methods'] if identity.startswith(QUEUE_SELECTION+'#')]))
+        self.assertEqual([],evidence['qualified_nested_registration_skips'])
+
+    def test_registration_api26_original_reason_is_qualified(self):
+        self.registration_fixture()
+        self.run_case(TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,SKIP_REASON=AVERAGING_REASON)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        skips=evidence['qualified_nested_registration_skips']
+        self.assertEqual(1,len(skips))
+        self.assertEqual(REGISTRATION+'#'+AVERAGING_METHOD,skips[0]['identity'])
+        self.assertEqual('26',skips[0]['api'])
+        self.assertEqual(AVERAGING_REASON,skips[0]['reason'])
+        self.assertTrue(skips[0]['qualified'])
+        self.assertEqual(skips,json.loads((self.root/'prototype-evidence/nested-registration-skips.json').read_text())['skips'])
+
+    def test_registration_rejects_other_skipped_identity(self):
+        self.registration_fixture()
+        self.run_case(1,TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD='transformedGlassSamplesItsSceneThroughForwardReverseFitAndScrolling',SKIP_REASON=AVERAGING_REASON)
+
+    def test_registration_rejects_wrong_reason(self):
+        self.registration_fixture()
+        self.run_case(1,TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,SKIP_REASON='Different adapter reason')
+
+    def test_registration_rejects_skip_on_api36(self):
+        self.registration_fixture()
+        self.run_case(1,SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,SKIP_REASON=AVERAGING_REASON)
+
+    def test_registration_rejects_missing_reason(self):
+        self.registration_fixture()
+        self.run_case(1,TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,SKIP_MESSAGE_PRESENT='0')
+
+    def test_registration_api26_text_reason_is_qualified(self):
+        self.registration_fixture()
+        self.run_case(TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,
+                      SKIP_MESSAGE_PRESENT='0',SKIP_TEXT=AVERAGING_REASON)
+        evidence=json.loads((self.root/'prototype-evidence/nested-registration-skips.json').read_text())
+        self.assertTrue(evidence['skips'][0]['qualified'])
+        self.assertEqual(AVERAGING_REASON,evidence['skips'][0]['text'])
+
+    def test_registration_rejects_conflicting_reason_channels(self):
+        self.registration_fixture()
+        self.run_case(1,TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,
+                      SKIP_REASON=AVERAGING_REASON,SKIP_TEXT='Different reason')
+        evidence=json.loads((self.root/'prototype-evidence/nested-registration-skips.json').read_text())
+        self.assertFalse(evidence['skips'][0]['qualified'])
+
+    def test_registration_rejects_reason_with_extra_suffix(self):
+        self.registration_fixture()
+        self.run_case(1,TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,
+                      SKIP_REASON=AVERAGING_REASON+'; unrelated skip')
+
+    def test_registration_rejects_blank_reason(self):
+        self.registration_fixture()
+        self.run_case(1,TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,SKIP_REASON=' \t\n')
+
+    def test_registration_rejects_other_identity_on_api36(self):
+        self.registration_fixture()
+        self.run_case(1,SKIP_CLASS=REGISTRATION,SKIP_METHOD='missingAndDetachedLocationsCannotBorrowIdentityRegistration',SKIP_REASON=AVERAGING_REASON)
+
+    def test_other_class_partial_skip_behavior_is_unchanged(self):
+        path=self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')
+        path.write_text(path.read_text().rsplit('}',1)[0]+' @org.junit.Test fun optional() {} }')
+        self.run_case(MODE='registration',SKIP_CLASS=AFFECTED,SKIP_METHOD='optional',SKIP_MESSAGE_PRESENT='0')
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual(1,evidence['counts'][AFFECTED]['passed'])
+        self.assertEqual(1,evidence['counts'][AFFECTED]['skipped'])
+        self.assertNotIn('qualified_nested_registration_skips',evidence)
+
+    def test_registration_skip_guard_survives_python_optimization(self):
+        self.registration_fixture()
+        self.run_case(1,TEST_API='26',SKIP_CLASS=REGISTRATION,SKIP_METHOD=AVERAGING_METHOD,
+                      SKIP_REASON='Different adapter reason',PYTHONOPTIMIZE='1')
+
+    def test_reconciliation_refuses_optimized_python_even_for_passing_results(self):
+        self.run_case(1,PYTHONOPTIMIZE='1')
 
     def test_publisher_failure_holds_success(self):
         self.executable('bin/node', '#!/bin/sh\nexit 17\n')
