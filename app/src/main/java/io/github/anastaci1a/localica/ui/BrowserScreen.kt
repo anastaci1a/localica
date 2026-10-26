@@ -105,7 +105,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val obscuredInset = LocalBrowseObscuredInset.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
-    val editTags = LocalTagEdit.current
     val sorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { BrowsePreferences(context) }
     var inheritedInformation by remember(preferences) { mutableStateOf(preferences.informationStyles()) }
@@ -734,7 +733,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     var contextMenu by remember { mutableStateOf<String?>(null) }
     var addingSong by remember { mutableStateOf<Track?>(null) }
-    var info by remember { mutableStateOf<Track?>(null) }
+    var info by remember { mutableStateOf<SongInformationRequest?>(null) }
     val pageColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = if (artDetail) pageColors.copy(onSurface = collectionInk, onSurfaceVariant = collectionInk.copy(alpha = .65f),
         primary = collectionInk, surface = if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom) else pageColors) {
@@ -940,7 +939,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
                                     onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { contextMenu = item.key }
                                 CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
-                                    onInformation = { info = it }, containingSource = route.collection, selection = session,
+                                    onInformationPresented = { song, presentation -> info = SongInformationRequest(song, presentation) }, containingSource = route.collection, selection = session,
                                     onRemove = if (item.row == null) null else when (route.collection?.kind) {
                                         MediaKind.Queue -> ({ queues?.removeEntries(setOf(item.key), route.collection.id); Unit })
                                         MediaKind.Playlist -> ({ playlistController?.removeEntries(route.collection.id, setOf(item.key)) { }; Unit })
@@ -1117,12 +1116,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     addingSong?.let { song -> AddToPlaylistDialog(listOf(song), playlists, playlistController, { addingSong = null }, { addingSong = null }) }
-    info?.let { song -> SongInformation(song, { info = null }, { editTags?.invoke(listOf(song)) {} }, folders = library.snapshot.folders) { action ->
+    info?.let { request -> TagEditorPresentationScope(request.presentation) {
+    val song = request.track
+    SongInformation(song, { info = null }, folders = library.snapshot.folders) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
         BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
             .firstOrNull { item -> item.songs.any { it.track.id == song.id &&
                 (action != PlayerAction.Folder || io.github.anastaci1a.localica.library.sameSongInformationLocation(it.track, song)) } }?.let { info = null; onOpen(it) }
-    } }
+    } } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }

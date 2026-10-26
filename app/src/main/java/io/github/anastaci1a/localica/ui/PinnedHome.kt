@@ -50,8 +50,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     val session = LocalSessionSelection.current ?: remember { SessionSelection() }
     val songs = items.mapNotNull { it.row }
     BindSelectionScope(session, null, songs, selectionVisible)
-    var info by remember { mutableStateOf<io.github.anastaci1a.localica.library.Track?>(null) }
-    val editTags = LocalTagEdit.current
+    var info by remember { mutableStateOf<SongInformationRequest?>(null) }
     var menu by remember { mutableStateOf<MediaRef?>(null) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val artworkTransit = remember { ArtworkTransit() }
@@ -110,7 +109,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
-                CollectionActions(currentOrder && menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null }, onInformation = { info = it }, extra = {
+                CollectionActions(currentOrder && menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null },
+                    onInformationPresented = { track, presentation -> info = SongInformationRequest(track, presentation) }, extra = {
                     ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
                     ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,
@@ -129,12 +129,14 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     }
     }
     }
-    info?.let { track -> SongInformation(track, { info = null }, { editTags?.invoke(listOf(track)) {} }, folders = library.snapshot.folders) { action ->
+    info?.let { request -> TagEditorPresentationScope(request.presentation) {
+    val track = request.track
+    SongInformation(track, { info = null }, folders = library.snapshot.folders) { action ->
         val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
             PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
         BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
             .firstOrNull { item -> item.songs.any { it.track.id == track.id &&
                 (action != PlayerAction.Folder || io.github.anastaci1a.localica.library.sameSongInformationLocation(it.track, track)) } }?.let { info = null; onOpen(it, it.songs) }
-    } }
+    } } }
 
 }
