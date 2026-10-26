@@ -126,8 +126,109 @@ class PlayerExpansionMotionTest {
         }
     }
 
-    @Test fun artworkKeepsMiniSizeUntilClearanceAndReversesExactlyWithConstrainedFallback() {
-        var compatible = 0
+    @Test fun artworkGrowthStartsImmediatelyAndHasBoundedContinuousVelocityInBothDirections() {
+        for (curvature in listOf(0f, .12f, .4f, 1f, 2f)) {
+            assertEquals(0f, playerArtworkSizeProgress(-1f, curvature), 0f)
+            assertEquals(0f, playerArtworkSizeProgress(0f, curvature), 0f)
+            assertEquals(1f, playerArtworkSizeProgress(1f, curvature), 0f)
+            assertEquals(1f, playerArtworkSizeProgress(2f, curvature), 0f)
+            for (p in listOf(.0001f, .001f, .01f, .05f, .1f)) {
+                val growth = playerArtworkSizeProgress(p, curvature)
+                assertTrue("No initial hold at $p", growth > 0f)
+                assertTrue("Do not hide growth behind excessive curvature", growth >= p * p / 3f)
+                assertTrue("Ease starts slower than linear", growth < p)
+            }
+            val samples = (0..10000).map { playerArtworkSizeProgress(it / 10000f, curvature) }
+            for (step in 1..10000) {
+                val p = step / 10000f
+                val size = samples[step]
+                assertTrue(size.isFinite() && size in 0f..1f)
+                assertTrue("Growth never reverses", size > samples[step - 1])
+                assertTrue("No late endpoint jump", (size - samples[step - 1]) / .0001f < 4.005f)
+                assertEquals("Collapse retraces the same curve", size,
+                    playerArtworkSizeProgress(p, curvature), 0f)
+            }
+            for (p in listOf(.01f, .12f, .25f, .4f, .8f, .99f)) {
+                val delta = .0001f
+                val before = (playerArtworkSizeProgress(p, curvature) -
+                    playerArtworkSizeProgress(p - delta, curvature)) / delta
+                val after = (playerArtworkSizeProgress(p + delta, curvature) -
+                    playerArtworkSizeProgress(p, curvature)) / delta
+                assertEquals("No old-clearance splice or velocity kink at $p", before, after, .007f)
+            }
+            val early = playerArtworkSizeProgress(.001f, curvature) / .001f
+            val earlier = playerArtworkSizeProgress(.0001f, curvature) / .0001f
+            assertTrue("Initial slope tends to zero", earlier < early / 9f)
+            for (p in listOf(0f, .4f, .85f, 1f, .85f, .4f, .85f, 0f))
+                assertEquals(samples[(p * 10000).toInt()], playerArtworkSizeProgress(p, curvature), 0f)
+        }
+        for (curvature in listOf(Float.NaN, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY))
+            assertTrue(playerArtworkSizeProgress(.5f, curvature).isFinite())
+        assertEquals(0f, playerArtworkSizeProgress(Float.NaN, 0f), 0f)
+    }
+
+    @Test fun artworkCurveUsesTheTitleRightOnlyWhileItsBottomRightTraversesTheTitleBand() {
+        val mini = 32f
+        val width = 200f
+        fun sample(p: Float) = PlayerArtworkTrajectorySample(p, 16f, 18f, 50f, 60f,
+            48f + (width - mini) * playerArtworkSizeProgress(p, .75f))
+        val curve = playerArtworkGrowthCurve(mini, width, mini, (0..128).map { sample(it / 128f) })
+        assertFalse(curve.constrained)
+        assertTrue("Geometry actually adjusts curvature", curve.curvature > .75f)
+        for (step in 0..8192) {
+            val p = step / 8192f
+            val point = sample(p)
+            val right = point.artworkLeft + mini + (width - mini) * playerArtworkSizeProgress(p, curve)
+            assertTrue("Independent dense right-bound check at $p", right <= point.titleRight + .0001f)
+        }
+        // It is the bottom-right corner and the named RIGHT bound, not rectangle exclusion.
+        for (top in listOf(-500f, 500f)) {
+            val free = listOf(0f, .25f, .5f, .75f, 1f).map {
+                PlayerArtworkTrajectorySample(it, 16f, top, 50f, 60f, 55f)
+            }
+            assertEquals(PlayerArtworkGrowthCurve(0f, false), playerArtworkGrowthCurve(mini, width, width, free))
+        }
+    }
+
+    @Test fun artworkCurveRechecksCornersThatEnterTheBandAfterAnotherSampleSlowsGrowth() {
+        val start = PlayerArtworkTrajectorySample(0f, 16f, 0f, -1000f, -980f, 1000f)
+        val first = PlayerArtworkTrajectorySample(.5f, 16f, 18f, 70f, 100f, 81.6f)
+        val entering = PlayerArtworkTrajectorySample(.5f, 16f, 0f, 62f, 70f, 70f)
+        val end = start.copy(expansion = 1f)
+        assertTrue(32f + 168f * playerArtworkSizeProgress(.5f, 0f) > entering.titleBottom)
+        assertTrue(32f + 168f * playerArtworkSizeProgress(.5f, .5f) in entering.titleTop..entering.titleBottom)
+        val curve = playerArtworkGrowthCurve(32f, 200f, 200f, listOf(start, first, entering, end))
+        assertFalse(curve.constrained)
+        assertTrue("The entering sample needs a second, stronger correction", curve.curvature > .8f && curve.curvature <= 2f)
+        assertTrue(32f + 168f * playerArtworkSizeProgress(.5f, curve) < entering.titleTop)
+        assertTrue(48f + 168f * playerArtworkSizeProgress(.5f, curve) <= first.titleRight)
+    }
+
+    @Test fun artworkConstrainedGeometryFallsBackExplicitlyWithoutChangingEndpointsOrDelayingGrowth() {
+        val start = PlayerArtworkTrajectorySample(0f, 16f, 0f, 32f, 40f, 300f)
+        val end = start.copy(expansion = 1f)
+        val cases = listOf(
+            listOf(start, end.copy(titleRight = 100f)), // Fixed endpoint collision.
+            listOf(start.copy(artworkLeft = -64f), end), // Fixed lower-reference collision.
+            listOf(start, start.copy(expansion = .5f, titleRight = 49f), end), // Excessive curvature.
+            listOf(start, end.copy(titleBottom = Float.NaN)),
+            listOf(start)) // Missing endpoint geometry.
+        for (trajectory in cases) {
+            val curve = playerArtworkGrowthCurve(32f, 200f, 32f, trajectory)
+            assertTrue(curve.constrained)
+            for (step in 0..1000) {
+                val p = step / 1000f
+                assertEquals("Explicit fallback, not a bound guarantee", p * p,
+                    playerArtworkSizeProgress(p, curve), 0f)
+            }
+            assertTrue(playerArtworkSizeProgress(.001f, curve) > 0f)
+            assertEquals(0f, playerArtworkSizeProgress(0f, curve), 0f)
+            assertEquals(1f, playerArtworkSizeProgress(1f, curve), 0f)
+        }
+    }
+
+    @Test fun artworkPresentedTrajectoriesRetainEndpointsAndRespectAdmittedTitleBandsBetweenSamples() {
+        var admitted = 0
         var constrained = 0
         for (width in listOf(320f, 360f, 412f, 640f)) for (height in listOf(360f, 600f, 800f, 960f)) {
             val virtualHeight = maxOf(height, 608f)
@@ -135,40 +236,42 @@ class PlayerExpansionMotionTest {
             val ordinary = maxOf(minOf((24f + 52f + floatingArt + 8f + virtualHeight - 304f) / 2f,
                 virtualHeight - 392f), 184f)
             val lyricMetadata = maxOf(ordinary, virtualHeight - 304f)
-            for (aspect in listOf(1f / 3f, 1f, 3f)) for (background in listOf(false, true)) for (mode in listOf(0f, .5f, 1f)) {
+            for (aspect in listOf(1f / 3f, 1f, 3f)) for (background in listOf(false, true))
+                for (mode in listOf(0f, .5f, 1f)) for (titleHeight in listOf(14f, 28f)) {
+                val fullWidth = if (background) width else minOf(floatingArt, floatingArt * aspect)
                 val fullHeight = if (background) width / aspect else minOf(floatingArt, floatingArt / aspect)
                 val fullTop = 76f + (floatingArt - fullHeight) / 2f - 24f * mode
                 val titleQuadratic = (lyricMetadata - ordinary) * mode
-                val titleTarget = ordinary + titleQuadratic
-                val fits = fullTop + fullHeight <= titleTarget
-                if (fits) compatible++ else constrained++
-                val snapshots = mutableMapOf<Float, Float>()
-                var prior = 0f
-                for (step in 0..1000) {
-                    val p = step / 1000f
-                    val size = playerArtworkSizeProgress(p, fullTop, fullHeight, titleTarget, 9.6f, 32f, titleQuadratic)
-                    assertTrue("Size never reverses during forward movement", size >= prior)
-                    assertTrue("Size remains bounded", size in 0f..1f)
-                    val top = 9.6f + (fullTop - 9.6f) * p - 48f * p * (1f - p)
+                fun sample(p: Float): PlayerArtworkTrajectorySample {
                     val title = 7f + (ordinary + titleQuadratic * p - 7f) * p
-                    if (fits) {
-                        if (top + 32f > title) assertEquals("Retain mini size until clear", 0f, size, 0f)
-                        if (size > 0f) assertTrue("Growing cover stays clear: $width x $height aspect=$aspect background=$background p=$p",
-                            top + 32f + (fullHeight - 32f) * size <= title + .0001f)
-                    } else assertEquals("Constrained geometry preserves existing animation", p * (.58f + .42f * p), size, 0f)
-                    snapshots[p] = size
-                    prior = size
+                    val miniTextWidth = maxOf(width - 252f, 40f)
+                    return PlayerArtworkTrajectorySample(p, 16f + ((width - fullWidth) / 2f - 16f) * p * p,
+                        9.6f + (fullTop - 9.6f) * p - 48f * p * (1f - p), title, title + titleHeight,
+                        58f - 26f * p + miniTextWidth + (width - 64f - miniTextWidth) * p)
                 }
-                for (step in 1000 downTo 0) {
-                    val p = step / 1000f
-                    assertEquals("Collapse exactly reverses expansion", snapshots.getValue(p),
-                        playerArtworkSizeProgress(p, fullTop, fullHeight, titleTarget, 9.6f, 32f, titleQuadratic))
+                val curve = playerArtworkGrowthCurve(32f, fullWidth, fullHeight, (0..128).map { sample(it / 128f) })
+                if (curve.constrained) constrained++ else admitted++
+                for (step in 0..4096) {
+                    val p = step / 4096f
+                    val size = playerArtworkSizeProgress(p, curve)
+                    val geometry = sample(p)
+                    val right = geometry.artworkLeft + 32f + (fullWidth - 32f) * size
+                    val bottom = geometry.artworkTop + 32f + (fullHeight - 32f) * size
+                    if (!curve.constrained && bottom in geometry.titleTop..geometry.titleBottom)
+                        assertTrue("Bottom-right bound $width x $height aspect=$aspect background=$background mode=$mode p=$p",
+                            right >= 16f - .0001f && right <= geometry.titleRight + .0001f)
                 }
-                assertEquals(0f, snapshots.getValue(0f), 0f)
-                assertEquals(1f, snapshots.getValue(1f), 0f)
+                assertEquals(0f, playerArtworkSizeProgress(0f, curve), 0f)
+                assertEquals(1f, playerArtworkSizeProgress(1f, curve), 0f)
+                val cropReference = playerArtworkClearance(fullTop, fullHeight, ordinary + titleQuadratic,
+                    9.6f, 32f, titleQuadratic)
+                assertTrue("The vertical crop reference must never hold growth", playerArtworkSizeProgress(.001f,
+                    fullTop, fullHeight, ordinary + titleQuadratic, 9.6f, 32f, titleQuadratic) > 0f)
+                assertEquals(playerArtworkSizeProgress(.5f, cropReference), playerArtworkSizeProgress(.5f,
+                    fullTop, fullHeight, ordinary + titleQuadratic, 9.6f, 32f, titleQuadratic), 0f)
             }
         }
-        assertTrue(compatible > 0)
+        assertTrue(admitted > 0)
         assertTrue(constrained > 0)
     }
 
