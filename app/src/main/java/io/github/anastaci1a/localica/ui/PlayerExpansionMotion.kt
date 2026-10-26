@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.ScaleFactor
+import androidx.compose.runtime.staticCompositionLocalOf
 
 /** Selected mode is independent of the expanded target, which only changes on release. */
 internal data class PlayerLyricsMotion(val layout: Float, val contentAlpha: Float, val artworkAlpha: Float)
@@ -69,6 +70,13 @@ internal data class PlayerArtworkTrajectorySample(val expansion: Float, val artw
  * It does not prove that every other curve is impossible. Its explicit fallback is the ordinary
  * quadratic ease, not a claim of collision avoidance. */
 internal data class PlayerArtworkGrowthCurve(val curvature: Float, val constrained: Boolean)
+
+internal data class PlayerArtworkGrowthPresentation(val expansion: Float,
+    val curve: PlayerArtworkGrowthCurve, val trajectory: List<PlayerArtworkTrajectorySample>,
+    val fullWidth: Float, val fullHeight: Float)
+
+internal val LocalPlayerArtworkGrowthObserver =
+    staticCompositionLocalOf<((PlayerArtworkGrowthPresentation) -> Unit)?> { null }
 
 /** Select curvature from actual presented trajectories, including measured title height.
  * Recompute when those trajectories change, not for each finger-progress update. The caller
