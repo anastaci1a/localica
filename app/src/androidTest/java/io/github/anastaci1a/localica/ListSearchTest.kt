@@ -137,6 +137,13 @@ class ListSearchTest {
                 assertTrue(observed.any { !it.sample.opening && it.sample.slotFraction in .01f.. .99f })
             }
         } finally {
+            val observed = compose.runOnUiThread { frames.toList() }
+            val directory = java.io.File(requireNotNull(context.getExternalFilesDir(null)), "search-slot-frames")
+            check(directory.isDirectory || directory.mkdirs())
+            val output = java.io.File(directory, "${if (reduced) "reduced" else "normal"}-${android.os.SystemClock.elapsedRealtimeNanos()}.txt")
+            output.writeText(observed.joinToString("\n") { "rowTop=${it.rowTop} ${it.sample}" })
+            android.util.Log.i("ListSearchSlotFrames", "reduced=$reduced frames=${observed.size} trace=${output.name}")
+            observed.takeLast(24).forEach { android.util.Log.i("ListSearchSlotFrames", "rowTop=${it.rowTop} ${it.sample}") }
             compose.mainClock.autoAdvance = true
             preferences.write(route, previous, false)
         }
