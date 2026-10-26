@@ -40,6 +40,9 @@ internal const val RaisedGlassDepthScale = 1.3f
 internal const val BottomPillDepthScale = .72f
 internal val MiniArtworkSize = 32.dp
 
+private data class LegacyGlassContributor(val backing: FrostedBackdrop, val image: ImageBitmap,
+    val weight: Float, val home: Boolean)
+
 @Stable
 internal class GlassContact {
     var pressed by mutableStateOf(false)
@@ -204,14 +207,18 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val thickness = body().thickness * (if (pressFeedback || anchor != null) contactShape().thickness else 1f)
             val depth = appearance.depth * depthScale * thickness
             val flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f)
-            val home = if (homeSource?.lensSnapshot != null || homeSource?.snapshot != null) homeWeight().coerceIn(0f, 1f) else 0f
+            val requestedHome = if (homeSource != null) homeWeight() else 0f
+            if (!requestedHome.isFinite()) return@Canvas
+            // Missing trusted material is unavailable; it must not donate its weight to destination.
+            val home = if (homeSource?.materialOnly == true || homeSource?.lensSnapshot != null ||
+                homeSource?.snapshot != null) requestedHome.coerceIn(0f, 1f) else 0f
             // Blur and tint are independent endpoints. Premultiplied addition
             // preserves opacity while either varies, including a source handoff.
-            val samples = mutableListOf<Triple<FrostedBackdrop, ImageBitmap, Float>>()
-            fun samples(backing: FrostedBackdrop?, imagesByRole: List<ImageBitmap?>, weight: Float) {
+            val samples = mutableListOf<LegacyGlassContributor>()
+            fun samples(backing: FrostedBackdrop?, imagesByRole: List<ImageBitmap?>, weight: Float, isHome: Boolean = false) {
                 if (backing == null || weight <= 0f) return
                 if (backing.materialOnly) {
-                    backing.fallback?.let { samples += Triple(backing, it, weight) }
+                    backing.fallback?.let { samples += LegacyGlassContributor(backing, it, weight, isHome) }
                     return
                 }
                 val images = linkedMapOf<ImageBitmap, Float>()
@@ -222,35 +229,59 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 add(imagesByRole[0], (1f - frost) * panel)
                 add(imagesByRole[3], frost * (1f - panel))
                 add(imagesByRole[2], frost * panel)
-                images.forEach { (image, amount) -> samples += Triple(backing, image, amount) }
+                images.forEach { (image, amount) -> samples += LegacyGlassContributor(backing, image, amount, isHome) }
             }
-            samples(source, sourceImages, 1f - home); samples(homeSource, homeImages, home)
-            val registrations = samples.map { it.first }.distinct().associateWith { backing ->
+            samples(source, sourceImages, 1f - home); samples(homeSource, homeImages, home, true)
+            val registrations = samples.map { it.backing }.distinct().associateWith { backing ->
                 location.registrationTo(backing.location) ?: return@Canvas
             }
             if (source?.materialOnly == true && home < 1f && materialRasters[source]?.isCurrent() != true ||
                 homeSource?.materialOnly == true && home > 0f && materialRasters[homeSource]?.isCurrent() != true) return@Canvas
-            val materialColors = samples.map { it.first }.distinct().filter { it.materialOnly }.associateWith { backing ->
+            val capturedHome = if (home > 0f && homeSource?.materialOnly == true) homeFootprint?.invoke() else null
+            if (home > 0f && homeSource?.materialOnly == true && homeFootprint != null && capturedHome == null) return@Canvas
+            val logicalHome = if (capturedHome == null && homeFootprint == null) homeBounds?.invoke()?.takeUnless { it.isEmpty } else null
+            if (logicalHome != null && !listOf(logicalHome.left, logicalHome.top, logicalHome.right, logicalHome.bottom).all { it.isFinite() }) return@Canvas
+            val homeToScreen = homeSource?.location?.registrationToScreen()
+            val homeToFootprint = when {
+                capturedHome != null -> capturedHome.sourceToLocal(homeToScreen)
+                logicalHome != null -> homeToScreen?.followedBy(BackdropRegistration.create(1f, 0f, 0f, 1f, -logicalHome.left, -logicalHome.top)!!)
+                else -> homeSource?.let { registrations[it]?.inverse() }
+            }
+            val homeExtent = capturedHome?.size ?: logicalHome?.size ?: size
+            val materialColors = samples.filter { it.backing.materialOnly }.associateWith { sample ->
+                val backing = sample.backing
                 val raster = materialRasters[backing] ?: return@Canvas
                 val coverage = materialAverageCoverage(backing.materialOnly && !backing.layer.isReleased,
                     backing.recorded, backing.size.width.toFloat(), backing.size.height.toFloat(),
-                    backing.materialCorner, size, registrations.getValue(backing))
-                val color = raster.color(coverage, backing.size, endpointTone) ?: return@Canvas
+                    backing.materialCorner, if (sample.home) homeExtent else size,
+                    if (sample.home) homeToFootprint?.inverse() else registrations.getValue(backing))
+                val color = raster.color(coverage, backing.size) ?: return@Canvas
                 coverage to color
             }
-            val blending = samples.size > 1
+            val materialStyle = MaterialAverageStyle(appearance.whiteTint * (1f - panel), endpointTone)
+            val combinedMaterial = if (samples.isNotEmpty() && samples.all { it.backing.materialOnly })
+                materialAverageColor(samples.map { materialColors.getValue(it).second to it.weight }, materialStyle) else null
+            val blending = samples.size > 1 && combinedMaterial == null
             if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
+            fun observeMaterial(sample: LegacyGlassContributor, coverage: MaterialAverageCoverage) {
+                androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                    materialAverageObserver?.invoke(MaterialAverageSamplingFrame(true,
+                        System.identityHashCode(sample.backing), materialRasters.getValue(sample.backing)!!.publication,
+                        coverage.validCount, sample.weight, home = sample.home))
+                }
+            }
             with(mesh.value) {
-                samples.forEachIndexed { index, (backing, image, amount) ->
-                    val material = materialColors[backing]
+                if (combinedMaterial != null) {
+                    // Like the modern entirely-flat path, tint/contrast follows the material blend.
+                    drawRect(combinedMaterial)
+                    samples.forEach { observeMaterial(it, materialColors.getValue(it).first) }
+                } else samples.forEachIndexed { index, sample ->
+                    val (backing, image, amount) = sample
+                    val material = materialColors[sample]
                     if (material != null) {
-                        drawRect(material.second, alpha = amount,
+                        drawRect(materialAverageColor(listOf(material.second to 1f), materialStyle), alpha = amount,
                             blendMode = if (index > 0) BlendMode.Plus else BlendMode.SrcOver)
-                        androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
-                            materialAverageObserver?.invoke(MaterialAverageSamplingFrame(true,
-                                System.identityHashCode(backing), materialRasters.getValue(backing)!!.publication,
-                                material.first.validCount, amount))
-                        }
+                        observeMaterial(sample, material.first)
                     } else draw(shape, image, backing.size, Offset.Zero, depth, refraction,
                         amount, lighting = false, additive = index > 0, flattening = flattening,
                         field = outline?.let { frame -> { point -> frame.opticalField(point) } }, fieldKey = outline,

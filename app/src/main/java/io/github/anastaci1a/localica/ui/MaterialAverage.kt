@@ -27,7 +27,7 @@ internal data class MaterialAverageStyle(val whiteTint: Float, val tone: GlassTo
 
 /** Sampling-route evidence only; a Canvas choice does not certify presented pixels. */
 internal data class MaterialAverageSamplingFrame(val legacy: Boolean, val sourceIdentity: Int,
-    val publication: Int?, val validSamples: Int, val weight: Float)
+    val publication: Int?, val validSamples: Int, val weight: Float, val home: Boolean = false)
 internal val LocalMaterialAverageSamplingObserver = staticCompositionLocalOf<((MaterialAverageSamplingFrame) -> Unit)?> { null }
 
 /** Bit order matches the shared row-major 8x8 source-recording plan. */

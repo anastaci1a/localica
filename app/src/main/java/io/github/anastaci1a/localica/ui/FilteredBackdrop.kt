@@ -60,12 +60,17 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
         // A list may load after this floating control's first draw. Observe the
         // first recording explicitly: GraphicsLayer.size is not snapshot state,
         // and returning before drawLayer otherwise installs no dependency.
-        if (!source.recorded || source.layer.isReleased || source.layer.size.width <= 0) return@Canvas
         if (size.width <= 0f || size.height <= 0f) return@Canvas
-        val blend = if (homeSource != null && !homeSource.layer.isReleased && homeSource.layer.size.width > 0)
-            homeWeight().coerceIn(0f, 1f) else 0f
-        val sourceToLocal = source.location.registrationTo(location) ?: return@Canvas
-        val localToSource = sourceToLocal.inverse() ?: return@Canvas
+        val requestedHome = if (homeSource != null) homeWeight() else 0f
+        if (!requestedHome.isFinite()) return@Canvas
+        val homeReady = homeSource != null && homeSource.recorded && !homeSource.layer.isReleased &&
+            homeSource.layer.size.width > 0 && homeSource.layer.size.height > 0
+        val blend = if (homeSource?.materialOnly == true || homeReady) requestedHome.coerceIn(0f, 1f) else 0f
+        if (blend < 1f && (!source.recorded || source.layer.isReleased || source.layer.size.width <= 0 ||
+                source.layer.size.height <= 0) || blend > 0f && !homeReady) return@Canvas
+        val sourceToLocal = source.location.registrationTo(location)
+        val localToSource = sourceToLocal?.inverse()
+        if (blend < 1f && localToSource == null) return@Canvas
         val viewportBounds = Rect(Offset.Zero, size)
         val homeToLocal = homeSource?.location?.registrationTo(location)
         if (blend > 0f && homeToLocal == null) return@Canvas
@@ -130,7 +135,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
             if (flatSource && blend < 1f) materialObserver?.invoke(MaterialAverageSamplingFrame(false,
                 System.identityHashCode(source), null, requireNotNull(sourceCoverage).validCount, 1f - blend))
             if (flatHome && blend > 0f) materialObserver?.invoke(MaterialAverageSamplingFrame(false,
-                System.identityHashCode(homeSource), null, requireNotNull(homeCoverage).validCount, blend))
+                System.identityHashCode(homeSource), null, requireNotNull(homeCoverage).validCount, blend, home = true))
         }
         if (entirelyFlat && averageRenderer != null && average != null && android.os.Build.VERSION.SDK_INT >= 33) {
             layer.renderEffect = averageRenderer.effect(average)

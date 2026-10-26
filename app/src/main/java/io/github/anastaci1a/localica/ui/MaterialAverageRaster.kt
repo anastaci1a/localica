@@ -20,7 +20,7 @@ internal class MaterialAverageRaster private constructor(
     fun isCurrent(): Boolean = source.materialOnly && source.recorded && !source.layer.isReleased &&
         source.snapshot === snapshot && source.fallback === image && source.snapshotReadbackRequest == publication
 
-    fun color(coverage: MaterialAverageCoverage, sourceSize: IntSize, tone: GlassTone): Color? {
+    fun color(coverage: MaterialAverageCoverage, sourceSize: IntSize): Color? {
         if (!isCurrent() || coverage.status != MaterialAverageCoverageStatus.SAMPLED ||
             sourceSize.width <= 0 || sourceSize.height <= 0) return null
         val bitmap = image.asAndroidBitmap()
@@ -47,9 +47,9 @@ internal class MaterialAverageRaster private constructor(
             accumulate(bitmap.getPixel(right, bottom), fx * fy)
         }
         if (!isCurrent()) return null
-        return if (alpha <= 0f) Color.Transparent else tone.color(Color(
+        return if (alpha <= 0f) Color.Transparent else Color(
             (red / alpha).coerceIn(0f, 1f), (green / alpha).coerceIn(0f, 1f),
-            (blue / alpha).coerceIn(0f, 1f), (alpha / coverage.validCount).coerceIn(0f, 1f)))
+            (blue / alpha).coerceIn(0f, 1f), (alpha / coverage.validCount).coerceIn(0f, 1f))
     }
 
     companion object {
