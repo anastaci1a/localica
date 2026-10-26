@@ -20,7 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> Unit,
+internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: (() -> Unit)? = null,
     folders: List<FolderSelection> = emptyList(),
     rootNameResolver: suspend (android.content.Context, List<FolderSelection>) -> List<SongRootName> = ::resolveSongRootNames,
     onAction: (PlayerAction) -> Unit) {
@@ -32,7 +32,13 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: () -> 
     var viewingArtwork by remember(track.uri) { mutableStateOf(false) }
     GlassAlertDialog(onDismissRequest = onDismiss, modifier = Modifier.testTag("song-information"),
         title = { Text("Song information") },
-        dismissButton = { ActionTextButton(onClick = { onDismiss(); onEdit() }) { Text("Edit tags") } },
+        dismissButton = {
+            val editTags = presentedTagEdit()
+            ActionTextButton(onClick = {
+                onDismiss()
+                if (onEdit != null) onEdit() else editTags?.invoke(listOf(track)) {}
+            }) { Text("Edit tags") }
+        },
         confirmButton = { ActionTextButton(onClick = onDismiss) { Text("Done") } },
         text = {
             val roots = currentFolders
