@@ -172,18 +172,48 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val lyricMetadataY = maxOf(ordinarySeekY, lyricSeekY)
     // Preserve the delivered title trajectory, including selected-lyrics expansion.
     val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricProgress
-    // Geometry may change while held (new aspect/layout/mode). Ease only that gate,
-    // never finger progress, so crossing the fallback boundary cannot pop the cover.
+    val contentInset = 32.dp
+    val contentWidth = windowWidth - contentInset * 2
+    val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
+    val titleStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+    val titleMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val miniTitleScale = 13f / titleStyle.fontSize.value
+    val fullTitleHeight = remember(titleMeasurer, state.title, titleStyle, density.density, density.fontScale) {
+        titleMeasurer.measure(state.title, marqueeTextStyle(titleStyle), maxLines = 1, softWrap = false)
+            .size.height / density.density
+    }
+    val artTrajectory = remember(windowWidth, fullArt, fullArtY, miniArtY, ordinarySeekY,
+        lyricMetadataY, lyricVisibility, fullTitleHeight, miniTitleScale) {
+        List(257) { index ->
+            val t = index / 256f
+            val titleTop = 7f + (ordinarySeekY.value - 7f) * t +
+                (lyricMetadataY - ordinarySeekY).value * lyricVisibility * t * t
+            PlayerArtworkTrajectorySample(t,
+                16f + (((windowWidth - fullArt) / 2).value - 16f) * t * t,
+                miniArtY.value + (fullArtY - miniArtY).value * t - 48f * t * (1f - t) - 24f * lyricVisibility * t,
+                titleTop, titleTop + fullTitleHeight * (miniTitleScale + (1f - miniTitleScale) * t),
+                58f + miniTextWidth.value + (-26f + (contentWidth - miniTextWidth).value) * t)
+        }
+    }
+    val growthCurve = remember(artTrajectory, fullArt, fullArtHeight) {
+        playerArtworkGrowthCurve(MiniArtworkSize.value, fullArt.value, fullArtHeight.value, artTrajectory)
+    }
+    // Only geometry changes ease their curvature; the finger always owns progress.
+    val artCurvature by animateFloatAsState(growthCurve.curvature,
+        tween(settings.motionDuration(300)), label = "Artwork growth curvature")
+    LocalPlayerArtworkGrowthObserver.current?.let { observer ->
+        SideEffect { observer(PlayerArtworkGrowthPresentation(p, growthCurve.copy(curvature = artCurvature),
+            artTrajectory, fullArt.value, fullArtHeight.value)) }
+    }
+    // Crop compatibility remains independent of immediate frame growth.
     val clearanceTarget = if (minOf(fullArt, fullArtHeight) < MiniArtworkSize) 0f else
         playerArtworkClearance((fullArtY - 24.dp * lyricVisibility).value,
             fullArtHeight.value, (ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricVisibility).value,
             miniArtY.value, MiniArtworkSize.value, ((lyricMetadataY - ordinarySeekY) * lyricVisibility).value)
-    val artClearance by animateFloatAsState(clearanceTarget,
-        tween(settings.motionDuration(300)), label = "Artwork clearance")
     val artCropRetention by animateFloatAsState(if (clearanceTarget > 0f) 1f else 0f,
         tween(settings.motionDuration(300)), label = "Artwork crop retention")
     val artContentScale = playerArtworkContentScale(with(density) { MiniArtworkSize.toPx() }, artCropRetention, p == 0f)
-    val artProgress = playerArtworkSizeProgress(p, artClearance)
+    val artProgress = playerArtworkSizeProgress(p, artCurvature)
     val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
     val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
     val normalTransport = ordinarySeekY + 184.dp + extraActions
@@ -213,10 +243,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Removing it during the handoff briefly reveals the square beneath the wash.
     val edgeSoftness = backgroundProgress * smoothReveal(p / .18f)
     val edgeBand = .02f + .24f * smoothReveal(p / .75f)
-    val contentInset = 32.dp
-    val contentWidth = windowWidth - contentInset * 2
     val transportWidth = minOf(contentWidth, 280.dp)
-    val miniTextWidth = (windowWidth - 252.dp).coerceAtLeast(40.dp)
     val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
     val textX = 58.dp + (contentInset - 58.dp) * p
     val foreground = androidx.compose.ui.graphics.lerp(miniForeground, playerInk, backgroundReveal)
@@ -345,7 +372,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             val textMotionPaused = playerMarqueePaused(p, expanded, dragging, progress.isRunning)
             MarqueeTitle(state.title, settings.reducedMotion,
                 Modifier.offset(textX, titleY).width(textWidth).scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title"),
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                style = titleStyle,
                 motionPaused = textMotionPaused)
             val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
             val artist = (if (settings.albumArtistFirst) state.albumArtist ?: state.artist else state.artist ?: state.albumArtist).orEmpty()

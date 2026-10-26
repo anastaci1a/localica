@@ -197,30 +197,30 @@ class PlayerExpansionMotionTest {
         }
     }
 
-    @Test fun artworkWaitsForPresentedTitleClearanceAndCollapseRetracesCompatibleSizing() {
+    @Test fun artworkImmediatelyEasesAlongItsCornerEnvelopeAndCollapseRetracesSizing() {
         val progress = Animatable(0f)
         var layout by mutableStateOf(ArtworkLayout.Floating)
         var selectedVisual by mutableStateOf(visual)
         var reduced by mutableStateOf(false)
         lateinit var scope: CoroutineScope
+        var growth: PlayerArtworkGrowthPresentation? = null
         data class Frame(val progress: Float, val layout: ArtworkLayout, val aspect: Float, val reduced: Boolean)
         var drawnFrame: Frame? = null
         compose.setContent {
-            // Capture the composition's inputs, not a later draw-time read of mutable state.
             val frame = Frame(progress.value, layout, selectedVisual.palette.aspect, reduced)
-            LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().drawWithContent {
-                drawContent()
-                drawnFrame = frame
-            }) {
-                scope = rememberCoroutineScope()
-                PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout, reducedMotion = reduced),
-                    progress, {}, {}, {}, {}, {}, {}, visual = selectedVisual)
+            LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
+                BoxWithConstraints(Modifier.fillMaxSize().drawWithContent {
+                    drawContent()
+                    drawnFrame = frame
+                }) {
+                    scope = rememberCoroutineScope()
+                    PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout, reducedMotion = reduced),
+                        progress, {}, {}, {}, {}, {}, {}, visual = selectedVisual)
+                }
             } }
         }
         fun sampleProgress(p: Float) {
             compose.runOnIdle {
-                // A queued launch can leave the immediately following semantics read at
-                // the previous endpoint. Complete the fixture input before requesting a frame.
                 val snap = scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(p) }
                 assertTrue("The direct progress sample must complete synchronously", snap.isCompleted)
                 assertEquals("The fixture owns this exact progress", p, progress.value, 0f)
@@ -230,10 +230,12 @@ class PlayerExpansionMotionTest {
             compose.runOnIdle {
                 assertEquals("Bounds must belong to the requested drawn source frame",
                     Frame(p, layout, selectedVisual.palette.aspect, reduced), drawnFrame)
+                assertEquals("Growth evidence belongs to this progress", p, requireNotNull(growth).expansion, 0f)
             }
         }
         val evidence = File(playerMotionOutputDirectory(), "artwork-size-frames.txt")
         evidence.writeText("")
+        var admitted = 0
         for (reduce in listOf(false, true)) for (artworkLayout in ArtworkLayout.entries) for (aspect in listOf(1f / 3f, 1f, 3f)) {
             compose.runOnIdle {
                 reduced = reduce
@@ -246,93 +248,59 @@ class PlayerExpansionMotionTest {
             compose.waitForIdle()
             sampleProgress(1f)
             val full = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
-            val fullTitle = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
             val fullHost = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot()
             val backgroundHeight = fullHost.height.value
-            val rawHeight = if (artworkLayout == ArtworkLayout.FullBackground) full.width.value / aspect else full.height.value
-            val compatible = full.top.value + rawHeight <= fullTitle.top.value
             sampleProgress(0f)
             val mini = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
             val miniTitle = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
             val miniHost = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot()
-            // PlayerSurface offsets both nodes inside this exact host. Title scaling
-            // anchors at (0,0); no lyrics/scroll/cover swipe is active in this fixture.
-            // Subtract each endpoint's own host, never mix window and local coordinates.
-            val fullTop = (full.top - fullHost.top).value
-            val fullTitleTop = (fullTitle.top - fullHost.top).value
-            val miniTop = (mini.top - miniHost.top).value
-            val miniTitleTop = (miniTitle.top - miniHost.top).value
-            assertEquals("Measured mini title matches the helper's delivered reference", 7f, miniTitleTop, 1f)
+            assertEquals("Measured mini title keeps its delivered reference", 7f, (miniTitle.top - miniHost.top).value, 1f)
             assertEquals("Native mini endpoint width", 32f, mini.width.value, .5f)
             assertEquals("Native mini endpoint height", 32f, mini.height.value, .5f)
-            val clearance = playerArtworkClearance(fullTop, rawHeight, fullTitleTop, miniTop, 32f)
-            if (compatible) assertTrue("A compatible native endpoint has an interior clearance", clearance > 0f && clearance < 1f)
-            else assertEquals("Constrained native endpoint retains the production fallback", 0f, clearance, 0f)
-
-            // Locate a half-grown interior with the production map, not a fixed progress grid.
-            var low = clearance
-            var high = 1f
-            repeat(24) {
-                val midpoint = (low + high) / 2f
-                if (playerArtworkSizeProgress(midpoint, clearance) < .5f) low = midpoint else high = midpoint
-            }
-            val interior = (low + high) / 2f
-            val beforeClearance: Float?
-            val afterClearance: Float?
-            val forward: List<Float>
-            if (compatible) {
-                // The derivative of presented title-minus-mini-bottom includes the
-                // unchanged 48dp artwork bow. Use it ONLY to choose a three-physical-
-                // pixel bracket; native geometry below must establish the actual sides.
-                val relativeSpeed = fullTitleTop - miniTitleTop - fullTop + miniTop + 48f * (1f - 2f * clearance)
-                assertTrue("Clearance crosses in the expected native direction", relativeSpeed > 0f)
-                val bracket = minOf(3f / compose.density.density / relativeSpeed,
-                    clearance / 2f, (1f - clearance) / 2f)
-                val before = clearance - bracket
-                val after = clearance + bracket
-                beforeClearance = before
-                afterClearance = after
-                forward = listOf(0f, before, clearance, after, interior, 1f).distinct().sorted()
-            } else {
-                beforeClearance = null
-                afterClearance = null
-                forward = listOf(0f, interior, 1f)
-            }
+            if (!requireNotNull(growth).curve.constrained) admitted++
+            val forward = listOf(0f, .125f, .25f, .5f, .75f, 1f)
             val snapshots = mutableMapOf<Float, androidx.compose.ui.unit.DpRect>()
             for (p in forward + forward.dropLast(1).asReversed()) {
                 sampleProgress(p)
+                val observed = requireNotNull(growth)
+                val source = observed.trajectory.single { it.expansion == p }
                 val art = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
                 val title = compose.onNodeWithTag("player-title", true).getUnclippedBoundsInRoot()
-                val context = "layout=$artworkLayout aspect=$aspect reduced=$reduce p=$p " +
-                    "reverse=${snapshots.containsKey(p)} compatible=$compatible full=$full title=$title art=$art"
-                evidence.appendText("$context clearance=$clearance before=$beforeClearance after=$afterClearance interior=$interior\n")
-                if (compatible) {
-                    val miniBottomGap = art.top + 32.dp - title.top
-                    if (p == beforeClearance) {
-                        assertTrue("Native pre-clearance frame remains below the title: $context", miniBottomGap > 0.dp)
-                        assertEquals("Pre-boundary cover remains mini width", 32f, art.width.value, .5f)
-                        assertEquals("Pre-boundary cover remains mini height", 32f, art.height.value, .5f)
-                    }
-                    if (p == clearance) assertEquals("Native clearance matches measured host coordinates: $context",
-                        0f, miniBottomGap.value, 1f)
-                    if (p == afterClearance) assertTrue("Native post-clearance frame clears the title: $context", miniBottomGap <= 0.dp)
-                    if (p == interior) assertTrue("Native interior actually grows before the expanded endpoint: $context",
-                        art.width > 33.dp || art.height > 33.dp)
-                    if (art.top + 32.dp > title.top + 1.dp) {
-                        assertEquals("Retain mini width before clearing title", 32f, art.width.value, .5f)
-                        assertEquals("Retain mini height before clearing title", 32f, art.height.value, .5f)
-                    } else if (art.height > 33.dp) {
-                        assertTrue("Growing cover stays above the actual presented title", art.bottom <= title.top + 1.dp)
-                    }
-                } else {
-                    val usual = p * (.58f + .42f * p)
-                    assertEquals("Constrained layout keeps existing width motion: $context", 32f + (full.width.value - 32f) * usual, art.width.value, 1f)
-                    assertEquals("Constrained layout keeps existing height motion: $context", minOf(backgroundHeight, 32f + (rawHeight - 32f) * usual), art.height.value, 1f)
+                val host = compose.onNodeWithTag("player-background-space", true).getUnclippedBoundsInRoot()
+                val context = "layout=$artworkLayout aspect=$aspect reduced=$reduce p=$p art=$art title=$title"
+                evidence.appendText(context + " curve=" + observed.curve + " source=" + source + "\n")
+                assertEquals("Actual artwork left supplies the curve: $context", source.artworkLeft, (art.left - host.left).value, 1f)
+                assertEquals("Actual artwork top supplies the curve: $context", source.artworkTop, (art.top - host.top).value, 1f)
+                assertEquals("Actual title top supplies the curve: $context", source.titleTop, (title.top - host.top).value, 1f)
+                assertEquals("Measured title height supplies the band: $context", source.titleBottom, (title.bottom - host.top).value, 1f)
+                assertEquals("Use title RIGHT, never title-left: $context", source.titleRight, (title.right - host.left).value, 1f)
+                val q = playerArtworkSizeProgress(p, observed.curve)
+                val expectedWidth = 32f + (observed.fullWidth - 32f) * q
+                val expectedHeight = minOf(backgroundHeight, 32f + (observed.fullHeight - 32f) * q)
+                assertEquals("Native immediate-ease width: $context", expectedWidth, art.width.value, 1f)
+                assertEquals("Native immediate-ease height: $context", expectedHeight, art.height.value, 1f)
+                if (p > 0f && p < 1f) {
+                    assertTrue("No hold/grow gate", q > 0f)
+                    if (expectedWidth > 32f + 1.1f / compose.density.density)
+                        assertTrue("Observable growth begins before settling: $context", art.width > 32.dp)
+                    if (expectedHeight > 32f + 1.1f / compose.density.density)
+                        assertTrue("Observable height begins before settling: $context", art.height > 32.dp)
                 }
+                if (observed.curve.constrained) {
+                    assertEquals("Explicit unsupported geometry uses ordinary immediate ease", p * p, q, .0001f)
+                } else {
+                    val rawBottom = source.artworkTop + 32f + (observed.fullHeight - 32f) * q
+                    if (rawBottom in source.titleTop..source.titleBottom) {
+                        assertTrue("Corner remains inside title-right envelope: $context", art.right <= title.right + 1.dp)
+                        assertTrue("Corner respects the fixed artwork-left reference: $context", (art.right - host.left).value >= 15f)
+                    }
+                }
+                if (p == 1f) assertEquals("Expanded geometry remains unchanged", full, art)
                 snapshots[p]?.let { assertEquals("Held reversal must retrace artwork bounds", it, art) }
                 snapshots[p] = art
             }
         }
+        assertTrue("Native matrix must exercise admitted geometry rather than only fallback", admitted > 0)
     }
 
     private fun playerMotionOutputDirectory(): File {
