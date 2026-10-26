@@ -27,6 +27,7 @@ import kotlin.math.*
 internal data class SelectionRegion(val bounds: Rect)
 internal class SelectionEntry {
     var coordinates: LayoutCoordinates? = null
+    var itemKey: Any? = null
     var selected by mutableStateOf(false)
     var visibility: () -> Float by mutableStateOf({ 0f })
     var visualSize by mutableStateOf<(Size) -> Size>({ it })
@@ -44,11 +45,12 @@ internal val LocalSelectionScene = staticCompositionLocalOf<SelectionScene?> { n
 /** Scrolling content and its lenses share a single clip, fade and overscroll transform. */
 @Composable
 internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
-    observePlacement: () -> Unit = {}, content: @Composable (OverscrollEffect?) -> Unit) {
+    observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
+    content: @Composable (OverscrollEffect?) -> Unit) {
     val overscroll = rememberOverscrollEffect()
     val events = remember(overscroll) { overscroll?.withoutVisualEffect() }
     ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier),
-        contentDrawing = contentDrawing, observePlacement = observePlacement) {
+        contentDrawing = contentDrawing, observePlacement = observePlacement, visibleItemKeys = visibleItemKeys) {
         content(events)
     }
 }
@@ -56,7 +58,8 @@ internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Mo
 /** Record content once and keep it sharp above the separately refracted backing. */
 @Composable
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
-    observePlacement: () -> Unit = {}, content: @Composable () -> Unit) {
+    observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
+    content: @Composable () -> Unit) {
     val scene = remember { SelectionScene() }
     val contentLayer = rememberGraphicsLayer()
     val transitionLayer = rememberGraphicsLayer()
@@ -89,10 +92,14 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             // global bounds through a later callback and lagging one frame behind rows.
             scene.placement
             val host = coordinates ?: return@drawWithContent drawContent()
+            // Lazy prefetch may keep an unplaced item's coordinates attached.
+            // Its owner's public native keys, rather than attachment, admit it.
+            val placedKeys = visibleItemKeys?.invoke()
             val visibleEntries = scene.regions.values.mapNotNull { entry ->
                 val item = entry.coordinates
                 val visibility = entry.visibility().coerceIn(0f, 1f)
-                if (visibility <= 0f || item == null || !item.isAttached) null else {
+                if (visibility <= 0f || item == null || !item.isAttached ||
+                    placedKeys != null && entry.itemKey !in placedKeys) null else {
                     val at = host.localPositionOf(item, Offset.Zero)
                     val measured = Size(item.size.width.toFloat(), item.size.height.toFloat())
                     SelectionRegion(selectionRevealBounds(mediaItemBounds(measured, entry.visualSize(measured), entry.direction), visibility).translate(at)) to visibility
@@ -293,7 +300,7 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float):
 
 @Composable
 internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
-    visualSize: (Size) -> Size = { it }): Modifier {
+    itemKey: Any? = null, visualSize: (Size) -> Size = { it }): Modifier {
     val scene = LocalSelectionScene.current
     val direction = LocalLayoutDirection.current
     val token = remember { Any() }
@@ -301,6 +308,7 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
     val visibility = androidx.compose.animation.core.animateFloatAsState(if (isSelected && !partial) 1f else 0f,
         selectionMotionSpec(LocalReducedMotion.current), label = "Selection lens visibility")
     SideEffect {
+        entry.itemKey = itemKey
         entry.visibility = { visibility.value }
         entry.visualSize = visualSize
         entry.direction = direction
