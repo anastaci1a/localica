@@ -101,8 +101,14 @@ class TagEditorChromeLayoutTest {
             assertFalse("No second scrolling shell surrounds the existing body", it.config.contains(SemanticsProperties.VerticalScrollAxisRange))
         }
         for (label in listOf("Close editor", "Review changes")) {
-            val action = compose.onNodeWithText(label).assertIsDisplayed().assertHasClickAction().getUnclippedBoundsInRoot()
-            assertTrue("$label retains a 48dp target: action=$action header=$header footer=$footer", action.right - action.left >= 48.dp && action.bottom - action.top >= 48.dp)
+            val interaction = compose.onNodeWithText(label).assertIsDisplayed().assertHasClickAction()
+            val action = interaction.getUnclippedBoundsInRoot()
+            // Material text buttons may draw at 40dp; validate the actual input target separately.
+            val semantics = interaction.fetchSemanticsNode()
+            val touch = semantics.touchBoundsInRoot
+            val minimumPx = with(semantics.layoutInfo.density) { 48.dp.roundToPx() }
+            assertTrue("$label retains a 48dp target: touch=$touch minimumPx=$minimumPx action=$action",
+                touch.width >= minimumPx && touch.height >= minimumPx)
             closeDp(0.dp, (if (label == "Close editor") header.right else footer.right) - action.right)
         }
         val layouts = mutableListOf<TextLayoutResult>()
