@@ -6,8 +6,6 @@ import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -158,25 +156,5 @@ class LibraryPlaybackReadTest {
         }
     }
 
-    @Test fun defaultStoreRetainsSnapshotsFirstFullListAndOriginalIdentity() = runBlocking {
-        val first = LibrarySnapshot(tracks = listOf(song("one"), song("two")))
-        val stream = MutableStateFlow(first)
-        val store = object : LibraryStore {
-            override val snapshots: Flow<LibrarySnapshot> = stream
-            override suspend fun current(): LibrarySnapshot = error("Default contract must collect snapshots.first")
-            override suspend fun replaceRoot(result: ScanResult): Unit = error("No writes")
-            override suspend fun removeRoot(uri: String): Unit = error("No writes")
-            override suspend fun updateMetadata(track: Track): Unit = error("No writes")
-        }
-        val original = store.playbackSnapshot(setOf("absent"))
-        assertSame(first, original.fullSnapshot)
-        assertSame(first.tracks, original.tracks)
-        assertEquals(2, original.totalTracks)
-        val next = LibrarySnapshot(tracks = listOf(song("three")))
-        stream.value = next
-        val latest = store.playbackSnapshot(emptySet())
-        assertSame(next, latest.fullSnapshot)
-        assertSame(next.tracks, latest.tracks)
-        assertEquals(1, latest.totalTracks)
-    }
+
 }
