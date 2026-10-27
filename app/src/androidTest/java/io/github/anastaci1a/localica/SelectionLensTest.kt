@@ -530,10 +530,8 @@ class SelectionLensTest {
     private fun captureShapeControl(tag: String, name: String): androidx.compose.ui.graphics.ImageBitmap =
         compose.onNodeWithTag(tag).captureToImage().also { image ->
             // Retain each fixed original before pixel inspection. No capture-driven retries.
-            val output = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
-            val directory = if (output == null)
-                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
-            else java.io.File(output, "complex-selection-captures").apply { check(isDirectory || mkdirs()) }
+            val directory = nativeEvidenceDirectory("complex-selection-captures",
+                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
             java.io.File(directory, "complex-selection-$name.png").outputStream().use {
                 image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             }

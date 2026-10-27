@@ -277,7 +277,8 @@ class GlassShadowTest {
                 maximum = maxOf(maximum, delta)
             }
             if (maximum >= .04f) {
-                val cacheDir = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+                val cacheDir = nativeEvidenceDirectory("glass-shadow-failures",
+                    androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
                 listOf("reference" to referenceImage, "cached" to cachedImage).forEach { (name, image) ->
                     java.io.File(cacheDir, "shadow-$name.png").outputStream().use {
                         image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)

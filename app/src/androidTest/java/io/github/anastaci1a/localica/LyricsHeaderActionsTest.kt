@@ -66,7 +66,8 @@ class LyricsHeaderActionsTest {
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing.lensSnapshot != null }
         fun capture(name: String) {
             val bitmap = compose.onNodeWithTag("player-lyrics-pill").captureToImage().asAndroidBitmap()
-            val folder = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+            val folder = nativeEvidenceDirectory("lyrics-header-actions",
+                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
             java.io.File(folder, "lyrics-header-$name.png").outputStream().use {
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             }

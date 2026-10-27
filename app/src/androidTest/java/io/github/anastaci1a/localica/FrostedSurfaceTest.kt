@@ -145,7 +145,7 @@ class FrostedSurfaceTest {
                     assertFalse("Keep light navigation icons over the player and Queue", bars.isAppearanceLightNavigationBars)
                 }
                 val image = compose.onRoot().captureToImage()
-                File(context.getExternalFilesDir(null), name).outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+                File(nativeEvidenceDirectory("frosted-surface", context.getExternalFilesDir(null)), name).outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
                 if (name == "queue-frosted-collapsed.png") {
                     // Attaching a new recording modifier at the end of expansion can
                     // leave descendant layers blank for a frame despite intact semantics.
@@ -208,7 +208,7 @@ class FrostedSurfaceTest {
         assertTrue("Scatter across the hard scene boundary: $nearLeft vs $left", nearLeft.blue > left.blue + .04f)
         compose.onNodeWithText("Sharp foreground").assertIsDisplayed()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        File(context.getExternalFilesDir(null), "frosted-material.png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+        File(nativeEvidenceDirectory("frosted-surface", context.getExternalFilesDir(null)), "frosted-material.png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
         val previous = source.fallback
         compose.runOnIdle { swapped = true }
         if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback !== previous }
