@@ -133,7 +133,19 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.run_case(2,AFFECTED_CLASSES=AFFECTED+';touch PWNED')
         self.assertFalse((self.root/'PWNED').exists())
     def test_unknown(self): self.run_case(2,AFFECTED_CLASSES='io.github.anastaci1a.localica.UnknownTest')
-    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*20))
+    def test_twenty_distinct_affected_classes_keep_all_mandatory_regressions(self):
+        classes = ['io.github.anastaci1a.localica.Additional%dTest' % i for i in range(20)]
+        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
+            inventory.write('\n'.join(classes)+'\n')
+        for cls in classes:
+            (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
+                'package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+
+                ' { @org.junit.Test fun regression() {} }\n')
+        self.run_case(AFFECTED_CLASSES=','.join(classes))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+
+    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*21))
     def test_too_long(self): self.run_case(2,AFFECTED_CLASSES='x'*4097)
     def test_missing_source(self):
         (self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')).unlink()
