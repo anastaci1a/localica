@@ -106,12 +106,40 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
     if (strength <= 0f || bodies.isEmpty()) return
     val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
     val reach = (4f + spread * 28f).dp.toPx()
-    cache.update(bodies.map { it.first }, reach, 2.dp.toPx())
+    val shift = 2.dp.toPx()
+    cache.update(bodies.map { it.first }, reach, shift)
+    // One uniform, already-valid outline needs no generic path fill. Keep the
+    // original path for clipping and for shapes requiring radius normalization:
+    // platform rectXY and per-corner path normalization need not be equivalent.
+    val uniform = bodies.singleOrNull()?.first?.takeIf { r ->
+        val corner = r.topLeftCornerRadius
+        corner == r.topRightCornerRadius && corner == r.bottomRightCornerRadius &&
+            corner == r.bottomLeftCornerRadius &&
+            listOf(r.left, r.top, r.right, r.bottom, r.width, r.height, corner.x, corner.y, reach, shift,
+                r.left - reach, r.top - reach + shift, r.right + reach, r.bottom + reach + shift,
+                (r.right + reach) - (r.left - reach), (r.bottom + reach + shift) - (r.top - reach + shift),
+                corner.x + reach, corner.y + reach).all { it.isFinite() } &&
+            r.width > 0f && r.height > 0f && reach >= 0f &&
+            corner.x >= 0f && corner.y >= 0f && corner.x <= r.width / 2f && corner.y <= r.height / 2f
+    }
     fun DrawScope.rings() {
         cache.rings.forEachIndexed { index, ring ->
             val t = (16 - index) / 16f
             val alpha = strength * opacity * .07f * (1f - t).pow(2)
-            if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
+            if (alpha > 0f) {
+                val color = Color.Black.copy(alpha = alpha)
+                if (uniform == null) drawPath(ring, color)
+                else {
+                    val expansion = reach * (16 - index) / 16f
+                    val left = uniform.left - expansion
+                    val top = uniform.top - expansion + shift
+                    val right = uniform.right + expansion
+                    val bottom = uniform.bottom + expansion + shift
+                    drawRoundRect(color, Offset(left, top), Size(right - left, bottom - top),
+                        CornerRadius(uniform.topLeftCornerRadius.x + expansion,
+                            uniform.topLeftCornerRadius.y + expansion))
+                }
+            }
         }
     }
     if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { rings() } else rings()
