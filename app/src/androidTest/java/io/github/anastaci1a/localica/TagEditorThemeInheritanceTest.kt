@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -28,6 +30,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicReference
 
 /** Real host and launch controls; no tag write is submitted by these presentation tests. */
 class TagEditorThemeInheritanceTest {
@@ -84,9 +87,12 @@ class TagEditorThemeInheritanceTest {
         return color
     }
 
-    private fun assertPopup(title: String, lightInk: Boolean, expectedAppearance: GlassAppearance = appearance(lightInk)) {
+    private fun assertPopup(title: String, lightInk: Boolean, expectedAppearance: GlassAppearance = appearance(lightInk),
+        onTitleColor: ((Color) -> Unit)? = null) {
         val node = compose.onNodeWithText(title).assertIsDisplayed()
-        assertEquals("Actual popup title keeps launch ink", lightInk, textColor(node, title).luminance() > .5f)
+        val titleColor = textColor(node, title)
+        onTitleColor?.invoke(titleColor)
+        assertEquals("Actual popup title keeps launch ink", lightInk, titleColor.luminance() > .5f)
         compose.runOnIdle {
             val current = declarations.last()
             assertEquals(lightInk, current.ink.luminance() > .5f)
@@ -208,15 +214,41 @@ class TagEditorThemeInheritanceTest {
 
     @Test fun playerArtworkTapAndMenuCaptureInsideThePlayerInsteadOfItsOuterHost() {
         var lightInk by mutableStateOf(true)
+        // Diagnostic only: retain the palette-only fixture and immediate clicks. Do not
+        // await/fabricate Current, substitute artwork, or weaken either polarity assertion.
+        val polarity = PlayerBackgroundPolarityState()
+        val composedInk = AtomicReference<PlayerInkComposition?>(null)
+        val launchOwner = AtomicReference<TagEditorLaunches?>(null)
+        fun trace(phase: String, target: Boolean, popupTitle: Color? = null) {
+            val observed = composedInk.get()
+            val decision = polarity.decision
+            val frame = polarity.frame
+            val editor = controller.state.value
+            val accepted = launchOwner.get()?.presentation(editor.sessionId)
+            val time = "uptime=${SystemClock.uptimeMillis()} virtual=${compose.mainClock.currentTime}"
+            val prefix = "phase=$phase target=$target $time"
+            Log.i("TagEditorThemeDiag", "$prefix decision=$decision composedDecision=${observed?.decision} " +
+                "sameDecision=${observed?.decision === decision} sameFrame=${observed?.frame === frame} " +
+                "providerInk=${observed?.contentColor} popupTitle=$popupTitle " +
+                "session=${editor.sessionId} acceptedInk=${accepted?.ink} " +
+                "acceptedOnSurface=${accepted?.colors?.onSurface} acceptedAppearance=${accepted?.appearance}")
+            Log.i("TagEditorThemeDiag", "$prefix frame=${frame?.let { "frozen=${it.frozenVisible} " +
+                "nativeBlur=${it.liveBlur} roles=" + it.roles.joinToString { role ->
+                    "${System.identityHashCode(role.identity)}:${role.visual.contentKey}@${role.weight}" } }} " +
+                "receipt=${polarity.sampleDiagnostic}")
+        }
         compose.setContent { LocalicaTheme { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
-                CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk)) {
+                val launches = checkNotNull(LocalTagEditorLaunches.current)
+                SideEffect { launchOwner.set(launches) }
+                CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk),
+                    LocalPlayerInkCompositionObserver provides { composedInk.set(it) }) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val color = if (lightInk) Color(0xFF181818) else Color(0xFFEAEAEA)
                         PlayerSurface(PlaybackState(title = track.title), true, {},
                             InterfaceSettings(reducedMotion = true, artworkTap = ArtworkAction.Change, artworkHold = ArtworkAction.Menu),
                             remember { Animatable(1f) }, {}, {}, {}, {}, {}, {}, track = track,
-                            visual = PlayerVisual(palette = PlayerPalette(color, color, color))) {}
+                            visual = PlayerVisual(palette = PlayerPalette(color, color, color)), backgroundPolarity = polarity) {}
                     }
                 }
             }
@@ -224,13 +256,18 @@ class TagEditorThemeInheritanceTest {
         } } } }
         for (target in listOf(true, false)) {
             compose.runOnIdle { lightInk = target }
+            trace("before-artwork-tap", target)
             compose.onNodeWithTag("artwork-gesture").performClick()
-            assertPopup("Choose artwork", target)
+            trace("after-artwork-tap", target)
+            assertPopup("Choose artwork", target, onTitleColor = { trace("tap-popup-title", target, it) })
             compose.runOnIdle { assertTrue(controller.state.value.artworkOnly) }
             compose.onNodeWithText("Cancel").performClick()
+            trace("before-artwork-hold", target)
             compose.onNodeWithTag("artwork-gesture").performTouchInput { longClick() }
+            trace("before-menu-action", target)
             compose.onNodeWithText("Change artwork").performClick()
-            assertPopup("Choose artwork", target)
+            trace("after-menu-action", target)
+            assertPopup("Choose artwork", target, onTitleColor = { trace("menu-popup-title", target, it) })
             compose.onNodeWithText("Cancel").performClick()
         }
     }
