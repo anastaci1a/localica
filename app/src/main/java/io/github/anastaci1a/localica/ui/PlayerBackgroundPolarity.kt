@@ -56,7 +56,14 @@ internal data class ArtworkBackgroundFrame(val roles: List<ArtworkBackgroundRole
 
 /** Returned paint images, not requested palette images: tone preparation may retain an older image. */
 internal data class PlayerBackdropDescriptor(val palette: PlayerPalette, val wash: Bitmap?, val softWash: Bitmap?,
-    val grain: Bitmap, val tone: GlassTone)
+    val grain: Bitmap, val tone: GlassTone,
+    val washProvenance: ToneSnapshotProvenance? = null, val softWashProvenance: ToneSnapshotProvenance? = null)
+
+/** One resource-free failure witness, not a frame/image lease or a presentation acknowledgement. */
+internal data class PlayerBackgroundRoleDiagnostic(val identity: Int, val visual: Int, val weight: Float,
+    val requestedTone: GlassTone, val wash: ToneSnapshotProvenance?, val softWash: ToneSnapshotProvenance?)
+internal data class PlayerBackgroundSampleDiagnostic(val decision: Int, val frame: Int,
+    val mean: BackgroundMean, val roleCount: Int, val roles: List<PlayerBackgroundRoleDiagnostic>)
 
 internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, val washCover: Rect, val footprints: List<Rect>,
     val fullArtBlend: Float, val softness: Float, val edgeSoftness: Float, val edgeBand: Float,
@@ -66,6 +73,8 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
 @Stable internal class PlayerBackgroundPolarityState {
     var decision by mutableStateOf(PlayerBackgroundDecision()); private set
     var frame by mutableStateOf<ArtworkBackgroundFrame?>(null); private set
+    // Plain bounded metadata: read/formatted only by a failure diagnostic, never observed by UI.
+    @Volatile var sampleDiagnostic: PlayerBackgroundSampleDiagnostic? = null; internal set
     private val coordinates = mutableMapOf<String, LayoutCoordinates>()
     var measured by mutableStateOf<Map<String, Rect>>(emptyMap()); private set
     val backdrops = mutableStateMapOf<Any, PlayerBackdropDescriptor>()
@@ -89,7 +98,10 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
         if (backdrops.size > 8) backdrops.keys.filter { key -> key != identity && frame?.roles?.none { it.identity == key } != false }
             .take(backdrops.size - 8).forEach { backdrops.remove(it) }
     }
-    fun unavailable(reason: PlayerBackgroundUnavailable): Long = publication.begin(reason).also { decision = publication.decision }
+    fun unavailable(reason: PlayerBackgroundUnavailable): Long = publication.begin(reason).also {
+        sampleDiagnostic = null
+        decision = publication.decision
+    }
     fun current(lightInk: Boolean) {
         val token = publication.begin(PlayerBackgroundUnavailable.Preparing)
         publication.publish(token, lightInk)
@@ -97,7 +109,15 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     }
 }
 
-private data class BackgroundSampleRole(val identity: Any, val visual: PlayerVisual, val backdrop: PlayerBackdropDescriptor)
+private data class BackgroundPaintInputs(val palette: PlayerPalette, val wash: Bitmap?, val softWash: Bitmap?,
+    val grain: Bitmap, val tone: GlassTone)
+private data class BackgroundSampleRole(val identity: Any, val visual: PlayerVisual, val backdrop: PlayerBackdropDescriptor) {
+    // Exactly the former descriptor equality. Provenance-only changes must not restart sampling.
+    private val pixels = BackgroundPaintInputs(backdrop.palette, backdrop.wash, backdrop.softWash, backdrop.grain, backdrop.tone)
+    override fun equals(other: Any?): Boolean = other is BackgroundSampleRole &&
+        identity == other.identity && visual == other.visual && pixels == other.pixels
+    override fun hashCode(): Int = 31 * (31 * identity.hashCode() + visual.hashCode()) + pixels.hashCode()
+}
 private data class BackgroundRequest(val geometry: PlayerBackgroundGeometry,
     val roles: List<BackgroundSampleRole>)
 private data class PreparedBackground(val request: BackgroundRequest, val samples: List<List<BackgroundRgb>>, val weights: List<Float>)
@@ -136,7 +156,18 @@ private data class PreparedBackground(val request: BackgroundRequest, val sample
             val colors = ready.samples.indices.map { index ->
                 ready.samples[index] to frame.roles.filter { it.identity == ready.request.roles[index].identity }.sumOf { it.weight.toDouble() }.toFloat()
             }
-            owner.current(backgroundLightInk(colors, ready.weights))
+            var mean: BackgroundMean? = null
+            owner.current(backgroundLightInk(colors, ready.weights) { mean = it })
+            // Use the current descriptor's provenance for these same prepared pixels. The equality
+            // guard above still requires every original sampling input to match. Never retain frame,
+            // visual, descriptor or bitmap references just to explain a future failure.
+            owner.sampleDiagnostic = mean?.let { sample ->
+                PlayerBackgroundSampleDiagnostic(System.identityHashCode(owner.decision), System.identityHashCode(frame),
+                    sample, ready.request.roles.size, requireNotNull(request).roles.take(8).mapIndexed { index, role ->
+                        PlayerBackgroundRoleDiagnostic(System.identityHashCode(role.identity), System.identityHashCode(role.visual),
+                            colors[index].second, role.backdrop.tone, role.backdrop.washProvenance, role.backdrop.softWashProvenance)
+                    })
+            }
         } else owner.unavailable(failure)
     }
 }
@@ -153,8 +184,10 @@ private fun Color.rgb() = BackgroundRgb(red, green, blue, alpha)
 private fun mix(a: BackgroundRgb, b: BackgroundRgb, t: Float) = BackgroundRgb(
     a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t)
 
+internal data class BackgroundMean(val red: Double, val green: Double, val blue: Double, val luminance: Double)
 /** Mix RGB first: averaging endpoint luminances would not describe a crossfade. */
-internal fun backgroundLightInk(roles: List<Pair<List<BackgroundRgb>, Float>>, areas: List<Float>): Boolean {
+internal fun backgroundLightInk(roles: List<Pair<List<BackgroundRgb>, Float>>, areas: List<Float>,
+    onMean: ((BackgroundMean) -> Unit)? = null): Boolean {
     var r = 0.0; var g = 0.0; var b = 0.0; var total = 0.0
     for (i in areas.indices) {
         val area = areas[i].toDouble(); total += area
@@ -164,7 +197,9 @@ internal fun backgroundLightInk(roles: List<Pair<List<BackgroundRgb>, Float>>, a
     }
     if (total <= 0.0) return true
     fun linear(x: Double) = if (x <= .04045) x / 12.92 else ((x + .055) / 1.055).pow(2.4)
-    val luminance = .2126 * linear(r / total) + .7152 * linear(g / total) + .0722 * linear(b / total)
+    val red = r / total; val green = g / total; val blue = b / total
+    val luminance = .2126 * linear(red) + .7152 * linear(green) + .0722 * linear(blue)
+    onMean?.invoke(BackgroundMean(red, green, blue, luminance))
     // Compare white (1.05 / (L + .05)) with black ((L + .05) / .05).
     // The old palette cutoff is not a contrast rule for already-toned pixels.
     return backgroundContrastLightInk(luminance)
