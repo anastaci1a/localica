@@ -34,9 +34,18 @@ internal fun BrowseResult.groupAlbumSongs(grouping: SongGrouping, checkActive: (
         item.copy(groupHeading = name.takeIf { index == 0 })
     } })
 }
-data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: SongListView = SongListView.Songs) {
+data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: SongListView = SongListView.Songs,
+    val artistAlbums: List<LibraryGroup> = emptyList()) {
     val rows: List<SongRow> get() = items.mapNotNull { it.row }
 }
+
+/** One result owns carousel and row ordering; invalid old values use album fallback. */
+internal fun orderedArtistAlbums(rows: List<SongRow>, query: LibraryQuery,
+    checkActive: () -> Unit = {}): ArtistAlbumOrder.Ordered =
+    when (val result = ArtistAlbumOrder.order(rows, query.sort, query.ascending, checkActive)) {
+        is ArtistAlbumOrder.Ordered -> result
+        is ArtistAlbumOrder.Unsupported -> ArtistAlbumOrder.order(rows, TrackSort.Album, true, checkActive) as ArtistAlbumOrder.Ordered
+    }
 
 /** UI-independent complete result snapshots; general queries run off Main. */
 object BrowseQueries {
@@ -80,6 +89,7 @@ object BrowseQueries {
     fun defaultQuery(route: BrowseRoute): LibraryQuery = if (route.search) LibraryQuery() else if (route.tab == MainTab.MostPlayed && route.collection == null)
         LibraryQuery(sort = TrackSort.MostPlayed, ascending = false) else when (route.collection?.kind) {
         MediaKind.Album -> LibraryQuery(sort = TrackSort.Album)
+        MediaKind.Artist, MediaKind.AlbumArtist -> LibraryQuery(sort = TrackSort.Year)
         MediaKind.Playlist, MediaKind.Queue -> LibraryQuery(sort = TrackSort.Manual)
         else -> LibraryQuery()
     }
@@ -170,6 +180,10 @@ object BrowseQueries {
         if (collection != null) {
             val source = catalog(collection.kind).firstOrNull { it.ref == collection }?.songs.orEmpty()
             val order = if (collection.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) effective.copy(sort = TrackSort.Manual, ascending = true) else effective
+            if (collection.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)) {
+                val grouped = orderedArtistAlbums(source, order, checkActive)
+                return BrowseResult(songItems(grouped.rows), scope(route), grouped.albums)
+            }
             return BrowseResult(songItems(LibraryQueries.rows(source, order, checkActive)), scope(route))
         }
         val kinds = if (route.globalSearch) route.filter?.let(::listOf) ?: libraryKinds else when (route.tab) {
