@@ -49,7 +49,8 @@ import kotlin.math.floor
  * shadow strength changes. No image-driven wait, redraw, extra source readback or optical threshold.
  * Current public host/source facts qualify supplied-owner stability, NOT fresh shader consumption.
  * An outer coating receipt may remain cached; it is never relabeled as a fresh frame. Missing or
- * changed source/geometry/provenance fails the matched-control claim after retaining the originals. */
+ * changed source/geometry/provenance fails the matched-control claim after retaining the originals.
+ * The first ordinary image is unbound context only; only zero and restored are compared. */
 class PopupContentShadowBoundaryTest {
     @get:Rule val compose = createComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
@@ -80,7 +81,7 @@ class PopupContentShadowBoundaryTest {
             ?.takeIf { it.isNotBlank() }?.let(::File) ?: requireNotNull(context.getExternalFilesDir(null))
         output = File(base, "popup-content-shadow-boundary/api${Build.VERSION.SDK_INT}-${SystemClock.uptimeMillis()}")
         assertTrue(output.mkdirs())
-        assertTrue("Ordinary child shadow control is known nonzero", ordinary > 0f)
+        assertEquals("Ordinary child shadow control is the specified default", .12f, ordinary, 0f)
         writeManifest("starting")
         val preferences = listOf("interface", "browse-style", "library-query", "library-filters", "pins", "queue-settings")
             .associate { name -> context.getSharedPreferences(name, 0).let { it to it.all.toMap() } }
@@ -188,14 +189,16 @@ class PopupContentShadowBoundaryTest {
             }
             assertEquals("Exactly three fixed original copies, no replacements", 3, copies)
             // Do not salvage a matched comparison by retrying, redrawing or selecting another frame.
-            val baseline = before.first()
-            before.indices.forEach { index ->
+            // Ordinary has no bound child receipt in the prior native run. Keep its original
+            // and facts as explicitly unbound context, never a baseline or comparison.
+            val baseline = before[1]
+            listOf(1, 2).forEach { index ->
                 assertStable(baseline, before[index], strengths[index])
                 assertStable(baseline, after[index], strengths[index])
             }
             val regions = margins(baseline)
-            writeProfiles(images, regions)
-            writeManifest("matched-supplied-owner-control-NOT-optical-acceptance")
+            writeProfiles(images[1], images[2], regions)
+            writeManifest("matched-zero-restored-supplied-owner-control-NOT-optical-acceptance")
         } catch (failure: Throwable) {
             primary = failure
             runCatching { writeManifest("failed-or-unmatched-source-control", failure.toString()) }.onFailure(failure::addSuppressed)
@@ -296,17 +299,35 @@ class PopupContentShadowBoundaryTest {
         Rect(xs.min(), ys.min(), xs.max(), ys.max())
     }
     private fun outer(facts: Facts): Observed {
-        val candidates = facts.frames.filter { !it.frame.shadowEnabled && frameBounds(it.frame) == facts.bounds.getValue("outer") }
-        assertEquals("Require one actual outer receipt bound to measured bounds; unknown is not a matched control", 1, candidates.size)
-        return candidates.single()
+        val candidates = facts.frames.filter { frameBounds(it.frame) == facts.bounds.getValue("outer") }
+        assertEquals("Require one actual outer receipt bound to exact measured bounds; unknown or ambiguous is not a matched control", 1, candidates.size)
+        return candidates.single().also { assertFalse("Outer receipt is not a shadow-enabled child", it.frame.shadowEnabled) }
     }
     private fun child(facts: Facts, label: String): Observed {
-        val candidates = facts.frames.filter { it.frame.shadowEnabled && frameBounds(it.frame) == facts.bounds.getValue(label) }
-        assertEquals("Require one measured child material receipt for $label", 1, candidates.size)
-        return candidates.single()
+        val candidates = facts.frames.filter { frameBounds(it.frame) == facts.bounds.getValue(label) }
+        assertEquals("Require one child material receipt at exact measured bounds for $label", 1, candidates.size)
+        return candidates.single().also { assertTrue("Measured child receipt enables its own shadow for $label", it.frame.shadowEnabled) }
     }
+    // Receipt time identifies an observation, not surface state. Strength is the sole
+    // surface-state field normalized for the matched child comparison.
     private fun stable(frame: GlassSurfaceDrawObservation) = frame.copy(uptime = 0L)
+    private fun assertReceiptOwnerAndGeometry(facts: Facts, receipt: GlassSurfaceDrawObservation, label: String) {
+        assertEquals(id(root), receipt.viewIdentity)
+        assertEquals(id(window), receipt.windowIdentity)
+        assertEquals(id(facts.token), receipt.tokenIdentity)
+        assertTrue("Receipt belongs to an attached, untransformed popup", receipt.attached && receipt.viewMatrixIdentity)
+        val corners = requireNotNull(receipt.rootCorners) { "Missing root geometry for $label" }
+        assertEquals(8, corners.size)
+        assertTrue(corners.all { it.isFinite() })
+        assertEquals(facts.bounds.getValue(label), frameBounds(receipt))
+        assertEquals("Receipt window geometry must match measured native root origin",
+            corners.mapIndexed { index, value -> value + if (index % 2 == 0) facts.inWindow.x else facts.inWindow.y }, receipt.windowCorners)
+        assertEquals("Receipt screen geometry must match measured native root origin",
+            corners.mapIndexed { index, value -> value + if (index % 2 == 0) facts.onScreen.x else facts.onScreen.y }, receipt.screenCorners)
+    }
     private fun assertStable(a: Facts, b: Facts, expected: Float) {
+        assertEquals("Baseline native draw acknowledges zero strength", 0f, requireNotNull(a.draw).requestedStrength, 0f)
+        assertEquals("Current native draw acknowledges requested strength", expected, requireNotNull(b.draw).requestedStrength, 0f)
         assertEquals("Outer and actual child/foreground bounds unchanged", a.bounds, b.bounds)
         assertEquals(a.inWindow, b.inWindow); assertEquals(a.onScreen, b.onScreen); assertSame(a.token, b.token)
         a.owners.forEach { (label, owner) ->
@@ -317,6 +338,7 @@ class PopupContentShadowBoundaryTest {
         val live = requireNotNull(b.liveSource) { "Current public source provenance is unavailable" }
         assertEquals("Live owner, revision, publication and current registration must remain unchanged", a.liveSource, b.liveSource)
         val first = outer(a).frame; val current = outer(b).frame
+        assertReceiptOwnerAndGeometry(a, first, "outer"); assertReceiptOwnerAndGeometry(b, current, "outer")
         assertEquals("Bind actual supplied outer source uniquely, not just an earlier candidate", b.liveSource, current.source)
         assertEquals("Outer coating/ink/geometry/supplied source must remain unchanged", stable(first), stable(current))
         assertEquals(1f, current.panel, 0f); assertEquals(1f, current.frost, 0f); assertEquals(0f, current.suppliedHomeWeight, 0f)
@@ -326,10 +348,18 @@ class PopupContentShadowBoundaryTest {
         assertNotNull(live.consumerCornersInSource)
         listOf("Scan music", "Settings").forEach { label ->
             val initial = child(a, label).frame; val frame = child(b, label).frame
+            assertReceiptOwnerAndGeometry(a, initial, label); assertReceiptOwnerAndGeometry(b, frame, label)
+            assertEquals("Baseline child receipt must acknowledge zero strength", 0f, initial.shadowStrength, 0f)
             assertEquals("Actual child coating receipt must acknowledge requested strength", expected, frame.shadowStrength, 0f)
             assertEquals("Child material, foreground polarity and registration stay unchanged apart from strength",
-                stable(initial), stable(frame).copy(shadowStrength = ordinary))
-            assertEquals("Child backing remains parented to the actual outer source", live.identity, frame.source?.parentIdentity)
+                stable(initial), stable(frame).copy(shadowStrength = 0f))
+            val childSource = requireNotNull(frame.source) { "Missing child backing for $label" }
+            assertEquals("Child backing remains parented to the actual outer source", live.identity, childSource.parentIdentity)
+            assertEquals("Child backing parent layer remains the live outer source layer", live.layerIdentity, childSource.parentLayerIdentity)
+            assertTrue("Child backing is recorded and not released", childSource.recorded && !childSource.released)
+            assertEquals(true, childSource.parentRecorded); assertEquals(false, childSource.parentReleased)
+            assertNotNull("Unknown child registration cannot become a matched control", childSource.sourceToConsumer)
+            assertNotNull(childSource.consumerCornersInSource)
         }
     }
 
@@ -349,30 +379,28 @@ class PopupContentShadowBoundaryTest {
         } }
     }
 
-    private fun writeProfiles(images: List<Bitmap>, regions: Map<String, Rect>) {
-        assertEquals(3, images.size)
-        images.forEach { assertEquals(images[0].width, it.width); assertEquals(images[0].height, it.height) }
+    private fun writeProfiles(zero: Bitmap, restored: Bitmap, regions: Map<String, Rect>) {
+        assertEquals(zero.width, restored.width); assertEquals(zero.height, restored.height)
         File(output, "outer-margin-profiles.csv").bufferedWriter().use { out ->
-            out.appendLine("margin,y,x_start,x_end_exclusive,pixels,ordinary_r,ordinary_g,ordinary_b,ordinary_a,zero_r,zero_g,zero_b,zero_a,restored_r,restored_g,restored_b,restored_a,mean_abs_rgba_ordinary_zero,mean_abs_rgba_ordinary_restored")
+            out.appendLine("margin,y,x_start,x_end_exclusive,pixels,zero_r,zero_g,zero_b,zero_a,restored_r,restored_g,restored_b,restored_a,mean_abs_rgba_zero_restored")
             regions.forEach { (name, r) ->
                 val x0 = ceil(r.left).toInt(); val x1 = floor(r.right).toInt()
                 val y0 = ceil(r.top).toInt(); val y1 = floor(r.bottom).toInt()
-                assertTrue(x0 >= 0 && y0 >= 0 && x1 <= images[0].width && y1 <= images[0].height)
+                assertTrue(x0 >= 0 && y0 >= 0 && x1 <= zero.width && y1 <= zero.height)
                 for (y in y0 until y1) {
-                    val sums = Array(3) { DoubleArray(4) }; var zeroDifference = 0.0; var restoredDifference = 0.0
+                    val sums = Array(2) { DoubleArray(4) }; var difference = 0.0
                     for (x in x0 until x1) {
-                        val values = images.map { image -> image.getPixel(x, y).let { c ->
+                        val values = listOf(zero, restored).map { image -> image.getPixel(x, y).let { c ->
                             intArrayOf(PixelColor.red(c), PixelColor.green(c), PixelColor.blue(c), PixelColor.alpha(c)) } }
                         for (channel in 0..3) {
-                            for (phase in 0..2) sums[phase][channel] += values[phase][channel]
-                            zeroDifference += abs(values[0][channel] - values[1][channel])
-                            restoredDifference += abs(values[0][channel] - values[2][channel])
+                            for (phase in 0..1) sums[phase][channel] += values[phase][channel]
+                            difference += abs(values[0][channel] - values[1][channel])
                         }
                     }
                     val n = x1 - x0
                     out.appendLine(listOf(name, y, x0, x1, n).joinToString(",") + "," +
                         sums.flatMap { it.map { value -> value / n } }.joinToString(",") +
-                        ",${zeroDifference / (n * 4)},${restoredDifference / (n * 4)}")
+                        ",${difference / (n * 4)}")
                 }
             }
         }
@@ -432,9 +460,11 @@ class PopupContentShadowBoundaryTest {
             .put("api", Build.VERSION.SDK_INT).put("declaredTotalCaptures", 3).put("requestedCopies", copies)
             .put("phaseOrder", JSONArray(listOf("ordinary", "child-zero", "ordinary-restored")))
             .put("ordinaryChildStrength", ordinary).put("records", records)
+            .put("requestedComparisonPhases", JSONArray(listOf("child-zero", "ordinary-restored")))
+            .put("ordinaryQualification", "ordinary original and metadata are unbound context only; not compared")
             .put("scope", "Actual LocalicaScreen Library More utility caller, same open native popup; synthetic three-song album and real in-memory controllers. Only opt-in child shadowStrength changes, never outer material/coating/shadow.")
             .put("readiness", "Existing actual-family root admission, Compose idle/native focus plus bounded 5000ms native layout/draw readiness; no image or source-value polling, forced draw or extra readback.")
-            .put("limits", "Descriptive outside-child top/bottom RGBA profiles, NOT band absence or an optical fix. Full original Window PNGs retained before pixels; alpha is not flattened. Supplied owner stability is non-atomic with copying and does not prove fresh filter or shader consumption. Any missing or changed binding fails the comparison without replacements.")
+            .put("limits", "Descriptive outside-child top/bottom RGBA profiles, NOT band absence or an optical fix. Full original Window PNGs retained before pixels; alpha is not flattened. Supplied owner stability is non-atomic with copying and does not prove fresh filter or shader consumption. Zero/restored require unique exact-bounds receipts and unchanged binding before and after each copy; any missing or changed binding fails the comparison without replacements. Ordinary is unbound context, not compared.")
             .toString(2))
     }
     private fun rect(value: Rect) = JSONArray(listOf(value.left, value.top, value.right, value.bottom))
