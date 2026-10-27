@@ -1,7 +1,7 @@
 name: Dev71 first-batch prototype (not release certified)
 'on':
   push:
-    branches: [test/dev71-apk1-prototype-20261026]
+    branches: [test/dev71-apk1-prototype-20261026, test/dev71-delivery-20261027]
 permissions:
   contents: read
 jobs:
