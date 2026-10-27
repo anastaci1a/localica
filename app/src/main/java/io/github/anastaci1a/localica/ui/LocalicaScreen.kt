@@ -225,7 +225,8 @@ fun LocalicaScreen(
     val previousArtwork = journey?.previous?.let { visit -> previousVisual?.let { ArtworkNeighbor(visit.token, it) } }
     // Older Android snapshots must never capture the expanding mini-player's
     // browsing glass and stretch it into the Queue’s artwork material.
-    val playerLightInk = !playerVisual.palette.isLight()
+    val playerBackgroundPolarity = remember { PlayerBackgroundPolarityState() }
+    val playerLightInk = playerBackgroundPolarity.decision.lightInk
     val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen, settings.glass), expanded && playerFullyOpen, dark = playerLightInk, glassBlur = settings.glass.blur)
     var browseInk by remember { mutableStateOf(androidx.compose.ui.graphics.Color.Black) }
     var pageBackground by remember { mutableStateOf(androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
@@ -356,7 +357,7 @@ fun LocalicaScreen(
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
-            onSeekRequest = onSeekRequest, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
+            onSeekRequest = onSeekRequest, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
             val editTags = presentedTagEdit()
             PlayerActionStrip(playerActions, { action -> when (action) {
