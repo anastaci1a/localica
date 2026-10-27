@@ -823,7 +823,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     sourceOrder = dragSourceOrder, routeKey = route, commit = moveSongs)
                 // Floating controls sample the finished scrolling scene, including
                 // its fade and selection/overscroll transforms, never the raw grid.
-                .then(if (needsListBackdrop) Modifier.recordBrowseBackdropLayer(backdropScene, requireNotNull(viewportBackdrop), backdropBacking)
+                // Queue already paints one continuous drawer material beneath its
+                // header and list. Record only list foreground here; the sampling
+                // composite adds backdropBacking independently. Repainting it in
+                // this displayed viewport would erase header-shadow spill at its edge.
+                .then(if (needsListBackdrop) Modifier.recordBrowseBackdropLayer(backdropScene, requireNotNull(viewportBackdrop),
+                    if (route.collection?.kind == MediaKind.Queue) null else backdropBacking)
                     .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
                 .graphicsLayer { alpha = if (artDetail || (skeletonReveal && !queryPending)) 1f else browse.reveal.value }
                 .then(if (maskedBackdrop) Modifier.listTopFade {
