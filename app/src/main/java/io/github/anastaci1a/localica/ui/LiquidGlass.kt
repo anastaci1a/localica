@@ -127,6 +127,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     silhouette: GlassSilhouette? = null, sharedContact: GlassContact? = null,
     contactPresentation: (() -> GlassShape)? = null,
+    contactAdmission: () -> Boolean = { true },
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val visible = LocalGlassVisible.current
     if (visible && Build.VERSION.SDK_INT < 33) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
@@ -158,7 +159,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
-        admit = { anchor?.hidden != true }) else if (anchor != null) Modifier.drawWithContent {
+        admit = contactAdmission) else if (anchor != null) Modifier.drawWithContent {
         val shape = contactShape()
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
     } else Modifier)
