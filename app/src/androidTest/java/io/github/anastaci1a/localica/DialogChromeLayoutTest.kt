@@ -103,9 +103,9 @@ class DialogChromeLayoutTest {
         compose.onNodeWithTag("repeat-section-insufficient-space").assertDoesNotExist()
         compose.onNodeWithTag(if (profile == DialogChrome.Compact) "repeat-section-compact" else "repeat-section-regular").assertExists()
         val panel = compose.onNodeWithTag("repeat-section-dialog").getUnclippedBoundsInRoot()
-        val title = compose.onNodeWithTag("repeat-section-title", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val body = compose.onNodeWithTag("repeat-section-body", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val footer = compose.onNodeWithTag("repeat-section-footer", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val title = compose.onNodeWithTag("repeat-section-title").getUnclippedBoundsInRoot()
+        val body = compose.onNodeWithTag("repeat-section-body").getUnclippedBoundsInRoot()
+        val footer = compose.onNodeWithTag("repeat-section-footer").getUnclippedBoundsInRoot()
         closeDp(profile.perimeterDp.dp, title.left - panel.left)
         closeDp(profile.perimeterDp.dp, title.top - panel.top)
         for (slot in listOf(body, footer)) {
