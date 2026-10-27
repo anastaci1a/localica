@@ -1027,8 +1027,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             // Active queues retain their occurrence return. Other current song lists,
             // including inactive queues, return to their own top without changing filters.
             val playbackReturn = route.collection?.kind == MediaKind.Queue && playingEntryId != null
+            val returning = returnToList.pending || (playbackReturn && playbackFollow.request != null)
             val showReturn = selectionVisible && !playerOpen && !localSearchOpen && returnListMatches &&
-                !session.active && reorder.drag == null &&
+                !session.active && reorder.drag == null && !returning &&
                 (if (playbackReturn) playingIndex != null && (if (route.search) returnDirection != 0 else !playbackFollow.attached)
                     else hasSongItems && gridState.canScrollBackward)
             // A drag owns this slot exclusively; retire a half-faded return drawing
@@ -1037,7 +1038,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 FloatingReturnToPositionButton(up = !playbackReturn || returnDirection < 0,
                     label = if (playbackReturn) "Current song" else "Return to top",
                     visible = showReturn, reducedMotion = reducedMotion,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset)) {
+                    returning = returning,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset +
+                        if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp)) {
                     if (!playbackReturn) returnToList(ListReturnAction.ScrollTop)
                     else {
                         orderScroll.cancel()

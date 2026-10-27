@@ -121,8 +121,9 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     }
     CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
         FloatingReturnToPositionButton(up = true, label = "Return to top",
-            visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward,
+            visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
             reducedMotion = reducedMotion,
+            returning = returnToList.pending,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBrowseObscuredInset.current)) {
             returnToList(ListReturnAction.ScrollTop)
         }
