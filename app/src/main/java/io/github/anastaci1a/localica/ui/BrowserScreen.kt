@@ -195,7 +195,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val displayedStyle = presentation?.style ?: style
     val queryPending = browse.pending
     val sourceResult = loadedResult ?: BrowseResult()
-    val artDetail = !route.search && route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist)
+    val artDetail = !route.search && route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist, MediaKind.Playlist)
+    val playlistDetail = artDetail && route.collection?.kind == MediaKind.Playlist
+    val detailPlaylist = if (playlistDetail) playlists.playlists.firstOrNull { it.id == route.collection?.id } else null
     val seededCollection = LocalBrowseArtwork.current?.collection?.takeIf { it.ref == route.collection }
     val entrySweep = remember(route.key, route.filter, route.search && route.text.isNotBlank()) {
         androidx.compose.animation.core.Animatable(if (browse.cached && !route.search) 1f else 0f)
@@ -206,7 +208,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             else entrySweep.animateTo(1f, androidx.compose.animation.core.tween(600, easing = androidx.compose.animation.core.LinearEasing))
         }
     }
-    val artistDetail = artDetail && route.collection?.kind != MediaKind.Album
+    val artistDetail = artDetail && route.collection?.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)
     var selectedAlbums by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
     // The completed query owns both orders. Per-album view overrides must not
     // reverse inner tracks or reorder this carousel independently of its rows.
@@ -222,7 +224,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val itemKeys = remember(result.items) { result.items.map { it.key } }
     // The artist page displays songs beneath album-filter chips; its hero follows that displayed list.
     // Entry artwork is only a loading seed, never a permanent override of a newly sorted result.
-    val heroUri = collectionHeroUri(loadedResult?.let { result }, seededCollection)
+    val heroUri = if (playlistDetail) remember(detailPlaylist, library.snapshot, playlists.loading, seededCollection) {
+        playlistHeroUri(detailPlaylist, library.snapshot)
+            ?: seededCollection?.coverUris?.firstOrNull().takeIf { detailPlaylist == null && playlists.loading }
+    } else collectionHeroUri(loadedResult?.let { result }, seededCollection)
     val hero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
     val lightCollection = collectionIsLight(hero)
     val collectionInk = if (lightCollection) androidx.compose.ui.graphics.Color(0xFF202124) else androidx.compose.ui.graphics.Color.White
@@ -871,14 +876,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         .then(if (pinchHeader != null) Modifier.collectionPinchHeader(pinchHeader, displayedStyle) else Modifier)) {
                         if (artDetail) {
                             CompositionLocalProvider(LocalFrostedBackdrop provides collectionSource) {
-                                CollectionHeader(route.title ?: seededCollection?.title.orEmpty(), if (artistDetail) null else (sourceResult.rows.firstOrNull()?.track ?: seededCollection?.songs?.firstOrNull()?.track)?.let { it.albumArtist ?: it.artist },
+                                CollectionHeader(detailPlaylist?.name ?: route.title ?: seededCollection?.title.orEmpty(), if (playlistDetail) songCountLabel(detailPlaylist?.entries?.size ?: 0)
+                                    else if (artistDetail) null else (sourceResult.rows.firstOrNull()?.track ?: seededCollection?.songs?.firstOrNull()?.track)?.let { it.albumArtist ?: it.artist },
                                     hero, artistDetail, enabled && result.rows.isNotEmpty(),
                                     onPlay = { onPlay(result.rows, 0, result.scope) }, onShuffle = {
                                         if (queues != null) queues.randomizedQueue(result.rows.map { it.track }, route.title ?: "Collection", result.rows.map { it.sourcePlaylistId })
                                         else onPlay(result.rows.shuffled(), 0, result.scope)
-                                    })
+                                    }, playlist = playlistDetail)
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
-                                if (artistDetail && showSearchPill) Box(Modifier.fillMaxWidth().then(searchSlotLayout)
+                                if ((artistDetail || playlistDetail) && showSearchPill) Box(Modifier.fillMaxWidth().then(searchSlotLayout)
                                     .onSizeChanged { measuredSearchSlotHeight = it.height }.clipToBounds()) {
                                     ListSearchPill("Search " + (route.title ?: route.tab.label), {
                                         if (searchVacancy == 0f && searchOriginalOffset < 0) {
