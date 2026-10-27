@@ -30,8 +30,10 @@ internal data class BrowseOptionsTopology(val gallery: Boolean, val manual: Bool
 internal fun browseOptionsDeclaration(route: BrowseRoute, mutable: Boolean = false,
     randomize: Boolean = false, overridden: Boolean = false, reverse: Boolean = false): BrowseOptionsDeclaration {
     val songs = route.collection != null || route.tab in setOf(MainTab.Songs, MainTab.MostPlayed) || route.filter == MediaKind.Song
+    val artist = route.collection?.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)
     val fields = if (songs) TrackSort.entries.filter {
-        it != TrackSort.Count && (it != TrackSort.Manual || route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue))
+        it != TrackSort.Count && (!artist || it != TrackSort.Album) &&
+            (it != TrackSort.Manual || route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue))
     } else TrackSort.entries.filterNot { it in setOf(TrackSort.Manual, TrackSort.Album, TrackSort.Folder) }
     return BrowseOptionsDeclaration(fields, route.listSizes(), route.informationChoices(),
         !route.search && route.collection?.kind != MediaKind.Album && (route.collection != null || route.tab != MainTab.Library),
