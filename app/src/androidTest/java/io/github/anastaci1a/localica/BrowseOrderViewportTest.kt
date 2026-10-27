@@ -1,8 +1,13 @@
 package io.github.anastaci1a.localica
 
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.*
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -32,6 +37,180 @@ class BrowseOrderViewportTest {
     @get:Rule val compose = createComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val currentId = "occurrence-70"
+
+    @Test fun realQueueRandomizeAndRevertAdmitAllNativeQuadrantsAcrossRepeatedActionsAndSortReopen() =
+        quadrantOrders(queue = true)
+
+    @Test fun realPlaylistRandomizeAndRevertAdmitAllNativeQuadrantsAcrossRepeatedActionsAndSortReopen() =
+        quadrantOrders(queue = false)
+
+    /** Public placed coordinates, real Room/controller path, no semantics activation.
+     * Draw-only glass deformation is not reported as measured optical geometry.
+     * Existing deferred admission tests retain exact dispatch/disabled/haptic coverage.
+     */
+    private fun quadrantOrders(queue: Boolean) = fixture(queue = queue, initiallySorted = true, reducedMotion = false) { f ->
+        fun ids() = if (queue) f.queue.entries.map { it.id } else f.playlist.entries.map { it.id }
+        fun order() = if (queue) f.queue.order else f.playlist.order
+        val openingIds = ids()
+        val openingOrder = order()
+        val queueEntries = if (queue) f.queue.entries.associateBy { it.id } else null
+        val playlistEntries = if (!queue) f.playlist.entries.associateBy { it.id } else null
+        val openingJourney = if (queue) f.queue.journey else null
+        val otherQueue = if (queue) f.queues!!.state.value.library.queues.single { it.id == "other" } else null
+        val otherPlaylist = if (!queue) f.playlists!!.state.value.playlists.single { it.id == "other" } else null
+        var contactPhase = "initial"
+        fun pump(endpoint: Boolean = false, predicate: () -> Boolean) {
+            val previousAutoAdvance = compose.mainClock.autoAdvance
+            if (endpoint) compose.mainClock.autoAdvance = true
+            try {
+                compose.waitUntil(5000) {
+                    if (endpoint) compose.waitForIdle() else compose.mainClock.advanceTimeByFrame()
+                    predicate()
+                }
+            } catch (failure: Throwable) {
+                val anchor = f.sortAnchor
+                val context = "queue=$queue phase=$contactPhase sorting=${f.sorting} " +
+                    "anchorHidden=${anchor?.hidden} modal=${anchor?.modalPresent} mounted=${anchor?.triggerMounted} " +
+                    "restored=${anchor?.restoredDrawn} bounds=${anchor?.bounds} virtual=${compose.mainClock.currentTime} " +
+                    "expansion=${anchor?.contact?.expansion?.value} target=${anchor?.contact?.expansion?.targetValue} " +
+                    "running=${anchor?.contact?.expansion?.isRunning} entries=${f.dialogHost?.entries?.map { entry ->
+                        "${System.identityHashCode(entry)}:mounted=${entry.mounted},anchor=${System.identityHashCode(entry.anchor)}," +
+                            "progress=${entry.anchor.contact.expansion.value},target=${entry.anchor.contact.expansion.targetValue}," +
+                            "running=${entry.anchor.contact.expansion.isRunning},modal=${entry.anchor.modalPresent}"
+                    }} order=${order()} ids=${ids()}"
+                android.util.Log.e("OrderQuadrant", context)
+                failure.addSuppressed(AssertionError(context))
+                throw failure
+            } finally { compose.mainClock.autoAdvance = previousAutoAdvance }
+        }
+        fun ready(label: String) {
+            // Quadrant admission uses a fully available action, not an interior
+            // morph witness; interruption/held-contact contracts live separately.
+            pump(endpoint = true) {
+                runCatching {
+                    val node = compose.onNodeWithText(label, substring = false).assertIsDisplayed().assertIsEnabled()
+                    quadrantPoint(node, .25f, .25f)
+                    quadrantPoint(node, .75f, .75f)
+                }.isSuccess
+            }
+        }
+        fun verifyMembershipAndPersistence() {
+            val actualIds = ids()
+            assertEquals(openingIds.size, actualIds.size)
+            assertEquals(openingIds.toSet(), actualIds.toSet())
+            assertEquals(actualIds.size, actualIds.distinct().size)
+            if (queue) {
+                val current = f.queue
+                assertEquals(queueEntries, current.entries.associateBy { it.id })
+                assertEquals(currentId, current.currentEntryId)
+                assertEquals(1234L, current.positionMs)
+                if (openingJourney != null) {
+                    assertEquals(openingJourney.history, current.journey?.history)
+                    assertEquals(openingJourney.current, current.journey?.current)
+                }
+                val persisted = runBlocking { f.queueDb.queues().read() }
+                assertEquals(current, persisted.queues.single { it.id == "mix" })
+                assertEquals(otherQueue, persisted.queues.single { it.id == "other" })
+            } else {
+                val current = f.playlist
+                assertEquals(playlistEntries, current.entries.associateBy { it.id })
+                val persisted = runBlocking { f.playlistDb.playlists().read() }
+                assertEquals(current, persisted.single { it.id == "mix" })
+                assertEquals(otherPlaylist, persisted.single { it.id == "other" })
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        nativeQuadrantContact(compose.onNodeWithContentDescription("Sort"), .5f, .5f)
+        ready("Randomize")
+        val quadrants = listOf(.25f to .25f, .75f to .25f, .25f to .75f, .75f to .75f)
+        (quadrants + quadrants).forEachIndexed { index, (x, y) ->
+            contactPhase = "window=${index / 4} quadrant=${index % 4} prepare"
+            if (index == 4) {
+                ready("Close")
+                android.util.Log.i("OrderQuadrant", "Close queue=$queue virtual=${compose.mainClock.currentTime} " +
+                    "entries=${f.dialogHost?.entries?.map { "${System.identityHashCode(it)}:${it.mounted}:${it.anchor.contact.expansion.value}" }}")
+                nativeQuadrantContact(compose.onNodeWithText("Close", substring = false), .5f, .5f)
+                pump { !f.sorting && compose.onAllNodesWithTag("browse-options-dialog").fetchSemanticsNodes().isEmpty() }
+                // A fresh real source contact, not a programmatic sorting flag.
+                // This is a fully returned endpoint, not the separate late-reopen
+                // contract. Avoid throttling virtual spring time through native UI round trips.
+                pump(endpoint = true) { compose.onAllNodesWithContentDescription("Sort").fetchSemanticsNodes().isNotEmpty() }
+                nativeQuadrantContact(compose.onNodeWithContentDescription("Sort"), .5f, .5f)
+            }
+            ready("Randomize")
+            contactPhase = "window=${index / 4} quadrant=${index % 4} randomize"
+            android.util.Log.i("OrderQuadrant", "queue=$queue $contactPhase")
+            nativeQuadrantContact(compose.onNodeWithText("Randomize", substring = false), x, y)
+            pump { order().sort == TrackSort.Manual }
+            verifyMembershipAndPersistence()
+            if (queue) assertEquals("Active Queue retains its current-first policy", currentId, ids().first())
+            // An identity shuffle is legitimate. Manual mode above still proves
+            // admission; one explicit Reverse establishes a deterministic Revert
+            // target rather than retrying Randomize until a favored result appears.
+            if (ids() == openingIds) {
+                ready("Reverse")
+                nativeQuadrantContact(compose.onNodeWithText("Reverse", substring = false), .5f, .5f)
+                pump { ids() == openingIds.reversed() }
+            }
+            ready("Revert")
+            contactPhase = "window=${index / 4} quadrant=${index % 4} revert"
+            android.util.Log.i("OrderQuadrant", "queue=$queue $contactPhase")
+            nativeQuadrantContact(compose.onNodeWithText("Revert", substring = false), x, y)
+            pump { ids() == openingIds && order() == openingOrder }
+            verifyMembershipAndPersistence()
+            pump { compose.onAllNodesWithText("Revert", substring = false).fetchSemanticsNodes().isEmpty() }
+        }
+        ready("Close")
+        nativeQuadrantContact(compose.onNodeWithText("Close", substring = false), .5f, .5f)
+        pump { !f.sorting && compose.onAllNodesWithTag("browse-options-dialog").fetchSemanticsNodes().isEmpty() }
+    }
+
+    private fun quadrantPoint(node: SemanticsNodeInteraction, x: Float, y: Float): Offset {
+        val semantics = node.assertIsDisplayed().assertIsEnabled().assertHasClickAction().fetchSemanticsNode()
+        assertEquals("Use the actual merged button, not its text's rectangle", androidx.compose.ui.semantics.Role.Button,
+            semantics.config.getOrNull(SemanticsProperties.Role))
+        val coordinates = semantics.layoutInfo.coordinates
+        val view = (semantics.root as ViewRootForTest).view
+        return compose.runOnUiThread {
+            assertTrue(coordinates.isAttached && view.isAttachedToWindow && view.hasWindowFocus())
+            val local = Offset(coordinates.size.width * x, coordinates.size.height * y)
+            val rootPoint = coordinates.localToRoot(local)
+            val ancestry = generateSequence(coordinates) { it.parentCoordinates }.take(64).map { ancestor ->
+                val inAncestor = ancestor.localPositionOf(coordinates, local)
+                "size=${ancestor.size} point=$inAncestor inside=${inAncestor.x >= 0f && inAncestor.y >= 0f &&
+                    inAncestor.x < ancestor.size.width && inAncestor.y < ancestor.size.height}"
+            }.toList()
+            assertTrue("Quadrant must lie in independently clipped native layout bounds: point=$rootPoint bounds=${semantics.boundsInRoot}",
+                semantics.boundsInRoot.contains(rootPoint))
+            val screen = IntArray(2).also(view::getLocationOnScreen)
+            val window = IntArray(2).also(view::getLocationInWindow)
+            val point = coordinates.localToWindow(local) + Offset((screen[0] - window[0]).toFloat(), (screen[1] - window[1]).toFloat())
+            val visible = android.graphics.Rect()
+            assertTrue(view.getGlobalVisibleRect(visible))
+            assertTrue("Native point is inside the actual visible window", point.x >= visible.left && point.x < visible.right &&
+                point.y >= visible.top && point.y < visible.bottom)
+            android.util.Log.i("OrderQuadrant", "local=$local root=$rootPoint screen=$point " +
+                "size=${coordinates.size} clipped=${semantics.boundsInRoot} view=${System.identityHashCode(view)} ancestry=$ancestry")
+            point
+        }
+    }
+
+    private fun nativeQuadrantContact(node: SemanticsNodeInteraction, x: Float, y: Float) {
+        val point = quadrantPoint(node, x, y)
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val downTime = SystemClock.uptimeMillis()
+        var held = false
+        fun send(action: Int) {
+            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, point.x, point.y, 0)
+            event.source = InputDevice.SOURCE_TOUCHSCREEN
+            try { assertTrue("Native order contact action=$action", automation.injectInputEvent(event, true)) }
+            finally { event.recycle() }
+        }
+        try {
+            send(MotionEvent.ACTION_DOWN); held = true
+            send(MotionEvent.ACTION_UP); held = false
+        } finally { if (held) send(MotionEvent.ACTION_CANCEL) }
+    }
     private val tracks = (0 until 100).map { index ->
         Track("missing:$index", "Song ${index.toString().padStart(3, '0')}",
             id = "track-$index", fileName = "$index.mp3", relativePath = "$index.mp3")
@@ -71,8 +250,10 @@ class BrowseOrderViewportTest {
     ) {
         var route by mutableStateOf(route)
         var sorting by mutableStateOf(false)
+        var sortAnchor: GlassAnchor? = null
         var topInset = 0f
         var cardInsetPx = 0
+        var dialogHost: GlassDialogs? = null
         val queue get() = queues!!.state.value.library.queues.first { it.id == "mix" }
         val playlist get() = playlists!!.state.value.playlists.first { it.id == "mix" }
     }
@@ -128,10 +309,15 @@ class BrowseOrderViewportTest {
             val noQueues = QueueUiState(loading = false)
             val noPlaylists = PlaylistState(loading = false)
             compose.setContent { LocalicaTheme {
-                CompositionLocalProvider(LocalReducedMotion provides reducedMotion) {
+                CompositionLocalProvider(LocalReducedMotion provides reducedMotion,
+                    LocalGlassContactTrace provides { label, phase, point, consumed ->
+                        android.util.Log.i("OrderContact", "queue=$queue label=$label phase=$phase point=$point consumed=$consumed")
+                    }) {
                     val queueState = fixture.queues?.state?.collectAsState()?.value ?: noQueues
                     val playlistState = fixture.playlists?.state?.collectAsState()?.value ?: noPlaylists
                     val anchor = rememberGlassAnchor()
+                    val dialogHost = LocalGlassDialogs.current
+                    SideEffect { fixture.sortAnchor = anchor; fixture.dialogHost = dialogHost }
                     fixture.topInset = with(LocalDensity.current) { listPillSlotHeight().toPx() }
                     fixture.cardInsetPx = with(LocalDensity.current) { BrowseCellGeometry(1).cardInset.dp.roundToPx() }
                     BrowserScreen(library, playlistState, fixture.route, { fixture.route = it }, {}, {},
@@ -139,7 +325,9 @@ class BrowseOrderViewportTest {
                         true, false, sorting = fixture.sorting, onSortDismiss = { fixture.sorting = false },
                         queueState = queueState, playingTrackId = tracks[40].id,
                         playingEntryId = queueState.library.active?.takeIf { it.id == fixture.route.collection?.id }?.currentEntryId,
-                        header = { BrowseOptionsPill(anchor) { fixture.sorting = true } },
+                        // Playlist details own their real collection toolbar; an injected
+                        // second Sort would test a duplicate fixture-only route.
+                        header = { if (queue) BrowseOptionsPill(anchor) { fixture.sorting = true } },
                         sortOrigin = anchor, reducedMotion = reducedMotion, queryDispatcher = queries)
                 }
             } }
