@@ -208,12 +208,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val artistDetail = artDetail && route.collection?.kind != MediaKind.Album
     var selectedAlbums by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
-    val albums = remember(sourceResult.rows, artistDetail, sorts) {
-        if (artistDetail) LibraryViews.groups(library.snapshot.copy(tracks = sourceResult.rows.map { it.track }),
-            SongListView.Albums, LibraryViews.defaults(SongListView.Albums)).map { album ->
-                album.copy(tracks = sorts.rows(MediaRef(MediaKind.Album, album.id), album.tracks.map { SongRow(it.id, it) }).map { it.track })
-            } else emptyList()
-    }
+    // The completed query owns both orders. Per-album view overrides must not
+    // reverse inner tracks or reorder this carousel independently of its rows.
+    val albums = if (artistDetail) sourceResult.artistAlbums else emptyList()
     val validAlbums = remember(albums, selectedAlbums) { selectedAlbums.filter { id -> albums.any { it.id == id } } }
     val selectedTrackIds = remember(albums, validAlbums) {
         albums.filter { it.id in validAlbums }.flatMap { it.tracks }.map { it.id }.toSet()
