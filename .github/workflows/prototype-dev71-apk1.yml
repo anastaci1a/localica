@@ -8,13 +8,15 @@ jobs:
   prototype:
     uses: ./.github/workflows/prototype.yml
     with:
-      affected_classes: io.github.anastaci1a.localica.QueueOrderActionAdmissionTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.ArtistCollectionActionsTest,io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest,io.github.anastaci1a.localica.ArtworkSwipeTest,io.github.anastaci1a.localica.CollectionControlsBackdropTest,io.github.anastaci1a.localica.LyricsReturnBackdropTest,io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest,io.github.anastaci1a.localica.PinchReadbackLifetimeTest,io.github.anastaci1a.localica.PinchReleaseHandoffTest,io.github.anastaci1a.localica.RetainedLayerReadbackTest,io.github.anastaci1a.localica.ArtistSelectionPlacementTest,io.github.anastaci1a.localica.LibraryPlaybackReadTest,io.github.anastaci1a.localica.LibraryDatabaseTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
+      affected_classes: io.github.anastaci1a.localica.QueueOrderActionAdmissionTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.ArtistCollectionActionsTest,io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest,io.github.anastaci1a.localica.ArtworkSwipeTest,io.github.anastaci1a.localica.CollectionControlsBackdropTest,io.github.anastaci1a.localica.LyricsReturnBackdropTest,io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest,io.github.anastaci1a.localica.PinchReadbackLifetimeTest,io.github.anastaci1a.localica.PinchReleaseHandoffTest,io.github.anastaci1a.localica.RetainedLayerReadbackTest,io.github.anastaci1a.localica.ArtistSelectionPlacementTest,io.github.anastaci1a.localica.LibraryPlaybackReadTest,io.github.anastaci1a.localica.LibraryDatabaseTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest,io.github.anastaci1a.localica.GlassShadowTest
       coverage_reason: >-
         First-batch Queue admission and exact opening, attached playback durability,
         artist scope/selection/range, immediate player growth, artwork readiness and
         occurrence transitions, actual-content controls, and header pinch/readback
         ownership. Adds fresh selected-library Room reads and tag-editor theme
-        inheritance without removing any prior affected class. Mandatory complete
+        inheritance without removing any prior affected class. Includes process-rooted
+        readback ownership, native IME setup retirement and complete GlassShadowTest
+        coverage for equivalent uniform-shadow primitive representation. Mandatory complete
         Search IME, ListSearch and contrast classes
         are added by the existing runner. Complete JVM/lint/build/signature and
         both preserved-data compatibility chains remain required. No full native
@@ -24,7 +26,12 @@ jobs:
         immutable evidence, tracked in issue464. Earlier unexpected Search
         dismissal and API26 player RenderThread/ART fatals remain unexplained;
         the complete player class is retained and an isolated passing method is
-        not causal clearance. Every selected method and mandatory sentinel must
+        not causal clearance. Hosted40437179441 header/IME failures and local
+        e19e2c82/ab7c846b player fatals remain preserved; equivalent shadow
+        representation preserves the original contour and passes the complete local
+        player/readback context and shadow comparisons on both APIs; the native
+        corruption cause itself is not established.
+        Every selected method and mandatory sentinel must
         independently pass; known issues never waive failures. Earlier full-suite
         DocumentsUI failures remain unresolved and the full native suite is unrun.
         This candidate adds bounded fresh library reads and theme inheritance;
