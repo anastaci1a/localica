@@ -1039,15 +1039,16 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val previousCatalog = activationCatalog
         val prepared = withContext(Dispatchers.IO) {
             // Keep the original explicit PlayNow/tap bypass; ordinary activations still
-            // collect the current snapshot even when its index can be reused.
-            val snapshot = if (refreshLocations) library.snapshots.first() else null
-            if (snapshot != null) {
+            // read current metadata for queued tracks; Room need not hydrate unrelated rows.
+            val read = if (refreshLocations) library.playbackSnapshot(queue.entries.mapTo(linkedSetOf()) { it.track.id }) else null
+            val snapshot = read?.fullSnapshot
+            if (read != null) {
                 orderTiming?.mark(QueueOrderTiming.Stage.FreshSnapshot)
-                orderTiming?.recordCounts(libraryTracks = snapshot.tracks.size)
+                orderTiming?.recordCounts(libraryTracks = read.totalTracks)
             }
-            val currentLibrary = if (snapshot == null) emptyMap()
-                else if (previousCatalog != null && previousCatalog.snapshot === snapshot) previousCatalog.index
-                else snapshot.tracks.associateBy { it.id }
+            val currentLibrary = if (read == null) emptyMap()
+                else if (snapshot != null && previousCatalog != null && previousCatalog.snapshot === snapshot) previousCatalog.index
+                else read.tracks.associateBy { it.id }
             val tracks = library.playableTracks(queue.entries.map { currentLibrary[it.track.id] ?: it.track })
             val reusable = previousCatalog?.takeIf { it.queueId == queue.id }?.occurrences.orEmpty()
             var reused = 0
@@ -1064,8 +1065,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             }
             orderTiming?.recordCounts(queueEntries = queue.entries.size, templatesReused = reused, templatesBuilt = built)
             orderTiming?.mark(QueueOrderTiming.Stage.GrantsTemplates)
-            val catalog = ActivationCatalog(snapshot ?: previousCatalog?.snapshot,
-                if (snapshot != null) currentLibrary else previousCatalog?.index.orEmpty(), queue.id, occurrences)
+            val catalog = ActivationCatalog(if (read == null) previousCatalog?.snapshot else snapshot,
+                if (read != null) currentLibrary else previousCatalog?.index.orEmpty(), queue.id, occurrences)
             catalog to queue.entries.map { occurrences.getValue(it.id).item }
         }
         if (player !== attached) return
