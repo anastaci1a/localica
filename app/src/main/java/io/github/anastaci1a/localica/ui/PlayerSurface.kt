@@ -17,6 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
@@ -56,7 +59,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     glassBackdrop: FrostedBackdrop? = null, visual: PlayerVisual? = null,
     artworkVisit: String? = null, previousArtwork: ArtworkNeighbor? = null, nextArtwork: ArtworkNeighbor? = null,
     onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black,
-    onSeekRequest: ((Long, String?) -> Long)? = null, actions: @Composable () -> Unit = {}) {
+    onSeekRequest: ((Long, String?) -> Long)? = null,
+    backgroundPolarity: PlayerBackgroundPolarityState? = null, actions: @Composable () -> Unit = {}) {
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
     val playerScroll = rememberScrollState()
@@ -68,7 +72,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val distance = with(density) { miniTop.toPx().coerceAtLeast(1f) }
     val p = progress.value
     val artwork = visual ?: rememberPlayerVisual(state.trackUri)
-    val lightInk = !artwork.palette.isLight()
+    val polarity = backgroundPolarity ?: remember { PlayerBackgroundPolarityState() }
+    DisposableEffect(polarity) { onDispose { polarity.detach() } }
+    val lightInk = polarity.decision.lightInk
     val playerInk = if (lightInk) Color.White else Color.Black
     val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, lightInk)
     val paletteDuration = settings.motionDuration(550)
@@ -258,6 +264,29 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
     val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground)
         smoothReveal(swipeFraction / .18f) * smoothReveal((1f - swipeFraction) / .18f) else 0f
+    val measuredBackground = polarity.measured["background"]
+    val measuredCover = polarity.measured["cover"]
+    val measuredViewport = polarity.measured["viewport"]
+    val controlNames = buildList {
+        if (rowMotion.seekAlpha > 0f) add("seek")
+        if (rowMotion.actionsAlpha > 0f) add("actions")
+        add("transport")
+    }
+    val footprints = playerBackgroundFootprints(measuredBackground, measuredViewport,
+        controlNames.mapNotNull { polarity.measured[it] })
+    val backgroundGeometry = if (measuredBackground != null && measuredCover != null && footprints.isNotEmpty())
+        PlayerBackgroundGeometry(Size(measuredBackground.width, measuredBackground.height), measuredCover,
+            with(density) { Rect(artX.toPx() + swipeOffset, artY.toPx(), artX.toPx() + swipeOffset + artPixels, artY.toPx() + artHeight.toPx()) },
+            footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather / .9f),
+            edgeSoftness, edgeBand, coverBlend, lyricMotion.artworkAlpha,
+            with(density) { ((8f + 16f * p).dp * (1f - p * backgroundProgress)).toPx() },
+            with(density) { MiniArtworkSize.toPx() }, artCropRetention) else null
+    ObservePlayerBackgroundPolarity(polarity, backgroundGeometry, when {
+        p < .999f || backgroundReveal < 1f -> PlayerBackgroundUnavailable.PartialPlayer
+        artSwipe.active || swipeOffset != 0f -> PlayerBackgroundUnavailable.MovingCover
+        controlNames.any { polarity.measured[it] == null } -> PlayerBackgroundUnavailable.Unmeasured
+        else -> null
+    })
     val baseColors = MaterialTheme.colorScheme
     GlassPanelTheme(lightInk) {
     val playerColors = MaterialTheme.colorScheme
@@ -269,6 +298,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
     Surface(Modifier.offset(x = surfaceFrame.x, y = surfaceFrame.y)
         .width(surfaceFrame.width).height(surfaceFrame.height)
+        .onGloballyPositioned { polarity.measure("viewport", it) }
         .bottomGlassShadow(surfaceCorner, opacity = { 1f - progress.value })
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone
@@ -281,22 +311,27 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
         Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
+            .onGloballyPositioned { polarity.measure("background", it) }
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
             ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration, occurrence = artworkVisit ?: state.trackId,
-                immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough) { frame ->
+                immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough,
+                onBackgroundFrame = polarity::frame) { frame ->
+                val backgroundRole = LocalArtworkBackgroundRole.current
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
                 if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
                     PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), backgroundProgress * (1f - lyricProgress),
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
+                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone,
+                        onBackgroundDescriptor = { descriptor -> backgroundRole?.let { polarity.backdrop(it, descriptor) } })
                     if (destination != null) PlayerBackdrop(destination.visual.palette,
                         Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, backgroundProgress,
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                         with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
                 }
                 @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
-                    Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).graphicsLayer {
+                    Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight)
+                        .then(if (!neighbor) Modifier.onGloballyPositioned { polarity.measure("cover", it) } else Modifier).graphicsLayer {
                         val remaining = if (neighbor) kotlin.math.abs(swipeOffset) else artPixels - kotlin.math.abs(swipeOffset)
                         alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
                         translationX = offset
@@ -418,16 +453,16 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
-                .testTag("player-seek-row").graphicsLayer { alpha = rowMotion.seekAlpha }) {
+                .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion.seekAlpha }) {
                 PlayerSeekControls(state, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,
                     cancelTarget = { scrubCancel.bounds },
                     onDrag = { active, hovered -> scrubCancel.update(active); scrubOverCancel = active && hovered })
             }
             if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
-                .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").graphicsLayer { alpha = rowMotion.actionsAlpha }
+                .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) }.graphicsLayer { alpha = rowMotion.actionsAlpha }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,
-                y = transportY),
+                y = transportY).testTag("player-transport-row").onGloballyPositioned { polarity.measure("transport", it) },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((transportWidth - 160.dp) / 2 * transportMotion)) {
                 TransportButton(TransportGlyph.Previous, false, "Previous", onPrevious,
                     Modifier.size(48.dp), 24.dp + 10.dp * transportMotion, foreground, state.connected, settings.reducedMotion)
