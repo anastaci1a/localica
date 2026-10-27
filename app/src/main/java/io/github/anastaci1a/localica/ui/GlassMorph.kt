@@ -137,8 +137,6 @@ internal fun Modifier.glassDepthScale(): Float = foldIn(1f) { depth, element ->
 
 internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
 internal val LocalGlassPanelReady = compositionLocalOf { true }
-/** Test-only opt-in for foreground child shadows; no ordinary caller provides a value. */
-internal val LocalPopupContentShadowStrength = compositionLocalOf<Float?> { null }
 // Only separate modal windows may read this scene. Inline lenses must keep using
 // LocalFrostedBackdrop, whose recordings exclude their own foreground controls.
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
@@ -652,12 +650,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 LocalSearchOpeningReady provides reportSearchOpening.takeIf { placement == GlassPlacement.Search },
                                 LocalSearchReturnStart provides (if (placement == GlassPlacement.Search) ::beginSearchReturn else null),
                                 LocalGlassPanelReady provides (visible && (placement == GlassPlacement.Search || p >= .9f))) {
-                                val childShadowStrength = LocalPopupContentShadowStrength.current
-                                if (childShadowStrength == null) GlassPanelTheme(dark, content)
-                                else CompositionLocalProvider(LocalGlassAppearance provides
-                                    LocalGlassAppearance.current.copy(shadowStrength = childShadowStrength)) {
-                                    GlassPanelTheme(dark, content)
-                                }
+                                GlassPanelTheme(dark, content)
                             }
                         }
                         Box(Modifier.graphicsLayer { alpha = (1f - p / .55f).coerceIn(0f, 1f) }
