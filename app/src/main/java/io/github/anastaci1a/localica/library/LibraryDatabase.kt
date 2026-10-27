@@ -11,6 +11,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 @Entity(tableName = "folders")
 data class FolderRecord(@PrimaryKey val uri: String, val name: String)
@@ -62,6 +63,28 @@ abstract class LibraryDao {
 
     @Transaction @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE, uri")
     abstract suspend fun read(): List<FolderWithTracks>
+
+    @Query("SELECT COUNT(DISTINCT folder_tracks.trackId) FROM folder_tracks JOIN folders ON folders.uri = folder_tracks.folderUri")
+    protected abstract suspend fun linkedTrackCount(): Int
+
+    @Transaction
+    @Query("SELECT folder_tracks.* FROM folder_tracks JOIN folders ON folders.uri = folder_tracks.folderUri " +
+        "WHERE folder_tracks.trackId IN (:ids) ORDER BY folders.name COLLATE NOCASE, folders.uri")
+    protected abstract suspend fun playbackRows(ids: Set<String>): List<TrackInFolder>
+
+    /** Fresh count and selected records share this transaction; no observer/revision cache is reused. */
+    @Transaction open suspend fun playbackSnapshot(trackIds: Set<String>): LibraryPlaybackRead {
+        val ids = trackIds.toSet()
+        val total = linkedTrackCount()
+        if (ids.isEmpty()) return LibraryPlaybackRead(emptyList(), total)
+        fun fullSelection(rows: List<FolderWithTracks>) = rows.toSnapshot().tracks.filter { it.id in ids }
+        val selected = if (ids.size > 900) fullSelection(read()) else {
+            val tracks = playbackRows(ids).canonicalTracks()
+            // The full path's stable sort has no ID tiebreak. Preserve its original tie order.
+            if (tracks.zipWithNext().any { (a, b) -> trackOrder.compare(a, b) == 0 }) fullSelection(read()) else tracks
+        }
+        return LibraryPlaybackRead(selected, total)
+    }
 
     @Upsert protected abstract suspend fun upsertFolder(folder: FolderRecord)
     @Upsert protected abstract suspend fun upsertTracks(tracks: List<TrackRecord>)
@@ -162,6 +185,10 @@ internal fun documentIdentity(uri: String): String = try {
 interface LibraryStore {
     val snapshots: Flow<LibrarySnapshot>
     suspend fun current(): LibrarySnapshot
+    suspend fun playbackSnapshot(trackIds: Set<String>): LibraryPlaybackRead {
+        val full = snapshots.first()
+        return LibraryPlaybackRead(full.tracks, full.tracks.size, full)
+    }
     suspend fun replaceRoot(result: ScanResult)
     suspend fun removeRoot(uri: String)
     suspend fun updateMetadata(track: Track)
@@ -175,6 +202,7 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
         searchIndex.prepare(it.toSnapshot()) { context.ensureActive() }
     }.flowOn(Dispatchers.Default)
     override suspend fun current() = dao.read().toSnapshot()
+    override suspend fun playbackSnapshot(trackIds: Set<String>) = dao.playbackSnapshot(trackIds)
     override suspend fun replaceRoot(result: ScanResult) {
         dao.replaceRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
             TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
@@ -190,7 +218,16 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
 }
 
 private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {
-    val tracks = flatMap { it.tracks }.groupBy { it.track.id }.values.map { occurrences ->
+    val tracks = flatMap { it.tracks }.canonicalTracks()
+    return LibrarySnapshot(map { FolderSelection(it.folder.uri, it.folder.name) }, tracks,
+        flatMap { it.tracks }.filter { it.location.metadataFailed }.map {
+            MetadataFailure(it.track.id, it.location.folderUri, it.location.relativePath)
+        })
+}
+
+/** Both read paths preserve identical metadata, first-location choice, location order and track sort. */
+private fun List<TrackInFolder>.canonicalTracks(): List<Track> =
+    groupBy { it.track.id }.values.map { occurrences ->
         val record = occurrences.first().track
         val locations = occurrences.map { TrackLocation(it.location.folderUri, it.location.uri, it.location.relativePath) }
         val location = locations.first()
@@ -198,8 +235,3 @@ private fun List<FolderWithTracks>.toSnapshot(): LibrarySnapshot {
             location.relativePath, record.id, record.albumArtist, record.trackNumber, record.discNumber, record.year,
             record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt, record.addedAt)
     }.sortedWith(trackOrder)
-    return LibrarySnapshot(map { FolderSelection(it.folder.uri, it.folder.name) }, tracks,
-        flatMap { it.tracks }.filter { it.location.metadataFailed }.map {
-            MetadataFailure(it.track.id, it.location.folderUri, it.location.relativePath)
-        })
-}
