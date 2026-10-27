@@ -31,8 +31,14 @@ class BrowseSortSnapshot private constructor(
             sort = TrackSort.entries.firstOrNull { it.name == legacy["${legacyPrefix}sort"] } ?: LibraryViews.defaults(view).sort,
             ascending = legacy["${legacyPrefix}ascending"] as? Boolean ?: true,
         ) else BrowseQueries.defaultQuery(route)
-        return LibraryQuery(sort = TrackSort.entries.firstOrNull { it.name == values["$key.sort"] } ?: default.sort,
+        val selected = LibraryQuery(sort = TrackSort.entries.firstOrNull { it.name == values["$key.sort"] } ?: default.sort,
             ascending = values["$key.ascending"] as? Boolean ?: default.ascending)
+        // The retired Artist album/disc/track choice becomes chronological albums.
+        // Resolve both shared and per-collection/legacy values through the same path;
+        // every other explicit sort and its direction remain unchanged.
+        return if (!route.search && route.collection?.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist) &&
+            selected.sort == TrackSort.Album) LibraryQuery(sort = TrackSort.Year, ascending = true)
+        else selected
     }
 
     fun grouping(route: BrowseRoute): SongGrouping = grouping(route, inherited = false)
@@ -43,6 +49,8 @@ class BrowseSortSnapshot private constructor(
     }
 
     fun rows(ref: MediaRef, rows: List<SongRow>, checkActive: () -> Unit = {}): List<SongRow> {
+        if (ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist))
+            return orderedArtistAlbums(rows, collectionQuery(ref), checkActive).rows
         val ordered = LibraryQueries.rows(rows, collectionQuery(ref), checkActive)
         val grouping = if (ref.kind == MediaKind.Album) grouping(collectionRoute(ref)) else SongGrouping.None
         var visits = 0
