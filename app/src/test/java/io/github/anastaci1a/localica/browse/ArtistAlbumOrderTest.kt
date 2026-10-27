@@ -122,13 +122,64 @@ class ArtistAlbumOrderTest {
     }
 
     @Test fun everyCurrentChoiceIsExplicitlySupportedOrReturnedUnsupported() {
-        val unsupported = setOf(TrackSort.Manual, TrackSort.Folder)
+        val unsupported = setOf(TrackSort.Manual)
         assertEquals(TrackSort.entries.toSet() - unsupported, ArtistAlbumOrder.supportedSorts)
         for (sort in TrackSort.entries) for (ascending in listOf(true, false)) {
             val result = ArtistAlbumOrder.order(listOf(row(track("one"))), sort, ascending)
             if (sort in unsupported) assertEquals(ArtistAlbumOrder.Unsupported(sort), result)
             else assertTrue(result is ArtistAlbumOrder.Ordered)
         }
+    }
+
+    @Test fun folderUsesEarliestCaseFoldedNonblankPathWithoutReversingInnerRows() {
+        val input = listOf(row(track("late", "Mixed", disc = 2).copy(relativePath = "Z/song.mp3")),
+            row(track("middle", "Middle").copy(relativePath = "Beta/song.mp3")),
+            row(track("early", "Mixed", number = 2).copy(relativePath = "alpha/song.mp3")),
+            row(track("blank", "Mixed").copy(relativePath = "")),
+            row(track("unknown-z", "Unknown Z").copy(relativePath = " \t")),
+            row(track("unknown-a", "Unknown A").copy(relativePath = "")))
+        val asc = ordered(input, TrackSort.Folder)
+        val desc = ordered(input, TrackSort.Folder, false)
+        assertEquals(listOf("Mixed", "Middle", "Unknown A", "Unknown Z"), asc.titles())
+        assertEquals(listOf("Middle", "Mixed", "Unknown A", "Unknown Z"), desc.titles())
+        assertEquals(listOf("blank", "early", "late"), asc.groups.first().rows.map { it.id })
+        assertEquals(asc.groups.associate { it.album.id to it.rows }, desc.groups.associate { it.album.id to it.rows })
+        assertEquals(asc.groups.flatMap { it.rows }, asc.rows)
+        assertEquals(desc.groups.flatMap { it.rows }, desc.rows)
+    }
+
+    @Test fun folderConsidersEveryOccurrencePathAndTiesUseTitleThenCanonicalId() {
+        val repeated = track("shared", "Same", albumArtist = "B").copy(relativePath = "Z/song.mp3")
+        val first = row(repeated, "first")
+        val second = row(repeated.copy(relativePath = "ALPHA/song.mp3", trackNumber = 2), "second")
+        val other = row(track("other", "same", albumArtist = "A").copy(relativePath = "alpha/song.mp3"))
+        val last = row(track("last", "Zulu").copy(relativePath = "Alpha/song.mp3"))
+        val input = listOf(last, first, second, other, first)
+        val expected = LibraryViews.groups(LibrarySnapshot(tracks = input.map { it.track }),
+            SongListView.Albums, LibraryQuery()).sortedWith(compareBy<LibraryGroup> { it.title.lowercase(Locale.ROOT) }.thenBy { it.id })
+        for (ascending in listOf(true, false)) {
+            val result = ordered(input, TrackSort.Folder, ascending)
+            assertEquals(expected.map { it.id }, result.albums.map { it.id })
+            assertEquals(listOf(other, first, first, second, last), result.rows)
+            assertSame(first, result.rows[1])
+            assertSame(first, result.rows[2])
+            assertSame(second, result.rows[3])
+        }
+    }
+
+    @Test fun folderUsesLibraryQueriesRootCaseFoldingWithoutTrimmingPaths() {
+        val previous = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+            val input = listOf(row(track("j", "J").copy(relativePath = "j/song.mp3")),
+                row(track("i", "I").copy(relativePath = "I/song.mp3")),
+                row(track("space", "Space").copy(relativePath = " z/song.mp3")))
+            for (ascending in listOf(true, false)) {
+                val queryRows = LibraryQueries.rows(input, LibraryQuery(sort = TrackSort.Folder, ascending = ascending))
+                assertEquals(queryRows, ordered(input, TrackSort.Folder, ascending).rows)
+            }
+            assertEquals(listOf("Space", "I", "J"), ordered(input, TrackSort.Folder).titles())
+        } finally { Locale.setDefault(previous) }
     }
 
     @Test fun countAndPlayCountDoNotMultiplyTheSameTrackForDuplicateOccurrences() {
@@ -207,7 +258,8 @@ class ArtistAlbumOrderTest {
 
     @Test fun emptyInputStillReportsUnsupportedPoliciesRatherThanChoosingAFallback() {
         assertEquals(emptyList<ArtistAlbumOrder.Group>(), ordered(emptyList()).groups)
-        assertEquals(ArtistAlbumOrder.Unsupported(TrackSort.Folder), ArtistAlbumOrder.order(emptyList(), TrackSort.Folder, false))
+        assertEquals(emptyList<ArtistAlbumOrder.Group>(), ordered(emptyList(), TrackSort.Folder, false).groups)
+        assertEquals(ArtistAlbumOrder.Unsupported(TrackSort.Manual), ArtistAlbumOrder.order(emptyList(), TrackSort.Manual, false))
     }
 
     @Test fun orderingIsIndependentOfTheDefaultLocale() {
