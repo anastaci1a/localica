@@ -15,10 +15,10 @@ internal object ArtistAlbumOrder {
     }
     data class Unsupported(val sort: TrackSort) : Result
 
-    // Manual occurrence order and a multi-file album's Folder key have no album aggregate.
+    // Manual occurrence order has no album aggregate.
     val supportedSorts: Set<TrackSort> = setOf(TrackSort.Title, TrackSort.Album, TrackSort.Year,
         TrackSort.Count, TrackSort.Duration, TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed,
-        TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre)
+        TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre, TrackSort.Folder)
 
     /** Groups use LibraryViews' length-prefixed album/Album Artist identity, not title alone.
      * Disc and track are always ascending (unknown last), then lowercase song title, track ID,
@@ -28,8 +28,10 @@ internal object ArtistAlbumOrder {
      * (all missing is unknown); Count and MostPlayed use distinct track IDs, as album catalogs do.
      * Text aggregates retain the catalog's distinct/sorted joined values; blank-only is unknown.
      * Title/Album use the album title, with a missing tag distinct from a literal "Unknown album".
+     * Folder uses the lexicographically earliest nonblank occurrence relativePath, lowercased with
+     * Locale.ROOT exactly as LibraryQueries does, without trimming or normalizing the path.
      * Missing aggregates stay last in both directions; ties always use lowercase album title and
-     * canonical album ID ascending. Unknown Manual/Folder policy is returned, never guessed.
+     * canonical album ID ascending. Unsupported Manual policy is returned, never guessed.
      */
     fun order(rows: List<SongRow>, sort: TrackSort, ascending: Boolean,
         checkActive: () -> Unit = {}): Result {
@@ -88,6 +90,8 @@ internal object ArtistAlbumOrder {
         fun text(value: String?) = Key(text = value?.takeIf { it.isNotBlank() }?.lowercase(Locale.ROOT))
         return when (sort) {
             TrackSort.Title, TrackSort.Album -> text(tracks.firstOrNull()?.album?.trim())
+            TrackSort.Folder -> Key(text = group.rows.asSequence().map { it.track.relativePath }
+                .filter { it.isNotBlank() }.map { it.lowercase(Locale.ROOT) }.minOrNull())
             TrackSort.Year -> Key(number = group.rows.mapNotNull { it.track.year }.minOrNull()?.toLong())
             TrackSort.Added -> Key(number = group.rows.mapNotNull { it.track.addedAt }.minOrNull())
             TrackSort.Modified -> Key(number = group.rows.mapNotNull { it.track.modifiedAt }.maxOrNull())
@@ -103,7 +107,7 @@ internal object ArtistAlbumOrder {
                     else -> null
                 }?.takeIf { value -> value.isNotBlank() }
             }.distinct().sorted().takeIf { it.isNotEmpty() }?.joinToString(", "))
-            TrackSort.Manual, TrackSort.Folder -> error("Unsupported album aggregate: $sort")
+            TrackSort.Manual -> error("Unsupported album aggregate: $sort")
         }
     }
 }
