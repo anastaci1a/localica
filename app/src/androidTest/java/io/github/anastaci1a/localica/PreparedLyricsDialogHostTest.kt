@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager.LayoutParams
 import android.widget.Button
 import androidx.activity.compose.BackHandler
@@ -370,6 +371,148 @@ class PreparedLyricsDialogHostTest {
             assertFalse(host.composeView.isAttachedToWindow)
             assertFalse(host.composeView.hasComposition)
             assertFalse(host.claim(token))
+            assertEquals(listOf(true, false), ownership)
+        }
+    }
+
+    private fun assertReturning() {
+        val attributes = host.window.attributes
+        assertEquals(InertFlags, attributes.flags and InertFlags)
+        assertEquals(0, attributes.flags and LayoutParams.FLAG_DIM_BEHIND)
+        assertEquals((caller.rootView.layoutParams as LayoutParams).flags and LayoutParams.FLAG_SECURE,
+            attributes.flags and LayoutParams.FLAG_SECURE)
+        assertEquals(1f, attributes.alpha, 0f)
+        assertEquals(0f, attributes.dimAmount, 0f)
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, host.composeView.importantForAccessibility)
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, host.window.decorView.importantForAccessibility)
+        assertFalse(host.ownsWindow)
+        assertNull(ready)
+        assertTrue(host.composeView.isAttachedToWindow)
+        assertTrue(host.composeView.hasComposition)
+        assertTrue(modalButton.isShown)
+        assertEquals(0, contentDisposals)
+    }
+
+    @Test fun returningWindowRetainsDrawingButReleasesRealSourceTouchAndBack() {
+        fixture(childBackHandler = true)
+        val token = prepare()
+        compose.runOnIdle { assertTrue(host.claim(token)) }
+        await { host.composeView.hasWindowFocus() }
+        compose.runOnIdle {
+            assertTrue(host.beginReturn())
+            assertTrue(host.beginReturn())
+            assertReturning()
+            assertFalse(host.prepare())
+            assertFalse(host.claim(token))
+            assertEquals(listOf(true, false), ownership)
+        }
+        await { caller.hasWindowFocus() && !host.composeView.hasWindowFocus() }
+        var draws = 0
+        val draw = ViewTreeObserver.OnDrawListener { draws++ }
+        compose.runOnIdle {
+            host.composeView.viewTreeObserver.addOnDrawListener(draw)
+            modalButton.invalidate()
+            host.composeView.invalidate()
+        }
+        try {
+            // A fresh owned-window draw traversal, not compositor/presented-pixel evidence.
+            await { draws > 0 }
+        } finally {
+            compose.runOnIdle { host.composeView.viewTreeObserver.removeOnDrawListener(draw) }
+        }
+        nativeClick(sourceButton)
+        await { sourceClicks == 1 }
+        pressSystemBack()
+        await { sourceBacks == 1 }
+        compose.runOnIdle {
+            assertEquals(0, childBacks)
+            assertEquals(0, modalBacks)
+            assertEquals(0, modalClicks)
+            assertReturning()
+            assertEquals(listOf(true, false), ownership)
+        }
+    }
+
+    @Test fun returningResizeCannotPublishReadinessOrReclaimAndDisposalIsFinal() {
+        fixture()
+        val token = prepare()
+        compose.runOnIdle { assertTrue(host.claim(token)) }
+        await { host.composeView.hasWindowFocus() }
+        var oldWidth = 0
+        var oldHeight = 0
+        var publications = 0
+        compose.runOnIdle {
+            assertTrue(host.beginReturn())
+            publications = readyPublications
+            oldWidth = host.composeView.width
+            oldHeight = host.composeView.height
+            host.window.setLayout((oldWidth * 3 / 4).coerceAtLeast(1), (oldHeight * 3 / 4).coerceAtLeast(1))
+        }
+        await { host.composeView.width != oldWidth && host.composeView.height != oldHeight && caller.hasWindowFocus() }
+        compose.runOnIdle {
+            assertReturning()
+            assertEquals(publications, readyPublications)
+            assertFalse(host.claim(token))
+            assertFalse(host.prepare())
+            assertTrue(host.beginReturn())
+            assertEquals(listOf(true, false), ownership)
+            mounted = false
+        }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertFalse(host.composeView.isAttachedToWindow)
+            assertFalse(host.composeView.hasComposition)
+            assertEquals(1, contentDisposals)
+            assertFalse(host.claim(token))
+            assertFalse(host.prepare())
+            assertFalse(host.beginReturn())
+            host.retire()
+            assertEquals(1, contentDisposals)
+            assertEquals(publications, readyPublications)
+            assertEquals(listOf(true, false), ownership)
+            assertInert()
+        }
+    }
+
+    @Test fun unclaimedReturnCannotExposePreparedWindow() {
+        fixture()
+        compose.runOnIdle { assertFalse(host.beginReturn()); assertInert() }
+        val token = prepare()
+        compose.runOnIdle {
+            assertFalse(host.beginReturn())
+            assertSame(token, ready)
+            assertInert()
+            assertTrue(ownership.isEmpty())
+            assertTrue(host.claim(token))
+            assertTrue(host.beginReturn())
+            assertReturning()
+            host.retire()
+            assertFalse(host.beginReturn())
+            assertEquals(1, contentDisposals)
+            assertEquals(listOf(true, false), ownership)
+        }
+    }
+
+    @Test fun returnAttemptsBothNotificationsOnceAndPreservesPrimaryFailure() {
+        fixture()
+        val token = prepare()
+        val primary = IllegalStateException("readiness return callback")
+        val secondary = IllegalArgumentException("ownership return callback")
+        compose.runOnIdle {
+            assertTrue(host.claim(token))
+            retiredReadinessFailure = primary
+            retiredOwnershipFailure = secondary
+            val failure = runCatching { host.beginReturn() }.exceptionOrNull()
+            assertSame(primary, failure)
+            assertTrue(primary.suppressed.any { it === secondary })
+            assertReturning()
+            assertFalse(host.claim(token))
+            assertTrue(host.beginReturn())
+            assertEquals(listOf(true, false), ownership)
+            host.retire()
+            assertFalse(host.composeView.isAttachedToWindow)
+            assertFalse(host.composeView.hasComposition)
+            assertEquals(1, contentDisposals)
             assertEquals(listOf(true, false), ownership)
         }
     }

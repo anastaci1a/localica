@@ -48,6 +48,7 @@ internal class PreparedLyricsReadiness internal constructor(
  * Call prepare(), then explicitly claim the current token. retire() is terminal; a new composition
  * key creates a new incarnation. The caller coordinates its source/shadow with a successful claim.
  * Resize replaces readiness/geometry evidence, not an already claimed window's modal ownership.
+ * beginReturn() irreversibly releases that ownership but retains drawing until retire().
  */
 @Composable
 internal fun rememberPreparedLyricsDialogHost(
@@ -86,6 +87,7 @@ internal class PreparedLyricsDialogHost internal constructor(
     private val incarnation = Any()
     private var generation = 0L
     private var prepared = false
+    private var returning = false
     private var retired = false
     private var viewport: Viewport? = null
     private var token: PreparedLyricsReadiness? = null
@@ -112,7 +114,7 @@ internal class PreparedLyricsDialogHost internal constructor(
     private val globalLayout = ViewTreeObserver.OnGlobalLayoutListener { observeViewport() }
     private val preDraw = ViewTreeObserver.OnPreDrawListener {
         observeViewport()
-        if (!retired && prepared && token == null && completedLayout() && actualViewport() != null) {
+        if (!retired && !returning && prepared && token == null && completedLayout() && actualViewport() != null) {
             val next = PreparedLyricsReadiness(incarnation, generation)
             token = next
             onReadinessChanged(next)
@@ -161,7 +163,7 @@ internal class PreparedLyricsDialogHost internal constructor(
 
     fun prepare(): Boolean {
         mainThread()
-        if (retired || !caller.isAttachedToWindow) return false
+        if (retired || returning || !caller.isAttachedToWindow) return false
         if (prepared) return true
         prepared = true
         try {
@@ -177,9 +179,9 @@ internal class PreparedLyricsDialogHost internal constructor(
 
     fun claim(readiness: PreparedLyricsReadiness): Boolean {
         mainThread()
-        if (retired || !prepared) return false
+        if (retired || returning || !prepared) return false
         observeViewport()
-        if (retired || token !== readiness || !readiness.matches(incarnation, generation) ||
+        if (retired || returning || token !== readiness || !readiness.matches(incarnation, generation) ||
             !completedLayout() || actualViewport() != viewport) return false
         val firstClaim = !ownsWindow
         try { setNativeOwnership(true) } catch (failure: Throwable) {
@@ -189,6 +191,38 @@ internal class PreparedLyricsDialogHost internal constructor(
         ownsWindow = true
         if (firstClaim) onOwnershipChanged(true)
         return !retired && ownsWindow
+    }
+
+    /**
+     * Release input, native focus, Back and accessibility, retaining the visible owned composition.
+     * Only a claimed host can enter this irreversible phase. Repeated calls are idempotent; neither
+     * resize nor a stale token can reclaim it. The route owner must retire after its draw handoff.
+     * A native update failure retires the host instead of leaving an interactive exit drawing.
+     */
+    fun beginReturn(): Boolean {
+        mainThread()
+        if (retired) return false
+        if (returning) return true
+        if (!ownsWindow) return false
+        returning = true
+        generation++
+        val hadToken = token != null
+        token = null
+        ownsWindow = false
+        var failure: Throwable? = null
+        fun attempt(action: () -> Unit) {
+            try { action() } catch (error: Throwable) {
+                val primary = failure
+                if (primary == null) failure = error else if (primary !== error) primary.addSuppressed(error)
+            }
+        }
+        attempt { setNativeOwnership(false, visible = true) }
+        if (failure != null) attempt { retire() }
+        // State is already revoked, so reentrant retirement cannot duplicate these notifications.
+        attempt { if (hadToken) onReadinessChanged(null) }
+        attempt { onOwnershipChanged(false) }
+        failure?.let { throw it }
+        return !retired
     }
 
     /** Cancellation and composition disposal use the same irreversible, owned teardown. */
@@ -227,19 +261,19 @@ internal class PreparedLyricsDialogHost internal constructor(
     }
 
     private fun observeViewport() {
-        if (retired || !prepared) return
+        if (retired || returning || !prepared) return
         val actual = actualViewport()
         if (actual == viewport) return
         viewport = actual
         generation++
         val hadToken = token != null
         token = null
-        // Before claim this stays inert. After claim, retain input/Back/visibility until retire;
+        // Before claim this stays inert. After claim, retain ownership until beginReturn/retire;
         // the next pre-draw reports fresh geometry for the route owner without reactivating source.
         if (hadToken) onReadinessChanged(null)
     }
 
-    private fun setNativeOwnership(enabled: Boolean) {
+    private fun setNativeOwnership(enabled: Boolean, visible: Boolean = enabled) {
         back.isEnabled = enabled
         val inaccessible = if (enabled) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
             else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -249,13 +283,13 @@ internal class PreparedLyricsDialogHost internal constructor(
             flags = if (enabled) flags and InertInputFlags.inv() else flags or InertInputFlags
             flags = flags and LayoutParams.FLAG_DIM_BEHIND.inv()
             // Match Compose 1.8.2 SecureFlagPolicy.Inherit via public caller-root attributes.
-            if (!retired) {
+            if (!retired && caller.isAttachedToWindow) {
                 val callerSecure = ((caller.rootView.layoutParams as? LayoutParams)?.flags ?: 0) and LayoutParams.FLAG_SECURE != 0
                 flags = if (callerSecure) flags or LayoutParams.FLAG_SECURE else flags and LayoutParams.FLAG_SECURE.inv()
             }
-            // Teardown never relaxes security because the caller has already detached.
+            // Return/teardown never relax security because the caller has already detached.
             dimAmount = 0f
-            alpha = if (enabled) 1f else 0f
+            alpha = if (visible) 1f else 0f
             windowAnimations = 0
         }
     }
