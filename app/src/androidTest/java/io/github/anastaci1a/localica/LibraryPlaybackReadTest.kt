@@ -16,7 +16,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class LibraryPlaybackReadTest {
-    private data class Query(val sql: String, val arguments: Int, val inTransaction: Boolean)
+    private data class Query(val sql: String, val arguments: Int, val inTransaction: Boolean,
+        val ids: List<String>?)
     private fun song(id: String) = Track("content://fixture/$id", "Title $id", artist = "Artist", album = "Album",
         durationMs = 12345L, fileName = "$id.flac", relativePath = "nested/$id.flac", id = id,
         albumArtist = "Album artist", trackNumber = 7, discNumber = 2, year = 2026, genre = "Genre",
@@ -24,6 +25,32 @@ class LibraryPlaybackReadTest {
     private fun result(root: String, name: String, tracks: List<Track>) = ScanResult(FolderSelection(root, name), tracks, 0)
     private fun fullRead(query: Query) = query.sql == "select * from folders order by name collate nocase, uri"
     private fun selectedRead(query: Query) = query.sql.contains("from folder_tracks join folders") && query.sql.contains("trackid in (")
+    private fun relationshipRead(query: Query) = query.sql.contains("from tracks where id in (")
+
+    private fun assertBoundedRead(queries: Collection<Query>, requested: Set<String>, found: Set<String>) {
+        val selected = queries.filter(::selectedRead)
+        val related = queries.filter(::relationshipRead)
+        android.util.Log.i("LibraryPlaybackQueries", "selectedExecutions=${selected.size} " +
+            "selectedBindings=${selected.map { it.arguments }} relationshipExecutions=${related.size} " +
+            "relationshipBindings=${related.map { it.arguments }} " +
+            "allInTransaction=${(selected + related).all { it.inTransaction }}")
+        // Pinned Room's relation adapter scans keys, resets the statement, then scans rows.
+        // Its SupportSQLite adapter executes the same bounded SELECT again after reset.
+        assertEquals("Expected the pinned two-pass relation read: $selected", 2, selected.size)
+        assertEquals(1, selected.map { it.sql }.distinct().size)
+        for (query in selected) {
+            assertEquals(requested.size, query.arguments)
+            assertTrue(query.arguments <= 900)
+            assertEquals(requested, query.ids?.toSet())
+            assertEquals(requested.size, query.ids?.size)
+            assertTrue(query.inTransaction)
+        }
+        assertEquals("Related TrackRecord hydration is accounted separately: $related", 1, related.size)
+        assertEquals(found, related.single().ids?.toSet())
+        assertEquals(found.size, related.single().arguments)
+        assertTrue(related.single().inTransaction)
+        assertTrue("No complete-folder hydration in the bounded path", queries.none(::fullRead))
+    }
 
     private suspend fun database(block: suspend (LibraryDatabase, RoomLibraryStore, ConcurrentLinkedQueue<Query>) -> Unit) {
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -31,8 +58,12 @@ class LibraryPlaybackReadTest {
         val owner = AtomicReference<LibraryDatabase>()
         val db = Room.inMemoryDatabaseBuilder(context, LibraryDatabase::class.java)
             .setQueryCallback(RoomDatabase.QueryCallback { sql, arguments ->
-                queries += Query(sql.replace("`", "").trim().replace(Regex("\\s+"), " ").lowercase(java.util.Locale.ROOT),
-                    arguments.size, owner.get()?.inTransaction() == true)
+                val normalized = sql.replace("`", "").trim().replace(Regex("\\s+"), " ").lowercase(java.util.Locale.ROOT)
+                val probe = Query(normalized, arguments.size, owner.get()?.inTransaction() == true, null)
+                // Only synthetic fixture track IDs, never values from unrelated SQL statements.
+                val ids = if (selectedRead(probe) || relationshipRead(probe))
+                    arguments.map { it as? String }.takeIf { it.all { id -> id != null } }?.filterNotNull() else null
+                queries += probe.copy(ids = ids)
             }, Executor { it.run() }).build()
         owner.set(db)
         try { block(db, RoomLibraryStore(db.libraryDao()), queries) } finally { db.close() }
@@ -64,7 +95,7 @@ class LibraryPlaybackReadTest {
                     TrackLocation("root-z", shared.uri, shared.relativePath))), track)
             assertNotNull(track.addedAt)
             assertTrue("Only bounded requested rows are selected", observed.any(::selectedRead))
-            assertEquals(3, observed.single(::selectedRead).arguments)
+            assertBoundedRead(observed, ids, selected.tracks.mapTo(linkedSetOf()) { it.id })
             assertTrue("Small selection does not hydrate all folders", observed.none(::fullRead))
             assertEquals(1, observed.count { it.sql.startsWith("select count(distinct folder_tracks.trackid)") })
             assertTrue("Count and selected reads execute inside the owning transaction", observed.filter {
@@ -127,7 +158,7 @@ class LibraryPlaybackReadTest {
             val bounded = store.playbackSnapshot(boundedIds)
             assertEquals(canonical.tracks.filter { it.id in boundedIds }, bounded.tracks)
             assertEquals(902, bounded.totalTracks)
-            assertEquals(900, queries.single(::selectedRead).arguments)
+            assertBoundedRead(queries, boundedIds, bounded.tracks.mapTo(linkedSetOf()) { it.id })
             assertTrue(queries.none(::fullRead))
 
             val fallbackIds = boundedIds + canonical.tracks[900].id
