@@ -11,6 +11,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -38,10 +39,11 @@ internal fun ReturnToPositionButton(up: Boolean, label: String, visible: Boolean
 /** Retain exit drawing without retaining its click, drag ownership or accessible action. */
 @Composable
 internal fun FloatingReturnToPositionButton(up: Boolean, label: String, visible: Boolean,
-    reducedMotion: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    reducedMotion: Boolean, modifier: Modifier = Modifier, returning: Boolean = false, onClick: () -> Unit) {
     val motion = rememberFloatingControlMotion(visible, reducedMotion)
     val rise = with(LocalDensity.current) { FloatingControlRise.toPx() }
-    if (motion.retained) Box(modifier.offset { IntOffset(0, motion.offsetY(rise).roundToInt()) }
+    if (motion.retained && !returning) Box(modifier.testTag("floating-return-control")
+        .offset { IntOffset(0, motion.offsetY(rise).roundToInt()) }
         .graphicsLayer {
             alpha = motion.alpha
             val scale = .92f + .08f * motion.progress

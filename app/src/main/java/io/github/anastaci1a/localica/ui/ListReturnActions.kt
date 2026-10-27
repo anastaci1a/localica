@@ -9,7 +9,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEnabled: Boolean,
     action: ListReturnAction, onSubmit: () -> Unit = {}, ready: suspend () -> Unit, execute: suspend (ListReturnAction) -> Unit): ListReturnCommand {
     val scope = rememberCoroutineScope()
-    val executor = remember(scope) { ListReturnExecutor(scope) }
+    var pending by remember { mutableStateOf(false) }
+    val executor = remember(scope) { ListReturnExecutor(scope) { pending = it } }
     val currentOwner by rememberUpdatedState(owner)
     val currentActive by rememberUpdatedState(active)
     val currentReady by rememberUpdatedState(ready)
@@ -40,5 +41,5 @@ internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEn
     }
     // Visible controls use a captured step, just like Back. Readiness cannot turn
     // a return-to-top tap into clearing the list's filter.
-    return ListReturnCommand({ submit(it) }, executor::cancel)
+    return ListReturnCommand({ submit(it) }, executor::cancel) { pending }
 }
