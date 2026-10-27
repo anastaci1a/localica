@@ -73,15 +73,22 @@ internal fun GlassSearchField(value: String, onValue: (String) -> Unit, label: S
     }
 }
 
-/** Fade the scrolling pixels, not a solid panel painted across the list. */
-internal fun Modifier.listTopFade() = composed {
+/** Fade the scrolling pixels, not a solid panel painted across the list.
+ * Read strength only while drawing; callers retain ownership of motion and geometry. */
+internal fun Modifier.listTopFade(strength: () -> Float = { 1f }) = composed {
     // Modal grids use the shared directional viewport mask instead of a
     // permanent top fade that would hide content even at the start of the list.
     if (LocalPopupScrollEdges.current) Modifier
     else Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
         drawContent()
+        val fade = strength().let { if (it.isFinite()) it.coerceIn(0f, 1f) else 1f }
         val height = 80.dp.toPx().coerceAtMost(size.height)
-        drawRect(Brush.verticalGradient(*Array(17) { i -> val t = i / 16f; t to Color.Black.copy(alpha = t * t * (3f - 2f * t)) }, endY = height),
+        drawRect(Brush.verticalGradient(*Array(17) { i ->
+            val t = i / 16f
+            val mask = t * t * (3f - 2f * t)
+            val alpha = when (fade) { 1f -> mask; 0f -> 1f; else -> 1f + (mask - 1f) * fade }
+            t to Color.Black.copy(alpha = alpha)
+        }, endY = height),
             size = Size(size.width, height), blendMode = BlendMode.DstIn)
     }
 }
