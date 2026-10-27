@@ -125,7 +125,7 @@ Hold any slot/action to customize, except Repeat, which retains its dedicated me
 Offer functional information, editing, art, lyrics, playlist, pin, collection links, shuffle/repeat, count, ten-second seek and More actions. Default: Info/Add to playlist left, Repeat/Shuffle right. Info uses circled i; playlist uses list-plus.
 
 - Information: shared bounded frosted popup with tappable artwork and divided file/location, metadata, known technical details and listening/date sections. Leading icons align beside label/value blocks; entire Album, Artist, Album Artist and Location rows open their existing collections. The body scrolls with directional overflow fades while Edit tags and Done stay together at the footer’s trailing edge. Popup controls and secondary text share the material’s light/dark palette.
-- Tag editor: compact frosted panel, centered artwork above checked fields, change/remove controls on the preview. Follow [editing and crop rules](product.md#metadata-and-artwork-editing); the cropper offers pan, pinch, zoom and reset.
+- Tag editor: frosted sheet with shared title, perimeter and fixed header/footer; only the fields scroll. Center artwork above checked fields, with change/remove controls on the preview. Follow [editing and crop rules](product.md#metadata-and-artwork-editing); the cropper offers pan, pinch, zoom and reset.
 - Image picker: rounded previews of readable previous choices; optional device-photo access has a short explanation and glass permission button. An evenly spaced divider separates these from icon-bearing glass Gallery/Files actions.
 - Bulk jobs: Continue in background and Stop after current file; **Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows progress/recent per-file outcomes.
 
@@ -137,7 +137,7 @@ Both modes share a compact, screen/font-aware popup: measure Simple for the comm
 
 Advanced uses **When a song ends** and **When a queue ends** buttons, matching Extra information. Each opens a non-scrolling configuration popup; Select stages its changes, while Cancel or Back discards that child draft.
 
-Parent Apply saves the selected mode; parent Cancel discards both mode drafts. Children measure complete shared-control layouts at the actual safe width, height and font scale, using wrapped labels and compact spacing/type roles when needed. Preserve full labels, the queue warning, system font scaling and 48 dp targets. Only when neither layout fits, show visible guidance to enlarge the window or reduce text size, with Cancel; resizing back restores the child draft.
+Parent Apply saves the selected mode; parent Cancel discards both mode drafts. Children measure complete shared-control layouts at the actual safe width, height and font scale. Keep the shared title and perimeter; wrap labels and use compact body roles when needed. Queue choices may sit beside the complete warning, with both switches above. Preserve full labels, system font scaling and 48 dp targets. Only when no complete arrangement fits, show visible guidance to enlarge the window or reduce text size, with Cancel; resizing back restores the child draft.
 
 Keep the parent’s mode tabs and actions fixed when they fit. Playback semantics live in [Product](product.md#queues-and-playback); keep the destination shelf extensible.
 
