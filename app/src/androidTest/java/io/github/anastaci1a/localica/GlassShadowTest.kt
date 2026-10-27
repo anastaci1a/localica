@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.layout.layout
@@ -30,6 +31,52 @@ import kotlin.math.roundToInt
 
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun singleBodyPrimitivePreservesTheExistingPathShadowAtTheSameNativeOrigin() {
+        var reference by mutableStateOf(true)
+        var sample by mutableIntStateOf(0)
+        compose.setContent {
+            val geometry = remember { GlassShadowGeometry() }
+            Box(Modifier.size(240.dp, 180.dp).background(Color.White).testTag("primitive-shadow")
+                .drawBehind {
+                    val dx = if (sample % 2 == 0) 0f else .375f
+                    val radius = if (sample < 2) CornerRadius(22.dp.toPx())
+                        else CornerRadius(30.dp.toPx(), 12.dp.toPx())
+                    val body = RoundRect(48.dp.toPx() + dx, 48.dp.toPx() + dx,
+                        188.dp.toPx() + dx, 118.dp.toPx() + dx, radius)
+                    val opacity = if (sample == 3) .2f else 1f
+                    if (!reference) glassShadows(listOf(body to opacity), .8f, .6f, geometry)
+                    else {
+                        // Frozen pre-primitive operation sequence, at the SAME host origin.
+                        geometry.update(listOf(body), (4f + .6f * 28f).dp.toPx(), 2.dp.toPx())
+                        clipPath(geometry.body,
+                            androidx.compose.ui.graphics.ClipOp.Difference) {
+                            geometry.rings.forEachIndexed { index, ring ->
+                                val t = (16 - index) / 16f
+                                val alpha = .8f * opacity * .07f * ((1f - t) * (1f - t))
+                                if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
+                            }
+                        }
+                    }
+                })
+        }
+        repeat(4) { index ->
+            compose.runOnIdle { sample = index; reference = true }
+            val expected = compose.onNodeWithTag("primitive-shadow").captureToImage().toPixelMap()
+            compose.runOnIdle { reference = false }
+            val actual = compose.onNodeWithTag("primitive-shadow").captureToImage().toPixelMap()
+            var error = 0f
+            var maximum = 0f
+            for (y in 0 until expected.height) for (x in 0 until expected.width) {
+                val delta = abs(expected[x, y].red - actual[x, y].red)
+                error += delta
+                maximum = maxOf(maximum, delta)
+            }
+            // Same bounds/opacity criterion as the existing retained/direct gradient case.
+            assertTrue("Primitive/path native shadow sample $index: max=$maximum sum=$error",
+                maximum < .04f && error / (expected.width * expected.height) < .003f)
+        }
+    }
 
     @Test fun shadowOffsetMatchesOrdinaryPlacementWithoutRemeasuring() {
         var offset by mutableStateOf(IntOffset.Zero)
