@@ -69,7 +69,13 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     // An unanchored window instead follows its current ambient ink, not a remembered seed.
     val ink = trigger?.ink?.takeIf { it.isSpecified } ?: LocalContentColor.current
     val dark = ink.luminance() > .5f
-    val entry = remember { GlassDialogEntry(origin, locals, onDismiss, dark, placement, content) }
+    val entry = remember(host, origin, placement) {
+        // Conditional callers are disposed at dismissal, while their host entry keeps
+        // returning. Reclaim that same animation/window instead of creating a second
+        // writer for the trigger's hidden, shadow and expansion state.
+        host.entries.lastOrNull { !it.mounted && it.anchor === origin && it.placement == placement }
+            ?: GlassDialogEntry(origin, locals, onDismiss, dark, placement, content)
+    }
     SideEffect {
         if (trigger == null) origin.ink = ink
         if (origin.source == null) origin.source = source
@@ -77,7 +83,8 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         entry.fitContent = fitContent
     }
     DisposableEffect(host, entry) {
-        host.entries.add(entry)
+        entry.mounted = true
+        if (entry !in host.entries) host.entries.add(entry)
         onDispose { entry.mounted = false }
     }
 }
