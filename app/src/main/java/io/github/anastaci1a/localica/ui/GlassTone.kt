@@ -47,16 +47,36 @@ private object ToneImages {
     }
 }
 
+/** Diagnostic identity hashes only: no source/returned bitmap is retained by this metadata.
+ * Hashes are correlation hints, not globally unique resource IDs. */
+internal data class ToneImageIdentity(val image: Int, val bitmap: Int)
+private fun ImageBitmap?.toneIdentity(): ToneImageIdentity? = this?.let {
+    ToneImageIdentity(System.identityHashCode(it), System.identityHashCode(it.asAndroidBitmap()))
+}
+internal enum class ToneSnapshotPath { CacheHit, CompletedResult, RawFallback, UntonedInput, CompletionMetadataUnavailable }
+/** [appliedTone] is null for raw or unverified pixels; requested tone never describes retained pixels.
+ * A custom preparation seam is identified separately: its output is not asserted to apply the curve. */
+internal data class ToneSnapshotProvenance(
+    val returned: ToneImageIdentity?, val source: ToneImageIdentity?, val appliedTone: GlassTone?,
+    val path: ToneSnapshotPath, val requestedSource: ToneImageIdentity?, val requestedTone: GlassTone,
+    val customPreparation: Boolean = false,
+)
+private class ToneSnapshotCompletion { @Volatile var provenance: ToneSnapshotProvenance? = null }
+
 /** Retain completed positive-tone content while a replacement image/tone is prepared.
  * The optional preparation seam is for deterministic state tests; ordinary callers keep
  * the identical cache and Dispatchers.Default preparation path. No bitmap is recycled here.
  */
 @Composable internal fun rememberToneSnapshot(image: ImageBitmap?, tone: GlassTone,
-    prepare: (suspend (ImageBitmap, GlassTone) -> ImageBitmap)? = null): ImageBitmap? {
+    prepare: (suspend (ImageBitmap, GlassTone) -> ImageBitmap)? = null,
+    onProvenance: ((ToneSnapshotProvenance) -> Unit)? = null): ImageBitmap? {
     val cached = remember(image, tone, prepare) {
         image?.takeIf { tone.trim > 0f && prepare == null }?.let { ToneImages.images.get(ToneImages.Key(it, tone)) }
     }
     var result by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Non-observable metadata follows the existing result publication, without another effect,
+    // cache entry, retained raw image or metadata-triggered recomposition.
+    val completed = remember { ToneSnapshotCompletion() }
     LaunchedEffect(image, tone, prepare) {
         val replacement = if (image == null || tone.trim == 0f) image
             else if (prepare != null) prepare(image, tone)
@@ -64,9 +84,31 @@ private object ToneImages {
         // A suspended preparer may finish non-cancellable owned work after replacement.
         // Its retired effect must never publish into the retained result.
         currentCoroutineContext().ensureActive()
+        completed.provenance = ToneSnapshotProvenance(replacement.toneIdentity(), image.toneIdentity(),
+            tone.takeIf { image != null && tone.trim != 0f && prepare == null },
+            ToneSnapshotPath.CompletedResult, image.toneIdentity(), tone, image != null && tone.trim != 0f && prepare != null)
         result = replacement
     }
-    return if (image == null || tone.trim == 0f) image else cached ?: result ?: image
+    val returned = if (image == null || tone.trim == 0f) image else cached ?: result ?: image
+    if (onProvenance != null) {
+        val source = image.toneIdentity()
+        val provenance = when {
+            image == null || tone.trim == 0f -> ToneSnapshotProvenance(returned.toneIdentity(), source,
+                null, ToneSnapshotPath.UntonedInput, source, tone)
+            cached != null -> ToneSnapshotProvenance(returned.toneIdentity(), source,
+                tone, ToneSnapshotPath.CacheHit, source, tone)
+            result != null -> completed.provenance?.takeIf { it.returned == returned.toneIdentity() }
+                ?.copy(requestedSource = source, requestedTone = tone)
+                // Do not misattribute a snapshot read if completion advances concurrently with composition.
+                ?: ToneSnapshotProvenance(returned.toneIdentity(), null, null,
+                    ToneSnapshotPath.CompletionMetadataUnavailable, source, tone)
+            else -> ToneSnapshotProvenance(returned.toneIdentity(), source,
+                null, ToneSnapshotPath.RawFallback, source, tone)
+        }
+        // The caller consumes this immutable value in the same composition as returned pixels.
+        onProvenance(provenance)
+    }
+    return returned
 }
 
 /** Shared post-optics mapping, also used by the material-only average. */
