@@ -104,7 +104,8 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                 verticalArrangement = Arrangement.spacedBy(chrome.gapDp.dp)) {
                 Row(Modifier.fillMaxWidth().testTag("tag-editor-header"), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (state.artworkOnly) "Change artwork" else "Edit ${state.tracks.size} ${if (state.tracks.size == 1) "song" else "songs"}", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                    ActionTextButton(enabled = !state.busy, onClick = controller::close) { Text("Close editor") }
+                    ActionTextButton(enabled = !state.busy, onClick = controller::close,
+                        modifier = Modifier.heightIn(min = 48.dp)) { Text("Close editor") }
                 }
                 Column(Modifier.fillMaxWidth().weight(1f).testTag("tag-editor-body").controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!state.artworkOnly) Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
@@ -160,10 +161,13 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                 }
                 FlowRow(Modifier.fillMaxWidth().testTag("tag-editor-footer"), horizontalArrangement = Arrangement.End) {
                     if (state.busy) {
-                        ActionTextButton(onClick = controller::continueInBackground) { Text("Continue in background") }
-                        ActionTextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
+                        ActionTextButton(onClick = controller::continueInBackground,
+                            modifier = Modifier.heightIn(min = 48.dp)) { Text("Continue in background") }
+                        ActionTextButton(onClick = controller::stopAfterCurrent,
+                            modifier = Modifier.heightIn(min = 48.dp)) { Text("Stop after current file") }
                     }
-                    Button(enabled = canReview, onClick = { confirming = true }) { Text("Review changes") }
+                    Button(enabled = canReview, onClick = { confirming = true },
+                        modifier = Modifier.heightIn(min = 48.dp)) { Text("Review changes") }
                 }
             }
         }
