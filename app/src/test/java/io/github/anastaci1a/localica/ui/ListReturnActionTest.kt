@@ -9,6 +9,31 @@ import org.junit.Test
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ListReturnActionTest {
+    @Test fun admissionIsPendingBeforeReadinessAndOldCompletionCannotClearItsReplacement() = runTest {
+        var pending = false
+        val first = CompletableDeferred<Unit>()
+        val second = CompletableDeferred<Unit>()
+        val executor = ListReturnExecutor(this) { pending = it }
+        val command = ListReturnCommand({
+            executor.submit({ true }, { first.await() }, { it }, {})
+        }, executor::cancel) { pending }
+        command(ListReturnAction.ScrollTop)
+        assertTrue("Admission hides the control before the coroutine is scheduled", command.pending)
+        runCurrent()
+        executor.submit({ true }, { second.await() }, { ListReturnAction.ScrollTop }, {})
+        first.complete(Unit)
+        runCurrent()
+        assertTrue("Retired completion cannot expose a pending replacement", command.pending)
+        second.complete(Unit)
+        runCurrent()
+        assertFalse(command.pending)
+        command(ListReturnAction.ScrollTop)
+        command.cancel()
+        assertFalse("Physical cancellation releases the pending owner synchronously", command.pending)
+        runCurrent()
+        assertFalse(command.pending)
+    }
+
     @Test fun scrollThenFilterThenOrdinaryBackHasOneApplicableStep() {
         assertEquals(ListReturnAction.ScrollTop, listReturnAction(true, false, true))
         assertEquals(ListReturnAction.ScrollTop, listReturnAction(false, true, true))

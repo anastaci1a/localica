@@ -73,6 +73,26 @@ class ListReturnControlsTest {
         return fixture
     }
 
+    @Test fun activatedReturnRemovesItsRetainedHostBeforeTheListFinishes() {
+        fixture(BrowseRoute(MainTab.Songs), reducedMotion = false)
+        awaitRow(tracks.first().id)
+        list.performScrollToIndex(65)
+        compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
+        compose.onNodeWithTag("floating-return-control", true).assertExists()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithContentDescription("Return to top").performClick()
+            compose.mainClock.advanceTimeByFrame()
+            assertTrue("The actual list has not reached its destination", position() > 0f)
+            compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+            compose.onNodeWithTag("floating-return-control", true).assertDoesNotExist()
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+        compose.waitUntil(5000) { position() == 0f }
+        compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+    }
+
     @Test fun ordinaryTopReturnPreservesTheExactFilterAndQuery() {
         val original = BrowseRoute(MainTab.Library, text = "Other", filter = MediaKind.Song)
         val fixture = fixture(original)
@@ -187,8 +207,11 @@ class ListReturnControlsTest {
         awaitRow(queue.entries[90].id)
         list.performScrollToIndex(30)
         val current = compose.onNodeWithContentDescription("Current song").fetchSemanticsNode().boundsInRoot
-        assertEquals(utility.center.y, current.center.y, 1f)
-        assertEquals(host.bottom - fixture.insetPx, current.bottom, 1f)
+        // Retain this historical method identity; Queue now explicitly adds
+        // clearance below its circular control rather than sharing the baseline.
+        val queueClearance = with(compose.density) { 12.dp.toPx() }
+        assertEquals(utility.center.y - queueClearance, current.center.y, 1f)
+        assertEquals(host.bottom - fixture.insetPx - queueClearance, current.bottom, 1f)
     }
 
     @Test fun currentOccurrenceReturnContinuesAcrossAPlaybackPositionCheckpoint() =
