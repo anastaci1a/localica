@@ -240,7 +240,7 @@ class LoadingMaterialOpacityTest {
             // Same captured pixels only. Diagnostics may never replace the assertion.
             runCatching {
                 val context = InstrumentationRegistry.getInstrumentation().targetContext
-                val artifact = java.io.File(context.getExternalFilesDir(null),
+                val artifact = java.io.File(nativeEvidenceDirectory("loading-material-failures", context.getExternalFilesDir(null)),
                     "loading-material-failure-${android.os.SystemClock.uptimeMillis()}.png")
                 artifact.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 android.util.Log.e("LoadingMaterialOpacity", "SAME failed capture=${artifact.absolutePath} coordinates=$coordinateEvidence")

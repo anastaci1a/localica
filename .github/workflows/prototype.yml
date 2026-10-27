@@ -166,6 +166,14 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
           app/build/outputs/connected_android_test_additional_output/**/list-top-fade-*/**
           app/build/outputs/connected_android_test_additional_output/**/complex-selection-captures/**
+          app/build/outputs/connected_android_test_additional_output/**/pinch-review/**
+          app/build/outputs/connected_android_test_additional_output/**/repeat386/**
+          app/build/outputs/connected_android_test_additional_output/**/glass-morph-failures/**
+          app/build/outputs/connected_android_test_additional_output/**/glass-shadow-failures/**
+          app/build/outputs/connected_android_test_additional_output/**/loading-material-failures/**
+          app/build/outputs/connected_android_test_additional_output/**/lyrics-header-actions/**
+          app/build/outputs/connected_android_test_additional_output/**/list-search-return/**
+          app/build/outputs/connected_android_test_additional_output/**/frosted-surface/**
 
           prototype-evidence/
           prototype-runner-environment.txt
@@ -299,6 +307,14 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
           app/build/outputs/connected_android_test_additional_output/**/list-top-fade-*/**
           app/build/outputs/connected_android_test_additional_output/**/complex-selection-captures/**
+          app/build/outputs/connected_android_test_additional_output/**/pinch-review/**
+          app/build/outputs/connected_android_test_additional_output/**/repeat386/**
+          app/build/outputs/connected_android_test_additional_output/**/glass-morph-failures/**
+          app/build/outputs/connected_android_test_additional_output/**/glass-shadow-failures/**
+          app/build/outputs/connected_android_test_additional_output/**/loading-material-failures/**
+          app/build/outputs/connected_android_test_additional_output/**/lyrics-header-actions/**
+          app/build/outputs/connected_android_test_additional_output/**/list-search-return/**
+          app/build/outputs/connected_android_test_additional_output/**/frosted-surface/**
 
           prototype-evidence/
           prototype-runner-environment.txt
