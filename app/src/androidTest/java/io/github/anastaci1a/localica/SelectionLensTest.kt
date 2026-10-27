@@ -348,4 +348,191 @@ class SelectionLensTest {
         assertTrue(initial > 20 && moved > 20)
         assertEquals("No lens remains at the previous row position", 0, stale)
     }
+
+    /** Four fixed captures: baseline + selected for each orientation, with both controls in
+     * the same capture. Optical differences are evidence, not a new parity tolerance. */
+    @Test fun joinedPairsExposeRenderedDifferencesFromSameOrientationRoundRectControls() {
+        var horizontal by mutableStateOf(false)
+        var chosen by mutableStateOf(false)
+        val observed = ShapeControlObservation(2)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(1f),
+                androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr,
+                LocalReducedMotion provides true,
+                LocalGlassAppearance provides LocalGlassAppearance.current.copy(depth = 1.35f)) {
+                val cells = shapeControlCells(horizontal)
+                val outer = if (horizontal) Rect(16f, 16f, 184f, 96f) else Rect(16f, 16f, 96f, 184f)
+                Row(Modifier.testTag("joined-shape-controls")) {
+                    ShapeControlPane(cells, cells, chosen, observed, 0)
+                    // A real single-item host is the optical control. The independent native
+                    // RoundRect below, not production path generation, is the contour oracle.
+                    ShapeControlPane(listOf(outer), cells, chosen, observed, 1)
+                }
+            }
+        } }
+        for (across in listOf(false, true)) {
+            compose.runOnIdle { horizontal = across; chosen = false }
+            compose.waitForIdle()
+            val name = if (across) "horizontal" else "vertical"
+            val before = captureShapeControl("joined-shape-controls", "$name-baseline").toPixelMap()
+            compose.runOnIdle { chosen = true }
+            awaitShapeControl(observed, listOf(2, 1))
+            val after = captureShapeControl("joined-shape-controls", "$name-selected").toPixelMap()
+            assertEquals(400, before.width); assertEquals(200, before.height)
+            assertEquals(before.width, after.width); assertEquals(before.height, after.height)
+            val cells = shapeControlCells(across)
+            val outer = if (across) Rect(16f, 16f, 184f, 96f) else Rect(16f, 16f, 96f, 184f)
+            val expected = independentRoundRect(outer)
+            assertSubmittedContour(observed, 0, cells, expected)
+            assertSubmittedContour(observed, 1, listOf(outer), expected)
+            var error = 0.0; var maximum = 0f; var samples = 0
+            for (y in 0 until 200) for (x in 0 until 200) {
+                assertEquals("Both $name controls start over the same local backing at $x/$y", before[x, y], before[x + 200, y])
+                if (expected.contains(x, y)) {
+                    val a = after[x, y]; val b = after[x + 200, y]
+                    val delta = (kotlin.math.abs(a.red - b.red) + kotlin.math.abs(a.green - b.green) + kotlin.math.abs(a.blue - b.blue)) / 3f
+                    error += delta; maximum = maxOf(maximum, delta); samples++
+                }
+            }
+            for (pane in 0..1) {
+                assertShapeForeground(before, after, cells, pane * 200)
+                for ((x, y) in listOf(4 to 4, 195 to 195))
+                    assertEquals("$name leaves unselected viewport pixels untouched", before[x + pane * 200, y], after[x + pane * 200, y])
+            }
+            println("ComplexSelection control=$name depth=1.35 density=1 meanRGBDifference=${error / samples} " +
+                "maxRGBDifference=$maximum samples=$samples pairClassifierAnalytic=${simpleLensGeometry(cells.map(::SelectionRegion), 16f) != null}; " +
+                "same-orientation single-item reference; descriptive only, not a parity or owner-symptom pass")
+        }
+    }
+
+    /** Two fixed captures. This is a static synthetic L, not a real browser pinch or the
+     * owner's unseen screenshot. Its contour oracle is the union of two independent bars. */
+    @Test fun irregularLRetainsItsIndependentContourUnselectedGapAndSharpForeground() {
+        var chosen by mutableStateOf(false)
+        val cells = listOf(Rect(16f, 16f, 96f, 96f), Rect(104f, 16f, 184f, 96f), Rect(16f, 104f, 96f, 184f))
+        val observed = ShapeControlObservation(1)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(1f),
+                androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr,
+                LocalReducedMotion provides true,
+                LocalGlassAppearance provides LocalGlassAppearance.current.copy(depth = 1.35f)) {
+                Box(Modifier.testTag("irregular-shape-control")) { ShapeControlPane(cells, cells, chosen, observed, 0) }
+            }
+        } }
+        compose.waitForIdle()
+        val before = captureShapeControl("irregular-shape-control", "l-baseline").toPixelMap()
+        compose.runOnIdle { chosen = true }
+        awaitShapeControl(observed, listOf(3))
+        val after = captureShapeControl("irregular-shape-control", "l-selected").toPixelMap()
+        assertEquals(200, before.width); assertEquals(200, before.height)
+        assertEquals(before.width, after.width); assertEquals(before.height, after.height)
+        val expected = independentRoundRect(Rect(16f, 16f, 184f, 96f)).apply {
+            op(independentRoundRect(Rect(16f, 16f, 96f, 184f)), Region.Op.UNION)
+        }
+        assertSubmittedContour(observed, 0, cells, expected)
+        assertTrue("Horizontal shared-side bridge is inside", expected.contains(100, 56))
+        assertTrue("Vertical shared-side bridge is inside", expected.contains(56, 100))
+        assertFalse("Missing lower-right tile stays outside", expected.contains(140, 140))
+        assertShapeForeground(before, after, cells, 0)
+        for (y in 116..176 step 4) for (x in 116..176 step 4) {
+            assertFalse(expected.contains(x, y))
+            assertEquals("The rendered missing tile cannot be filled by a group hull at $x/$y", before[x, y], after[x, y])
+        }
+        for ((x, y) in listOf(4 to 4, 195 to 195))
+            assertEquals("L leaves the surrounding viewport untouched", before[x, y], after[x, y])
+        var error = 0.0; var samples = 0
+        for (y in 0 until 200) for (x in 0 until 200) if (expected.contains(x, y)) {
+            error += kotlin.math.abs(after[x, y].red - before[x, y].red); samples++
+        }
+        println("ComplexSelection control=L depth=1.35 density=1 meanRedChange=${error / samples} samples=$samples; " +
+            "contour/gap/foreground contracts only, no optical-quality or real-pinch acceptance")
+    }
+
+    private class ShapeControlObservation(count: Int) {
+        val sources = arrayOfNulls<FrostedBackdrop>(count)
+        val scenes = arrayOfNulls<SelectionScene>(count)
+    }
+
+    private fun shapeControlCells(horizontal: Boolean) = listOf(Rect(16f, 16f, 96f, 96f),
+        if (horizontal) Rect(104f, 16f, 184f, 96f) else Rect(16f, 104f, 96f, 184f))
+
+    @Composable private fun ShapeControlPane(regions: List<Rect>, foreground: List<Rect>, chosen: Boolean,
+        observed: ShapeControlObservation, index: Int) {
+        val source = rememberFrostedBackdrop(Unit)
+        SideEffect { observed.sources[index] = source }
+        Box(Modifier.size(200.dp)) {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                for (y in 0..24) for (x in 0..24) drawRect(if ((x + y) % 2 == 0) Color.Red else Color.Blue,
+                    androidx.compose.ui.geometry.Offset(x * 8f, y * 8f), androidx.compose.ui.geometry.Size(8f, 8f))
+            }
+            CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+                ConnectedSelectionHost(Modifier.fillMaxSize()) {
+                    val scene = requireNotNull(LocalSelectionScene.current)
+                    SideEffect { observed.scenes[index] = scene }
+                    regions.forEach { rect ->
+                        Box(Modifier.absoluteOffset(rect.left.dp, rect.top.dp).size(rect.width.dp, rect.height.dp)
+                            .selectionLens(chosen, false))
+                    }
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                        foreground.forEach { rect ->
+                            repeat(6) { stripe -> drawRect(if (stripe % 2 == 0) Color.White else Color.Black,
+                                androidx.compose.ui.geometry.Offset(rect.left + 28f + stripe * 4f, rect.top + 28f),
+                                androidx.compose.ui.geometry.Size(4f, 24f)) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun awaitShapeControl(observed: ShapeControlObservation, counts: List<Int>) {
+        compose.waitForIdle()
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { observed.sources.all { it?.snapshot != null } }
+        compose.runOnIdle {
+            counts.forEachIndexed { index, count ->
+                val scene = requireNotNull(observed.scenes[index])
+                assertEquals("Actual host drew all selected bodies", count, scene.lastDrawnRegions.size)
+                assertTrue(scene.regions.values.all { it.selected && it.visibility() == 1f })
+            }
+        }
+    }
+
+    private fun independentRoundRect(bounds: Rect): Region {
+        val path = android.graphics.Path().apply {
+            addRoundRect(android.graphics.RectF(bounds.left, bounds.top, bounds.right, bounds.bottom), 24f, 24f,
+                android.graphics.Path.Direction.CW)
+        }
+        return Region().apply { setPath(path, Region(0, 0, 200, 200)) }
+    }
+
+    private fun assertSubmittedContour(observed: ShapeControlObservation, index: Int, expectedRegions: List<Rect>, expected: Region) {
+        compose.runOnIdle {
+            val regions = requireNotNull(observed.scenes[index]).lastDrawnRegions
+            assertEquals("Every expected body was submitted", expectedRegions.size, regions.size)
+            assertEquals("Scene-map iteration order does not define geometry", expectedRegions.toSet(), regions.map { it.bounds }.toSet())
+            val actual = Region().apply { setPath(connectedSelectionPath(regions, 16f).asAndroidPath(), Region(0, 0, 200, 200)) }
+            assertTrue("Submitted contour matches an independent native RoundRect oracle",
+                Region(actual).apply { op(expected, Region.Op.XOR) }.isEmpty)
+        }
+    }
+
+    private fun assertShapeForeground(before: androidx.compose.ui.graphics.PixelMap, after: androidx.compose.ui.graphics.PixelMap,
+        cells: List<Rect>, offset: Int) {
+        for (cell in cells) for (stripe in 0..5) for (dy in listOf(32, 40, 48)) {
+            val x = offset + cell.left.toInt() + 30 + stripe * 4
+            val y = cell.top.toInt() + dy
+            val white = stripe % 2 == 0
+            assertEquals("Baseline marker is spatially registered", white, before[x, y].red > .5f)
+            assertEquals("Opaque foreground stripes cannot move or duplicate under a connected lens", white, after[x, y].red > .5f)
+        }
+    }
+
+    private fun captureShapeControl(tag: String, name: String): androidx.compose.ui.graphics.ImageBitmap =
+        compose.onNodeWithTag(tag).captureToImage().also { image ->
+            // Retain each fixed original before pixel inspection. No capture-driven retries.
+            val directory = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+            java.io.File(directory, "complex-selection-$name.png").outputStream().use {
+                image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
 }
