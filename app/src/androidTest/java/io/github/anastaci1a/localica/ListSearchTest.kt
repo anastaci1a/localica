@@ -33,12 +33,15 @@ class ListSearchTest {
 
     @Test fun searchSlotUsesPlacedTravelThroughNativeReadinessAndInterruptedReturn() = slotFrames(false)
     @Test fun reducedSearchSlotUsesTheSameNativePlacementEndpoints() = slotFrames(true)
+    @Test fun queueRowsLandAtTheDepartingSearchMaterialTop() = slotFrames(false, queue = true)
 
     private data class SlotFrame(val sample: SearchMorphSample, val rowTop: Float)
 
-    private fun slotFrames(reduced: Boolean) = withDockedSlotKeyboard {
+    private fun slotFrames(reduced: Boolean, queue: Boolean = false) = withDockedSlotKeyboard {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val route = BrowseRoute(MainTab.Songs, key = "search-slot-frames")
+        val route = if (queue) BrowseRoute(MainTab.Queues,
+            MediaRef(MediaKind.Queue, "slot-queue"), title = "Slot queue", key = "queue-search-slot-frames")
+            else BrowseRoute(MainTab.Songs, key = "search-slot-frames")
         val preferences = BrowsePreferences(context)
         val previous = preferences.read(route)
         preferences.write(route, BrowseStyle(quickSearch = true), false)
@@ -48,6 +51,13 @@ class ListSearchTest {
         var slot = 0f
         val tracks = (0..20).map { Track("slot:$it", "Song ${it.toString().padStart(3, '0')}",
             fileName = "$it.mp3", relativePath = "$it.mp3") }
+        val queueState = if (queue) {
+            val value = io.github.anastaci1a.localica.queue.ListeningQueue(id = "slot-queue", name = "Slot queue",
+                entries = tracks.mapIndexed { index, track -> io.github.anastaci1a.localica.queue.QueueEntry("slot-entry:$index", track) },
+                currentEntryId = "slot-entry:0")
+            io.github.anastaci1a.localica.queue.QueueUiState(
+                io.github.anastaci1a.localica.queue.QueueLibrary(listOf(value), value.id), loading = false, browsedId = value.id)
+        } else io.github.anastaci1a.localica.queue.QueueUiState()
         try {
             compose.setContent { LocalicaTheme {
                 val density = LocalDensity.current
@@ -62,13 +72,18 @@ class ListSearchTest {
                     Box(Modifier.fillMaxSize()) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, {}, {},
                             { _, _, _ -> }, null, null, true, false, reducedMotion = reduced,
+                            queueState = queueState, playingEntryId = if (queue) "slot-entry:0" else null,
                             queryDispatcher = Dispatchers.Unconfined)
                     }
                 }
             } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Song 000").fetchSemanticsNodes().isNotEmpty() }
-            fun rowNode() = compose.onNodeWithTag("media-${tracks.first().id}", useUnmergedTree = true)
+            fun rowNode() = compose.onNodeWithTag("media-${if (queue) "slot-entry:0" else tracks.first().id}", useUnmergedTree = true)
             val baseline = rowNode().fetchSemanticsNode().boundsInRoot.top
+            val originalRoot = (rowNode().fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+            val originalRootY = compose.runOnUiThread {
+                IntArray(2).also(originalRoot::getLocationOnScreen)[1].toFloat()
+            }
             compose.mainClock.autoAdvance = false
             fun advanceObservedFrame(count: Int = 1) {
                 repeat(count) { compose.mainClock.advanceTimeByFrame() }
@@ -155,9 +170,15 @@ class ListSearchTest {
             val rootLayouts = compose.runOnUiThread { rootFrames.toList() }
             assertTrue("Observe underlying window layouts", rootLayouts.size > 2)
             assertTrue("Root layout observes the fully vacated slot", rootLayouts.any { it.fraction == 1f })
+            // The popup's first measured source is the visible material, not its
+            // taller touch target. Compare in the original list window's coordinates.
+            val initialHome = requireNotNull(placements.first { it.opening && it.flight?.opening == true }.flight).from
+            val originalMaterialTop = initialHome.top - originalRootY
+            val vacancy = baseline - originalMaterialTop
+            assertTrue("Only the real slot is vacated", vacancy in 0f..slot)
             for (sample in rootLayouts)
                 assertEquals("Row uses the placement owner's fraction measured in its own traversal: $sample",
-                    baseline - slot * sample.fraction, sample.rowTop, 1.1f)
+                    baseline - vacancy * sample.fraction, sample.rowTop, 1.1f)
             var heldFlight: SearchMorphFlight? = null
             var heldFraction = 0f
             // Keep every callback for owner/trajectory assertions, including those
