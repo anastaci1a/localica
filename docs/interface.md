@@ -38,7 +38,7 @@ Settings categories are Interface, Playback and queues, Library and tags, About/
 | Navigation selector | Adjustable glass has independent blur/tint; Clear overlay has 0–50% darkening (default off) and optional icon/text refraction (default off). Classic gray pill has adjustable opacity (default 10%) and no glass deformation. |
 | Sliders and switches | White opaque resting thumbs morph into clear unblurred glass on contact; independent expansion 1–2× (default 1.75×). |
 
-Adaptive contrast also applies to player color continuations, Queue frost and nested panels; they share one page-wide polarity. Supported player backgrounds choose the greater black/white contrast from bounded region samples. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Blur, texture and the artwork continuation remain unchanged.
+Adaptive contrast also applies to player color continuations, Queue frost and nested panels; they share one page-wide polarity. Supported player backgrounds compare black and white ink against their respective toned versions of the same bounded region samples, independently of the previous ink. A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Blur, texture and the artwork continuation remain unchanged.
 
 ## Navigation and Back
 
