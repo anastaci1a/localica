@@ -512,13 +512,18 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val completePanel = rememberFrostedBackdrop(p == 1f, dark = dark, retainRaster = false)
                 SideEffect { completePanel.parent = source }
                 fun mix(a: Float, b: Float) = a + (b - a) * geometry
+                // Read readiness in composition even for committed queries, whose
+                // IME-dismissal branch below is disabled. A SideEffect-only read
+                // would leave a recreated popup at its initial bottom target.
+                val openingSearchTarget = visible &&
+                    (searchFlight?.opening == true || searchFocusRequest != false)
                 SideEffect {
                     if (placement == GlassPlacement.Search && targetHeight > 0) {
                         // Aim at the keyboard's reported destination immediately, rather
                         // than following each inset frame and waiting for native onEnd.
                         searchTarget = searchPanelTarget(windowOrigin, availableWidth.toFloat(), availableHeight.toFloat(),
                             widthLimit.toFloat(), targetHeight.toFloat(), margin, imeHeight, imeTarget, safeBottom,
-                            opening = visible && (searchFlight?.opening == true || searchFocusRequest != false))
+                            opening = openingSearchTarget)
                     }
                 }
                 // A visibility change may precede the animation effect. Freeze the
