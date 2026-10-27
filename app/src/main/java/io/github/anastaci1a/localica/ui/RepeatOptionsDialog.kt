@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.AnnotatedString
@@ -18,6 +19,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
 import io.github.anastaci1a.localica.queue.*
+
+/** Passive evidence for attempted complete layouts, in pixels; null keeps production silent. */
+internal val LocalRepeatFitEvidence = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+private fun Modifier.repeatFitComponent(name: String, heights: MutableMap<String, Int>?): Modifier =
+    if (heights == null) this else layout { measurable, constraints ->
+        val measured = measurable.measure(constraints)
+        heights[name] = measured.height
+        layout(measured.width, measured.height) { measured.place(0, 0) }
+    }
 
 private val repeatModeLabels = listOf("Simple", "Advanced")
 
@@ -131,6 +142,7 @@ internal fun RepeatSectionDialog(section: RepeatSection, policy: AdvancedRepeat,
     var draft by remember { mutableStateOf(policy) }
     GlassDialog(onDismiss, fitContent = true) {
         val measurer = rememberTextMeasurer()
+        val fitEvidence = LocalRepeatFitEvidence.current
         val labels = if (section == RepeatSection.Song) SongEnd.entries.map { it.label } else QueueEnd.entries.map { it.label }
         val regularStyle = MaterialTheme.typography.bodyMedium
         val compactStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 14.sp)
@@ -148,13 +160,22 @@ internal fun RepeatSectionDialog(section: RepeatSection, policy: AdvancedRepeat,
                     val labelLayouts = labels.map { measurer.measure(AnnotatedString(it), style,
                         overflow = TextOverflow.Clip, maxLines = 2, constraints = Constraints(maxWidth = labelWidth)) }
                     val cellHeight = maxOf(48.dp, (labelLayouts.maxOf { it.size.height }).toDp() + 8.dp)
+                    val componentHeights = if (fitEvidence != null) mutableMapOf<String, Int>() else null
                     val natural = subcompose("measurement-$compact") {
                         Box(Modifier.clearAndSetSemantics { }) {
-                            RepeatSectionFrame(section, draft, null, null, null, chrome, cellHeight, style)
+                            RepeatSectionFrame(section, draft, null, null, null, chrome, cellHeight, style, componentHeights)
                         }
                     }.single().measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-                    if (natural.height <= constraints.maxHeight && labelLayouts.none { it.hasVisualOverflow })
-                        Fit(chrome, cellHeight) else null
+                    val fits = natural.height <= constraints.maxHeight && labelLayouts.none { it.hasVisualOverflow }
+                    // Body includes warning; component heights are not additive without subtracting it.
+                    fitEvidence?.invoke("section=$section chrome=$chrome units=px " +
+                        "natural=${natural.width}x${natural.height} available=${constraints.maxWidth}x${constraints.maxHeight} " +
+                        "title=${componentHeights?.get("title")} body=${componentHeights?.get("body")} " +
+                        "warning=${componentHeights?.get("warning") ?: 0} footer=${componentHeights?.get("footer")} " +
+                        "perimeter=${padding.roundToPx()} gap=${chrome.gapDp.dp.roundToPx()} " +
+                        "cell=${cellHeight.roundToPx()} labelWidth=$labelWidth labelOverflow=${labelLayouts.any { it.hasVisualOverflow }} " +
+                        "density=$density fontScale=$fontScale fits=$fits bodyIncludesWarning=true")
+                    if (fits) Fit(chrome, cellHeight) else null
                 }
                 val live = subcompose("content") {
                     if (fit != null) RepeatSectionFrame(section, draft, onDismiss,
@@ -179,16 +200,17 @@ internal fun RepeatSectionDialog(section: RepeatSection, policy: AdvancedRepeat,
 @Composable
 private fun RepeatSectionFrame(section: RepeatSection, policy: AdvancedRepeat,
     onDismiss: (() -> Unit)?, onSelect: (() -> Unit)?, onChange: ((AdvancedRepeat) -> Unit)?,
-    chrome: DialogChrome = DialogChrome.Regular, choiceHeight: Dp? = null, choiceStyle: TextStyle? = null) {
+    chrome: DialogChrome = DialogChrome.Regular, choiceHeight: Dp? = null, choiceStyle: TextStyle? = null,
+    componentHeights: MutableMap<String, Int>? = null) {
     val compact = chrome == DialogChrome.Compact
     val style = choiceStyle ?: MaterialTheme.typography.bodyMedium
     Column(Modifier.fillMaxWidth().padding(chrome.perimeterDp.dp)
         .testTag(if (compact) "repeat-section-compact" else "repeat-section-regular"),
         verticalArrangement = Arrangement.spacedBy(chrome.gapDp.dp)) {
-        Text(section.title, Modifier.testTag("repeat-section-title"), style = MaterialTheme.typography.titleLarge)
+        Text(section.title, Modifier.testTag("repeat-section-title").repeatFitComponent("title", componentHeights), style = MaterialTheme.typography.titleLarge)
         CompositionLocalProvider(LocalCompactPreferenceFrames provides compact) {
             ProvideTextStyle(style) {
-                Column(Modifier.fillMaxWidth().testTag("repeat-section-body"), verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 8.dp)) {
+                Column(Modifier.fillMaxWidth().testTag("repeat-section-body").repeatFitComponent("body", componentHeights), verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 8.dp)) {
                     if (section == RepeatSection.Song) {
                         RepeatChoices(SongEnd.entries, policy.songEnd, { it.label }, onChange?.let { change ->
                             { change(policy.copy(songEnd = it)) }
@@ -205,12 +227,13 @@ private fun RepeatSectionFrame(section: RepeatSection, policy: AdvancedRepeat,
                         }, choiceHeight, style, compact)
                         if (policy.songEnd == SongEnd.Repeat) Text(
                             "Queue-end options apply after you turn off repeating the current song.",
+                            modifier = Modifier.repeatFitComponent("warning", componentHeights),
                             style = if (compact) style else MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         }
-        FlowRow(Modifier.fillMaxWidth().testTag("repeat-section-footer"), horizontalArrangement = Arrangement.End) {
+        FlowRow(Modifier.fillMaxWidth().testTag("repeat-section-footer").repeatFitComponent("footer", componentHeights), horizontalArrangement = Arrangement.End) {
             if (onDismiss == null) TextButtonMeasurement("Cancel", if (compact) style else null)
             else ActionTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel", style = if (compact) style else MaterialTheme.typography.labelLarge) }
             if (onSelect == null) TextButtonMeasurement("Select", if (compact) style else null)
