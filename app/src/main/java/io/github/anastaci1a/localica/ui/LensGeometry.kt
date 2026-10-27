@@ -187,14 +187,31 @@ internal fun localLensRegions(regions: List<SelectionRegion>, origin: Offset) = 
     SelectionRegion(Rect(stable(r.left), stable(r.top), stable(r.right), stable(r.bottom)))
 }
 
-/** Exact common case, not a bounding-hull approximation: only one item or a
- * contiguous column whose rectangular bridges form one rounded outline. */
+/** Exact common case, not a bounding-hull approximation: one item or an aligned
+ * contiguous chain whose rectangular bridges form one rounded outline. */
 internal fun simpleLensGeometry(regions: List<SelectionRegion>, gap: Float): LensGeometry? {
-    if (regions.isEmpty()) return null
+    if (regions.isEmpty() || !gap.isFinite() || gap < 0f || regions.any {
+        val r = it.bounds
+        !listOf(r.left, r.top, r.right, r.bottom, r.width, r.height).all { value -> value.isFinite() } ||
+            r.width <= 0f || r.height <= 0f
+    }) return null
     val sorted = regions.sortedBy { it.bounds.top }
     val first = sorted.first().bounds
     val radius = mediaItemCornerRadius(first, gap)
-    if (sorted.any { it.bounds.left != first.left || it.bounds.right != first.right || it.bounds.height < 2 * radius }) return null
-    if (sorted.zipWithNext().any { (a, b) -> b.bounds.top - a.bounds.bottom !in 0f..gap }) return null
-    return LensGeometry(Rect(first.left, first.top, first.right, sorted.last().bounds.bottom), radius)
+    if (sorted.all { it.bounds.left == first.left && it.bounds.right == first.right && it.bounds.height >= 2 * radius } &&
+        sorted.zipWithNext().all { (a, b) -> b.bounds.top - a.bounds.bottom in 0f..gap }) {
+        return LensGeometry(Rect(first.left, first.top, first.right, sorted.last().bounds.bottom), radius)
+    }
+    val row = regions.sortedBy { it.bounds.left }
+    val left = row.first().bounds
+    val rowRadius = mediaItemCornerRadius(left, gap)
+    // The existing contour bridge extends gap*1.5 into BOTH neighbors. Keep
+    // those shoulders inside each item's straight core, never its outside caps.
+    // This deliberately declines narrow/unequal-radius cases rather than routing
+    // a connected shape through its merely enclosing rectangle.
+    val minimumWidth = gap * 1.5f * 2f
+    if (!minimumWidth.isFinite() || row.any { it.bounds.top != left.top || it.bounds.bottom != left.bottom ||
+        it.bounds.width < minimumWidth || mediaItemCornerRadius(it.bounds, gap) != rowRadius }) return null
+    if (row.zipWithNext().any { (a, b) -> b.bounds.left - a.bounds.right !in 0f..gap }) return null
+    return LensGeometry(Rect(left.left, left.top, row.last().bounds.right, left.bottom), rowRadius)
 }
