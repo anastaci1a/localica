@@ -134,7 +134,7 @@ On Android 13+, controls entirely over explicitly recorded panel material use an
 | Live scattering | Bounded downsampled layers: frosted panels on Android 12+, refracting glass on Android 13+. |
 | Prepared scattering | Shared cancellable snapshots on older adapters after scene changes/settled scrolling, never each gesture frame. |
 | Foreground / clear glass | Full resolution; tint below icons/text. |
-| Shadows | Retain padded textures excluding transparent interiors. Shadows inherit their owner's transform, fade and clipping; only siblings moving together share a union (bottom chrome/filter strips), never whole pages or modal descendants. Pad scrolling clips for the gradient's reach. Popup and trigger transfer exclusive ownership at handoff. Geometry changes invalidate the texture; translation reuses it. |
+| Shadows | Retain padded textures excluding transparent interiors; use rounded primitives for one valid uniform body and union paths otherwise. Shadows inherit their owner's transform, fade and clipping; only siblings moving together share a union (bottom chrome/filter strips), never whole pages or modal descendants. Pad scrolling clips for the gradient's reach. Popup and trigger transfer exclusive ownership at handoff. Geometry changes invalidate the texture; translation reuses it. |
 
 Keep composed backings within their viewport and guard unrecorded/released layers before readback. Floating-glass blur is independent of Queue frost. Graphics remain replaceable and independent of core data/playback.
 
