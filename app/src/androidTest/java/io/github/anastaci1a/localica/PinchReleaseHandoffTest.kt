@@ -243,22 +243,23 @@ class PinchReleaseHandoffTest {
         val before = compose.onNodeWithTag("media-release:73").fetchSemanticsNode().boundsInRoot.center.y
         val returnBounds = compose.onNodeWithContentDescription("Current song")
             .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        // swipeUp() starts at bottom-center, which belongs to the sibling return
-        // button, not the grid. Do not confuse that correctly owned button drag
-        // with a leaked pinch scroll mutation. Keep this hit-path precondition so
-        // future control placement changes cannot silently invalidate the probe.
-        assertTrue("The default bottom-center swipe would hit Current song: $returnBounds in $viewport",
-            returnBounds.contains(Offset(viewport.center.x, viewport.bottom - 1f)))
+        // The return control is a sibling of the list. Check the actual vertical
+        // swipe path, not swipeUp()'s unused bottom-center default, so a control
+        // drag cannot be mistaken for a leaked pinch scroll mutation.
         val start = Offset(viewport.width * .25f, viewport.height * .7f)
         val end = Offset(start.x, viewport.height * .3f)
-        for (point in listOf(start, end)) {
-            val rootPoint = point + viewport.topLeft
+        val rootStart = start + viewport.topLeft
+        val rootEnd = end + viewport.topLeft
+        for (rootPoint in listOf(rootStart, rootEnd)) {
             assertTrue("Scroll probe stays within the list", viewport.contains(rootPoint))
-            assertFalse("Scroll probe must not start on the floating return control", returnBounds.contains(rootPoint))
+            assertFalse("Scroll probe must avoid the floating return control", returnBounds.contains(rootPoint))
         }
+        assertTrue("Scroll probe path must avoid Current song: $rootStart->$rootEnd return=$returnBounds",
+            rootStart.x < returnBounds.left || rootStart.x >= returnBounds.right ||
+                maxOf(rootStart.y, rootEnd.y) < returnBounds.top ||
+                minOf(rootStart.y, rootEnd.y) >= returnBounds.bottom)
         // Record the real layout hit path without moving the probe away from a
         // regression. Zero-width hidden menu slots can still own touch targets.
-        val rootStart = start + viewport.topLeft
         val nearbyMenuSlots = compose.onAllNodes(SemanticsMatcher("release menu slot") {
             it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-menu-release:") == true
         }, useUnmergedTree = true).fetchSemanticsNodes()
