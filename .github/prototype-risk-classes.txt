@@ -236,3 +236,4 @@ io.github.anastaci1a.localica.PlayerBackgroundPolarityTest
 io.github.anastaci1a.localica.PlaylistDetailPresentationTest
 io.github.anastaci1a.localica.QueueSaveOriginTest
 io.github.anastaci1a.localica.TagEditorChromeLayoutTest
+io.github.anastaci1a.localica.QueueSelectionPlacementTest
