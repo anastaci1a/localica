@@ -218,6 +218,29 @@ class SearchMorphMotionTest {
         assertTrue(searchOpeningOwnsPosition(false, 0, 0, true, false, false))
     }
 
+    @Test fun openingUsesReportedDestinationBeforeCurrentImeMoves() {
+        val target = searchPanelTarget(Offset.Zero, 400f, 952f,
+            376f, 100f, 12f, 0, 500, safeBottom = 48, opening = true)
+        assertEquals(Rect(12f, 388f, 388f, 488f), target)
+    }
+
+    @Test fun unavailableOpeningTargetStartsAtSafeBottomThenTracksLiveIme() {
+        for (ime in listOf(0, 20, 48, 200, 500)) {
+            val target = searchPanelTarget(Offset.Zero, 400f, 1000f - maxOf(ime, 48),
+                376f, 100f, 12f, ime, ime, safeBottom = 48, opening = true)
+            assertEquals(1000f - maxOf(ime, 48) - 12f, target.bottom, 0f)
+            assertEquals(100f, target.height, 0f)
+        }
+    }
+
+    @Test fun openingTargetAndCurrentInsetsShareOneSafeViewport() {
+        for (ime in listOf(0, 20, 48, 200, 500)) {
+            val target = searchPanelTarget(Offset(0f, 24f), 400f, 1000f - maxOf(ime, 48),
+                376f, 700f, 12f, ime, 500, safeBottom = 48, opening = true)
+            assertEquals(Rect(12f, 36f, 388f, 512f), target)
+        }
+    }
+
     @Test fun tallForegroundTargetsTheFinalKeyboardBottomThroughoutItsArrival() {
         for (ime in listOf(100, 200, 400, 500)) {
             val target = searchPanelTarget(Offset.Zero, 400f, 1000f - ime,

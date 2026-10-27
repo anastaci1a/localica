@@ -151,7 +151,7 @@ class ListSearchTest {
             assertEquals("Final restoration keeps the exact original row position", baseline, rowNode().fetchSemanticsNode().boundsInRoot.top, 1.1f)
             val observed = compose.runOnUiThread { frames.toList() }
             val placements = compose.runOnUiThread { placedFrames.toList() }
-            assertTrue("Observe real frames before native placement ownership", placements.any { it.opening && it.placementBottom == null && it.flight?.opening == true })
+            assertTrue("Observe a shared opening rectangle before handoff", placements.any { it.opening && it.openingOwnedBounds != null && it.flight?.opening == true })
             val rootLayouts = compose.runOnUiThread { rootFrames.toList() }
             assertTrue("Observe underlying window layouts", rootLayouts.size > 2)
             assertTrue("Root layout observes the fully vacated slot", rootLayouts.any { it.fraction == 1f })
@@ -173,7 +173,7 @@ class ListSearchTest {
                     heldFlight = flight
                 }
                 if (sample.opening && flight?.opening == true && bottom == null)
-                    assertEquals("Shape growth preserves vacancy until native placement owns travel", heldFraction, sample.slotFraction, 0f)
+                    assertEquals("Vacancy holds only before the opening rectangle starts", heldFraction, sample.slotFraction, 0f)
                 if (sample.opening && bottom != null && travel != null)
                     assertEquals("Use actual bottom travel, not another timer", travel.fraction(bottom), sample.slotFraction, .0001f)
                 if (!sample.opening && flight != null)
