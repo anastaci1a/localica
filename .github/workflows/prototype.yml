@@ -164,6 +164,8 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
           app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
           app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
+          app/build/outputs/connected_android_test_additional_output/**/list-top-fade-*/**
+          app/build/outputs/connected_android_test_additional_output/**/complex-selection-captures/**
 
           prototype-evidence/
           prototype-runner-environment.txt
@@ -295,6 +297,8 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
           app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
           app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
+          app/build/outputs/connected_android_test_additional_output/**/list-top-fade-*/**
+          app/build/outputs/connected_android_test_additional_output/**/complex-selection-captures/**
 
           prototype-evidence/
           prototype-runner-environment.txt
