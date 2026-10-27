@@ -34,11 +34,11 @@ Settings categories are Interface, Playback and queues, Library and tags, About/
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |
-| Adaptive contrast | Page-wide ink polarity; background brightness trim 0–50% (default 25%) and weighting from even to highlight/shadow-focused. White icons darken highlights; dark icons lift shadows. Foreground and media selections remain unfiltered; dark artwork selects light ink, light artwork selects dark ink. The player’s blurred artwork extension uses the same trim/weight, without a separate bottom-darkening gradient. |
+| Adaptive contrast | Page-wide ink polarity; background brightness trim 0–50% (default 25%) and weighting from even to highlight/shadow-focused. White icons darken highlights; dark icons lift shadows. Foreground and media selections remain unfiltered; Player/Queue ink follows the measured background behind controls rather than the cover’s middle band. The player’s blurred artwork extension uses the same trim/weight, without a separate bottom-darkening gradient. |
 | Navigation selector | Adjustable glass has independent blur/tint; Clear overlay has 0–50% darkening (default off) and optional icon/text refraction (default off). Classic gray pill has adjustable opacity (default 10%) and no glass deformation. |
 | Sliders and switches | White opaque resting thumbs morph into clear unblurred glass on contact; independent expansion 1–2× (default 1.75×). |
 
-Adaptive contrast also applies to player color continuations, Queue frost and nested panels; all inherit the page’s artwork-selected ink polarity. Blur and texture retain their own material character.
+Adaptive contrast also applies to player color continuations, Queue frost and nested panels; they share one page-wide polarity. Supported player backgrounds choose the greater black/white contrast from bounded region samples. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Blur, texture and the artwork continuation remain unchanged.
 
 ## Navigation and Back
 
