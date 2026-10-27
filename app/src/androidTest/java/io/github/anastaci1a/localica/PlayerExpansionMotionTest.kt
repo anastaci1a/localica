@@ -34,7 +34,8 @@ import java.io.File
 class PlayerExpansionMotionTest {
     @get:Rule val compose = createComposeRule()
     private fun trace(phase: String) {
-        Log.i("PlayerExpansionPhase", "ns=${SystemClock.elapsedRealtimeNanos()} thread=${Thread.currentThread().name} phase=$phase")
+        Log.i("PlayerExpansionPhase", "ns=${SystemClock.elapsedRealtimeNanos()} thread=${Thread.currentThread().name} phase=$phase " +
+            "processReadbackActiveChildren=${ReadbackCompletion.activeProcessReadCount()}")
     }
     private val state = PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000)
     private val visual = PlayerVisual(Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply {

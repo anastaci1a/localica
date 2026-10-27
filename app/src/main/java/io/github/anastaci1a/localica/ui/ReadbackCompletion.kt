@@ -22,6 +22,12 @@ internal class ReadbackCompletion private constructor(private val readOwner: Job
     private val pending = Mutex()
 
     companion object {
+        /** Weakly consistent scalar observation, not a completion fence. Excludes
+         * completed-read CPU fallback work and framework/native dependencies.
+         * Enumerates without collecting or exposing any child reference.
+         */
+        internal fun activeProcessReadCount(): Int = processReadbackOwner.children.count { it.isActive }
+
         /** Isolated ownership assertions without exposing/cancelling the production root. */
         internal fun withOwnerForTest(owner: Job) = ReadbackCompletion(owner)
     }
