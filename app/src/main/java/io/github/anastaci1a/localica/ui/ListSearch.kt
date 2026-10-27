@@ -82,6 +82,8 @@ internal fun Modifier.listTopFade(strength: () -> Float = { 1f }) = composed {
     else Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
         drawContent()
         val fade = strength().let { if (it.isFinite()) it.coerceIn(0f, 1f) else 1f }
+        // Identity means no mask operation, including native gradient dithering.
+        if (fade == 0f) return@drawWithContent
         val height = 80.dp.toPx().coerceAtMost(size.height)
         drawRect(Brush.verticalGradient(*Array(17) { i ->
             val t = i / 16f

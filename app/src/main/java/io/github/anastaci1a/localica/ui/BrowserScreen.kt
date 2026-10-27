@@ -127,6 +127,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val filters = if (route.globalSearch) LibraryFilter.entries else libraryFilters.visible
     val showFilters = route.collection == null && (route.tab == MainTab.Library || route.globalSearch) && filters.isNotEmpty()
     val pillSlotHeight = listPillSlotHeight()
+    val pillMaterialTopInset = ListPillVerticalInset + (listPillTargetHeight() - listPillHeight()) / 2
     val showSearchPill = !route.search && route.collection?.kind != MediaKind.Album && style.quickSearch && (route.collection != null || route.tab != MainTab.Library)
     val routeFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val focus = scopedEditor?.focus ?: routeFocus
@@ -825,7 +826,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .then(if (needsListBackdrop) Modifier.recordBrowseBackdropLayer(backdropScene, requireNotNull(viewportBackdrop), backdropBacking)
                     .then(if (surroundingBackdrop == null && !artDetail) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier) else Modifier)
                 .graphicsLayer { alpha = if (artDetail || (skeletonReveal && !queryPending)) 1f else browse.reveal.value }
-                .then(if (maskedBackdrop) Modifier.listTopFade() else Modifier)
+                .then(if (maskedBackdrop) Modifier.listTopFade {
+                    if (showSearchPill) {
+                        // Invalidate with the same motion, then draw the fraction
+                        // consumed by actual placement rather than lookahead.
+                        searchAnchor.searchSlot.fraction
+                        1f - searchSlotLayoutOwner.placedFraction
+                    } else 1f
+                } else Modifier)
                 .then(if (maskedBackdrop && viewportBackdrop != null) Modifier.browseBackdropMaskWitness(backdropScene, viewportBackdrop) else Modifier),
                 contentDrawing = Modifier.onPlaced { pinchHeader?.viewport = it }
                     .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
@@ -889,7 +897,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     ListSearchPill("Search " + (route.title ?: route.tab.label), {
                                         if (searchVacancy == 0f && searchOriginalOffset < 0) {
                                             searchOriginalOffset = if (gridState.firstVisibleItemIndex == 0) gridState.firstVisibleItemScrollOffset else -1
-                                            searchVacancy = with(density) { pillSlotHeight.toPx() }
+                                            searchVacancy = with(density) { searchSlotVacancy(pillSlotHeight.toPx(),
+                                                pillMaterialTopInset.toPx(), cellGeometry.cardVerticalInset(displayedStyle).dp.toPx()) }
                                         }
                                         localSearch = freshSearch(); localFocusRequest++; localSearchOpen = true
                                     }, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
@@ -922,7 +931,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val current = route.collection?.kind == MediaKind.Queue && item.row != null && item.row.id == playingEntryId
                     val selectedCount = session.selectedCount(item, route.collection)
                     val partiallySelected = item.row == null && selectedCount > 0 && selectedCount < item.songs.size
-                    Column(Modifier.then(if (editableOrder && pinchMotion.visualSource == null) Modifier.animateItem(placementSpec = if (reorder.drag?.let { it.dropping && item.key in it.keys } == true) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
+                    // Search already owns the spacer and row displacement. A second
+                    // reorder tween would trail that measured placement every frame.
+                    Column(Modifier.then(if (editableOrder && pinchMotion.visualSource == null) Modifier.animateItem(placementSpec = if (
+                        searchOriginalOffset >= 0 && searchVacancy > 0f ||
+                        reorder.drag?.let { it.dropping && item.key in it.keys } == true
+                    ) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer {
                             val sweep = if (!artDetail && !route.search) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
                                 .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
@@ -1011,7 +1025,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 // return reaches home; do not capture a partly collapsed replacement.
                 if (searchVacancy == 0f && searchOriginalOffset < 0 && gridState.firstVisibleItemIndex == 0) {
                     searchOriginalOffset = gridState.firstVisibleItemScrollOffset
-                    searchVacancy = (with(density) { pillSlotHeight.toPx() } - searchOriginalOffset).coerceAtLeast(0f)
+                    searchVacancy = with(density) { searchSlotVacancy(
+                        (pillSlotHeight.toPx() - searchOriginalOffset).coerceAtLeast(0f),
+                        pillMaterialTopInset.toPx(), cellGeometry.cardVerticalInset(displayedStyle).dp.toPx()) }
                 }
                 localSearch = freshSearch(); localFocusRequest++; localSearchOpen = true
             }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
