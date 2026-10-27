@@ -52,14 +52,33 @@ class SearchImeMotionTest {
     private val keyboardSetup = mutableListOf<String>()
     private val motionTimeline = mutableListOf<String>()
 
+    private val controls = SearchImeRetirementControls()
+    private val nativeProbes = mutableListOf<SearchImeRetirementProbe>()
+
+    // Always call on the UI thread; use the same clock as native/input callbacks.
+    private fun phase(label: String) {
+        motionTimeline += "${SystemClock.uptimeMillis()} fixturePhase [$label] visible=$visible " +
+            "mounted=$mounted keyboardAllowed=$keyboardAllowed queryEmpty=${text.isBlank()}"
+    }
+
     @Before fun prepareWindow() {
         compose.activityRule.scenario.onActivity {
             WindowCompat.setDecorFitsSystemWindows(it.window, false)
             it.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            if (controls.enabled) motionTimeline += "${SystemClock.uptimeMillis()} controls ${controls.description()}"
+            if (controls.nativeTrace) nativeProbes += SearchImeRetirementProbe(it.window.decorView, it.window, "activity") { event ->
+                motionTimeline += event
+            }
         }
     }
 
     @After fun recordPlacedFrames() {
+        if (controls.nativeTrace) compose.runOnUiThread {
+            nativeProbes.forEach { probe ->
+                runCatching { probe.close() }.onFailure { motionTimeline += "probeCleanupFailure ${it.javaClass.name}: ${it.message}" }
+            }
+            nativeProbes.clear()
+        }
         val additional = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.takeIf { it.isNotBlank() }
         val root = additional?.let { java.io.File(it) } ?: requireNotNull(compose.activity.getExternalFilesDir(null))
         val directory = java.io.File(root, "search-ime-motion").apply { mkdirs() }
@@ -73,10 +92,11 @@ class SearchImeMotionTest {
         text = initialQuery
         extraContentHeight = initialExtraContentHeight
         keyboardAllowed = !deferKeyboard
+        if (controls.enabled) compose.runOnUiThread { phase("fixture-install showKeyboard=$showKeyboard reduced=$reduced deferKeyboard=$deferKeyboard") }
         compose.setContent { LocalicaTheme {
             val speed = LocalMotionSpeed.current
             SideEffect { motionSpeed = speed }
-            CompositionLocalProvider(LocalTextEditingObservation provides { event ->
+            val observeTextEditing: (String) -> Unit = { event ->
                 val native = popupView?.let { view ->
                     val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
                     "view=${System.identityHashCode(view)} attached=${view.isAttachedToWindow} " +
@@ -84,40 +104,55 @@ class SearchImeMotionTest {
                         "nativeHeight=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom}"
                 }
                 motionTimeline += "${SystemClock.uptimeMillis()} textEditing $event nativeObservation=$native"
-            }, LocalReducedMotion provides reduced,
+            }
+            CompositionLocalProvider(LocalTextEditingObservation provides observeTextEditing.takeIf { controls.inputObservation },
+                LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides {
                     samples += it
                     motionTimeline += "${SystemClock.uptimeMillis()} $it"
                 }) {
                 anchor = rememberGlassAnchor()
                 Box(Modifier.fillMaxSize()) {
-                    ListSearchPill("Search fixture", { visible = true }, Modifier.align(Alignment.TopCenter)
+                    ListSearchPill("Search fixture", { if (controls.enabled) phase("pill-open-request"); visible = true }, Modifier.align(Alignment.TopCenter)
                         .padding(top = 80.dp, start = 20.dp, end = 20.dp), anchor)
                 }
-                if (mounted) ListSearchWindow(visible, anchor, text.isNotBlank(), { visible = false }) {
+                if (mounted) ListSearchWindow(visible, anchor, text.isNotBlank(), { if (controls.enabled) phase("popup-dismiss-callback"); visible = false }) {
                     val focus = remember { FocusRequester() }
                     val keyboard = LocalSoftwareKeyboardController.current
                     val focusedWindow = LocalWindowInfo.current.isWindowFocused
                     val ready = LocalSearchOpeningReady.current
                     val view = LocalView.current
+                    if (controls.nativeTrace) DisposableEffect(view) {
+                        val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+                        val probe = SearchImeRetirementProbe(view, requireNotNull(window), "popup") { event ->
+                            motionTimeline += event
+                        }.also { nativeProbes += it }
+                        onDispose { probe.close() }
+                    }
                     val density = LocalDensity.current
                     val ime = WindowInsets.ime.getBottom(density)
                     val source = WindowInsets.imeAnimationSource.getBottom(density)
                     val target = WindowInsets.imeAnimationTarget.getBottom(density)
                     SideEffect { popupView = view; keyboardSettled = ime == target && source == target }
                     LaunchedEffect(visible, focusedWindow, ready) {
+                        if (controls.enabled) phase("focus-effect windowFocused=$focusedWindow")
                         if (visible && focusedWindow) {
                             withFrameNanos { }
+                            if (controls.enabled) phase("opening-ready-request")
                             ready?.invoke(true)
                             if (showKeyboard) {
                                 // The delayed fixture releases input only after observing
                                 // the fallback endpoint, independent of CI wall-clock load.
                                 snapshotFlow { keyboardAllowed }.first { it }
-                                focus.requestFocus(); keyboard?.show()
-                            } else keyboard?.hide()
+                                if (controls.enabled) phase("request-focus")
+                                focus.requestFocus()
+                                if (controls.enabled) phase("request-keyboard-show")
+                                keyboard?.show()
+                                if (controls.enabled) phase("request-keyboard-show-returned")
+                            } else { if (controls.enabled) phase("request-keyboard-hide-no-input"); keyboard?.hide() }
                         }
                     }
-                    CompositionLocalProvider(LocalEmptySearchBack provides ({ visible = false }).takeIf { text.isBlank() }) {
+                    CompositionLocalProvider(LocalEmptySearchBack provides ({ if (controls.enabled) phase("empty-search-back-callback"); visible = false }).takeIf { text.isBlank() }) {
                         Column {
                             GlassSearchField(text, { text = it }, "Search fixture", fieldModifier = Modifier.focusRequester(focus))
                             Spacer(Modifier.height(extraContentHeight.dp))
@@ -157,6 +192,7 @@ class SearchImeMotionTest {
     }
 
     private fun opened() {
+        if (controls.enabled) compose.runOnUiThread { phase("opened-start") }
         // Shape starts independently of native input. Give each independent spring
         // its calculated frame budget, not a longer undiagnosed overall wait.
         advanceUntil { anchor.contact.expansion.isRunning || anchor.contact.expansion.value == 1f }
@@ -317,7 +353,7 @@ class SearchImeMotionTest {
                 val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
                 assertTrue(raised.left > 2f)
                 assertTrue(device.click(2, raised.center.y.toInt()))
-            } else pressSystemBack()
+            } else tracedSystemBack()
             android.util.Log.i("SearchImeMotionTest", "Native dismissal input returned uptime=${SystemClock.uptimeMillis()}")
             closed()
             verifyReturn(raised, home, reduced)
@@ -385,7 +421,7 @@ class SearchImeMotionTest {
             assertEquals("The delayed IME has not appeared", 0, before.ime)
             assertNotNull("Accepted no-target fallback already moves while expanding", before.placementBottom)
             assertTrue("The same opening already moves away from the pill", before.bounds.top > home.top + 2f)
-            compose.runOnUiThread { keyboardAllowed = true }
+            compose.runOnUiThread { if (controls.enabled) phase("release-delayed-keyboard"); keyboardAllowed = true }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
             // Native insets advance on real time while the controlled morph is
@@ -444,7 +480,7 @@ class SearchImeMotionTest {
             advanceUntil { samples.any { it.opening && it.progress == 1f } }
             val original = compose.runOnUiThread { samples.last() }
             assertEquals("The editor has not requested its keyboard", 0, original.ime)
-            compose.runOnUiThread { extraContentHeight = 72; keyboardAllowed = true }
+            compose.runOnUiThread { if (controls.enabled) phase("resize-and-release-delayed-keyboard"); extraContentHeight = 72; keyboardAllowed = true }
             compose.mainClock.advanceTimeByFrame()
             opened()
             awaitDockedKeyboard()
@@ -477,7 +513,7 @@ class SearchImeMotionTest {
             compose.runOnUiThread { samples.last() }.let {
                 assertRect("Fallback handoff completes before releasing native input", it.destination, it.bounds)
             }
-            compose.runOnUiThread { keyboardAllowed = true }
+            compose.runOnUiThread { if (controls.enabled) phase("release-delayed-keyboard"); keyboardAllowed = true }
             awaitDockedKeyboard()
             repeat(40) { compose.mainClock.advanceTimeBy(32); compose.waitForIdle() }
             val all = compose.runOnUiThread { samples.toList() }
@@ -501,7 +537,7 @@ class SearchImeMotionTest {
             awaitDockedKeyboard()
             compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
             compose.runOnUiThread { samples.clear() }
-            pressSystemBack()
+            tracedSystemBack()
             advanceUntil {
                 val insets = popupView?.let(ViewCompat::getRootWindowInsets)
                 keyboardSettled && insets != null && !insets.isVisible(WindowInsetsCompat.Type.ime())
@@ -511,7 +547,7 @@ class SearchImeMotionTest {
             compose.onNode(hasSetTextAction()).assertTextContains("Keep this").assertIsNotFocused()
             val positions = compose.runOnUiThread { samples.filter { it.opening }.map { it.bounds }.distinct() }
             assertTrue("Retained panel recenters through intermediate rectangles", positions.size > 2)
-            pressSystemBack()
+            tracedSystemBack()
             closed()
         } finally {
             compose.runOnUiThread { visible = false }
@@ -524,6 +560,7 @@ class SearchImeMotionTest {
     ).bufferedReader().use { it.readText().trim() }
 
     private fun awaitDockedKeyboard() {
+        if (controls.enabled) compose.runOnUiThread { phase("await-docked-keyboard-start") }
         advanceUntil {
             val insets = popupView?.let(ViewCompat::getRootWindowInsets)
             keyboardSettled && insets != null && insets.isVisible(WindowInsetsCompat.Type.ime()) &&
@@ -534,7 +571,17 @@ class SearchImeMotionTest {
             Regex("\\bmIsInputViewShown=(true|false)\\b").find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1))
     }
 
-    private fun prepareDockedKeyboard() = prepareNativeDockedKeyboard(compose, keyboardSetup, ::shell)
+    private fun prepareDockedKeyboard() {
+        if (controls.enabled) compose.runOnUiThread { phase("native-warmup-start enabled=${controls.nativeWarmup}") }
+        if (controls.nativeWarmup) prepareNativeDockedKeyboard(compose, keyboardSetup, ::shell)
+        if (controls.enabled) compose.runOnUiThread { phase("native-warmup-returned enabled=${controls.nativeWarmup}") }
+    }
+
+    private fun tracedSystemBack() {
+        if (controls.enabled) compose.runOnUiThread { phase("system-back-request") }
+        pressSystemBack()
+        if (controls.enabled) compose.runOnUiThread { phase("system-back-returned") }
+    }
 
     private fun withDockedKeyboard(block: () -> Unit) = withNativeAnimations {
         val key = "show_ime_with_hard_keyboard"
