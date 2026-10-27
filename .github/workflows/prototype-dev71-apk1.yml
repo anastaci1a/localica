@@ -8,36 +8,29 @@ jobs:
   prototype:
     uses: ./.github/workflows/prototype.yml
     with:
-      affected_classes: io.github.anastaci1a.localica.QueueOrderActionAdmissionTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.ArtistCollectionActionsTest,io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest,io.github.anastaci1a.localica.ArtworkSwipeTest,io.github.anastaci1a.localica.CollectionControlsBackdropTest,io.github.anastaci1a.localica.LyricsReturnBackdropTest,io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest,io.github.anastaci1a.localica.PinchReadbackLifetimeTest,io.github.anastaci1a.localica.PinchReleaseHandoffTest,io.github.anastaci1a.localica.RetainedLayerReadbackTest,io.github.anastaci1a.localica.ArtistSelectionPlacementTest
+      affected_classes: io.github.anastaci1a.localica.QueueOrderActionAdmissionTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.ArtistCollectionActionsTest,io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest,io.github.anastaci1a.localica.ArtworkSwipeTest,io.github.anastaci1a.localica.CollectionControlsBackdropTest,io.github.anastaci1a.localica.LyricsReturnBackdropTest,io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest,io.github.anastaci1a.localica.PinchReadbackLifetimeTest,io.github.anastaci1a.localica.PinchReleaseHandoffTest,io.github.anastaci1a.localica.RetainedLayerReadbackTest,io.github.anastaci1a.localica.ArtistSelectionPlacementTest,io.github.anastaci1a.localica.LibraryPlaybackReadTest,io.github.anastaci1a.localica.LibraryDatabaseTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
       coverage_reason: >-
         First-batch Queue admission and exact opening, attached playback durability,
         artist scope/selection/range, immediate player growth, artwork readiness and
         occurrence transitions, actual-content controls, and header pinch/readback
-        ownership. Mandatory complete Search IME, ListSearch and contrast classes
+        ownership. Adds fresh selected-library Room reads and tag-editor theme
+        inheritance without removing any prior affected class. Mandatory complete
+        Search IME, ListSearch and contrast classes
         are added by the existing runner. Complete JVM/lint/build/signature and
         both preserved-data compatibility chains remain required. No full native
         suite is claimed by this explicitly uncertified development lane.
       known_issues: >-
-        Original comparison40255001797 and dev71 attempts40314182315/40316556722/40346834058/40354462197
-        remain failed evidence. The historical unexpected first-open Search
-        dismissal is not causally explained; unchanged strict61-method contexts
-        passed both APIs after the slot-phase repair and observation-only hook.
-        Header packing reduced allocation and passed those contexts without
-        establishing the historical missing-callback cause. This run must
-        independently pass every selected
-        source method and mandatory sentinel; known issues never waive a failure.
-        Prototype40346834058 passed all other jobs but failed the API26 Search
-        reopening endpoint wait. Its clock driver is corrected without changing
-        production motion, the five-second deadline or geometry assertions;
-        fresh required native validation remains mandatory.
-        Attempt40354462197 exposed a reentrant Search viewport restoration on
-        API26 and a separate unexpected first-open dismissal on API36. The exact
-        restoration request is now deferred; no passing claim is inferred for
-        the distinct dismissal or any still-pending required check.
-        Earlier full-suite DocumentsUI focus/presented-pixel failures remain
-        unexplained and those full suites are not rerun here. Phone queue latency,
-        acoustic seams and universal native callback delivery are not established
-        by emulator results. APK2/3 feedback remains separate. This is not release
-        certification or a claim that every reported physical symptom is resolved.
+        Original comparison40255001797 and prior failed dev71 attempts remain
+        immutable evidence, tracked in issue464. Earlier unexpected Search
+        dismissal and API26 player RenderThread/ART fatals remain unexplained;
+        the complete player class is retained and an isolated passing method is
+        not causal clearance. Every selected method and mandatory sentinel must
+        independently pass; known issues never waive failures. Earlier full-suite
+        DocumentsUI failures remain unresolved and the full native suite is unrun.
+        This candidate adds bounded fresh library reads and theme inheritance;
+        experimental material averaging, Repeat chrome with failing font2 fit,
+        and the unwired prepared lyrics host are excluded. Emulator timing does
+        not establish phone queue latency or acoustic correctness. This is an
+        uncertified development prototype, not proof that all feedback is fixed.
     secrets:
       ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}

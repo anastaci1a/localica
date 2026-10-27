@@ -81,6 +81,7 @@ io.github.anastaci1a.localica.KeyedDragTest
 io.github.anastaci1a.localica.LargeQueueTransportTest
 io.github.anastaci1a.localica.LensMeshSamplingTest
 io.github.anastaci1a.localica.LibraryDatabaseTest
+io.github.anastaci1a.localica.LibraryPlaybackReadTest
 io.github.anastaci1a.localica.LibraryFilterMotionTest
 io.github.anastaci1a.localica.LibraryFilterPresentationTest
 io.github.anastaci1a.localica.LibraryFilterTest
@@ -215,6 +216,7 @@ io.github.anastaci1a.localica.SwitchTapOpticsTest
 io.github.anastaci1a.localica.TabPagerTest
 io.github.anastaci1a.localica.TabResetTest
 io.github.anastaci1a.localica.TagEditorFlowTest
+io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
 io.github.anastaci1a.localica.TagWritingTest
 io.github.anastaci1a.localica.ThemeTest
 io.github.anastaci1a.localica.ToneSnapshotContinuityTest
