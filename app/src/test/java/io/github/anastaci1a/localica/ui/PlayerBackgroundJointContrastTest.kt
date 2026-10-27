@@ -15,7 +15,7 @@ class PlayerBackgroundJointContrastTest {
             listOf(listOf(candidate(raw, GlassTone(trim, weight, false))) to 1f),
             listOf(listOf(candidate(raw, GlassTone(trim, weight, true))) to 1f), listOf(1f)))
 
-    @Test fun coldBlackAndWhiteChooseTheirOwnMaximumTrimContrastRatherThanThePaintedFeedback() {
+    @Test fun hypotheticalJointToneMathIsDistinctFromComparingOnePaintedBacking() {
         val black = choice(0xff000000.toInt())
         val white = choice(-1)
         assertTrue(black.lightInk)
@@ -28,31 +28,28 @@ class PlayerBackgroundJointContrastTest {
         assertFalse(choice(-1, 0f).lightInk)
     }
 
-    @Test fun oppositeHistoriesChooseTheSameRequestWhileOnlyAcknowledgedPublicationBecomesCurrent() {
+    @Test fun singleRenderedBackingChoosesTheSameInkRegardlessOfPriorPublication() {
         for (initial in listOf(false, true)) for (raw in listOf(0xff000000.toInt(), -1, 0xff808080.toInt())) {
             val state = PlayerBackgroundPolarityState()
             state.current(initial)
-            val next = choice(raw).lightInk
-            state.request(next)
+            val rendered = candidate(raw, GlassTone(.5f, 2f, false))
+            val expected = requireNotNull(backgroundSingleContrast(listOf(listOf(rendered) to 1f), listOf(1f)))
             state.unavailable(PlayerBackgroundUnavailable.Preparing)
             assertEquals(initial, state.decision.lightInk)
             assertEquals(PlayerBackgroundConfidence.Stale, state.decision.confidence)
-            assertEquals(next, state.requestedLightInk)
-            state.current(next)
-            assertEquals(next, state.decision.lightInk)
+            state.current(expected.lightInk)
+            assertEquals(expected.lightInk, state.decision.lightInk)
             assertEquals(PlayerBackgroundConfidence.Current, state.decision.confidence)
-            state.request(!next)
-            state.unavailable(PlayerBackgroundUnavailable.NativeBlurSampleUnavailable)
-            assertEquals(next, state.requestedLightInk)
-            assertEquals(next, state.decision.lightInk)
+            state.unavailable(PlayerBackgroundUnavailable.Transitioning)
+            assertEquals(expected.lightInk, state.decision.lightInk)
             assertEquals(PlayerBackgroundConfidence.Stale, state.decision.confidence)
         }
-        val cold = PlayerBackgroundPolarityState()
-        cold.request(false)
-        cold.unavailable(PlayerBackgroundUnavailable.Preparing)
-        assertTrue(cold.decision.lightInk)
-        assertFalse(cold.requestedLightInk)
-        assertEquals(PlayerBackgroundConfidence.Cold, cold.decision.confidence)
+        assertFalse("A lifted black backing is compared as painted, not as a darkened alternative",
+            requireNotNull(backgroundSingleContrast(listOf(listOf(candidate(0xff000000.toInt(),
+                GlassTone(.5f, 2f, false))) to 1f), listOf(1f))).lightInk)
+        assertTrue(requireNotNull(backgroundSingleContrast(listOf(listOf(BackgroundRgb.Black) to 1f), listOf(1f))).lightInk)
+        assertNull(backgroundSingleContrast(emptyList(), listOf(1f)))
+        assertNull(backgroundSingleContrast(listOf(listOf(BackgroundRgb.Black) to 1f), emptyList()))
     }
 
     @Test fun nonlinearToneMustBeQuantizedOnEachTexelBeforeBilinearFiltering() {
