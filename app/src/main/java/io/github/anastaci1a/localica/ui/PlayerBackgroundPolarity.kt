@@ -57,7 +57,8 @@ internal data class ArtworkBackgroundFrame(val roles: List<ArtworkBackgroundRole
 /** Returned paint images, not requested palette images: tone preparation may retain an older image. */
 internal data class PlayerBackdropDescriptor(val palette: PlayerPalette, val wash: Bitmap?, val softWash: Bitmap?,
     val grain: Bitmap, val tone: GlassTone,
-    val washProvenance: ToneSnapshotProvenance? = null, val softWashProvenance: ToneSnapshotProvenance? = null)
+    val washProvenance: ToneSnapshotProvenance? = null, val softWashProvenance: ToneSnapshotProvenance? = null,
+    val washReceipt: ToneSnapshotReceipt<Bitmap>? = null, val softWashReceipt: ToneSnapshotReceipt<Bitmap>? = null)
 
 /** One resource-free failure witness, not a frame/image lease or a presentation acknowledgement. */
 internal data class PlayerBackgroundRoleDiagnostic(val identity: Int, val visual: Int, val weight: Float,
@@ -72,6 +73,7 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
 /** All coordinates are relative to the measured background, including scroll and viewport clipping. */
 @Stable internal class PlayerBackgroundPolarityState {
     var decision by mutableStateOf(PlayerBackgroundDecision()); private set
+    var requestedLightInk by mutableStateOf(true); private set
     var frame by mutableStateOf<ArtworkBackgroundFrame?>(null); private set
     // Plain bounded metadata: read/formatted only by a failure diagnostic, never observed by UI.
     @Volatile var sampleDiagnostic: PlayerBackgroundSampleDiagnostic? = null; internal set
@@ -101,7 +103,9 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     fun unavailable(reason: PlayerBackgroundUnavailable): Long = publication.begin(reason).also {
         sampleDiagnostic = null
         decision = publication.decision
+        if (reason != PlayerBackgroundUnavailable.Preparing) requestedLightInk = decision.lightInk
     }
+    fun request(lightInk: Boolean) { requestedLightInk = lightInk }
     fun current(lightInk: Boolean) {
         val token = publication.begin(PlayerBackgroundUnavailable.Preparing)
         publication.publish(token, lightInk)
@@ -112,22 +116,37 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
 private data class BackgroundPaintInputs(val palette: PlayerPalette, val wash: Bitmap?, val softWash: Bitmap?,
     val grain: Bitmap, val tone: GlassTone)
 private data class BackgroundSampleRole(val identity: Any, val visual: PlayerVisual, val backdrop: PlayerBackdropDescriptor) {
-    // Exactly the former descriptor equality. Provenance-only changes must not restart sampling.
-    private val pixels = BackgroundPaintInputs(backdrop.palette, backdrop.wash, backdrop.softWash, backdrop.grain, backdrop.tone)
+    // Candidate preparation uses the same RAW inputs for both tones. Returned-image readiness,
+    // diagnostic metadata and the chosen polarity must not restart or bias that analysis.
+    private val pixels = BackgroundPaintInputs(backdrop.palette, backdrop.palette.wash, backdrop.palette.softWash,
+        backdrop.grain, backdrop.tone.copy(lightInk = false))
     override fun equals(other: Any?): Boolean = other is BackgroundSampleRole &&
         identity == other.identity && visual == other.visual && pixels == other.pixels
     override fun hashCode(): Int = 31 * (31 * identity.hashCode() + visual.hashCode()) + pixels.hashCode()
 }
 private data class BackgroundRequest(val geometry: PlayerBackgroundGeometry,
     val roles: List<BackgroundSampleRole>)
-private data class PreparedBackground(val request: BackgroundRequest, val samples: List<List<BackgroundRgb>>, val weights: List<Float>)
+private data class PreparedBackground(val request: BackgroundRequest, val black: List<List<BackgroundRgb>>,
+    val white: List<List<BackgroundRgb>>, val weights: List<Float>)
+
+/** Only images actually participating in this background need a preparation receipt. A raw
+ * fallback or retained previous source/tone cannot certify the candidate as current. */
+private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, lightInk: Boolean): Boolean {
+    val b = backdrop
+    if (b.tone.lightInk != lightInk) return false
+    if (geometry.fullArtBlend <= 0f) return true
+    fun ready(source: Bitmap?, output: Bitmap?, receipt: ToneSnapshotReceipt<Bitmap>?) =
+        if (source == null) output == null else receipt?.matches(source, output, b.tone) == true
+    return ready(b.palette.wash, b.wash, b.washReceipt) &&
+        (geometry.softness <= 0f || b.palette.wash == null || ready(b.palette.softWash, b.softWash, b.softWashReceipt))
+}
 
 /** Preparation is keyed by owned pixels and geometry, not the blend clock. Each clipped
  * footprint uses an 8x8 quadrature: a bounded approximation, not an exact pixel average or
  * per-pixel readability guarantee. Geometry changes reuse cached immutable pixel arrays;
  * a blend frame only mixes prepared RGB metadata, without filtering, Bitmap reads or GPU copies. */
 @Composable internal fun ObservePlayerBackgroundPolarity(owner: PlayerBackgroundPolarityState,
-    geometry: PlayerBackgroundGeometry?, unsupported: PlayerBackgroundUnavailable?) {
+    geometry: PlayerBackgroundGeometry?, unsupported: PlayerBackgroundUnavailable?, requestedTone: GlassTone) {
     val frame = owner.frame
     val reason = unsupported ?: when {
         frame == null || geometry == null -> PlayerBackgroundUnavailable.Unmeasured
@@ -135,6 +154,9 @@ private data class PreparedBackground(val request: BackgroundRequest, val sample
         frame.frozenVisible -> PlayerBackgroundUnavailable.FrozenSampleUnavailable
         frame.liveBlur -> PlayerBackgroundUnavailable.NativeBlurSampleUnavailable
         frame.roles.any { owner.backdrops[it.identity] == null } -> PlayerBackgroundUnavailable.MissingRole
+        frame.roles.any { role -> owner.backdrops[role.identity]?.tone?.let {
+            it.trim != requestedTone.trim || it.weight != requestedTone.weight
+        } == true } -> PlayerBackgroundUnavailable.Preparing
         else -> null
     }
     val request = if (reason == null && geometry != null && frame != null)
@@ -153,19 +175,31 @@ private data class PreparedBackground(val request: BackgroundRequest, val sample
     val failure = reason ?: if (failed == request && request != null) PlayerBackgroundUnavailable.UnreadableImage else PlayerBackgroundUnavailable.Preparing
     SideEffect {
         if (ready != null && frame != null) {
-            val colors = ready.samples.indices.map { index ->
-                ready.samples[index] to frame.roles.filter { it.identity == ready.request.roles[index].identity }.sumOf { it.weight.toDouble() }.toFloat()
+            val weights = ready.request.roles.map { role ->
+                frame.roles.filter { it.identity == role.identity }.sumOf { it.weight.toDouble() }.toFloat()
             }
-            var mean: BackgroundMean? = null
-            owner.current(backgroundLightInk(colors, ready.weights) { mean = it })
+            val choice = backgroundJointContrast(ready.black.zip(weights), ready.white.zip(weights), ready.weights)
+            if (choice == null) {
+                owner.unavailable(PlayerBackgroundUnavailable.InvalidGeometry)
+                return@SideEffect
+            }
+            owner.request(choice.lightInk)
+            val currentRequest = requireNotNull(request)
+            if (currentRequest.roles.filterIndexed { index, _ -> weights[index] > 0f }
+                    .any { !it.paintReady(currentRequest.geometry, choice.lightInk) }) {
+                owner.unavailable(PlayerBackgroundUnavailable.Preparing)
+                return@SideEffect
+            }
+            owner.current(choice.lightInk)
+            val mean = if (choice.lightInk) choice.white else choice.black
             // Use the current descriptor's provenance for these same prepared pixels. The equality
             // guard above still requires every original sampling input to match. Never retain frame,
             // visual, descriptor or bitmap references just to explain a future failure.
-            owner.sampleDiagnostic = mean?.let { sample ->
+            owner.sampleDiagnostic = mean.let { sample ->
                 PlayerBackgroundSampleDiagnostic(System.identityHashCode(owner.decision), System.identityHashCode(frame),
-                    sample, ready.request.roles.size, requireNotNull(request).roles.take(8).mapIndexed { index, role ->
+                    sample, ready.request.roles.size, currentRequest.roles.take(8).mapIndexed { index, role ->
                         PlayerBackgroundRoleDiagnostic(System.identityHashCode(role.identity), System.identityHashCode(role.visual),
-                            colors[index].second, role.backdrop.tone, role.backdrop.washProvenance, role.backdrop.softWashProvenance)
+                            weights[index], role.backdrop.tone, role.backdrop.washProvenance, role.backdrop.softWashProvenance)
                     })
             }
         } else owner.unavailable(failure)
@@ -208,13 +242,53 @@ internal fun backgroundLightInk(roles: List<Pair<List<BackgroundRgb>, Float>>, a
 /** Exact contrast ties choose white, deterministically. */
 internal fun backgroundContrastLightInk(luminance: Double): Boolean = luminance <= sqrt(.0525) - .05
 
+/** Compare each ink against its OWN toned candidate, never against the previous ink's
+ * painted result. Neither score depends on publication history. Exact ties choose white. */
+internal fun jointBackgroundLightInk(blackLuminance: Double, whiteLuminance: Double): Boolean? {
+    if (!blackLuminance.isFinite() || !whiteLuminance.isFinite() ||
+        blackLuminance !in 0.0..1.0 || whiteLuminance !in 0.0..1.0) return null
+    return 1.05 / (whiteLuminance + .05) >= (blackLuminance + .05) / .05
+}
+internal data class BackgroundJointContrast(val lightInk: Boolean, val black: BackgroundMean, val white: BackgroundMean)
+internal fun backgroundJointContrast(black: List<Pair<List<BackgroundRgb>, Float>>,
+    white: List<Pair<List<BackgroundRgb>, Float>>, areas: List<Float>): BackgroundJointContrast? {
+    if (areas.isEmpty() || areas.any { !it.isFinite() || it <= 0f } ||
+        !areas.sumOf { it.toDouble() }.isFinite() || black.isEmpty() || black.size != white.size) return null
+    fun valid(roles: List<Pair<List<BackgroundRgb>, Float>>) = roles.all { (pixels, weight) ->
+        weight.isFinite() && weight >= 0f && pixels.size == areas.size && pixels.all { pixel ->
+            listOf(pixel.r, pixel.g, pixel.b, pixel.a).all { it.isFinite() && it in 0f..1f }
+        }
+    } && roles.sumOf { it.second.toDouble() }.let { it.isFinite() && it > 0.0 && it <= 1.000001 }
+    if (!valid(black) || !valid(white) || black.indices.any { black[it].second != white[it].second }) return null
+    var blackMean: BackgroundMean? = null
+    var whiteMean: BackgroundMean? = null
+    backgroundLightInk(black, areas) { blackMean = it }
+    backgroundLightInk(white, areas) { whiteMean = it }
+    // Float blend weights can sum a few ulps above one. Clamp only that arithmetic
+    // residue to the representable output range; materially excessive weight is rejected.
+    fun bounded(mean: BackgroundMean?): BackgroundMean? {
+        mean ?: return null
+        if (listOf(mean.red, mean.green, mean.blue).any { !it.isFinite() || it !in 0.0..1.000001 }) return null
+        val r = mean.red.coerceIn(0.0, 1.0); val g = mean.green.coerceIn(0.0, 1.0); val b = mean.blue.coerceIn(0.0, 1.0)
+        fun linear(x: Double) = if (x <= .04045) x / 12.92 else ((x + .055) / 1.055).pow(2.4)
+        return BackgroundMean(r, g, b, .2126 * linear(r) + .7152 * linear(g) + .0722 * linear(b))
+    }
+    val b = bounded(blackMean) ?: return null
+    val w = bounded(whiteMean) ?: return null
+    return BackgroundJointContrast(jointBackgroundLightInk(b.luminance, w.luminance) ?: return null, b, w)
+}
+
 internal class BackgroundPixels(val width: Int, val height: Int, val colors: IntArray) {
-    fun at(u: Float, v: Float): BackgroundRgb {
+    fun at(u: Float, v: Float, toneLut: IntArray? = null): BackgroundRgb {
         val x = u * width - .5f; val y = v * height - .5f
         val x0 = floor(x).toInt(); val y0 = floor(y).toInt()
         fun pixel(dx: Int, dy: Int): BackgroundRgb {
             val c = colors[(y0 + dy).coerceIn(0, height - 1) * width + (x0 + dx).coerceIn(0, width - 1)]
-            return BackgroundRgb((c ushr 16 and 255) / 255f, (c ushr 8 and 255) / 255f, (c and 255) / 255f, (c ushr 24) / 255f)
+            fun channel(shift: Int): Float {
+                val raw = c ushr shift and 255
+                return (toneLut?.get(raw) ?: raw) / 255f
+            }
+            return BackgroundRgb(channel(16), channel(8), channel(0), (c ushr 24) / 255f)
         }
         fun premultiplied(value: BackgroundRgb) = value.copy(r = value.r * value.a, g = value.g * value.a, b = value.b * value.a)
         val color = mix(mix(premultiplied(pixel(0, 0)), premultiplied(pixel(1, 0)), x - x0),
@@ -296,56 +370,61 @@ private suspend fun prepareBackground(request: BackgroundRequest): PreparedBackg
         Offset(rect.left + (x + .5f) * rect.width / 8, rect.top + (y + .5f) * rect.height / 8)
     } } }
     val areas = geometry.footprints.flatMap { rect -> List(64) { rect.width * rect.height / 64 } }
-    val samples = request.roles.map { (_, visual, backdrop) ->
-        currentCoroutineContext().ensureActive()
-        val wash = backdrop.wash?.let { BackgroundPixelCache.get(it) ?: return null }
-        val softWash = backdrop.softWash?.let { BackgroundPixelCache.get(it) ?: return null }
-        val cover = visual.artwork?.let { BackgroundPixelCache.get(it.asAndroidBitmap()) ?: return null }
-        val softCover = visual.softArtwork?.let { BackgroundPixelCache.get(it.asAndroidBitmap()) ?: return null }
-        val grain = BackgroundPixelCache.get(backdrop.grain) ?: return null
-        val top = backdrop.tone.color(backdrop.palette.top).rgb()
-        val middle = backdrop.tone.color(backdrop.palette.middle).rgb()
-        val bottom = backdrop.tone.color(backdrop.palette.bottom).rgb()
-        points.map { point ->
-            val t = (point.y / geometry.size.height).coerceIn(0f, 1f)
-            var result = if (t < .5f) mix(top, middle, t * 2) else mix(middle, bottom, (t - .5f) * 2)
-            val radial = (1f - hypot(point.x - geometry.size.width * .1f, point.y - geometry.size.height * .4f) / (geometry.size.width * 1.2f)).coerceIn(0f, 1f)
-            result = top.copy(a = .45f).over(result, radial)
-            val uv = (mapping.sample(point) as? ArtworkWashMappingResult.Known)?.value?.clampedNormalized ?: return null
-            if (wash != null && geometry.fullArtBlend > 0f) {
-                result = wash.at(uv.x, uv.y).over(result, (255 * geometry.fullArtBlend).toInt() / 255f)
-                if (softWash != null && geometry.softness > 0f) result = softWash.at(uv.x, uv.y).over(result,
-                    (255 * geometry.fullArtBlend * geometry.softness).toInt().coerceIn(0, 255) / 255f)
+    val candidates = listOf(false, true).map { lightInk ->
+        request.roles.map { (_, visual, backdrop) ->
+            currentCoroutineContext().ensureActive()
+            if (!backdrop.tone.trim.isFinite() || !backdrop.tone.weight.isFinite()) return null
+            val tone = backdrop.tone.copy(lightInk = lightInk)
+            val lut = IntArray(256) { tone.byteChannel(it) }
+            val wash = backdrop.palette.wash?.let { BackgroundPixelCache.get(it) ?: return null }
+            val softWash = backdrop.palette.softWash?.let { BackgroundPixelCache.get(it) ?: return null }
+            val cover = visual.artwork?.let { BackgroundPixelCache.get(it.asAndroidBitmap()) ?: return null }
+            val softCover = visual.softArtwork?.let { BackgroundPixelCache.get(it.asAndroidBitmap()) ?: return null }
+            val grain = BackgroundPixelCache.get(backdrop.grain) ?: return null
+            val top = tone.color(backdrop.palette.top).rgb()
+            val middle = tone.color(backdrop.palette.middle).rgb()
+            val bottom = tone.color(backdrop.palette.bottom).rgb()
+            points.map { point ->
+                val t = (point.y / geometry.size.height).coerceIn(0f, 1f)
+                var result = if (t < .5f) mix(top, middle, t * 2) else mix(middle, bottom, (t - .5f) * 2)
+                val radial = (1f - hypot(point.x - geometry.size.width * .1f, point.y - geometry.size.height * .4f) / (geometry.size.width * 1.2f)).coerceIn(0f, 1f)
+                result = top.copy(a = .45f).over(result, radial)
+                val uv = (mapping.sample(point) as? ArtworkWashMappingResult.Known)?.value?.clampedNormalized ?: return null
+                if (wash != null && geometry.fullArtBlend > 0f) {
+                    result = wash.at(uv.x, uv.y, lut).over(result, (255 * geometry.fullArtBlend).toInt() / 255f)
+                    if (softWash != null && geometry.softness > 0f) result = softWash.at(uv.x, uv.y, lut).over(result,
+                        (255 * geometry.fullArtBlend * geometry.softness).toInt().coerceIn(0, 255) / 255f)
+                }
+                result = grain.at(point.x / geometry.size.width, point.y / geometry.size.height).over(result,
+                    (255 * (1f - geometry.fullArtBlend * .8f)).toInt() / 255f)
+                val x = (point.x - geometry.cover.left) / geometry.cover.width
+                val y = (point.y - geometry.cover.top) / geometry.cover.height
+                if (x in 0f..1f && y in 0f..1f && geometry.artworkAlpha > 0f) {
+                    fun image(pixels: BackgroundPixels): BackgroundRgb? {
+                        val fit = minOf(geometry.cover.width / pixels.width, geometry.cover.height / pixels.height)
+                        val mini = maxOf(geometry.miniSize / pixels.width, geometry.miniSize / pixels.height)
+                        val scale = fit + (maxOf(fit, mini) - fit) * geometry.cropRetention
+                        val u = (point.x - geometry.cover.center.x) / (pixels.width * scale) + .5f
+                        val v = (point.y - geometry.cover.center.y) / (pixels.height * scale) + .5f
+                        return if (u in 0f..1f && v in 0f..1f) pixels.at(u, v) else null
+                    }
+                    if (softCover != null && geometry.edgeSoftness > 0f) image(softCover)?.let {
+                        result = it.over(result, geometry.artworkAlpha * geometry.edgeSoftness * feather(x, y, 1f, .13f, 0f))
+                    }
+                    val radius = geometry.corner.coerceAtMost(minOf(geometry.cover.width, geometry.cover.height) / 2)
+                    val dx = max(0f, radius - min(point.x - geometry.cover.left, geometry.cover.right - point.x))
+                    val dy = max(0f, radius - min(point.y - geometry.cover.top, geometry.cover.bottom - point.y))
+                    if (dx * dx + dy * dy <= radius * radius) {
+                        // Missing/loading placeholders have their own foreground; do not invent their pixels.
+                        if (cover == null) return null
+                        var direct = visual.palette.middle.rgb()
+                        image(cover)?.let { direct = it.over(direct) }
+                        result = direct.over(result, geometry.artworkAlpha * feather(x, y, geometry.edgeSoftness, geometry.edgeBand, geometry.coverBlend))
+                    }
+                }
+                result
             }
-            result = grain.at(point.x / geometry.size.width, point.y / geometry.size.height).over(result,
-                (255 * (1f - geometry.fullArtBlend * .8f)).toInt() / 255f)
-            val x = (point.x - geometry.cover.left) / geometry.cover.width
-            val y = (point.y - geometry.cover.top) / geometry.cover.height
-            if (x in 0f..1f && y in 0f..1f && geometry.artworkAlpha > 0f) {
-                fun image(pixels: BackgroundPixels): BackgroundRgb? {
-                    val fit = minOf(geometry.cover.width / pixels.width, geometry.cover.height / pixels.height)
-                    val mini = maxOf(geometry.miniSize / pixels.width, geometry.miniSize / pixels.height)
-                    val scale = fit + (maxOf(fit, mini) - fit) * geometry.cropRetention
-                    val u = (point.x - geometry.cover.center.x) / (pixels.width * scale) + .5f
-                    val v = (point.y - geometry.cover.center.y) / (pixels.height * scale) + .5f
-                    return if (u in 0f..1f && v in 0f..1f) pixels.at(u, v) else null
-                }
-                if (softCover != null && geometry.edgeSoftness > 0f) image(softCover)?.let {
-                    result = it.over(result, geometry.artworkAlpha * geometry.edgeSoftness * feather(x, y, 1f, .13f, 0f))
-                }
-                val radius = geometry.corner.coerceAtMost(minOf(geometry.cover.width, geometry.cover.height) / 2)
-                val dx = max(0f, radius - min(point.x - geometry.cover.left, geometry.cover.right - point.x))
-                val dy = max(0f, radius - min(point.y - geometry.cover.top, geometry.cover.bottom - point.y))
-                if (dx * dx + dy * dy <= radius * radius) {
-                    // Missing/loading placeholders have their own foreground; do not invent their pixels.
-                    if (cover == null) return null
-                    var direct = visual.palette.middle.rgb()
-                    image(cover)?.let { direct = it.over(direct) }
-                    result = direct.over(result, geometry.artworkAlpha * feather(x, y, geometry.edgeSoftness, geometry.edgeBand, geometry.coverBlend))
-                }
-            }
-            result
         }
     }
-    return PreparedBackground(request, samples, areas)
+    return PreparedBackground(request, candidates[0], candidates[1], areas)
 }

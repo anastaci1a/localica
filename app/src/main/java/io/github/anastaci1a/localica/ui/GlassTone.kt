@@ -21,6 +21,8 @@ internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val 
         return if (lightInk) x - t * x.pow(p) else x + t * (1f - x).pow(p)
     }
     fun color(color: Color) = Color(channel(color.red), channel(color.green), channel(color.blue), color.alpha)
+    /** Same rounded 8-bit stage as the prepared image, before bitmap filtering. */
+    fun byteChannel(value: Int): Int = (channel(value / 255f) * 255f + .5f).toInt()
 }
 
 /** Older adapters share bounded prepared pixels, never a readback or per-frame CPU filter. */
@@ -36,7 +38,7 @@ private object ToneImages {
         val original = image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
         val pixels = IntArray(original.width * original.height)
         original.getPixels(pixels, 0, original.width, 0, 0, original.width, original.height)
-        val lut = IntArray(256) { (tone.channel(it / 255f) * 255f + .5f).toInt() }
+        val lut = IntArray(256) { tone.byteChannel(it) }
         for (i in pixels.indices) {
             val c = pixels[i]
             pixels[i] = (c and -0x1000000) or (lut[c ushr 16 and 255] shl 16) or
@@ -61,7 +63,19 @@ internal data class ToneSnapshotProvenance(
     val path: ToneSnapshotPath, val requestedSource: ToneImageIdentity?, val requestedTone: GlassTone,
     val customPreparation: Boolean = false,
 )
-private class ToneSnapshotCompletion { @Volatile var provenance: ToneSnapshotProvenance? = null }
+/** Reference identity receipt, separate from diagnostic hashes. It acknowledges preparation,
+ * not native presentation. At most the one retained completion is owned by this composable. */
+internal data class ToneSnapshotReceipt<T : Any>(private val source: T?, private val output: T?,
+    private val appliedTone: GlassTone?, private val custom: Boolean = false) {
+    fun matches(source: T?, output: T?, tone: GlassTone): Boolean = !custom &&
+        this.source === source && this.output === output &&
+        (if (tone.trim == 0f) source === output else appliedTone == tone)
+}
+private class ToneSnapshotCompletion {
+    @Volatile var provenance: ToneSnapshotProvenance? = null
+    @Volatile var receipt: ToneSnapshotReceipt<Bitmap>? = null
+    @Volatile var output: ImageBitmap? = null
+}
 
 /** Retain completed positive-tone content while a replacement image/tone is prepared.
  * The optional preparation seam is for deterministic state tests; ordinary callers keep
@@ -69,13 +83,15 @@ private class ToneSnapshotCompletion { @Volatile var provenance: ToneSnapshotPro
  */
 @Composable internal fun rememberToneSnapshot(image: ImageBitmap?, tone: GlassTone,
     prepare: (suspend (ImageBitmap, GlassTone) -> ImageBitmap)? = null,
-    onProvenance: ((ToneSnapshotProvenance) -> Unit)? = null): ImageBitmap? {
+    onProvenance: ((ToneSnapshotProvenance) -> Unit)? = null,
+    onReceipt: ((ToneSnapshotReceipt<Bitmap>?) -> Unit)? = null): ImageBitmap? {
     val cached = remember(image, tone, prepare) {
         image?.takeIf { tone.trim > 0f && prepare == null }?.let { ToneImages.images.get(ToneImages.Key(it, tone)) }
     }
     var result by remember { mutableStateOf<ImageBitmap?>(null) }
     // Non-observable metadata follows the existing result publication, without another effect,
-    // cache entry, retained raw image or metadata-triggered recomposition.
+    // cache entry or metadata-triggered recomposition. Only an opted-in receipt retains
+    // one exact raw/output association until the next completion or disposal.
     val completed = remember { ToneSnapshotCompletion() }
     LaunchedEffect(image, tone, prepare) {
         val replacement = if (image == null || tone.trim == 0f) image
@@ -87,9 +103,19 @@ private class ToneSnapshotCompletion { @Volatile var provenance: ToneSnapshotPro
         completed.provenance = ToneSnapshotProvenance(replacement.toneIdentity(), image.toneIdentity(),
             tone.takeIf { image != null && tone.trim != 0f && prepare == null },
             ToneSnapshotPath.CompletedResult, image.toneIdentity(), tone, image != null && tone.trim != 0f && prepare != null)
+        if (onReceipt != null) {
+            completed.receipt = ToneSnapshotReceipt(image?.asAndroidBitmap(), replacement?.asAndroidBitmap(), tone,
+                custom = image != null && tone.trim != 0f && prepare != null)
+            completed.output = replacement
+        }
         result = replacement
     }
     val returned = if (image == null || tone.trim == 0f) image else cached ?: result ?: image
+    onReceipt?.invoke(when {
+        image == null || tone.trim == 0f || cached != null -> ToneSnapshotReceipt(image?.asAndroidBitmap(), returned?.asAndroidBitmap(), tone)
+        result != null && completed.output === returned -> completed.receipt
+        else -> null
+    })
     if (onProvenance != null) {
         val source = image.toneIdentity()
         val provenance = when {

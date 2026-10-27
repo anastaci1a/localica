@@ -81,14 +81,18 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
     onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null) {
     var washProvenance: ToneSnapshotProvenance? = null
     var softWashProvenance: ToneSnapshotProvenance? = null
+    var washReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
+    var softWashReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
     val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone,
-        onProvenance = if (onBackgroundDescriptor != null) ({ washProvenance = it }) else null)?.asAndroidBitmap()
+        onProvenance = if (onBackgroundDescriptor != null) ({ washProvenance = it }) else null,
+        onReceipt = if (onBackgroundDescriptor != null) ({ washReceipt = it }) else null)?.asAndroidBitmap()
     val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone,
-        onProvenance = if (onBackgroundDescriptor != null) ({ softWashProvenance = it }) else null)?.asAndroidBitmap()
+        onProvenance = if (onBackgroundDescriptor != null) ({ softWashProvenance = it }) else null,
+        onReceipt = if (onBackgroundDescriptor != null) ({ softWashReceipt = it }) else null)?.asAndroidBitmap()
     // Expose exactly the retained tone outputs used below, not their requested raw inputs.
     if (onBackgroundDescriptor != null) {
         val descriptor = PlayerBackdropDescriptor(palette, wash, softWash, playerGrain, tone,
-            washProvenance, softWashProvenance)
+            washProvenance, softWashProvenance, washReceipt, softWashReceipt)
         SideEffect { onBackgroundDescriptor(descriptor) }
     }
     val washPaint = remember(wash) {
