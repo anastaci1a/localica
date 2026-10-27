@@ -27,7 +27,9 @@ class CollectionArtworkTest {
             val ascending = sorts(kind, TrackSort.Title)
             val descending = sorts(kind, TrackSort.Title, false)
             val first = item(tab, ascending)
-            assertEquals(listOf("alpha"), first.coverUris)
+            // Artist Title orders album groups; this single album always starts
+            // with track 1, even when the outer album direction changes (#471).
+            assertEquals(listOf(if (kind == MediaKind.Album) "alpha" else "zulu"), first.coverUris)
             assertEquals(listOf("zulu"), item(tab, descending).coverUris)
             val detail = BrowseQueries.evaluate(library, emptyList(), BrowseRoute(tab, first.ref), sorts = ascending)
             assertEquals(detail.rows.first().track.uri, first.coverUris.single())
@@ -180,7 +182,14 @@ class CollectionArtworkTest {
         assertEquals(2040, result.items.size)
         assertEquals("One library scan per grouping kind, independent of group count", tracks.size * 4, reads)
         result.items.forEach { item ->
-            assertEquals(LibraryQueries.rows(item.songs, preferences.collectionQuery(item.ref)).first().track.uri, item.coverUris.single())
+            val expected = if (item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)) {
+                // Independent oracle for this fixture: every disc/track number
+                // is equal, so album Title then inner song Title chooses the cover.
+                item.songs.minWith(compareBy<SongRow> { it.track.album!!.lowercase(java.util.Locale.ROOT) }
+                    .thenBy { it.track.title.lowercase(java.util.Locale.ROOT) }
+                    .thenBy { it.track.id }).track.uri
+            } else LibraryQueries.rows(item.songs, preferences.collectionQuery(item.ref)).first().track.uri
+            assertEquals(expected, item.coverUris.single())
         }
     }
 
