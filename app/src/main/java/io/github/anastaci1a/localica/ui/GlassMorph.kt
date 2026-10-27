@@ -37,6 +37,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
@@ -55,6 +58,8 @@ internal class GlassAnchor {
             Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()),
             samplingLocation.registrationToScreen())
     }
+    /** Opening admission can reclaim a still-present returning window synchronously. */
+    var reclaimOpening: (() -> Unit)? = null
     var triggerMounted = false
     var restoredDrawn = false
     var bounds by mutableStateOf(Rect.Zero)
@@ -224,7 +229,26 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val ambientSource = LocalModalBackdrop.current
     androidx.activity.compose.BackHandler(visible && originPreparation != null && !present) { dismissNow() }
     DisposableEffect(originPreparation) { onDispose { originPreparation?.reset() } }
+    val transitionJob = remember { arrayOfNulls<Job>(1) }
+    val reclaimOpening = remember(anchor) { {
+        // A click updates its conditional caller before the next composition can
+        // remount the retained entry. Stop the old return at that admission point,
+        // otherwise its restored-draw acknowledgment can dispose this same window.
+        if (!anchor.hidden && anchor.modalPresent && modalWindow != null && modalWindow === readyWindow) {
+            transitionJob[0]?.cancel()
+            transitionJob[0] = null
+            present = true
+            anchor.hidden = true
+            anchor.shadowInModal = true
+            anchor.contact.modal = true
+        }
+    } }
+    DisposableEffect(anchor, reclaimOpening) {
+        anchor.reclaimOpening = reclaimOpening
+        onDispose { if (anchor.reclaimOpening === reclaimOpening) anchor.reclaimOpening = null }
+    }
     LaunchedEffect(visible, reduced, speed, originPreparation) {
+        transitionJob[0] = currentCoroutineContext().job
         if (!visible && !present) {
             anchor.hidden = false
             originPreparation?.settle(false, reduced, speed)
