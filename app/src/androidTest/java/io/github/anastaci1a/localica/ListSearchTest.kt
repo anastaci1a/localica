@@ -8,6 +8,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.semantics.getAllSemanticsNodes
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
@@ -351,11 +353,58 @@ class ListSearchTest {
             val name = n.toString().padStart(3, '0')
             Track("track:$n", "Song $name", album = "Album $name", fileName = "$n.mp3", relativePath = "$n.mp3")
         }
+        var observedMorph: SearchMorphSample? = null
+        var observedMorphAt = -1L
+        val observationFailures = mutableListOf<Throwable>()
+        fun observePosition(label: String, row: androidx.compose.ui.semantics.SemanticsNode,
+            captured: androidx.compose.ui.geometry.Rect) {
+            runCatching { compose.runOnUiThread {
+                val root = row.root
+                val view = (root as androidx.compose.ui.platform.ViewRootForTest).view
+                // Direct public semantics reads on Main: no additional Espresso
+                // synchronization, readiness wait, frame or screenshot.
+                val nodes = root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true)
+                val props = androidx.compose.ui.semantics.SemanticsProperties
+                val viewport = nodes.singleOrNull { it.config.getOrNull(props.TestTag) == "browser-list" }
+                val viewportBounds = viewport?.boundsInRoot
+                val relative = viewportBounds?.let { captured.translate(-it.topLeft) }
+                val neighbors = nodes.mapNotNull { node ->
+                    val tag = node.config.getOrNull(props.TestTag)
+                    val bounds = node.boundsInRoot
+                    if (tag?.startsWith("media-") == true && viewportBounds?.overlaps(bounds) == true)
+                        tag to bounds else null
+                }.sortedBy { kotlin.math.abs(it.second.top - captured.top) }.take(5)
+                val screen = IntArray(2).also(view::getLocationOnScreen)
+                val window = IntArray(2).also(view::getLocationInWindow)
+                val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+                val ime = androidx.core.view.WindowInsetsCompat.Type.ime()
+                android.util.Log.i("SearchResultReturn", "sample=$label nonAtomicPostSample=true " +
+                    "root=${System.identityHashCode(root)} view=${System.identityHashCode(view)} " +
+                    "window=${view.windowToken?.let(System::identityHashCode)} screen=${screen.contentToString()} " +
+                    "windowOrigin=${window.contentToString()} viewSize=${view.width}x${view.height} " +
+                    "rootView=${System.identityHashCode(view.rootView)} rootSize=${view.rootView.width}x${view.rootView.height} " +
+                    "attached=${view.isAttachedToWindow} focus=${view.hasWindowFocus()} " +
+                    "capturedRow=$captured currentRow=${row.boundsInRoot} viewport=$viewportBounds rowRelative=$relative " +
+                    "scroll=${viewport?.config?.getOrNull(props.VerticalScrollAxisRange)?.value?.invoke()} " +
+                    "neighbors=$neighbors imeVisible=${insets?.isVisible(ime)} ime=${insets?.getInsets(ime)?.bottom} " +
+                    "lastMorphAt=$observedMorphAt now=${android.os.SystemClock.uptimeMillis()} lastMorph=$observedMorph")
+            } }.exceptionOrNull()?.let { diagnostic ->
+                if (observationFailures.size < 2) observationFailures += diagnostic
+            }
+        }
         try {
             BrowseSchedulerWatchdog.phase("install list search fixture")
-            compose.setContent { LocalicaTheme { LocalicaScreen(
+            compose.setContent { LocalicaTheme {
+                val inheritedObserver = LocalSearchMorphObserver.current
+                val observer = remember(inheritedObserver) { { sample: SearchMorphSample ->
+                    inheritedObserver?.invoke(sample)
+                    observedMorph = sample
+                    observedMorphAt = android.os.SystemClock.uptimeMillis()
+                } }
+                CompositionLocalProvider(LocalSearchMorphObserver provides observer) { LocalicaScreen(
                 LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaybackState(connected = true),
-                {}, {}, {}, {}, {}, {}) } }
+                {}, {}, {}, {}, {}, {}) }
+            } }
             BrowseSchedulerWatchdog.phase("await initial album")
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 000").fetchSemanticsNodes().isNotEmpty() }
             val pill = compose.onNodeWithTag("list-search-pill").fetchSemanticsNode().boundsInRoot
@@ -377,7 +426,9 @@ class ListSearchTest {
             compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Album 061"))
             androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
                 .takeScreenshot(java.io.File(context.getExternalFilesDir(null), "list-search-popup.png"))
-            val resultPosition = compose.onNodeWithText("Album 061").fetchSemanticsNode().boundsInRoot
+            val originalResultNode = compose.onNodeWithText("Album 061").fetchSemanticsNode()
+            val resultPosition = originalResultNode.boundsInRoot
+            observePosition("before-result-navigation", originalResultNode, resultPosition)
             BrowseSchedulerWatchdog.phase("open search result")
             compose.onNodeWithText("Album 061").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Song 061").fetchSemanticsNodes().isNotEmpty() }
@@ -386,7 +437,10 @@ class ListSearchTest {
             compose.onNodeWithContentDescription("Back").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Album 061").fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(hasSetTextAction()).assertTextContains("Album")
-            assertEquals(resultPosition, compose.onNodeWithText("Album 061").fetchSemanticsNode().boundsInRoot)
+            val returnedResultNode = compose.onNodeWithText("Album 061").fetchSemanticsNode()
+            val returnedPosition = returnedResultNode.boundsInRoot
+            observePosition("after-result-return", returnedResultNode, returnedPosition)
+            assertEquals(resultPosition, returnedPosition)
             BrowseSchedulerWatchdog.phase("dismiss list search")
             dismissSearch()
             assertEquals(before, compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot)
@@ -405,6 +459,9 @@ class ListSearchTest {
             pressSystemBack()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-popup").fetchSemanticsNodes().isEmpty() }
             assertEquals(before, compose.onNodeWithText("Album 060").fetchSemanticsNode().boundsInRoot)
+        } catch (failure: Throwable) {
+            observationFailures.forEach(failure::addSuppressed)
+            throw failure
         } finally {
             context.getSharedPreferences("interface", 0).edit().clear().commit()
             context.getSharedPreferences("browse-style", 0).edit().clear().commit()
