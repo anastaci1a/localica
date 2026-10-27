@@ -113,6 +113,10 @@ internal fun rememberBrowseLoadingReveal(key: Any?, ready: Boolean, cached: Bool
 
 /** All loading art and metadata in this viewport use exactly one draw-only clock. */
 internal val LocalLoadingShimmer = compositionLocalOf<State<Float>?> { null }
+/** Loading material only, applied once by ArtworkPlaceholder (also used by text shapes).
+ * Providers surround colored/stylized viewports; loaded content and final fallback ignore it.
+ */
+internal val LocalLoadingMaterialOpacity = staticCompositionLocalOf { 1f }
 internal val LocalLoadingShimmerActivity = staticCompositionLocalOf<LoadingShimmerActivity?> { null }
 
 /** Visible pending artwork keeps the existing viewport clock alive after catalog reveal. */

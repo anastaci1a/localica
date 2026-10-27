@@ -87,6 +87,7 @@ private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
 
 @Composable
 internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier, showIcon: Boolean = true) {
+    val loadingOpacity = LocalLoadingMaterialOpacity.current.coerceIn(0f, 1f)
     val base = MaterialTheme.colorScheme.surfaceContainer
     val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = .065f)
     val reducedMotion = LocalReducedMotion.current
@@ -101,7 +102,9 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
         else LocalLoadingShimmer.current ?: rememberInfiniteTransition(label = "Artwork loading").animateFloat(-1f, 2f,
             infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "Artwork shimmer")
     } else null
-    Box(modifier.then(if (loading) Modifier.testTag("artwork-loading") else Modifier), contentAlignment = Alignment.Center) {
+    Box(modifier.then(if (loading) Modifier.testTag("artwork-loading") else Modifier)
+        .then(if (loading && loadingOpacity != 1f) Modifier.graphicsLayer { alpha = loadingOpacity } else Modifier),
+        contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) {
             drawRect(base)
             progress?.let {
@@ -110,6 +113,6 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
                     start = Offset(x - size.width * .6f, 0f), end = Offset(x + size.width * .6f, size.height)))
             }
         }
-        if (showIcon && !(loading && sharedActivity != null)) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
+        if (showIcon && !loading) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
     }
 }
