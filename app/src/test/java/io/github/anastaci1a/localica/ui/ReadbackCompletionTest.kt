@@ -3,6 +3,8 @@ package io.github.anastaci1a.localica.ui
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -13,6 +15,74 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReadbackCompletionTest {
+    @Test fun cancelledCallerLeavesReadAttachedToIndependentOwnerUntilActualCompletion() = runTest {
+        val processOwner = SupervisorJob()
+        val callerOwner = SupervisorJob()
+        val helper = ReadbackCompletion.withOwnerForTest(processOwner)
+        val finish = CompletableDeferred<Int>()
+        var readJob: Job? = null
+        var releases = 0
+        var published = false
+        val caller = launch(callerOwner, start = CoroutineStart.UNDISPATCHED) {
+            helper.capture(acquire = { Any() }, read = {
+                readJob = currentCoroutineContext().job
+                finish.await()
+            }, release = { releases++ })
+            published = true
+        }
+        assertSame(readJob, processOwner.children.single())
+        assertNotSame(caller, readJob)
+        callerOwner.cancel()
+        runCurrent()
+        assertTrue("Independent read stays active after caller-tree cancellation", requireNotNull(readJob).isActive)
+        assertSame(readJob, processOwner.children.single())
+        assertFalse(caller.isCompleted)
+        assertEquals(0, releases)
+        assertFalse(published)
+        finish.complete(42)
+        caller.join()
+        assertTrue(caller.isCancelled)
+        assertTrue(requireNotNull(readJob).isCompleted)
+        assertTrue(processOwner.children.none())
+        assertEquals(1, releases)
+        assertFalse(published)
+        processOwner.complete()
+        callerOwner.join()
+    }
+
+    @Test fun nestedReadsEachRetainTheirOwnProcessChildAndReleaseInsideOut() = runTest {
+        val processOwner = SupervisorJob()
+        val outer = ReadbackCompletion.withOwnerForTest(processOwner)
+        val inner = ReadbackCompletion.withOwnerForTest(processOwner)
+        val finish = CompletableDeferred<Unit>()
+        val readJobs = mutableListOf<Job>()
+        val events = mutableListOf<String>()
+        val caller = launch(start = CoroutineStart.UNDISPATCHED) {
+            outer.capture(acquire = { "outer" }, read = {
+                readJobs += currentCoroutineContext().job
+                inner.capture(acquire = { "inner" }, read = {
+                    readJobs += currentCoroutineContext().job
+                    finish.await()
+                    events += "copy"
+                    42
+                }, release = { events += "release-$it" })
+            }, release = { events += "release-$it" })
+            events += "publish"
+        }
+        assertEquals(2, readJobs.distinct().size)
+        assertEquals(readJobs.toSet(), processOwner.children.toSet())
+        caller.cancel()
+        runCurrent()
+        assertEquals(readJobs.toSet(), processOwner.children.toSet())
+        assertTrue(readJobs.all { it.isActive })
+        assertTrue(events.isEmpty())
+        finish.complete(Unit)
+        caller.join()
+        assertEquals(listOf("copy", "release-inner", "release-outer"), events)
+        assertTrue(processOwner.children.none())
+        processOwner.complete()
+    }
+
     @Test fun normalReadReleasesBeforeReturningItsValue() = runTest {
         val owner = ReadbackCompletion()
         val lease = Any()
