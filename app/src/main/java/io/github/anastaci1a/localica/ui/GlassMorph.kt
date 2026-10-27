@@ -139,6 +139,15 @@ internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
 internal val LocalGlassPanelReady = compositionLocalOf { true }
 /** Test-only opt-in for foreground child shadows; no ordinary caller provides a value. */
 internal val LocalPopupContentShadowStrength = compositionLocalOf<Float?> { null }
+/** Diagnostic-only outer finish: 0 ordinary, 1 no rim, 2 no frost coating. */
+internal val LocalPopupFinishDiagnostic = compositionLocalOf { 0 }
+/** Scalar-only diagnostics after recording the material supplied to popup children. */
+internal data class PopupDerivedMaterialDraw(val uptime: Long, val viewIdentity: Int, val sourceIdentity: Int,
+    val layerIdentity: Int, val parentIdentity: Int?, val parentLayerIdentity: Int?,
+    val recorded: Boolean, val released: Boolean, val revision: Int, val requestedReadback: Int,
+    val publishedReadback: Int, val snapshotIdentity: Int?, val fallbackIdentity: Int?,
+    val lensIdentity: Int?, val finishMode: Int)
+internal val LocalPopupDerivedMaterialObserver = compositionLocalOf<((PopupDerivedMaterialDraw) -> Unit)?> { null }
 // Only separate modal windows may read this scene. Inline lenses must keep using
 // LocalFrostedBackdrop, whose recordings exclude their own foreground controls.
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
@@ -511,6 +520,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // This recording is sampled only by a later nested modal. Its
                 // material already has a shared raster; don't allocate and redraw
                 // another full-panel texture throughout every opening/closing.
+                val finishMode = LocalPopupFinishDiagnostic.current
+                val derivedObserver = LocalPopupDerivedMaterialObserver.current
                 val completePanel = rememberFrostedBackdrop(p == 1f, dark = dark, retainRaster = false)
                 SideEffect { completePanel.parent = source }
                 fun mix(a: Float, b: Float) = a + (b - a) * geometry
@@ -617,7 +628,19 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         Box(Modifier.graphicsLayer {
                             if (anchor.quiet) { val t = (p / .25f).coerceIn(0f, 1f); alpha = t * t * (3f - 2f * t) }
-                        }.recordFrostedBackdrop(material)) {
+                        }.then(if (derivedObserver == null) Modifier else Modifier.drawWithContent {
+                            drawContent()
+                            // This observes this material recording, not the pixels later consumed by a lens.
+                            try { androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                                derivedObserver(PopupDerivedMaterialDraw(android.os.SystemClock.uptimeMillis(), System.identityHashCode(view),
+                                    System.identityHashCode(material), System.identityHashCode(material.layer),
+                                    material.parent?.let(System::identityHashCode), material.parent?.layer?.let(System::identityHashCode),
+                                    material.recorded, material.layer.isReleased, material.revision,
+                                    material.readbackRequest, material.snapshotReadbackRequest,
+                                    material.snapshot?.let(System::identityHashCode), material.fallback?.let(System::identityHashCode),
+                                    material.lensSnapshot?.let(System::identityHashCode), finishMode))
+                            } } catch (_: Throwable) { /* diagnostics must not affect drawing */ }
+                        }).recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
@@ -634,6 +657,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     // original foreground is rendered separately during its return.
                                     inkOverride = if (dark) Color.White else Color(0xFF202124),
                                     pressFeedback = false, shadow = false,
+                                    diagnosticFinishMode = finishMode,
                                     body = { body.value },
                                     depthScale = anchor.depthScale,
                                     refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)

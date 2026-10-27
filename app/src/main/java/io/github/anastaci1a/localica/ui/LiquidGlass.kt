@@ -66,6 +66,7 @@ internal data class GlassSurfaceDrawObservation(
     val blur: Float, val whiteTint: Float, val depth: Float, val depthScale: Float, val refraction: Float,
     val shadowEnabled: Boolean, val shadowStrength: Float, val shadowSpread: Float,
     val shadowGroupIdentity: Int?, val shadowInModal: Boolean?, val silhouettePresent: Boolean,
+    val diagnosticFinishMode: Int,
 )
 internal val LocalGlassSurfaceDrawObserver = staticCompositionLocalOf<((GlassSurfaceDrawObservation) -> Unit)?> { null }
 
@@ -173,6 +174,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     silhouette: GlassSilhouette? = null, sharedContact: GlassContact? = null,
     contactPresentation: (() -> GlassShape)? = null,
     contactAdmission: () -> Boolean = { true },
+    diagnosticFinishMode: Int = 0,
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val drawObserver = LocalGlassSurfaceDrawObserver.current
     // Do not create diagnostic state, closures, geometry or modifiers for ordinary/null callers.
@@ -305,12 +307,12 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         }
         Canvas(Modifier.matchParentSize()) {
             drawRect(tone.color(tint))
-            if (panel > 0f) drawFrostCoating(coatingDark, Color.Transparent, panel)
+            if (panel > 0f && diagnosticFinishMode != 2) drawFrostCoating(coatingDark, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
-            drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f,
+            if (diagnosticFinishMode != 1) drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f,
                 path = outline?.path, tone = tone, opacity = 1f - splitRim)
-            if (outline != null && splitRim > 0f) outline.bodies.forEach { part ->
+            if (diagnosticFinishMode != 1 && outline != null && splitRim > 0f) outline.bodies.forEach { part ->
                 clipRect(part.left, part.top, part.right, part.bottom) {
                     drawGlassRim(androidx.compose.ui.geometry.Rect(part.left, part.top, part.right, part.bottom),
                         part.height / 2f, path = outline.path, tone = tone, opacity = splitRim)
@@ -343,7 +345,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         homeWeight(), appearance.blur, appearance.whiteTint, appearance.depth, depthScale, refraction,
                         shadow, shadows.shadowStrength, shadows.shadowSpread,
                         surfaceDrawIdentity(observedShadowGroup),
-                        anchor?.shadowInModal, silhouette != null))
+                        anchor?.shadowInModal, silhouette != null, diagnosticFinishMode))
                 }
             } catch (_: Throwable) { /* A diagnostic must never fail or change the drawing. */ }
 
