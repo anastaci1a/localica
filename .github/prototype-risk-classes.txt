@@ -224,3 +224,15 @@ io.github.anastaci1a.localica.TrackedDataSourceTest
 io.github.anastaci1a.localica.TracklistPinchIntegrationTest
 io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest
 io.github.anastaci1a.localica.WorkflowPersistenceTest
+io.github.anastaci1a.localica.ActionStripDrawingTest
+io.github.anastaci1a.localica.CompactCollectionArtworkTest
+io.github.anastaci1a.localica.DialogChromeLayoutTest
+io.github.anastaci1a.localica.GlassDialogLateReopenTest
+io.github.anastaci1a.localica.GlassDialogReopenTest
+io.github.anastaci1a.localica.ListTopFadeTest
+io.github.anastaci1a.localica.LoadingMaterialOpacityTest
+io.github.anastaci1a.localica.LyricsPlayerReopenTest
+io.github.anastaci1a.localica.PlayerBackgroundPolarityTest
+io.github.anastaci1a.localica.PlaylistDetailPresentationTest
+io.github.anastaci1a.localica.QueueSaveOriginTest
+io.github.anastaci1a.localica.TagEditorChromeLayoutTest

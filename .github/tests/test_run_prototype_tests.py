@@ -75,6 +75,20 @@ for i,cls in enumerate(classes):
     case=E.SubElement(suite,'testcase',classname=cls,name='regression')
     if mode=='xml-failure' and i==0:E.SubElement(case,'failure')
     if mode=='all-skipped' and i==0:E.SubElement(case,'skipped')
+    if os.environ.get('SKIP_CLASS')==cls:
+        method=os.environ['SKIP_METHOD']
+        skipped=E.SubElement(suite,'testcase',classname=cls,name=method)
+        skip=E.SubElement(skipped,'skipped')
+        if os.environ.get('SKIP_XML_REASON'):skip.set('message',os.environ['SKIP_XML_REASON'])
+        suite.set('tests','2')
+        if os.environ.get('SKIP_LOG','yes')=='yes':
+            folder=root/'emulator-5554 - fixture';folder.mkdir(exist_ok=True)
+            marker=method+'('+cls+')'
+            reason=os.environ.get('SKIP_REASON','')
+            lines=['10-27 12:00:00.000 123 456 I TestRunner: started: '+marker,
+                '10-27 12:00:00.001 123 456 E TestRunner: assumption failed: '+marker]
+            if reason:lines.append('10-27 12:00:00.002 123 456 E TestRunner: org.junit.AssumptionViolatedException: '+reason)
+            (folder/('logcat-'+cls+'-'+method+'.txt')).write_text(chr(10).join(lines)+chr(10))
     if mode=='bad-count':suite.set('tests','2')
     E.ElementTree(suite).write(root/('TEST-'+str(i)+'.xml'))
 ''')
@@ -163,12 +177,114 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
 
-    def test_twenty_two_distinct_affected_classes_are_rejected_before_instrumentation(self):
-        classes = self.distinct_affected_sources(22)
+    def test_forty_eight_distinct_affected_classes_are_rejected_before_instrumentation(self):
+        classes = self.distinct_affected_sources(48)
         self.run_case(2,AFFECTED_CLASSES=','.join(classes))
         self.assertFalse((self.root/'argv.json').exists())
 
-    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*22))
+    def test_forty_seven_distinct_affected_classes_keep_all_mandatory_regressions(self):
+        classes = self.distinct_affected_sources(47)
+        self.run_case(AFFECTED_CLASSES=','.join(classes))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
+
+    def skip_source(self, cls, method):
+        with (self.root/'.github/prototype-risk-classes.txt').open('a') as stream:
+            stream.write(cls+'\n')
+        (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
+            'package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+
+            ' { @org.junit.Test fun regression() {} @org.junit.Test fun '+method+'() {} }\n')
+        return dict(AFFECTED_CLASSES=cls, SKIP_CLASS=cls, SKIP_METHOD=method)
+
+    def test_profile_skip_requires_exact_identity_reason_and_keeps_evidence(self):
+        cls='io.github.anastaci1a.localica.DialogChromeLayoutTest'
+        method='native360x640Font2RetainsSharedChromeAndEveryRepeatControl'
+        reason='Requires sufficient display space and actual Android font scale 2'
+        self.run_case(**self.skip_source(cls,method),SKIP_REASON=reason)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual([cls+'#'+method],[x['id'] for x in evidence['qualified_skips']])
+        self.assertEqual(reason,evidence['qualified_skips'][0]['reason'])
+        self.assertEqual('36',str(evidence['qualified_skips'][0]['api']))
+        self.assertIn('logcat-',evidence['qualified_skips'][0]['evidence'])
+
+    def accepted_profile(self, cls, method, reason, api):
+        self.run_case(**self.skip_source('io.github.anastaci1a.localica.'+cls,method),TEST_API=api,SKIP_REASON=reason)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual(1,len(evidence['qualified_skips']))
+        self.assertEqual(reason,evidence['qualified_skips'][0]['reason'])
+
+    def test_repeat_exact360_observed_profile_reason(self):
+        self.accepted_profile('RepeatOptionsEnvelopeTest','native360x640Font2SectionsExposeEveryControlAndStageDrafts',
+            'Exact native window profile requires sufficient display space and actual Android font scale 2','26')
+
+    def test_repeat_exact400_observed_profile_reason(self):
+        self.accepted_profile('RepeatOptionsEnvelopeTest','native400x800Font2SectionsExposeEveryControlAndStageDrafts',
+            'Exact native window profile requires sufficient display space and actual Android font scale 2','36')
+
+    def test_repeat_phone360_observed_profile_reason(self):
+        self.accepted_profile('RepeatOptionsEnvelopeTest','native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize',
+            'Requires the lead-configured 360x640 phone/font2 focused run','26')
+
+    def test_repeat_phone400_observed_profile_reason(self):
+        self.accepted_profile('RepeatOptionsEnvelopeTest','native400x800PhoneFont2SectionsFitSafeInsetsWithoutWindowResize',
+            'Requires the lead-configured 400x800 phone/font2 focused run','36')
+
+    def test_chrome400_observed_profile_reason(self):
+        self.accepted_profile('DialogChromeLayoutTest','native400x800Font2RetainsSharedChromeAndEveryRepeatControl',
+            'Requires sufficient display space and actual Android font scale 2','26')
+
+    def test_tag_editor_observed_profile_reason(self):
+        self.accepted_profile('TagEditorChromeLayoutTest','native360x640Font2KeepsSharedChromeAndScrollableFullSizeFields',
+            'Requires sufficient display space and the requested actual system font scale','36')
+
+    def test_phone_profile_cannot_borrow_the_other_dimension_reason(self):
+        self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest',
+            'native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize'),
+            SKIP_REASON='Requires the lead-configured 400x800 phone/font2 focused run')
+
+    def test_xml_reason_cannot_contradict_original_method_log(self):
+        self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.DialogChromeLayoutTest',
+            'native360x640Font2RetainsSharedChromeAndEveryRepeatControl'),
+            SKIP_REASON='Requires sufficient display space and actual Android font scale 2',SKIP_XML_REASON='Contradiction')
+
+    def test_profile_skip_wrong_method_is_rejected(self):
+        self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.DialogChromeLayoutTest','wrongMethod'),
+            SKIP_REASON='Requires sufficient display space and actual Android font scale 2')
+
+    def test_profile_skip_wrong_reason_is_rejected(self):
+        self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.DialogChromeLayoutTest',
+            'native360x640Font2RetainsSharedChromeAndEveryRepeatControl'),SKIP_REASON='Different reason')
+
+    def test_profile_skip_missing_observed_reason_is_rejected(self):
+        self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.DialogChromeLayoutTest',
+            'native360x640Font2RetainsSharedChromeAndEveryRepeatControl'),SKIP_REASON='')
+
+    def test_empty_xml_skip_without_method_log_is_not_guessed(self):
+        self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.DialogChromeLayoutTest',
+            'native360x640Font2RetainsSharedChromeAndEveryRepeatControl'),SKIP_LOG='no')
+
+    def test_api26_native_blur_skip_is_qualified_by_observed_default_junit_reason(self):
+        cls='io.github.anastaci1a.localica.PlayerBackgroundPolarityTest'
+        method='nativeBlurRetainsVerifiedInkAsDistinctUnavailableThenRecovers'
+        self.run_case(**self.skip_source(cls,method),TEST_API='26',SKIP_REASON='got: <false>, expected: is <true>')
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual('got: <false>, expected: is <true>',evidence['qualified_skips'][0]['reason'])
+
+    def test_api36_native_blur_must_run(self):
+        self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.PlayerBackgroundPolarityTest',
+            'nativeBlurRetainsVerifiedInkAsDistinctUnavailableThenRecovers'),SKIP_REASON='got: <false>, expected: is <true>')
+
+    def test_unrelated_class_cannot_borrow_profile_reason(self):
+        self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.OtherProfileTest',
+            'native360x640Font2RetainsSharedChromeAndEveryRepeatControl'),
+            SKIP_REASON='Requires sufficient display space and actual Android font scale 2')
+
+    def test_optimized_python_cannot_disable_reconciliation(self):
+        self.run_case(1,PYTHONOPTIMIZE='1')
+
+    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*48))
     def test_too_long(self): self.run_case(2,AFFECTED_CLASSES='x'*4097)
     def test_missing_source(self):
         (self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')).unlink()
@@ -340,6 +456,33 @@ class WorkflowContract(unittest.TestCase):
                     subprocess.run(['bash','-n'],input=step['run'],text=True,check=True)
                 if 'uses' in step:
                     self.assertRegex(step['uses'],r'@[0-9a-f]{40}$')
+
+
+
+class InsertedWorkflowContract(unittest.TestCase):
+    def test_exact_approved_classes_retain_prior_gate_and_exclude_diagnostics(self):
+        import re
+        text=(ROOT/'.github/workflows/prototype-dev72-inserted.yml').read_text()
+        line=re.findall(r'^      affected_classes: (.+)$',text,re.MULTILINE)
+        self.assertEqual(1,len(line))
+        actual=line[0].split(',')
+        expected=set(["io.github.anastaci1a.localica.ActionStripDrawingTest","io.github.anastaci1a.localica.AdvancedRepeatTest","io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest","io.github.anastaci1a.localica.ArtistAlbumSelectionTest","io.github.anastaci1a.localica.ArtistCollectionActionsTest","io.github.anastaci1a.localica.ArtistSelectionPlacementTest","io.github.anastaci1a.localica.ArtworkCropLoadingTest","io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest","io.github.anastaci1a.localica.ArtworkSwipeTest","io.github.anastaci1a.localica.BrowseOrderViewportTest","io.github.anastaci1a.localica.ButtonGestureTest","io.github.anastaci1a.localica.CollectionControlsBackdropTest","io.github.anastaci1a.localica.CollectionDetailTest","io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest","io.github.anastaci1a.localica.CompactCollectionArtworkTest","io.github.anastaci1a.localica.DialogChromeLayoutTest","io.github.anastaci1a.localica.GlassActionRowTest","io.github.anastaci1a.localica.GlassDialogLateReopenTest","io.github.anastaci1a.localica.GlassDialogReopenTest","io.github.anastaci1a.localica.GlassDialogsTest","io.github.anastaci1a.localica.GlassMorphTest","io.github.anastaci1a.localica.GlassShadowTest","io.github.anastaci1a.localica.LibraryDatabaseTest","io.github.anastaci1a.localica.LibraryPlaybackReadTest","io.github.anastaci1a.localica.ListReturnControlsTest","io.github.anastaci1a.localica.ListTopFadeTest","io.github.anastaci1a.localica.LoadingMaterialOpacityTest","io.github.anastaci1a.localica.LyricsHeaderActionsTest","io.github.anastaci1a.localica.LyricsPlayerReopenTest","io.github.anastaci1a.localica.LyricsReturnBackdropTest","io.github.anastaci1a.localica.LyricsViewportMotionTest","io.github.anastaci1a.localica.PinchReadbackLifetimeTest","io.github.anastaci1a.localica.PinchReleaseHandoffTest","io.github.anastaci1a.localica.PlaybackIntentTest","io.github.anastaci1a.localica.PlayerBackgroundPolarityTest","io.github.anastaci1a.localica.PlayerExpansionMotionTest","io.github.anastaci1a.localica.PlaylistCoverActionTest","io.github.anastaci1a.localica.PlaylistDetailPresentationTest","io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest","io.github.anastaci1a.localica.QueueFollowingTest","io.github.anastaci1a.localica.QueueOrderActionAdmissionTest","io.github.anastaci1a.localica.QueueSaveOriginTest","io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest","io.github.anastaci1a.localica.RetainedLayerReadbackTest","io.github.anastaci1a.localica.SongInformationTest","io.github.anastaci1a.localica.TagEditorChromeLayoutTest","io.github.anastaci1a.localica.TagEditorThemeInheritanceTest"])
+        self.assertEqual(47,len(actual))
+        self.assertEqual(expected,set(actual))
+        inventory=(ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()
+        self.assertTrue(expected.issubset(inventory))
+        self.assertFalse({REQUIRED,FOCUS,CONTRAST}.intersection(actual))
+        self.assertLessEqual(len(','.join(sorted(expected|{REQUIRED,FOCUS,CONTRAST}))),4096)
+        self.assertNotIn('PopupFamilyPresentationTest',line[0])
+        self.assertNotIn('CollectionHeaderInputRetentionTest',line[0])
+        self.assertIn('uses: ./.github/workflows/prototype.yml',text)
+        self.assertIn('branches: [test/dev72-inserted-prototype-20261027]',text)
+        self.assertIn('release clearance',text)
+        self.assertIn('dependent coverage review',text)
+
+    def test_historical_dev71_workflow_remains_byte_identical(self):
+        import hashlib
+        self.assertEqual('a6b884a815d2703532aa8679678cc2d7e4b67a1a322a7e66f0a29b6e17e3b542',hashlib.sha256((ROOT/'.github/workflows/prototype-dev71-apk1.yml').read_bytes()).hexdigest())
 
 
 if __name__=='__main__':unittest.main()
