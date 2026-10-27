@@ -56,7 +56,7 @@ Complete native workflow jobs enable `LOCALICA_LIVE_EVIDENCE=true`: the existing
 
 ### Opt-in prototypes
 
-The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select affected behavior classes and describe coverage and limitations. Search IME, search-focus and contrast coverage is mandatory on API 26/36; build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
+The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 53 affected behavior classes (4096 characters maximum) and describe coverage and limitations. The focused jobs allow 60 minutes without trimming selected methods; this is a capacity allowance, not a measured speedup. Search IME, search-focus and contrast coverage is mandatory on API 26/36; build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
 

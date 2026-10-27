@@ -177,8 +177,8 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
 
-    def test_fifty_two_distinct_affected_classes_are_rejected_before_instrumentation(self):
-        classes = self.distinct_affected_sources(52)
+    def test_fifty_four_distinct_affected_classes_are_rejected_before_instrumentation(self):
+        classes = self.distinct_affected_sources(54)
         self.run_case(2,AFFECTED_CLASSES=','.join(classes))
         self.assertFalse((self.root/'argv.json').exists())
 
@@ -205,6 +205,32 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
+
+    def test_fifty_three_distinct_affected_classes_keep_every_method_and_sentinel(self):
+        classes = self.distinct_affected_sources(53)
+        self.run_case(AFFECTED_CLASSES=','.join(classes))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
+        self.assertEqual(expected,set(evidence['counts']))
+        self.assertEqual({c+'#regression' for c in expected},set(evidence['methods']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST},set(evidence['required_selectors']))
+        self.assertTrue(all(outcome == 'passed' for outcome in evidence['methods'].values()))
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertEqual(expected,set(args[-1].split('=',1)[1].split(',')))
+
+    def test_menu_classes_run_in_full_with_all_mandatory_regressions(self):
+        menu=['io.github.anastaci1a.localica.GlassMenuContentTest',
+              'io.github.anastaci1a.localica.GlassMenuViewportTouchTest']
+        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
+            inventory.write('\n'.join(menu)+'\n')
+        for cls in menu:
+            (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
+                'package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+
+                ' { @org.junit.Test fun regression() {} }\n')
+        self.run_case(AFFECTED_CLASSES=','.join(menu))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({c+'#regression' for c in set(menu)|{REQUIRED,FOCUS,CONTRAST}},
+                         set(evidence['methods']))
 
     def skip_source(self, cls, method):
         with (self.root/'.github/prototype-risk-classes.txt').open('a') as stream:
@@ -300,7 +326,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_optimized_python_cannot_disable_reconciliation(self):
         self.run_case(1,PYTHONOPTIMIZE='1')
 
-    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*52))
+    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*54))
     def test_too_long(self): self.run_case(2,AFFECTED_CLASSES='x'*4097)
     def test_missing_source(self):
         (self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')).unlink()
@@ -449,6 +475,24 @@ class WorkflowContract(unittest.TestCase):
             self.assertEqual('always()',preserve['if'])
             self.assertIn('reports/prototype-runner-environment.txt',preserve['run'])
 
+    def test_full_selected_gate_retains_time_budget_and_original_menu_images(self):
+        import yaml
+        jobs=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
+        for api in (26,36):
+            job=jobs[f'focused_{api}']
+            self.assertEqual(60,job['timeout-minutes'])
+            upload=next(s for s in job['steps']
+                if s.get('with',{}).get('name')==f'prototype-focused-api-{api}')
+            self.assertEqual('always()',upload['if'])
+            self.assertEqual('error',upload['with']['if-no-files-found'])
+            paths=upload['with']['path'].splitlines()
+            self.assertIn('app/build/outputs/connected_android_test_additional_output/**/menu-viewport-touch/**',paths)
+            self.assertIn('app/build/outputs/androidTest-results/',paths)
+            self.assertIn('prototype-evidence/',paths)
+            self.assertEqual(60,jobs[f'compatibility_{api}']['timeout-minutes'])
+        self.assertEqual(20,jobs['build']['timeout-minutes'])
+        self.assertEqual(10,jobs['evidence']['timeout-minutes'])
+
     def test_opt_in_only_and_five_required_jobs(self):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
@@ -484,7 +528,9 @@ class InsertedWorkflowContract(unittest.TestCase):
         actual=line[0].split(',')
         expected=set(["io.github.anastaci1a.localica.ActionStripDrawingTest","io.github.anastaci1a.localica.AdvancedRepeatTest","io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest","io.github.anastaci1a.localica.ArtistAlbumSelectionTest","io.github.anastaci1a.localica.ArtistCollectionActionsTest","io.github.anastaci1a.localica.ArtistSelectionPlacementTest","io.github.anastaci1a.localica.ArtworkCropLoadingTest","io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest","io.github.anastaci1a.localica.ArtworkSwipeTest","io.github.anastaci1a.localica.BrowseOrderViewportTest","io.github.anastaci1a.localica.ButtonGestureTest","io.github.anastaci1a.localica.CollectionControlsBackdropTest","io.github.anastaci1a.localica.CollectionDetailTest","io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest","io.github.anastaci1a.localica.CompactCollectionArtworkTest","io.github.anastaci1a.localica.DialogChromeLayoutTest","io.github.anastaci1a.localica.GlassActionRowTest","io.github.anastaci1a.localica.GlassDialogLateReopenTest","io.github.anastaci1a.localica.GlassDialogReopenTest","io.github.anastaci1a.localica.GlassDialogsTest","io.github.anastaci1a.localica.GlassMorphTest","io.github.anastaci1a.localica.GlassShadowTest","io.github.anastaci1a.localica.LibraryDatabaseTest","io.github.anastaci1a.localica.LibraryPlaybackReadTest","io.github.anastaci1a.localica.ListReturnControlsTest","io.github.anastaci1a.localica.ListTopFadeTest","io.github.anastaci1a.localica.LoadingMaterialOpacityTest","io.github.anastaci1a.localica.LyricsHeaderActionsTest","io.github.anastaci1a.localica.LyricsPlayerReopenTest","io.github.anastaci1a.localica.LyricsReturnBackdropTest","io.github.anastaci1a.localica.LyricsViewportMotionTest","io.github.anastaci1a.localica.PinchReadbackLifetimeTest","io.github.anastaci1a.localica.PinchReleaseHandoffTest","io.github.anastaci1a.localica.PlaybackIntentTest","io.github.anastaci1a.localica.PlayerBackgroundPolarityTest","io.github.anastaci1a.localica.PlayerExpansionMotionTest","io.github.anastaci1a.localica.PlaylistCoverActionTest","io.github.anastaci1a.localica.PlaylistDetailPresentationTest","io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest","io.github.anastaci1a.localica.QueueDragAnchorTest","io.github.anastaci1a.localica.QueueFollowingTest","io.github.anastaci1a.localica.QueueOrderActionAdmissionTest","io.github.anastaci1a.localica.QueueSaveOriginTest","io.github.anastaci1a.localica.QueueSelectionPlacementTest","io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest","io.github.anastaci1a.localica.RetainedLayerReadbackTest","io.github.anastaci1a.localica.SelectionLensTest","io.github.anastaci1a.localica.SongInformationTest","io.github.anastaci1a.localica.TagEditorChromeLayoutTest","io.github.anastaci1a.localica.TagEditorThemeInheritanceTest"])
         expected.add('io.github.anastaci1a.localica.PlaylistSelectionPlacementTest')
-        self.assertEqual(51,len(actual))
+        expected.update({'io.github.anastaci1a.localica.GlassMenuContentTest',
+                         'io.github.anastaci1a.localica.GlassMenuViewportTouchTest'})
+        self.assertEqual(53,len(actual))
         self.assertEqual(expected,set(actual))
         inventory=(ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()
         self.assertTrue(expected.issubset(inventory))
