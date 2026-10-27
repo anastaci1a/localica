@@ -48,6 +48,12 @@ import kotlinx.coroutines.launch
 internal fun playerHandleColor(ink: Color): Color =
     ink.copy(alpha = .45f)
 
+/** Provider composition evidence, not a draw/presentation acknowledgement. The sampling
+ * frame and decision are captured with the composition that selected the supplied ink. */
+internal data class PlayerInkComposition(val decision: PlayerBackgroundDecision,
+    val frame: ArtworkBackgroundFrame?, val contentColor: Color)
+internal val LocalPlayerInkCompositionObserver = staticCompositionLocalOf<((PlayerInkComposition) -> Unit)?> { null }
+
 /** The surface, gesture owner, artwork, metadata and transport retain identity at every progress value. */
 @Composable
 internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expanded: Boolean, onExpanded: (Boolean) -> Unit,
@@ -74,7 +80,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artwork = visual ?: rememberPlayerVisual(state.trackUri)
     val polarity = backgroundPolarity ?: remember { PlayerBackgroundPolarityState() }
     DisposableEffect(polarity) { onDispose { polarity.detach() } }
-    val lightInk = polarity.decision.lightInk
+    val inkObserver = LocalPlayerInkCompositionObserver.current
+    val inkDecision = polarity.decision
+    // Do not subscribe the ordinary player to the sampling-frame clock for diagnostics.
+    val inkFrame = if (inkObserver != null) polarity.frame else null
+    val lightInk = inkDecision.lightInk
     val playerInk = if (lightInk) Color.White else Color.Black
     val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, lightInk)
     val paletteDuration = settings.motionDuration(550)
@@ -305,6 +315,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = surfaceFrame.shape, color = Color.Transparent, contentColor = foreground) {
+        if (inkObserver != null) {
+            // Read inside Surface's actual provider, including when the actions row is absent.
+            val observed = PlayerInkComposition(inkDecision, inkFrame, LocalContentColor.current)
+            SideEffect { inkObserver(observed) }
+        }
         val editArtwork = presentedArtworkEdit()
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
