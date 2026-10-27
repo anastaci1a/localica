@@ -37,13 +37,13 @@ internal fun searchOpeningOwnsPosition(positioned: Boolean, ime: Int, nativeIme:
 /** Use the reported final IME viewport for both size and anchor, even while foreground
  * measurement still reflects the taller current viewport. */
 internal fun searchPanelTarget(origin: Offset, availableWidth: Float, availableHeight: Float,
-    width: Float, measuredHeight: Float, margin: Float, ime: Int, imeTarget: Int, safeBottom: Int = 0): Rect {
+    width: Float, measuredHeight: Float, margin: Float, ime: Int, imeTarget: Int, safeBottom: Int = 0, opening: Boolean = false): Rect {
     // safeDrawingPadding already consumes the greater of system/cutout and IME.
     val currentConsumed = maxOf(ime, safeBottom)
-    val targetConsumed = maxOf(imeTarget, safeBottom)
-    val targetAvailable = if (ime > 0) availableHeight - (targetConsumed - currentConsumed).coerceAtLeast(0) else availableHeight
+    val targetConsumed = maxOf(if (opening) maxOf(ime, imeTarget) else imeTarget, safeBottom)
+    val targetAvailable = if (ime > 0 || opening) availableHeight - (targetConsumed - currentConsumed).coerceAtLeast(0) else availableHeight
     val height = minOf(measuredHeight, (targetAvailable - margin * 2).coerceAtLeast(1f))
-    val top = if (ime > 0) (targetAvailable - height - margin).coerceAtLeast(margin)
+    val top = if (ime > 0 || opening) (targetAvailable - height - margin).coerceAtLeast(margin)
         else ((availableHeight - height) / 2f).coerceAtLeast(margin)
     return Rect(origin + Offset((availableWidth - width) / 2f, top), Size(width, height))
 }
@@ -171,6 +171,8 @@ internal data class SearchMorphSample(
     val slotFraction: Float = 0f,
     val slotTravel: SearchSlotTravel? = null,
     val slotReturnFrom: Float = 0f,
+    /** Same rectangle animation owns opening movement and size, before actual placement. */
+    val openingOwnedBounds: Rect? = null,
 )
 internal val LocalSearchMorphObserver = staticCompositionLocalOf<((SearchMorphSample) -> Unit)?> { null }
 

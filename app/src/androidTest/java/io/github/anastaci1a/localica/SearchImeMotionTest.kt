@@ -77,7 +77,13 @@ class SearchImeMotionTest {
             val speed = LocalMotionSpeed.current
             SideEffect { motionSpeed = speed }
             CompositionLocalProvider(LocalTextEditingObservation provides { event ->
-                motionTimeline += "${SystemClock.uptimeMillis()} textEditing $event"
+                val native = popupView?.let { view ->
+                    val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+                    "view=${System.identityHashCode(view)} attached=${view.isAttachedToWindow} " +
+                        "focused=${view.hasWindowFocus()} nativeVisible=${insets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())} " +
+                        "nativeHeight=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom}"
+                }
+                motionTimeline += "${SystemClock.uptimeMillis()} textEditing $event nativeObservation=$native"
             }, LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides {
                     samples += it
@@ -215,17 +221,10 @@ class SearchImeMotionTest {
         opening.forEach { sample ->
             if (reduced) assertEquals(1f, sample.progress, 0f)
             sample.flight?.let { flight ->
-                val shapeTarget = requireNotNull(sample.openingShapeDestination)
-                val remaining = 1f - flight.startingProgress
-                val fraction = if (remaining <= .0001f) 1f else
-                    ((sample.progress - flight.startingProgress) / remaining).coerceIn(0f, 1f)
-                val shape = between(flight.from, shapeTarget, fraction)
-                val height = minOf(shape.height, sample.openingHeightLimit)
-                val top = sample.placementBottom?.minus(height) ?: flight.from.top
-                assertRect("Independent opening shape/bottom at ${sample.progress}",
-                    Rect(shape.left, top, shape.right, top + height), sample.bounds)
-                if (sample.placementBottom == null)
-                    assertEquals("Before keyboard travel, the pill top stays anchored", home.top, sample.bounds.top, 2f)
+                val owned = requireNotNull(sample.openingOwnedBounds)
+                assertRect("One opening rectangle owns size and travel at "+sample.progress, owned, sample.bounds)
+                assertNotNull("Expansion does not wait for native IME travel", sample.placementBottom)
+
             }
         }
         assertRect("Opening reaches the keyboard anchor", opening.last().destination, opening.last().bounds)
@@ -384,8 +383,8 @@ class SearchImeMotionTest {
             advanceUntil { samples.any { it.progress in .05f.. .35f && it.bounds.height > home.height + 2f } }
             val before = compose.runOnUiThread { samples.last() }
             assertEquals("The delayed IME has not appeared", 0, before.ime)
-            assertNull("Keyboard travel has not started", before.placementBottom)
-            assertEquals("Shape expands downward from the pill", home.top, before.bounds.top, 2f)
+            assertNotNull("Accepted no-target fallback already moves while expanding", before.placementBottom)
+            assertTrue("The same opening already moves away from the pill", before.bounds.top > home.top + 2f)
             compose.runOnUiThread { keyboardAllowed = true }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()

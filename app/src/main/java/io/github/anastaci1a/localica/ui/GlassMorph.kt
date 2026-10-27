@@ -185,15 +185,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     SideEffect { searchMotion.observer = searchObserver }
     var searchFlight by remember { mutableStateOf<SearchMorphFlight?>(null) }
     val searchOpeningShape = remember { Animatable(Rect.Zero, SearchRectConverter) }
-    fun shapeTarget(rect: Rect) = Rect(rect.left, 0f, rect.right, rect.height)
+    // One rectangle owns opening expansion and travel, including retargets.
     val searchPlacement = remember { Animatable(Rect.Zero, SearchRectConverter) }
     var searchTarget by remember { mutableStateOf(Rect.Zero) }
     var searchFocusRequest by remember { mutableStateOf<Boolean?>(null) }
     var searchOpeningGeneration by remember { mutableIntStateOf(0) }
-    var searchFallbackReady by remember { mutableStateOf(false) }
     var searchShapeStarted by remember { mutableStateOf(false) }
     var searchOpeningPositioned by remember { mutableStateOf(false) }
-    val searchOpeningBottom = remember { Animatable(0f) }
+
     var searchSlotToken by remember { mutableLongStateOf(0L) }
     var searchSlotTravel by remember { mutableStateOf<SearchSlotTravel?>(null) }
     var searchSlotReturnFrom by remember { mutableFloatStateOf(0f) }
@@ -236,7 +235,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 searchSlotTravel = null
                 searchOpeningGeneration++
                 searchFocusRequest = null
-                searchFallbackReady = false
                 searchShapeStarted = false
                 searchOpeningPositioned = false
                 val from = searchMotion.rendered.takeIf { present && it.width > 0f } ?: anchor.bounds
@@ -285,9 +283,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
         if (visible && placement == GlassPlacement.Search) {
             // Measurement is needed for shape growth, but keyboard preparation is not.
-            // Start expanding down from the pill while native focus/insets catch up.
+            // Expand and travel from the pill together; unknown IME targets use the safe bottom.
             snapshotFlow { searchTarget }.first { it.width > 0f && it.height > 0f }
-            searchOpeningShape.snapTo(shapeTarget(searchTarget))
+            searchOpeningShape.snapTo(requireNotNull(searchFlight).from)
             searchShapeStarted = true
         }
         if (reduced) progress.snapTo(if (visible) 1f else 0f)
@@ -297,11 +295,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             // Hand off the identical endpoint before normal results/IME geometry
             // resumes. Late geometry is eased from here, never exposed as a snap.
             if (placement == GlassPlacement.Search) {
-                // Shape and position can finish in either order. Keep the bottom-owned
-                // opening until both agree, then transfer the exact displayed endpoint.
-                snapshotFlow { searchFlight?.opening == true && searchOpeningPositioned && !searchOpeningBottom.isRunning &&
-                    searchOpeningBottom.value == searchTarget.bottom && !searchOpeningShape.isRunning &&
-                    searchOpeningShape.value == shapeTarget(searchTarget) }.first { it }
+                // Transfer the same rectangle only after its single owner settles.
+                snapshotFlow { searchFlight?.opening == true && searchOpeningPositioned &&
+                    !searchOpeningShape.isRunning && searchOpeningShape.value == searchTarget }.first { it }
                 searchPlacement.snapTo(searchTarget)
             }
             searchFlight = null
@@ -323,14 +319,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             searchMotion.rendered = Rect.Zero
             searchMotion.lastIme = 0
         }
-    }
-    LaunchedEffect(placement, visible, searchOpeningGeneration, searchShapeStarted, searchOpeningPositioned) {
-        if (placement != GlassPlacement.Search || !visible || !searchShapeStarted || searchOpeningPositioned) return@LaunchedEffect
-        // Hardware/floating/refused keyboards must not strand the panel at its pill.
-        // This bound delays only the absent-IME placement fallback, never shape growth.
-        val deadline = android.os.SystemClock.uptimeMillis() + 1000L
-        while (android.os.SystemClock.uptimeMillis() < deadline) withFrameNanos { }
-        searchFallbackReady = true
     }
     DisposableEffect(anchor) { onDispose {
         if (placement == GlassPlacement.Search) { val token = anchor.searchSlot.begin(); anchor.searchSlot.settle(token, 0f) }
@@ -443,34 +431,20 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     }
                 }
                 val imeSettled = imeHeight == imeTarget && imeSource == imeTarget
-                LaunchedEffect(placement, visible, searchTarget, searchFlight, searchShapeStarted, childPanels.intValue, reduced, speed) {
-                    if (placement == GlassPlacement.Search && visible && searchFlight?.opening == true &&
-                        searchShapeStarted && childPanels.intValue == 0 && searchTarget.height > 0f) {
-                        // A keyboard, content or viewport resize can arrive after the
-                        // initial shape progress finishes. Keep this independent size
-                        // channel until both size and bottom reach the same endpoint.
-                        if (reduced) searchOpeningShape.snapTo(shapeTarget(searchTarget))
-                        else searchOpeningShape.animateTo(shapeTarget(searchTarget), searchPlacementSpring(speed))
-                    }
-                }
-                val ownsOpeningPosition = searchOpeningOwnsPosition(searchOpeningPositioned, imeHeight, nativeIme,
-                    windowFocused, searchFocusRequest, searchFallbackReady)
-                LaunchedEffect(placement, visible, searchTarget, searchFlight, ownsOpeningPosition, searchShapeStarted, window,
+                LaunchedEffect(placement, visible, searchTarget, searchFlight, searchShapeStarted, window,
                     childPanels.intValue, reduced, speed) {
                     if (placement == GlassPlacement.Search && visible && searchFlight?.opening == true &&
-                        searchShapeStarted && childPanels.intValue == 0 && searchTarget.height > 0f &&
-                        ownsOpeningPosition) {
+                        searchShapeStarted && childPanels.intValue == 0 && searchTarget.height > 0f) {
                         if (modalWindow !== window) return@LaunchedEffect
-                        if (!searchOpeningPositioned) {
-                            searchOpeningBottom.snapTo(searchMotion.rendered.takeIf { it.height > 0f }?.bottom ?: origin.bottom)
-                            searchOpeningPositioned = true
-                        }
+                        searchOpeningPositioned = true
                         val token = searchSlotToken
-                        val travel = SearchSlotTravel(anchor.searchSlot.fraction, searchOpeningBottom.value, searchTarget.bottom)
+                        val travel = SearchSlotTravel(anchor.searchSlot.fraction, searchOpeningShape.value.bottom, searchTarget.bottom)
                         searchSlotTravel = travel
-                        anchor.searchSlot.bind(token) { travel.fraction(searchOpeningBottom.value) }
-                        if (reduced) searchOpeningBottom.snapTo(searchTarget.bottom)
-                        else searchOpeningBottom.animateTo(searchTarget.bottom, searchBottomSpring(speed))
+                        anchor.searchSlot.bind(token) { travel.fraction(searchOpeningShape.value.bottom) }
+                        // Retarget from the rendered rectangle with its existing velocity.
+                        // No native-IME delay or second placement animation splits the motion.
+                        if (reduced) searchOpeningShape.snapTo(searchTarget)
+                        else searchOpeningShape.animateTo(searchTarget, searchPlacementSpring(speed))
                         if (modalWindow === window) anchor.searchSlot.settle(token, 1f)
                     }
                 }
@@ -519,7 +493,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // Aim at the keyboard's reported destination immediately, rather
                         // than following each inset frame and waiting for native onEnd.
                         searchTarget = searchPanelTarget(windowOrigin, availableWidth.toFloat(), availableHeight.toFloat(),
-                            widthLimit.toFloat(), targetHeight.toFloat(), margin, imeHeight, imeTarget, safeBottom)
+                            widthLimit.toFloat(), targetHeight.toFloat(), margin, imeHeight, imeTarget, safeBottom,
+                            opening = visible && (searchFlight?.opening == true || searchFocusRequest != false))
                     }
                 }
                 // A visibility change may precede the animation effect. Freeze the
@@ -539,14 +514,16 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     imeTarget == 0 && (imeSource > 0 || searchMotion.lastIme > 0)
                 // A visibility reversal can lay out once before its effect resets state.
                 // The synthetic reopening flight must not borrow the old opening bottom.
-                val openingBottom = searchOpeningBottom.value.takeIf {
+                val openingBottom = searchOpeningShape.value.bottom.takeIf {
                     searchOpeningPositioned && visible && searchFlight?.opening == true
                 }
                 val slotFraction = if (placement == GlassPlacement.Search) anchor.searchSlot.fraction else 0f
                 val slotTravel = searchSlotTravel
                 val slotReturnFrom = searchSlotReturnFrom
                 val flightRect = (flight?.let {
-                    if (it.opening && visible) it.openingRectangle(p, searchOpeningShape.value, openingBottom, availableHeight.toFloat())
+                    if (it.opening && visible) {
+                        if (searchShapeStarted && searchFlight?.opening == true) searchOpeningShape.value else it.from
+                    }
                     else it.rectangle(p, anchor.bounds)
                 }
                     ?: searchMotion.rendered.takeIf { holdImeBack && it.width > 0f }
@@ -584,7 +561,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 flight, if (visible) searchTarget else anchor.bounds,
                                 imeHeight, imeSource, imeTarget, openingBottom, searchOpeningShape.value.takeIf { flight?.opening == true }, availableHeight.toFloat(),
                                 surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused,
-                                slotFraction = slotFraction, slotTravel = slotTravel, slotReturnFrom = slotReturnFrom))
+                                slotFraction = slotFraction, slotTravel = slotTravel, slotReturnFrom = slotReturnFrom,
+                                openingOwnedBounds = searchOpeningShape.value.takeIf { visible && searchShapeStarted && flight?.opening == true }))
                         }
                     }.drawWithContent {
                         // Match the trigger's draw-space deformation. A layout-layer
