@@ -79,11 +79,16 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
     artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f, tone: GlassTone = GlassTone(),
     artTopReader: (() -> Float)? = null,
     onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null) {
-    val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone)?.asAndroidBitmap()
-    val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone)?.asAndroidBitmap()
+    var washProvenance: ToneSnapshotProvenance? = null
+    var softWashProvenance: ToneSnapshotProvenance? = null
+    val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone,
+        onProvenance = if (onBackgroundDescriptor != null) ({ washProvenance = it }) else null)?.asAndroidBitmap()
+    val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone,
+        onProvenance = if (onBackgroundDescriptor != null) ({ softWashProvenance = it }) else null)?.asAndroidBitmap()
     // Expose exactly the retained tone outputs used below, not their requested raw inputs.
     if (onBackgroundDescriptor != null) {
-        val descriptor = PlayerBackdropDescriptor(palette, wash, softWash, playerGrain, tone)
+        val descriptor = PlayerBackdropDescriptor(palette, wash, softWash, playerGrain, tone,
+            washProvenance, softWashProvenance)
         SideEffect { onBackgroundDescriptor(descriptor) }
     }
     val washPaint = remember(wash) {
