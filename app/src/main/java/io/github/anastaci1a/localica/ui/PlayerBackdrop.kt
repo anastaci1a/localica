@@ -77,9 +77,15 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
 @Composable
 internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifier, fullArtBlend: Float = 0f,
     artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f, tone: GlassTone = GlassTone(),
-    artTopReader: (() -> Float)? = null) {
+    artTopReader: (() -> Float)? = null,
+    onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null) {
     val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone)?.asAndroidBitmap()
     val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone)?.asAndroidBitmap()
+    // Expose exactly the retained tone outputs used below, not their requested raw inputs.
+    if (onBackgroundDescriptor != null) {
+        val descriptor = PlayerBackdropDescriptor(palette, wash, softWash, playerGrain, tone)
+        SideEffect { onBackgroundDescriptor(descriptor) }
+    }
     val washPaint = remember(wash) {
         wash?.let { bitmap -> android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
             shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
