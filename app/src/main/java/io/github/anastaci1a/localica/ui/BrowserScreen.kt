@@ -735,6 +735,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     MaterialTheme(colorScheme = if (artDetail) pageColors.copy(onSurface = collectionInk, onSurfaceVariant = collectionInk.copy(alpha = .65f),
         primary = collectionInk, surface = if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom) else pageColors) {
     CompositionLocalProvider(LocalArtworkTransit provides artworkTransit, LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+        LocalLoadingMaterialOpacity provides if (route.collection?.kind in setOf(MediaKind.Artist,
+            MediaKind.AlbumArtist, MediaKind.Album, MediaKind.Playlist, MediaKind.Queue)) .5f else 1f,
         LocalFrostedBackdrop provides if (artDetail) collectionSource else surroundingBackdrop,
         LocalEmptySearchBack provides popupDismiss?.takeIf { route.text.isBlank() }) {
     Box(Modifier.then(if (popupDismiss != null && route.text.isBlank()) Modifier.fillMaxWidth() else Modifier.fillMaxSize())) {
