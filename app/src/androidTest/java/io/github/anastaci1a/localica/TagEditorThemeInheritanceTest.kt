@@ -28,6 +28,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicReference
 
 /** Real host and launch controls; no tag write is submitted by these presentation tests. */
 class TagEditorThemeInheritanceTest {
@@ -208,15 +209,53 @@ class TagEditorThemeInheritanceTest {
 
     @Test fun playerArtworkTapAndMenuCaptureInsideThePlayerInsteadOfItsOuterHost() {
         var lightInk by mutableStateOf(true)
+        val polarity = PlayerBackgroundPolarityState()
+        val composedInk = AtomicReference<PlayerInkComposition?>(null)
+        val launchOwner = AtomicReference<TagEditorLaunches?>(null)
+        fun awaitPlayerInk(target: Boolean): Color {
+            var readyInk: Color? = null
+            try {
+                compose.waitUntil(10_000) {
+                    val decision = polarity.decision
+                    val observed = composedInk.get()
+                    // A palette change does not synchronously publish player ink. Require
+                    // the real current decision/frame to reach the actual Surface provider.
+                    val ready = decision.confidence == PlayerBackgroundConfidence.Current &&
+                        decision.lightInk == target && observed != null && observed.frame != null &&
+                        observed.decision === decision && observed.frame === polarity.frame &&
+                        observed.contentColor.isSpecified && (observed.contentColor.luminance() > .5f) == target
+                    if (ready) readyInk = observed!!.contentColor
+                    ready
+                }
+            } catch (timeout: ComposeTimeoutException) {
+                val observed = composedInk.get()
+                throw AssertionError("Player launch ink was not current/composed for lightInk=$target within 10000ms: " +
+                    "decision=${polarity.decision}; composed=${observed?.decision}; ink=${observed?.contentColor}; " +
+                    "sameDecision=${observed?.decision === polarity.decision}; sameFrame=${observed?.frame === polarity.frame}; " +
+                    "sample=${polarity.sampleDiagnostic}", timeout)
+            }
+            return checkNotNull(readyInk)
+        }
+        fun assertLaunchInk(expected: Color) {
+            val accepted = compose.runOnIdle {
+                checkNotNull(launchOwner.get()?.presentation(controller.state.value.sessionId))
+            }
+            assertEquals("Artwork launch captures the actual player/menu ink", expected, accepted.ink)
+            assertEquals("Artwork popup title uses the accepted launch ink", accepted.ink,
+                textColor(compose.onNodeWithText("Choose artwork"), "Choose artwork"))
+        }
         compose.setContent { LocalicaTheme { GlassPanelTheme(!lightInk) { Scene(lightInk) {
             TagEditorHost(controller) {
-                CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk)) {
+                val launches = checkNotNull(LocalTagEditorLaunches.current)
+                SideEffect { launchOwner.set(launches) }
+                CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk),
+                    LocalPlayerInkCompositionObserver provides { composedInk.set(it) }) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val color = if (lightInk) Color(0xFF181818) else Color(0xFFEAEAEA)
                         PlayerSurface(PlaybackState(title = track.title), true, {},
                             InterfaceSettings(reducedMotion = true, artworkTap = ArtworkAction.Change, artworkHold = ArtworkAction.Menu),
                             remember { Animatable(1f) }, {}, {}, {}, {}, {}, {}, track = track,
-                            visual = PlayerVisual(palette = PlayerPalette(color, color, color))) {}
+                            visual = PlayerVisual(palette = PlayerPalette(color, color, color)), backgroundPolarity = polarity) {}
                     }
                 }
             }
@@ -224,13 +263,19 @@ class TagEditorThemeInheritanceTest {
         } } } }
         for (target in listOf(true, false)) {
             compose.runOnIdle { lightInk = target }
+            val tapInk = awaitPlayerInk(target)
             compose.onNodeWithTag("artwork-gesture").performClick()
             assertPopup("Choose artwork", target)
+            assertLaunchInk(tapInk)
             compose.runOnIdle { assertTrue(controller.state.value.artworkOnly) }
             compose.onNodeWithText("Cancel").performClick()
+            val menuInk = awaitPlayerInk(target)
             compose.onNodeWithTag("artwork-gesture").performTouchInput { longClick() }
+            assertEquals("Artwork menu action inherits the actual player ink", menuInk,
+                textColor(compose.onNodeWithText("Change artwork"), "Change artwork"))
             compose.onNodeWithText("Change artwork").performClick()
             assertPopup("Choose artwork", target)
+            assertLaunchInk(menuInk)
             compose.onNodeWithText("Cancel").performClick()
         }
     }
