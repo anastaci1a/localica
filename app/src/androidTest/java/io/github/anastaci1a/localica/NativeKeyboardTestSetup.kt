@@ -24,6 +24,13 @@ internal fun prepareNativeDockedKeyboard(
     lateinit var insetObserver: android.view.View
     val observation = SearchImeHandoffObservation()
     val input = requireNotNull(compose.activity.getSystemService(InputMethodManager::class.java))
+    var nativeWindowVisible: Boolean? = null
+    var nativeWindowObservedAt: Long? = null
+    // Called only by the instrumentation thread, never inside runOnUiThread.
+    fun nativeInputMethodState(): String = shell("dumpsys -t 2 input_method").also { dump ->
+        nativeWindowVisible = nativeImeWindowVisible(dump)
+        nativeWindowObservedAt = SystemClock.uptimeMillis()
+    }
     compose.runOnUiThread {
         root = FrameLayout(compose.activity).apply { isFocusableInTouchMode = true }
         insetObserver = createSearchImeObserver(compose.activity, observation)
@@ -38,7 +45,8 @@ internal fun prepareNativeDockedKeyboard(
         editor.requestFocus()
     }
     fun record(label: String) {
-        keyboardSetup += "${SystemClock.uptimeMillis()} $label " + compose.runOnUiThread {
+        keyboardSetup += "${SystemClock.uptimeMillis()} $label " +
+            "nativeImeWindowVisible=$nativeWindowVisible nativeWindowObservedAt=$nativeWindowObservedAt " + compose.runOnUiThread {
             val insets = ViewCompat.getRootWindowInsets(editor)
             "focused=${editor.isFocused} windowFocused=${editor.hasWindowFocus()} " +
                 "editorActive=${input.isActive(editor)} rootActive=${input.isActive(root)} acceptingText=${input.isAcceptingText} " +
@@ -74,8 +82,12 @@ internal fun prepareNativeDockedKeyboard(
                 // its native window, so check it only while shown. Wait for the
                 // native hide's end too: removing the warmup window
                 // at its first zero inset can lend the still-hiding IME to the popup.
-                placed && (!shown || Regex("\\bmIsInputViewShown=(true|false)\\b")
-                    .find(shell("dumpsys -t 2 input_method"))?.groupValues?.get(1) == "true")
+                placed && run {
+                    val state = nativeInputMethodState()
+                    if (shown) Regex("\\bmIsInputViewShown=(true|false)\\b")
+                        .find(state)?.groupValues?.get(1) == "true"
+                    else nativeWindowVisible == false // Unknown native evidence fails closed.
+                }
             }
         } catch (timeout: ComposeTimeoutException) {
             record("native-input-view-$shown-timeout")
@@ -124,11 +136,15 @@ internal fun prepareNativeDockedKeyboard(
                 // Public isActive/isAcceptingText checks precede the next measured editor.
                 // The still-mounted observer also sees hide/animation callbacks caused by removal.
                 compose.waitUntil(5000) {
-                    compose.runOnUiThread {
+                    val retired = compose.runOnUiThread {
                         val view = compose.activity.window.decorView
                         val insets = ViewCompat.getRootWindowInsets(view)
                         !input.isActive(editor) && !input.isActive(root) && !input.isAcceptingText &&
                             observation.complete(view.hasWindowFocus(), insets)
+                    }
+                    retired && run {
+                        nativeInputMethodState()
+                        nativeWindowVisible == false
                     }
                 }
                 record("native-editor-retired")
