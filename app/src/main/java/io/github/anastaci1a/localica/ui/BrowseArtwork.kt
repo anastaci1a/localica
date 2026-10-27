@@ -98,3 +98,16 @@ internal val LocalArtworkTransit = staticCompositionLocalOf<ArtworkTransit?> { n
 internal fun collectionHeroUri(result: io.github.anastaci1a.localica.browse.BrowseResult?,
     seed: io.github.anastaci1a.localica.browse.BrowserItem?): String? =
     if (result == null) seed?.coverUris?.firstOrNull() else result.rows.firstOrNull()?.track?.uri
+
+/** Match the playlist card's canonical manual/automatic cover, never a displayed
+ * sort/filter result. Refresh the first physical occurrence's metadata exactly as
+ * PlaylistEdits.rows does, retaining its unavailable-track fallback.
+ */
+internal fun playlistHeroUri(playlist: io.github.anastaci1a.localica.playlist.ManualPlaylist?,
+    snapshot: io.github.anastaci1a.localica.library.LibrarySnapshot): String? {
+    playlist ?: return null
+    playlist.coverUri?.let { return it }
+    val first = playlist.entries.firstOrNull()?.track
+    val current = first?.let { stored -> snapshot.tracks.firstOrNull { it.id == stored.id } ?: stored }
+    return io.github.anastaci1a.localica.browse.collectionCoverUris(playlist.coverUri, current?.uri).firstOrNull()
+}
