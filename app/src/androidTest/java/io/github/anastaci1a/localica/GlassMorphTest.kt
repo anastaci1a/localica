@@ -275,7 +275,8 @@ class GlassMorphTest {
                     val bytes = java.io.ByteArrayOutputStream().also {
                         screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                     }.toByteArray()
-                    val file = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "trigger-$stage.png")
+                    val file = java.io.File(nativeEvidenceDirectory("glass-morph-failures",
+                        instrumentation.targetContext.getExternalFilesDir(null)), "trigger-$stage.png")
                     runCatching { file.writeBytes(bytes) }
                     if (bytes.size <= 256 * 1024) {
                         val chunks = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).chunked(3000)

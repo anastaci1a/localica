@@ -425,7 +425,7 @@ class ListSearchTest {
             compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().size == 1 }
             compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Album 061"))
             androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-                .takeScreenshot(java.io.File(context.getExternalFilesDir(null), "list-search-popup.png"))
+                .takeScreenshot(java.io.File(nativeEvidenceDirectory("list-search-return", context.getExternalFilesDir(null)), "list-search-popup.png"))
             val originalResultNode = compose.onNodeWithText("Album 061").fetchSemanticsNode()
             val resultPosition = originalResultNode.boundsInRoot
             observePosition("before-result-navigation", originalResultNode, resultPosition)
