@@ -64,8 +64,15 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
         }
     }
     @Composable fun rightAction() {
-        ActionIconButton(onHide, Modifier.fillMaxSize(), enabled = lyricsOpen) {
-            Icon(painterResource(R.drawable.ic_eye_off), "Hide lyrics", Modifier.size(24.dp))
+        val colors = androidx.compose.material3.IconButtonDefaults.iconButtonColors()
+        val foreground = controlStateColor(lyricsOpen, colors.contentColor, colors.disabledContentColor,
+            "Action icon availability")
+        if (lyricsOpen) ActionIconButton(onHide, Modifier.fillMaxSize()) {
+            Icon(painterResource(R.drawable.ic_eye_off), "Hide lyrics", Modifier.size(24.dp), tint = foreground)
+        } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // Keep the closing glyph, not a disabled button whose hit region can
+            // cover Show lyrics as the two circles overlap during contraction.
+            Icon(painterResource(R.drawable.ic_eye_off), null, Modifier.size(24.dp), tint = foreground)
         }
     }
     Box(Modifier.width(width).height(CompactControlSize).testTag("player-lyrics-pill").silhouetteGlassShadow(shadow)) {
