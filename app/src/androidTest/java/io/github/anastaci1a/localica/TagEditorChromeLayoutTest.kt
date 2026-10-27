@@ -102,7 +102,14 @@ class TagEditorChromeLayoutTest {
         }
         for (label in listOf("Close editor", "Review changes")) {
             val action = compose.onNodeWithText(label).assertIsDisplayed().assertHasClickAction().getUnclippedBoundsInRoot()
-            assertTrue("$label retains a 48dp target", action.right - action.left >= 48.dp && action.bottom - action.top >= 48.dp)
+            val actionNode = compose.onNodeWithText(label).fetchSemanticsNode()
+            val nativeBounds = actionNode.boundsInRoot
+            val density = (actionNode.root as ViewRootForTest).view.resources.displayMetrics.density
+            // Compare physical extents before dividing separate edges into Dp;
+            // subtracting those rounded edges can turn an exact 48dp into 47.999996dp.
+            val minimum = 48f * density
+            assertTrue("$label retains a 48dp target; bounds=$nativeBounds density=$density dp=$action",
+                nativeBounds.width >= minimum && nativeBounds.height >= minimum)
             closeDp(0.dp, (if (label == "Close editor") header.right else footer.right) - action.right)
         }
         val layouts = mutableListOf<TextLayoutResult>()
