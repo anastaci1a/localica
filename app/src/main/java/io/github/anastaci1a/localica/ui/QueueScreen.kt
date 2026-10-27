@@ -36,6 +36,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     var selector by remember { mutableStateOf(false) }
     val selectorAnchor = rememberGlassAnchor()
     val sortAnchor = rememberGlassAnchor()
+    val saveAnchor = rememberGlassAnchor()
     val menuAnchor = rememberGlassAnchor()
     val removeOthersAnchor = rememberGlassAnchor()
     var deletionOrigin by remember { mutableStateOf<GlassAnchor?>(null) }
@@ -100,7 +101,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                             Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
                             Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
                         }
-                        ActionIcon(R.drawable.ic_playlist_add, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true) { saving = true }
+                        ActionIcon(R.drawable.ic_playlist_add, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true,
+                            anchor = saveAnchor) { saving = true }
 
                     }
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -109,7 +111,9 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
             }, listBackEnabled = listBackEnabled, scrollToTopRequest = scrollToTopRequest, reducedMotion = reducedMotion, selectionVisible = selectionVisible, onSearchEdit = { browsing = browsing.editSearch(it) }, onSearchCommit = { browsing = browsing.commitSearch() }, sortOrigin = sortAnchor)
     }
     }
-    if (saving && active != null) AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
+    if (saving && active != null) CompositionLocalProvider(LocalGlassOrigin provides saveAnchor) {
+        AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
+    }
     GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center) {
         BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
             val showHeading = maxHeight >= 240.dp
