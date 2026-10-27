@@ -45,13 +45,16 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /** Diagnostic only: same actual Library More caller, five fixed native Window originals.
- * Child shadows are fixed at zero; independent rim-off and coating-off phases are each compared
- * with a restored ordinary phase. The supplied UPSTREAM source and layout must remain stable.
+ * The first ordinary context uses normal child shadows and is never compared. At rim-off the
+ * child strength changes to zero and stays zero across both ablated/restored comparisons.
+ * The supplied UPSTREAM source and layout must remain stable.
  * The derived child-material recording intentionally changes; its receipts are retained but not
  * represented as unchanged. No optical threshold, production repair, or fresh-shader claim. */
 class PopupOuterFinishBoundaryTest {
     @get:Rule val compose = createComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+    private val ordinaryChildStrength = InterfaceSettings().glass.shadowStrength
+    private var childStrength by mutableFloatStateOf(ordinaryChildStrength)
     private var mode by mutableIntStateOf(0)
     private var mounted by mutableStateOf(true)
     private lateinit var host: GlassDialogs
@@ -60,7 +63,7 @@ class PopupOuterFinishBoundaryTest {
     private lateinit var output: File
     private val records = JSONArray()
     private var copies = 0
-    private data class Draw(val count: Int, val uptime: Long, val requestedMode: Int)
+    private data class Draw(val count: Int, val uptime: Long, val requestedMode: Int, val requestedChildStrength: Float)
     private val drawn = AtomicReference<Draw?>()
     // Plain Main-thread bounded metadata; no Snapshot writes or retained graphics resources.
     private data class Observed(val sequence: Long, val frame: GlassSurfaceDrawObservation)
@@ -122,7 +125,7 @@ class PopupOuterFinishBoundaryTest {
                 } }
                 CompositionLocalProvider(LocalGlassSurfaceDrawObserver provides collect,
                     LocalPopupDerivedMaterialObserver provides collectDerived,
-                    LocalPopupContentShadowStrength provides 0f, LocalPopupFinishDiagnostic provides mode) {
+                    LocalPopupContentShadowStrength provides childStrength, LocalPopupFinishDiagnostic provides mode) {
                     if (mounted) LocalicaTheme {
                         val ordinaryHost = requireNotNull(LocalGlassDialogs.current)
                         SideEffect { host = ordinaryHost }
@@ -156,23 +159,28 @@ class PopupOuterFinishBoundaryTest {
                 observedRoot = System.identityHashCode(root)
                 tree = root.viewTreeObserver
                 listener = ViewTreeObserver.OnDrawListener {
-                    drawn.set(Draw((drawn.get()?.count ?: 0) + 1, SystemClock.uptimeMillis(), mode))
+                    drawn.set(Draw((drawn.get()?.count ?: 0) + 1, SystemClock.uptimeMillis(), mode, childStrength))
                 }.also { tree!!.addOnDrawListener(it) }
             }
             compose.mainClock.autoAdvance = true
             val before = mutableListOf<Facts>()
             val after = mutableListOf<Facts>()
+            assertTrue("Context must differ from the zero-strength comparison phases", ordinaryChildStrength > 0f)
             val phases = listOf("ordinary-context", "rim-off", "rim-restored", "coating-off", "coating-restored")
             val modes = listOf(0, 1, 0, 2, 0)
             phases.forEachIndexed { index, label ->
                 val precedingDraw = compose.runOnUiThread {
                     val count = if (index == 0) 0 else drawn.get()?.count ?: 0
                     mode = modes[index]
+                    // This control change requests a child redraw; only a real receipt can prove it.
+                    // Only the unbound context uses ordinary shadows; compared phases stay zero.
+                    if (index == 1) childStrength = 0f
                     count
                 }
                 awaitDraw(precedingDraw, modes[index])
                 val start = facts().also(before::add)
                 val record = JSONObject().put("phase", label).put("requestedFinishMode", modes[index])
+                    .put("requestedChildStrength", if (index == 0) ordinaryChildStrength else 0f)
                     .put("before", json(start)).put("status", "copy-requested")
                 records.put(record); writeManifest("running")
                 copies++
@@ -329,6 +337,8 @@ class PopupOuterFinishBoundaryTest {
     private fun assertStable(a: Facts, b: Facts, baselineMode: Int, expected: Int) {
         assertEquals("Baseline root draw acknowledges requested mode", baselineMode, requireNotNull(a.draw).requestedMode)
         assertEquals("Current root draw acknowledges requested mode", expected, requireNotNull(b.draw).requestedMode)
+        assertEquals("Baseline root draw acknowledges zero child strength", 0f, requireNotNull(a.draw).requestedChildStrength, 0f)
+        assertEquals("Current root draw acknowledges zero child strength", 0f, requireNotNull(b.draw).requestedChildStrength, 0f)
         assertEquals("Outer and actual child/foreground bounds unchanged", a.bounds, b.bounds)
         assertEquals(a.inWindow, b.inWindow); assertEquals(a.onScreen, b.onScreen); assertSame(a.token, b.token)
         a.owners.forEach { (label, owner) ->
@@ -485,10 +495,11 @@ class PopupOuterFinishBoundaryTest {
         File(output, "manifest.json").writeText(JSONObject().put("status", status).put("failure", failure ?: JSONObject.NULL)
             .put("api", Build.VERSION.SDK_INT).put("declaredTotalCaptures", 5).put("requestedCopies", copies)
             .put("phaseOrder", JSONArray(listOf("ordinary-context", "rim-off", "rim-restored", "coating-off", "coating-restored")))
-            .put("fixedChildShadowStrength", 0f).put("records", records)
+            .put("contextChildShadowStrength", ordinaryChildStrength)
+            .put("comparedChildShadowStrength", 0f).put("records", records)
             .put("requestedComparisonPhases", JSONArray(listOf("rim-off/rim-restored", "coating-off/coating-restored")))
             .put("ordinaryQualification", "first original and metadata are unbound context only; not compared")
-            .put("scope", "Actual LocalicaScreen Library More utility caller, same open native popup; synthetic three-song album and real in-memory controllers. Child shadows fixed at zero; only outer rim or coating toggles. Outer upstream source stays fixed; derived child recording is separately observed and may change, not asserted pixel-equal.")
+            .put("scope", "Actual LocalicaScreen Library More utility caller, same open native popup; synthetic three-song album and real in-memory controllers. Unbound context uses ordinary child shadows; all compared phases use zero child shadows while outer rim or coating toggles. Outer upstream source stays fixed; derived child recording is separately observed and may change, not asserted pixel-equal.")
             .put("readiness", "Existing actual-family root admission, Compose idle/native focus plus bounded 5000ms native layout/draw readiness; no image or source-value polling, forced draw or extra readback.")
             .put("limits", "Descriptive outside-child top/bottom RGBA profiles, NOT band absence or an optical fix. Full original Window PNGs retained before pixels; alpha is not flattened. Supplied owner stability is non-atomic with copying and does not prove fresh filter or shader consumption. Each pair requires unique exact-bounds receipts and unchanged upstream binding before and after each copy. Derived backing records include finish mode and scalar publication state, but pixels may change and consumption can be cached; neither is certified. Any missing or changed binding fails the comparison without replacements. Ordinary context is not compared.")
             .toString(2))
