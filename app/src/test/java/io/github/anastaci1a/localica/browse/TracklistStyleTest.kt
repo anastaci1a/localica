@@ -38,7 +38,7 @@ class TracklistStyleTest {
         assertNull(BrowseStyle().trackNumberLabel("12", 2))
         assertNull(BrowseStyle(listSize = ListSize.Large).trackNumberLabel("12", 2))
         assertNull(numbered.copy(presentation = Presentation.Standard).trackNumberLabel("12", 2))
-        for (size in listOf(ListSize.Smallest, ListSize.Small, ListSize.Compact)) {
+        for (size in listOf(ListSize.Smallest, ListSize.Small)) {
             assertEquals("12", BrowseStyle(listSize = size).trackNumberLabel("12", 2))
             assertNull(BrowseStyle(listSize = size).trackNumberLabel(null, 2))
         }
@@ -54,5 +54,22 @@ class TracklistStyleTest {
         for (size in listOf(ListSize.Compact, ListSize.Normal, ListSize.Large))
             assertNull(BrowseStyle(listSize = size).trackNumberLabel(null, 2, mutablePosition = 46))
         assertNull(BrowseStyle(listSize = ListSize.Small).trackNumberLabel(null, 2, mutablePosition = 0))
+    }
+
+    @Test fun compactKeepsArtworkRegardlessOfAlbumNumbersOrMutableOccurrencePositions() {
+        val compact = BrowseStyle(listSize = ListSize.Compact)
+        for (albumNumber in listOf(null, "12", "0")) {
+            for (position in listOf(null, 0, 46)) for (index in listOf(0, 2)) {
+                assertNull(compact.trackNumberLabel(albumNumber, index, position))
+                assertNull(compact.copy(presentation = Presentation.Standard)
+                    .trackNumberLabel(albumNumber, index, position))
+            }
+        }
+        // A neighboring density must not inherit Compact's artwork policy.
+        assertEquals("12", compact.copy(listSize = ListSize.Small).trackNumberLabel("12", 2, 46))
+        assertEquals("12", compact.copy(listSize = ListSize.Tracklist).trackNumberLabel("12", 2, 46))
+        assertEquals("46", compact.copy(listSize = ListSize.Tracklist).trackNumberLabel(null, 2, 46))
+        assertTrue(compact.listSize.trailingInformation)
+        assertFalse(compact.copy(listSize = ListSize.Normal).listSize.trailingInformation)
     }
 }
