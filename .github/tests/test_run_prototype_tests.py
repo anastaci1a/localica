@@ -145,7 +145,30 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
 
-    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*21))
+    def distinct_affected_sources(self, count):
+        classes = ['io.github.anastaci1a.localica.Coverage%dTest' % i for i in range(count)]
+        with (self.root/'.github/prototype-risk-classes.txt').open('a') as inventory:
+            inventory.write('\n'.join(classes)+'\n')
+        for cls in classes:
+            (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
+                'package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+
+                ' { @org.junit.Test fun regression() {} }\n')
+        return classes
+
+    def test_twenty_one_distinct_affected_classes_keep_all_mandatory_regressions(self):
+        classes = self.distinct_affected_sources(21)
+        self.run_case(AFFECTED_CLASSES=','.join(classes))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(evidence['counts']))
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
+
+    def test_twenty_two_distinct_affected_classes_are_rejected_before_instrumentation(self):
+        classes = self.distinct_affected_sources(22)
+        self.run_case(2,AFFECTED_CLASSES=','.join(classes))
+        self.assertFalse((self.root/'argv.json').exists())
+
+    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*22))
     def test_too_long(self): self.run_case(2,AFFECTED_CLASSES='x'*4097)
     def test_missing_source(self):
         (self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')).unlink()
