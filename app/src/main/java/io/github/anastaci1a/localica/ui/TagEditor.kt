@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.editing.*
 import io.github.anastaci1a.localica.library.Track
@@ -97,13 +98,15 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
     fun patch() = TagPatch(changed.associate { name -> EditField.valueOf(name) to JSONObject(values).getString(name) },
         if (removeImage) ArtworkChange.Remove else cover?.let { ArtworkChange.Replace(it) } ?: ArtworkChange.Keep)
     if (!state.artworkOnly || !choosing) GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Sheet) {
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(.94f), color = androidx.compose.ui.graphics.Color.Transparent) {
-            Column(Modifier.fillMaxSize().imePadding()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        val chrome = DialogChrome.Regular
+        Surface(Modifier.fillMaxWidth().fillMaxHeight(.94f).testTag("tag-editor-sheet"), color = androidx.compose.ui.graphics.Color.Transparent) {
+            Column(Modifier.fillMaxSize().imePadding().testTag("tag-editor-frame").padding(chrome.perimeterDp.dp),
+                verticalArrangement = Arrangement.spacedBy(chrome.gapDp.dp)) {
+                Row(Modifier.fillMaxWidth().testTag("tag-editor-header"), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (state.artworkOnly) "Change artwork" else "Edit ${state.tracks.size} ${if (state.tracks.size == 1) "song" else "songs"}", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     ActionTextButton(enabled = !state.busy, onClick = controller::close) { Text("Close editor") }
                 }
-                Column(Modifier.weight(1f).controlVerticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().weight(1f).testTag("tag-editor-body").controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!state.artworkOnly) Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     val artworkBackdrop = rememberFrostedBackdrop(cover to removeImage, dark = LocalFrostedBackdrop.current?.dark == true)
@@ -155,7 +158,7 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                         color = if (result.saved) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error) }
                     if (state.recovery != null) ActionTextButton(enabled = !state.busy, onClick = { controller.close() }) { Text("Close editor to recover interrupted edit") }
                 }
-                FlowRow(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End) {
+                FlowRow(Modifier.fillMaxWidth().testTag("tag-editor-footer"), horizontalArrangement = Arrangement.End) {
                     if (state.busy) {
                         ActionTextButton(onClick = controller::continueInBackground) { Text("Continue in background") }
                         ActionTextButton(onClick = controller::stopAfterCurrent) { Text("Stop after current file") }
