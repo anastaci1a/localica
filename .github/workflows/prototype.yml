@@ -99,7 +99,8 @@ jobs:
     name: Prototype build, unit tests and lint
   focused_26:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Capacity for the complete selected gate, not a throughput optimization.
+    timeout-minutes: 60
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
       TEST_API: '26'
@@ -174,6 +175,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/**/lyrics-header-actions/**
           app/build/outputs/connected_android_test_additional_output/**/list-search-return/**
           app/build/outputs/connected_android_test_additional_output/**/frosted-surface/**
+          app/build/outputs/connected_android_test_additional_output/**/menu-viewport-touch/**
 
           prototype-evidence/
           prototype-runner-environment.txt
@@ -240,7 +242,8 @@ jobs:
     name: Prototype preserved-data compatibility API 26
   focused_36:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Capacity for the complete selected gate, not a throughput optimization.
+    timeout-minutes: 60
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
       TEST_API: '36'
@@ -315,6 +318,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/**/lyrics-header-actions/**
           app/build/outputs/connected_android_test_additional_output/**/list-search-return/**
           app/build/outputs/connected_android_test_additional_output/**/frosted-surface/**
+          app/build/outputs/connected_android_test_additional_output/**/menu-viewport-touch/**
 
           prototype-evidence/
           prototype-runner-environment.txt

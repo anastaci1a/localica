@@ -154,8 +154,15 @@ internal fun GlassMenu(visible: Boolean, anchor: GlassAnchor, onDismiss: () -> U
     originPreparation: GlassOriginPreparation? = null, content: @Composable ColumnScope.() -> Unit) {
     GlassMorphPopup(visible, anchor, onDismiss, if (anchor.bounds == Rect.Zero) GlassPlacement.Center else GlassPlacement.Menu,
         originPreparation = originPreparation) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).controlVerticalScroll(rememberScrollState()), content = content)
+        GlassMenuContent(Modifier.fillMaxWidth(), content)
     }
+}
+
+/** Keep the existing menu gutters inside the scroll viewport. Padding outside it
+ * cuts child shadows at a straight inset line instead of the popup's rounded edge. */
+@Composable
+internal fun GlassMenuContent(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.controlVerticalScroll(rememberScrollState()).padding(vertical = 8.dp), content = content)
 }
 
 /** Keep this call composed when closed so the same surface can return to its trigger. */
