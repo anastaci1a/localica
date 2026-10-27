@@ -98,7 +98,9 @@ class PlayerBackgroundPolarityTest {
                 it.roles.joinToString { role -> "${System.identityHashCode(role.identity)}:${role.visual.contentKey}@${role.weight}" }
         } ?: "none"
         return "decision=${owner.decision}; frame=${frame(owner.frame)}; " +
-            "composedDecision=${observed?.decision}; composedFrame=${frame(observed?.frame)}; ink=${observed?.contentColor}"
+            "composedDecision=${observed?.decision}; composedFrame=${frame(observed?.frame)}; ink=${observed?.contentColor}; " +
+            "decisionIdentity=${System.identityHashCode(owner.decision)}; " +
+            "composedDecisionIdentity=${System.identityHashCode(observed?.decision)}; sampled=${owner.sampleDiagnostic}"
     }
     private fun frames(count: Int) { repeat(count) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() } }
     private fun sampleBackgroundAtTransport(): Float {
