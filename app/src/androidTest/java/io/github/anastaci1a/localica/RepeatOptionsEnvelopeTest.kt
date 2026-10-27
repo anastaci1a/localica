@@ -30,10 +30,17 @@ import kotlin.math.roundToInt
 @Composable
 private fun RepeatTestScene(content: @Composable () -> Unit) {
     LocalicaTheme {
+        val fitEvidence: ((String) -> Unit)? = remember {
+            if (androidx.test.platform.app.InstrumentationRegistry.getArguments()
+                    .getString("repeatFitEvidence") == "true") {
+                { message: String -> android.util.Log.i("RepeatFitEvidence", message); Unit }
+            } else null
+        }
         val source = rememberFrostedBackdrop(Unit, dark = false)
         Box(Modifier.fillMaxSize()) {
             Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) { drawRect(Color.White) }
             CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides source,
+                LocalRepeatFitEvidence provides fitEvidence,
                 content = content)
         }
     }
@@ -341,8 +348,19 @@ class RepeatOptionsEnvelopeTest {
             assertEquals("Actual native width", widthPx, window.decorView.width)
             assertEquals("Actual native height; configure a display tall enough for this test", heightPx, window.decorView.height)
             val origin = IntArray(2).also(view::getLocationOnScreen)
-            val display = view.resources.displayMetrics
-            assertTrue("Native window is wholly on screen", origin[0] >= 0 && origin[1] >= 0 &&
+            @Suppress("DEPRECATION")
+            val display = android.util.DisplayMetrics().also {
+                view.context.getSystemService(WindowManager::class.java).defaultDisplay.getRealMetrics(it)
+            }
+            val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+            val safeInsets = insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                androidx.core.view.WindowInsetsCompat.Type.displayCutout())
+            val context = "origin=${origin.contentToString()} requested=${widthPx}x${heightPx} " +
+                "decor=${window.decorView.width}x${window.decorView.height} view=${view.width}x${view.height} " +
+                "physical=${display.widthPixels}x${display.heightPixels} safeInsets=$safeInsets " +
+                "imeInsets=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())}"
+            android.util.Log.i("RepeatNativeWindow", context)
+            assertTrue("Native window is wholly on screen; $context", origin[0] >= 0 && origin[1] >= 0 &&
                 origin[0] + widthPx <= display.widthPixels && origin[1] + heightPx <= display.heightPixels)
         }
     }
@@ -432,11 +450,14 @@ class RepeatOptionsEnvelopeTest {
                 a.bottom <= b.top || b.bottom <= a.top)
         } }
         (toggles + choices + listOf("Cancel", "Select")).forEach { label ->
-            val target = childText(label).getUnclippedBoundsInRoot()
-            // DpRect exposes edges; subtract them in dp instead of resolving gesture-scope dimensions.
-            val targetWidth = target.right - target.left
-            val targetHeight = target.bottom - target.top
-            assertTrue("$label keeps a 48dp touch target; actual=$target", targetWidth >= 48.dp && targetHeight >= 48.dp)
+            val node = childText(label).fetchSemanticsNode()
+            val target = node.boundsInRoot
+            val nativeDensity = (node.root as ViewRootForTest).view.resources.displayMetrics.density
+            // Compare physical extents before converting edges separately to dp;
+            // a 144px target at density 3 must not lose height by cancellation.
+            val minimum = 48f * nativeDensity
+            assertTrue("$label keeps a 48dp touch target; actual=$target density=$nativeDensity",
+                target.width >= minimum && target.height >= minimum)
             childText(label).assertHasClickAction()
         }
         choices.forEach { childText(it).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)) }

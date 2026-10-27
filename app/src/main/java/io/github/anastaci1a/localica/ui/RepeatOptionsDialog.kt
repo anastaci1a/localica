@@ -5,8 +5,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.AnnotatedString
@@ -19,7 +21,19 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
 import io.github.anastaci1a.localica.queue.*
 
+/** Passive evidence for attempted complete layouts, in pixels; null keeps production silent. */
+internal val LocalRepeatFitEvidence = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+private fun Modifier.repeatFitComponent(name: String, heights: MutableMap<String, Int>?): Modifier =
+    if (heights == null) this else layout { measurable, constraints ->
+        val measured = measurable.measure(constraints)
+        heights[name] = measured.height
+        layout(measured.width, measured.height) { measured.place(0, 0) }
+    }
+
 private val repeatModeLabels = listOf("Simple", "Advanced")
+private const val queueRepeatWarning = "Queue-end options apply after you turn off repeating the current song."
+private data class RepeatWarningColumns(val choices: Dp, val warning: Dp)
 
 @Composable
 internal fun RepeatOptionsDialog(settings: QueueSettings, onDismiss: () -> Unit, onApply: ((QueueSettings) -> QueueSettings) -> Unit) {
@@ -131,6 +145,7 @@ internal fun RepeatSectionDialog(section: RepeatSection, policy: AdvancedRepeat,
     var draft by remember { mutableStateOf(policy) }
     GlassDialog(onDismiss, fitContent = true) {
         val measurer = rememberTextMeasurer()
+        val fitEvidence = LocalRepeatFitEvidence.current
         val labels = if (section == RepeatSection.Song) SongEnd.entries.map { it.label } else QueueEnd.entries.map { it.label }
         val regularStyle = MaterialTheme.typography.bodyMedium
         val compactStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 14.sp)
@@ -138,29 +153,89 @@ internal fun RepeatSectionDialog(section: RepeatSection, policy: AdvancedRepeat,
             // Try the complete layouts at the real safe width/height. Compact changes
             // spacing and type roles, never system font scale, labels or touch targets.
             SubcomposeLayout(Modifier.testTag("repeat-section-dialog")) { constraints ->
-                data class Fit(val chrome: DialogChrome, val cellHeight: Dp)
-                val fit = DialogChrome.entries.firstNotNullOfOrNull { chrome ->
+                data class Fit(val chrome: DialogChrome, val cellHeight: Dp, val columns: RepeatWarningColumns?)
+                fun measureCandidate(chrome: DialogChrome, columns: RepeatWarningColumns? = null): Fit? {
                     val compact = chrome == DialogChrome.Compact
                     val style = if (compact) compactStyle else regularStyle
                     val padding = chrome.perimeterDp.dp
-                    val labelWidth = (constraints.maxWidth -
+                    val labelWidth = if (columns == null) (constraints.maxWidth -
                         (padding * 2 + (ChoiceInnerInset + ChoiceLabelHorizontalInset) * 2).roundToPx()).coerceAtLeast(1)
+                    else (columns.choices.roundToPx() - 2 * (ChoiceInnerInset.roundToPx() +
+                        ChoiceLabelHorizontalInset.roundToPx())).coerceAtLeast(1)
                     val labelLayouts = labels.map { measurer.measure(AnnotatedString(it), style,
                         overflow = TextOverflow.Clip, maxLines = 2, constraints = Constraints(maxWidth = labelWidth)) }
                     val cellHeight = maxOf(48.dp, (labelLayouts.maxOf { it.size.height }).toDp() + 8.dp)
-                    val natural = subcompose("measurement-$compact") {
+                    val warningLayout = columns?.let { measurer.measure(AnnotatedString(queueRepeatWarning), style,
+                        overflow = TextOverflow.Clip, constraints = Constraints(maxWidth = it.warning.roundToPx())) }
+                    val componentHeights = if (fitEvidence != null) mutableMapOf<String, Int>() else null
+                    val arrangement = if (columns == null) "full-width" else "queue-warning-columns"
+                    val natural = subcompose("measurement-$compact-${columns?.choices?.roundToPx() ?: -1}") {
                         Box(Modifier.clearAndSetSemantics { }) {
-                            RepeatSectionFrame(section, draft, null, null, null, chrome, cellHeight, style)
+                            RepeatSectionFrame(section, draft, null, null, null, chrome, cellHeight, style,
+                                componentHeights, columns)
                         }
                     }.single().measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-                    if (natural.height <= constraints.maxHeight && labelLayouts.none { it.hasVisualOverflow })
-                        Fit(chrome, cellHeight) else null
+                    val fits = natural.height <= constraints.maxHeight && labelLayouts.none { it.hasVisualOverflow } &&
+                        warningLayout?.hasVisualOverflow != true
+                    // Body includes warning; component heights are not additive without subtracting it.
+                    fitEvidence?.invoke("section=$section chrome=$chrome arrangement=$arrangement units=px " +
+                        "natural=${natural.width}x${natural.height} available=${constraints.maxWidth}x${constraints.maxHeight} " +
+                        "title=${componentHeights?.get("title")} body=${componentHeights?.get("body")} " +
+                        "warning=${componentHeights?.get("warning") ?: 0} footer=${componentHeights?.get("footer")} " +
+                        "perimeter=${padding.roundToPx()} gap=${chrome.gapDp.dp.roundToPx()} " +
+                        "cell=${cellHeight.roundToPx()} labelWidth=$labelWidth labelOverflow=${labelLayouts.any { it.hasVisualOverflow }} " +
+                        "choiceColumn=${columns?.choices?.roundToPx()} warningColumn=${columns?.warning?.roundToPx()} " +
+                        "warningNatural=${warningLayout?.size} warningOverflow=${warningLayout?.hasVisualOverflow} " +
+                        "density=$density fontScale=$fontScale fits=$fits bodyIncludesWarning=true")
+                    return if (fits) Fit(chrome, cellHeight, columns) else null
                 }
+                // Preserve both complete full-width layouts first. Only the Queue
+                // warning case needs a bounded alternative; never split its selector.
+                val fullWidthFit = DialogChrome.entries.firstNotNullOfOrNull { measureCandidate(it) }
+                val fit = fullWidthFit ?: if (section == RepeatSection.Queue && draft.songEnd == SongEnd.Repeat &&
+                    constraints.hasBoundedWidth) {
+                    val chrome = DialogChrome.Compact
+                    val available = constraints.maxWidth - 2 * chrome.perimeterDp.dp.roundToPx() - chrome.gapDp.dp.roundToPx()
+                    val minimum = 48.dp.roundToPx()
+                    val minimumChoices = minimum + 2 * ChoiceInnerInset.roundToPx()
+                    val maximumChoices = available - minimum
+                    val labelInsets = 2 * (ChoiceInnerInset.roundToPx() + ChoiceLabelHorizontalInset.roundToPx())
+                    fun labelsFit(choices: Int): Boolean = labels.all { label ->
+                        !measurer.measure(AnnotatedString(label), compactStyle, overflow = TextOverflow.Clip,
+                            maxLines = 2, constraints = Constraints(maxWidth = (choices - labelInsets).coerceAtLeast(1)))
+                            .hasVisualOverflow
+                    }
+                    // Search integer pixel widths, not a presumed font/word length.
+                    // The finite interval preserves both the selector target and the
+                    // warning column. Text-only probes do not compose extra frames.
+                    val narrowestChoices = if (maximumChoices >= minimumChoices && labelsFit(maximumChoices)) {
+                        var low = minimumChoices
+                        var high = maximumChoices
+                        while (low < high) {
+                            val middle = low + (high - low) / 2
+                            if (labelsFit(middle)) high = middle else low = middle + 1
+                        }
+                        // Independently recheck the proposed boundary and its immediate
+                        // predecessor; the complete candidate below is still authoritative.
+                        low.takeIf { labelsFit(it) && (it == minimumChoices || !labelsFit(it - 1)) }
+                    } else null
+                    fitEvidence?.invoke("section=$section arrangement=queue-warning-width-search units=px " +
+                        "minimumChoices=$minimumChoices maximumChoices=$maximumChoices derivedChoices=$narrowestChoices " +
+                        "availableColumns=$available labelInsets=$labelInsets")
+                    // These are width candidates, not assumed heights. Every candidate
+                    // remeasures full labels, unrestricted warning and the ENTIRE frame.
+                    listOfNotNull(narrowestChoices, available / 2, available * 3 / 5).distinct().firstNotNullOfOrNull { choices ->
+                        val warning = available - choices
+                        if (choices < minimumChoices || warning < minimum) null
+                        else measureCandidate(chrome, RepeatWarningColumns(choices.toDp(), warning.toDp()))
+                    }
+                } else null
                 val live = subcompose("content") {
                     if (fit != null) RepeatSectionFrame(section, draft, onDismiss,
                         onSelect = { onSelect(draft); onDismiss() }, onChange = { draft = it },
                         chrome = fit.chrome, choiceHeight = fit.cellHeight,
-                        choiceStyle = if (fit.chrome == DialogChrome.Compact) compactStyle else regularStyle)
+                        choiceStyle = if (fit.chrome == DialogChrome.Compact) compactStyle else regularStyle,
+                        warningColumns = fit.columns)
                     else Column(Modifier.fillMaxWidth().padding(DialogChrome.Compact.perimeterDp.dp).testTag("repeat-section-insufficient-space"),
                         verticalArrangement = Arrangement.spacedBy(DialogChrome.Compact.gapDp.dp)) {
                         Text("More space needed", style = MaterialTheme.typography.titleLarge)
@@ -179,16 +254,17 @@ internal fun RepeatSectionDialog(section: RepeatSection, policy: AdvancedRepeat,
 @Composable
 private fun RepeatSectionFrame(section: RepeatSection, policy: AdvancedRepeat,
     onDismiss: (() -> Unit)?, onSelect: (() -> Unit)?, onChange: ((AdvancedRepeat) -> Unit)?,
-    chrome: DialogChrome = DialogChrome.Regular, choiceHeight: Dp? = null, choiceStyle: TextStyle? = null) {
+    chrome: DialogChrome = DialogChrome.Regular, choiceHeight: Dp? = null, choiceStyle: TextStyle? = null,
+    componentHeights: MutableMap<String, Int>? = null, warningColumns: RepeatWarningColumns? = null) {
     val compact = chrome == DialogChrome.Compact
     val style = choiceStyle ?: MaterialTheme.typography.bodyMedium
     Column(Modifier.fillMaxWidth().padding(chrome.perimeterDp.dp)
         .testTag(if (compact) "repeat-section-compact" else "repeat-section-regular"),
         verticalArrangement = Arrangement.spacedBy(chrome.gapDp.dp)) {
-        Text(section.title, Modifier.testTag("repeat-section-title"), style = MaterialTheme.typography.titleLarge)
+        Text(section.title, Modifier.testTag("repeat-section-title").repeatFitComponent("title", componentHeights), style = MaterialTheme.typography.titleLarge)
         CompositionLocalProvider(LocalCompactPreferenceFrames provides compact) {
             ProvideTextStyle(style) {
-                Column(Modifier.fillMaxWidth().testTag("repeat-section-body"), verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 8.dp)) {
+                Column(Modifier.fillMaxWidth().testTag("repeat-section-body").repeatFitComponent("body", componentHeights), verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 8.dp)) {
                     if (section == RepeatSection.Song) {
                         RepeatChoices(SongEnd.entries, policy.songEnd, { it.label }, onChange?.let { change ->
                             { change(policy.copy(songEnd = it)) }
@@ -200,17 +276,30 @@ private fun RepeatSectionFrame(section: RepeatSection, policy: AdvancedRepeat,
                         RepeatBoolean("Reshuffle when shuffle is enabled", policy.reshuffle, onChange?.let { change ->
                             { change(policy.copy(reshuffle = it)) }
                         })
-                        RepeatChoices(QueueEnd.entries, policy.queueEnd, { it.label }, onChange?.let { change ->
-                            { change(policy.copy(queueEnd = it)) }
-                        }, choiceHeight, style, compact)
-                        if (policy.songEnd == SongEnd.Repeat) Text(
-                            "Queue-end options apply after you turn off repeating the current song.",
-                            style = if (compact) style else MaterialTheme.typography.bodySmall)
+                        @Composable fun Choices() {
+                            RepeatChoices(QueueEnd.entries, policy.queueEnd, { it.label }, onChange?.let { change ->
+                                { change(policy.copy(queueEnd = it)) }
+                            }, choiceHeight, style, compact)
+                        }
+                        @Composable fun Warning(modifier: Modifier = Modifier) {
+                            Text(queueRepeatWarning, modifier = modifier.repeatFitComponent("warning", componentHeights),
+                                style = if (compact) style else MaterialTheme.typography.bodySmall)
+                        }
+                        if (warningColumns != null && policy.songEnd == SongEnd.Repeat) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(chrome.gapDp.dp),
+                                verticalAlignment = Alignment.Top) {
+                                Box(Modifier.width(warningColumns.choices)) { Choices() }
+                                Warning(Modifier.width(warningColumns.warning))
+                            }
+                        } else {
+                            Choices()
+                            if (policy.songEnd == SongEnd.Repeat) Warning()
+                        }
                     }
                 }
             }
         }
-        FlowRow(Modifier.fillMaxWidth().testTag("repeat-section-footer"), horizontalArrangement = Arrangement.End) {
+        FlowRow(Modifier.fillMaxWidth().testTag("repeat-section-footer").repeatFitComponent("footer", componentHeights), horizontalArrangement = Arrangement.End) {
             if (onDismiss == null) TextButtonMeasurement("Cancel", if (compact) style else null)
             else ActionTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel", style = if (compact) style else MaterialTheme.typography.labelLarge) }
             if (onSelect == null) TextButtonMeasurement("Select", if (compact) style else null)
