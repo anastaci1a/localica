@@ -180,9 +180,13 @@ internal fun BrowseOptionsPill(anchor: GlassAnchor, onChoose: (Boolean) -> Unit)
             }
         }
     }
-    LiquidGlassSurface(Modifier.height(CompactControlSize).glassAnchor(anchor).testTag("browse-options-trigger")) {
+    LiquidGlassSurface(Modifier.height(CompactControlSize).glassAnchor(anchor).testTag("browse-options-trigger"),
+        pressFeedback = !anchor.hidden) {
         anchor.captureInk()
-        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
+        // A hidden source retains its measured face, not live child hit targets.
+        // Visibility restores input immediately, including during the return rebound.
+        if (anchor.hidden) Box(Modifier.align(Alignment.Center)) { anchor.face?.invoke() }
+        else Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
             ActionIcon(R.drawable.ic_sort, "Sort", glass = false) { onChoose(false) }
             GlassPillDivider()
             ActionIcon(R.drawable.ic_eye, "View options", glass = false) { onChoose(true) }
