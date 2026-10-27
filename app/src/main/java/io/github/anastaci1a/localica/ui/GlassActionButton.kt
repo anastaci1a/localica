@@ -8,12 +8,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.LayoutDirection
@@ -28,9 +31,11 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun GlassActionButton(icon: Int, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Glass action availability")
+    androidx.compose.runtime.CompositionLocalProvider(LocalGlassContactName provides label) {
     LiquidGlassSurface(modifier.alpha(opacity).heightIn(min = CompactControlSize).ownButtonDrag(enabled)
         .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = controlActivation(enabled, onClick)), pressFeedback = enabled) {
         GlassActionButtonFace(icon, label)
+    }
     }
 }
 
@@ -54,6 +59,9 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
     val reduced = LocalReducedMotion.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val shadowInset = glassShadowInset()
+    val drawing = rememberActionStripDrawing()
+    val trace = LocalGlassContactTrace.current
+    val traceName = "action-strip-${System.identityHashCode(scroll)}"
     fun move(forward: Boolean) {
         scope.launch {
             val target = (scroll.value + (if (forward) 1 else -1) * scroll.viewportSize)
@@ -62,10 +70,23 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
         }
     }
     Layout(modifier = modifier.fillMaxWidth(), content = {
+        androidx.compose.runtime.CompositionLocalProvider(LocalGlassContactName provides traceName) {
+        // The original padded scroll subtree remains composed exactly once.
+        // Clip its INPUT ancestry at the logical row; replay its complete padded
+        // drawing outside that clip so shadows and Presence keep their own owners.
+        Box(drawing.replay(shadowInset).clipToBounds()) {
         Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner)
-            .shadowViewportOutset(shadowInset, horizontal = true).controlHorizontalScroll(scroll)
+            .shadowViewportOutset(shadowInset, horizontal = true)
+            .then(drawing.record())
+            .then(if (trace == null) Modifier else Modifier.onGloballyPositioned { coordinates ->
+                runCatching { trace(traceName, "viewport size=${coordinates.size} bounds=${coordinates.boundsInRoot()}",
+                    androidx.compose.ui.geometry.Offset.Zero, false) }
+            }.observeGlassContact { })
+            .controlHorizontalScroll(scroll)
             .padding(shadowInset), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically, content = content)
+        }
+        }
         Row(Modifier.fillMaxWidth().then(if (scroll.maxValue == 0) Modifier.clearAndSetSemantics { } else Modifier),
             horizontalArrangement = Arrangement.End) {
             ActionIconButton(onClick = { move(false) }, enabled = scroll.canScrollBackward) {

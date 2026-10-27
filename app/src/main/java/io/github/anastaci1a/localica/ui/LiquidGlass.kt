@@ -39,6 +39,8 @@ internal val CompactControlSize = NavigationPillHeight * .8f
 internal const val RaisedGlassDepthScale = 1.3f
 internal const val BottomPillDepthScale = .72f
 internal val MiniArtworkSize = 32.dp
+internal val LocalGlassContactName = staticCompositionLocalOf { "" }
+internal val LocalGlassContactTrace = staticCompositionLocalOf<((String, String, Offset, Boolean) -> Unit)?> { null }
 
 @Stable
 internal class GlassContact {
@@ -86,9 +88,12 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
 internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, onPressed: (Boolean) -> Unit): Modifier {
     val notify by rememberUpdatedState(onPressed)
     val admission by rememberUpdatedState(admit)
+    val trace by rememberUpdatedState(LocalGlassContactTrace.current)
+    val name by rememberUpdatedState(LocalGlassContactName.current)
     return pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            runCatching { trace?.invoke(name, "down", down.position, down.isConsumed) }
             // Read the live draw owner at contact acquisition. Replacing controls
             // in composition can leave a restored visible face without input for
             // one frame. A rejected DOWN must not turn into a click after return.
@@ -100,7 +105,11 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, onPre
             try {
                 // Visual pressure belongs to the initiating finger until it lifts.
                 // Clickable still cancels activation when that finger leaves the target.
-                do { val event = awaitPointerEvent(PointerEventPass.Final) }
+                do { val event = awaitPointerEvent(PointerEventPass.Final)
+                    event.changes.firstOrNull { it.id == down.id }?.let { point ->
+                        runCatching { trace?.invoke(name, if (point.pressed) "held" else "up", point.position, point.isConsumed) }
+                    }
+                }
                 while (event.changes.any { it.id == down.id && it.pressed })
             } finally { notify(false) }
         }
