@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -35,7 +34,8 @@ class PlayerBackgroundPolarityTest {
     private var topInset by mutableStateOf(0.dp)
     private var queue by mutableStateOf(false)
     private var lyrics by mutableStateOf(false)
-    private var ink = Color.Unspecified
+    @Volatile private var inkComposition: PlayerInkComposition? = null
+    private val ink: Color get() = inkComposition?.contentColor ?: Color.Unspecified
     private var queueInk = Color.Unspecified
     private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground,
         artworkTransition = ArtworkTransition.BlurThrough, glass = GlassAppearance(contrast = 0f)))
@@ -53,7 +53,8 @@ class PlayerBackgroundPolarityTest {
     private fun mount(initial: PlayerVisual) {
         visual = initial
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+            CompositionLocalProvider(LocalDensity provides Density(1f),
+                LocalPlayerInkCompositionObserver provides { inkComposition = it }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val available = maxHeight
                     BoxWithConstraints(Modifier.padding(top = topInset).width(300.dp)
@@ -61,8 +62,6 @@ class PlayerBackgroundPolarityTest {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),
                             true, {}, settings, remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
                             visual = visual, artworkVisit = visit, backgroundPolarity = owner, lyricsOpen = lyrics) {
-                            val color = MaterialTheme.colorScheme.onSurface
-                            SideEffect { ink = color }
                             Text("Controls", Modifier.testTag("control-ink"))
                         }
                         if (queue) GlassPanelTheme(owner.decision.lightInk) {
@@ -84,7 +83,23 @@ class PlayerBackgroundPolarityTest {
         if (!compose.mainClock.autoAdvance) compose.mainClock.advanceTimeByFrame()
         condition()
     }
-    private fun current() = await { owner.decision.confidence == PlayerBackgroundConfidence.Current }
+    private fun current() = await {
+        val observed = inkComposition
+        val decision = owner.decision
+        // Current describes samples, not provider composition or presented pixels. Wait for
+        // that same decision/frame to reach the real provider; glyph captures still prove drawing.
+        decision.confidence == PlayerBackgroundConfidence.Current && observed != null &&
+            observed.decision === decision && observed.frame === owner.frame
+    }
+    private fun jointInkContext(): String {
+        val observed = inkComposition
+        fun frame(value: ArtworkBackgroundFrame?): String = value?.let {
+            "${System.identityHashCode(it)} frozen=${it.frozenVisible} nativeBlur=${it.liveBlur} roles=" +
+                it.roles.joinToString { role -> "${System.identityHashCode(role.identity)}:${role.visual.contentKey}@${role.weight}" }
+        } ?: "none"
+        return "decision=${owner.decision}; frame=${frame(owner.frame)}; " +
+            "composedDecision=${observed?.decision}; composedFrame=${frame(observed?.frame)}; ink=${observed?.contentColor}"
+    }
     private fun frames(count: Int) { repeat(count) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() } }
     private fun sampleBackgroundAtTransport(): Float {
         val background = compose.onNodeWithTag("player-surface")
@@ -185,6 +200,7 @@ class PlayerBackgroundPolarityTest {
         val black = cover(false)
         compose.runOnIdle { visual = black; visit = "maximum-trim-black" }
         frames(32); current()
+        if (ink != Color.White) println("maximumTrim ink mismatch: ${jointInkContext()}")
         assertRenderedInk(true)
         repeat(12) { frames(1); assertTrue(owner.decision.lightInk) }
     }
