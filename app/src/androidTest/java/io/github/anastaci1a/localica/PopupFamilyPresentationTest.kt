@@ -52,6 +52,17 @@ class PopupFamilyPresentationTest {
     private lateinit var output: File
     private val records = JSONArray()
     private var requests = 0
+    // Main-thread, non-snapshot diagnostic storage. Only scalar receipts from this route's
+    // measured native root/window are retained; old routes are never used to fill a missing draw.
+    private data class SurfaceDraw(val sequence: Long, val frame: GlassSurfaceDrawObservation)
+    private val surfaceDraws = ArrayDeque<SurfaceDraw>()
+    private val surfaceDrawLimit = 256
+    private var observedRootIdentity: Int? = null
+    private var observedWindowIdentity: Int? = null
+    private var surfaceDrawSequence = 0L
+    private var previousFactsSequence = 0L
+    private var surfaceDrawsDropped = 0
+    private var collectionStartedUptime = 0L
     private val labels = listOf("library-utility", "playlist-plus", "sort-view", "collection-actions", "song-information")
     private val tracks = (1..3).map { index ->
         Track("popup-family:$index", "Diagnostic song $index", artist = "Diagnostic artist", album = "Diagnostic album",
@@ -91,6 +102,13 @@ class PopupFamilyPresentationTest {
             } }
             val catalog = LibraryUiState(LibrarySnapshot(listOf(FolderSelection("popup-family-root", "Diagnostic music")), tracks), loading = false)
             compose.setContent {
+                val inherited = LocalGlassSurfaceDrawObserver.current
+                val observe = remember(inherited) { { frame: GlassSurfaceDrawObservation ->
+                    // Preserve an existing observer without letting its failure suppress this collector.
+                    try { inherited?.invoke(frame) } catch (_: Throwable) { }
+                    collectSurfaceDraw(frame)
+                } }
+                CompositionLocalProvider(LocalGlassSurfaceDrawObserver provides observe) {
                 if (mounted) LocalicaTheme {
                     val ordinaryHost = requireNotNull(LocalGlassDialogs.current)
                     SideEffect { host = ordinaryHost }
@@ -102,6 +120,7 @@ class PopupFamilyPresentationTest {
                             queues = queueState, queueController = queues,
                             playlist = playlistState, playlistController = playlists)
                     }
+                }
                 }
             }
             contentInstalled = true
@@ -192,6 +211,7 @@ class PopupFamilyPresentationTest {
                 (root.parent as DialogWindowProvider).window
             }
             compose.runOnUiThread {
+                beginSurfaceDrawCollection(root, window)
                 val tree = root.viewTreeObserver.also { observer = it }
                 val watch = ViewTreeObserver.OnDrawListener {
                     val count = (draw.get()?.count ?: 0) + 1
@@ -243,6 +263,7 @@ class PopupFamilyPresentationTest {
             val watch = listener
             val tree = observer
             if (watch != null) compose.runOnUiThread {
+                observedRootIdentity = null; observedWindowIdentity = null
                 if (tree?.isAlive == true) tree.removeOnDrawListener(watch)
                 else observedView?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnDrawListener(watch)
             }
@@ -293,6 +314,89 @@ class PopupFamilyPresentationTest {
             .put("actualNativeSourceConsumption", "UNKNOWN: no per-consumer receipt from these callers")
             .put("homeFootprintAndWeight", "UNKNOWN: no direct-menu anchor or frame-correlated sampling receipt")
             .put("shadowRasterConsumption", "UNKNOWN: configured shadow is not a native consumption receipt")
+            .put("surfaceDrawObservations", surfaceDrawFacts(root, window, bounds, draw))
+    }
+
+    private fun beginSurfaceDrawCollection(root: View, window: Window) {
+        surfaceDraws.clear(); surfaceDrawsDropped = 0
+        observedRootIdentity = System.identityHashCode(root)
+        observedWindowIdentity = System.identityHashCode(window)
+        previousFactsSequence = surfaceDrawSequence
+        collectionStartedUptime = SystemClock.uptimeMillis()
+    }
+
+    private fun collectSurfaceDraw(frame: GlassSurfaceDrawObservation) {
+        if (frame.viewIdentity != observedRootIdentity || frame.windowIdentity != observedWindowIdentity) return
+        if (surfaceDraws.size == surfaceDrawLimit) { surfaceDraws.removeFirst(); surfaceDrawsDropped++ }
+        surfaceDraws.addLast(SurfaceDraw(++surfaceDrawSequence, frame))
+    }
+
+    /** No waits/assertions depend on these observations, including missing or cached entries. */
+    private fun surfaceDrawFacts(root: View, window: Window, bounds: Rect, native: Draw?): JSONObject {
+        val baseline = previousFactsSequence
+        val entries = surfaceDraws.filter { it.frame.viewIdentity == System.identityHashCode(root) &&
+            it.frame.windowIdentity == System.identityHashCode(window) }
+        previousFactsSequence = surfaceDrawSequence
+        fun finite(value: Float): Any = if (value.isFinite()) value else "NONFINITE:$value"
+        fun numbers(values: List<Float>?): Any = values?.let { JSONArray(it.map(::finite)) } ?: "UNKNOWN"
+        fun source(value: GlassSurfaceSourceDraw?): Any = value?.let { f ->
+            JSONObject().put("identity", f.identity).put("parentIdentity", f.parentIdentity ?: "NONE")
+                .put("layerIdentity", f.layerIdentity).put("parentLayerIdentity", f.parentLayerIdentity ?: "NONE")
+                .put("recorded", f.recorded).put("released", f.released)
+                .put("parentRecorded", f.parentRecorded ?: "NONE").put("parentReleased", f.parentReleased ?: "NONE")
+                .put("materialOnly", f.materialOnly).put("dark", f.dark)
+                .put("extent", JSONArray(listOf(f.width, f.height))).put("layerExtent", JSONArray(listOf(f.layerWidth, f.layerHeight)))
+                .put("revision", f.revision).put("requestedReadback", f.requestedReadback).put("publishedReadback", f.publishedReadback)
+                .put("publishedDrawRequest", f.publishedDrawRequest ?: "UNKNOWN").put("publishedComposite", f.publishedComposite ?: "UNKNOWN")
+                .put("snapshotIdentity", f.snapshotIdentity ?: "NONE").put("frostIdentity", f.frostIdentity ?: "NONE")
+                .put("lensIdentity", f.lensIdentity ?: "NONE").put("sourceToConsumerAffine", numbers(f.sourceToConsumer))
+                .put("unrefractedConsumerCornersInSource", numbers(f.consumerCornersInSource))
+        } ?: "NONE: no supplied source"
+        fun matchedBounds(frame: GlassSurfaceDrawObservation): Boolean {
+            val points = frame.rootCorners ?: return false
+            if (points.size != 8) return false
+            val xs = points.filterIndexed { index, _ -> index % 2 == 0 }
+            val ys = points.filterIndexed { index, _ -> index % 2 == 1 }
+            return Rect(xs.min(), ys.min(), xs.max(), ys.max()) == bounds
+        }
+        return JSONObject().put("collectionStartedUptime", collectionStartedUptime)
+            .put("limit", surfaceDrawLimit).put("droppedOldest", surfaceDrawsDropped)
+            .put("previousFactsSequence", baseline).put("lastSequence", surfaceDrawSequence)
+            .put("status", when {
+                entries.isEmpty() -> "MISSING: no matching surface traversal observed; no backfill or redraw"
+                entries.none { it.sequence > baseline } -> "CACHED: retained observations only, no new traversal since previous facts"
+                else -> "NEW_TRAVERSALS: not proof of fresh filter execution or native consumption"
+            })
+            .put("rootMatchedCount", entries.size).put("exactOuterBoundsMatchCount", entries.count { matchedBounds(it.frame) })
+            .put("observations", JSONArray(entries.map { entry ->
+                val f = entry.frame
+                JSONObject().put("sequence", entry.sequence).put("newSincePreviousFacts", entry.sequence > baseline)
+                    .put("uptime", f.uptime).put("surfaceIdentity", f.surfaceIdentity)
+                    .put("viewIdentity", f.viewIdentity).put("windowIdentity", f.windowIdentity ?: "UNKNOWN")
+                    .put("tokenIdentity", f.tokenIdentity ?: "UNKNOWN").put("attached", f.attached).put("focused", f.focused)
+                    .put("viewMatrixIdentity", f.viewMatrixIdentity).put("visible", f.visible).put("drawExtent", JSONArray(listOf(finite(f.width), finite(f.height))))
+                    .put("rootCorners", numbers(f.rootCorners)).put("windowCorners", numbers(f.windowCorners))
+                    .put("screenCorners", numbers(f.screenCorners)).put("computedSilhouetteBounds", numbers(f.outlineBounds))
+                    .put("exactOuterLayoutBoundsMatch", matchedBounds(f))
+                    .put("nativeDrawAssociation", when {
+                        native == null -> "UNKNOWN: no native draw witness"
+                        f.uptime < native.uptime -> "CACHED_OR_EARLIER: observation predates latest native draw witness"
+                        else -> "SAME_OR_LATER_MILLISECOND: ordering only, NOT a shared frame or consumption token"
+                    })
+                    .put("source", source(f.source)).put("home", source(f.home))
+                    .put("inkArgb", f.inkArgb).put("inkOverridden", f.inkOverridden).put("lightInk", f.lightInk)
+                    .put("coatingDark", f.coatingDark).put("toneTrim", finite(f.toneTrim)).put("toneWeight", finite(f.toneWeight))
+                    .put("tintArgb", f.tintArgb).put("panel", finite(f.panel)).put("frost", finite(f.frost))
+                    .put("suppliedHomeWeight", finite(f.suppliedHomeWeight)).put("blur", finite(f.blur))
+                    .put("whiteTint", finite(f.whiteTint)).put("depth", finite(f.depth)).put("depthScale", finite(f.depthScale))
+                    .put("refraction", finite(f.refraction)).put("surfaceShadowEnabled", f.shadowEnabled)
+                    .put("configuredShadowStrength", finite(f.shadowStrength)).put("configuredShadowSpread", finite(f.shadowSpread))
+                    .put("shadowGroupIdentity", f.shadowGroupIdentity ?: "NONE").put("shadowInModal", f.shadowInModal ?: "NO_ANCHOR")
+                    .put("silhouettePresent", f.silhouettePresent)
+            }))
+            .put("nonAtomicWithCopy", true)
+            .put("qualification", "Bounded scalar coating-Canvas traversals in this measured popup root/window, including nested controls. Exact layout-bounds matches are candidates, not unique surface or raster proof. Identity hashes can collide. Pre/post copy observations are not atomic; cached draws may emit nothing. No observation controls readiness.")
+            .put("unknown", "Actual filter crop/averaging/parent branch, admitted home blend, sampled revision, ancestor draw-only deformation/clip/opacity, outer caller-owned shadow and native shader/compositor consumption remain UNKNOWN. Supplied homeWeight is re-read at coating traversal, not copied from private filter execution. Corners use layout registration, not refracted rays or optical crop.")
     }
 
     private fun sourceFacts(source: FrostedBackdrop?, screen: Rect): Any {

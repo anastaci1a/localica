@@ -42,6 +42,51 @@ internal val MiniArtworkSize = 32.dp
 internal val LocalGlassContactName = staticCompositionLocalOf { "" }
 internal val LocalGlassContactTrace = staticCompositionLocalOf<((String, String, Offset, Boolean) -> Unit)?> { null }
 
+/** Passive coating-draw evidence, not a filter/shader/native-consumption receipt. All emitted
+ * values are scalars or scalar lists; no scene, layer, bitmap, coordinates, View or Window escapes.
+ * Identity hashes are process-local correlation hints, not collision-free resource identifiers. */
+internal data class GlassSurfaceSourceDraw(
+    val identity: Int, val parentIdentity: Int?, val layerIdentity: Int, val parentLayerIdentity: Int?,
+    val recorded: Boolean, val released: Boolean, val parentRecorded: Boolean?, val parentReleased: Boolean?,
+    val materialOnly: Boolean, val dark: Boolean, val width: Int, val height: Int,
+    val layerWidth: Int, val layerHeight: Int, val revision: Int, val requestedReadback: Int,
+    val publishedReadback: Int, val publishedDrawRequest: Int?, val publishedComposite: Int?,
+    val snapshotIdentity: Int?, val frostIdentity: Int?, val lensIdentity: Int?,
+    val sourceToConsumer: List<Float>?, val consumerCornersInSource: List<Float>?,
+)
+internal data class GlassSurfaceDrawObservation(
+    val uptime: Long, val surfaceIdentity: Int, val viewIdentity: Int, val windowIdentity: Int?, val tokenIdentity: Int?,
+    val attached: Boolean, val focused: Boolean, val viewMatrixIdentity: Boolean, val visible: Boolean,
+    val width: Float, val height: Float, val rootCorners: List<Float>?, val windowCorners: List<Float>?,
+    val screenCorners: List<Float>?, val outlineBounds: List<Float>?,
+    val source: GlassSurfaceSourceDraw?, val home: GlassSurfaceSourceDraw?,
+    val inkArgb: Int, val inkOverridden: Boolean, val lightInk: Boolean, val coatingDark: Boolean,
+    val toneTrim: Float, val toneWeight: Float, val tintArgb: Int,
+    val panel: Float, val frost: Float, val suppliedHomeWeight: Float,
+    val blur: Float, val whiteTint: Float, val depth: Float, val depthScale: Float, val refraction: Float,
+    val shadowEnabled: Boolean, val shadowStrength: Float, val shadowSpread: Float,
+    val shadowGroupIdentity: Int?, val shadowInModal: Boolean?, val silhouettePresent: Boolean,
+)
+internal val LocalGlassSurfaceDrawObserver = staticCompositionLocalOf<((GlassSurfaceDrawObservation) -> Unit)?> { null }
+
+private fun surfaceDrawIdentity(value: Any?): Int? = value?.let(System::identityHashCode)
+private fun List<Offset>.surfaceDrawScalars(): List<Float>? =
+    takeIf { all { it.x.isFinite() && it.y.isFinite() } }?.flatMap { listOf(it.x, it.y) }
+private fun androidx.compose.ui.geometry.Rect.surfaceDrawScalars(): List<Float> = listOf(left, top, right, bottom)
+private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, extent: Size): GlassSurfaceSourceDraw? {
+    val source = this ?: return null
+    val registration = source.location.registrationTo(location)
+    return GlassSurfaceSourceDraw(System.identityHashCode(source), surfaceDrawIdentity(source.parent),
+        System.identityHashCode(source.layer), surfaceDrawIdentity(source.parent?.layer),
+        source.recorded, source.layer.isReleased, source.parent?.recorded, source.parent?.layer?.isReleased,
+        source.materialOnly, source.dark, source.size.width, source.size.height,
+        source.layer.size.width, source.layer.size.height, source.revision, source.readbackRequest,
+        source.snapshotReadbackRequest, source.snapshotDraws?.request, source.snapshotDraws?.composite,
+        surfaceDrawIdentity(source.snapshot), surfaceDrawIdentity(source.fallback), surfaceDrawIdentity(source.lensSnapshot),
+        registration?.let { listOf(it.xx, it.xy, it.yx, it.yy, it.tx, it.ty) },
+        registration?.inverse()?.corners(androidx.compose.ui.geometry.Rect(Offset.Zero, extent))?.surfaceDrawScalars())
+}
+
 @Stable
 internal class GlassContact {
     var pressed by mutableStateOf(false)
@@ -129,6 +174,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     contactPresentation: (() -> GlassShape)? = null,
     contactAdmission: () -> Boolean = { true },
     content: (@Composable BoxScope.() -> Unit)? = null) {
+    val drawObserver = LocalGlassSurfaceDrawObserver.current
+    // Do not create diagnostic state, closures, geometry or modifiers for ordinary/null callers.
+    val observedShadowGroup = if (drawObserver == null) null else LocalSurfaceShadows.current
+    val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
     val visible = LocalGlassVisible.current
     if (visible && Build.VERSION.SDK_INT < 33) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
     val location = remember { BackdropLocation() }
@@ -267,6 +316,36 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         part.height / 2f, path = outline.path, tone = tone, opacity = splitRim)
                 }
             }
+            // Reuse this existing coating Canvas and its computed outline: no extra draw node,
+            // readback, invalidation or filter traversal. Diagnostic reads cannot subscribe drawing
+            // to new snapshot state; construction AND callback failures are isolated from rendering.
+            if (drawObserver != null) try {
+                androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                    val shadows = requireNotNull(observedShadowAppearance)
+                    val coordinates = location.coordinates?.takeIf { it.isAttached }
+                    val localCorners = listOf(Offset.Zero, Offset(size.width, 0f),
+                        Offset(size.width, size.height), Offset(0f, size.height))
+                    val rootCorners = coordinates?.let { c -> localCorners.map(c::localToRoot) }
+                    val inWindow = IntArray(2).also(view::getLocationInWindow)
+                    val onScreen = IntArray(2).also(view::getLocationOnScreen)
+                    val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+                    drawObserver(GlassSurfaceDrawObservation(android.os.SystemClock.uptimeMillis(),
+                        System.identityHashCode(location), System.identityHashCode(view), surfaceDrawIdentity(window),
+                        surfaceDrawIdentity(view.windowToken), view.isAttachedToWindow, view.hasWindowFocus(), view.matrix.isIdentity, visible,
+                        size.width, size.height, rootCorners?.surfaceDrawScalars(),
+                        rootCorners?.map { it + Offset(inWindow[0].toFloat(), inWindow[1].toFloat()) }?.surfaceDrawScalars(),
+                        rootCorners?.map { it + Offset(onScreen[0].toFloat(), onScreen[1].toFloat()) }?.surfaceDrawScalars(),
+                        outline?.geometry?.bounds?.surfaceDrawScalars(),
+                        source.surfaceDrawSource(location, size), homeSource.surfaceDrawSource(location, size),
+                        (inkOverride ?: if (dark) Color.White else Color(0xFF202124)).toArgb(), inkOverride != null,
+                        dark, coatingDark, tone.trim, tone.weight, tint.toArgb(), panel, frost,
+                        // Supplied reader sampled here, NOT the private filter's admitted/clamped blend.
+                        homeWeight(), appearance.blur, appearance.whiteTint, appearance.depth, depthScale, refraction,
+                        shadow, shadows.shadowStrength, shadows.shadowSpread,
+                        surfaceDrawIdentity(observedShadowGroup),
+                        anchor?.shadowInModal, silhouette != null))
+                }
+            } catch (_: Throwable) { /* A diagnostic must never fail or change the drawing. */ }
 
         }
         val ink = inkOverride ?: if (dark) Color.White else Color(0xFF202124)
