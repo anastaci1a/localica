@@ -9,7 +9,7 @@ contrast_regression=io.github.anastaci1a.localica.FrostedSurfaceTest
 pattern='^io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(,io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*)*$'
 [[ "$classes" =~ $pattern ]] || { echo 'Invalid affected class selector' >&2; exit 2; }
 IFS=, read -r -a selected <<< "$classes"
-[[ ${#selected[@]} -le 21 ]] || { echo 'At most 21 affected classes plus the three required regression classes' >&2; exit 2; }
+[[ ${#selected[@]} -le 47 ]] || { echo 'At most 47 affected classes plus the three required regression classes' >&2; exit 2; }
 [[ -f .github/prototype-risk-classes.txt ]] || { echo 'Missing reviewed class inventory' >&2; exit 2; }
 declare -A seen=()
 affected=0
@@ -60,7 +60,9 @@ result=$?
 set -e
 [[ "$result" == 0 ]] || exit "$result"
 python3 - "$selector" "$required,$focus_regression,$contrast_regression" <<'PYXML'
-import hashlib, json, pathlib, sys, xml.etree.ElementTree as ET
+import hashlib, json, pathlib, re, sys, xml.etree.ElementTree as ET
+if not __debug__:
+    raise SystemExit("Optimized Python cannot disable prototype reconciliation")
 root = pathlib.Path('prototype-evidence')
 observed = json.loads((root/'live/observed/manifest.json').read_text())
 assert observed['status'] == 'completed' and observed['child_returncode'] == 0
@@ -77,6 +79,45 @@ source_inventory = json.loads(source_bytes)
 assert set(source_inventory['selectors']) == selected
 expected_methods = set(source_inventory['runtime_methods'])
 required = set(sys.argv[2].split(','))
+# AGP's observed XML serializes assumptions as <skipped />. Its EXISTING per-method
+# logcat carries the reason. Never infer that reason from a count or source predicate.
+package = 'io.github.anastaci1a.localica.'
+profile_reasons = {
+    'RepeatOptionsEnvelopeTest#native360x640Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
+    'RepeatOptionsEnvelopeTest#native400x800Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
+    'RepeatOptionsEnvelopeTest#native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize': 'Requires the lead-configured 360x640 phone/font2 focused run',
+    'RepeatOptionsEnvelopeTest#native400x800PhoneFont2SectionsFitSafeInsetsWithoutWindowResize': 'Requires the lead-configured 400x800 phone/font2 focused run',
+    'DialogChromeLayoutTest#native360x640Font2RetainsSharedChromeAndEveryRepeatControl': 'Requires sufficient display space and actual Android font scale 2',
+    'DialogChromeLayoutTest#native400x800Font2RetainsSharedChromeAndEveryRepeatControl': 'Requires sufficient display space and actual Android font scale 2',
+    'TagEditorChromeLayoutTest#native360x640Font2KeepsSharedChromeAndScrollableFullSizeFields': 'Requires sufficient display space and the requested actual system font scale',
+}
+qualified_skips = []
+def qualify_skip(name, method, skipped, xml_file):
+    identity = name+'#'+method
+    api = str(observed['api'])
+    expected = profile_reasons.get(identity.removeprefix(package)) if identity.startswith(package) else None
+    if identity == package+'PlayerBackgroundPolarityTest#nativeBlurRetainsVerifiedInkAsDistinctUnavailableThenRecovers' and api == '26':
+        expected = 'got: <false>, expected: is <true>'
+    if expected is None or api not in ('26', '36'):
+        raise ValueError('Unqualified skipped identity/API: '+identity+' API'+api)
+    logs = sorted(pathlib.Path('app/build/outputs/androidTest-results').rglob('logcat-'+name+'-'+method+'.txt'))
+    if len(logs) != 1 or logs[0].is_symlink() or logs[0].stat().st_size > 4*1024*1024:
+        raise ValueError('Require one bounded original per-method assumption log: '+identity)
+    text = logs[0].read_text(encoding='utf-8')
+    marker = method+'('+name+')'
+    if text.count('TestRunner: started: '+marker) != 1 or text.count('TestRunner: assumption failed: '+marker) != 1:
+        raise ValueError('Assumption log lacks unique matching method boundaries: '+identity)
+    reasons = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
+    if reasons != [expected]:
+        raise ValueError('Missing, ambiguous or wrong observed skip reason: '+identity)
+    # If another adapter supplies XML reason text, it must not contradict the paired log.
+    message = skipped.attrib.get('message', '')
+    detail = (skipped.text or '').strip()
+    if message not in ('', expected) or detail not in ('', expected, 'org.junit.AssumptionViolatedException: '+expected):
+        raise ValueError('Contradictory XML assumption reason: '+identity)
+    qualified_skips.append({'id': identity, 'api': api, 'reason': reasons[0], 'evidence': str(logs[0]),
+        'evidence_sha256': hashlib.sha256(logs[0].read_bytes()).hexdigest(), 'xml': str(xml_file),
+        'qualification': 'Observed assumption only; not a passed profile or optical proof'})
 for file in files:
     tree = ET.parse(file)
     suites = [tree.getroot()] if tree.getroot().tag == 'testsuite' else tree.getroot().findall('.//testsuite')
@@ -91,6 +132,8 @@ for file in files:
             assert identity not in identities, 'Duplicate XML test '+str(identity)
             identities.add(identity)
             outcome = 'failed' if case.find('failure') is not None else 'errors' if case.find('error') is not None else 'skipped' if case.find('skipped') is not None else 'passed'
+            if outcome == 'skipped':
+                qualify_skip(name, case.attrib['name'], case.find('skipped'), file)
             counts[name][outcome] += 1
             methods[name+'#'+case.attrib['name']] = outcome
         for attr, tag in [('failures','failure'), ('errors','error'), ('skipped','skipped')]:
@@ -98,7 +141,7 @@ for file in files:
                 assert int(suite.attrib[attr]) == sum(c.find(tag) is not None for c in cases), 'Inconsistent XML '+attr
 assert set(methods) == expected_methods, 'Missing or extra source-declared methods'
 assert all(counts[c]['skipped'] == 0 for c in required), 'Required regression methods cannot skip'
-result = {'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
+result = {'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
 assert all(v['passed'] > 0 and v['failed'] == 0 and v['errors'] == 0 for v in counts.values()), 'Required class failed or had no passing tests'
 PYXML
