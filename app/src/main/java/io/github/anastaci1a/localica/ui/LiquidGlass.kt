@@ -73,20 +73,29 @@ internal fun rememberGlassContact(shared: GlassContact? = null): GlassContact {
 /** Observe touch without consuming it; children retain gesture and accessibility ownership. */
 @Composable
 internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
-    presentation: () -> GlassShape = { contact.body.value }, onPressed: (Boolean) -> Unit = {}): Modifier {
+    presentation: () -> GlassShape = { contact.body.value }, admit: () -> Boolean = { true },
+    onPressed: (Boolean) -> Unit = {}): Modifier {
     return drawWithContent {
         val shape = presentation()
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    }.observeGlassContact { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    }.observeGlassContact(admit) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
 }
 
 /** Shared contact lifetime for ordinary buttons and independently draggable glass bodies. */
 @Composable
-internal fun Modifier.observeGlassContact(onPressed: (Boolean) -> Unit): Modifier {
+internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, onPressed: (Boolean) -> Unit): Modifier {
     val notify by rememberUpdatedState(onPressed)
+    val admission by rememberUpdatedState(admit)
     return pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            // Read the live draw owner at contact acquisition. Replacing controls
+            // in composition can leave a restored visible face without input for
+            // one frame. A rejected DOWN must not turn into a click after return.
+            if (!admission()) {
+                down.consume()
+                return@awaitEachGesture
+            }
             notify(true)
             try {
                 // Visual pressure belongs to the initiating finger until it lifts.
@@ -139,7 +148,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val mesh = remember { lazy { LensMeshRenderer() } }
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
-    Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape) else if (anchor != null) Modifier.drawWithContent {
+    Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
+        admit = { anchor?.hidden != true }) else if (anchor != null) Modifier.drawWithContent {
         val shape = contactShape()
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
     } else Modifier)
