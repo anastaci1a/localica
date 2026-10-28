@@ -207,8 +207,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var dismissalAttempt by remember { mutableIntStateOf(0) }
     val gestures = rememberModalGestureScope()
-    DisposableEffect(gestures, visible, dismissalAttempt, originAdmitted, anchor.hidden) {
-        if (visible && (continuousOrigin == null || originAdmitted && anchor.hidden)) gestures.activate() else gestures.deactivate()
+    // Generic/Search owners keep their original effect lifetime. Only a prepared
+    // origin's native admission changes when its trigger is restored or hidden.
+    val originOwnsInput = continuousOrigin == null || originAdmitted && anchor.hidden
+    DisposableEffect(gestures, visible, dismissalAttempt, originOwnsInput) {
+        if (visible && originOwnsInput) gestures.activate() else gestures.deactivate()
         onDispose { gestures.deactivate() }
     }
     val searchMotion = remember { SearchMorphMotion() }
@@ -254,7 +257,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     androidx.activity.compose.BackHandler(visible && originPreparation != null && (if (continuousOrigin != null) !originAdmitted || !anchor.hidden else !present)) { dismissNow() }
     DisposableEffect(originPreparation) { onDispose { originPreparation?.reset() } }
     val transitionJob = remember { arrayOfNulls<Job>(1) }
-    val reclaimOpening = remember(anchor, continuousOrigin, placement) { {
+    val reclaimOpening = remember(anchor, continuousOrigin, placement.takeIf { continuousOrigin != null }) { {
         // A click updates its conditional caller before the next composition can
         // remount the retained entry. Stop the old return at that admission point,
         // otherwise its restored-draw acknowledgment can dispose this same window.
@@ -271,7 +274,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         anchor.reclaimOpening = reclaimOpening
         onDispose { if (anchor.reclaimOpening === reclaimOpening) anchor.reclaimOpening = null }
     }
-    LaunchedEffect(visible, reduced, speed, originPreparation, continuousOrigin, placement) {
+    LaunchedEffect(visible, reduced, speed, originPreparation, continuousOrigin, placement.takeIf { continuousOrigin != null }) {
         transitionJob[0] = currentCoroutineContext().job
         if (continuousOrigin != null) {
             val preparation = continuousOrigin
@@ -520,7 +523,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }
             }
         }
-        DisposableEffect(window, visible, dismissalAttempt, originAdmitted, anchor.hidden) {
+        DisposableEffect(window, visible, dismissalAttempt, originOwnsInput) {
             // A busy editor may refuse dismissal; Settings Back may only change
             // the page. Reconcile with the actual state after that callback.
             window?.glassInput(visible && (continuousOrigin == null || originAdmitted && anchor.hidden && readyWindow === window))
@@ -549,8 +552,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val geometry = glassMorphGeometryProgress(p, anchor.quiet)
         val admittedDraw = continuousOrigin == null || originAdmitted && readyWindow === window
         Box(Modifier.fillMaxSize()
-            .drawWithContent { if (admittedDraw) drawContent() }
-            .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)
+            .then(if (continuousOrigin != null) Modifier
+                .drawWithContent { if (admittedDraw) drawContent() }
+                .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)
+                else Modifier)
             .background(Color.Black.copy(alpha = .16f * p))
             .pointerInput(visible, admittedDraw) { detectTapGestures { if (visible && admittedDraw) dismissNow() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
