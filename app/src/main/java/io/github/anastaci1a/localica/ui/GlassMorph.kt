@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -189,6 +191,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     originPreparation: GlassOriginPreparation? = null, searchDismissOnImeBack: Boolean = false,
     content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
+    val originWell = remember { GlassOriginWell() }
+    val wellCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val wellStrength = LocalGlassAppearance.current.shadowStrength
     val speed = LocalMotionSpeed.current
     val progress = anchor.contact.expansion
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
@@ -737,13 +742,26 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 slotFraction = slotFraction, slotTravel = slotTravel, slotReturnFrom = slotReturnFrom,
                                 openingOwnedBounds = searchOpeningShape.value.takeIf { visible && searchShapeStarted && flight?.opening == true }))
                         }
-                    }.drawWithContent {
+                    }.onPlaced { wellCoordinates[0] = it }.drawWithContent {
                         // Match the trigger's draw-space deformation. A layout-layer
                         // scale changes global sampling coordinates, causing a small
                         // optical jump when the same body returns to its trigger.
                         val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight) else null
                         val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
                         val vertical = pose?.vertical ?: anchor.contact.vertical
+                        // Draw in this native window outside the sampled panel/backdrop.
+                        // Read placed coordinates in the same draw, not a previous-frame
+                        // globally-positioned state handoff. The original trigger restores
+                        // before this decoration relinquishes its covered footprint.
+                        val coordinates = wellCoordinates[0]
+                        if (!page && !detached && !anchor.contextual && placement != GlassPlacement.Search &&
+                            anchor.hidden && admittedDraw && surfaceOpacity() == 1f &&
+                            coordinates?.isAttached == true) {
+                            val home = anchor.bounds.translate(-coordinates.backdropPosition(view))
+                            val caster = glassWellCaster(size, radius.toPx(), shape.scaleX(vertical),
+                                shape.scaleY(vertical), pose?.horizontalShift ?: 0f)
+                            with(originWell) { draw(home, homeRadius.toPx(), caster, wellStrength) }
+                        }
                         // Source pivot compensation precedes body scaling too.
                         translate(left = pose?.horizontalShift ?: 0f) {
                             scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
@@ -844,3 +862,4 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
     } } }
 }
+

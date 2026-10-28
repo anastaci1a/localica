@@ -32,6 +32,34 @@ import kotlin.math.roundToInt
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun originWellIsMaskedByActualCasterWithoutFadingAndReusesStationaryRaster() {
+        var casterX by mutableFloatStateOf(0f)
+        val well = GlassOriginWell()
+        compose.setContent {
+            Box(Modifier.size(220.dp, 120.dp).background(Color(0xFF808080)).testTag("origin-well")
+                .drawBehind {
+                    val home = androidx.compose.ui.geometry.Rect(30.dp.toPx(),30.dp.toPx(),150.dp.toPx(),78.dp.toPx())
+                    val caster = RoundRect(home.translate(androidx.compose.ui.geometry.Offset(casterX.dp.toPx(),0f)),
+                        androidx.compose.ui.geometry.CornerRadius(24.dp.toPx()))
+                    with(well) { draw(home,24.dp.toPx(),caster,1f) }
+                })
+        }
+        val closed = compose.onNodeWithTag("origin-well").captureToImage().toPixelMap()
+        compose.runOnIdle { casterX = 140f }
+        val open = compose.onNodeWithTag("origin-well").captureToImage().toPixelMap()
+        val d = open.width / 220f
+        val x = (90*d).toInt(); val y = (54*d).toInt()
+        assertTrue("Vacant basin shades its receiver",open[x,y].red < closed[x,y].red-.01f)
+        val count = compose.runOnIdle { well.rasterizations }
+        for (position in listOf(70f,20f,100f,0f)) {
+            compose.runOnIdle { casterX = position }
+            compose.onNodeWithTag("origin-well").captureToImage()
+        }
+        val restored = compose.onNodeWithTag("origin-well").captureToImage().toPixelMap()
+        assertTrue("Covered receiver has no shadow residue",abs(restored[x,y].red-closed[x,y].red) < .001f)
+        compose.runOnIdle { org.junit.Assert.assertEquals("Moving caster must not rerasterize",count,well.rasterizations) }
+    }
+
     @Test fun singleBodyPrimitivePreservesTheExistingPathShadowAtTheSameNativeOrigin() {
         var reference by mutableStateOf(true)
         var sample by mutableIntStateOf(0)
