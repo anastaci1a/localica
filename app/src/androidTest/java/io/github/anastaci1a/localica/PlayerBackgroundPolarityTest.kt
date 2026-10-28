@@ -33,6 +33,11 @@ class PlayerBackgroundPolarityTest {
     private var tall by mutableStateOf(false)
     private var topInset by mutableStateOf(0.dp)
     private var queue by mutableStateOf(false)
+    private var compareWash by mutableStateOf(false)
+    @Volatile private var baselineBackdrop: PlayerBackdropDescriptor? = null
+    @Volatile private var selectedBackdrop: PlayerBackdropDescriptor? = null
+    @Volatile private var productionBackdrop: PlayerBackdropDescriptor? = null
+    @Volatile private var productionRole: Any? = null
     private var lyrics by mutableStateOf(false)
     @Volatile private var inkComposition: PlayerInkComposition? = null
     private val ink: Color get() = inkComposition?.contentColor ?: Color.Unspecified
@@ -50,7 +55,7 @@ class PlayerBackgroundPolarityTest {
             softArtwork = runBlocking { blurGlassSnapshot(bitmap.asImageBitmap(), bitmap.width * .035f) }, contentKey = "$white/$border")
     }
 
-    private fun mount(initial: PlayerVisual) {
+    private fun mount(initial: PlayerVisual, waitForCurrent: Boolean = true) {
         visual = initial
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(1f),
@@ -64,6 +69,28 @@ class PlayerBackgroundPolarityTest {
                             visual = visual, artworkVisit = visit, backgroundPolarity = owner, lyricsOpen = lyrics) {
                             Text("Controls", Modifier.testTag("control-ink"))
                         }
+                        // Compare otherwise identical backing-only probes, using the real
+                        // PlayerBackdrop's descriptor rather than reconstructing its tone from
+                        // the ink request. The old policy directed tone from the target palette.
+                        // Only compare a single settled fixture role. Do not certify an
+                        // outgoing, frozen, blurred, or mixed transition as this baseline.
+                        val role = if (compareWash) owner.frame?.takeIf { !it.frozenVisible && !it.liveBlur }
+                            ?.roles?.filter { it.weight > .0001f }?.singleOrNull()
+                            ?.takeIf { it.weight >= .9999f && it.visual.contentKey == visual.contentKey } else null
+                        val production = role?.let { owner.backdrops[it.identity] }
+                        if (production != null && role != null) {
+                            SideEffect { productionRole = role.identity; productionBackdrop = production }
+                            Row(Modifier.align(androidx.compose.ui.Alignment.TopStart)) {
+                                val baselineTone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight,
+                                    !visual.palette.isLight())
+                                PlayerBackdrop(production.palette, Modifier.size(96.dp).testTag("baseline-wash"),
+                                    fullArtBlend = 1f, artTop = 0f, artHeight = 96f, artLeft = 0f, artWidth = 96f,
+                                    tone = baselineTone, onBackgroundDescriptor = { baselineBackdrop = it })
+                                PlayerBackdrop(production.palette, Modifier.size(96.dp).testTag("selected-wash"),
+                                    fullArtBlend = 1f, artTop = 0f, artHeight = 96f, artLeft = 0f, artWidth = 96f,
+                                    tone = production.tone, onBackgroundDescriptor = { selectedBackdrop = it })
+                            }
+                        }
                         if (queue) GlassPanelTheme(owner.decision.lightInk) {
                             QueueSurface(remember { Animatable(1f) }, settings, {}) {
                                 val color = LocalContentColor.current
@@ -75,7 +102,7 @@ class PlayerBackgroundPolarityTest {
                 }
             }
         } }
-        current()
+        if (waitForCurrent) current()
     }
 
     private fun await(condition: () -> Boolean) = compose.waitUntil(10000) {
@@ -124,6 +151,47 @@ class PlayerBackgroundPolarityTest {
         assertTrue("Real transport glyph draws the selected ink", inkPixels > 10)
     }
 
+    @Test fun zeroTrimControlHasIdenticalBackingForBothToneDirections() = compareBacking(0f)
+
+    @Test fun nonzeroTrimPreservesThePre473BackingWhenInkDiffersFromPalettePolarity() = compareBacking(.5f)
+
+    private fun compareBacking(trim: Float) {
+        settings = settings.copy(glass = settings.glass.copy(contrast = trim))
+        compareWash = true
+        val border = cover(white = true, border = true)
+        assertTrue("Fixture must have a light middle palette", border.palette.isLight())
+        mount(border, waitForCurrent = false)
+        fun ready(descriptor: PlayerBackdropDescriptor?): Boolean {
+            val d = descriptor ?: return false
+            fun matches(source: Bitmap?, output: Bitmap?, receipt: ToneSnapshotReceipt<Bitmap>?) =
+                if (source == null) output == null else receipt?.matches(source, output, d.tone) == true
+            return matches(d.palette.wash, d.wash, d.washReceipt) &&
+                matches(d.palette.softWash, d.softWash, d.softWashReceipt)
+        }
+        await {
+            val production = productionBackdrop
+            val selected = selectedBackdrop
+            val roleIdentity = productionRole
+            val frame = owner.frame
+            val visibleRole = frame?.takeIf { !it.frozenVisible && !it.liveBlur }?.roles
+                ?.filter { it.weight > .0001f }?.singleOrNull()
+            roleIdentity != null && visibleRole != null && visibleRole.identity === roleIdentity &&
+                visibleRole.weight >= .9999f && visibleRole.visual.contentKey == border.contentKey &&
+                owner.backdrops[roleIdentity] === production && ready(production) &&
+                ready(baselineBackdrop) && ready(selected) && production != null && selected != null &&
+                selected.tone == production.tone && selected.palette === production.palette
+        }
+        val baseline = compose.onNodeWithTag("baseline-wash").captureToImage().toPixelMap()
+        val selected = compose.onNodeWithTag("selected-wash").captureToImage().toPixelMap()
+        assertEquals(baseline.width, selected.width)
+        assertEquals(baseline.height, selected.height)
+        var changed = 0
+        for (y in 0 until baseline.height) for (x in 0 until baseline.width) {
+            if (baseline[x, y] != selected[x, y]) changed++
+        }
+        assertEquals("Changing ink must not retone the existing backing; changed pixels=$changed", 0, changed)
+    }
+
     @Test fun whiteCoverBlackLowerBorderUsesDirectAndContinuationFootprintsAtShortTallAndTranslatedInsets() {
         val border = cover(white = true, border = true)
         assertTrue("The old middle-palette policy would select black ink", border.palette.isLight())
@@ -166,6 +234,22 @@ class PlayerBackgroundPolarityTest {
         assertEquals("Both real surfaces use the same page decision", ink.red > .5f, queueInk.red > .5f)
         val image = compose.onNodeWithTag("queue-ink").captureToImage().toPixelMap()
         assertTrue((0 until image.height).any { y -> (0 until image.width).any { x -> image[x, y].red < .2f } })
+    }
+
+    @Test fun opacityTransitionIsUnavailableUntilTheSuccessorIsSettled() {
+        lyrics = true // Real opacity transition, not the perspective-moving carousel.
+        val black = cover(false); val white = cover(true)
+        mount(black)
+        assertTrue(owner.decision.lightInk)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { visual = white; visit = "settled-only-white" }
+        frames(4)
+        await { owner.frame?.transitioning == true && owner.decision.unavailable == PlayerBackgroundUnavailable.Transitioning }
+        assertEquals(PlayerBackgroundConfidence.Stale, owner.decision.confidence)
+        assertTrue("A transition does not publish the target ink", owner.decision.lightInk)
+        frames(32); current()
+        assertFalse(owner.decision.lightInk)
+        assertRenderedInk(false)
     }
 
     @Test fun interruptedFrozenRoleIsExplicitlyStaleAndRecoversOnlyFromLiveSuccessor() {

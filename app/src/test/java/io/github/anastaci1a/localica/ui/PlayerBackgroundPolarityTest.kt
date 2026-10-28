@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.*
 import org.junit.Test
-import kotlin.math.pow
 import kotlin.math.sqrt
 
 class PlayerBackgroundPolarityTest {
@@ -67,20 +66,17 @@ class PlayerBackgroundPolarityTest {
         assertTrue(backgroundLightInk(listOf(listOf(BackgroundRgb(.3f, .3f, .3f)) to 1f), listOf(1f)))
     }
 
-    @Test fun polarityToneFeedbackStabilizesForBothStartingPolaritiesAndMaximumTrim() {
-        for (raw in listOf(0f, .1f, .25f, .5f, .75f, 1f)) for (trim in listOf(0f, .25f, .5f))
-            for (weight in listOf(1f, 2f)) for (initial in listOf(false, true)) {
-                var ink = initial
-                var flips = 0
-                repeat(8) {
-                    // The existing ordered tone endpoints; this test does not change GlassTone.
-                    val displayed = if (ink) raw - trim * raw.pow(weight) else raw + trim * (1f - raw).pow(weight)
-                    val next = backgroundLightInk(listOf(listOf(BackgroundRgb(displayed, displayed, displayed)) to 1f), listOf(1f))
-                    if (next != ink) flips++
-                    ink = next
-                }
-                assertTrue("Background/ink feedback must not oscillate: $raw/$trim/$weight/$initial", flips <= 1)
+    @Test fun fixedPaintedBackingChoosesIndependentlyOfPriorInk() {
+        for (painted in listOf(0f, .1f, .25f, .5f, .75f, 1f)) {
+            val sample = listOf(listOf(BackgroundRgb(painted, painted, painted)) to 1f)
+            val expected = requireNotNull(backgroundSingleContrast(sample, listOf(1f))).lightInk
+            for (initial in listOf(false, true)) {
+                val publication = PlayerBackgroundPublication()
+                publication.publish(publication.begin(PlayerBackgroundUnavailable.Preparing), initial)
+                publication.publish(publication.begin(PlayerBackgroundUnavailable.Preparing), expected)
+                assertEquals(expected, publication.decision.lightInk)
             }
+        }
     }
 
     @Test fun nativeBlurIsDistinctFromFrozenAndAlsoRequiresLiveRecovery() {
