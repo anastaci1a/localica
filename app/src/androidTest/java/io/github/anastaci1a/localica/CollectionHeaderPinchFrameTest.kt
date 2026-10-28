@@ -130,7 +130,7 @@ class CollectionHeaderPinchFrameTest {
             assertTrue("Visible held material is live, not the intact frozen fallback", visibleFrames.all { it.liveAction })
             val sourceCorners = visibleFrames.map { frame ->
                 assertSame("Live frames draw the excluded source, never old material under new glass", frame.staticRetainedPart, frame.displayedHeaderPart)
-                val draw = requireNotNull(frame.actionMaterialDraw) { "Observe the actual material draw, not just the layer placement" }
+                val draw = requireNotNull(frame.actionMaterialDraw) { "Require a same-generation actual material-record receipt, not just layer placement" }
                 val body = requireNotNull(frame.actionBounds)
                 val root = requireNotNull(draw.rootCorners)
                 val origin = list.fetchSemanticsNode().boundsInRoot.topLeft

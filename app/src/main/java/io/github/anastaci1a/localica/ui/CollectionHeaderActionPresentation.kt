@@ -65,7 +65,9 @@ internal fun CollectionHeaderActionPresentation(owner: CollectionPinchHeader, so
     val upstreamObserver = LocalGlassSurfaceDrawObserver.current
     val inspect = owner.observer != null
     val drawObserver: ((GlassSurfaceDrawObservation) -> Unit)? = if (inspect) { observation ->
-        owner.actionMaterialDraw = observation
+        // Nested material display lists may be reused while geometry is unchanged.
+        // Preserve the last actual recording, but never admit a retired producer.
+        if (owner.actionPresentation?.generation == captured.generation) owner.actionMaterialDraw = observation
         upstreamObserver?.invoke(observation)
     } else upstreamObserver
     CompositionLocalProvider(LocalFrostedBackdrop provides source,
@@ -77,7 +79,6 @@ internal fun CollectionHeaderActionPresentation(owner: CollectionPinchHeader, so
                 // Retain only a normal display list, never a readback lease.
                 owner.actionStageRect() // observe the pinch clock in DRAW too
                 val actualRect = owner.actionPlacedRect(placement.coordinates)
-                if (inspect) owner.actionMaterialDraw = null
                 layer.record { this@drawWithContent.drawContent() }
                 owner.actionRecordedRect = actualRect
                 owner.actionRecordedGeneration = captured.generation

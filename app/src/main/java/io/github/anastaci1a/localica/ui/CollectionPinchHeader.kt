@@ -141,6 +141,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         check(geometry.begin(token, measured.geometry()))
         generation = token
         actionRecordedGeneration = null
+        actionMaterialDraw = null
         actionPresentation = checkNotNull(capturedAction)
         sourceStyle = source; targetStyle = destination; endpointStyle = null
         sourceBounds = measured; targetBounds = null
@@ -196,7 +197,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     }
     fun clear() {
         generation?.let { geometry.discard(it) }
-        generation = null; actionPresentation = null; actionRecordedGeneration = null; actionRecordedRect = null; frozen = null; frozenStatic = null; verifiedFrame = null; sourceStyle = null; targetStyle = null; endpointStyle = null
+        generation = null; actionPresentation = null; actionRecordedGeneration = null; actionRecordedRect = null; actionMaterialDraw = null; frozen = null; frozenStatic = null; verifiedFrame = null; sourceStyle = null; targetStyle = null; endpointStyle = null
         target.cancel(); handed.cancel()
         pin?.release(); pin = null
         revision++
