@@ -4,9 +4,101 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.*
 import org.junit.Test
-import kotlin.math.abs
+import kotlin.math.*
 
 class LensGeometryTest {
+    // Frozen pre-refactor ray equations: independent differential oracle.
+    private fun originalRay(field: LensField, span: Float, depth: Float, flattening: Float = 0f): LensRay {
+        if (field.distance < 0f || span <= 0f) return LensRay(Offset.Zero, 1f, 0f)
+        val u = (1f - field.distance / span).coerceIn(0f, 1f)
+        val root = sqrt(max(1f - u * u, .0004f))
+        val requested = depth.coerceIn(.05f, 4f)
+        val opticalDepth = requested / sqrt(1f + requested * requested / 4f)
+        val crown = span * .62f * opticalDepth
+        // A continuously curved shoulder carries most of the optical power. The
+        // center retains finite curvature without magnifying the whole face like a
+        // thick spherical lens. This is the derivative of the same height field,
+        // not an independent rim displacement or a flat-center mask.
+        val shoulder = .4f + .06f * flattening.coerceIn(0f, 1f)
+        val height = crown * root * (1f + shoulder * u * u)
+        val slope = crown / span * u / root * (1f - 2f * shoulder + 3f * shoulder * u * u)
+        val gx = -field.inward.x * slope
+        val gy = -field.inward.y * slope
+        val z = 1f / sqrt(1f + gx * gx + gy * gy)
+        val nx = gx * z
+        val ny = gy * z
+        // Entry and exit interfaces: a single height projection nearly cancels the
+        // changing slope and looks like uniform zoom. The emerging ray bends again.
+        val eta = 1f / 1.33f
+        val k = sqrt(max(1f - eta * eta * (1f - z * z), 0f))
+        val factor = eta * z - k
+        val rz = -eta + factor * z
+        val inside = Offset(nx * factor, ny * factor)
+        val outside = inside * 1.33f
+        val exitZ = sqrt(max(1f - outside.getDistanceSquared(), .01f))
+        val offset = inside * (height / max(-rz, .12f)) + outside * (span * .32f * opticalDepth / exitZ)
+        return LensRay(offset, z, height, Offset(nx, ny))
+    }
+
+    private fun assertSameFloat(expected: Float, actual: Float) {
+        if (expected.isNaN()) assertTrue(actual.isNaN())
+        else assertEquals(expected.toRawBits(), actual.toRawBits())
+    }
+
+    @Test fun sharedOpticalProfilePreservesBothAdaptersCoefficients() {
+        val exceptional = listOf(Float.NaN, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, -0f, 0f)
+        for (span in listOf(.5f, 32f, 120f, 450f) + exceptional) {
+            for (depth in listOf(-1f, .05f, .72f, 1.3f, 1.35f, 4f, 8f) + exceptional) {
+                for (flattening in listOf(-1f, 0f, .37f, 1f, 2f) + exceptional) {
+                    val optics = LensOpticalProfile.create(span, depth, flattening)
+                    // Independent pre-refactor coefficients; never call the new factory for expected values.
+                    val d = depth.coerceIn(.05f, 4f)
+                    val normalized = d / kotlin.math.sqrt(1f + d * d / 4f)
+                    assertSameFloat(span, optics.span)
+                    assertSameFloat(span * .62f * normalized, optics.crown)
+                    assertSameFloat(.4f + .06f * flattening.coerceIn(0f, 1f), optics.shoulder)
+                    assertSameFloat(span * .32f * normalized, optics.baseThickness)
+                    for (fraction in listOf(-.1f, 0f, .001f, .25f, .9f, 1f, 1.1f)) {
+                        val field = LensField(span * fraction, Offset(.6f, -.8f))
+                        val expected = originalRay(field, span, depth, flattening)
+                        for (actual in listOf(lensRay(field, optics), lensRay(field, span, depth, flattening))) {
+                            assertSameFloat(expected.offset.x, actual.offset.x)
+                            assertSameFloat(expected.offset.y, actual.offset.y)
+                            assertSameFloat(expected.normalZ, actual.normalZ)
+                            assertSameFloat(expected.height, actual.height)
+                            assertSameFloat(expected.normalXY.x, actual.normalXY.x)
+                            assertSameFloat(expected.normalXY.y, actual.normalXY.y)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun invalidFieldOrNonpositiveSpanRetainsIndependentNeutralRayContract() {
+        val invalidOptics = listOf(Float.NaN, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, -0f)
+        fun assertNeutral(field: LensField, span: Float, depth: Float, flattening: Float) {
+            // Explicit original early-out contract, not wrapper-versus-delegate equality.
+            val expected = LensRay(Offset.Zero, 1f, 0f)
+            assertEquals(expected, lensRay(field, span, depth, flattening))
+            assertEquals(expected, lensRay(field, LensOpticalProfile.create(span, depth, flattening)))
+        }
+        for (depth in invalidOptics) for (flattening in invalidOptics) {
+            for (span in listOf(-1f, -0f, 0f, Float.NEGATIVE_INFINITY)) {
+                for (distance in listOf(-1f, -0f, 0f, 1f, Float.NaN, Float.POSITIVE_INFINITY)) {
+                    assertNeutral(LensField(distance, Offset(Float.NaN, Float.POSITIVE_INFINITY)),
+                        span, depth, flattening)
+                }
+            }
+            for (span in listOf(1f, Float.NaN, Float.POSITIVE_INFINITY)) {
+                for (distance in listOf(-1f, Float.NEGATIVE_INFINITY)) {
+                    assertNeutral(LensField(distance, Offset(Float.NaN, Float.POSITIVE_INFINITY)),
+                        span, depth, flattening)
+                }
+            }
+        }
+    }
+
     @Test fun maximumOpticalDepthCannotSampleBeyondTheSelectionAtlasMargin() {
         for (width in listOf(64f, 320f, 800f)) for (height in listOf(64f, 120f, 900f)) {
             val span = minOf(width, height) / 2f
@@ -258,3 +350,4 @@ class LensGeometryTest {
             assertNull(simpleLensGeometry(listOf(valid, SelectionRegion(bounds)), 16f))
     }
 }
+

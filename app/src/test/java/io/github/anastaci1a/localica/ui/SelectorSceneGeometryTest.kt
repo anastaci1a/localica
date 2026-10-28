@@ -21,6 +21,27 @@ class SelectorSceneGeometryTest {
         assertEquals(q + second.offset, sample.backdrop)
         assertEquals(q, sample.ink)
         assertNotEquals(p + lensRay(shell.field(p), shell.span, .72f).offset, sample.backdrop)
+        // All constructor inputs that affect prepared optics must survive copy invalidation.
+        val original = scene()
+        val variants = listOf(
+            original.copy(shellDepth = 2.1f), original.copy(selectorDepth = 2.1f),
+            original.copy(shellFlattening = .8f), original.copy(selectorFlattening = .8f),
+            original.copy(shell = LensGeometry(Rect(0f, 0f, 320f, 92f), 35f)),
+            original.copy(selector = LensGeometry(Rect(4f, 4f, 116f, 84f), 30f)),
+        )
+        for (variant in variants) for (extend in listOf(false, true)) {
+            val field = variant.selector.field(p)
+            val selectorRay = lensRay(if (extend) field.copy(distance = field.distance.coerceAtLeast(0f)) else field,
+                variant.selector.span, variant.selectorDepth, variant.selectorFlattening)
+            val surface = p + selectorRay.offset
+            val shellField = variant.shell.field(surface)
+            val shellRay = if (shellField.distance >= 0f)
+                lensRay(shellField, variant.shell.span, variant.shellDepth, variant.shellFlattening) else null
+            val actual = variant.sample(p, true, extend)
+            assertEquals(selectorRay, actual.selectorRay)
+            assertEquals(shellRay, actual.shellRay)
+            assertEquals(surface + (shellRay?.offset ?: Offset.Zero), actual.backdrop)
+        }
     }
 
     @Test fun changingSlotStretchMovesOnlyInkNotTheBackground() {

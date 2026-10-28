@@ -35,16 +35,21 @@ internal data class SelectorSceneGeometry(
     val shellFlattening: Float = 0f,
     val selectorFlattening: Float = 0f,
 ) {
+    // Each immutable scene prepares material constants once, not twice per mesh vertex.
+    // Data-class copy() reconstructs these when either geometry/material changes.
+    private val shellOptics = LensOpticalProfile.create(shell.span, shellDepth, shellFlattening)
+    private val selectorOptics = LensOpticalProfile.create(selector.span, selectorDepth, selectorFlattening)
+
     fun sample(point: Offset, refractInk: Boolean, extendBoundary: Boolean = false): SelectorSceneSample {
         val field = selector.field(point)
         // Boundary triangles can straddle the final clip. Extend their ray instead
         // of interpolating a zero displacement into the visible rounded edge.
         val selectorRay = lensRay(if (extendBoundary) field.copy(distance = field.distance.coerceAtLeast(0f)) else field,
-            selector.span, selectorDepth, selectorFlattening)
+            selectorOptics)
         val surface = point + selectorRay.offset
         val shellField = shell.field(surface)
         val shellRay = if (shellField.distance >= 0f)
-            lensRay(shellField, shell.span, shellDepth, shellFlattening) else null
+            lensRay(shellField, shellOptics) else null
         val ink = if (refractInk && shellRay != null)
             slots.firstOrNull { it.displayed.contains(surface) }?.sourceAt(surface) else null
         return SelectorSceneSample(surface, surface + (shellRay?.offset ?: Offset.Zero),

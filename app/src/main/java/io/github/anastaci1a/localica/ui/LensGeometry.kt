@@ -149,16 +149,21 @@ internal fun glassGray(value: Float, opacity: Float): Int {
  * surface normal and ray path together; there is no zoom transform or inset plate. */
 internal fun lensRay(field: LensField, span: Float, depth: Float, flattening: Float = 0f): LensRay {
     if (field.distance < 0f || span <= 0f) return LensRay(Offset.Zero, 1f, 0f)
+    return lensRay(field, LensOpticalProfile.create(span, depth, flattening))
+}
+
+/** Renderer adapters reuse their surface-wide coefficients across every field sample. */
+internal fun lensRay(field: LensField, optics: LensOpticalProfile): LensRay {
+    val span = optics.span
+    if (field.distance < 0f || span <= 0f) return LensRay(Offset.Zero, 1f, 0f)
     val u = (1f - field.distance / span).coerceIn(0f, 1f)
     val root = sqrt(max(1f - u * u, .0004f))
-    val requested = depth.coerceIn(.05f, 4f)
-    val opticalDepth = requested / sqrt(1f + requested * requested / 4f)
-    val crown = span * .62f * opticalDepth
+    val crown = optics.crown
     // A continuously curved shoulder carries most of the optical power. The
     // center retains finite curvature without magnifying the whole face like a
     // thick spherical lens. This is the derivative of the same height field,
     // not an independent rim displacement or a flat-center mask.
-    val shoulder = .4f + .06f * flattening.coerceIn(0f, 1f)
+    val shoulder = optics.shoulder
     val height = crown * root * (1f + shoulder * u * u)
     val slope = crown / span * u / root * (1f - 2f * shoulder + 3f * shoulder * u * u)
     val gx = -field.inward.x * slope
@@ -175,7 +180,7 @@ internal fun lensRay(field: LensField, span: Float, depth: Float, flattening: Fl
     val inside = Offset(nx * factor, ny * factor)
     val outside = inside * 1.33f
     val exitZ = sqrt(max(1f - outside.getDistanceSquared(), .01f))
-    val offset = inside * (height / max(-rz, .12f)) + outside * (span * .32f * opticalDepth / exitZ)
+    val offset = inside * (height / max(-rz, .12f)) + outside * (optics.baseThickness / exitZ)
     return LensRay(offset, z, height, Offset(nx, ny))
 }
 
@@ -215,3 +220,4 @@ internal fun simpleLensGeometry(regions: List<SelectionRegion>, gap: Float): Len
     if (row.zipWithNext().any { (a, b) -> b.bounds.left - a.bounds.right !in 0f..gap }) return null
     return LensGeometry(Rect(left.left, left.top, row.last().bounds.right, left.bottom), rowRadius)
 }
+

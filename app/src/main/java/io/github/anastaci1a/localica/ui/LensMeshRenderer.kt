@@ -70,12 +70,13 @@ internal class LensMeshRenderer {
         if (geometryChanged || depth != opticalDepth || power != opticalPower || flattening != opticalFlattening || tone != opticalTone) {
             opticalDepth = depth; opticalPower = power; opticalFlattening = flattening; generation++
             opticalTone = tone
+            val optics = LensOpticalProfile.create(shape.span, depth, flattening)
             for (i in fields.indices) {
                 val f = fields[i]
                 // Boundary triangles include vertices just outside a rounded clip.
                 // Extend the boundary normal there; zeroing their ray introduces
                 // a sawtooth along the curve when those triangles interpolate.
-                val ray = lensRay(f.copy(distance = f.distance.coerceAtLeast(0f)), shape.span, depth, flattening)
+                val ray = lensRay(f.copy(distance = f.distance.coerceAtLeast(0f)), optics)
                 rays[2 * i] = ray.offset.x * power; rays[2 * i + 1] = ray.offset.y * power
                 highlights[i] = lensReflectionColor(ray, tone, power)
             }
@@ -129,3 +130,4 @@ internal class LensMeshRenderer {
         }
     }
 }
+

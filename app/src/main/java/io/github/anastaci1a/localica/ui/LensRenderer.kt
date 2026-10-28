@@ -232,10 +232,8 @@ internal class LensRenderer {
         shader.setFloatUniform("corner", geometry.corner.coerceIn(0f, geometry.span))
         shader.setFloatUniform("span", geometry.span)
         // Surface-wide constants belong to the draw, not every shaded pixel.
-        val d = state[7]
-        val opticalDepth = d / kotlin.math.sqrt(1f + d * d / 4f)
-        shader.setFloatUniform("optics", geometry.span * .62f * opticalDepth,
-            .4f + .06f * flattening.coerceIn(0f, 1f), geometry.span * .32f * opticalDepth)
+        val optics = LensOpticalProfile.create(geometry.span, depth, flattening)
+        shader.setFloatUniform("optics", optics.crown, optics.shoulder, optics.baseThickness)
         shader.setFloatUniform("power", power)
         shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)
@@ -269,3 +267,4 @@ internal class LensRenderer {
         private val emptyField by lazy { Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888) }
     }
 }
+
