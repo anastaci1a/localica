@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.PixelCopy
 import android.view.View
 import android.view.ViewTreeObserver
@@ -53,6 +54,7 @@ class GlassMenuViewportTouchTest {
     private lateinit var popupView: View
     private lateinit var output: File
     private var open by mutableStateOf(false)
+    private var nativeDismissRequests = 0
     private var mounted by mutableStateOf(true)
     private var stage by mutableIntStateOf(0)
     private val records = JSONArray()
@@ -80,7 +82,7 @@ class GlassMenuViewportTouchTest {
                         CompositionLocalProvider(LocalModalBackdrop provides source, LocalFrostedBackdrop provides source) {
                             GlassActionButton(R.drawable.ic_more, "Open long menu",
                                 Modifier.padding(32.dp).glassAnchor(anchor).testTag("long-menu-trigger")) { open = true }
-                            GlassMenu(open, anchor, { open = false }) {
+                            GlassMenu(open, anchor, { nativeDismissRequests++; open = false }) {
                                 val view = LocalView.current
                                 SideEffect { popupView = view }
                                 Box(Modifier.width(240.dp)) {
@@ -146,7 +148,7 @@ class GlassMenuViewportTouchTest {
             compose.runOnIdle { assertEquals(listOf(23), activated) }
             openByNativeTap()
             assertEquals("Fresh opening starts at the first row", 0f, scrollPosition().first, 0f)
-            pressSystemBack()
+            pressSystemBackAndAwaitDismissRequest()
             awaitClosed()
             openByNativeTap()
             // The shell is inset from the left window edge. Tap the real native scrim,
@@ -247,6 +249,39 @@ class GlassMenuViewportTouchTest {
         awaitGlassReturn(compose, anchor) { "open=$open activated=$activated" }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("long-menu-trigger"))
+    }
+
+    private fun pressSystemBackAndAwaitDismissRequest() {
+        val before = compose.runOnUiThread { nativeDismissRequests }
+        val virtualStart = compose.mainClock.currentTime
+        val wallStart = SystemClock.uptimeMillis()
+        val autoAdvance = compose.mainClock.autoAdvance
+        // Acceptance by Android is not delivery to this dialog. Keep the animation
+        // allowance untouched while the real native Back reaches onDismissRequest.
+        compose.mainClock.autoAdvance = false
+        fun state() = compose.runOnUiThread {
+            "before=$before requests=$nativeDismissRequests open=$open " +
+                "wallElapsed=${SystemClock.uptimeMillis() - wallStart} " +
+                "virtualElapsed=${compose.mainClock.currentTime - virtualStart}"
+        }
+        try {
+            Log.i("NativeBackTest", "requesting menu Back: ${state()}")
+            pressSystemBack()
+            compose.waitUntil(5000) { compose.runOnUiThread { nativeDismissRequests > before } }
+            compose.runOnUiThread {
+                assertEquals("One native dismissal request per Back", before + 1, nativeDismissRequests)
+                assertFalse("The native dismissal callback must close the menu", open)
+            }
+            Log.i("NativeBackTest", "menu Back acknowledged: ${state()}")
+        } catch (failure: Throwable) {
+            val detail = "menu Back acknowledgement failed: " +
+                runCatching { state() }.getOrElse { "diagnostic-error=$it" }
+            Log.e("NativeBackTest", detail, failure)
+            failure.addSuppressed(IllegalStateException(detail))
+            throw failure
+        } finally {
+            compose.mainClock.autoAdvance = autoAdvance
+        }
     }
 
     private fun capture(label: String, topFaded: Boolean, bottomFaded: Boolean) {
