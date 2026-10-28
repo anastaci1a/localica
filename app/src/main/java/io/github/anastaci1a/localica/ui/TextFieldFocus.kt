@@ -83,6 +83,70 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
     if (observation == null) { content(); return }
     val observe by rememberUpdatedState(observation)
     val view = androidx.compose.ui.platform.LocalView.current
+    // Diagnostic only: a separate zero-size sibling leaves Compose's listeners intact.
+    // Installing animation callbacks can perturb native scheduling; passing this
+    // instrumented build is not evidence that the uninstrumented failure is fixed.
+    DisposableEffect(view) {
+        val dialogWindow = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        val root = (dialogWindow?.decorView ?: view.rootView.takeIf { view.isAttachedToWindow }) as? android.view.ViewGroup
+        if (android.os.Build.VERSION.SDK_INT < 30 || root == null) onDispose { } else {
+            val type = android.view.WindowInsets.Type.ime()
+            fun emit(phase: String, insets: android.view.WindowInsets? = null,
+                animation: android.view.WindowInsetsAnimation? = null, extra: String = "") {
+                val native = view.rootWindowInsets
+                runCatching { observe("nativeLifecycle phase=$phase " +
+                    "uptime=${android.os.SystemClock.uptimeMillis()} view=${System.identityHashCode(view)} " +
+                    "root=${System.identityHashCode(root)} rootClass=${root.javaClass.name} attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()} " +
+                    "rootVisible=${native?.isVisible(type)} rootHeight=${native?.getInsets(type)?.bottom} " +
+                    "eventVisible=${insets?.isVisible(type)} eventHeight=${insets?.getInsets(type)?.bottom} " +
+                    "animation=${animation?.let { System.identityHashCode(it) }} mask=${animation?.typeMask} " +
+                    "fraction=${animation?.fraction} duration=${animation?.durationMillis} $extra") }
+                    .onFailure { android.util.Log.w("TextEditingObservation", "Native lifecycle observer failed") }
+            }
+            val probe = object : android.view.View(view.context) {
+                override fun onApplyWindowInsets(insets: android.view.WindowInsets): android.view.WindowInsets {
+                    emit("apply", insets)
+                    return insets
+                }
+                override fun onWindowFocusChanged(focused: Boolean) {
+                    super.onWindowFocusChanged(focused)
+                    emit("windowFocus=$focused")
+                }
+                override fun onAttachedToWindow() {
+                    super.onAttachedToWindow()
+                    emit("attach")
+                }
+                override fun onDetachedFromWindow() {
+                    emit("detach")
+                    super.onDetachedFromWindow()
+                }
+            }.apply {
+                isFocusable = false
+                isClickable = false
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                setWindowInsetsAnimationCallback(object : android.view.WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                    override fun onPrepare(animation: android.view.WindowInsetsAnimation) { emit("prepare", animation = animation) }
+                    override fun onStart(animation: android.view.WindowInsetsAnimation,
+                        bounds: android.view.WindowInsetsAnimation.Bounds): android.view.WindowInsetsAnimation.Bounds {
+                        emit("start", animation = animation, extra = "lower=${bounds.lowerBound} upper=${bounds.upperBound}")
+                        return bounds
+                    }
+                    override fun onProgress(insets: android.view.WindowInsets,
+                        runningAnimations: MutableList<android.view.WindowInsetsAnimation>): android.view.WindowInsets {
+                        emit("progress", insets, extra = "running=" + runningAnimations.joinToString { "${System.identityHashCode(it)}:${it.typeMask}:${it.fraction}" })
+                        return insets
+                    }
+                    override fun onEnd(animation: android.view.WindowInsetsAnimation) { emit("end", animation = animation) }
+                })
+            }
+            root.addView(probe, 0, android.view.ViewGroup.LayoutParams(0, 0))
+            probe.requestApplyInsets()
+            onDispose {
+                probe.setWindowInsetsAnimationCallback(null)
+                root.removeView(probe)
+            }
+        }
+    }
     val trace = remember(view) {
         val main = android.os.Looper.getMainLooper()
         val handler = android.os.Handler(main)
@@ -154,3 +218,4 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
         } else false
     }
 }
+
