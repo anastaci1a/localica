@@ -440,6 +440,26 @@ class SearchImeMotionTest {
     private fun exerciseDismissal(outside: Boolean, reduced: Boolean = false) = withDockedKeyboard {
         fixture(true, reduced)
         try {
+            if (outside && android.os.Build.VERSION.SDK_INT >= 30) {
+                compose.runOnUiThread {
+                    nativeReturnProbe = NativeReturnProbe().also { probe ->
+                        (compose.activity.window.decorView as android.view.ViewGroup)
+                            .addView(probe, 0, android.view.ViewGroup.LayoutParams(0, 0))
+                        ViewCompat.requestApplyInsets(probe)
+                    }
+                }
+                // Register before the popup owns input, rather than racing its
+                // dismissal against the host's first traversal of a new child.
+                // Native traversal runs independently of the controlled Compose clock.
+                compose.waitUntil(5000) {
+                    compose.runOnUiThread {
+                        requireNotNull(nativeReturnProbe).let { probe ->
+                            probe.isAttachedToWindow && ViewCompat.isLaidOut(probe) &&
+                                !probe.isLayoutRequested && ViewCompat.getRootWindowInsets(probe) != null
+                        }
+                    }
+                }
+            }
             val home = compose.runOnUiThread { anchor.bounds }
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
             opened()
@@ -450,14 +470,7 @@ class SearchImeMotionTest {
             verifyOpening(home, reduced)
             compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
             val raised = compose.runOnUiThread { samples.last().bounds }
-            if (outside && android.os.Build.VERSION.SDK_INT >= 30) compose.runOnUiThread {
-                nativeReturnProbe = NativeReturnProbe().also { probe ->
-                    (compose.activity.window.decorView as android.view.ViewGroup)
-                        .addView(probe, 0, android.view.ViewGroup.LayoutParams(0, 0))
-                    ViewCompat.requestApplyInsets(probe)
-                    probe.arm()
-                }
-            }
+            compose.runOnUiThread { nativeReturnProbe?.arm() }
             android.util.Log.i("SearchImeMotionTest", "Native dismissal requested outside=$outside uptime=${SystemClock.uptimeMillis()}")
             if (outside) {
                 val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
@@ -722,3 +735,4 @@ class SearchImeMotionTest {
         }
     }
 }
+
