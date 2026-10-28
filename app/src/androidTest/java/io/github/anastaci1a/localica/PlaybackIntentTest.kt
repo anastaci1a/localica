@@ -32,6 +32,56 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun orderedSeeksSurviveUnknownDurationAndNeverLeakToTheFollowingVisit() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name)
+        barrier()
+        withContext(Dispatchers.Main) {
+            player.durationOverride = androidx.media3.common.C.TIME_UNSET
+            player.positionSeeks.clear()
+            queues.next(); queues.seek(9000); queues.next()
+        }
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertEquals(listOf("duplicate-1" to 9000L), player.positionSeeks.toList())
+            assertEquals("duplicate-2", player.currentMediaItem!!.mediaId)
+            assertEquals(0L, player.currentPosition)
+            assertFalse(player.playWhenReady)
+            player.positionSeeks.clear()
+            queues.seek(3000); queues.seek(6000)
+        }
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertEquals(listOf("duplicate-2" to 3000L, "duplicate-2" to 6000L), player.positionSeeks.toList())
+            assertEquals(6000L, player.currentPosition)
+            player.durationOverride = 5000L
+            player.positionSeeks.clear()
+            queues.seek(9000); queues.seek(-10)
+        }
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertEquals(listOf("duplicate-2" to 5000L, "duplicate-2" to 0L), player.positionSeeks.toList())
+            assertEquals(0L, player.currentPosition)
+            player.durationOverride = 0L
+            player.positionSeeks.clear()
+            queues.seek(1000)
+        }
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertTrue("Known empty media retains its no-seek contract", player.positionSeeks.isEmpty())
+            player.durationOverride = null
+        }
+        queues.clearPlayback()
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertNull(player.currentMediaItem)
+            player.positionSeeks.clear()
+            queues.seek(500)
+        }
+        barrier()
+        withContext(Dispatchers.Main) { assertTrue(player.positionSeeks.isEmpty()); assertFalse(player.playWhenReady) }
+    }
+
     @Test fun queuedSkipsPublishEveryVisitBeforeOneSlowDurableCheckpoint() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         queues.rename(first.id, first.name) // Await the initial cursor snapshot before installing a disk gate.
@@ -1056,6 +1106,7 @@ class PlaybackIntentTest {
 
     private class RecordingPlayer(val engine: ExoPlayer) : ForwardingPlayer(engine) {
         val seekVisits = CopyOnWriteArrayList<String>()
+        val positionSeeks = CopyOnWriteArrayList<Pair<String?, Long>>()
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
             seekVisits.add(getMediaItemAt(mediaItemIndex).mediaId)
             super.seekTo(mediaItemIndex, positionMs)
@@ -1066,6 +1117,7 @@ class PlaybackIntentTest {
         override fun getDuration() = durationOverride ?: super.getDuration()
         override fun seekTo(positionMs: Long) {
             check(!rejectSeek) { "Controlled native seek failure" }
+            positionSeeks.add(currentMediaItem?.mediaId to positionMs)
             super.seekTo(positionMs)
         }
         var suppression: Int? = null

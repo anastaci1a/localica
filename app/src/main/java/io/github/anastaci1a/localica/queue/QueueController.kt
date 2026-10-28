@@ -672,7 +672,19 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         intents.apply(revision, fallback) { attached.playWhenReady = it }
     }
     fun seek(positionMs: Long) = submit {
-        player?.let { if (it.duration != C.TIME_UNSET && it.duration > 0) it.seekTo(positionMs.coerceIn(0, it.duration)) }
+        player?.let { attached ->
+            if (attached.currentMediaItem != null) {
+                val duration = attached.duration
+                // Next can change the native item before its duration is ready. Media3 masks
+                // this ordered seek until preparation completes; do not silently drop it.
+                val target = when {
+                    duration == C.TIME_UNSET -> positionMs.coerceAtLeast(0)
+                    duration > 0 -> positionMs.coerceIn(0, duration)
+                    else -> return@let
+                }
+                attached.seekTo(target)
+            }
+        }
         capture()
     }
     /** Main-thread snapshot of the service-owned player; no command or persistence work. */
