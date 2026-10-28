@@ -89,13 +89,35 @@ jobs:
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
         with:
           distribution: temurin
-          java-version: '17.0.20.1'
+          # Use the original prototype's supported major selector, not java -version text.
+          java-version: '17'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
       - name: Create fresh immutable provenance and source method inventory
         run: bash harness/.github/run-ime-control.sh prepare "$EXACT_CASE" "$GITHUB_WORKSPACE/source" "$GITHUB_WORKSPACE/tooling" "$GITHUB_WORKSPACE/ime-control-evidence-$EXACT_CASE"
+      - name: Capture actual Java 17 identity (not patch equivalence)
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,re,subprocess
+          root = pathlib.Path(os.environ['GITHUB_WORKSPACE']) / ('ime-control-evidence-' + os.environ['EXACT_CASE'])
+          raw_path = root / 'java-identity.txt'
+          command = ['java', '-XshowSettings:properties', '-version']
+          with raw_path.open('xb') as output:
+              subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=30, check=True)
+          raw = raw_path.read_bytes()
+          text = raw.decode()
+          majors = re.findall(r'^\s*java\.specification\.version = (\S+)\s*$', text, re.M)
+          versions = re.findall(r'^\s*java\.version = (\S+)\s*$', text, re.M)
+          if majors != ['17'] or len(versions) != 1 or not re.fullmatch(r'17(?:\.[0-9]+)*(?:[+_-][A-Za-z0-9.+_-]+)?', versions[0]):
+              raise SystemExit('Requires one unambiguous Java 17 runtime identity; inspect java-identity.txt')
+          receipt = dict(requested_selector='17', required_major=17, actual_version=versions[0],
+              command=command, raw_sha256=hashlib.sha256(raw).hexdigest(),
+              exact_patch_equivalence=False, full_environment_equivalence=False)
+          with (root / 'java-identity.json').open('x') as output:
+              json.dump(receipt, output, indent=2); output.write('\n')
+          PY
       - name: Install the pinned live evidence publisher
         run: npm ci --prefix tooling/.github/test-evidence --ignore-scripts --no-audit --no-fund
       - name: Enable emulator acceleration
