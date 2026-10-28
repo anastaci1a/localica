@@ -1,0 +1,63 @@
+{
+  "baseline": {
+    "sha": "1a33ec700da54044a552fbf45d012854d1ffee5c",
+    "tree": "e029d59d646a577d497c0c798c8de1a4d8cc5315",
+    "files": {
+      ".github/run-prototype-tests.sh": "45ef0f701814dba458c50b96ff0aabb016c2cfdcf07449b2f6e5f35c4af82bf4",
+      ".github/tests/test_run_prototype_tests.py": "bac1890daef4bd1768598fb26eb07b697e2daa9f5bd80a35dd44e0aebd57cb2f"
+    }
+  },
+  "candidate": {
+    "sha": "ca28f49c3b50d73d47ddf06aeaaae407366fe87c",
+    "tree": "0577c2ce8f4bb9aad5a9ec2a7785672326a0139c",
+    "files": {
+      ".github/run-prototype-tests.sh": "86fa262ad10b2af1e8d55361b0ab284e6c04e8876a6edf398493a1914e8e40b6",
+      ".github/tests/test_run_prototype_tests.py": "b56bd082c9c8c9e138b3831959bdd6eb2d9c2b406d3e12a49bc27477ebaea781"
+    }
+  },
+  "artifacts": {
+    "26": {
+      "id": 12788876999,
+      "name": "prototype-focused-api-26",
+      "digest": "sha256:424b9a1fd5a9948945856db584ac080e05cc84a3a48834c7c28ea363533ed47a",
+      "files": {
+        "app/build/outputs/androidTest-results/connected/debug/TEST-emulator-5554 - 8.0.0-_app-.xml": "e2fef71276acc090b57aefcd4ab4d3b7530c722976783c50f10940ed03af18dc",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.DialogChromeLayoutTest-native360x640Font2RetainsSharedChromeAndEveryRepeatControl.txt": "a5ec62ebd1493faf996dbfbcd964a16f7f7380d545b079ed031e7ea8f6776098",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.DialogChromeLayoutTest-native400x800Font2RetainsSharedChromeAndEveryRepeatControl.txt": "83ad853f6b8ab245cd395b16b8390c07aeab6a59beca8d12499d97305d91b7bf",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.PlayerBackgroundPolarityTest-nativeBlurRetainsVerifiedInkAsDistinctUnavailableThenRecovers.txt": "9cf382ef18bef1560b27b9918f28b6cd964644228ecd82dc6ea5aeb444330e07",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest-native360x640Font2SectionsExposeEveryControlAndStageDrafts.txt": "4853ad8bdbfccb87bcbbfa10e9d9969f6e1fdea7d5df7528936200a87772eaad",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest-native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize.txt": "72b7e1deeadab7cb3989bd0ad6400ec93e1b2b186dff8b74eb315d8a781c2e62",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest-native400x800Font2SectionsExposeEveryControlAndStageDrafts.txt": "8536deeb8815c783b545410abe030ec933b4b93676e458ead3bb41942069c04c",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest-native400x800PhoneFont2SectionsFitSafeInsetsWithoutWindowResize.txt": "8965b85270e3236066e80ea14fa74fe503af3373abb6acef9552ac687d051f46",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.SelectionLensTest-translatingASelectionReusesItsDistanceField.txt": "84df0445f171824ca67ed88016de90ab8c2d3841251b7781f9a35c898fe9fc99",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.SelectionLensTest-translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt.txt": "fa1408bcb50b23da122d32bdb17b07aeae67b092a046ee89c08474bb3d20b6d6",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 8.0.0/logcat-io.github.anastaci1a.localica.TagEditorChromeLayoutTest-native360x640Font2KeepsSharedChromeAndScrollableFullSizeFields.txt": "571a6baa66b24c5d398b2400c92ce33d8a4a3fc7ed4e4f6139359d35bb1249a9",
+        "prototype-evidence/context.txt": "e9cecf311510a095b96e0dc10f4ba71401b91a12dfe713a047b48185c9bb04f9",
+        "prototype-evidence/expected-methods.json": "1564b494e405300f42b0d7de7cad96a39e810db7aa38d728f76d26079950d7eb",
+        "prototype-evidence/live/observed/events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "prototype-evidence/live/observed/manifest.json": "653c42e3b0a6df0484d7990094f0e6b2bb2a8ed30cffc7a22e3b9fb2ff7f5764",
+        "prototype-evidence/selectors.txt": "1fabd8ca3dd11d482b6bf32229f5edb1fc601c9885be99a5e5308f853a463656"
+      }
+    },
+    "36": {
+      "id": 12788152454,
+      "name": "prototype-focused-api-36",
+      "digest": "sha256:f1f542ab42a3acc39601bd0a21c6ed6f8b6cd0ba68dc8658afcbb53bfa01b29c",
+      "files": {
+        "app/build/outputs/androidTest-results/connected/debug/TEST-emulator-5554 - 16-_app-.xml": "dba65c0b5ae1e8e4bfc174958f212aa2999b3f73116a1daaa2b61dd2b1528a10",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 16/logcat-io.github.anastaci1a.localica.DialogChromeLayoutTest-native360x640Font2RetainsSharedChromeAndEveryRepeatControl.txt": "9195eee48f42721a1f00fb72be23c38fb4d98591b510668a5dedd21e93e4f3fb",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 16/logcat-io.github.anastaci1a.localica.DialogChromeLayoutTest-native400x800Font2RetainsSharedChromeAndEveryRepeatControl.txt": "8f32dbddadb61b8d9c26b6b282de77f83cd2e6a92a0aaa2af0d85e909d56559c",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 16/logcat-io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest-native360x640Font2SectionsExposeEveryControlAndStageDrafts.txt": "29aa95df7a9aa3497263b42e9871c4df34b6b5d8512c5382ade2cd92fba0d149",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 16/logcat-io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest-native360x640PhoneFont2SectionsFitSafeInsetsWithoutWindowResize.txt": "ecd3a327b1b2858a73f6269918568794a2057dbe8f331493b83c0af6c96c2554",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 16/logcat-io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest-native400x800Font2SectionsExposeEveryControlAndStageDrafts.txt": "d33181a52a929b1022fb27e324d63d5b6b9b843a0258ba8ec056c5f678a14d3b",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 16/logcat-io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest-native400x800PhoneFont2SectionsFitSafeInsetsWithoutWindowResize.txt": "78b7e78fa8f3997e943208c1856ac2a98e1f125c3d654712d4d4a20d772d1e6a",
+        "app/build/outputs/androidTest-results/connected/debug/emulator-5554 - 16/logcat-io.github.anastaci1a.localica.TagEditorChromeLayoutTest-native360x640Font2KeepsSharedChromeAndScrollableFullSizeFields.txt": "caebb0b5cd2365ec5e9fc928a183e380d571712324fc353a8d3548f10050dd8d",
+        "prototype-evidence/context.txt": "fa3786c9d6efe531fc99f0185ad07794ac5c14873b4b814f0133c81051f20b84",
+        "prototype-evidence/expected-methods.json": "1564b494e405300f42b0d7de7cad96a39e810db7aa38d728f76d26079950d7eb",
+        "prototype-evidence/live/observed/events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "prototype-evidence/live/observed/manifest.json": "15ffea67fd5c04373bfea27b81363ee5085990a3bef440a2f5361697de046573",
+        "prototype-evidence/selectors.txt": "1fabd8ca3dd11d482b6bf32229f5edb1fc601c9885be99a5e5308f853a463656"
+      }
+    }
+  }
+}

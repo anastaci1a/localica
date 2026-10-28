@@ -1,0 +1,103 @@
+name: Hosted SelectionLens SDK accounting replay (not native or release)
+'on':
+  push:
+    branches: [test/selection-lens-sdk-skip-validation-20261028]
+    paths:
+      - .github/workflows/hosted-selection-lens-sdk-replay.yml
+      - .github/replay-selection-lens-sdk-skips.py
+      - .github/selection-lens-sdk-replay-inputs.json
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: selection-lens-sdk-replay-${{ github.ref }}
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+jobs:
+  replay:
+    if: github.repository == 'anastaci1a/localica' && github.ref == 'refs/heads/test/selection-lens-sdk-skip-validation-20261028'
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout this isolated harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: .github
+      - name: Checkout exact reviewed correction
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ca28f49c3b50d73d47ddf06aeaaae407366fe87c
+          path: candidate
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Checkout original source for negative control
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 1a33ec700da54044a552fbf45d012854d1ffee5c
+          path: baseline
+          persist-credentials: false
+      - name: Create isolated Python dependency environment
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          python3 -m venv "$RUNNER_TEMP/selection-lens-replay-venv"
+          "$RUNNER_TEMP/selection-lens-replay-venv/bin/python" -m pip install --disable-pip-version-check PyYAML==6.0.2
+          echo "$RUNNER_TEMP/selection-lens-replay-venv/bin" >> "$GITHUB_PATH"
+      - name: Run unchanged and added runner contracts
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s candidate/.github/tests -p test_run_prototype_tests.py -v 2>&1 | tee evidence/contracts-normal.log
+          python -O -m unittest discover -s candidate/.github/tests -p test_run_prototype_tests.py -v 2>&1 | tee evidence/contracts-optimized.log
+      - name: Retain original artifact metadata using read-only token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/anastaci1a/localica/actions/artifacts/12788876999 > evidence/api26-artifact.json
+          gh api repos/anastaci1a/localica/actions/artifacts/12788152454 > evidence/api36-artifact.json
+      - name: Download exact original API26 artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '12788876999'
+          repository: anastaci1a/localica
+          run-id: '40620520114'
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: originals/api26
+      - name: Download exact original API36 artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '12788152454'
+          repository: anastaci1a/localica
+          run-id: '40620520114'
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: originals/api36
+      - name: Replay original evidence without running Android or modifying originals
+        run: |
+          set -euo pipefail
+          python harness/.github/replay-selection-lens-sdk-skips.py --baseline baseline --candidate candidate --pins harness/.github/selection-lens-sdk-replay-inputs.json --api26 originals/api26 --api36 originals/api36 --evidence evidence
+      - name: Retain validation inputs and original outputs even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: selection-lens-sdk-accounting-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: |
+            evidence/
+            originals/
+            harness/.github/workflows/hosted-selection-lens-sdk-replay.yml
+            harness/.github/replay-selection-lens-sdk-skips.py
+            harness/.github/selection-lens-sdk-replay-inputs.json
+            candidate/.github/run-prototype-tests.sh
+            candidate/.github/tests/test_run_prototype_tests.py
+            baseline/.github/run-prototype-tests.sh
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
