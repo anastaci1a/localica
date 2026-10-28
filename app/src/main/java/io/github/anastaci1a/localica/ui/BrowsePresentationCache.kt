@@ -182,7 +182,18 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
         source, route, style, sorts, sourcesReady, cachedPresentation)
     val queryOwner = remember(source, route, style, sorts, sourcesReady, openingPresentation) { Any() }
     val latestQueryOwner by rememberUpdatedState(queryOwner)
+    fun trace(phase: String, candidate: PresentedBrowse? = null) {
+        android.util.Log.i("BrowseQueryTrace", "phase=$phase route=${route.key} " +
+            "owner=${System.identityHashCode(queryOwner)} latest=${System.identityHashCode(latestQueryOwner)} " +
+            "queues=${System.identityHashCode(source.queues)} " +
+            "entries=${source.queues.firstOrNull { it.id == route.collection?.id }?.entries?.let(System::identityHashCode)} " +
+            "candidateQueues=${candidate?.source?.queues?.let(System::identityHashCode)} " +
+            "candidateItems=${candidate?.result?.items?.size} " +
+            "matches=${candidate?.let { matchesBrowseRequest(it, source, route, style, sorts) }}")
+    }
+    SideEffect { trace("composed") }
     val queriedPresentation by produceState(openingPresentation ?: cachedPresentation, queryOwner) {
+        trace("producer-start")
         if (!sourcesReady) { value = null; return@produceState }
         if (openingPresentation != null) {
             value = openingPresentation
@@ -190,13 +201,17 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
             return@produceState
         }
         if (cachedPresentation != null) { value = cachedPresentation; return@produceState }
+        trace("query-dispatch")
         val queried = withContext(queryDispatcher) {
+            trace("query-enter")
             val context = currentCoroutineContext()
             BrowseQueries.evaluate(library, playlists, route, style.query(), queues, libraryFilters.allCollections, sorts) { context.ensureActive() }
         }
-        if (latestQueryOwner !== queryOwner) return@produceState
+        trace("query-return")
+        if (latestQueryOwner !== queryOwner) { trace("query-stale"); return@produceState }
         value = PresentedBrowse(route, style, queried, source, sorts).also {
             presentationCache.put(library, playlists, queues, libraryFilters, it)
+            trace("query-publish", it)
         }
     }
     // produceState retains its previous value until its restarted producer runs.
@@ -206,11 +221,13 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     var displayedFilter by remember(route.key) { mutableStateOf(route.filter) }
     val reveal = remember(route.key) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
     LaunchedEffect(source, route, style, candidate, reducedMotion, sorts, sourcesReady, animateArrival) {
+        trace("presentation-effect", candidate)
         if (!sourcesReady) { reveal.snapTo(0f); return@LaunchedEffect }
         if (displayedFilter != route.filter) {
             if (reducedMotion) reveal.snapTo(0f) else reveal.animateTo(0f, androidx.compose.animation.core.tween(110))
         }
         if (candidate != null && matchesBrowseRequest(candidate, source, route, style, sorts)) {
+            trace("presentation-accept", candidate)
             presentation = candidate
             displayedFilter = route.filter
             if (reducedMotion || !animateArrival) reveal.snapTo(1f) else if (reveal.value < 1f)
@@ -218,6 +235,8 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
         }
     }
     val displayed = openingPresentation ?: browseLayoutPresentation(presentation, source, route, style, sorts)
+    SideEffect { trace("displayed", displayed) }
     return BrowsePresentationState(displayed.takeIf { sourcesReady }, openingPresentation != null || cachedPresentation != null, reveal,
         !sourcesReady || displayed?.source != source || displayed?.route != route || displayed?.style != style || displayed?.sorts != sorts)
 }
+
