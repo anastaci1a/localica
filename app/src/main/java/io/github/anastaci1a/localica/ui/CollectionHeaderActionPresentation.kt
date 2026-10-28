@@ -100,13 +100,20 @@ internal fun CollectionHeaderActionPresentation(owner: CollectionPinchHeader, so
                 }
             }
         }) { measurables, constraints ->
-            val rect = checkNotNull(owner.actionStageRect())
-            val child = measurables.single().measure(Constraints.fixed(
-                rect.width.roundToInt().coerceAtLeast(1), rect.height.roundToInt().coerceAtLeast(1)))
-            layout(constraints.maxWidth, constraints.maxHeight) {
-                // Absolute viewport coordinates, not RTL-relative offsets. Using
-                // real placement also moves the source sampling registration.
-                child.place(rect.left.roundToInt(), rect.top.roundToInt())
+            val rect = owner.actionStageRect()
+            if (rect == null) {
+                // The transaction may retire between composition and lookahead
+                // measurement. The ordinary header already owns this endpoint;
+                // leave the stale passive producer unplaced until recomposition.
+                layout(constraints.maxWidth, constraints.maxHeight) {}
+            } else {
+                val child = measurables.single().measure(Constraints.fixed(
+                    rect.width.roundToInt().coerceAtLeast(1), rect.height.roundToInt().coerceAtLeast(1)))
+                layout(constraints.maxWidth, constraints.maxHeight) {
+                    // Absolute viewport coordinates, not RTL-relative offsets.
+                    // Real placement moves the source sampling registration too.
+                    child.place(rect.left.roundToInt(), rect.top.roundToInt())
+                }
             }
         }
     }
