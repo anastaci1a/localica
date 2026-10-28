@@ -74,7 +74,7 @@ class ImeOwnershipLifecycleTest {
         compose.setContent {
             val view = LocalView.current
             SideEffect { host = view }
-            if (installed) CompositionLocalProvider(LocalTextEditingObservation provides { log("input $it") }) {
+            if (installed) CompositionLocalProvider(LocalTextEditingObservation provides { log("input $it"); witness?.inputEvent(it) }) {
                 TextEditingFocusHost {
                     Column(Modifier.fillMaxSize().padding(24.dp)) {
                         BasicTextField("First", {}, Modifier.testTag("first").clearTextFocusOnBack().padding(24.dp))
@@ -134,9 +134,14 @@ class ImeOwnershipLifecycleTest {
     }
     private fun transfer() {
         fixture(); compose.onNodeWithTag("first").performClick(); awaitShown()
+        val confirmedBeforeTransfer = compose.runOnUiThread {
+            requireNotNull(witness).shadow.confirms.also { assertTrue("First show must have completed before transfer", it > 0) }
+        }
         compose.onNodeWithTag("second").performClick(); awaitShown()
         compose.onNodeWithTag("second").assertIsFocused()
-        compose.runOnUiThread { witness?.snapshot("transferred") }
+        compose.runOnUiThread { witness?.snapshot("transferred")
+            assertEquals("Already-visible transfer supplies no new show completion", confirmedBeforeTransfer, requireNotNull(witness).shadow.confirms)
+            assertEquals("Continuous-window transfer preserves receipt without new completion", ImeExposureShadow.Receipt.ACTIVE, requireNotNull(witness).shadow.receipt) }
         hide(); awaitUnfocused()
         assertEquals(1, compose.runOnUiThread { events.count { "endEditing reason=imeObservation" in it } })
     }

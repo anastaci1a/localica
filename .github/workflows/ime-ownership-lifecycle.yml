@@ -1,12 +1,12 @@
-name: IME ownership native lifecycle experiment (not delivery)
+name: IME exposure shadow decision experiment (not delivery)
 'on':
   push:
     branches:
-    - test/ime-ownership-lifecycle-20261028
+    - test/ime-exposure-shadow-20261028
 permissions:
   contents: read
 concurrency:
-  group: ime-ownership-lifecycle-${{ github.ref }}
+  group: ime-exposure-shadow-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   ownership_36:

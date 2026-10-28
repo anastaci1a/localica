@@ -15,6 +15,8 @@ internal class NativeImeOwnershipWitness(
 ) {
     private val root = host.rootView as ViewGroup
     private val type = WindowInsets.Type.ime()
+    val shadow = ImeExposureShadow { record("${SystemClock.uptimeMillis()} $it") }
+    fun inputEvent(event: String) = shadow.input(event, SystemClock.uptimeMillis())
     val prepared = mutableSetOf<Int>()
     val started = mutableSetOf<Int>()
     val ended = mutableSetOf<Int>()
@@ -28,10 +30,11 @@ internal class NativeImeOwnershipWitness(
     }
     private val probe = object : View(host.context) {
         override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
-            emit("apply", insets = insets); return insets
+            emit("apply", insets = insets); shadow.insets(insets.isVisible(type)); return insets
         }
         override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
             super.onWindowFocusChanged(hasWindowFocus); emit("focus=$hasWindowFocus")
+            shadow.availability(hasWindowFocus)
         }
     }.apply {
         isFocusable = false; isClickable = false
@@ -41,10 +44,12 @@ internal class NativeImeOwnershipWitness(
                 if (animation.typeMask and type == 0) return
                 prepared += System.identityHashCode(animation)
                 emit("prepare", animation)
+                shadow.prepare(System.identityHashCode(animation), host.rootWindowInsets?.isVisible(type), SystemClock.uptimeMillis())
                 onPrepareIme?.invoke(animation)
             }
             override fun onStart(animation: WindowInsetsAnimation, bounds: WindowInsetsAnimation.Bounds): WindowInsetsAnimation.Bounds {
-                if (animation.typeMask and type != 0) { started += System.identityHashCode(animation); emit("start", animation) }
+                if (animation.typeMask and type != 0) { started += System.identityHashCode(animation); emit("start", animation)
+                    shadow.start(System.identityHashCode(animation), host.rootWindowInsets?.isVisible(type)) }
                 return bounds
             }
             override fun onProgress(insets: WindowInsets, runningAnimations: MutableList<WindowInsetsAnimation>): WindowInsets {
@@ -52,20 +57,25 @@ internal class NativeImeOwnershipWitness(
                 return insets
             }
             override fun onEnd(animation: WindowInsetsAnimation) {
-                if (animation.typeMask and type != 0) { ended += System.identityHashCode(animation); emit("end", animation) }
+                if (animation.typeMask and type != 0) { ended += System.identityHashCode(animation); emit("end", animation)
+                    shadow.end(System.identityHashCode(animation), animation.fraction, host.rootWindowInsets?.isVisible(type), SystemClock.uptimeMillis()) }
             }
         })
     }
     private val controller = root.windowInsetsController
-    private val control = WindowInsetsController.OnControllableInsetsChangedListener { _, types -> emit("control=$types") }
+    private val control = WindowInsetsController.OnControllableInsetsChangedListener { _, types ->
+        emit("control=$types"); shadow.availability(host.hasWindowFocus(), types and type != 0)
+    }
     init {
         check(android.os.Build.VERSION.SDK_INT >= 31)
+        shadow.insets(host.rootWindowInsets?.isVisible(type))
+        shadow.availability(host.hasWindowFocus())
         root.addView(probe, 0, ViewGroup.LayoutParams(0, 0))
         controller?.addOnControllableInsetsChangedListener(control)
         emit("attached")
         // Do not requestApplyInsets: record only normal platform dispatch.
     }
-    fun snapshot(label: String) = emit("snapshot-$label")
+    fun snapshot(label: String) { emit("snapshot-$label"); shadow.snapshot(label) }
     fun dispose() {
         controller?.removeOnControllableInsetsChangedListener(control)
         probe.setWindowInsetsAnimationCallback(null); root.removeView(probe)

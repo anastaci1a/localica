@@ -135,7 +135,7 @@ class FloatingImeLifecycleTest {
                 val from = WindowInsets.imeAnimationSource.getBottom(density)
                 val to = WindowInsets.imeAnimationTarget.getBottom(density)
                 SideEffect { host = view; composeVisible = visible; current = ime; source = from; target = to }
-                if (contentInstalled) CompositionLocalProvider(LocalTextEditingObservation provides { decisions += "${SystemClock.uptimeMillis()} $it" }) {
+                if (contentInstalled) CompositionLocalProvider(LocalTextEditingObservation provides { decisions += "${SystemClock.uptimeMillis()} $it"; ownershipWitness?.inputEvent(it) }) {
                     TextEditingFocusHost {
                         Column(Modifier.fillMaxSize().padding(24.dp)) {
                             BasicTextField("First", {}, Modifier.testTag("first").clearTextFocusOnBack().padding(24.dp))
@@ -168,10 +168,17 @@ class FloatingImeLifecycleTest {
                 compose.runOnUiThread { decisions.count { "endEditing reason=imeObservation" in it } })
             compose.onNodeWithTag("first").performClick()
             awaitFloating("host-refocused", component)
+            compose.runOnUiThread {
+                requireNotNull(ownershipWitness).snapshot("shadow-refocused")
+                assertTrue("Shadow has historical completed floating show", requireNotNull(ownershipWitness).shadow.confirms > 0)
+                assertEquals("Refocus cannot manufacture completion", ImeExposureShadow.Receipt.SUSPENDED, requireNotNull(ownershipWitness).shadow.receipt)
+            }
             compose.onNodeWithTag("second").performClick()
             awaitFloating("already-visible-second", component)
             compose.onNodeWithTag("second").assertIsFocused()
             hideFromService(testPackage, "second")
+            // Record, do not fabricate timely dismissal from a later completion.
+            compose.runOnUiThread { requireNotNull(ownershipWitness).snapshot("after-shadow-refocus-hide") }
             assertEquals(0, compose.runOnUiThread { emptyReturns })
             compose.onNodeWithTag("empty").performClick()
             awaitFloating("empty-reopened", component)
@@ -180,6 +187,11 @@ class FloatingImeLifecycleTest {
             compose.onNodeWithTag("first").performClick()
             awaitFloating("nonempty-reopened", component)
             hideFromService(testPackage, "first")
+            compose.runOnUiThread {
+                assertTrue("Must actually observe completed suspended hide, not infer it from refocus",
+                    requireNotNull(ownershipWitness).shadow.suspendedHideCompletions > 0)
+                requireNotNull(ownershipWitness).snapshot("all-shadow-lifecycle-evidence")
+            }
         } catch (error: Throwable) { failure = error; throw error }
         finally {
             var cleanupError: Throwable? = null
