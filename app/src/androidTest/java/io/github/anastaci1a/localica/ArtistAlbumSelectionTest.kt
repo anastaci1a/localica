@@ -30,13 +30,25 @@ class ArtistAlbumSelectionTest {
                 ArtistAlbumChoices(albums, explicit) { explicit = it; changes += it }
             }
         } }
-        fun album(name: String) = compose.onNodeWithText(name).performScrollTo()
+        fun album(name: String): SemanticsNodeInteraction {
+            // Position the LazyRow item itself before injecting a physical contact.
+            // A retained offscreen descendant can survive performScrollTo without
+            // becoming a displayed hit target in this isolated carousel fixture.
+            val index = albums.indexOfFirst { it.title == name }
+            check(index >= 0)
+            compose.onNode(hasScrollToIndexAction()).performScrollToIndex(index + 1)
+            return compose.onNodeWithText(name).assertIsDisplayed()
+        }
+        fun allChoice(): SemanticsNodeInteraction {
+            compose.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
+            return compose.onNodeWithText("All albums").assertIsDisplayed()
+        }
         fun all() {
-            compose.onNodeWithText("All albums").performScrollTo().assertIsSelected()
+            allChoice().assertIsSelected()
             for (name in ids.keys) album(name).assertIsSelected().assertIsOn()
         }
         fun only(vararg names: String) {
-            compose.onNodeWithText("All albums").performScrollTo().assertIsNotSelected()
+            allChoice().assertIsNotSelected()
             for (name in ids.keys) {
                 if (name in names) album(name).assertIsSelected().assertIsOn()
                 else album(name).assertIsNotSelected().assertIsOff()
