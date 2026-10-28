@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -7,8 +8,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -252,10 +255,17 @@ class TagEditorThemeInheritanceTest {
                     LocalPlayerInkCompositionObserver provides { composedInk.set(it) }) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val color = if (lightInk) Color(0xFF181818) else Color(0xFFEAEAEA)
+                        // Measured control footprints can overlap the cover. Supply real,
+                        // readable pixels instead of asking the sampler to invent a placeholder.
+                        val artwork = remember(color) {
+                            Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).apply {
+                                eraseColor(color.toArgb())
+                            }.asImageBitmap()
+                        }
                         PlayerSurface(PlaybackState(title = track.title), true, {},
                             InterfaceSettings(reducedMotion = true, artworkTap = ArtworkAction.Change, artworkHold = ArtworkAction.Menu),
                             remember { Animatable(1f) }, {}, {}, {}, {}, {}, {}, track = track,
-                            visual = PlayerVisual(palette = PlayerPalette(color, color, color)), backgroundPolarity = polarity) {}
+                            visual = PlayerVisual(artwork = artwork, palette = PlayerPalette(color, color, color)), backgroundPolarity = polarity) {}
                     }
                 }
             }
