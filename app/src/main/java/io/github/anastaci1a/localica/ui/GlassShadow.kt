@@ -75,6 +75,11 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<GlassShadowGroup?> {
 }
 
 internal class GlassShadowGeometry {
+    private var receiverSampler: GlassShadowReceiverBrush? = null
+    internal fun receiverBrush(receiver: GlassShadowReceiver): ShaderBrush {
+        val sampler = receiverSampler ?: GlassShadowReceiverBrush().also { receiverSampler = it }
+        return sampler.get(receiver)
+    }
     private var previous = emptyList<RoundRect>()
     private var previousReach = -1f
     private var previousShift = Float.NaN
@@ -102,12 +107,15 @@ internal class GlassShadowGeometry {
 
 /** Draw the union once: neighboring shadows never accumulate opacity. */
 internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float, cache: GlassShadowGeometry,
-    excludeInterior: Boolean = true) {
+    excludeInterior: Boolean = true, receiver: GlassShadowReceiver? = null) {
     if (strength <= 0f || bodies.isEmpty()) return
     val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
     val reach = (4f + spread * 28f).dp.toPx()
     val shift = 2.dp.toPx()
-    cache.update(bodies.map { it.first }, reach, shift)
+    val outlines = bodies.map { it.first }
+    cache.update(outlines, reach, shift)
+    val response = receiver?.takeIf { glassReceiverTouchesShadow(it,outlines,reach,shift) }
+    val brush = response?.let { cache.receiverBrush(it) }
     // One uniform, already-valid outline needs no generic path fill. Keep the
     // original path for clipping and for shapes requiring radius normalization:
     // platform rectXY and per-corner path normalization need not be equivalent.
@@ -128,16 +136,18 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
             val alpha = strength * opacity * .07f * (1f - t).pow(2)
             if (alpha > 0f) {
                 val color = Color.Black.copy(alpha = alpha)
-                if (uniform == null) drawPath(ring, color)
-                else {
+                if (uniform == null) {
+                    if (brush == null) drawPath(ring, color) else drawPath(ring, brush, alpha = alpha)
+                } else {
                     val expansion = reach * (16 - index) / 16f
                     val left = uniform.left - expansion
                     val top = uniform.top - expansion + shift
                     val right = uniform.right + expansion
                     val bottom = uniform.bottom + expansion + shift
-                    drawRoundRect(color, Offset(left, top), Size(right - left, bottom - top),
-                        CornerRadius(uniform.topLeftCornerRadius.x + expansion,
-                            uniform.topLeftCornerRadius.y + expansion))
+                    val corner = CornerRadius(uniform.topLeftCornerRadius.x + expansion,
+                        uniform.topLeftCornerRadius.y + expansion)
+                    if (brush == null) drawRoundRect(color, Offset(left, top), Size(right - left, bottom - top), corner)
+                    else drawRoundRect(brush, Offset(left, top), Size(right-left,bottom-top), corner, alpha = alpha)
                 }
             }
         }
@@ -149,19 +159,23 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
 internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     private val geometry = GlassShadowGeometry()
     private data class Key(val bodies: List<Pair<RoundRect, Float>>, val strength: Float,
-        val spread: Float, val density: Float)
+        val spread: Float, val density: Float, val receiver: GlassShadowReceiver?)
     private data class Raster(val key: Key, val image: ImageBitmap, val inset: Offset)
     private var requested: Key? = null
     private var preparation: Job? = null
     private var raster by mutableStateOf<Raster?>(null)
     var rasterizations = 0; private set
-    fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float) {
+    fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float,
+        receiver: GlassShadowReceiver? = null) {
         if (bodies.isEmpty() || strength <= 0f) return
         val origin = Offset(bodies.minOf { it.first.left }, bodies.minOf { it.first.top })
         val normalized = bodies.map { (r, alpha) -> RoundRect(r.left - origin.x, r.top - origin.y,
             r.right - origin.x, r.bottom - origin.y, r.topLeftCornerRadius, r.topRightCornerRadius,
             r.bottomRightCornerRadius, r.bottomLeftCornerRadius) to alpha }
-        val key = Key(normalized, strength, spread, density)
+        val response = receiver?.let { GlassShadowReceiver(it.bounds.translate(-origin),it.mask,it.sampleBounds.translate(-origin)) }
+            ?.takeIf { glassReceiverTouchesShadow(it,normalized.map { body -> body.first },
+                (4f+spread*28f).dp.toPx(),2.dp.toPx()) }
+        val key = Key(normalized, strength, spread, density, response)
         if (key != requested) {
             requested = key
             preparation?.cancel()
@@ -184,7 +198,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                     ImageBitmap(extent.width, extent.height, ImageBitmapConfig.F16).also { next ->
                         CanvasDrawScope().draw(metrics, direction, Canvas(next),
                             Size(extent.width.toFloat(), extent.height.toFloat())) {
-                            translate(-inset.x, -inset.y) { glassShadows(normalized, strength, spread, GlassShadowGeometry(), excludeInterior = false) }
+                            translate(-inset.x, -inset.y) { glassShadows(normalized, strength, spread, GlassShadowGeometry(), excludeInterior = false, receiver = key.receiver) }
                         }
                     }
                 }
@@ -202,7 +216,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                     drawImage(prepared.image, dstSize = IntSize(prepared.image.width, prepared.image.height), filterQuality = FilterQuality.Low)
                 }
             }
-        } else translate(origin.x, origin.y) { glassShadows(normalized, strength, spread, geometry) }
+        } else translate(origin.x, origin.y) { glassShadows(normalized, strength, spread, geometry, receiver = key.receiver) }
     }
 }
 
@@ -231,12 +245,20 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     }
 }
 
-@Composable internal fun Modifier.clearGlassShadow(strength: Float, spread: Float, radius: Dp?, visible: () -> Boolean = { true }): Modifier {
+@Composable internal fun Modifier.clearGlassShadow(strength: Float, spread: Float, radius: Dp?, visible: () -> Boolean = { true }): Modifier =
+    clearGlassShadowImpl(strength,spread,radius,null,visible)
+
+/** Receiver-aware adapter; original positional/trailing-lambda API stays unchanged. */
+@Composable internal fun Modifier.clearGlassReceiverShadow(strength: Float, spread: Float, radius: Dp?,
+    receiver: () -> GlassShadowReceiver?): Modifier = clearGlassShadowImpl(strength,spread,radius,receiver) { true }
+
+@Composable private fun Modifier.clearGlassShadowImpl(strength: Float, spread: Float, radius: Dp?,
+    receiver: (() -> GlassShadowReceiver?)?, visible: () -> Boolean): Modifier {
     val cache = rememberGlassShadow()
     return drawBehind {
     if (!visible()) return@drawBehind
     val corner = (radius?.toPx() ?: size.minDimension / 2).coerceIn(0f, size.minDimension / 2)
-    with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread) }
+    with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread, receiver?.invoke()) }
     }
 }
 
@@ -287,3 +309,4 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
         with(cache) { draw(bodies, appearance.shadowStrength, appearance.shadowSpread) }
     }
 }
+

@@ -22,6 +22,8 @@ internal data class GlassOriginWellProfile(
     }
 }
 
+internal val DefaultGlassOriginWellProfile = GlassOriginWellProfile()
+
 /** C2 height profile; zero slope at both the outside plane and the basin floor. */
 internal fun glassWellDepth(t: Float): Float {
     val u = t.coerceIn(0f, 1f)
@@ -85,7 +87,7 @@ internal class GlassOriginWell {
     internal var rasterizations = 0; private set
 
     fun DrawScope.draw(home: Rect, homeRadius: Float, caster: RoundRect, strength: Float,
-        profile: GlassOriginWellProfile = GlassOriginWellProfile()) {
+        profile: GlassOriginWellProfile = DefaultGlassOriginWellProfile) {
         if (strength <= 0f || home.width <= 0f || home.height <= 0f ||
             !home.left.isFinite() || !home.top.isFinite() || !home.right.isFinite() || !home.bottom.isFinite() ||
             !homeRadius.isFinite() || !caster.left.isFinite() || !caster.top.isFinite() ||

@@ -47,6 +47,33 @@ class GlassOriginWellTest {
         assertEquals(30f,caster.topLeftCornerRadius.x,.00001f)
         assertEquals(20f,caster.topLeftCornerRadius.y,.00001f)
     }
+    @Test fun receiverInverseMapsTheActualCasterTransformWithoutMovingTheHome() {
+        val home = androidx.compose.ui.geometry.Rect(150f,70f,214f,134f)
+        val size = Size(180f,90f)
+        for (sx in listOf(.7f,1f,1.3f)) for (sy in listOf(.8f,1f,1.2f)) for (shift in listOf(-11f,0f,13f)) {
+            val local = requireNotNull(glassReceiverInCasterSpace(home,size,sx,sy,shift))
+            fun x(v: Float) = size.width/2 + shift + sx*(v-size.width/2)
+            fun y(v: Float) = size.height/2 + sy*(v-size.height/2)
+            assertEquals(home.left,x(local.left),.0001f); assertEquals(home.right,x(local.right),.0001f)
+            assertEquals(home.top,y(local.top),.0001f); assertEquals(home.bottom,y(local.bottom),.0001f)
+        }
+        assertNull(glassReceiverInCasterSpace(home,size,0f,1f,0f))
+        assertNull(glassReceiverInCasterSpace(home,size,Float.NaN,1f,0f))
+        assertNull(glassReceiverInCasterSpace(home,size,.002f,1f,-Float.MAX_VALUE))
+        assertNull(glassReceiverInCasterSpace(home,size,Float.MAX_VALUE,1f,0f))
+    }
+    @Test fun receiverWeightKeepsExteriorNormalAndWeakensFloorWithoutNormalCreases() {
+        val size = Size(150f,80f)
+        fun weight(x: Float,y: Float) = glassWellShadowWeight(x,y,size,16f,.86f,.45f)
+        assertEquals(1f,weight(-10f,40f),0f); assertEquals(1f,weight(75f,0f),0f)
+        assertEquals(.45f,weight(75f,40f),.000001f)
+        assertEquals(weight(125.001f,55f),weight(124.999f,55f),.000001f)
+        for (y in 0..80) for (x in 0..150) assertTrue(weight(x.toFloat(),y.toFloat()) in .449999f..1f)
+        val rings = listOf(.01f,.03f,.05f)
+        fun composite(w: Float) = 1f-rings.fold(1f) { alpha,a -> alpha*(1f-a*w) }
+        assertTrue(composite(.45f)<composite(1f))
+        assertEquals(1f,glassWellShadowWeight(75f,40f,size,0f,.86f,.45f),0f)
+    }
     @Test fun invalidDepthProfilesFailClosed() {
         for (bad in listOf(Float.NaN,Float.POSITIVE_INFINITY,-.1f,.5f)) {
             assertTrue(runCatching { GlassOriginWellProfile(depthFraction=bad) }.isFailure)
