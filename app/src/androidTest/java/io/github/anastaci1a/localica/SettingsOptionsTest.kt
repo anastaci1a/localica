@@ -73,13 +73,13 @@ class SettingsOptionsTest {
             FolderSettings(LibraryUiState(loading = false), { dismissed++ }, {}, {}, initialCategory = "Scanner")
         } }
         compose.onNodeWithText("Metadata read failures").performScrollTo().performClick()
-        androidx.test.espresso.Espresso.pressBack()
+        androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
         compose.onNodeWithText("Scanner").assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, dismissed) }
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNodeWithText("Library and tags").assertIsDisplayed()
         compose.onNodeWithText("Scanner").performClick()
-        androidx.test.espresso.Espresso.pressBack()
+        androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
         compose.runOnIdle { assertEquals(1, dismissed) }
     }
     @Test fun scannerPopupKeepsItsSizeAndSeparatesRepeatableQuickAndFullActions() {
