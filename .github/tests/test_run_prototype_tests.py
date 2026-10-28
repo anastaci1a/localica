@@ -88,6 +88,8 @@ for i,cls in enumerate(classes):
             lines=['10-27 12:00:00.000 123 456 I TestRunner: started: '+marker,
                 '10-27 12:00:00.001 123 456 E TestRunner: assumption failed: '+marker]
             if reason:lines.append('10-27 12:00:00.002 123 456 E TestRunner: org.junit.AssumptionViolatedException: '+reason)
+            if os.environ.get('SKIP_CALLSITE'):lines.append('10-27 12:00:00.002 123 456 E TestRunner: '+os.environ['SKIP_CALLSITE'])
+            if os.environ.get('SKIP_FINISHED')=='yes':lines.append('10-27 12:00:00.003 123 456 I TestRunner: finished: '+marker)
             (folder/('logcat-'+cls+'-'+method+'.txt')).write_text(chr(10).join(lines)+chr(10))
     if mode=='bad-count':suite.set('tests','2')
     E.ElementTree(suite).write(root/('TEST-'+str(i)+'.xml'))
@@ -313,6 +315,54 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.run_case(**self.skip_source(cls,method),TEST_API='26',SKIP_REASON='got: <false>, expected: is <true>')
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         self.assertEqual('got: <false>, expected: is <true>',evidence['qualified_skips'][0]['reason'])
+
+    def selection_sdk_skip(self, method, line, **overrides):
+        cls='io.github.anastaci1a.localica.SelectionLensTest'
+        env=dict(self.skip_source(cls,method),TEST_API='26',SKIP_REASON='got: <false>, expected: is <true>',
+            SKIP_CALLSITE='at '+cls+'.'+method+'(SelectionLensTest.kt:'+str(line)+')',SKIP_FINISHED='yes')
+        env.update(overrides)
+        return env
+
+    def test_selection_simple_api26_sdk_guard_keeps_skip_not_pass(self):
+        method='translatingASelectionReusesItsDistanceField'
+        self.run_case(**self.selection_sdk_skip(method,303))
+        result=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        identity='io.github.anastaci1a.localica.SelectionLensTest#'+method
+        self.assertEqual('skipped',result['methods'][identity])
+        self.assertEqual(1,result['counts']['io.github.anastaci1a.localica.SelectionLensTest']['skipped'])
+        self.assertIn('API36 must execute',result['qualified_skips'][0]['qualification'])
+
+    def test_selection_irregular_api26_sdk_guard_keeps_skip_not_pass(self):
+        self.run_case(**self.selection_sdk_skip('translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt',315))
+        result=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual('skipped',result['methods']['io.github.anastaci1a.localica.SelectionLensTest#translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt'])
+
+    def test_selection_simple_api36_cannot_skip(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,TEST_API='36'))
+
+    def test_selection_irregular_api36_cannot_skip(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt',315,TEST_API='36'))
+
+    def test_selection_wrong_sdk_callsite_rejected(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',315))
+
+    def test_selection_missing_sdk_callsite_rejected(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_CALLSITE=''))
+
+    def test_selection_missing_terminal_rejected(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_FINISHED='no'))
+
+    def test_selection_wrong_assumption_reason_rejected(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_REASON='Different assumption'))
+
+    def test_selection_missing_assumption_log_rejected(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_LOG='no'))
+
+    def test_selection_unlisted_method_cannot_borrow_sdk_reason(self):
+        self.run_case(1,**self.selection_sdk_skip('otherSelectionMethod',303))
+
+    def test_selection_xml_reason_cannot_contradict_sdk_log(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_XML_REASON='Contradiction'))
 
     def test_api36_native_blur_must_run(self):
         self.run_case(1,**self.skip_source('io.github.anastaci1a.localica.PlayerBackgroundPolarityTest',
