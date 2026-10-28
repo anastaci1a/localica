@@ -202,6 +202,8 @@ class ListReturnControlsTest {
             playlists = PlaylistState(listOf(playlist), loading = false), reducedMotion = false)
         awaitRow(playlist.entries.first().id)
         list.performScrollToIndex(65)
+        // Let the real return control enter before freezing animation time.
+        compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
         compose.mainClock.autoAdvance = false
         try {
             compose.onNodeWithContentDescription("Return to top").performClick()

@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.ui.*
@@ -20,8 +21,11 @@ class ArtistAlbumSelectionTest {
         val ids = albums.associate { it.title to it.id }
         var explicit by mutableStateOf(emptyList<String>())
         val changes = mutableListOf<List<String>>()
+        var longPressTimeout = 0L
         val pulses = mutableListOf<ControlHaptic>()
         compose.setContent { LocalicaTheme {
+            val timeout = LocalViewConfiguration.current.longPressTimeoutMillis
+            SideEffect { longPressTimeout = timeout }
             CompositionLocalProvider(LocalControlHaptics provides ControlHaptics { pulses += it }) {
                 ArtistAlbumChoices(albums, explicit) { explicit = it; changes += it }
             }
@@ -39,12 +43,34 @@ class ArtistAlbumSelectionTest {
             }
         }
         fun hold(name: String) {
+            val node = album(name)
             val before = changes.size
             val haptics = pulses.size
-            album(name).performTouchInput { longClick() }
-            compose.runOnIdle {
-                assertEquals("One recognition, no accidental short tap on release", before + 1, changes.size)
-                assertEquals(listOf(ControlHaptic.Strong), pulses.drop(haptics))
+            val autoAdvance = compose.mainClock.autoAdvance
+            compose.mainClock.autoAdvance = false
+            var held = false
+            try {
+                // Keep the native contact down while Compose's recognition timer runs.
+                // Batched event timestamps alone can dispatch UP before that timer fires.
+                node.performTouchInput { down(center); held = true }
+                compose.mainClock.advanceTimeByFrame()
+                compose.mainClock.advanceTimeBy(longPressTimeout + 1)
+                compose.runOnIdle {
+                    assertEquals("$name recognizes before release", before + 1, changes.size)
+                    assertEquals("$name emits one recognition pulse while held",
+                        listOf(ControlHaptic.Strong), pulses.drop(haptics))
+                }
+                node.performTouchInput { up(); held = false }
+                compose.runOnIdle {
+                    assertEquals("$name has no trailing short tap", before + 1, changes.size)
+                    assertEquals("$name has no release pulse", listOf(ControlHaptic.Strong), pulses.drop(haptics))
+                }
+            } finally {
+                try {
+                    if (held) node.performTouchInput { cancel() }
+                } finally {
+                    compose.mainClock.autoAdvance = autoAdvance
+                }
             }
         }
         all()

@@ -208,8 +208,14 @@ class PlaylistDetailPresentationTest {
             top(); assertTrueTop()
             list.performScrollToIndex(65)
             compose.onNodeWithContentDescription("Return to top").assertIsDisplayed().performClick()
-            compose.waitUntil(5000) { position() == 0f }
-            assertTrueTop()
+            // The floating control returns to the padded songs boundary, not the hero.
+            // Native Back below deliberately retains its separate page-top contract.
+            compose.waitForIdle()
+            assertEquals("Floating return stops at the padded song boundary",
+                list.getUnclippedBoundsInRoot().top.value,
+                compose.onNodeWithTag("browser-song-list-start", true).getUnclippedBoundsInRoot().top.value, 1f)
+            assertTrue("Hero stays above the viewport", position() > 0f)
+            compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
             list.performScrollToIndex(65)
             compose.awaitExpectedWindowFocus(list)
             UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()

@@ -27,7 +27,6 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.roundToInt
@@ -230,7 +229,7 @@ class BrowseOrderViewportTest {
         override fun dispatch(context: CoroutineContext, block: Runnable) {
             if (held) tasks.add(block) else Dispatchers.Default.dispatch(context, block)
         }
-        fun next() = requireNotNull(tasks.poll(5, TimeUnit.SECONDS)) { "Expected a held browse query" }
+        fun poll(): Runnable? = tasks.poll()
         fun releaseRemaining() {
             held = false
             while (true) (tasks.poll() ?: break).run()
@@ -363,8 +362,19 @@ class BrowseOrderViewportTest {
         compose.waitForIdle()
     }
     private fun nextQuery(queries: QueryDispatcher): Runnable {
-        compose.waitForIdle()
-        return queries.next()
+        // Controller commit can precede collectAsState/produceState dispatch.
+        // Yield through Compose readiness instead of blocking its test clock in
+        // LinkedBlockingQueue.poll while waiting for that very dispatch.
+        var pending: Runnable? = null
+        try {
+            compose.waitUntil(5000) {
+                pending = queries.poll()
+                pending != null
+            }
+        } catch (failure: ComposeTimeoutException) {
+            throw AssertionError("Expected a held browse query after Compose presentation dispatch", failure)
+        }
+        return requireNotNull(pending)
     }
     private fun assertTop(fixture: Fixture? = null, action: String? = null) {
         try {
