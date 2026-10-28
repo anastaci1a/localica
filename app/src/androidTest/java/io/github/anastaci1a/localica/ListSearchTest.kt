@@ -37,6 +37,78 @@ class ListSearchTest {
     @Test fun reducedSearchSlotUsesTheSameNativePlacementEndpoints() = slotFrames(true)
     @Test fun queueRowsLandAtTheDepartingSearchMaterialTop() = slotFrames(false, queue = true)
 
+    @Test fun scopedResultsWrapBelowTheirLimitWithAndWithoutKeyboard() = withDockedSlotKeyboard {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val route = BrowseRoute(MainTab.Songs, key = "search-result-height")
+        val preferences = BrowsePreferences(context)
+        val previous = preferences.read(route)
+        preferences.write(route, BrowseStyle(quickSearch = true), false)
+        val tracks = (0..30).map { Track("height:$it", "Song ${it.toString().padStart(3, '0')}",
+            fileName = "$it.mp3", relativePath = "$it.mp3") }
+        var lastSample: SearchMorphSample? = null
+        try {
+            compose.setContent { LocalicaTheme {
+                CompositionLocalProvider(LocalSearchMorphObserver provides { lastSample = it }) {
+                    BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("height-root", "Music")),
+                        tracks = tracks), loading = false), PlaylistState(), route, {}, {}, {},
+                        { _, _, _ -> }, null, null, true, false, queryDispatcher = Dispatchers.Unconfined)
+                }
+            } }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Song 000").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("list-search-pill").performClick()
+            awaitSearchFocus()
+            fun query(text: String) {
+                compose.onNode(hasSetTextAction()).performClick()
+                awaitSearchFocus()
+                compose.onNode(hasSetTextAction()).performTextReplacement(text)
+                compose.waitUntil(5000) {
+                    val first = compose.onAllNodesWithTag("media-height:0").fetchSemanticsNodes().size
+                    val second = compose.onAllNodesWithTag("media-height:1").fetchSemanticsNodes().size
+                    val expectedResults = when (text) {
+                        "Song 000" -> first == 1 && second == 0
+                        "no-match-height" -> first == 0 && second == 0 &&
+                            compose.onAllNodesWithContentDescription("No matching items").fetchSemanticsNodes().size == 1
+                        else -> first == 1 && second == 1
+                    }
+                    expectedResults && compose.runOnUiThread { lastSample?.let { it.ime > 0 && it.nativeIme > 0 && it.ime == it.imeTarget } == true }
+                }
+                compose.waitForIdle()
+            }
+            fun height() = compose.onNodeWithTag("list-search-popup").fetchSemanticsNode().boundsInRoot.height
+            fun commit() {
+                compose.awaitSearchImeHandoff { compose.onNode(hasSetTextAction()).performImeAction() }
+                compose.onNode(hasSetTextAction()).assertIsNotFocused()
+                compose.waitForIdle()
+            }
+            query("Song")
+            val manyDocked = height()
+            commit()
+            val manyHidden = height()
+            query("Song 000")
+            compose.onAllNodesWithTag("media-height:1").assertCountEquals(0)
+            val oneDocked = height()
+            assertTrue("A single docked result must not occupy the maximum popup: $oneDocked vs $manyDocked",
+                oneDocked < manyDocked - 20f)
+            commit()
+            val oneHidden = height()
+            assertTrue("A single result also wraps without a keyboard: $oneHidden vs $manyHidden",
+                oneHidden < manyHidden - 20f)
+            assertEquals("Removing the keyboard does not inflate short result content", oneDocked, oneHidden, 2f)
+            query("no-match-height")
+            val emptyDocked = height()
+            compose.onNodeWithContentDescription("No matching items").assertIsDisplayed()
+            assertTrue("No-match content remains bounded", emptyDocked <= manyDocked + 2f)
+            commit()
+            assertTrue("No-match content also remains bounded without IME", height() <= manyHidden + 2f)
+            query("Song")
+            assertEquals("Growing results restores the bounded viewport", manyDocked, height(), 2f)
+            compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Song 030"))
+            compose.onNodeWithText("Song 030").assertIsDisplayed()
+        } finally {
+            preferences.write(route, previous, false)
+        }
+    }
+
     private data class SlotFrame(val sample: SearchMorphSample, val rowTop: Float)
 
     private fun slotFrames(reduced: Boolean, queue: Boolean = false) = withDockedSlotKeyboard {

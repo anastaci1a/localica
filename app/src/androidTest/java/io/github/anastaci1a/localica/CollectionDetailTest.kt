@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.*
@@ -109,12 +110,19 @@ class CollectionDetailTest {
         }
     }
 
-    @Test fun artistAlbumsFilterThePlayedSnapshotAndLastDeselectionRestoresAll() {
-        val artist = LibraryViews.groups(snapshot, SongListView.Artists, LibraryQuery()).single()
+    @Test fun artistAlbumsFilterThePlayedSnapshotAndLastDeselectionRestoresAll() =
+        albumSelectionRestoresAll(MainTab.Artists, MediaKind.Artist, SongListView.Artists)
+
+    @Test fun albumArtistAlbumsFilterThePlayedSnapshotAndLastDeselectionRestoresAll() =
+        albumSelectionRestoresAll(MainTab.AlbumArtists, MediaKind.AlbumArtist, SongListView.AlbumArtists)
+
+    private fun albumSelectionRestoresAll(tab: MainTab, kind: MediaKind, view: SongListView) {
+        var currentSnapshot by mutableStateOf(snapshot)
+        val artist = LibraryViews.groups(snapshot, view, LibraryQuery()).single()
         var played = emptyList<Track>()
         compose.setContent { LocalicaTheme {
-            BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(),
-                BrowseRoute(MainTab.Artists, MediaRef(MediaKind.Artist, artist.id), "Artist"), {}, {}, {},
+            BrowserScreen(LibraryUiState(currentSnapshot, loading = false), PlaylistState(),
+                BrowseRoute(tab, MediaRef(kind, artist.id), "Artist"), {}, {}, {},
                 { rows, _, _ -> played = rows.map { it.track } }, null, null, true, false,
                 queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
         } }
@@ -128,11 +136,32 @@ class CollectionDetailTest {
         compose.onNodeWithText("Second album").assertIsSelected()
         compose.onNodeWithContentDescription("Play selected albums").performClick()
         assertEquals(6, played.size)
+        compose.onNodeWithText("All albums").performScrollTo().assertIsSelected()
         compose.onNodeWithText("First album").performScrollTo().performTouchInput { longClick() }
         compose.onNodeWithText("Second album").performScrollTo().performTouchInput { longClick() }
         compose.onNodeWithText("All albums").performScrollTo().assertIsSelected()
         compose.onNodeWithContentDescription("Play selected albums").performClick()
         assertEquals(6, played.size)
+        val added = tracks.first().copy(id = "collection:new", title = "New song", album = "Third album")
+        compose.runOnIdle { currentSnapshot = snapshot.copy(tracks = tracks + added) }
+        compose.waitForIdle()
+        compose.onNodeWithText("All albums").performScrollTo().assertIsSelected()
+        compose.onNodeWithContentDescription("Play selected albums").performClick()
+        assertEquals((tracks + added).map { it.id }.toSet(), played.map { it.id }.toSet())
+        // Completing a selection because the library shrinks must also persist All.
+        compose.onNodeWithText("First album").performScrollTo().performClick()
+        compose.onNodeWithText("Second album").performScrollTo().performTouchInput { longClick() }
+        compose.onNodeWithText("All albums").performScrollTo().assertIsNotSelected()
+        compose.runOnIdle { currentSnapshot = snapshot }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("All albums").fetchSemanticsNodes().singleOrNull()
+                ?.config?.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Selected) == true
+        }
+        compose.runOnIdle { currentSnapshot = snapshot.copy(tracks = tracks + added) }
+        compose.waitForIdle()
+        compose.onNodeWithText("All albums").performScrollTo().assertIsSelected()
+        compose.onNodeWithContentDescription("Play selected albums").performClick()
+        assertEquals((tracks + added).map { it.id }.toSet(), played.map { it.id }.toSet())
     }
 
     @Test fun albumOmitsScopedSearchAndPlaysItsTrackOrder() {

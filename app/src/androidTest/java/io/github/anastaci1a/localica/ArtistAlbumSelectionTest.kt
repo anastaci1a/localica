@@ -52,6 +52,10 @@ class ArtistAlbumSelectionTest {
         album("First").performClick(); only("First")
         compose.runOnIdle { assertEquals(listOf(ids.getValue("First")), explicit); assertTrue(pulses.isEmpty()) }
         hold("Second"); only("First", "Second")
+        hold("Third"); all()
+        compose.runOnIdle { assertTrue("Full explicit set returns to canonical All", explicit.isEmpty()) }
+        album("First").performClick(); only("First")
+        hold("Second"); only("First", "Second")
         hold("First"); only("Second")
         hold("Second"); all()
         hold("First"); only("Second", "Third")

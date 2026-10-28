@@ -27,6 +27,43 @@ class InterfaceNavigationTest {
     @Before fun reset() { context.getSharedPreferences("interface", 0).edit().clear().commit() }
     @After fun cleanup() { reset() }
 
+    @Test fun playlistDetailOwnsItsOnlyHeaderAndInsetThroughTheRealNavigationShell() {
+        InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Playlists), reducedMotion = true))
+        val detail = io.github.anastaci1a.localica.playlist.ManualPlaylist(
+            id = "shell-playlist", name = "Shell playlist",
+            entries = listOf(SongRow("shell-row", track)))
+        compose.setContent { LocalicaTheme { LocalicaScreen(library, PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
+            playlist = PlaylistState(listOf(detail), loading = false)) } }
+        fun openAndAssert() {
+            compose.waitUntil(5000) {
+                compose.onAllNodes(hasText(detail.name) and hasClickAction()).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNode(hasText(detail.name) and hasClickAction()).performClick()
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithContentDescription("Play playlist").fetchSemanticsNodes().isNotEmpty()
+            }
+            // BrowserScreen-only fixtures cannot catch an obsolete shell heading.
+            compose.onAllNodesWithTag("page-heading").assertCountEquals(0)
+            compose.onAllNodesWithContentDescription("Back").assertCountEquals(1)
+            compose.onAllNodesWithContentDescription("Sort").assertCountEquals(1)
+            compose.onNodeWithContentDescription("Play playlist").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Shuffle playlist").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Playlist actions").assertIsDisplayed()
+            assertEquals("The hero viewport must not inherit an extra shell status-bar inset",
+                compose.onNodeWithTag("browse-background").fetchSemanticsNode().boundsInRoot.top,
+                compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot.top, 1.1f)
+        }
+        openAndAssert()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNode(hasTestTag("page-heading") and hasText("Playlists")).assertIsDisplayed()
+        openAndAssert()
+        back()
+        compose.waitUntil(5000) {
+            compose.onAllNodes(hasTestTag("page-heading") and hasText("Playlists")).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNode(hasText(detail.name) and hasClickAction()).assertIsDisplayed()
+    }
+
     @Test fun tabFeedbackAndHeadingArriveBeforeThePagerSettles() {
         compose.setContent { LocalicaTheme { LocalicaScreen(library, PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
             playlist = PlaylistState(loading = false)) } }
@@ -144,3 +181,4 @@ class InterfaceNavigationTest {
     }
 
 }
+
