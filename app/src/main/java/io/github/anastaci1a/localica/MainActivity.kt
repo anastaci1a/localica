@@ -43,10 +43,10 @@ class MainActivity : ComponentActivity() {
                     (application as LocalicaApplication).playlists, (application as LocalicaApplication).scanner, (application as LocalicaApplication).statistics.counts) as T
         })[LibraryViewModel::class.java]
         consumeScannerIntent(intent)
-        if (savedInstanceState == null && scannerRequest == 0 && io.github.anastaci1a.localica.scanner.ScanPreferences(this).scanOnLaunch) {
+        if (scannerRequest == 0 && io.github.anastaci1a.localica.scanner.ScanPreferences(this).scanOnLaunch) {
             lifecycleScope.launch {
-                val state = model.library.first { !it.loading }
-                if (!state.scanning) model.scanAll()
+                model.library.first { !it.loading }
+                model.scanNewFiles()
             }
         }
         setContent {

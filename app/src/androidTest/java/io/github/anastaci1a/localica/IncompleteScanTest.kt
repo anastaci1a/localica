@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,6 +26,120 @@ import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 class IncompleteScanTest {
+    @Test fun startupControllerContinuesOtherRootsAfterOneProviderFails() = fixture {
+        repository.scan(root)
+        repository.scan(other)
+        val before = store.current()
+        mode("updated")
+        unavailableRoot = root
+        metadataReads = 0
+        val finished = CompletableDeferred<Unit>()
+        val controller = io.github.anastaci1a.localica.scanner.ScanController(
+            InstrumentationRegistry.getInstrumentation().targetContext, repository)
+        withContext(Dispatchers.Main) { controller.run(listOf(root, other), newFilesOnly = true) { finished.complete(Unit) } }
+        withTimeout(10_000) { finished.await() }
+        assertFalse(controller.state.value.running)
+        assertEquals(2, controller.state.value.completedFolders)
+        assertTrue(controller.state.value.message.orEmpty().contains("1 folder"))
+        assertEquals(1, metadataReads)
+        val after = store.current()
+        assertEquals(3, after.tracks.size)
+        before.tracks.forEach { assertEquals(it, after.tracks.single { current -> current.id == it.id }) }
+        assertEquals(listOf(other), after.tracks.single { track -> before.tracks.none { it.id == track.id } }.locations.map { it.folderUri })
+        assertCursorsClosed()
+    }
+
+    @Test fun manualFullRequestSurvivesAnActiveQuickScanForTheSameRoot() = fixture {
+        repository.scan(root)
+        val original = store.current().tracks
+        original.forEach { store.updateMetadata(it.copy(title = "Cached edited title")) }
+        mode("updated")
+        metadataReads = 0
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        beforeMetadata = { entered.complete(Unit); release.await(); beforeMetadata = null }
+        val finished = CompletableDeferred<Unit>()
+        val controller = io.github.anastaci1a.localica.scanner.ScanController(
+            InstrumentationRegistry.getInstrumentation().targetContext, repository)
+        try {
+            withContext(Dispatchers.Main) { controller.run(listOf(root), newFilesOnly = true) { finished.complete(Unit) } }
+            withTimeout(10_000) { entered.await() }
+            withContext(Dispatchers.Main) { controller.run(listOf(root), newFilesOnly = false) { } }
+            release.complete(Unit)
+            withTimeout(10_000) { finished.await() }
+            assertFalse(controller.state.value.running)
+            assertEquals(2, controller.state.value.completedFolders)
+            assertEquals("One new-file read, then all three files during the queued full scan", 4, metadataReads)
+            val after = store.current()
+            assertEquals(3, after.tracks.size)
+            assertTrue("Full scan refreshes cached metadata after additive discovery",
+                after.tracks.none { it.title == "Cached edited title" })
+            assertCursorsClosed()
+        } finally {
+            release.complete(Unit)
+            withContext(Dispatchers.Main) { controller.cancel() }
+            withTimeout(10_000) { finished.await() }
+        }
+    }
+
+    @Test fun startupDiscoverySkipsKnownFileOpensAndAddsOverlapsWithoutReplacingCachedRows() = fixture {
+        repository.scan(root)
+        repository.scan(other)
+        val before = store.current()
+        val grants = persisted()
+        metadataReads = 0
+        probeFileOpens = true
+        val initialStats = stats()
+        val started = System.nanoTime()
+        val unchanged = repository.scanNewFiles(root)
+        val overlap = repository.scanNewFiles(other)
+        assertEquals(0, metadataReads)
+        assertEquals(0, stats().getInt("fileOpens") - initialStats.getInt("fileOpens"))
+        assertEquals(4, stats().getInt("childQueries") - initialStats.getInt("childQueries"))
+        assertEquals(0, unchanged.metrics.metadataReads + overlap.metrics.metadataReads)
+        assertEquals(before, store.current())
+        android.util.Log.i("StartupScanBenchmark", "unchanged roots=2 tracks=2 childQueries=4 fileOpens=0 elapsedNanos=${System.nanoTime() - started}")
+        mode("updated")
+        val added = repository.scanNewFiles(root)
+        repository.scanNewFiles(other)
+        assertEquals(1, metadataReads)
+        assertEquals(1, stats().getInt("fileOpens") - initialStats.getInt("fileOpens"))
+        assertEquals(1, added.metrics.metadataReads)
+        val after = store.current()
+        assertEquals(3, after.tracks.size)
+        assertTrue(after.tracks.all { it.locations.size == 2 && it.addedAt != null })
+        before.tracks.forEach { assertEquals(it, after.tracks.single { current -> current.id == it.id }) }
+        mode("empty")
+        repository.scanNewFiles(root)
+        assertEquals(after, store.current())
+        assertEquals(grants, persisted())
+        repository.scan(root)
+        assertTrue(store.current().tracks.all { track -> track.locations.all { it.folderUri == other } })
+        assertCursorsClosed()
+    }
+
+    @Test fun interruptedStartupDoesNotPublishPartialAdditionsAndCanRetryAfterRelaunch() = fixture {
+        repository.scan(root)
+        val before = store.current()
+        for (status in listOf("loading-partial", "error", "null", "nested-loading-partial", "nested-error", "nested-null")) {
+            mode(status)
+            expectFailure { repository.scanNewFiles(root) }
+            assertEquals(before, store.current())
+        }
+        mode("updated")
+        cancelMetadata = true
+        try { repository.scanNewFiles(root); fail("Cancellation must propagate") }
+        catch (_: CancellationException) { }
+        finally { cancelMetadata = false }
+        assertEquals(before, store.current())
+        // A fresh repository models loss of the process-local scanner; indexed identity is durable.
+        freshRepository().scanNewFiles(root)
+        val after = store.current()
+        assertEquals(3, after.tracks.size)
+        before.tracks.forEach { assertEquals(it, after.tracks.single { current -> current.id == it.id }) }
+        assertCursorsClosed()
+    }
+
     @Test fun incompleteRootResultsKeepSongsLocationsDatesAndGrantsUntilCompleteRetry() = fixture {
         repository.scan(root)
         repository.scan(other)
@@ -137,7 +252,21 @@ class IncompleteScanTest {
 
     private fun fixture(block: suspend Fixture.() -> Unit) = runBlocking {
         val fixture = Fixture()
-        try { fixture.prepare(); fixture.block() } finally { fixture.close() }
+        var primaryFailure: Throwable? = null
+        try {
+            fixture.prepare()
+            fixture.block()
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
+        } finally {
+            try { fixture.close() }
+            catch (cleanupFailure: Throwable) {
+                val primary = primaryFailure
+                if (primary == null) throw cleanupFailure
+                if (primary !== cleanupFailure) primary.addSuppressed(cleanupFailure)
+            }
+        }
     }
 
     private class Fixture {
@@ -152,39 +281,67 @@ class IncompleteScanTest {
         val newRoot = tree("new-root")
         var metadataReads = 0
         var cancelMetadata = false
+        var probeFileOpens = false
+        var beforeMetadata: (suspend () -> Unit)? = null
+        var unavailableRoot: String? = null
         private val documents = AndroidDocuments(context)
         // Exercise actual resolver/provider listings without requiring decoder fixtures.
         private val source = object : DocumentSource by documents {
+            override fun root(treeUri: String): ScanDocument {
+                if (treeUri == unavailableRoot) throw IOException("Fixture root unavailable")
+                return documents.root(treeUri)
+            }
             override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
                 metadataReads++
+                beforeMetadata?.invoke()
                 if (cancelMetadata) throw CancellationException("Fixture cancellation")
+                if (probeFileOpens) {
+                    // Count real provider open attempts; this synthetic provider intentionally has no audio bytes.
+                    try { resolver.openFileDescriptor(Uri.parse(uri), "r")?.close() } catch (_: java.io.FileNotFoundException) { }
+                }
                 return AudioMetadata(title = fileName, durationMs = 120_000)
             }
         }
         val repository = LibraryRepository(store, TreeScanner(source), permissions)
+        fun freshRepository() = LibraryRepository(store, TreeScanner(source), permissions)
+        fun stats(): Bundle = requireNotNull(resolver.call(Uri.parse(root), "scanFixtureStats", null, null))
         private fun tree(id: String) = DocumentsContract.buildTreeDocumentUri(IncompleteScanGrantActivity.AUTHORITY, id).toString()
         fun songInfoTree(id: String) = tree(id)
         suspend fun songInfoNames(folders: List<FolderSelection>) = withContext(Dispatchers.IO) { resolveSongRootNames(context, folders) }
-        suspend fun grant(action: String) {
+        suspend fun grant(action: String, phase: String = "body") {
+            val requestId = java.util.UUID.randomUUID().toString()
+            android.util.Log.i("ScanGrantFixture", "request id=$requestId action=$action phase=$phase")
             val completed = CompletableDeferred<Unit>()
             val completion = object : ResultReceiver(Handler(Looper.getMainLooper())) {
-                override fun onReceiveResult(resultCode: Int, resultData: Bundle?) { completed.complete(Unit) }
+                override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                    android.util.Log.i("ScanGrantFixture", "callback id=$requestId action=$action phase=$phase")
+                    completed.complete(Unit)
+                }
             }
             context.startActivity(Intent(action)
                 .setClassName(instrumentation.context.packageName, IncompleteScanGrantActivity::class.java.name)
                 .putExtra("completion", completion)
+                .putExtra("request-id", requestId)
+                .putExtra("phase", phase)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             // Read access alone cannot prove that a fresh persistable grant has arrived.
-            withTimeout(10_000) { completed.await() }
+            try { withTimeout(10_000) { completed.await() } }
+            catch (failure: TimeoutCancellationException) {
+                throw AssertionError("Synthetic grant activity callback timed out: id=$requestId action=$action phase=$phase", failure)
+            }
         }
         suspend fun prepare() {
             assertEquals(IncompleteScanGrantActivity.TARGET, context.packageName)
             listOf(root, other, newRoot).forEach(permissions::release)
-            grant(IncompleteScanGrantActivity.GRANT)
-            withTimeout(10_000) {
-                while (true) {
-                    try { documents.root(newRoot); break } catch (_: SecurityException) { delay(25) }
+            grant(IncompleteScanGrantActivity.GRANT, "prepare")
+            try {
+                withTimeout(10_000) {
+                    while (true) {
+                        try { documents.root(newRoot); break } catch (_: SecurityException) { delay(25) }
+                    }
                 }
+            } catch (failure: TimeoutCancellationException) {
+                throw AssertionError("Synthetic grant read readiness timed out during prepare", failure)
             }
             mode("complete")
         }
@@ -202,13 +359,17 @@ class IncompleteScanTest {
         suspend fun close() {
             try {
                 listOf(root, other, newRoot).forEach(permissions::release)
-                grant(IncompleteScanGrantActivity.REVOKE)
+                grant(IncompleteScanGrantActivity.REVOKE, "cleanup")
                 // Do not let asynchronous activity cleanup race the next fixture's grant.
-                withTimeout(10_000) {
-                    while (true) {
-                        try { documents.root(newRoot) } catch (_: SecurityException) { break }
-                        delay(25)
+                try {
+                    withTimeout(10_000) {
+                        while (true) {
+                            try { documents.root(newRoot) } catch (_: SecurityException) { break }
+                            delay(25)
+                        }
                     }
+                } catch (failure: TimeoutCancellationException) {
+                    throw AssertionError("Synthetic grant removal timed out during cleanup", failure)
                 }
             } finally { database.close() }
         }

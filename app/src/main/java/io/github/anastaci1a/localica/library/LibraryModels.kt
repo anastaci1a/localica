@@ -68,7 +68,10 @@ interface DocumentSource {
 }
 
 data class ScanResult(val folder: FolderSelection, val tracks: List<Track>, val metadataFailures: Int,
-    val failedMetadataIds: Set<String> = emptySet())
+    val failedMetadataIds: Set<String> = emptySet(), val metrics: ScanMetrics = ScanMetrics())
+
+/** Provider discovery queries and metadata requests; not a claim about decoder-internal file opens. */
+data class ScanMetrics(val directoryQueries: Int = 0, val metadataReads: Int = 0, val elapsedNanos: Long = 0)
 
 data class ScanOptions(val includeSubfolders: Boolean = true, val minimumDurationSeconds: Int = 0,
     val excludedPaths: Set<String> = emptySet()) {

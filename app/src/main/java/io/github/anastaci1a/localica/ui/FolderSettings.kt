@@ -27,7 +27,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Library and tags", null, R.drawable.ic_library, "Folders, scanner configuration, tag jobs and recovery"),
     SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and unfiltered collections"),
     SettingsDestination("Folders to scan", "Library and tags", R.drawable.ic_folder, "Choose music folders and excluded subfolders"),
-    SettingsDestination("Scanner configuration", "Library and tags", R.drawable.ic_search, "Subfolders, short files, and scanning on launch"),
+    SettingsDestination("Scanner configuration", "Library and tags", R.drawable.ic_search, "Quick Scan on launch, subfolders, and short files"),
     SettingsDestination("Tag jobs and recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
     SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, and open-source licenses"),
 )
@@ -121,10 +121,10 @@ private fun ScannerConfiguration(preferences: ScanPreferences, folders: () -> Un
     SettingsLink("Folders to scan", "Included folders and excluded subfolders", R.drawable.ic_folder, onClick = folders)
     BooleanPreference("Include subfolders", options.includeSubfolders) { options = options.copy(includeSubfolders = it); preferences.write(options) }
     SettingsLink("Exclude short files", if (options.minimumDurationSeconds == 0) "Off" else "Shorter than ${options.minimumDurationSeconds} seconds") { durationOpen = true }
-    Text("Files with unknown duration are kept. Changes take effect on the next scan.", style = MaterialTheme.typography.bodySmall)
-    SettingsHeading("Automatic scanning")
-    BooleanPreference("Scan when Localica opens", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
-    Text("Off by default. An enabled scan continues in the background with a progress notification.", style = MaterialTheme.typography.bodySmall)
+    Text("Unknown durations are kept. Use Scan music to apply changed rules to indexed songs.", style = MaterialTheme.typography.bodySmall)
+    SettingsHeading("On launch")
+    BooleanPreference("Quick Scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
+    Text("Off by default. When Localica opens, find new songs in the background without rereading existing songs. Uses your folders, subfolder setting and exclusions. For changed tags or removed files, run a full scan from More → Scan music.", style = MaterialTheme.typography.bodySmall)
     if (durationOpen) {
         var input by remember { mutableStateOf(options.minimumDurationSeconds.toString()) }
         val seconds = input.toIntOrNull()
@@ -149,7 +149,7 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
         val valid = lines.all { !it.startsWith('/') && it.split('/').none { part -> part in setOf("", ".", "..") } }
         GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Excluded subfolders") }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Changes apply on the next scan.")
+                Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Quick Scan skips these paths. Run a full scan from Scan music to remove already indexed songs from excluded paths.")
                 GlassTextField(input, { input = it }, label = { Text("Subfolder paths") }, minLines = 3, maxLines = 6, isError = !valid)
             }
         }, confirmButton = { ActionTextButton(enabled = valid, onClick = { paths = lines; preferences.excluded(folder.uri, paths); open = false }) { Text("Save") } },
