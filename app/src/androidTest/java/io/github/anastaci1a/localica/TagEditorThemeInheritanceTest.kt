@@ -281,7 +281,10 @@ class TagEditorThemeInheritanceTest {
             compose.onNodeWithText("Cancel").performClick()
             val menuInk = awaitPlayerInk(target)
             compose.onNodeWithTag("artwork-gesture").performTouchInput { longClick() }
-            assertEquals("Artwork menu action inherits the actual player ink", menuInk,
+            // Glass action surfaces preserve the page polarity with canonical control ink;
+            // the accepted editor session below must still capture the exact player/menu ink.
+            val menuActionInk = if (menuInk.luminance() > .5f) Color.White else Color(0xFF202124)
+            assertEquals("Artwork glass-menu action uses canonical ink for the actual player polarity", menuActionInk,
                 textColor(compose.onNodeWithText("Change artwork"), "Change artwork"))
             compose.onNodeWithText("Change artwork").performClick()
             assertPopup("Choose artwork", target)
