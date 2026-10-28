@@ -36,8 +36,9 @@ internal fun glassWellSlope(t: Float): Float {
 internal fun glassWellShade(x: Float, y: Float, width: Float, height: Float, radius: Float,
     profile: GlassOriginWellProfile): Float {
     val half = min(width, height) / 2f
-    if (half <= 0f || !half.isFinite()) return 0f
+    if (half <= 0f || !half.isFinite() || !radius.isFinite()) return 0f
     val r = radius.coerceIn(0f, half)
+    if (r <= 0f) return 0f // Sharp-corner accessors have no curved receiver profile.
     val px = x - width / 2f; val py = y - height / 2f
     val qx = abs(px) - (width / 2f - r)
     val qy = abs(py) - (height / 2f - r)
@@ -45,7 +46,9 @@ internal fun glassWellShade(x: Float, y: Float, width: Float, height: Float, rad
     val length = hypot(ox, oy)
     val inward = r - length - min(max(qx, qy), 0f)
     if (inward <= 0f) return 0f
-    val wall = half * profile.wallFraction
+    // Rounded rectangles develop diagonal medial branches at inward distance r,
+    // not only at the shape center. Flatten before the earliest branch.
+    val wall = min(half, r) * profile.wallFraction
     val u = (inward / wall).coerceIn(0f, 1f)
     // The derivative is zero before reaching every distance-field medial axis.
     // Therefore nearest-edge normal ties cannot produce an internal crease.
@@ -84,7 +87,9 @@ internal class GlassOriginWell {
     fun DrawScope.draw(home: Rect, homeRadius: Float, caster: RoundRect, strength: Float,
         profile: GlassOriginWellProfile = GlassOriginWellProfile()) {
         if (strength <= 0f || home.width <= 0f || home.height <= 0f ||
-            !listOf(home.left, home.top, home.right, home.bottom).all { it.isFinite() }) return
+            !home.left.isFinite() || !home.top.isFinite() || !home.right.isFinite() || !home.bottom.isFinite() ||
+            !homeRadius.isFinite() || !caster.left.isFinite() || !caster.top.isFinite() ||
+            !caster.right.isFinite() || !caster.bottom.isFinite()) return
         val radius = homeRadius.coerceIn(0f, home.size.minDimension / 2f)
         val next = Key(home.size, radius, profile)
         if (key != next) {

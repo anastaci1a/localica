@@ -30,6 +30,14 @@ class GlassOriginWellTest {
             assertEquals(0f,glassWellShade(w/2,0f,w,h,radius,profile),0f)
         }
     }
+    @Test fun smallCornerRectangleIsFlatBeforeItsOffCenterMedialBranches() {
+        val p = GlassOriginWellProfile()
+        val a = glassWellShade(125.001f,55f,150f,80f,16f,p)
+        val b = glassWellShade(124.999f,55f,150f,80f,16f,p)
+        assertEquals(-p.ambient,a,.000001f)
+        assertEquals(a,b,.000001f)
+        assertEquals(0f,glassWellShade(75f,40f,150f,80f,0f,p),0f)
+    }
     @Test fun casterUsesDrawScaleAndTranslationNotLayoutRectangle() {
         val caster = glassWellCaster(Size(120f,50f),25f,1.2f,.8f,7f)
         assertEquals(-5f,caster.left,.00001f)

@@ -53,6 +53,68 @@ internal fun ComposeTestRule.advanceMorphOpening(
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun realPopupLeavesOneOriginWellThenRestoresTheTriggerWithoutResidue() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides true, LocalGlassAppearance provides
+                io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF808080))) {
+                    anchor = rememberGlassAnchor()
+                    Box(Modifier.align(Alignment.BottomEnd)
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.End))
+                        .padding(32.dp).size(64.dp).glassAnchor(anchor).background(Color(0xFF808080)))
+                    GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) {
+                        Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Synthetic origin receiver") }
+                    }
+                }
+            }
+        } }
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun centerRed(): Int {
+            val image = requireNotNull(automation.takeScreenshot())
+            try { return android.graphics.Color.red(image.getPixel(anchor.bounds.center.x.toInt(),anchor.bounds.center.y.toInt())) }
+            finally { image.recycle() }
+        }
+        fun shadeDelta(): Int {
+            val image = requireNotNull(automation.takeScreenshot())
+            try {
+                val y = anchor.bounds.center.y.toInt()
+                val center = android.graphics.Color.red(image.getPixel(anchor.bounds.center.x.toInt(),y))
+                val outside = android.graphics.Color.red(image.getPixel((anchor.bounds.left-16).toInt(),y))
+                return outside-center // Cancel the modal scrim, measuring only local shading.
+            } finally { image.recycle() }
+        }
+        fun saveReceiver(stage: String) {
+            val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            val screenshot = requireNotNull(automation.takeScreenshot())
+            try {
+                val file = java.io.File(nativeEvidenceDirectory("popup-origin-well",
+                    instrumentation.targetContext.getExternalFilesDir(null)), "$stage.png")
+                file.outputStream().use { assertTrue(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)) }
+            } finally { screenshot.recycle() }
+        }
+        compose.waitForIdle()
+        val original = centerRed()
+        saveReceiver("closed")
+        compose.runOnIdle { open = true }
+        compose.waitUntil(5000) { anchor.hidden && anchor.modalPresent && shadeDelta() > 2 }
+        compose.waitUntil(5000) { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning }
+        val firstShade = shadeDelta()
+        saveReceiver("open")
+        compose.runOnIdle { open = false }
+        compose.waitUntil(5000) { !anchor.hidden && !anchor.modalPresent && kotlin.math.abs(centerRed()-original) <= 1 }
+        // A second modal lifecycle must reuse the same physical origin, not stack receivers.
+        compose.runOnIdle { open = true }
+        compose.waitUntil(5000) { anchor.hidden && anchor.modalPresent && shadeDelta() > 2 }
+        compose.waitUntil(5000) { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning }
+        val second = shadeDelta()
+        assertTrue("A single subtle receiver, not cumulative darkening: first=$firstShade second=$second",
+            second <= 12 && kotlin.math.abs(second-firstShade) <= 2)
+        compose.runOnIdle { open = false }
+        compose.waitUntil(5000) { !anchor.hidden && !anchor.modalPresent && kotlin.math.abs(centerRed()-original) <= 1 }
+    }
+
     @Test fun cancelledShapeClockRetainsItsBodyUntilANewOwnerFinishesNormally() {
         val state = GlassBodyState()
         var present by mutableStateOf(true)
