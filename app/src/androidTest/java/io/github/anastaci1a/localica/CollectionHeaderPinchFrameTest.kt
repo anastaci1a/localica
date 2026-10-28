@@ -59,16 +59,20 @@ class CollectionHeaderPinchFrameTest {
             keepVisual(tracks.first().uri, PlayerVisual(bitmap.asImageBitmap(), kotlinx.coroutines.runBlocking { playerPalette(bitmap) }))
         }
         val frames = mutableListOf<CollectionHeaderFrame>()
+        val sampling = mutableListOf<CollectionHeaderActionSamplingFrame>()
         var density = 0f
+        var allowPlayback = false
+        var playbackCalls = 0
         try {
             compose.setContent { LocalicaTheme {
                 val currentDensity = LocalDensity.current.density
                 SideEffect { density = currentDensity }
                 CompositionLocalProvider(LocalBrowseArtwork provides artwork, LocalReducedMotion provides false,
-                    LocalCollectionHeaderFrameObserver provides { frames += it }) {
+                    LocalCollectionHeaderFrameObserver provides { frames += it },
+                    LocalCollectionHeaderActionSamplingObserver provides { sampling += it }) {
                     Box(Modifier.fillMaxSize()) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, {}, {},
-                            { _, _, _ -> fail("A pinch must not start playback") }, null, null, true, false,
+                            { _, _, _ -> if (!allowPlayback) fail("A pinch must not start playback") else playbackCalls++ }, null, null, true, false,
                             queryDispatcher = Dispatchers.Unconfined)
                     }
                 }
@@ -84,10 +88,14 @@ class CollectionHeaderPinchFrameTest {
                 titleOrigin.x + initialTitle.size.width, titleOrigin.y + initialTitle.size.height)
             // Retain a genuinely mounted source while leaving enough song rows for
             // the real finger anchor to virtualize the destination header.
-            val scroll = (initialHeader.size.height - 48 * density).coerceAtLeast(0f)
-            list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, scroll) }
+            val playDescription = if (artist) "Play selected albums" else "Play album"
+            val playCoordinates = compose.onNodeWithContentDescription(playDescription).fetchSemanticsNode().layoutInfo.coordinates
+            val playTop = playCoordinates.positionInRoot().y - list.fetchSemanticsNode().boundsInRoot.top
+            val visibleScroll = (playTop - 80 * density).coerceAtLeast(0f)
+            list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, visibleScroll) }
+            compose.onNodeWithContentDescription(playDescription).assertIsDisplayed()
             compose.waitForIdle()
-            val sourceRect = headerRect()
+            var sourceRect = headerRect()
             assertTrue("Source header is partly visible", sourceRect.top < 0f && sourceRect.bottom > 0f)
             compose.mainClock.autoAdvance = false
 
@@ -104,6 +112,60 @@ class CollectionHeaderPinchFrameTest {
                 held = true
                 spread(if (outward) 80f else 45f)
             }
+            // First exercise the material while the action is still visible,
+            // before the existing genuinely virtualized source/destination path.
+            val viewportHeight = list.fetchSemanticsNode().boundsInRoot.height
+            val beforeVisible = compose.runOnUiThread { frames.lastOrNull()?.generation ?: -1L }
+            start(true)
+            pump { frames.any { it.generation > beforeVisible && it.drawn && it.destinationReady && it.progress in .3f.. .99f } }
+            val visibleGeneration = compose.runOnUiThread { frames.last { it.drawn }.generation }
+            spread(52f)
+            pump { frames.lastOrNull()?.let { it.generation == visibleGeneration && it.drawn && it.progress in .05f.. .4f } == true }
+            list.performTouchInput { cancel() }; held = false
+            pump { frames.any { it.generation == visibleGeneration && !it.drawn && it.handoff && it.progress == 0f } }
+            val visibleFrames = compose.runOnUiThread { frames.filter {
+                it.generation == visibleGeneration && it.drawn && it.destinationReady && it.progress in .05f.. .95f &&
+                    it.actionBounds?.let { bounds -> bounds.top >= 0f && bounds.bottom <= viewportHeight } == true
+            } }
+            assertTrue("Actual held/reversal frames keep the action visible", visibleFrames.size >= 2)
+            assertTrue("Visible held material is live, not the intact frozen fallback", visibleFrames.all { it.liveAction })
+            visibleFrames.forEach { frame ->
+                assertSame("Live frames draw the excluded source, never old material under new glass",
+                    frame.staticRetainedPart, frame.displayedHeaderPart)
+            }
+            // A nested RenderNode may record after its outer overlay callback.
+            // Correlate independent same-generation sampling receipts after the
+            // gesture instead of requiring callback ordering within each frame.
+            val sampled = compose.runOnUiThread { sampling.filter { it.generation == visibleGeneration && it.active && it.progress in .05f.. .95f } }
+            assertTrue("Observe actual filter/mesh recordings", sampled.isNotEmpty())
+            sampled.forEach { receipt ->
+                val expected = requireNotNull(receipt.expectedRoot)
+                val root = requireNotNull(receipt.draw.rootCorners)
+                assertEquals("Sampling Canvas follows the actual presented left", expected.left, root[0].x, 1.1f)
+                assertEquals("Sampling Canvas follows the actual presented top", expected.top, root[0].y, 1.1f)
+            }
+            val origin = list.fetchSemanticsNode().boundsInRoot.topLeft
+            visibleFrames.forEach { frame ->
+                val body = requireNotNull(frame.actionBounds).translate(origin)
+                assertTrue("Each visible position/progress has an active sampling receipt", sampled.any { receipt ->
+                    receipt.draw.rootCorners?.firstOrNull()?.let {
+                        kotlin.math.abs(receipt.progress - frame.progress) <= .0001f &&
+                        kotlin.math.abs(it.x - body.left) <= 1.1f && kotlin.math.abs(it.y - body.top) <= 1.1f
+                    } == true
+                })
+            }
+            assertTrue("Sampling coordinates change during held pinch/reversal",
+                sampled.map { it.draw.consumerCornersInSource }.distinct().size >= 2)
+            assertEquals(sourceStyle, preferences.read(route))
+            // Return to the original tightly visible source for offscreen retention.
+            compose.mainClock.autoAdvance = true
+            val remainingScroll = headerRect().bottom - 48 * density
+            list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, remainingScroll) }
+            compose.waitForIdle()
+            sourceRect = headerRect()
+            assertEquals("Fixture reaches the tightly visible source before freezing time",
+                48 * density, sourceRect.bottom, 1.1f)
+            compose.mainClock.autoAdvance = false
             val generationBefore = compose.runOnUiThread { frames.lastOrNull()?.generation ?: -1L }
             start(true)
             pump { frames.any { it.generation > generationBefore && it.drawn && it.destinationReady && it.progress in .3f.. .99f } }
@@ -145,6 +207,20 @@ class CollectionHeaderPinchFrameTest {
                 assertTrue("Observe native header draw frames for $generation", drawing.isNotEmpty())
                 val retained = requireNotNull(drawing.first().retainedPart)
                 assertGlyphPixels(retained, titleRect)
+                val static = requireNotNull(drawing.first().staticRetainedPart)
+                assertSame("Full fallback and excluded header share one completed native atlas", retained.image, static.image)
+                assertEquals(retained.size, static.size)
+                assertNotEquals(retained.origin, static.origin)
+                assertGlyphPixels(static, titleRect)
+                val action = requireNotNull(drawing.first().sourceActionBounds)
+                assertTrue(action.left >= 0f && action.top >= 0f && action.right <= retained.size.width && action.bottom <= retained.size.height)
+                val fullPixels = retained.image.toPixelMap()
+                assertTrue("The full source positively contains the action at that same coordinate",
+                    fullPixels[retained.origin.x + action.center.x.toInt(), retained.origin.y + action.center.y.toInt()].alpha > .05f)
+                val pixels = static.image.toPixelMap()
+                val actionX = static.origin.x + action.center.x.toInt()
+                val actionY = static.origin.y + action.center.y.toInt()
+                assertTrue("The retained static header excludes the action body", pixels[actionX, actionY].alpha < .02f)
                 for (frame in drawing) {
                     val part = requireNotNull(frame.retainedPart)
                     assertSame("Preview/reversal uses one immutable completed image", retained.image, part.image)
@@ -161,6 +237,20 @@ class CollectionHeaderPinchFrameTest {
                         frame.anchorExpected, requireNotNull(frame.anchorPoint), 1.1f)
                 }
                 assertTrue("Every observed transaction has an endpoint-verified handoff", transaction.any { !it.drawn && it.handoff })
+            }
+            assertEquals("No pinch/return path triggered an action", 0, playbackCalls)
+            compose.mainClock.autoAdvance = true
+            list.performScrollToIndex(0)
+            compose.waitForIdle()
+            allowPlayback = true
+            val play = if (artist) "Play selected albums" else "Play album"
+            compose.onAllNodesWithContentDescription(play).assertCountEquals(1)
+            compose.onNodeWithContentDescription(play).performTouchInput { click() }
+            compose.runOnIdle { assertEquals("The original action still receives coordinate input once", 1, playbackCalls) }
+            if (artist) {
+                compose.onAllNodesWithContentDescription("Shuffle selected albums").assertCountEquals(1)
+                compose.onNodeWithContentDescription("Shuffle selected albums").performTouchInput { click() }
+                compose.runOnIdle { assertEquals(2, playbackCalls) }
             }
         } finally {
             android.util.Log.i("CollectionHeaderFrames", "artist=$artist frames=${frames.size} last=${frames.takeLast(3)}")

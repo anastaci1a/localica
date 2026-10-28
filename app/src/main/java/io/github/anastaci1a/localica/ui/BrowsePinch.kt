@@ -32,6 +32,7 @@ import io.github.anastaci1a.localica.navigation.BrowseRoute
 private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: GraphicsLayer,
     val size: androidx.compose.ui.unit.IntSize = layer.size)
 private object PinchHeaderCaptureKey
+private object PinchHeaderStaticCaptureKey
 
 internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0) {
     // LazyGrid places items on integer pixels but retains fractional scroll deltas.
@@ -423,7 +424,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         // No native read has begun: this preparation wait can still
                         // cancel normally. Pinning keeps the offscreen producer mounted.
                         kotlinx.coroutines.withTimeout(3000) {
-                            while (header.recordedRequest != header.captureRequest || header.layer?.size == androidx.compose.ui.unit.IntSize.Zero) {
+                            while (header.recordedRequest != header.captureRequest || header.layer?.size == androidx.compose.ui.unit.IntSize.Zero || header.staticLayer?.size == androidx.compose.ui.unit.IntSize.Zero) {
                                 withFrameNanos { }
                             }
                         }
@@ -447,7 +448,8 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         listOfNotNull(motion.retained[entry.key]?.let { PinchCaptureDrawing(entry.key, 0, it) },
                             motion.text[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 1, it) },
                             motion.artwork[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 2, it) })
-                    } + listOfNotNull(motion.header?.layer?.let { PinchCaptureDrawing(PinchHeaderCaptureKey, 3, it) }))
+                    } + listOfNotNull(motion.header?.layer?.let { PinchCaptureDrawing(PinchHeaderCaptureKey, 3, it) },
+                        motion.header?.staticLayer?.let { PinchCaptureDrawing(PinchHeaderStaticCaptureKey, 4, it) }))
                         .filter { !it.layer.isReleased && it.size.width > 0 && it.size.height > 0 }
                     if (drawings.isNotEmpty()) {
                         val atlasLayout = packPinchAtlas(drawings.map { it.size }, width)
@@ -480,7 +482,8 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                             motion.frozen[drawing.key] = FrozenBrowseItem(image, origins[i], drawing.size,
                                 highlights[drawing.key]?.let(::RetainedCurrentSongHighlight), endpoints[drawing.key], art[drawing.key], text[drawing.key])
                         } }
-                        motion.header?.freeze(checkNotNull(parts(3)[PinchHeaderCaptureKey]))
+                        motion.header?.freeze(checkNotNull(parts(3)[PinchHeaderCaptureKey]),
+                            checkNotNull(parts(4)[PinchHeaderStaticCaptureKey]))
                     }
                     if (motion.owns(generation)) {
                         motion.capturing = false

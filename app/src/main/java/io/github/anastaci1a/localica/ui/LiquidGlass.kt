@@ -175,6 +175,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     contactAdmission: () -> Boolean = { true },
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val drawObserver = LocalGlassSurfaceDrawObserver.current
+    val samplingObserver = LocalBackdropSamplingObserver.current
     // Do not create diagnostic state, closures, geometry or modifiers for ordinary/null callers.
     val observedShadowGroup = if (drawObserver == null) null else LocalSurfaceShadows.current
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
@@ -286,6 +287,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             samples(source, sourceImages, 1f - home); samples(homeSource, homeImages, home)
             val registrations = samples.map { it.first }.distinct().associateWith { backing ->
                 location.registrationTo(backing.location) ?: return@Canvas
+            }
+            if (samplingObserver != null && source != null) registrations[source]?.let {
+                observeBackdropSampling(samplingObserver, location, it,
+                    androidx.compose.ui.geometry.Rect(Offset.Zero, size))
             }
             val blending = samples.size > 1
             if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
