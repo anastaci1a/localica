@@ -17,11 +17,11 @@ jobs:
     env:
       TEST_API: ${{ matrix.api }}
       ANDROID_SERIAL: emulator-5554
-      SOURCE_SHA: e35d4283a587382219d03de35ccbdd140ca2cdd6
+      SOURCE_SHA: fa8e0987a81dfefec9d331d5133f196a1b5c9429
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
-        ref: e35d4283a587382219d03de35ccbdd140ca2cdd6
+        ref: fa8e0987a81dfefec9d331d5133f196a1b5c9429
         persist-credentials: false
     - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
       with:
