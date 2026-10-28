@@ -26,6 +26,20 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     val progress = preparation.progress
     val separated = progress >= .5f
     val gap = ((progress - .5f) * 2f).coerceIn(0f, 1f)
+    val originPresentation: (Float) -> GlassOriginPresentation = remember(anchor, contacts, preparation) {
+        { homeHeight ->
+            val separation = ((preparation.progress - .5f) * 2f).coerceIn(0f, 1f)
+            val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
+            GlassOriginPresentation(
+                shape = contacts.presentation(contacts.left, contacts.right, separation),
+                vertical = contacts.left.vertical,
+                horizontalShift = -homeHeight / 2f * (common.scaleX() - 1f) * (1f - separation))
+        }
+    }
+    DisposableEffect(anchor, originPresentation) {
+        anchor.originPresentation = originPresentation
+        onDispose { if (anchor.originPresentation === originPresentation) anchor.originPresentation = null }
+    }
     // A fast source tap can finish the still-growing two-action header without
     // substituting a full-width pill at the beginning of preparation.
     val expanded = maxOf(reveal, (progress * 2f).coerceIn(0f, 1f))
@@ -75,7 +89,8 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             Icon(painterResource(R.drawable.ic_eye_off), null, Modifier.size(24.dp), tint = foreground)
         }
     }
-    Box(Modifier.width(width).height(CompactControlSize).testTag("player-lyrics-pill").silhouetteGlassShadow(shadow)) {
+    Box(Modifier.width(width).height(CompactControlSize).preparedOrigin(preparation, progress)
+        .testTag("player-lyrics-pill").silhouetteGlassShadow(shadow)) {
         if (!separated) {
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {
@@ -92,14 +107,15 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
         } else {
             fun Modifier.pivotCompensation(side: Float) = drawWithContent {
                 val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
-                val shift = side * CompactControlSize.toPx() / 2f * (common.scaleX() - 1f) * (1f - gap)
+                val shift = if (side < 0f) originPresentation(CompactControlSize.toPx()).horizontalShift
+                    else side * CompactControlSize.toPx() / 2f * (common.scaleX() - 1f) * (1f - gap)
                 // Like shared contact scaling, this is a draw-space correction.
                 // Moving layout coordinates would resample the backdrop at the cut.
                 translate(left = shift) { this@drawWithContent.drawContent() }
             }
             LiquidGlassSurface(Modifier.align(Alignment.CenterStart).size(CompactControlSize)
                 .pivotCompensation(-1f).glassAnchor(anchor),
-                contactPresentation = { contacts.presentation(contacts.left, contacts.right, gap) },
+                contactPresentation = { originPresentation(0f).shape },
                 shadow = false, depthScale = RaisedGlassDepthScale) { leftAction() }
             LiquidGlassSurface(Modifier.align(Alignment.CenterEnd).size(CompactControlSize).pivotCompensation(1f),
                 sharedContact = contacts.right,
