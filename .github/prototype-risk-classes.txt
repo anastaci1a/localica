@@ -241,3 +241,5 @@ io.github.anastaci1a.localica.TagEditorChromeLayoutTest
 io.github.anastaci1a.localica.QueueSelectionPlacementTest
 io.github.anastaci1a.localica.PlaylistSelectionPlacementTest
 io.github.anastaci1a.localica.StartupMergeTest
+io.github.anastaci1a.localica.PlayerPausedSkipTest
+
