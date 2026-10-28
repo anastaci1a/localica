@@ -77,6 +77,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val miniTop = maxHeight - navigationInset - (CompactControlSize + bottomChrome)
     val distance = with(density) { miniTop.toPx().coerceAtLeast(1f) }
     val p = progress.value
+    // A paused skip can buffer without requesting playback. Only show Pause
+    // while playing or buffering with an explicit play-when-ready intent.
+    val showPause = state.isPlaying || (state.isBuffering && state.playWhenReady)
     val artwork = visual ?: rememberPlayerVisual(state.trackUri)
     val polarity = backgroundPolarity ?: remember { PlayerBackgroundPolarityState() }
     DisposableEffect(polarity) { onDispose { polarity.detach() } }
@@ -279,6 +282,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val measuredCover = polarity.measured["cover"]
     val measuredViewport = polarity.measured["viewport"]
     val controlNames = buildList {
+        // Metadata uses the same foreground as transport. Its darker upper
+        // backing must participate too, rather than letting lower controls
+        // choose unreadable ink for the title and artist.
+        add("title")
+        add("artist")
         if (rowMotion.seekAlpha > 0f) add("seek")
         if (rowMotion.actionsAlpha > 0f) add("actions")
         add("transport")
@@ -435,7 +443,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             val titleInputY = with(density) { (titleY.roundToPx() - titlePadding.roundToPx()).toDp() }
             Layout(modifier = Modifier.offset(textX, titleInputY).width(textWidth), content = {
                 MarqueeTitle(state.title, settings.reducedMotion,
-                    Modifier.fillMaxWidth().scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title"),
+                    Modifier.fillMaxWidth().scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title").onGloballyPositioned { polarity.measure("title", it) },
                     style = titleStyle, motionPaused = textMotionPaused)
                 if (titleOpensLyrics) Box(Modifier.testTag("player-lyrics-title-target")
                     .clickable(interactionSource = null, indication = null, role = Role.Button,
@@ -465,7 +473,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     append(" · "); append(album)
                 } }
             }, settings.reducedMotion,
-                Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag("player-artist"),
+                Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
                 style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
@@ -482,8 +490,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((transportWidth - 160.dp) / 2 * transportMotion)) {
                 TransportButton(TransportGlyph.Previous, false, "Previous", onPrevious,
                     Modifier.size(48.dp), 24.dp + 10.dp * transportMotion, foreground, state.connected, settings.reducedMotion)
-                TransportButton(TransportGlyph.PlayPause, state.isPlaying || state.isBuffering,
-                    if (state.isPlaying || state.isBuffering) "Pause" else "Play", onToggle,
+                TransportButton(TransportGlyph.PlayPause, showPause,
+                    if (showPause) "Pause" else "Play", onToggle,
                     Modifier.size(48.dp + 16.dp * transportMotion), 24.dp + 16.dp * transportMotion,
                     foreground, state.connected, settings.reducedMotion)
                 TransportButton(TransportGlyph.Next, false, "Next", onNext,
@@ -505,3 +513,4 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
 }
 }
+

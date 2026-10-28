@@ -59,8 +59,10 @@ class LibraryViewModel(
     fun scan(uri: String) { scanner.start(listOf(uri)) }
     fun scanAll() { scanner.start(library.value.snapshot.folders.map { it.uri }) }
     private var startupScanRequested = false
-    fun scanNewFiles() {
-        if (!startupScanRequested) startupScanRequested = scanner.startNewFiles(library.value.snapshot.folders.map { it.uri })
+    fun scanNewFiles() { scanner.startNewFiles(library.value.snapshot.folders.map { it.uri }) }
+    fun scanOnLaunch(quick: Boolean, full: Boolean) {
+        if (!startupScanRequested) startupScanRequested = scanner.startOnLaunch(
+            library.value.snapshot.folders.map { it.uri }, quick, full)
     }
     fun cancelScan() { scanner.cancel() }
     fun addFolder(uri: String) = changeFolder(LibraryProblem.AddFailed) { repository.addFolder(uri) }
@@ -86,3 +88,4 @@ class LibraryViewModel(
     }
     override fun onCleared() { playback.close() }
 }
+
