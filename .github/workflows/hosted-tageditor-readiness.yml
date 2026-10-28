@@ -1,0 +1,156 @@
+# Exact readable-fixture correction independently verified; no production modifications.
+# Publishing to this exact opt-in branch starts two independent focused jobs; this package does neither.
+# Opt-in diagnostics only: no release gate, compatibility, production, or canonical APK delivery/signing changes.
+name: Hosted TagEditor readable fixture (Java17, not release evidence)
+'on':
+  push:
+    branches: [test/hosted-tageditor-readable-fixture-20261028]
+    paths:
+      - .github/workflows/hosted-tageditor-readiness.yml
+      - .github/run-tageditor-readiness.sh
+      - .github/reconcile-tageditor-readiness.py
+      - .github/tageditor_environment.py
+      - .github/tageditor_java.py
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: hosted-tageditor-readiness-${{ github.ref }}
+  # Do not silently cancel a run or discard its first failure on a later push.
+  cancel-in-progress: false
+
+jobs:
+  exact:
+    name: TagEditor readiness ${{ matrix.case }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: tag26
+            api: 26
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            source: 408e9fb7726b76e0baa7b0d9aae3b8d2573110d2
+          - case: tag36
+            api: 36
+            target: default
+            gpu: lavapipe
+            disable_animations: false
+            source: 408e9fb7726b76e0baa7b0d9aae3b8d2573110d2
+    env:
+      EXACT_CASE: ${{ matrix.case }}
+      TEST_API: ${{ matrix.api }}
+      ANDROID_SERIAL: emulator-5554
+    steps:
+      - name: Checkout diagnostic harness at the event SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: .github
+      - name: Checkout immutable test source (never overlay tests)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ matrix.source }}
+          path: source
+          # Verify source child, readiness parent, and its sole integrated parent.
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Checkout immutable monitoring and device-ownership helpers
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 1e31403cb042e9896686200a4800faffce9b2a59
+          path: tooling
+          persist-credentials: false
+          sparse-checkout: .github
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Create fresh immutable provenance and source method inventory
+        run: bash harness/.github/run-tageditor-readiness.sh prepare "$EXACT_CASE" "$GITHUB_WORKSPACE/source" "$GITHUB_WORKSPACE/tooling" "$GITHUB_WORKSPACE/tageditor-readiness-evidence-$EXACT_CASE"
+      - name: Install the pinned live evidence publisher
+        run: npm ci --prefix tooling/.github/test-evidence --ignore-scripts --no-audit --no-fund
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Make room for disposable emulator userdata
+        run: |
+          # This diagnostic Android job does not use the preinstalled .NET SDKs.
+          sudo rm -rf /usr/share/dotnet
+          df -h "$HOME"
+      - name: Compile the exact test inputs before emulator startup
+        working-directory: source
+        run: |
+          # Isolated runner-generated debug signing only; never a canonical keystore.
+          env -u LOCALICA_DEBUG_KEYSTORE ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2 2>&1 | tee "$GITHUB_WORKSPACE/tageditor-readiness-evidence-$EXACT_CASE/build.log"
+          sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$GITHUB_WORKSPACE/tageditor-readiness-evidence-$EXACT_CASE/build-input-apks.sha256"
+          printf '%s\n' 'UNVALIDATED DIAGNOSTIC DEBUG INPUTS. Disposable runner debug signing; not canonical delivery, release certification, or a full-suite pass.' > "$GITHUB_WORKSPACE/tageditor-readiness-evidence-$EXACT_CASE/APK-STATUS.txt"
+      - name: Run all nine fixed class methods on its owned disposable emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          emulator-build: 16428233
+          cores: 2
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.gpu }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.disable_animations }}
+          script: |
+            adb -s emulator-5554 shell wm size reset
+            adb -s emulator-5554 shell wm density reset
+            if [ "$TEST_API" = 36 ]; then adb -s emulator-5554 shell wm size 720x1280 || exit $?; adb -s emulator-5554 shell wm density 280 || exit $?; for key in animator_duration_scale transition_animation_scale window_animation_scale; do adb -s emulator-5554 shell settings put global "$key" 1 || exit $?; done; fi
+            sleep 60
+            bash harness/.github/run-tageditor-readiness.sh run "$EXACT_CASE" "$GITHUB_WORKSPACE/source" "$GITHUB_WORKSPACE/tooling" "$GITHUB_WORKSPACE/tageditor-readiness-evidence-$EXACT_CASE"
+      - name: Reconcile exact methods, monitoring, and run-bounded original logs
+        if: always()
+        run: |
+          result=125
+          if [[ -f "tageditor-readiness-evidence-$EXACT_CASE/runner-exit.txt" ]]; then result=$(cat "tageditor-readiness-evidence-$EXACT_CASE/runner-exit.txt"); fi
+          python3 harness/.github/reconcile-tageditor-readiness.py --case "$EXACT_CASE" --source "$GITHUB_WORKSPACE/source" --tooling "$GITHUB_WORKSPACE/tooling" --evidence "$GITHUB_WORKSPACE/tageditor-readiness-evidence-$EXACT_CASE" --runner-exit "$result" --workflow-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+      - name: Preserve public host diagnostics
+        if: always()
+        run: |
+          mkdir -p "tageditor-readiness-evidence-$EXACT_CASE"
+          { date -u +%FT%TZ; free -h; df -h; } > "tageditor-readiness-evidence-$EXACT_CASE/host-final.txt" 2>&1
+          sudo dmesg --ctime | tail -100 > "tageditor-readiness-evidence-$EXACT_CASE/host-kernel.txt"
+      - name: Retain original reports and diagnostic files, even on failure
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: tageditor-readiness-${{ matrix.case }}-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: |
+            tageditor-readiness-evidence-${{ matrix.case }}/
+            source/app/build/reports/androidTests/
+            source/app/build/outputs/androidTest-results/
+            source/app/build/outputs/connected_android_test_additional_output/
+            source/app/build/outputs/apk/debug/app-debug.apk
+            source/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            source/app/src/androidTest/java/io/github/anastaci1a/localica/TagEditorThemeInheritanceTest.kt
+            source/app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt
+            source/app/src/main/java/io/github/anastaci1a/localica/ui/PlayerBackgroundPolarity.kt
+            source/app/src/main/java/io/github/anastaci1a/localica/ui/TagEditorPresentation.kt
+            harness/.github/workflows/hosted-tageditor-readiness.yml
+            harness/.github/run-tageditor-readiness.sh
+            harness/.github/reconcile-tageditor-readiness.py
+            harness/.github/tageditor_environment.py
+            harness/.github/tageditor_java.py
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
