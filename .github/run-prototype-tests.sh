@@ -91,11 +91,21 @@ profile_reasons = {
     'DialogChromeLayoutTest#native400x800Font2RetainsSharedChromeAndEveryRepeatControl': 'Requires sufficient display space and actual Android font scale 2',
     'TagEditorChromeLayoutTest#native360x640Font2KeepsSharedChromeAndScrollableFullSizeFields': 'Requires sufficient display space and the requested actual system font scale',
 }
+# These two existing RuntimeShader-path tests assume SDK >= 33. Their exact
+# API26 assumption callsites must be observed; API36 must execute both tests.
+selection_sdk33_callsites = {
+    'SelectionLensTest#translatingASelectionReusesItsDistanceField': 303,
+    'SelectionLensTest#translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt': 315,
+}
 qualified_skips = []
 def qualify_skip(name, method, skipped, xml_file):
     identity = name+'#'+method
     api = str(observed['api'])
-    expected = profile_reasons.get(identity.removeprefix(package)) if identity.startswith(package) else None
+    short_identity = identity.removeprefix(package) if identity.startswith(package) else None
+    sdk33_line = selection_sdk33_callsites.get(short_identity)
+    expected = profile_reasons.get(short_identity)
+    if sdk33_line is not None and api == '26':
+        expected = 'got: <false>, expected: is <true>'
     if identity == package+'PlayerBackgroundPolarityTest#nativeBlurRetainsVerifiedInkAsDistinctUnavailableThenRecovers' and api == '26':
         expected = 'got: <false>, expected: is <true>'
     if expected is None or api not in ('26', '36'):
@@ -110,6 +120,18 @@ def qualify_skip(name, method, skipped, xml_file):
     reasons = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
     if reasons != [expected]:
         raise ValueError('Missing, ambiguous or wrong observed skip reason: '+identity)
+    if sdk33_line is not None:
+        callsite = 'at '+name+'.'+method+'(SelectionLensTest.kt:'+str(sdk33_line)+')'
+        boundaries = re.findall(r'TestRunner: (started|assumption failed|finished): ([^\r\n]*)', text)
+        callsites = re.findall(r'TestRunner:\s+(at '+re.escape(name+'.'+method)+r'\(SelectionLensTest\.kt:[0-9]+\))', text)
+        if boundaries != [('started', marker), ('assumption failed', marker), ('finished', marker)] or callsites != [callsite]:
+            raise ValueError('Missing, mixed or ambiguous SDK assumption callsite/terminal: '+identity)
+        ordered = ['TestRunner: started: '+marker, 'TestRunner: assumption failed: '+marker,
+                   'TestRunner: org.junit.AssumptionViolatedException: '+expected, callsite,
+                   'TestRunner: finished: '+marker]
+        positions = [text.index(value) for value in ordered]
+        if positions != sorted(positions) or re.search(r'TestRunner: (?:failed|failure|error):', text):
+            raise ValueError('Unordered or contradictory SDK assumption evidence: '+identity)
     # If another adapter supplies XML reason text, it must not contradict the paired log.
     message = skipped.attrib.get('message', '')
     detail = (skipped.text or '').strip()
@@ -117,7 +139,8 @@ def qualify_skip(name, method, skipped, xml_file):
         raise ValueError('Contradictory XML assumption reason: '+identity)
     qualified_skips.append({'id': identity, 'api': api, 'reason': reasons[0], 'evidence': str(logs[0]),
         'evidence_sha256': hashlib.sha256(logs[0].read_bytes()).hexdigest(), 'xml': str(xml_file),
-        'qualification': 'Observed assumption only; not a passed profile or optical proof'})
+        'qualification': ('Observed API26 SDK>=33 guard; shader path not exercised and API36 must execute'
+                          if sdk33_line is not None else 'Observed assumption only; not a passed profile or optical proof')})
 for file in files:
     tree = ET.parse(file)
     suites = [tree.getroot()] if tree.getroot().tag == 'testsuite' else tree.getroot().findall('.//testsuite')
