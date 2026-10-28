@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.ui.*
@@ -51,6 +52,131 @@ class SearchImeMotionTest {
     private val samples = mutableListOf<SearchMorphSample>()
     private val keyboardSetup = mutableListOf<String>()
     private val motionTimeline = mutableListOf<String>()
+    private var nativeReturnProbe: NativeReturnProbe? = null
+    private val nativeReturnFrames = mutableListOf<Pair<SearchMorphSample, NativeReturnEvidence>>()
+
+    private data class NativeReturnEvidence(
+        val uptime: Long,
+        val virtual: Long,
+        val requested: Long?,
+        val progressAt: Long?,
+        val attached: Boolean,
+        val focused: Boolean,
+        val ime: Int,
+        val navigation: Int,
+        val targetVisible: Boolean?,
+        val targetIme: Int?,
+        val activeHideIds: List<Int>,
+    ) {
+        val overlapsNativeHide: Boolean get() = requested != null && progressAt != null &&
+            progressAt >= requested && uptime >= progressAt && attached && focused &&
+            targetVisible == false && targetIme == 0 && ime > navigation && activeHideIds.isNotEmpty()
+    }
+
+    // API 30+ uses platform animation callbacks, not synthetic legacy compat animation.
+    // This visible zero-size decor sibling never takes input or replaces Compose listeners.
+    // A callback can change native frame synchronization: this is not timing-equivalent
+    // evidence to the uninstrumented baseline, and cannot establish optical acceptance.
+    private inner class NativeReturnProbe : android.view.View(compose.activity) {
+        private var requested: Long? = null
+        private var progressAt: Long? = null
+        private val preparedAfterRequest = mutableSetOf<WindowInsetsAnimationCompat>()
+        private val activeHides = mutableSetOf<WindowInsetsAnimationCompat>()
+        private var progressed = emptySet<WindowInsetsAnimationCompat>()
+        private var animatedIme = 0
+        private var animatedNavigation = 0
+
+        init {
+            isFocusable = false
+            isClickable = false
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            ViewCompat.setWindowInsetsAnimationCallback(this,
+                object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                    override fun onPrepare(animation: WindowInsetsAnimationCompat) {
+                        if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0 && requested != null &&
+                            SystemClock.uptimeMillis() >= requireNotNull(requested)) preparedAfterRequest += animation
+                        record("prepare", animation)
+                    }
+                    override fun onStart(animation: WindowInsetsAnimationCompat,
+                        bounds: WindowInsetsAnimationCompat.BoundsCompat): WindowInsetsAnimationCompat.BoundsCompat {
+                        if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) {
+                            // Never borrow a previous animation's positive current inset.
+                            progressed = emptySet()
+                            progressAt = null
+                            val target = ViewCompat.getRootWindowInsets(this@NativeReturnProbe)
+                            if (animation in preparedAfterRequest && requested != null &&
+                                SystemClock.uptimeMillis() >= requireNotNull(requested) &&
+                                target?.isVisible(WindowInsetsCompat.Type.ime()) == false &&
+                                target.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0) {
+                                // Bind hide direction to this identity after its end-state apply.
+                                activeHides += animation
+                            }
+                        }
+                        record("start", animation)
+                        return bounds
+                    }
+                    override fun onProgress(insets: WindowInsetsCompat,
+                        runningAnimations: MutableList<WindowInsetsAnimationCompat>): WindowInsetsCompat {
+                        progressed = runningAnimations.filter { it in activeHides }.toSet()
+                        progressAt = SystemClock.uptimeMillis().takeIf { progressed.isNotEmpty() }
+                        animatedIme = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                        animatedNavigation = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+                        record("progress")
+                        return insets
+                    }
+                    override fun onEnd(animation: WindowInsetsAnimationCompat) {
+                        preparedAfterRequest -= animation
+                        activeHides -= animation
+                        progressed = progressed - animation
+                        if (progressed.isEmpty()) progressAt = null
+                        record("end", animation)
+                    }
+                })
+        }
+
+        private fun reset() {
+            preparedAfterRequest.clear()
+            activeHides.clear()
+            progressed = emptySet()
+            progressAt = null
+            animatedIme = 0
+            animatedNavigation = 0
+        }
+        fun arm() {
+            reset()
+            requested = SystemClock.uptimeMillis()
+            record("dismissal-armed")
+        }
+        fun snapshot(): NativeReturnEvidence {
+            val target = ViewCompat.getRootWindowInsets(this)
+            return NativeReturnEvidence(SystemClock.uptimeMillis(), compose.mainClock.currentTime,
+                requested, progressAt, isAttachedToWindow, hasWindowFocus(), animatedIme, animatedNavigation,
+                target?.isVisible(WindowInsetsCompat.Type.ime()),
+                target?.getInsets(WindowInsetsCompat.Type.ime())?.bottom,
+                progressed.filter { it in activeHides }.map { System.identityHashCode(it) })
+        }
+        private fun record(phase: String, animation: WindowInsetsAnimationCompat? = null) {
+            val evidence = snapshot()
+            motionTimeline += "${evidence.uptime} nativeReturn phase=$phase " +
+                "animation=${animation?.let { System.identityHashCode(it) }} type=${animation?.typeMask} $evidence"
+        }
+        override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+            super.onWindowFocusChanged(hasWindowFocus)
+            if (!hasWindowFocus) reset()
+            record("focus=$hasWindowFocus")
+        }
+        override fun onDetachedFromWindow() {
+            reset()
+            record("detach")
+            super.onDetachedFromWindow()
+        }
+        fun dispose() {
+            ViewCompat.setWindowInsetsAnimationCallback(this, null)
+            reset()
+            requested = null
+            (parent as? android.view.ViewGroup)?.removeView(this)
+        }
+    }
 
     @Before fun prepareWindow() {
         compose.activityRule.scenario.onActivity {
@@ -88,6 +214,11 @@ class SearchImeMotionTest {
                 LocalSearchMorphObserver provides {
                     samples += it
                     motionTimeline += "${SystemClock.uptimeMillis()} $it"
+                    nativeReturnProbe?.snapshot()?.let { evidence ->
+                        nativeReturnFrames += it to evidence
+                        motionTimeline += "${evidence.uptime} nativeReturn phase=placed " +
+                            "sample=${samples.lastIndex} progress=${it.progress} opening=${it.opening} $evidence"
+                    }
                 }) {
                 anchor = rememberGlassAnchor()
                 Box(Modifier.fillMaxSize()) {
@@ -251,8 +382,15 @@ class SearchImeMotionTest {
             // Compose 1.8.2 preserves the source during the native animation and
             // resets source/target onEnd. Current insets may already be zero when
             // a closing window loses IME control, before that animation finishes.
-            val overlap = returning.indexOfFirst {
-                it.progress < .99f && (it.ime > 0 || it.imeSource > it.imeTarget)
+            val nativeFrames = compose.runOnUiThread { nativeReturnFrames.toList() }
+            val overlap = returning.indexOfFirst { sample ->
+                // A released popup can report all-zero insets before the surviving
+                // activity's native hide has even started. Count independently observed
+                // native overlap only on this exact intermediate placed return frame.
+                val hostOverlap = sample.progress >= .01f && nativeFrames.any { (placed, evidence) ->
+                    placed === sample && evidence.overlapsNativeHide
+                }
+                sample.progress < .99f && (sample.ime > 0 || sample.imeSource > sample.imeTarget || hostOverlap)
             }
             assertTrue("Return moves before the native keyboard hide settles", overlap >= 0)
             // A closing popup can lose IME control before disposal. Its cached current
@@ -312,6 +450,14 @@ class SearchImeMotionTest {
             verifyOpening(home, reduced)
             compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
             val raised = compose.runOnUiThread { samples.last().bounds }
+            if (outside && android.os.Build.VERSION.SDK_INT >= 30) compose.runOnUiThread {
+                nativeReturnProbe = NativeReturnProbe().also { probe ->
+                    (compose.activity.window.decorView as android.view.ViewGroup)
+                        .addView(probe, 0, android.view.ViewGroup.LayoutParams(0, 0))
+                    ViewCompat.requestApplyInsets(probe)
+                    probe.arm()
+                }
+            }
             android.util.Log.i("SearchImeMotionTest", "Native dismissal requested outside=$outside uptime=${SystemClock.uptimeMillis()}")
             if (outside) {
                 val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
@@ -322,7 +468,11 @@ class SearchImeMotionTest {
             closed()
             verifyReturn(raised, home, reduced)
         } finally {
-            compose.runOnUiThread { visible = false }
+            compose.runOnUiThread {
+                nativeReturnProbe?.dispose()
+                nativeReturnProbe = null
+                visible = false
+            }
             compose.mainClock.autoAdvance = true
         }
     }
