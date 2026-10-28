@@ -38,7 +38,11 @@ class FloatingImeLifecycleTest {
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
         InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
     ).bufferedReader().use { it.readText().trim() }
-    private fun quote(value: String) = "'" + value.replace("'", "'\\''") + "'"
+    // UiAutomation uses Runtime.exec tokenization, not shell parsing. Quotes
+    // would be literal bytes. These fixture settings/components are single tokens.
+    private fun argument(value: String): String = value.also {
+        require(it.matches(Regex("[A-Za-z0-9_./:;=+-]+"))) { "Unsupported direct-command argument" }
+    }
     private fun snapshot(label: String): Boolean = compose.runOnUiThread {
         val view = host
         val insets = view?.rootWindowInsets
@@ -59,8 +63,8 @@ class FloatingImeLifecycleTest {
         val requested = SystemClock.uptimeMillis()
         var serviceWitness = ""
         compose.waitUntil(5000) {
-            records += shell("am broadcast -a " + quote(testPackage + ".floating.SNAPSHOT") + " -p " + quote(testPackage))
-            serviceWitness = shell("logcat -d -v threadtime -s LocalicaFloatingIme:I '*:S'")
+            records += shell("am broadcast -a " + argument(testPackage + ".floating.SNAPSHOT") + " -p " + argument(testPackage))
+            serviceWitness = shell("logcat -d -v threadtime -s LocalicaFloatingIme:I *:S")
                 .lineSequence().lastOrNull { "event=snapshot " in it }.orEmpty()
             fun number(key: String) = Regex("\\b" + key + "=(-?\\d+)")
                 .find(serviceWitness)?.groupValues?.get(1)?.toLongOrNull()
@@ -87,7 +91,7 @@ class FloatingImeLifecycleTest {
 
     private fun hideFromService(testPackage: String, tag: String) {
         val before = compose.runOnUiThread { decisions.count { "endEditing reason=imeObservation" in it } }
-        records += shell("am broadcast -a " + quote(testPackage + ".floating.HIDE") + " -p " + quote(testPackage))
+        records += shell("am broadcast -a " + argument(testPackage + ".floating.HIDE") + " -p " + argument(testPackage))
         compose.waitUntil(10000) {
             compose.runOnUiThread {
                 host?.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == false && !composeVisible
@@ -110,12 +114,16 @@ class FloatingImeLifecycleTest {
         val component = "$testPackage/io.github.anastaci1a.localica.FloatingTestImeService"
         val keys = listOf("default_input_method", "enabled_input_methods", "selected_input_method_subtype", "input_methods_subtype_history", "show_ime_with_hard_keyboard")
         val original = keys.associateWith { shell("settings get secure $it") }
+        // Validate every value before the first mutation so restoration never
+        // discovers an unrepresentable empty/whitespace argument after changing IMEs.
+        original.values.forEach { argument(it) }
+        argument(component); argument(testPackage)
         var contentInstalled by mutableStateOf(true)
         var failure: Throwable? = null
         try {
             assertTrue("Test APK declares the real IME", shell("ime list -a -s").lineSequence().any { it.trim() == component })
-            records += shell("ime enable " + quote(component))
-            records += shell("ime set " + quote(component))
+            records += shell("ime enable " + argument(component))
+            records += shell("ime set " + argument(component))
             shell("settings put secure show_ime_with_hard_keyboard 1")
             assertEquals(component, shell("settings get secure default_input_method"))
             compose.setContent {
@@ -194,14 +202,14 @@ class FloatingImeLifecycleTest {
             }
             cleanup {
                 original.getValue("default_input_method").takeUnless { it == "null" || it.isBlank() }
-                    ?.let { records += shell("ime set " + quote(it)) }
+                    ?.let { records += shell("ime set " + argument(it)) }
             }
             cleanup {
                 if (!original.getValue("enabled_input_methods").split(':').any { it.substringBefore(';') == component })
-                    records += shell("ime disable " + quote(component))
+                    records += shell("ime disable " + argument(component))
             }
             for ((key, value) in original) cleanup {
-                shell(if (value == "null") "settings delete secure $key" else "settings put secure $key " + quote(value))
+                shell(if (value == "null") "settings delete secure $key" else "settings put secure $key " + argument(value))
                 assertEquals("Restore secure setting $key", value, shell("settings get secure $key"))
             }
             cleanup {
@@ -211,7 +219,7 @@ class FloatingImeLifecycleTest {
             records += "settings-restore-attempted=$original errors=" + (cleanupError != null)
             cleanup { File(output(), "host-observations.txt").writeText(records.joinToString("\n")) }
             cleanup { File(output(), "editing-decisions.txt").writeText(compose.runOnUiThread { decisions.toList() }.joinToString("\n")) }
-            cleanup { File(output(), "service-logcat.txt").writeText(shell("logcat -d -v threadtime -s LocalicaFloatingIme:I '*:S'")) }
+            cleanup { File(output(), "service-logcat.txt").writeText(shell("logcat -d -v threadtime -s LocalicaFloatingIme:I *:S")) }
             cleanupError?.let { if (failure != null) failure.addSuppressed(it) else throw it }
         }
     }
