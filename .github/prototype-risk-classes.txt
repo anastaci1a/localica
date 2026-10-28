@@ -1,6 +1,7 @@
 # Exact top-level instrumentation classes available at the candidate baseline.
 # Selection remains explicit; this inventory does not claim affected coverage.
 io.github.anastaci1a.localica.AacEditListExtractionTest
+io.github.anastaci1a.localica.ActionStripDrawingTest
 io.github.anastaci1a.localica.ActivationHapticsTest
 io.github.anastaci1a.localica.AdvancedRepeatTest
 io.github.anastaci1a.localica.AppIdentityTest
@@ -38,17 +39,20 @@ io.github.anastaci1a.localica.CollectionDetailTest
 io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest
 io.github.anastaci1a.localica.CollectionNavigationTest
 io.github.anastaci1a.localica.CollectionSelectionTest
+io.github.anastaci1a.localica.CompactCollectionArtworkTest
 io.github.anastaci1a.localica.ContinuousPlaybackTest
 io.github.anastaci1a.localica.ControlStateMotionTest
 io.github.anastaci1a.localica.CoverImagesTest
 io.github.anastaci1a.localica.CurrentSongHighlightGeometryTest
 io.github.anastaci1a.localica.DeviceCornersTest
+io.github.anastaci1a.localica.DialogChromeLayoutTest
 io.github.anastaci1a.localica.DragReorderTest
 io.github.anastaci1a.localica.EffectiveMotionWindowTest
 io.github.anastaci1a.localica.EffectiveReducedMotionTest
 io.github.anastaci1a.localica.EmbeddedTagsTest
 io.github.anastaci1a.localica.FilterBackdropTest
 io.github.anastaci1a.localica.FloatingControlMotionTest
+io.github.anastaci1a.localica.FloatingImeLifecycleTest
 io.github.anastaci1a.localica.FolderLabelsTest
 io.github.anastaci1a.localica.FolderPickerTest
 io.github.anastaci1a.localica.FrostedSurfaceTest
@@ -58,6 +62,8 @@ io.github.anastaci1a.localica.GalleryNavigationTest
 io.github.anastaci1a.localica.GallerySkeletonGeometryTest
 io.github.anastaci1a.localica.GlassActionRowTest
 io.github.anastaci1a.localica.GlassAppearanceTest
+io.github.anastaci1a.localica.GlassDialogLateReopenTest
+io.github.anastaci1a.localica.GlassDialogReopenTest
 io.github.anastaci1a.localica.GlassDialogsTest
 io.github.anastaci1a.localica.GlassForegroundTest
 io.github.anastaci1a.localica.GlassMenuContentTest
@@ -75,6 +81,7 @@ io.github.anastaci1a.localica.GlassSilhouetteTest
 io.github.anastaci1a.localica.GlobalPlaybackModesTest
 io.github.anastaci1a.localica.HomeSelectionTest
 io.github.anastaci1a.localica.ImageChooserTest
+io.github.anastaci1a.localica.ImeOwnershipLifecycleTest
 io.github.anastaci1a.localica.IncompleteScanTest
 io.github.anastaci1a.localica.InheritedInformationPreferencesTest
 io.github.anastaci1a.localica.InterfaceControlsTest
@@ -83,10 +90,10 @@ io.github.anastaci1a.localica.KeyedDragTest
 io.github.anastaci1a.localica.LargeQueueTransportTest
 io.github.anastaci1a.localica.LensMeshSamplingTest
 io.github.anastaci1a.localica.LibraryDatabaseTest
-io.github.anastaci1a.localica.LibraryPlaybackReadTest
 io.github.anastaci1a.localica.LibraryFilterMotionTest
 io.github.anastaci1a.localica.LibraryFilterPresentationTest
 io.github.anastaci1a.localica.LibraryFilterTest
+io.github.anastaci1a.localica.LibraryPlaybackReadTest
 io.github.anastaci1a.localica.LibraryPreferencesTest
 io.github.anastaci1a.localica.LiquidGlassTest
 io.github.anastaci1a.localica.ListBackTest
@@ -95,11 +102,14 @@ io.github.anastaci1a.localica.ListDensityGeometryTest
 io.github.anastaci1a.localica.ListMotionTest
 io.github.anastaci1a.localica.ListReturnControlsTest
 io.github.anastaci1a.localica.ListSearchTest
+io.github.anastaci1a.localica.ListTopFadeTest
 io.github.anastaci1a.localica.LiveOrderDialogTest
 io.github.anastaci1a.localica.LiveOrderPersistenceTest
+io.github.anastaci1a.localica.LoadingMaterialOpacityTest
 io.github.anastaci1a.localica.LyricsHeaderActionsTest
 io.github.anastaci1a.localica.LyricsInteractionTest
 io.github.anastaci1a.localica.LyricsLoadingStateTest
+io.github.anastaci1a.localica.LyricsPlayerReopenTest
 io.github.anastaci1a.localica.LyricsReaderTest
 io.github.anastaci1a.localica.LyricsReturnBackdropTest
 io.github.anastaci1a.localica.LyricsViewportMotionTest
@@ -127,6 +137,7 @@ io.github.anastaci1a.localica.PlaybackTest
 io.github.anastaci1a.localica.PlayerActionSlotsTest
 io.github.anastaci1a.localica.PlayerArtworkChoiceInputTest
 io.github.anastaci1a.localica.PlayerBackdropTest
+io.github.anastaci1a.localica.PlayerBackgroundPolarityTest
 io.github.anastaci1a.localica.PlayerContrastTest
 io.github.anastaci1a.localica.PlayerExpansionMotionTest
 io.github.anastaci1a.localica.PlayerFeedbackTest
@@ -140,6 +151,8 @@ io.github.anastaci1a.localica.PlaylistCompletionTest
 io.github.anastaci1a.localica.PlaylistCoverActionTest
 io.github.anastaci1a.localica.PlaylistDatabaseTest
 io.github.anastaci1a.localica.PlaylistDestinationUiTest
+io.github.anastaci1a.localica.PlaylistDetailPresentationTest
+io.github.anastaci1a.localica.PlaylistSelectionPlacementTest
 io.github.anastaci1a.localica.PopupEnvelopeTest
 io.github.anastaci1a.localica.PopupScrollEdgesTest
 io.github.anastaci1a.localica.PopupShadowContinuityTest
@@ -170,7 +183,9 @@ io.github.anastaci1a.localica.QueueRecoveryTest
 io.github.anastaci1a.localica.QueueReorderCommandTest
 io.github.anastaci1a.localica.QueueRestoreTest
 io.github.anastaci1a.localica.QueueReusePlaybackTest
+io.github.anastaci1a.localica.QueueSaveOriginTest
 io.github.anastaci1a.localica.QueueScrollOwnershipTest
+io.github.anastaci1a.localica.QueueSelectionPlacementTest
 io.github.anastaci1a.localica.QueueSelectorDragTest
 io.github.anastaci1a.localica.QueueSqlCountBenchmarkTest
 io.github.anastaci1a.localica.QueuedSettingsTest
@@ -213,10 +228,12 @@ io.github.anastaci1a.localica.SlidingTabsTest
 io.github.anastaci1a.localica.SongDragViewportTest
 io.github.anastaci1a.localica.SongInformationTest
 io.github.anastaci1a.localica.SplitPillContactTest
+io.github.anastaci1a.localica.StartupMergeTest
 io.github.anastaci1a.localica.StatisticsStorageTest
 io.github.anastaci1a.localica.SwitchTapOpticsTest
 io.github.anastaci1a.localica.TabPagerTest
 io.github.anastaci1a.localica.TabResetTest
+io.github.anastaci1a.localica.TagEditorChromeLayoutTest
 io.github.anastaci1a.localica.TagEditorFlowTest
 io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
 io.github.anastaci1a.localica.TagWritingTest
@@ -226,18 +243,3 @@ io.github.anastaci1a.localica.TrackedDataSourceTest
 io.github.anastaci1a.localica.TracklistPinchIntegrationTest
 io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest
 io.github.anastaci1a.localica.WorkflowPersistenceTest
-io.github.anastaci1a.localica.ActionStripDrawingTest
-io.github.anastaci1a.localica.CompactCollectionArtworkTest
-io.github.anastaci1a.localica.DialogChromeLayoutTest
-io.github.anastaci1a.localica.GlassDialogLateReopenTest
-io.github.anastaci1a.localica.GlassDialogReopenTest
-io.github.anastaci1a.localica.ListTopFadeTest
-io.github.anastaci1a.localica.LoadingMaterialOpacityTest
-io.github.anastaci1a.localica.LyricsPlayerReopenTest
-io.github.anastaci1a.localica.PlayerBackgroundPolarityTest
-io.github.anastaci1a.localica.PlaylistDetailPresentationTest
-io.github.anastaci1a.localica.QueueSaveOriginTest
-io.github.anastaci1a.localica.TagEditorChromeLayoutTest
-io.github.anastaci1a.localica.QueueSelectionPlacementTest
-io.github.anastaci1a.localica.PlaylistSelectionPlacementTest
-io.github.anastaci1a.localica.StartupMergeTest
