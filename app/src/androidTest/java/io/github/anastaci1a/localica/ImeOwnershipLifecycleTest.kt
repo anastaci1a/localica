@@ -5,6 +5,8 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewTreeObserver
+import androidx.activity.OnBackPressedCallback
 import android.view.WindowInsets as NativeInsets
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
@@ -33,6 +35,8 @@ class ImeOwnershipLifecycleTest {
     private var installed by mutableStateOf(true)
     private var witness: NativeImeOwnershipWitness? = null
     private var screenshotSequence = 0
+    private var cancelBeforeDraw: Pair<ViewTreeObserver, ViewTreeObserver.OnPreDrawListener>? = null
+    private var retainBackHost: OnBackPressedCallback? = null
     private fun output(): File {
         val extra = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
         val root = extra?.takeIf { it.isNotBlank() }?.let(::File) ?: requireNotNull(compose.activity.getExternalFilesDir(null))
@@ -108,6 +112,11 @@ class ImeOwnershipLifecycleTest {
             } }
             clean {
                 compose.runOnUiThread {
+                    cancelBeforeDraw?.let { (observer, listener) ->
+                        if (observer.isAlive) observer.removeOnPreDrawListener(listener)
+                        else host?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener)
+                    }
+                    cancelBeforeDraw = null
                     installed = false
                     host?.windowInsetsController?.hide(NativeInsets.Type.ime())
                 }
@@ -116,7 +125,10 @@ class ImeOwnershipLifecycleTest {
                     host == null || host?.rootWindowInsets?.isVisible(NativeInsets.Type.ime()) == false
                 } }
             }
-            clean { compose.runOnUiThread { witness?.dispose(); witness = null } }
+            clean { compose.runOnUiThread {
+                retainBackHost?.remove(); retainBackHost = null
+                witness?.dispose(); witness = null
+            } }
             original.forEach { (key, value) -> clean {
                 shell(if (value == "null") "settings delete $key" else "settings put $key $value")
                 assertEquals("Restored $key", value, shell("settings get $key"))
@@ -153,8 +165,24 @@ class ImeOwnershipLifecycleTest {
         fixture { animation ->
             if (canceled == null) {
                 canceled = System.identityHashCode(animation)
-                log("requested-native-cancel animation=$canceled")
-                host?.windowInsetsController?.hide(NativeInsets.Type.ime())
+                // onPrepare runs inside the runner constructor, before runner registration.
+                // Our pre-draw listener is registered before the platform's start listener:
+                // defer hide until the runner exists but its start has not dispatched.
+                val view = requireNotNull(host)
+                val observer = view.viewTreeObserver
+                val listener = object : ViewTreeObserver.OnPreDrawListener {
+                    override fun onPreDraw(): Boolean {
+                        if (observer.isAlive) observer.removeOnPreDrawListener(this)
+                        else view.viewTreeObserver.takeIf { it.isAlive }?.removeOnPreDrawListener(this)
+                        cancelBeforeDraw = null
+                        log("requested-native-cancel-before-draw animation=$canceled " +
+                            "started=${requireNotNull(canceled) in requireNotNull(witness).started}")
+                        view.windowInsetsController?.hide(NativeInsets.Type.ime())
+                        return true
+                    }
+                }
+                cancelBeforeDraw = observer to listener
+                observer.addOnPreDrawListener(listener)
             }
         }
         compose.onNodeWithTag("first").performClick()
@@ -176,6 +204,13 @@ class ImeOwnershipLifecycleTest {
 
     @Test fun nativeBackDuringOpeningIsRecordedBeforeShowEnds() = controlled {
         var id: Int? = null
+        // Keep this diagnostic host alive if the native key's fallback reaches Activity.
+        // This callback does not clear focus, hide IME, or simulate an editing decision.
+        compose.runOnUiThread {
+            retainBackHost = object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() { log("fixture-retained-back-host") }
+            }.also { compose.activity.onBackPressedDispatcher.addCallback(it) }
+        }
         fixture { animation -> if (id == null) id = System.identityHashCode(animation) }
         compose.onNodeWithTag("first").performClick()
         compose.waitUntil(5000) { compose.runOnUiThread { id != null } }
@@ -192,8 +227,53 @@ class ImeOwnershipLifecycleTest {
             log("native-back-delivered animation=$id ended=${requireNotNull(id) in requireNotNull(witness).ended}")
         }
         awaitUnfocused()
+        assertFalse("Back must leave diagnostic Activity alive", compose.activity.isFinishing)
+        assertEquals("The actual editor, not the retaining callback, must handle Back once", 1,
+            compose.runOnUiThread { events.count { "endEditing reason=backKey" in it } })
         compose.onNodeWithTag("second").performClick(); awaitShown()
         compose.onNodeWithTag("second").assertIsFocused()
         hide(); awaitUnfocused()
     }
+    /** Pure protocol assertions executed in this diagnostic APK; not native cancellation proof. */
+    @Test fun shadowCancellationCleanupRejectsLateCallbacksAndAllowsNewOwner() {
+        val shadow = ImeExposureShadow(::log)
+        shadow.availability(true, true)
+        shadow.insets(false)
+        shadow.input("inputSession phase=start generation=101", 1)
+        shadow.prepare(1, false, 2)
+        shadow.cancel(1, "protocol-explicit-cancel")
+        shadow.cancel(1, "protocol-idempotent-cancel")
+        assertEquals(0, shadow.pendingCount)
+        shadow.end(1, 1f, true, 3)
+        assertEquals(0, shadow.confirms)
+        assertEquals(1, shadow.rejectedCompletions)
+        shadow.prepare(2, false, 4)
+        shadow.input("inputSession phase=retire generation=101", 5)
+        assertEquals(0, shadow.pendingCount)
+        shadow.input("inputSession phase=start generation=102", 6)
+        shadow.end(2, 1f, true, 7)
+        assertEquals(0, shadow.confirms)
+        shadow.prepare(3, false, 8)
+        shadow.availability(false, true)
+        assertEquals(0, shadow.pendingCount)
+        shadow.availability(true, true)
+        shadow.end(3, 1f, true, 9)
+        assertEquals(0, shadow.confirms)
+        shadow.prepare(4, false, 10)
+        shadow.start(4, true)
+        shadow.end(4, 1f, true, 11)
+        assertEquals("Orphaned prior records must not poison a new real completion", 1, shadow.confirms)
+        assertEquals(ImeExposureShadow.Receipt.ACTIVE, shadow.receipt)
+        shadow.end(2, 1f, false, 12)
+        assertEquals(1, shadow.confirms)
+        assertEquals("A stale completion must not erase a newer receipt", ImeExposureShadow.Receipt.ACTIVE, shadow.receipt)
+        shadow.prepare(5, true, 12)
+        shadow.dispose()
+        assertEquals(0, shadow.pendingCount)
+        assertEquals(ImeExposureShadow.Receipt.NONE, shadow.receipt)
+        shadow.end(5, 1f, false, 13)
+        assertEquals(0, shadow.suspendedHideCompletions)
+        assertEquals(1, shadow.confirms)
+    }
+
 }

@@ -1,12 +1,12 @@
-name: IME exposure shadow decision experiment (not delivery)
+name: IME native cancellation and retained host experiment (not delivery)
 'on':
   push:
     branches:
-    - test/ime-exposure-shadow-20261028
+    - test/ime-fixture-retirement-20261028
 permissions:
   contents: read
 concurrency:
-  group: ime-exposure-shadow-${{ github.ref }}
+  group: ime-fixture-retirement-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   ownership_36:

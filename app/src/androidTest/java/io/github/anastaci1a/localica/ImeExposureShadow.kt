@@ -16,14 +16,28 @@ internal class ImeExposureShadow(private val record: (String) -> Unit) {
     private var controlled = false
     private var visible: Boolean? = null
     private val pending = mutableMapOf<Int, Pending>()
+    val pendingCount: Int get() = pending.size
     private var lastEditingEnd: Pair<Long?, Long>? = null
     private fun emit(event: String) = record("shadow $event owner=$owner epoch=$epoch receipt=$receipt pending=${pending.size}")
 
+    fun cancel(id: Int, reason: String) {
+        val removed = pending.remove(id) ?: return
+        emit("cancelled id=$id transactionOwner=${removed.owner} reason=$reason")
+    }
+    private fun clearPending(reason: String) {
+        pending.keys.toList().forEach { cancel(it, reason) }
+    }
+    fun dispose() {
+        clearPending("witness-disposed")
+        owner = null; epoch++; receipt = Receipt.NONE
+        focused = false; controlled = false; visible = null
+        emit("disposed")
+    }
     fun availability(focus: Boolean, control: Boolean? = null) {
         val nextControl = control ?: controlled
         if ((focused && !focus) || (controlled && !nextControl)) {
             epoch++
-            // Keep records solely to report rejected stale callbacks; epoch prevents reuse.
+            clearPending("availability-lost")
             if (receipt != Receipt.NONE) receipt = Receipt.SUSPENDED
         }
         focused = focus; controlled = nextControl
@@ -34,12 +48,15 @@ internal class ImeExposureShadow(private val record: (String) -> Unit) {
         val generation = Regex("\\bgeneration=(\\d+)").find(event)?.groupValues?.get(1)?.toLong()
         when {
             "inputSession phase=start" in event && generation != null -> {
-                owner = generation; epoch++
                 if (pending.isNotEmpty()) receipt = Receipt.NONE
+                clearPending("input-replaced")
+                owner = generation; epoch++
                 if (receipt == Receipt.ACTIVE && (!focused || !controlled || visible != true)) receipt = Receipt.SUSPENDED
                 emit("input-start generation=$generation")
             }
             "inputSession phase=retire" in event && generation == owner -> {
+                if (pending.isNotEmpty()) receipt = Receipt.NONE
+                clearPending("input-retired")
                 owner = null; epoch++; emit("input-retire generation=$generation")
             }
             "endEditing reason=" in event -> {
@@ -60,7 +77,12 @@ internal class ImeExposureShadow(private val record: (String) -> Unit) {
         emit("start id=$id target=$target")
     }
     fun end(id: Int, fraction: Float, nowVisible: Boolean?, now: Long) {
-        val p = pending.remove(id) ?: return
+        val p = pending.remove(id)
+        if (p == null) {
+            rejectedCompletions++
+            emit("rejected-orphan id=$id fraction=$fraction visible=$nowVisible")
+            return
+        }
         val live = p.owner != null && owner == p.owner && epoch == p.epoch && focused && controlled
         val show = p.before == false && p.target == true
         val hide = p.before == true && p.target == false

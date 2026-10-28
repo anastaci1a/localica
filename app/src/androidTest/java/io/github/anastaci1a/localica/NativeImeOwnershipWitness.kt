@@ -79,5 +79,6 @@ internal class NativeImeOwnershipWitness(
     fun dispose() {
         controller?.removeOnControllableInsetsChangedListener(control)
         probe.setWindowInsetsAnimationCallback(null); root.removeView(probe)
+        shadow.dispose()
     }
 }
