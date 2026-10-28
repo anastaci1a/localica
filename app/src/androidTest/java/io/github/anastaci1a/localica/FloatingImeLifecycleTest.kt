@@ -216,6 +216,53 @@ class FloatingImeLifecycleTest {
                 val restored = keys.associateWith { shell("settings get secure $it") }
                 assertEquals("All captured IME settings agree after the complete restoration", original, restored)
             }
+            // Secure settings alone do not prove the native window/input runtime
+            // recovered. Never dismiss an unknown crash/system window to pass this.
+            cleanup {
+                if (host != null) {
+                    val input = requireNotNull(compose.activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java))
+                    compose.waitUntil(5000) {
+                        compose.runOnUiThread {
+                            host?.isAttachedToWindow == true && host?.hasWindowFocus() == true &&
+                                !input.isAcceptingText &&
+                                host?.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == false
+                        }
+                    }
+                }
+            }
+            var restoredMethodDump = ""
+            cleanup {
+                compose.waitUntil(5000) {
+                    restoredMethodDump = shell("dumpsys -t 2 input_method")
+                    fun field(name: String): String? {
+                        val matches = Regex("(?m)^\\s*" + name + "=(\\S+)")
+                            .findAll(restoredMethodDump).map { it.groupValues[1] }.toList()
+                        return matches.singleOrNull()
+                    }
+                    val originalId = original.getValue("default_input_method")
+                    val bound = field("mCurId")
+                    val noBinding = bound == "null" && field("mCurToken") == "null" &&
+                        field("mCurMethod") == "null" && field("mHasMainConnection") == "false" &&
+                        field("mVisibleBound") == "false"
+                    // mCurIntent may retain a historical disconnected service;
+                    // only current live binding fields establish contamination.
+                    field("mSelectedMethodId") == originalId &&
+                        ((originalId != "null" && bound == originalId) || noBinding)
+                }
+                records += "method-binding-restoration-verified"
+            }
+            cleanup { File(output(), "restored-input-method.txt").writeText(restoredMethodDump) }
+            if (cleanupError != null) {
+                cleanup { File(output(), "restoration-windows.txt").writeText(shell("dumpsys -t 2 window")) }
+                cleanup {
+                    val bitmap = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                    try {
+                        File(output(), "restoration-screen.png").outputStream().use {
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                    } finally { bitmap.recycle() }
+                }
+            }
             records += "settings-restore-attempted=$original errors=" + (cleanupError != null)
             cleanup { File(output(), "host-observations.txt").writeText(records.joinToString("\n")) }
             cleanup { File(output(), "editing-decisions.txt").writeText(compose.runOnUiThread { decisions.toList() }.joinToString("\n")) }
