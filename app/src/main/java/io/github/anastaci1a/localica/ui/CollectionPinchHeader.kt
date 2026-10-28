@@ -31,7 +31,7 @@ internal data class CollectionHeaderFrame(val generation: Long, val progress: Fl
     val source: Rect, val destination: Rect?, val drawn: Boolean, val heroProgress: Float?,
     val retainedPart: FrozenBrowsePart?, val anchorPoint: Float?, val anchorExpected: Float, val anchorEdge: Int,
     val heroArtworkTop: Float?, val heroInset: Float, val parallax: Float,
-    val actionBounds: Rect?, val liveAction: Boolean, val actionMaterialDraw: GlassSurfaceDrawObservation?,
+    val actionBounds: Rect?, val liveAction: Boolean, val actionMaterialDraw: BackdropSamplingObservation?,
     val staticRetainedPart: FrozenBrowsePart?, val sourceActionBounds: Rect?, val displayedHeaderPart: FrozenBrowsePart?)
 internal val LocalCollectionHeaderFrameObserver = staticCompositionLocalOf<((CollectionHeaderFrame) -> Unit)?> { null }
 
@@ -60,7 +60,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     var actionLayer: GraphicsLayer? = null
     var actionRecordedGeneration: Long? = null
     var actionRecordedRect: Rect? = null
-    var actionMaterialDraw: GlassSurfaceDrawObservation? = null
+    var actionMaterialDraw: BackdropSamplingObservation? = null
     var excludingActionFromCapture = false
         private set
     var pinnable: PinnableContainer? = null

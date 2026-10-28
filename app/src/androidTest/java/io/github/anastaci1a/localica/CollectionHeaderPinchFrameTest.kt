@@ -59,6 +59,7 @@ class CollectionHeaderPinchFrameTest {
             keepVisual(tracks.first().uri, PlayerVisual(bitmap.asImageBitmap(), kotlinx.coroutines.runBlocking { playerPalette(bitmap) }))
         }
         val frames = mutableListOf<CollectionHeaderFrame>()
+        val sampling = mutableListOf<CollectionHeaderActionSamplingFrame>()
         var density = 0f
         var allowPlayback = false
         var playbackCalls = 0
@@ -67,7 +68,8 @@ class CollectionHeaderPinchFrameTest {
                 val currentDensity = LocalDensity.current.density
                 SideEffect { density = currentDensity }
                 CompositionLocalProvider(LocalBrowseArtwork provides artwork, LocalReducedMotion provides false,
-                    LocalCollectionHeaderFrameObserver provides { frames += it }) {
+                    LocalCollectionHeaderFrameObserver provides { frames += it },
+                    LocalCollectionHeaderActionSamplingObserver provides { sampling += it }) {
                     Box(Modifier.fillMaxSize()) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, {}, {},
                             { _, _, _ -> if (!allowPlayback) fail("A pinch must not start playback") else playbackCalls++ }, null, null, true, false,
@@ -90,7 +92,6 @@ class CollectionHeaderPinchFrameTest {
             val playCoordinates = compose.onNodeWithContentDescription(playDescription).fetchSemanticsNode().layoutInfo.coordinates
             val playTop = playCoordinates.positionInRoot().y - list.fetchSemanticsNode().boundsInRoot.top
             val visibleScroll = (playTop - 80 * density).coerceAtLeast(0f)
-            val offscreenScroll = (initialHeader.size.height - 48 * density).coerceAtLeast(0f)
             list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, visibleScroll) }
             compose.onNodeWithContentDescription(playDescription).assertIsDisplayed()
             compose.waitForIdle()
@@ -128,22 +129,43 @@ class CollectionHeaderPinchFrameTest {
             } }
             assertTrue("Actual held/reversal frames keep the action visible", visibleFrames.size >= 2)
             assertTrue("Visible held material is live, not the intact frozen fallback", visibleFrames.all { it.liveAction })
-            val sourceCorners = visibleFrames.map { frame ->
-                assertSame("Live frames draw the excluded source, never old material under new glass", frame.staticRetainedPart, frame.displayedHeaderPart)
-                val draw = requireNotNull(frame.actionMaterialDraw) { "Require a same-generation actual material-record receipt, not just layer placement" }
-                val body = requireNotNull(frame.actionBounds)
-                val root = requireNotNull(draw.rootCorners)
-                val origin = list.fetchSemanticsNode().boundsInRoot.topLeft
-                assertEquals("Actual material root placement follows presented left", body.left + origin.x, root[0], 1.1f)
-                assertEquals("Actual material root placement follows presented top", body.top + origin.y, root[1], 1.1f)
-                requireNotNull(draw.source?.consumerCornersInSource) { "Live material has a source sampling registration" }
+            visibleFrames.forEach { frame ->
+                assertSame("Live frames draw the excluded source, never old material under new glass",
+                    frame.staticRetainedPart, frame.displayedHeaderPart)
             }
-            assertTrue("Sampling coordinates change during held pinch/reversal", sourceCorners.distinct().size >= 2)
+            // A nested RenderNode may record after its outer overlay callback.
+            // Correlate independent same-generation sampling receipts after the
+            // gesture instead of requiring callback ordering within each frame.
+            val sampled = compose.runOnUiThread { sampling.filter { it.generation == visibleGeneration && it.active && it.progress in .05f.. .95f } }
+            assertTrue("Observe actual filter/mesh recordings", sampled.isNotEmpty())
+            sampled.forEach { receipt ->
+                val expected = requireNotNull(receipt.expectedRoot)
+                val root = requireNotNull(receipt.draw.rootCorners)
+                assertEquals("Sampling Canvas follows the actual presented left", expected.left, root[0].x, 1.1f)
+                assertEquals("Sampling Canvas follows the actual presented top", expected.top, root[0].y, 1.1f)
+            }
+            val origin = list.fetchSemanticsNode().boundsInRoot.topLeft
+            visibleFrames.forEach { frame ->
+                val body = requireNotNull(frame.actionBounds).translate(origin)
+                assertTrue("Each visible position/progress has an active sampling receipt", sampled.any { receipt ->
+                    receipt.draw.rootCorners?.firstOrNull()?.let {
+                        kotlin.math.abs(receipt.progress - frame.progress) <= .0001f &&
+                        kotlin.math.abs(it.x - body.left) <= 1.1f && kotlin.math.abs(it.y - body.top) <= 1.1f
+                    } == true
+                })
+            }
+            assertTrue("Sampling coordinates change during held pinch/reversal",
+                sampled.map { it.draw.consumerCornersInSource }.distinct().size >= 2)
             assertEquals(sourceStyle, preferences.read(route))
             // Return to the original tightly visible source for offscreen retention.
-            list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, offscreenScroll - visibleScroll) }
+            compose.mainClock.autoAdvance = true
+            val remainingScroll = headerRect().bottom - 48 * density
+            list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, remainingScroll) }
             compose.waitForIdle()
             sourceRect = headerRect()
+            assertEquals("Fixture reaches the tightly visible source before freezing time",
+                48 * density, sourceRect.bottom, 1.1f)
+            compose.mainClock.autoAdvance = false
             val generationBefore = compose.runOnUiThread { frames.lastOrNull()?.generation ?: -1L }
             start(true)
             pump { frames.any { it.generation > generationBefore && it.drawn && it.destinationReady && it.progress in .3f.. .99f } }

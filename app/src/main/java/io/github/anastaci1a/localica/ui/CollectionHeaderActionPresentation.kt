@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -19,6 +20,11 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import kotlin.math.roundToInt
 import kotlin.math.abs
+
+internal data class CollectionHeaderActionSamplingFrame(val generation: Long, val progress: Float, val active: Boolean,
+    val expectedRoot: Rect?, val draw: BackdropSamplingObservation)
+internal val LocalCollectionHeaderActionSamplingObserver =
+    staticCompositionLocalOf<((CollectionHeaderActionSamplingFrame) -> Unit)?> { null }
 
 private class HeaderActionPlacement { var coordinates: LayoutCoordinates? = null }
 
@@ -62,17 +68,24 @@ internal fun CollectionHeaderActionPresentation(owner: CollectionPinchHeader, so
             owner.actionRecordedGeneration = null
         }
     } }
-    val upstreamObserver = LocalGlassSurfaceDrawObserver.current
-    val inspect = owner.observer != null
-    val drawObserver: ((GlassSurfaceDrawObservation) -> Unit)? = if (inspect) { observation ->
+    val upstreamObserver = LocalBackdropSamplingObserver.current
+    val actionObserver = LocalCollectionHeaderActionSamplingObserver.current
+    val inspect = owner.observer != null || actionObserver != null
+    val drawObserver: ((BackdropSamplingObservation) -> Unit)? = if (inspect) { observation ->
         // Nested material display lists may be reused while geometry is unchanged.
         // Preserve the last actual recording, but never admit a retired producer.
-        if (owner.actionPresentation?.generation == captured.generation) owner.actionMaterialDraw = observation
+        if (owner.actionPresentation?.generation == captured.generation) {
+            owner.actionMaterialDraw = observation
+            actionObserver?.invoke(CollectionHeaderActionSamplingFrame(captured.generation,
+                owner.motion.progress.value, owner.motion.visualSource != null, owner.viewport?.takeIf { it.isAttached }?.let { viewport ->
+                    owner.actionRect()?.translate(viewport.localToRoot(Offset.Zero))
+                }, observation))
+        }
         upstreamObserver?.invoke(observation)
     } else upstreamObserver
     CompositionLocalProvider(LocalFrostedBackdrop provides source,
         LocalSurfaceShadows provides null, LocalBottomShadows provides null,
-        LocalGlassSurfaceDrawObserver provides drawObserver) {
+        LocalBackdropSamplingObserver provides drawObserver) {
         Layout(content = {
             Box(Modifier.onPlaced { placement.coordinates = it }.drawWithContent {
                 // Placement has already updated the material's BackdropLocation.
