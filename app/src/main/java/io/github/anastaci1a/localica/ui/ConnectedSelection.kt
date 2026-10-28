@@ -272,29 +272,13 @@ private class SelectionPathCache {
 /** Union neighbors through the gaps, across shared sides only. Never fill group hulls or corner gaps. */
 internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float): Path {
     val path = Path()
-    fun add(part: Path) { path.op(path, part, PathOperation.Union) }
-    regions.forEach { region ->
-        val r = region.bounds
-        add(Path().apply { addRoundRect(mediaItemContour(r, gap)) })
-    }
-    regions.forEachIndexed { i, a -> regions.drop(i + 1).forEach { b ->
-        val xGap = max(a.bounds.left - b.bounds.right, b.bounds.left - a.bounds.right)
-        val yGap = max(a.bounds.top - b.bounds.bottom, b.bounds.top - a.bounds.bottom)
-        if (xGap > gap || yGap > gap || (xGap < 0 && yGap < 0)) return@forEach
-        if (xGap < 0 || yGap < 0) {
-            // Extend through the rounded shoulders, not just across the empty gap.
-            // A round line cap here is as large as half a row's width (the old circle).
-            val r = gap * 1.5f
-            val bridge = if (xGap < 0) Rect(max(a.bounds.left, b.bounds.left),
-                min(a.bounds.bottom, b.bounds.bottom) - r,
-                min(a.bounds.right, b.bounds.right), max(a.bounds.top, b.bounds.top) + r)
-            else Rect(min(a.bounds.right, b.bounds.right) - r, max(a.bounds.top, b.bounds.top),
-                max(a.bounds.left, b.bounds.left) + r, min(a.bounds.bottom, b.bounds.bottom))
-            add(Path().apply { addRect(bridge) })
-            return@forEach
+    selectionContour(regions, gap).bodies.forEach { body ->
+        val part = Path().apply {
+            if (body.radius == 0f) addRect(body.bounds)
+            else addRoundRect(RoundRect(body.bounds, CornerRadius(body.radius)))
         }
-        // Corner-only neighbors remain separate; no diagonal connectors.
-    } }
+        path.op(path, part, PathOperation.Union)
+    }
     return path
 }
 

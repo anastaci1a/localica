@@ -1,6 +1,10 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Region
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import kotlin.math.max
+import kotlin.math.min
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidPath
 import io.github.anastaci1a.localica.ui.*
@@ -21,6 +25,66 @@ import androidx.compose.ui.unit.dp
 
 class SelectionLensTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun sharedContourPrimitivesRetainOriginalNativePathUnion() {
+        fun originalPath(regions: List<SelectionRegion>, gap: Float): Path {
+            val path = Path()
+            fun add(part: Path) { path.op(path, part, PathOperation.Union) }
+            regions.forEach { region ->
+                val r = region.bounds
+                add(Path().apply { addRoundRect(mediaItemContour(r, gap)) })
+            }
+            regions.forEachIndexed { i, a -> regions.drop(i + 1).forEach { b ->
+                val xGap = max(a.bounds.left - b.bounds.right, b.bounds.left - a.bounds.right)
+                val yGap = max(a.bounds.top - b.bounds.bottom, b.bounds.top - a.bounds.bottom)
+                if (xGap > gap || yGap > gap || (xGap < 0 && yGap < 0)) return@forEach
+                if (xGap < 0 || yGap < 0) {
+                    // Extend through the rounded shoulders, not just across the empty gap.
+                    // A round line cap here is as large as half a row's width (the old circle).
+                    val r = gap * 1.5f
+                    val bridge = if (xGap < 0) Rect(max(a.bounds.left, b.bounds.left),
+                        min(a.bounds.bottom, b.bounds.bottom) - r,
+                        min(a.bounds.right, b.bounds.right), max(a.bounds.top, b.bounds.top) + r)
+                    else Rect(min(a.bounds.right, b.bounds.right) - r, max(a.bounds.top, b.bounds.top),
+                        max(a.bounds.left, b.bounds.left) + r, min(a.bounds.bottom, b.bounds.bottom))
+                    add(Path().apply { addRect(bridge) })
+                    return@forEach
+                }
+                // Corner-only neighbors remain separate; no diagonal connectors.
+            } }
+            return path
+        }
+
+        val shapes = listOf(
+            listOf(Rect(0f, 0f, 80f, 40f), Rect(0f, 48f, 80f, 88f), Rect(88f, 48f, 168f, 88f)),
+            listOf(Rect(0f, 0f, 10f, 10f), Rect(14f, 0f, 24f, 10f)),
+            listOf(Rect(.125f, .375f, 80.125f, 40.375f), Rect(.126f, 48.375f, 80.126f, 88.375f)),
+            (0..2).flatMap { y -> (0..2).mapNotNull { x ->
+                if (x == 1 && y == 1) null else Rect(x * 48f, y * 48f, x * 48f + 40f, y * 48f + 40f)
+            } },
+            listOf(Rect(0f, 0f, 80f, 40f), Rect(20f, 10f, 100f, 50f))
+        )
+        shapes.forEach { cells -> for (gap in listOf(0f, 4f, 8f)) {
+            val regions = cells.map(::SelectionRegion)
+            val original = originalPath(regions, gap)
+            val candidate = connectedSelectionPath(regions, gap)
+            assertEquals(original.getBounds(), candidate.getBounds())
+            val bounds = original.getBounds()
+            val width = kotlin.math.ceil((bounds.width + 8f) * 2f).toInt()
+            val height = kotlin.math.ceil((bounds.height + 8f) * 2f).toInt()
+            assertTrue((bounds.width + 4f) * 2f < width && (bounds.height + 4f) * 2f < height)
+            fun pixels(path: Path): IntArray {
+                val image = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                android.graphics.Canvas(image).apply {
+                    scale(2f, 2f); translate(4f - bounds.left, 4f - bounds.top)
+                    drawPath(path.asAndroidPath(), android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = -1 })
+                }
+                return IntArray(width * height).also { image.getPixels(it, 0, width, 0, 0, width, height); image.recycle() }
+            }
+            assertArrayEquals("Original contour raster must remain byte-identical: gap=$gap cells=$cells",
+                pixels(original), pixels(candidate))
+        } }
+    }
 
     @Test fun disconnectedSelectionCannotChangeTheFirstGroupsOptics() {
         var second by mutableStateOf(false)
