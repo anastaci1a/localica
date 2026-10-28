@@ -29,9 +29,12 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
         }
     }
     var adding by remember { mutableStateOf(false) }
-    SettingsLink("Add library filter", enabled = value.visible.size < LibraryFilter.entries.size) { adding = true }
-    if (adding) ChoiceDialog("Add library filter", LibraryFilter.entries.filterNot { it in value.visible }, LibraryFilter.entries.first { it !in value.visible },
+    val addingOrigin = rememberGlassAnchor()
+    SettingsLink("Add library filter", anchor = addingOrigin, enabled = value.visible.size < LibraryFilter.entries.size) { adding = true }
+    if (adding) CompositionLocalProvider(LocalGlassOrigin provides addingOrigin) {
+        ChoiceDialog("Add library filter", LibraryFilter.entries.filterNot { it in value.visible }, LibraryFilter.entries.first { it !in value.visible },
         { it.label }, { adding = false }) { onChange(value.copy(visible = value.visible + it)) }
+    }
     SettingsHeading("Unfiltered Library collections")
     Text("Choose which collections appear when no filter is selected. This is independent of the visible filter buttons.", style = MaterialTheme.typography.bodyMedium)
     MediaKind.entries.filterNot { it == MediaKind.Song || it == MediaKind.Queue }.forEach { kind ->
@@ -41,3 +44,4 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
     }
     ActionTextButton(onClick = { onChange(LibraryFilters()) }) { Text("Reset library filters") }
 }
+

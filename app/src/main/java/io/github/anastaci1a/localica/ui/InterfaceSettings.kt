@@ -74,9 +74,12 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                 }
             }
             var adding by remember { mutableStateOf(false) }
-            SettingsLink("Add main tab", enabled = value.tabs.size < MainTab.available.size) { adding = true }
-            if (adding) ChoiceDialog("Add main tab", MainTab.available.filterNot { it in value.tabs }, MainTab.Home, { it.label },
-                { adding = false }) { onChange(value.copy(tabs = value.tabs + it)) }
+            val addingOrigin = rememberGlassAnchor()
+            SettingsLink("Add main tab", anchor = addingOrigin, enabled = value.tabs.size < MainTab.available.size) { adding = true }
+            if (adding) CompositionLocalProvider(LocalGlassOrigin provides addingOrigin) {
+                ChoiceDialog("Add main tab", MainTab.available.filterNot { it in value.tabs }, MainTab.Home, { it.label },
+                    { adding = false }) { onChange(value.copy(tabs = value.tabs + it)) }
+            }
             ActionTextButton(onClick = { onChange(value.copy(tabs = InterfaceSettings().tabs)) }) { Text("Reset main tabs") }
         }
     }
@@ -95,3 +98,4 @@ internal fun BooleanPreference(label: String, value: Boolean, onChange: (Boolean
         InterfaceSwitch(value, onChange)
     }
 }
+

@@ -1,5 +1,12 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import io.github.anastaci1a.localica.library.FolderSelection
+import io.github.anastaci1a.localica.library.LibrarySnapshot
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -12,6 +19,90 @@ import org.junit.Test
 
 class SettingsOptionsTest {
     @get:Rule val compose = createComposeRule()
+    private fun assertAnchoredPopup(host: GlassDialogs, title: String, editBeforeCancel: () -> Unit = {}) {
+        compose.onNodeWithText(title).performScrollTo().performClick()
+        compose.waitUntil(5000) {
+            host.entries.lastOrNull { it.mounted && it.placement != GlassPlacement.Page }?.anchor?.let {
+                it.triggerMounted && it.hidden && it.bounds.width > 0f && it.bounds.height > 0f && it.face != null
+            } == true
+        }
+        val origin = host.entries.last { it.mounted && it.placement != GlassPlacement.Page }.anchor
+        editBeforeCancel()
+        compose.onNodeWithText("Cancel", substring = false).performClick()
+        compose.waitUntil(5000) { !origin.hidden && !origin.modalPresent }
+        assertTrue("Cancellation restores the same physical settings source",origin.triggerMounted)
+    }
+
+    @Test fun addMainTabUsesItsSettingsLinkAsTheRetainedPopupOrigin() {
+        lateinit var host: GlassDialogs
+        compose.setContent { LocalicaTheme {
+            host = requireNotNull(LocalGlassDialogs.current)
+            CompositionLocalProvider(LocalReducedMotion provides true) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    InterfaceSettingsControls(InterfaceSettings(tabs=listOf(MainTab.Home)),onChange={ fail("Cancelled choice must not save") })
+                }
+            }
+        } }
+        repeat(2) { assertAnchoredPopup(host,"Add main tab") }
+    }
+
+    @Test fun addLibraryFilterUsesItsSettingsLinkAsTheRetainedPopupOrigin() {
+        lateinit var host: GlassDialogs
+        compose.setContent { LocalicaTheme {
+            host = requireNotNull(LocalGlassDialogs.current)
+            CompositionLocalProvider(LocalReducedMotion provides true) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    LibraryFilterSettings(LibraryFilters(visible=emptyList())) { fail("Cancelled choice must not save") }
+                }
+            }
+        } }
+        repeat(2) { assertAnchoredPopup(host,"Add library filter") }
+    }
+
+    @Test fun scannerDurationDialogUsesItsRealSettingsOrigin() {
+        val preferences = io.github.anastaci1a.localica.scanner.ScanPreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+        val originalOptions = preferences.read("")
+        val originalLaunchFlags = preferences.scanOnLaunch to preferences.fullScanOnLaunch
+        lateinit var host: GlassDialogs
+        compose.setContent { LocalicaTheme {
+            host = requireNotNull(LocalGlassDialogs.current)
+            CompositionLocalProvider(LocalReducedMotion provides true) {
+                FolderSettings(LibraryUiState(loading=false),{},{},{},initialCategory="Scanner")
+            }
+        } }
+        repeat(2) {
+            assertAnchoredPopup(host, "Exclude short files") {
+                compose.onNode(hasSetTextAction()).performTextReplacement("17")
+            }
+            compose.runOnIdle {
+                assertEquals("Cancelling an edited duration preserves scanner rules", originalOptions, preferences.read(""))
+                assertEquals(originalLaunchFlags, preferences.scanOnLaunch to preferences.fullScanOnLaunch)
+            }
+        }
+    }
+
+    @Test fun folderExclusionsAndRemovalConfirmationHaveIndependentRestorableOrigins() {
+        val root = "content://synthetic-origin"
+        val preferences = io.github.anastaci1a.localica.scanner.ScanPreferences(InstrumentationRegistry.getInstrumentation().targetContext)
+        val originalOptions = preferences.read(root)
+        lateinit var host: GlassDialogs
+        compose.setContent { LocalicaTheme {
+            host = requireNotNull(LocalGlassDialogs.current)
+            CompositionLocalProvider(LocalReducedMotion provides true) {
+                FolderSettings(LibraryUiState(LibrarySnapshot(folders=listOf(FolderSelection("content://synthetic-origin","Synthetic origin"))),loading=false),
+                    {},{}, { fail("Cancelled removal cannot remove the folder") }, initialCategory="Folders to scan")
+            }
+        } }
+        compose.onNodeWithText("Synthetic origin").performScrollTo().performClick()
+        repeat(2) {
+            assertAnchoredPopup(host, "Excluded subfolders") {
+                compose.onNode(hasSetTextAction()).performTextReplacement("Synthetic/Cancelled")
+            }
+            assertAnchoredPopup(host, "Remove folder")
+            compose.runOnIdle { assertEquals("Cancellation preserves the folder scan configuration", originalOptions, preferences.read(root)) }
+        }
+    }
+
     @Test fun settingsSearchIsRootOnlyAndScannerLinksReachSharedFolderPage() {
         compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
         compose.onNode(hasSetTextAction()).performTextInput("scanner")
@@ -138,4 +229,5 @@ class SettingsOptionsTest {
         } finally { context.getSharedPreferences("browse-style", 0).edit().clear().commit() }
     }
 }
+
 
