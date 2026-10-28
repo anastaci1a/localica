@@ -45,15 +45,22 @@ internal class TextEditingImeSession {
     private var shown = false
     private var docked = false
 
+    fun invalidateExposure() { shown = false }
+
     fun shouldEnd(focused: Boolean, windowFocused: Boolean, visible: Boolean,
-        current: Int, source: Int, target: Int, endAtHideStart: Boolean): Boolean {
+        current: Int, source: Int, target: Int, endAtHideStart: Boolean,
+        zeroHeightConfirmed: Boolean = true): Boolean {
         if (!focused || !windowFocused) shown = false
         // Native window/input handoff can briefly clear visibility/current
         // while the animation target still requests the shown keyboard.
         else if (shown && target == 0 && (!visible || (endAtHideStart && docked))) {
             shown = false
             return true
-        } else if (visible && current == target && source == target) {
+        } else if (visible && current == target && source == target &&
+            (target != 0 || zeroHeightConfirmed)) {
+            // API30+ confirms zero-height exposure from this same host/sample.
+            // Never latch native visibility from a preceding observation. The
+            // default retains legacy behavior where that evidence is unavailable.
             shown = true
             docked = target > 0
         }
@@ -117,13 +124,22 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable internal fun Modifier.clearTextFocusOnBack(): Modifier {
     var focused by remember { mutableStateOf(false) }
-    val imeSession = remember { TextEditingImeSession() }
+    val view = androidx.compose.ui.platform.LocalView.current
+    val imeSession = remember(view) { TextEditingImeSession() }
     val keyboardVisible = WindowInsets.isImeVisible
     val density = androidx.compose.ui.platform.LocalDensity.current
     val keyboardHeight = WindowInsets.ime.getBottom(density)
     val keyboardSource = WindowInsets.imeAnimationSource.getBottom(density)
     val keyboardTarget = WindowInsets.imeAnimationTarget.getBottom(density)
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    val nativeCorroboration = android.os.Build.VERSION.SDK_INT >= 30
+    val nativeReader = LocalNativeImeVisibilityReader.current
+    val nativeHost = if (nativeCorroboration)
+        rememberNativeImeHostReady(view, imeSession::invalidateExposure) else NativeImeHostState(false)
+    val zeroHeightCandidate = focused && windowFocused && keyboardVisible &&
+        keyboardHeight == 0 && keyboardSource == 0 && keyboardTarget == 0
+    val nativeRevision = if (nativeCorroboration)
+        rememberNativeImeRevision(view, zeroHeightCandidate && nativeHost.ready, nativeHost.generation, nativeReader) else 0L
     // Keep native window focus, but move Compose focus out of the editor. Clearing
     // the window owner can immediately focus its first editor again in key mode.
     val restingFocus = LocalRestingTextFocus.current
@@ -137,10 +153,14 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
         restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
     }
     BackHandler(focused) { endEditing("backDispatcher") }
-    LaunchedEffect(focused, windowFocused, keyboardVisible, keyboardHeight, keyboardSource, keyboardTarget) {
-        val end = imeSession.shouldEnd(focused, windowFocused, keyboardVisible, keyboardHeight,
-            keyboardSource, keyboardTarget, endAtHideStart = emptySearchBack != null)
-        observe?.invoke("imeDecision end=$end focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
+    LaunchedEffect(view, focused, windowFocused, keyboardVisible, keyboardHeight, keyboardSource,
+        keyboardTarget, nativeHost, nativeRevision, nativeReader) {
+        val zeroHeightConfirmed = !nativeCorroboration || !zeroHeightCandidate ||
+            confirmedNativeZeroHeightIme(view, nativeReader)
+        val end = imeSession.shouldEnd(focused, windowFocused && (!nativeCorroboration || nativeHost.ready), keyboardVisible, keyboardHeight,
+            keyboardSource, keyboardTarget, endAtHideStart = emptySearchBack != null,
+            zeroHeightConfirmed = zeroHeightConfirmed)
+        observe?.invoke("imeDecision end=$end zeroHeightConfirmed=$zeroHeightConfirmed nativeRevision=$nativeRevision focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
         if (end) {
             // IME-owned Back announces its zero target before its last visible
             // frame. Empty search returns home immediately, independently of it.
@@ -154,3 +174,4 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
         } else false
     }
 }
+
