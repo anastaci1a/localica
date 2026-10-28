@@ -78,22 +78,28 @@ jobs:
         emulator-options: -no-window -gpu ${{ matrix.gpu }} -no-snapshot -noaudio
           -no-boot-anim -memory 3072
         disable-animations: ${{ matrix.disable }}
-        script: "if [ \"$TEST_API\" = 36 ]; then adb -s emulator-5554 shell wm size\
-          \ 720x1280; adb -s emulator-5554 shell wm density 280; else adb -s emulator-5554\
-          \ shell wm size reset; adb -s emulator-5554 shell wm density reset; fi\n\
-          sleep 60\nbash .github/test-evidence/environment.sh >> prototype-runner-environment.txt\n\
-          bash -c 'set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$SOURCE_SHA\"\
-          \ntest \"$(adb -s emulator-5554 shell getprop ro.build.version.sdk | tr\
-          \ -d '\"'\"'\\r'\"'\"')\" = \"$TEST_API\"\nsource .github/prepare-device-tests.sh\n\
-          child='\"'\"''\"'\"'\nstop_child() {\n  local sig=$1 code=$2\n  trap '\"\
-          '\"''\"'\"' INT TERM\n  if [[ -n \"$child\" ]]; then kill -s \"$sig\" \"\
-          $child\" 2>/dev/null || true; wait \"$child\" || true; fi\n  exit \"$code\"\
-          \n}\ntrap '\"'\"'stop_child TERM 143'\"'\"' TERM\ntrap '\"'\"'stop_child\
-          \ INT 130'\"'\"' INT\nset +e\npython3 .github/test-evidence/supervise.py\
-          \ --output evidence/live --run-id \"$GITHUB_RUN_ID\" --attempt \"$GITHUB_RUN_ATTEMPT\"\
-          \ --sha \"$SOURCE_SHA\" --api \"$TEST_API\" --lane \"list-pump-$TEST_API\"\
-          \ -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.ListSearchTest\
-          \ &\nchild=$!\nwait \"$child\"\nresult=$?\nset -e\nexit \"$result\"\n'\n"
+        script: 'if [ "$TEST_API" = 36 ]; then adb -s emulator-5554 shell wm size
+          720x1280; adb -s emulator-5554 shell wm density 280; else adb -s emulator-5554
+          shell wm size reset; adb -s emulator-5554 shell wm density reset; fi
+
+          sleep 60
+
+          bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+
+          bash -c ''set -euo pipefail; test "$(git rev-parse HEAD)" = "$SOURCE_SHA";
+          test "$(adb -s emulator-5554 shell getprop ro.build.version.sdk | tr -d
+          ''"''"''\r''"''"'')" = "$TEST_API"; source .github/prepare-device-tests.sh;
+          child=''"''"''''"''"''; stop_child() {   local sig=$1 code=$2;   trap ''"''"''''"''"''
+          INT TERM;   if [[ -n "$child" ]]; then kill -s "$sig" "$child" 2>/dev/null
+          || true; wait "$child" || true; fi;   exit "$code"; }; trap ''"''"''stop_child
+          TERM 143''"''"'' TERM; trap ''"''"''stop_child INT 130''"''"'' INT; set
+          +e; python3 .github/test-evidence/supervise.py --output evidence/live --run-id
+          "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$SOURCE_SHA" --api
+          "$TEST_API" --lane "list-pump-$TEST_API" -- ./gradlew connectedDebugAndroidTest
+          --no-daemon --max-workers=2 -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.ListSearchTest
+          & child=$!; wait "$child"; result=$?; set -e; exit "$result"''
+
+          '
         cores: 2
         emulator-build: '16428233'
     - name: Reconcile exact class methods without skips
