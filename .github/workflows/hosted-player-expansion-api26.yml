@@ -1,0 +1,171 @@
+# Source commits are pinned; publication and native execution remain separate authorized actions.
+# Opt-in diagnostics only: no release gate, compatibility, production, or canonical APK delivery/signing changes.
+name: Hosted PlayerExpansion API26 passive draw probe (diagnostic only)
+'on':
+  push:
+    branches: [test/hosted-player-expansion-draw-api26-20261028]
+    paths:
+      - .github/workflows/hosted-player-expansion-api26.yml
+      - .github/run-player-expansion-api26-diagnostic.sh
+      - .github/reconcile-player-expansion-api26-diagnostic.py
+      - .github/capture-player-expansion-api26.py
+      - .github/player_expansion_api26_evidence.py
+      - .github/verify-api26-environment.py
+      - .github/start-player-expansion-api26-monitor.sh
+      - .github/finalize-player-expansion-api26-evidence.sh
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: hosted-player-expansion-api26-diagnostic-${{ github.ref }}
+  # Do not silently cancel a run or discard its first failure on a later push.
+  cancel-in-progress: false
+
+jobs:
+  exact:
+    name: Exact test-only API26 player passive draw probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXACT_CASE: expansion26
+      TEST_API: '26'
+      ANDROID_SERIAL: emulator-5554
+    steps:
+      - name: Checkout diagnostic harness at the event SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: .github
+      - name: Checkout immutable test-only diagnostic source (never overlay tests)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 0e45152dfe0dbd1adb089b583f35264c34349814
+          path: source
+          # Verify exact test-only diagnostic source, parent, and tree.
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Checkout immutable monitoring and device-ownership helpers
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 1e31403cb042e9896686200a4800faffce9b2a59
+          path: tooling
+          persist-credentials: false
+          sparse-checkout: .github
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Create fresh immutable provenance and source method inventory
+        run: bash harness/.github/run-player-expansion-api26-diagnostic.sh prepare "$EXACT_CASE" "$GITHUB_WORKSPACE/source" "$GITHUB_WORKSPACE/tooling" "$GITHUB_WORKSPACE/player-expansion-api26-evidence-$EXACT_CASE"
+      - name: Retain complete immutable source archive
+        run: |
+          git -C source archive --format=tar 0e45152dfe0dbd1adb089b583f35264c34349814 > "player-expansion-api26-evidence-$EXACT_CASE/exact-source.tar"
+          sha256sum "player-expansion-api26-evidence-$EXACT_CASE/exact-source.tar" > "player-expansion-api26-evidence-$EXACT_CASE/exact-source.sha256"
+      - name: Install the pinned live evidence publisher
+        run: npm ci --prefix tooling/.github/test-evidence --ignore-scripts --no-audit --no-fund
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Make room for disposable emulator userdata
+        run: |
+          # This diagnostic Android job does not use the preinstalled .NET SDKs.
+          sudo rm -rf /usr/share/dotnet
+          df -h "$HOME"
+      - name: Compile the exact test inputs before emulator startup
+        working-directory: source
+        run: |
+          # Isolated runner-generated debug signing only; never a canonical keystore.
+          env -u LOCALICA_DEBUG_KEYSTORE ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2 2>&1 | tee "$GITHUB_WORKSPACE/player-expansion-api26-evidence-$EXACT_CASE/build.log"
+          sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$GITHUB_WORKSPACE/player-expansion-api26-evidence-$EXACT_CASE/build-input-apks.sha256"
+          printf '%s\n' 'UNVALIDATED DIAGNOSTIC DEBUG INPUTS. Disposable runner debug signing; not canonical delivery, release certification, or a full-suite pass.' > "$GITHUB_WORKSPACE/player-expansion-api26-evidence-$EXACT_CASE/APK-STATUS.txt"
+      - name: Run exactly the player target and two readback lifecycle methods with continuous loss evidence
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 26
+          emulator-build: 16428233
+          cores: 2
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          # Same rendering/memory settings; logging-only flags and stdout/stderr retention added.
+          # The pinned action launches through sh -c, so redirection retains the original emulator stream.
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
+            -verbose -show-kernel > "$GITHUB_WORKSPACE/player-expansion-api26-evidence-expansion26/emulator-original.log" 2>&1
+          pre-emulator-launch-script: bash harness/.github/start-player-expansion-api26-monitor.sh
+          disable-animations: true
+          script: |
+            adb -s emulator-5554 shell wm size reset
+            adb -s emulator-5554 shell wm density reset
+            sleep 60
+            bash harness/.github/run-player-expansion-api26-diagnostic.sh run "$EXACT_CASE" "$GITHUB_WORKSPACE/source" "$GITHUB_WORKSPACE/tooling" "$GITHUB_WORKSPACE/player-expansion-api26-evidence-$EXACT_CASE"
+      - name: Finalize evidence if native startup or cleanup failed
+        if: always()
+        run: bash harness/.github/finalize-player-expansion-api26-evidence.sh
+      - name: Summarize passive draw originals even when native execution failed
+        if: always()
+        run: |
+          python3 - "$GITHUB_WORKSPACE/player-expansion-api26-evidence-$EXACT_CASE" <<'PYDRAW'
+          import json, pathlib, sys
+          sys.path.insert(0, 'harness/.github')
+          from player_expansion_api26_evidence import validate_draw_probe_evidence
+          root = pathlib.Path(sys.argv[1])
+          result = dict(status='unavailable-or-invalid', native_completion_proven=False, resource_ownership_proven=False, causal_claim=False)
+          try:
+              result = validate_draw_probe_evidence(root, require_complete=False)
+          except (OSError, ValueError, KeyError, TypeError) as error:
+              result['error'] = type(error).__name__+': '+str(error)
+          root.mkdir(parents=True, exist_ok=True)
+          with (root/'draw-probe-summary.json').open('x') as handle:
+              json.dump(result, handle, indent=2); handle.write('\n')
+          print(json.dumps(result))
+          PYDRAW
+      - name: Reconcile exact methods, monitoring, and original loss evidence
+        if: always()
+        run: |
+          result=125
+          if [[ -f "player-expansion-api26-evidence-$EXACT_CASE/runner-exit.txt" ]]; then result=$(cat "player-expansion-api26-evidence-$EXACT_CASE/runner-exit.txt"); fi
+          python3 harness/.github/reconcile-player-expansion-api26-diagnostic.py --case "$EXACT_CASE" --source "$GITHUB_WORKSPACE/source" --tooling "$GITHUB_WORKSPACE/tooling" --evidence "$GITHUB_WORKSPACE/player-expansion-api26-evidence-$EXACT_CASE" --runner-exit "$result" --workflow-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+      - name: Retain original reports and diagnostic files, even on failure
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: player-expansion-api26-expansion26-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: |
+            player-expansion-api26-evidence-expansion26/
+            source/app/build/reports/androidTests/
+            source/app/build/outputs/androidTest-results/
+            source/app/build/outputs/connected_android_test_additional_output/
+            source/app/build/outputs/apk/debug/app-debug.apk
+            source/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            source/app/src/androidTest/java/io/github/anastaci1a/localica/PlayerExpansionMotionTest.kt
+            source/app/src/androidTest/java/io/github/anastaci1a/localica/RetainedLayerReadbackTest.kt
+            source/app/src/androidTest/java/io/github/anastaci1a/localica/PlayerExpansionDrawProbe.kt
+            source/app/src/androidTest/java/io/github/anastaci1a/localica/NoLyricsFixture.kt
+            source/app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt
+            source/app/src/main/java/io/github/anastaci1a/localica/ui/RetainedLayerReadback.kt
+            source/app/src/main/java/io/github/anastaci1a/localica/ui/ReadbackCompletion.kt
+            harness/.github/workflows/hosted-player-expansion-api26.yml
+            harness/.github/run-player-expansion-api26-diagnostic.sh
+            harness/.github/reconcile-player-expansion-api26-diagnostic.py
+            harness/.github/capture-player-expansion-api26.py
+            harness/.github/player_expansion_api26_evidence.py
+            harness/.github/verify-api26-environment.py
+            harness/.github/start-player-expansion-api26-monitor.sh
+            harness/.github/finalize-player-expansion-api26-evidence.sh
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
