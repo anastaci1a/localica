@@ -345,7 +345,13 @@ class BrowseOrderViewportTest {
         }
     }
 
-    private fun openSort() = compose.onNodeWithContentDescription("Sort").performClick()
+    private fun openSort() {
+        compose.onNodeWithContentDescription("Sort").performClick()
+        // The real popup owns its semantics only once its entry transition admits content.
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithText("Sort by").fetchSemanticsNodes().size == 1
+        }
+    }
     private fun chooseTitle() {
         compose.onNodeWithText("Sort by").performScrollTo().performClick()
         compose.onNodeWithText("Title").performScrollTo().performClick()

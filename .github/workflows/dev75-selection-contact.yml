@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      AFFECTED_CLASSES: io.github.anastaci1a.localica.ArtistAlbumSelectionTest
+      AFFECTED_CLASSES: io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.BrowseOrderViewportTest
       TEST_API: '26'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -100,7 +100,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      AFFECTED_CLASSES: io.github.anastaci1a.localica.ArtistAlbumSelectionTest
+      AFFECTED_CLASSES: io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.BrowseOrderViewportTest
       TEST_API: '36'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
