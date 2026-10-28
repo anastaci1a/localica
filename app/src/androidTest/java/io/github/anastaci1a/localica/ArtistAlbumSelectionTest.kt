@@ -1,6 +1,10 @@
 package io.github.anastaci1a.localica
 
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.runtime.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -22,10 +26,12 @@ class ArtistAlbumSelectionTest {
         var explicit by mutableStateOf(emptyList<String>())
         val changes = mutableListOf<List<String>>()
         var longPressTimeout = 0L
+        var host: android.view.View? = null
         val pulses = mutableListOf<ControlHaptic>()
         compose.setContent { LocalicaTheme {
             val timeout = LocalViewConfiguration.current.longPressTimeoutMillis
-            SideEffect { longPressTimeout = timeout }
+            val view = LocalView.current
+            SideEffect { longPressTimeout = timeout; host = view }
             CompositionLocalProvider(LocalControlHaptics provides ControlHaptics { pulses += it }) {
                 ArtistAlbumChoices(albums, explicit) { explicit = it; changes += it }
             }
@@ -43,7 +49,31 @@ class ArtistAlbumSelectionTest {
             }
         }
         fun hold(name: String) {
-            val node = album(name)
+            val node = album(name).assertIsDisplayed()
+            val semantics = node.fetchSemanticsNode()
+            val coordinates = semantics.layoutInfo.coordinates
+            var downLocal: Offset? = null
+            fun trace(phase: String) {
+                compose.runOnUiThread {
+                    val attached = coordinates.isAttached
+                    val local = downLocal
+                    val location = IntArray(2)
+                    host?.getLocationOnScreen(location)
+                    val clipped = if (attached) semantics.boundsInRoot else null
+                    val first = if (attached) coordinates.localToRoot(Offset.Zero) else null
+                    val last = if (attached) coordinates.localToRoot(Offset(
+                        coordinates.size.width.toFloat(), coordinates.size.height.toFloat())) else null
+                    Log.i("AlbumHoldDiagnostic", "name=$name phase=$phase uptime=${SystemClock.uptimeMillis()} " +
+                        "virtual=${compose.mainClock.currentTime} timeout=$longPressTimeout " +
+                        "attached=$attached viewAttached=${host?.isAttachedToWindow} windowFocused=${host?.hasWindowFocus()} " +
+                        "hostScreen=${location.toList()} clipped=$clipped layoutFirst=$first layoutLast=$last " +
+                        "layoutSize=${coordinates.size} downLocal=$local " +
+                        "clippedOriginPlusDown=${if (clipped != null && local != null) clipped.topLeft + local else null} " +
+                        "layoutMappedDown=${if (attached && local != null) coordinates.localToRoot(local) else null} " +
+                        "changes=${changes.size} pulses=$pulses selected=$explicit")
+                }
+            }
+            trace("before-freeze")
             val before = changes.size
             val haptics = pulses.size
             val autoAdvance = compose.mainClock.autoAdvance
@@ -52,19 +82,30 @@ class ArtistAlbumSelectionTest {
             try {
                 // Keep the native contact down while Compose's recognition timer runs.
                 // Batched event timestamps alone can dispatch UP before that timer fires.
-                node.performTouchInput { down(center); held = true }
+                node.performTouchInput { downLocal = center; down(center); held = true }
+                trace("down-dispatched")
                 compose.mainClock.advanceTimeByFrame()
                 compose.mainClock.advanceTimeBy(longPressTimeout + 1)
+                trace("recognition-deadline")
                 compose.runOnIdle {
                     assertEquals("$name recognizes before release", before + 1, changes.size)
                     assertEquals("$name emits one recognition pulse while held",
                         listOf(ControlHaptic.Strong), pulses.drop(haptics))
                 }
                 node.performTouchInput { up(); held = false }
+                trace("up-dispatched")
                 compose.runOnIdle {
                     assertEquals("$name has no trailing short tap", before + 1, changes.size)
                     assertEquals("$name has no release pulse", listOf(ControlHaptic.Strong), pulses.drop(haptics))
                 }
+            } catch (failure: Throwable) {
+                try {
+                    trace("failure")
+                    Log.i("AlbumHoldDiagnostic", "name=$name semantics=" + compose.onRoot().printToString(maxDepth = 12))
+                } catch (diagnostic: Throwable) {
+                    if (diagnostic !== failure) failure.addSuppressed(diagnostic)
+                }
+                throw failure
             } finally {
                 try {
                     if (held) node.performTouchInput { cancel() }
