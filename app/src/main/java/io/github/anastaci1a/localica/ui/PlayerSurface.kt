@@ -86,9 +86,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val inkFrame = if (inkObserver != null) polarity.frame else null
     val lightInk = inkDecision.lightInk
     val playerInk = if (lightInk) Color.White else Color.Black
-    // Preparation follows the raw two-candidate choice; ink remains last verified until
-    // the actual returned tone images acknowledge that source/tone, avoiding feedback.
-    val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, polarity.requestedLightInk)
+    // Preserve the pre-#473 wash policy; foreground selection must not retone the background.
+    val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, !artwork.palette.isLight())
     val paletteDuration = settings.motionDuration(550)
     val palette = animatedPlayerPalette(artwork.palette, paletteDuration)
     // Header controls already sample this scene before lyrics open. Older

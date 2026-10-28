@@ -102,7 +102,8 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
                 }
                 ArtworkBackgroundFrame(roles,
                     transitioning && composed.frozen != null && incomingWeight < 1f,
-                    Build.VERSION.SDK_INT >= 31 && blur() > .001f)
+                    Build.VERSION.SDK_INT >= 31 && blur() > .001f,
+                    transitioning)
             }.collect { observer(it) }
         }
     }
