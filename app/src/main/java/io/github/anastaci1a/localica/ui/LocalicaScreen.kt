@@ -270,10 +270,14 @@ fun LocalicaScreen(
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
             val sortAnchor = rememberGlassAnchor()
+            // Collection pages own their hero, navigation controls and status-bar inset.
+            // Playlists use that same presentation, not the legacy shell heading.
+            val collectionChrome = !route.search && route.collection?.kind in setOf(
+                MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist, MediaKind.Playlist)
             Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                .then(if (route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search)
+                .then(if (collectionChrome)
                     Modifier else Modifier.statusBarsPadding())) {
-                if (route.search || route.collection?.kind !in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist)) Row(Modifier.zIndex(2f).fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+                if (!collectionChrome) Row(Modifier.zIndex(2f).fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
                     androidx.compose.animation.Crossfade(if (route.search) "Search" else route.title ?: route.tab.label,
@@ -453,3 +457,4 @@ internal fun LibraryNotice(state: LibraryUiState) {
             else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
     }
 }
+
