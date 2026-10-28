@@ -1,0 +1,5 @@
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsSwitchingToNextInputMethod="true">
+    <subtype android:label="@string/localica_floating_test_ime_label"
+        android:imeSubtypeLocale="en_US" android:imeSubtypeMode="keyboard" />
+</input-method>
