@@ -19,14 +19,14 @@ import io.github.anastaci1a.localica.R
 
 @Composable
 internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit = onBack,
-    backLabel: String = "Back from settings", navigationDepth: Int = 0, content: @Composable ColumnScope.() -> Unit) {
+    backLabel: String = "Back from settings", navigationDepth: Int = 0, onSystemBack: () -> Unit = onBack, content: @Composable ColumnScope.() -> Unit) {
     var previousDepth by remember { mutableIntStateOf(navigationDepth) }
     var direction by remember { mutableFloatStateOf(1f) }
     if (navigationDepth != previousDepth) {
         direction = if (navigationDepth < previousDepth) -1f else 1f
         previousDepth = navigationDepth
     }
-    GlassDialog(onBack, GlassPlacement.Page) {
+    GlassDialog(onSystemBack, GlassPlacement.Page) {
         Surface(Modifier.fillMaxSize()) {
             val reduced = LocalReducedMotion.current
             val speed = LocalMotionSpeed.current
@@ -103,3 +103,4 @@ internal fun <T> ChoicePreference(title: String, selected: T, choices: List<T>, 
         ChoiceDialog(title, choices, selected, label, { open = false }, onSelect)
     }
 }
+

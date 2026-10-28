@@ -27,14 +27,18 @@ class ScanController(private val context: Context, private val library: LibraryR
 
     fun startNewFiles(roots: List<String>): Boolean = start(roots, ScanMode.NewFiles)
 
-    private fun start(roots: List<String>, mode: ScanMode): Boolean {
+    fun startOnLaunch(roots: List<String>, quick: Boolean, full: Boolean): Boolean =
+        if (quick || full) start(roots, if (quick) ScanMode.NewFiles else ScanMode.Full, quick && full) else false
+
+    private fun start(roots: List<String>, mode: ScanMode, fullAfterQuick: Boolean = false): Boolean {
         if (roots.isEmpty()) return false
         try {
             if (!state.value.running) canceledBeforeStart = false
             mutable.update { it.copy(running = true, message = null) }
             ContextCompat.startForegroundService(context, Intent(context, ScanService::class.java)
                 .putStringArrayListExtra("roots", ArrayList(roots.distinct()))
-                .putExtra("new-files-only", mode == ScanMode.NewFiles))
+                .putExtra("new-files-only", mode == ScanMode.NewFiles)
+                .putExtra("full-after-quick", fullAfterQuick))
             return true
         } catch (_: Exception) {
             mutable.update { it.copy(running = false, message = "Android couldn’t start background scanning. Keep Localica open and check its app settings.") }
@@ -42,11 +46,12 @@ class ScanController(private val context: Context, private val library: LibraryR
         }
     }
 
-    internal fun run(roots: List<String>, newFilesOnly: Boolean = false, finished: () -> Unit) {
+    internal fun run(roots: List<String>, newFilesOnly: Boolean = false, fullAfterQuick: Boolean = false, finished: () -> Unit) {
         if (canceledBeforeStart) {
             mutable.update { it.copy(running = false, message = "Scan canceled.") }; finished(); return
         }
-        requests.add(roots, if (newFilesOnly) ScanMode.NewFiles else ScanMode.Full)
+        if (newFilesOnly && fullAfterQuick) requests.addQuickThenFull(roots)
+        else requests.add(roots, if (newFilesOnly) ScanMode.NewFiles else ScanMode.Full)
         if (job?.isActive == true) {
             mutable.update { it.copy(totalFolders = it.completedFolders + requests.size) }
             return
@@ -107,3 +112,4 @@ class ScanController(private val context: Context, private val library: LibraryR
         mutable.update { it.copy(running = false, message = "Android couldn’t start background scanning. Check Localica’s app settings and try again.") }
     }
 }
+

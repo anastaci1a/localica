@@ -53,6 +53,7 @@ fun LocalicaScreen(
     playlist: io.github.anastaci1a.localica.playlist.PlaylistState = io.github.anastaci1a.localica.playlist.PlaylistState(),
     playlistController: PlaylistController? = null,
     onScanAll: () -> Unit = { library.snapshot.folders.forEach { onRescan(it.uri) } },
+    onQuickScan: () -> Unit = {},
     scannerRequest: Int = 0,
     onRetryPlayback: () -> Unit = onToggle,
     onSeekRequest: ((Long, String?) -> Long)? = null,
@@ -414,10 +415,10 @@ fun LocalicaScreen(
             Text("Localica", style = MaterialTheme.typography.headlineSmall)
             Text("Offline music, organized your way.")
             LibraryLicenses()
-        }, initialCategory = settingsCategory, libraryFiltersContent = {
+        }, initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
         })
-    if (scannerOpen) ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan) { destination ->
+    if (scannerOpen) ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan, onQuickScan) { destination ->
         scannerOpen = false; returnToScanner = true; settingsCategory = destination; settingsOpen = true
     }
     if (exitPrompt) GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
@@ -457,4 +458,5 @@ internal fun LibraryNotice(state: LibraryUiState) {
             else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
     }
 }
+
 

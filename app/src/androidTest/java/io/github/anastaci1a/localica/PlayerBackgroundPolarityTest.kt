@@ -151,6 +151,38 @@ class PlayerBackgroundPolarityTest {
         assertTrue("Real transport glyph draws the selected ink", inkPixels > 10)
     }
 
+    @Test fun metadataParticipatesWhenTitleBackingIsDarkerThanTransport() {
+        tall = true
+        val bitmap = Bitmap.createBitmap(300, 300, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.WHITE)
+        }
+        val wash = Bitmap.createBitmap(ArtworkWash.WIDTH, ArtworkWash.HEIGHT, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.rgb(125, 125, 125))
+        }
+        val initial = PlayerVisual(bitmap.asImageBitmap(), PlayerPalette(Color.White, Color.White, Color.White,
+            wash = wash), contentKey = "metadata-base")
+        mount(initial)
+        assertFalse("Uniform mid-gray backing chooses black", owner.decision.lightInk)
+        val title = requireNotNull(owner.measured["title"]) { "The actual title must be sampled" }
+        val artist = requireNotNull(owner.measured["artist"]) { "The actual artist must be sampled" }
+        val cover = requireNotNull(owner.measured["cover"])
+        assertTrue("Tall fixture metadata is below direct cover", title.top > cover.bottom)
+        assertTrue(title.width > 0f && title.height > 0f && artist.width > 0f && artist.height > 0f)
+        val mapping = (ArtworkWashMapping.create(cover) as ArtworkWashMappingResult.Known).value
+        val shaded = wash.copy(Bitmap.Config.ARGB_8888, true)
+        for (y in 0 until shaded.height) {
+            val point = (mapping.forward(androidx.compose.ui.geometry.Offset(0f, y + .5f)) as ArtworkWashMappingResult.Known).value
+            if (point.y >= title.top - 4f && point.y <= artist.bottom + 4f) {
+                for (x in 0 until shaded.width) shaded.setPixel(x, y, android.graphics.Color.rgb(32, 32, 32))
+            }
+        }
+        compose.runOnIdle { visual = initial.copy(palette = initial.palette.copy(wash = shaded), contentKey = "metadata-dark"); visit = "metadata-dark" }
+        compose.waitForIdle(); current()
+        assertTrue("Dark metadata cannot be omitted from the shared foreground choice", owner.decision.lightInk)
+        assertRenderedInk(true)
+        assertTrue("Control-only backing remains mid-gray, not secretly darkened", sampleBackgroundAtTransport() > .46f)
+    }
+
     @Test fun zeroTrimControlHasIdenticalBackingForBothToneDirections() = compareBacking(0f)
 
     @Test fun nonzeroTrimPreservesThePre473BackingWhenInkDiffersFromPalettePolarity() = compareBacking(.5f)
@@ -330,3 +362,4 @@ class PlayerBackgroundPolarityTest {
         assertRenderedInk(true); assertTrue(sampleBackgroundAtTransport() < .1f)
     }
 }
+
