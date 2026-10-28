@@ -15,6 +15,8 @@ import java.io.FileNotFoundException;
 public class IncompleteScanDocumentsProvider extends DocumentsProvider {
     private final java.util.concurrent.atomic.AtomicInteger opened = new java.util.concurrent.atomic.AtomicInteger();
     private final java.util.concurrent.atomic.AtomicInteger closed = new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicInteger childQueries = new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicInteger fileOpens = new java.util.concurrent.atomic.AtomicInteger();
     private volatile String mode = "complete";
     private static final String[] COLUMNS = {Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME,
         Document.COLUMN_MIME_TYPE, Document.COLUMN_LAST_MODIFIED};
@@ -28,6 +30,7 @@ public class IncompleteScanDocumentsProvider extends DocumentsProvider {
         return cursor;
     }
     @Override public Cursor queryChildDocuments(String parent, String[] projection, String order) {
+        childQueries.incrementAndGet();
         String current = mode;
         boolean nested = parent.equals("nested");
         boolean affected = current.startsWith("nested-") ? nested : !nested;
@@ -58,7 +61,8 @@ public class IncompleteScanDocumentsProvider extends DocumentsProvider {
     }
     @Override public Bundle call(String method, String argument, Bundle extras) {
         if (method.equals("scanFixtureStats")) {
-            Bundle result = new Bundle(); result.putInt("opened", opened.get()); result.putInt("closed", closed.get()); return result;
+            Bundle result = new Bundle(); result.putInt("opened", opened.get()); result.putInt("closed", closed.get());
+            result.putInt("childQueries", childQueries.get()); result.putInt("fileOpens", fileOpens.get()); return result;
         }
         if (!method.equals("scanFixtureMode")) return super.call(method, argument, extras);
         if (argument == null || !argument.matches("(nested-)?(complete|updated|empty|null|loading-empty|loading-partial|loading-malformed|error|error-empty|error-malformed)"))
@@ -86,6 +90,7 @@ public class IncompleteScanDocumentsProvider extends DocumentsProvider {
         }
     }
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
+        fileOpens.incrementAndGet();
         throw new FileNotFoundException("Metadata is supplied by the scan test");
     }
     private MatrixCursor cursor(String[] projection) {

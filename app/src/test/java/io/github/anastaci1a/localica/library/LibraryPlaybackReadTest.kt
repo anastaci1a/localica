@@ -19,6 +19,7 @@ class LibraryPlaybackReadTest {
             override val snapshots: Flow<LibrarySnapshot> = stream
             override suspend fun current(): LibrarySnapshot = error("Default contract must collect snapshots.first")
             override suspend fun replaceRoot(result: ScanResult): Unit = error("No writes")
+            override suspend fun mergeRoot(result: ScanResult): Unit = error("No writes")
             override suspend fun removeRoot(uri: String): Unit = error("No writes")
             override suspend fun updateMetadata(track: Track): Unit = error("No writes")
         }
