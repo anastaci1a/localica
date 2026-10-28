@@ -142,9 +142,31 @@ class GlassOriginPreparationTest {
         fixture()
         var beforeCapture: android.graphics.Bitmap? = null
         var prewarmCapture: android.graphics.Bitmap? = null
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val directory = nativeEvidenceDirectory("lyrics-premeasurement", instrumentation.targetContext.cacheDir)
+        fun saveCapture(name: String, bitmap: android.graphics.Bitmap?) {
+            bitmap ?: return
+            java.io.File(directory, name).outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
         try {
-            val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
-            val before = requireNotNull(instrumentation.uiAutomation.takeScreenshot()).also { beforeCapture = it }
+            val initialBounds = compose.runOnUiThread { anchor.bounds }
+            assertTrue(initialBounds.width > 0f && initialBounds.height > 0f)
+            // Compose idle does not prove SurfaceFlinger has presented this fixture.
+            // Wait for the actual closed host's known pixels BEFORE starting motion;
+            // never compare premeasurement with a stale previous-window screenshot.
+            compose.waitUntil(5000) {
+                beforeCapture?.recycle()
+                beforeCapture = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+                val shot = requireNotNull(beforeCapture)
+                (1..3).all { iy -> (1..3).all { ix ->
+                    shot.getPixel((initialBounds.left + initialBounds.width * ix / 4).toInt(),
+                        (initialBounds.top + initialBounds.height * iy / 4).toInt()) == 0xFF143A5F.toInt()
+                } }
+            }
+            val before = requireNotNull(beforeCapture)
+            saveCapture("native-before.png", before)
             var invisiblePixels = false
             compose.runOnIdle { open = true }
             var preAdmission = false
@@ -174,15 +196,12 @@ class GlassOriginPreparationTest {
                     compose.onNodeWithTag("prepared-menu-content").assertDoesNotExist()
                     if (observedPrewarmWindow && !invisiblePixels) {
                         val prewarm = requireNotNull(instrumentation.uiAutomation.takeScreenshot()).also { prewarmCapture = it }
+                        saveCapture("native-prewarm.png", prewarm)
                         val bounds = anchor.bounds
                         for (iy in 1..3) for (ix in 1..3) {
                             val x = (bounds.left + bounds.width * ix / 4).toInt()
                             val y = (bounds.top + bounds.height * iy / 4).toInt()
                             assertEquals("Premeasurement cannot paint its source surface", before.getPixel(x, y), prewarm.getPixel(x, y))
-                        }
-                        val directory = nativeEvidenceDirectory("lyrics-premeasurement", instrumentation.targetContext.cacheDir)
-                        java.io.File(directory, "native-prewarm.png").outputStream().use {
-                            prewarm.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                         }
                         prewarm.recycle()
                         prewarmCapture = null
@@ -226,7 +245,12 @@ class GlassOriginPreparationTest {
                 assertFalse(anchor.modalPresent); assertFalse(anchor.hidden)
                 assertEquals(0f, preparation.progress, 0f)
             }
-        } finally { beforeCapture?.recycle(); prewarmCapture?.recycle(); compose.mainClock.autoAdvance = true }
+        } finally {
+            saveCapture("native-before.png", beforeCapture)
+            saveCapture("native-prewarm.png", prewarmCapture)
+            beforeCapture?.recycle(); prewarmCapture?.recycle()
+            compose.mainClock.autoAdvance = true
+        }
     }
 
     @Test fun cancelledPreparationAndReopenNeverCreateAnEarlyModal() {
