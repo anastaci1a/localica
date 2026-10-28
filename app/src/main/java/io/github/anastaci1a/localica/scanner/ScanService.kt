@@ -37,7 +37,8 @@ class ScanService : Service() {
                     getSystemService(NotificationManager::class.java).notify(9001, notification(state))
             } }
         }
-        scanner.run(intent?.getStringArrayListExtra("roots").orEmpty(), intent?.getBooleanExtra("new-files-only", false) == true) {
+        scanner.run(intent?.getStringArrayListExtra("roots").orEmpty(), intent?.getBooleanExtra("new-files-only", false) == true,
+            intent?.getBooleanExtra("full-after-quick", false) == true) {
             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(latestStart)
         }
         return START_NOT_STICKY
@@ -64,3 +65,4 @@ class ScanService : Service() {
     }
     override fun onBind(intent: Intent?): IBinder? = null
 }
+

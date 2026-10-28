@@ -43,10 +43,11 @@ class MainActivity : ComponentActivity() {
                     (application as LocalicaApplication).playlists, (application as LocalicaApplication).scanner, (application as LocalicaApplication).statistics.counts) as T
         })[LibraryViewModel::class.java]
         consumeScannerIntent(intent)
-        if (scannerRequest == 0 && io.github.anastaci1a.localica.scanner.ScanPreferences(this).scanOnLaunch) {
+        val scanPreferences = io.github.anastaci1a.localica.scanner.ScanPreferences(this)
+        if (scannerRequest == 0 && (scanPreferences.scanOnLaunch || scanPreferences.fullScanOnLaunch)) {
             lifecycleScope.launch {
                 model.library.first { !it.loading }
-                model.scanNewFiles()
+                model.scanOnLaunch(scanPreferences.scanOnLaunch, scanPreferences.fullScanOnLaunch)
             }
         }
         setContent {
@@ -66,7 +67,7 @@ class MainActivity : ComponentActivity() {
                     queues = queues, queueController = model.playback.queues,
                     onPrevious = model.playback::previous, onNext = model.playback::next,
                     playlist = playlist, playlistController = model.playlists,
-                    onScanAll = model::scanAll, scannerRequest = scannerRequest, onRetryPlayback = model.playback::retry,
+                    onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, onRetryPlayback = model.playback::retry,
                     onSeekRequest = model.playback::requestSeek)
                 }
             }
@@ -84,3 +85,4 @@ private class LocalFolderPicker : ActivityResultContracts.OpenDocumentTree() {
     override fun createIntent(context: Context, input: Uri?): Intent = super.createIntent(context, input)
         .putExtra(Intent.EXTRA_LOCAL_ONLY, true)
 }
+

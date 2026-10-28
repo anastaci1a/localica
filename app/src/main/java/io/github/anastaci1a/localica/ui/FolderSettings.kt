@@ -27,13 +27,14 @@ private val settingsDestinations = listOf(
     SettingsDestination("Library and tags", null, R.drawable.ic_library, "Folders, scanner configuration, tag jobs and recovery"),
     SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and unfiltered collections"),
     SettingsDestination("Folders to scan", "Library and tags", R.drawable.ic_folder, "Choose music folders and excluded subfolders"),
-    SettingsDestination("Scanner configuration", "Library and tags", R.drawable.ic_search, "Quick Scan on launch, subfolders, and short files"),
+    SettingsDestination("Scanner", "Library and tags", R.drawable.ic_search, "Quick scan, full scan, startup scans, subfolders and short files"),
+    SettingsDestination("Metadata read failures", "Scanner", R.drawable.ic_info, "Files with incomplete metadata"),
     SettingsDestination("Tag jobs and recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
     SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, and open-source licenses"),
 )
 private fun settingsPath(title: String?): List<String> {
     if (title == null) return emptyList()
-    val name = if (title == "Interface and gestures") "Interface" else title
+    val name = when (title) { "Interface and gestures" -> "Interface"; "Scanner configuration" -> "Scanner"; else -> title }
     val destination = settingsDestinations.firstOrNull { it.title == name } ?: return emptyList()
     return settingsPath(destination.parent) + name
 }
@@ -42,7 +43,7 @@ private fun settingsPath(title: String?): List<String> {
 fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder: () -> Unit,
     onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {},
     interfaceContent: @Composable (String) -> Unit = {}, playbackContent: @Composable (String) -> Unit = {},
-    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, libraryFiltersContent: @Composable () -> Unit = {}) {
+    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}) {
     var path by rememberSaveable { mutableStateOf(settingsPath(initialCategory)) }
     var search by rememberSaveable { mutableStateOf("") }
     var folderUri by rememberSaveable { mutableStateOf<String?>(null) }
@@ -54,11 +55,13 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     val preferences = remember(context) { ScanPreferences(context) }
     val pageKey = (page ?: "root") + if (page == "Folder options") folderUri.orEmpty() else ""
     fun back() { if (path.isEmpty()) onDismiss() else path = path.dropLast(1) }
-    SettingsPage(page ?: "Settings", ::back, onDismiss, navigationDepth = path.size) {
+    SettingsPage(page ?: "Settings", ::back, onDismiss, navigationDepth = path.size,
+        onSystemBack = { if (initialCategory != null && path == settingsPath(initialCategory)) onDismiss() else back() }) {
         if (page == null) GlassSearchField(search, { search = it }, "Search settings",
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
-            Column(Modifier.fillMaxWidth().weight(1f).controlVerticalScroll(rememberScrollState()).padding(24.dp),
+            if (page == "Metadata read failures") MetadataReadFailures(state, Modifier.weight(1f))
+            else Column(Modifier.fillMaxWidth().weight(1f).controlVerticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (page == null) {
                     val shown = settingsDestinations.filter {
@@ -101,7 +104,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         ExcludedFoldersPreference(folder, preferences, !state.scanning && !state.updatingFolders)
                         ActionTextButton(onClick = { removing = folder }, enabled = !state.scanning && !state.updatingFolders) { Text("Remove folder") }
                     }
-                    "Scanner configuration" -> ScannerConfiguration(preferences) { path = path + "Folders to scan" }
+                    "Scanner" -> ScannerConfiguration(preferences, state, onFullScan, onQuickScan) { path = path + "Metadata read failures" }
                 }
             }
         } }
@@ -113,18 +116,22 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
 }
 
 @Composable
-private fun ScannerConfiguration(preferences: ScanPreferences, folders: () -> Unit) {
+private fun ScannerConfiguration(preferences: ScanPreferences, state: LibraryUiState, onFullScan: () -> Unit,
+    onQuickScan: () -> Unit, failures: () -> Unit) {
     var options by remember { mutableStateOf(preferences.read("")) }
     var onLaunch by remember { mutableStateOf(preferences.scanOnLaunch) }
+    var fullOnLaunch by remember { mutableStateOf(preferences.fullScanOnLaunch) }
     var durationOpen by remember { mutableStateOf(false) }
+    ScannerActions(state, onFullScan, onQuickScan)
+    SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs", onClick = failures)
     SettingsHeading("Music library")
-    SettingsLink("Folders to scan", "Included folders and excluded subfolders", R.drawable.ic_folder, onClick = folders)
     BooleanPreference("Include subfolders", options.includeSubfolders) { options = options.copy(includeSubfolders = it); preferences.write(options) }
     SettingsLink("Exclude short files", if (options.minimumDurationSeconds == 0) "Off" else "Shorter than ${options.minimumDurationSeconds} seconds") { durationOpen = true }
     Text("Unknown durations are kept. Use Scan music to apply changed rules to indexed songs.", style = MaterialTheme.typography.bodySmall)
     SettingsHeading("On launch")
-    BooleanPreference("Quick Scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
-    Text("Off by default. When Localica opens, find new songs in the background without rereading existing songs. Uses your folders, subfolder setting and exclusions. For changed tags or removed files, run a full scan from More → Scan music.", style = MaterialTheme.typography.bodySmall)
+    BooleanPreference("Quick scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
+    BooleanPreference("Full scan", fullOnLaunch) { fullOnLaunch = it; preferences.fullScanOnLaunch = it }
+    Text("Both are off by default. Quick scan finds new songs; full scan also refreshes tags and removes missing files. Enable both to run quick scan first, then full scan.", style = MaterialTheme.typography.bodySmall)
     if (durationOpen) {
         var input by remember { mutableStateOf(options.minimumDurationSeconds.toString()) }
         val seconds = input.toIntOrNull()
@@ -156,3 +163,4 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
             dismissButton = { ActionTextButton(onClick = { open = false }) { Text("Cancel") } })
     }
 }
+

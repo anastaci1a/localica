@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,7 +32,7 @@ internal fun openLocalicaSystemSettings(context: Context, notifications: Boolean
 }
 
 @Composable
-internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart: () -> Unit, onCancel: () -> Unit,
+internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart: () -> Unit, onCancel: () -> Unit, onQuickScan: () -> Unit = {},
     onSettings: (String) -> Unit) {
     val context = LocalContext.current
     var backgroundHelp by remember { mutableStateOf(false) }
@@ -49,25 +50,25 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
     GlassAlertDialog(onDismissRequest = onDismiss, title = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Scan music", Modifier.weight(1f))
-            ActionIcon(R.drawable.ic_settings, "Scanner configuration") { onSettings("Scanner configuration") }
+            ActionIcon(R.drawable.ic_settings, "Scanner") { onSettings("Scanner") }
         }
     }, text = {
-        Column(Modifier.controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = {
-                if (!state.scanning) onStart()
-                else if (!notifications || restricted) backgroundHelp = true else onDismiss()
-            }, modifier = Modifier.fillMaxWidth(), enabled = state.scanning ||
-                (!state.loading && !state.updatingFolders && state.snapshot.folders.isNotEmpty())) {
-                Text(if (state.scanning) "Continue in background" else "Scan now")
+        Column(Modifier.testTag("scanner-body").controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ScannerActions(state, onStart, onQuickScan)
+            // Keep these slots in both states: starting/stopping cannot resize the popup.
+            Box(Modifier.fillMaxWidth().height(4.dp)) {
+                if (state.scanning) LinearProgressIndicator(Modifier.fillMaxSize(),
+                    color = NavigationAccent, trackColor = NavigationAccent.copy(alpha = .18f))
             }
-            if (!state.scanning) Text("A full scan finds new songs, refreshes existing tags and removes missing files from the library. Audio files are not deleted.", style = MaterialTheme.typography.bodySmall)
-            if (state.scanning) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("${state.scannedCount} files checked · ${state.scanStatus.completedFolders}/${state.scanStatus.totalFolders} folders")
-                state.snapshot.folders.firstOrNull { it.uri == state.scanningFolderUri }?.let { Text(it.name) }
-                ActionTextButton(onClick = onCancel) { Text("Cancel scan") }
+            Text(if (state.scanning) "${state.scannedCount} files checked · ${state.scanStatus.completedFolders}/${state.scanStatus.totalFolders} folders"
+                else state.scanStatus.message ?: "Ready to scan", minLines = 2, maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTextButton(onClick = {
+                    if (!notifications || restricted) backgroundHelp = true else onDismiss()
+                }, enabled = state.scanning, modifier = Modifier.weight(1f)) { Text("Continue in background") }
+                ActionTextButton(onClick = onCancel, enabled = state.scanning) { Text("Cancel scan") }
             }
-            state.scanStatus.message?.let { Text(it) }
             Text("${state.snapshot.tracks.size} songs in your library")
             SettingsLink("Folders to scan", "${state.snapshot.folders.size} selected", R.drawable.ic_folder) { onSettings("Folders to scan") }
             SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs") { failuresOpen = true }
@@ -88,17 +89,31 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
     }, confirmButton = { ActionTextButton(onClick = { backgroundHelp = false; onDismiss() }) { Text("Continue in background") } },
         dismissButton = { ActionTextButton(onClick = { backgroundHelp = false }) { Text("Stay here") } })
     if (failuresOpen) SettingsPage("Metadata read failures", { failuresOpen = false }, { failuresOpen = false }) {
-        Text("These files remain in the library using available metadata or their filenames. A successful rescan clears their errors.", Modifier.padding(16.dp))
-        if (state.snapshot.metadataFailures.isEmpty()) Text("No metadata read failures.", Modifier.padding(16.dp))
-        val failuresScroll = androidx.compose.foundation.lazy.rememberLazyListState()
-        LazyColumn(Modifier.fillMaxWidth().weight(1f).modalScroll(failuresScroll), state = failuresScroll,
-            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(state.snapshot.metadataFailures, key = { it.folderUri + "\n" + it.trackId }) { failure ->
-                Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text(failure.path, style = MaterialTheme.typography.titleSmall)
-                        Text(state.snapshot.folders.firstOrNull { it.uri == failure.folderUri }?.name.orEmpty(), style = MaterialTheme.typography.bodySmall)
-                    }
+        MetadataReadFailures(state, Modifier.weight(1f))
+    }
+}
+
+@Composable
+internal fun ScannerActions(state: LibraryUiState, onFullScan: () -> Unit, onQuickScan: () -> Unit) {
+    val enabled = !state.scanning && !state.loading && !state.updatingFolders && state.snapshot.folders.isNotEmpty()
+    SettingsLink("Full scan", enabled = enabled, onClick = onFullScan)
+    SettingsLink("Quick scan", enabled = enabled, onClick = onQuickScan)
+    Text("Quick scan adds new songs. Full scan also refreshes tags and removes missing files. Your audio files stay untouched.",
+        style = MaterialTheme.typography.bodySmall)
+}
+
+@Composable
+internal fun MetadataReadFailures(state: LibraryUiState, modifier: Modifier = Modifier) {
+    val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+    LazyColumn(modifier.fillMaxWidth().modalScroll(scroll), state = scroll,
+        contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item { Text("These files remain in the library using available metadata or filenames. A successful full scan clears their errors.") }
+        if (state.snapshot.metadataFailures.isEmpty()) item { Text("No metadata read failures.") }
+        items(state.snapshot.metadataFailures, key = { it.folderUri + "\n" + it.trackId }) { failure ->
+            Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(failure.path, style = MaterialTheme.typography.titleSmall)
+                    Text(state.snapshot.folders.firstOrNull { it.uri == failure.folderUri }?.name.orEmpty(), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
