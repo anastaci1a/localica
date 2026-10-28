@@ -25,6 +25,120 @@ import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 class IncompleteScanTest {
+    @Test fun startupControllerContinuesOtherRootsAfterOneProviderFails() = fixture {
+        repository.scan(root)
+        repository.scan(other)
+        val before = store.current()
+        mode("updated")
+        unavailableRoot = root
+        metadataReads = 0
+        val finished = CompletableDeferred<Unit>()
+        val controller = io.github.anastaci1a.localica.scanner.ScanController(
+            InstrumentationRegistry.getInstrumentation().targetContext, repository)
+        withContext(Dispatchers.Main) { controller.run(listOf(root, other), newFilesOnly = true) { finished.complete(Unit) } }
+        withTimeout(10_000) { finished.await() }
+        assertFalse(controller.state.value.running)
+        assertEquals(2, controller.state.value.completedFolders)
+        assertTrue(controller.state.value.message.orEmpty().contains("1 folder"))
+        assertEquals(1, metadataReads)
+        val after = store.current()
+        assertEquals(3, after.tracks.size)
+        before.tracks.forEach { assertEquals(it, after.tracks.single { current -> current.id == it.id }) }
+        assertEquals(listOf(other), after.tracks.single { track -> before.tracks.none { it.id == track.id } }.locations.map { it.folderUri })
+        assertCursorsClosed()
+    }
+
+    @Test fun manualFullRequestSurvivesAnActiveQuickScanForTheSameRoot() = fixture {
+        repository.scan(root)
+        val original = store.current().tracks
+        original.forEach { store.updateMetadata(it.copy(title = "Cached edited title")) }
+        mode("updated")
+        metadataReads = 0
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        beforeMetadata = { entered.complete(Unit); release.await(); beforeMetadata = null }
+        val finished = CompletableDeferred<Unit>()
+        val controller = io.github.anastaci1a.localica.scanner.ScanController(
+            InstrumentationRegistry.getInstrumentation().targetContext, repository)
+        try {
+            withContext(Dispatchers.Main) { controller.run(listOf(root), newFilesOnly = true) { finished.complete(Unit) } }
+            withTimeout(10_000) { entered.await() }
+            withContext(Dispatchers.Main) { controller.run(listOf(root), newFilesOnly = false) { } }
+            release.complete(Unit)
+            withTimeout(10_000) { finished.await() }
+            assertFalse(controller.state.value.running)
+            assertEquals(2, controller.state.value.completedFolders)
+            assertEquals("One new-file read, then all three files during the queued full scan", 4, metadataReads)
+            val after = store.current()
+            assertEquals(3, after.tracks.size)
+            assertTrue("Full scan refreshes cached metadata after additive discovery",
+                after.tracks.none { it.title == "Cached edited title" })
+            assertCursorsClosed()
+        } finally {
+            release.complete(Unit)
+            withContext(Dispatchers.Main) { controller.cancel() }
+            withTimeout(10_000) { finished.await() }
+        }
+    }
+
+    @Test fun startupDiscoverySkipsKnownFileOpensAndAddsOverlapsWithoutReplacingCachedRows() = fixture {
+        repository.scan(root)
+        repository.scan(other)
+        val before = store.current()
+        val grants = persisted()
+        metadataReads = 0
+        probeFileOpens = true
+        val initialStats = stats()
+        val started = System.nanoTime()
+        val unchanged = repository.scanNewFiles(root)
+        val overlap = repository.scanNewFiles(other)
+        assertEquals(0, metadataReads)
+        assertEquals(0, stats().getInt("fileOpens") - initialStats.getInt("fileOpens"))
+        assertEquals(4, stats().getInt("childQueries") - initialStats.getInt("childQueries"))
+        assertEquals(0, unchanged.metrics.metadataReads + overlap.metrics.metadataReads)
+        assertEquals(before, store.current())
+        android.util.Log.i("StartupScanBenchmark", "unchanged roots=2 tracks=2 childQueries=4 fileOpens=0 elapsedNanos=${System.nanoTime() - started}")
+        mode("updated")
+        val added = repository.scanNewFiles(root)
+        repository.scanNewFiles(other)
+        assertEquals(1, metadataReads)
+        assertEquals(1, stats().getInt("fileOpens") - initialStats.getInt("fileOpens"))
+        assertEquals(1, added.metrics.metadataReads)
+        val after = store.current()
+        assertEquals(3, after.tracks.size)
+        assertTrue(after.tracks.all { it.locations.size == 2 && it.addedAt != null })
+        before.tracks.forEach { assertEquals(it, after.tracks.single { current -> current.id == it.id }) }
+        mode("empty")
+        repository.scanNewFiles(root)
+        assertEquals(after, store.current())
+        assertEquals(grants, persisted())
+        repository.scan(root)
+        assertTrue(store.current().tracks.all { track -> track.locations.all { it.folderUri == other } })
+        assertCursorsClosed()
+    }
+
+    @Test fun interruptedStartupDoesNotPublishPartialAdditionsAndCanRetryAfterRelaunch() = fixture {
+        repository.scan(root)
+        val before = store.current()
+        for (status in listOf("loading-partial", "error", "null", "nested-loading-partial", "nested-error", "nested-null")) {
+            mode(status)
+            expectFailure { repository.scanNewFiles(root) }
+            assertEquals(before, store.current())
+        }
+        mode("updated")
+        cancelMetadata = true
+        try { repository.scanNewFiles(root); fail("Cancellation must propagate") }
+        catch (_: CancellationException) { }
+        finally { cancelMetadata = false }
+        assertEquals(before, store.current())
+        // A fresh repository models loss of the process-local scanner; indexed identity is durable.
+        freshRepository().scanNewFiles(root)
+        val after = store.current()
+        assertEquals(3, after.tracks.size)
+        before.tracks.forEach { assertEquals(it, after.tracks.single { current -> current.id == it.id }) }
+        assertCursorsClosed()
+    }
+
     @Test fun incompleteRootResultsKeepSongsLocationsDatesAndGrantsUntilCompleteRetry() = fixture {
         repository.scan(root)
         repository.scan(other)
@@ -152,16 +266,30 @@ class IncompleteScanTest {
         val newRoot = tree("new-root")
         var metadataReads = 0
         var cancelMetadata = false
+        var probeFileOpens = false
+        var beforeMetadata: (suspend () -> Unit)? = null
+        var unavailableRoot: String? = null
         private val documents = AndroidDocuments(context)
         // Exercise actual resolver/provider listings without requiring decoder fixtures.
         private val source = object : DocumentSource by documents {
+            override fun root(treeUri: String): ScanDocument {
+                if (treeUri == unavailableRoot) throw IOException("Fixture root unavailable")
+                return documents.root(treeUri)
+            }
             override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
                 metadataReads++
+                beforeMetadata?.invoke()
                 if (cancelMetadata) throw CancellationException("Fixture cancellation")
+                if (probeFileOpens) {
+                    // Count real provider open attempts; this synthetic provider intentionally has no audio bytes.
+                    try { resolver.openFileDescriptor(Uri.parse(uri), "r")?.close() } catch (_: java.io.FileNotFoundException) { }
+                }
                 return AudioMetadata(title = fileName, durationMs = 120_000)
             }
         }
         val repository = LibraryRepository(store, TreeScanner(source), permissions)
+        fun freshRepository() = LibraryRepository(store, TreeScanner(source), permissions)
+        fun stats(): Bundle = requireNotNull(resolver.call(Uri.parse(root), "scanFixtureStats", null, null))
         private fun tree(id: String) = DocumentsContract.buildTreeDocumentUri(IncompleteScanGrantActivity.AUTHORITY, id).toString()
         fun songInfoTree(id: String) = tree(id)
         suspend fun songInfoNames(folders: List<FolderSelection>) = withContext(Dispatchers.IO) { resolveSongRootNames(context, folders) }

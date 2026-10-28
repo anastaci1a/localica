@@ -60,6 +60,7 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
                 (!state.loading && !state.updatingFolders && state.snapshot.folders.isNotEmpty())) {
                 Text(if (state.scanning) "Continue in background" else "Scan now")
             }
+            if (!state.scanning) Text("A full scan finds new songs, refreshes existing tags and removes missing files from the library. Audio files are not deleted.", style = MaterialTheme.typography.bodySmall)
             if (state.scanning) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
                 Text("${state.scannedCount} files checked · ${state.scanStatus.completedFolders}/${state.scanStatus.totalFolders} folders")

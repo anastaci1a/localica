@@ -37,7 +37,7 @@ class ScanService : Service() {
                     getSystemService(NotificationManager::class.java).notify(9001, notification(state))
             } }
         }
-        scanner.run(intent?.getStringArrayListExtra("roots").orEmpty()) {
+        scanner.run(intent?.getStringArrayListExtra("roots").orEmpty(), intent?.getBooleanExtra("new-files-only", false) == true) {
             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(latestStart)
         }
         return START_NOT_STICKY

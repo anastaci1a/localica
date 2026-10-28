@@ -97,6 +97,8 @@ abstract class LibraryDao {
     }
     @Transaction open suspend fun updateMetadataBatch(tracks: List<TrackRecord>) { tracks.forEach { updateMetadata(it) } }
     @Insert protected abstract suspend fun insertLocations(locations: List<FolderTrackRecord>)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) protected abstract suspend fun insertNewTracks(tracks: List<TrackRecord>)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) protected abstract suspend fun insertNewLocations(locations: List<FolderTrackRecord>)
     @Query("DELETE FROM folder_tracks WHERE folderUri = :uri") protected abstract suspend fun clearLocations(uri: String)
     @Query("DELETE FROM folders WHERE uri = :uri") protected abstract suspend fun deleteFolder(uri: String)
     @Query("DELETE FROM tracks WHERE id NOT IN (SELECT trackId FROM folder_tracks)") protected abstract suspend fun pruneTracks()
@@ -111,6 +113,16 @@ abstract class LibraryDao {
         clearLocations(folder.uri)
         insertLocations(locations)
         pruneTracks()
+    }
+
+    @Transaction
+    open suspend fun mergeRoot(folder: FolderRecord, tracks: List<TrackRecord>, locations: List<FolderTrackRecord>) {
+        require(locations.all { it.folderUri == folder.uri })
+        upsertFolder(folder)
+        val now = System.currentTimeMillis()
+        // INSERT IGNORE preserves metadata, dates and existing membership failure state atomically.
+        insertNewTracks(tracks.map { it.copy(addedAt = now) })
+        insertNewLocations(locations)
     }
 
     @Transaction
@@ -190,6 +202,7 @@ interface LibraryStore {
         return LibraryPlaybackRead(full.tracks, full.tracks.size, full)
     }
     suspend fun replaceRoot(result: ScanResult)
+    suspend fun mergeRoot(result: ScanResult)
     suspend fun removeRoot(uri: String)
     suspend fun updateMetadata(track: Track)
     suspend fun updateMetadataBatch(tracks: List<Track>) { tracks.forEach { updateMetadata(it) } }
@@ -205,6 +218,12 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
     override suspend fun playbackSnapshot(trackIds: Set<String>) = dao.playbackSnapshot(trackIds)
     override suspend fun replaceRoot(result: ScanResult) {
         dao.replaceRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
+            TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
+                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt)
+        }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })
+    }
+    override suspend fun mergeRoot(result: ScanResult) {
+        dao.mergeRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
             TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
                 it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt)
         }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })

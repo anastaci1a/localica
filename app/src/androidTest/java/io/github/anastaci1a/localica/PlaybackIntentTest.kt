@@ -929,6 +929,7 @@ class PlaybackIntentTest {
         override val snapshots = flow { collections.incrementAndGet(); next.getAndSet(null)?.await(); emit(snapshot ?: LibrarySnapshot()) }
         override suspend fun current() = LibrarySnapshot()
         override suspend fun replaceRoot(result: ScanResult) = Unit
+        override suspend fun mergeRoot(result: ScanResult) = Unit
         override suspend fun removeRoot(uri: String) = Unit
         override suspend fun updateMetadata(track: Track) = Unit
     }
