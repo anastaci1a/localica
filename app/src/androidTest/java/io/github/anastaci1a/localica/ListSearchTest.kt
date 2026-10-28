@@ -46,20 +46,32 @@ class ListSearchTest {
         val tracks = (0..30).map { Track("height:$it", "Song ${it.toString().padStart(3, '0')}",
             fileName = "$it.mp3", relativePath = "$it.mp3") }
         var lastSample: SearchMorphSample? = null
+        val diagnosticEvents = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val diagnosticQuery = java.util.concurrent.atomic.AtomicInteger(0)
+        var diagnosticFailure: Throwable? = null
+        fun diagnostic(event: String) {
+            diagnosticEvents.add("${android.os.SystemClock.uptimeMillis()} query=${diagnosticQuery.get()} $event")
+        }
         try {
             compose.setContent { LocalicaTheme {
-                CompositionLocalProvider(LocalSearchMorphObserver provides { lastSample = it }) {
+                CompositionLocalProvider(
+                    LocalTextEditingObservation provides { diagnostic("text $it") },
+                    LocalSearchMorphObserver provides { lastSample = it; diagnostic("morph $it") }) {
                     BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("height-root", "Music")),
                         tracks = tracks), loading = false), PlaylistState(), route, {}, {}, {},
                         { _, _, _ -> }, null, null, true, false, queryDispatcher = Dispatchers.Unconfined)
                 }
             } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Song 000").fetchSemanticsNodes().isNotEmpty() }
+            diagnostic("initial-open requested")
             compose.onNodeWithTag("list-search-pill").performClick()
             awaitSearchFocus()
             fun query(text: String) {
+                diagnosticQuery.incrementAndGet()
+                diagnostic("query-start text=$text")
                 compose.onNode(hasSetTextAction()).performClick()
                 awaitSearchFocus()
+                diagnostic("query-focused")
                 compose.onNode(hasSetTextAction()).performTextReplacement(text)
                 compose.waitUntil(5000) {
                     val first = compose.onAllNodesWithTag("media-height:0").fetchSemanticsNodes().size
@@ -73,12 +85,15 @@ class ListSearchTest {
                     expectedResults && compose.runOnUiThread { lastSample?.let { it.ime > 0 && it.nativeIme > 0 && it.ime == it.imeTarget } == true }
                 }
                 compose.waitForIdle()
+                diagnostic("query-results-settled")
             }
             fun height() = compose.onNodeWithTag("list-search-popup").fetchSemanticsNode().boundsInRoot.height
             fun commit() {
+                diagnostic("commit-start")
                 compose.awaitSearchImeHandoff { compose.onNode(hasSetTextAction()).performImeAction() }
                 compose.onNode(hasSetTextAction()).assertIsNotFocused()
                 compose.waitForIdle()
+                diagnostic("commit-complete")
             }
             query("Song")
             val manyDocked = height()
@@ -104,8 +119,27 @@ class ListSearchTest {
             assertEquals("Growing results restores the bounded viewport", manyDocked, height(), 2f)
             compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Song 030"))
             compose.onNodeWithText("Song 030").assertIsDisplayed()
+        } catch (failure: Throwable) {
+            diagnosticFailure = failure
+            diagnostic("failure ${failure.javaClass.name}: ${failure.message}")
+            throw failure
         } finally {
-            preferences.write(route, previous, false)
+            try {
+                val additional = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                    ?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+                val directory = java.io.File(additional ?: requireNotNull(context.getExternalFilesDir(null)), "search-sizing-diagnostic")
+                check(directory.isDirectory || directory.mkdirs())
+                val output = java.io.File(directory, "sizing-${android.os.SystemClock.elapsedRealtimeNanos()}.txt")
+                val snapshot = synchronized(diagnosticEvents) { diagnosticEvents.toList() }
+                output.writeText(snapshot.joinToString("\n"))
+                android.util.Log.i("ListSearchSizing", "events=${snapshot.size} trace=${output.name}")
+            } catch (evidenceFailure: Throwable) {
+                if (diagnosticFailure == null) throw evidenceFailure
+                diagnosticFailure?.addSuppressed(evidenceFailure)
+                android.util.Log.e("ListSearchSizing", "Failed to persist diagnostic evidence", evidenceFailure)
+            } finally {
+                preferences.write(route, previous, false)
+            }
         }
     }
 
