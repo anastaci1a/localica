@@ -11,14 +11,17 @@ index=0
 for variant in baseline candidate candidate baseline; do
   index=$((index+1))
   prefix="profile-evidence/${index}-${variant}"
-  adb install -r -t "/tmp/nav-$variant/app/build/outputs/apk/debug/app-debug.apk"
-  adb install -r -t "/tmp/nav-$variant/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
-  adb shell pm clear io.github.anastaci1a.localica.debug
-  adb logcat -c
-  adb shell am instrument -w -r -e class io.github.anastaci1a.localica.NavigationProfileTest io.github.anastaci1a.localica.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$prefix-instrumentation.txt"
-  adb logcat -d -v threadtime > "$prefix-logcat.txt"
-  adb shell dumpsys meminfo io.github.anastaci1a.localica.debug > "$prefix-meminfo.txt"
-  grep -q 'OK (4 tests)' "$prefix-instrumentation.txt"
-  adb shell am force-stop io.github.anastaci1a.localica.debug
+  adb install -r -t -d "/tmp/nav-$variant/app/build/outputs/apk/debug/app-debug.apk"
+  adb install -r -t -d "/tmp/nav-$variant/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+  for case in playlistTen artistTen albumOne albumTen; do
+    case_prefix="$prefix-$case"
+    adb shell pm clear io.github.anastaci1a.localica.debug
+    adb logcat -c
+    adb shell am instrument -w -r -e class "io.github.anastaci1a.localica.NavigationProfileTest#$case" io.github.anastaci1a.localica.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$case_prefix-instrumentation.txt"
+    adb logcat -d -v threadtime > "$case_prefix-logcat.txt"
+    adb shell dumpsys meminfo io.github.anastaci1a.localica.debug > "$case_prefix-meminfo.txt"
+    grep -q 'OK (1 test)' "$case_prefix-instrumentation.txt"
+    adb shell am force-stop io.github.anastaci1a.localica.debug
+  done
   sleep 10
 done

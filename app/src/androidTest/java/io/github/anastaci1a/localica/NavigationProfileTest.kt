@@ -86,6 +86,11 @@ class NavigationProfileTest {
                 assertTrue(device.wait(Until.hasObject(By.text(title)), 10000))
                 SystemClock.sleep(1000)
             }
+        } catch (failure: Throwable) {
+            val dump = java.io.ByteArrayOutputStream()
+            runCatching { device.dumpWindowHierarchy(dump) }
+            Log.e("NavigationProfileHierarchy", dump.toString("UTF-8"))
+            throw failure
         } finally {
             scenario.onActivity { it.window.removeOnFrameMetricsAvailableListener(listener) }
             scenario.close(); handlerThread.quitSafely()
