@@ -15,6 +15,7 @@ public class IncompleteScanGrantActivity extends Activity {
     @SuppressWarnings("deprecation")
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        trace("onCreate", getIntent());
         try {
             for (String id : new String[]{"root", "other", "new-root"}) {
                 android.net.Uri tree = DocumentsContract.buildTreeDocumentUri(AUTHORITY, id);
@@ -26,7 +27,23 @@ public class IncompleteScanGrantActivity extends Activity {
                 }
             }
             ResultReceiver completion = getIntent().getParcelableExtra("completion");
-            if (completion != null) completion.send(0, Bundle.EMPTY);
-        } finally { finish(); }
+            if (completion != null) {
+                trace("callback-send", getIntent());
+                completion.send(0, Bundle.EMPTY);
+            }
+        } finally { trace("finish-entry", getIntent()); finish(); }
+    }
+    @Override protected void onNewIntent(Intent intent) {
+        trace("onNewIntent", intent);
+        super.onNewIntent(intent);
+    }
+    @Override protected void onDestroy() {
+        trace("onDestroy", getIntent());
+        super.onDestroy();
+    }
+    private void trace(String stage, Intent intent) {
+        android.util.Log.i("ScanGrantFixture", "stage=" + stage + " instance=" + System.identityHashCode(this)
+            + " id=" + intent.getStringExtra("request-id") + " action=" + intent.getAction()
+            + " phase=" + intent.getStringExtra("phase"));
     }
 }

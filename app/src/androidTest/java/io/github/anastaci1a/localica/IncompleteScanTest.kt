@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -251,7 +252,21 @@ class IncompleteScanTest {
 
     private fun fixture(block: suspend Fixture.() -> Unit) = runBlocking {
         val fixture = Fixture()
-        try { fixture.prepare(); fixture.block() } finally { fixture.close() }
+        var primaryFailure: Throwable? = null
+        try {
+            fixture.prepare()
+            fixture.block()
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
+        } finally {
+            try { fixture.close() }
+            catch (cleanupFailure: Throwable) {
+                val primary = primaryFailure
+                if (primary == null) throw cleanupFailure
+                if (primary !== cleanupFailure) primary.addSuppressed(cleanupFailure)
+            }
+        }
     }
 
     private class Fixture {
@@ -293,26 +308,40 @@ class IncompleteScanTest {
         private fun tree(id: String) = DocumentsContract.buildTreeDocumentUri(IncompleteScanGrantActivity.AUTHORITY, id).toString()
         fun songInfoTree(id: String) = tree(id)
         suspend fun songInfoNames(folders: List<FolderSelection>) = withContext(Dispatchers.IO) { resolveSongRootNames(context, folders) }
-        suspend fun grant(action: String) {
+        suspend fun grant(action: String, phase: String = "body") {
+            val requestId = java.util.UUID.randomUUID().toString()
+            android.util.Log.i("ScanGrantFixture", "request id=$requestId action=$action phase=$phase")
             val completed = CompletableDeferred<Unit>()
             val completion = object : ResultReceiver(Handler(Looper.getMainLooper())) {
-                override fun onReceiveResult(resultCode: Int, resultData: Bundle?) { completed.complete(Unit) }
+                override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                    android.util.Log.i("ScanGrantFixture", "callback id=$requestId action=$action phase=$phase")
+                    completed.complete(Unit)
+                }
             }
             context.startActivity(Intent(action)
                 .setClassName(instrumentation.context.packageName, IncompleteScanGrantActivity::class.java.name)
                 .putExtra("completion", completion)
+                .putExtra("request-id", requestId)
+                .putExtra("phase", phase)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             // Read access alone cannot prove that a fresh persistable grant has arrived.
-            withTimeout(10_000) { completed.await() }
+            try { withTimeout(10_000) { completed.await() } }
+            catch (failure: TimeoutCancellationException) {
+                throw AssertionError("Synthetic grant activity callback timed out: id=$requestId action=$action phase=$phase", failure)
+            }
         }
         suspend fun prepare() {
             assertEquals(IncompleteScanGrantActivity.TARGET, context.packageName)
             listOf(root, other, newRoot).forEach(permissions::release)
-            grant(IncompleteScanGrantActivity.GRANT)
-            withTimeout(10_000) {
-                while (true) {
-                    try { documents.root(newRoot); break } catch (_: SecurityException) { delay(25) }
+            grant(IncompleteScanGrantActivity.GRANT, "prepare")
+            try {
+                withTimeout(10_000) {
+                    while (true) {
+                        try { documents.root(newRoot); break } catch (_: SecurityException) { delay(25) }
+                    }
                 }
+            } catch (failure: TimeoutCancellationException) {
+                throw AssertionError("Synthetic grant read readiness timed out during prepare", failure)
             }
             mode("complete")
         }
@@ -330,13 +359,17 @@ class IncompleteScanTest {
         suspend fun close() {
             try {
                 listOf(root, other, newRoot).forEach(permissions::release)
-                grant(IncompleteScanGrantActivity.REVOKE)
+                grant(IncompleteScanGrantActivity.REVOKE, "cleanup")
                 // Do not let asynchronous activity cleanup race the next fixture's grant.
-                withTimeout(10_000) {
-                    while (true) {
-                        try { documents.root(newRoot) } catch (_: SecurityException) { break }
-                        delay(25)
+                try {
+                    withTimeout(10_000) {
+                        while (true) {
+                            try { documents.root(newRoot) } catch (_: SecurityException) { break }
+                            delay(25)
+                        }
                     }
+                } catch (failure: TimeoutCancellationException) {
+                    throw AssertionError("Synthetic grant removal timed out during cleanup", failure)
                 }
             } finally { database.close() }
         }
