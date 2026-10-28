@@ -176,10 +176,22 @@ class LargeQueueTransportTest {
             await(timeoutMs = 30_000) { checkPlayback(); queues.state.value.library.active?.entries?.size == 13_000 }
             val active = queues.state.value.library.active!!
             val selected = active.entries[6500].id
+            try {
             await(timeoutMs = 30_000) {
                 checkPlayback()
                 firstDecoded.get() > 0 && firstReady.get() > 0 && if (pendingSave)
                     pendingNext.get()?.let { ready(it.entryId, 9000) } == true else ready(selected)
+            }
+            } catch (failure: Throwable) {
+                instrumentation.runOnMainSync {
+                    Log.i("QueueScaleFailure", "pendingSave=$pendingSave firstDecoded=${firstDecoded.get()} firstReady=${firstReady.get()} " +
+                        "expectedEntry=${pendingNext.get()?.entryId} nativeEntry=${player.currentMediaItem?.mediaId} " +
+                        "nativePosition=${player.currentPosition} nativeState=${player.playbackState} playWhenReady=${player.playWhenReady} " +
+                        "logicalEntry=${queues.state.value.library.active?.currentEntryId} logicalPosition=${queues.state.value.library.active?.positionMs} " +
+                        "commits=${dao.completed.map { it.library.active?.let { q -> q.currentEntryId to q.positionMs } }} " +
+                        "problem=${queues.state.value.problem} pauseAtSave=${pendingNativeState.get()}")
+                }
+                throw failure
             }
             val targetReadyAt = SystemClock.elapsedRealtime()
             if (!pendingSave) instrumentation.runOnMainSync { player.pause() }
@@ -278,3 +290,4 @@ private class ObservedQueueDao(private val delegate: QueueDao) : QueueDao() {
     override suspend fun clearEntries(id: String): Unit = error("Use save")
     override suspend fun deleteQueue(id: String): Unit = error("Use save")
 }
+
