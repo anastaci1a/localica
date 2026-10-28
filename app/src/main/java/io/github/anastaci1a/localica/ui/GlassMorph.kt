@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.Layout
@@ -45,8 +46,13 @@ import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
+internal data class GlassOriginPresentation(val shape: GlassShape, val vertical: Boolean,
+    val horizontalShift: Float)
+
 @Stable
 internal class GlassAnchor {
+    // Optional source-owned draw pose, evaluated against its home height in px.
+    var originPresentation: ((Float) -> GlassOriginPresentation)? = null
     val contact = GlassContact()
     val searchSlot = SearchSlotMotion()
     val samplingLocation = BackdropLocation()
@@ -62,6 +68,8 @@ internal class GlassAnchor {
     var reclaimOpening: (() -> Unit)? = null
     var triggerMounted = false
     var restoredDrawn = false
+    var restoredDrawRequest by mutableLongStateOf(0L)
+    var restoredDrawReceipt = -1L
     var bounds by mutableStateOf(Rect.Zero)
     var hidden by mutableStateOf(false)
     var modalPresent by mutableStateOf(false)
@@ -122,7 +130,14 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
     }
         // Read visibility in drawing, not only in a child RenderNode's alpha. Recorded
         // backdrop parents must re-record the restored trigger even while stationary.
-        .drawWithContent { if (!anchor.hidden) { drawContent(); anchor.restoredDrawn = true } }
+        .drawWithContent {
+            val restoreRequest = anchor.restoredDrawRequest
+            if (!anchor.hidden) {
+                drawContent()
+                anchor.restoredDrawn = true
+                anchor.restoredDrawReceipt = restoreRequest
+            }
+        }
         .then(if (anchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)
 }
 
@@ -176,6 +191,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val reduced = LocalReducedMotion.current
     val speed = LocalMotionSpeed.current
     val progress = anchor.contact.expansion
+    val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
+    var originAdmitted by remember { mutableStateOf(false) }
+    var measuredOriginWindow by remember { mutableStateOf<android.view.Window?>(null) }
     val searchObserver = LocalSearchMorphObserver.current
     val body = rememberGlassBody({ anchor.contact.travel + progress.value },
         contact = { if (anchor.contact.pressed) 1f else 0f }, state = anchor.contact.state,
@@ -189,8 +207,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     var modalWindow by remember { mutableStateOf<android.view.Window?>(null) }
     var dismissalAttempt by remember { mutableIntStateOf(0) }
     val gestures = rememberModalGestureScope()
-    DisposableEffect(gestures, visible, dismissalAttempt) {
-        if (visible) gestures.activate() else gestures.deactivate()
+    // Generic/Search owners keep their original effect lifetime. Only a prepared
+    // origin's native admission changes when its trigger is restored or hidden.
+    val originOwnsInput = continuousOrigin == null || originAdmitted && anchor.hidden
+    DisposableEffect(gestures, visible, dismissalAttempt, originOwnsInput) {
+        if (visible && originOwnsInput) gestures.activate() else gestures.deactivate()
         onDispose { gestures.deactivate() }
     }
     val searchMotion = remember { SearchMorphMotion() }
@@ -233,14 +254,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         dismissalAttempt++
     }
     val ambientSource = LocalModalBackdrop.current
-    androidx.activity.compose.BackHandler(visible && originPreparation != null && !present) { dismissNow() }
+    androidx.activity.compose.BackHandler(visible && originPreparation != null && (if (continuousOrigin != null) !originAdmitted || !anchor.hidden else !present)) { dismissNow() }
     DisposableEffect(originPreparation) { onDispose { originPreparation?.reset() } }
     val transitionJob = remember { arrayOfNulls<Job>(1) }
-    val reclaimOpening = remember(anchor) { {
+    val reclaimOpening = remember(anchor, continuousOrigin, placement.takeIf { continuousOrigin != null }) { {
         // A click updates its conditional caller before the next composition can
         // remount the retained entry. Stop the old return at that admission point,
         // otherwise its restored-draw acknowledgment can dispose this same window.
-        if (!anchor.hidden && anchor.modalPresent && modalWindow != null && modalWindow === readyWindow) {
+        if (continuousOrigin == null && !anchor.hidden && anchor.modalPresent && modalWindow != null && modalWindow === readyWindow) {
             transitionJob[0]?.cancel()
             transitionJob[0] = null
             present = true
@@ -253,8 +274,102 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         anchor.reclaimOpening = reclaimOpening
         onDispose { if (anchor.reclaimOpening === reclaimOpening) anchor.reclaimOpening = null }
     }
-    LaunchedEffect(visible, reduced, speed, originPreparation) {
+    LaunchedEffect(visible, reduced, speed, originPreparation, continuousOrigin, placement.takeIf { continuousOrigin != null }) {
         transitionJob[0] = currentCoroutineContext().job
+        if (continuousOrigin != null) {
+            val preparation = continuousOrigin
+            val owner = preparation.phase
+            val now = withFrameNanos { it }
+            val initialAdmission = !present && owner.frame.q == 0f
+            val token = if (initialAdmission)
+                owner.retarget(visible, reduced, speed, now, LyricsSourcePhaseController.Gate.OpeningReady)
+            else owner.retarget(visible, reduced, speed, now)
+            if (visible && !present) {
+                // Mount only for measurement. No native modal ownership yet.
+                origin = anchor.bounds
+                source = ambientSource ?: anchor.source
+                present = true
+            }
+            fun current(frame: LyricsSourcePhaseController.Frame) =
+                frame.generation == token && owner.frame.generation == token &&
+                    owner.frame.crossing == frame.crossing
+            suspend fun publish(frame: LyricsSourcePhaseController.Frame) {
+                if (!current(frame)) return
+                preparation.publish(frame)
+                progress.snapTo(frame.popup)
+            }
+            var frame = owner.frame
+            while (current(frame)) {
+                publish(frame)
+                if (frame.status == LyricsSourcePhaseController.Status.Held) {
+                    when (frame.heldGate) {
+                        LyricsSourcePhaseController.Gate.OpeningReady -> {
+                            if (!visible) {
+                                // This flight was never admitted. Intent cancellation
+                                // is an explicit boundary impulse, not saved momentum.
+                                owner.rejectOpening(token, frame.crossing, withFrameNanos { it })
+                            } else {
+                                preparation.beginOriginProof(frame)
+                                var releaseAt = withFrameNanos { it }
+                                while (current(frame) && (modalWindow == null ||
+                                    measuredOriginWindow !== modalWindow ||
+                                    !preparation.preparedOriginDrawn(frame.preparation))) {
+                                    releaseAt = withFrameNanos { it }
+                                }
+                                if (!current(frame)) return@LaunchedEffect
+                                val window = modalWindow ?: return@LaunchedEffect
+                                origin = anchor.bounds
+                                originFootprint = anchor.samplingFootprint()
+                                measuredHome = anchor.samplingLocation.coordinates?.isAttached == true
+                                source?.refresh()
+                                readyWindow = window
+                                originAdmitted = true
+                                anchor.modalPresent = true; anchor.contact.modal = true
+                                anchor.hidden = true; anchor.shadowInModal = true
+                                owner.release(token, frame.crossing, releaseAt)
+                            }
+                        }
+                        LyricsSourcePhaseController.Gate.RestoredDraw -> {
+                            // Freeze at the return seam until the actual trigger
+                            // draws. Keep the identical modal circle during ack.
+                            modalWindow?.glassInput(false)
+                            gestures.deactivate()
+                            preparation.beginOriginProof(frame)
+                            anchor.restoredDrawn = false
+                            val restoreRequest = ++anchor.restoredDrawRequest
+                            anchor.hidden = false
+                            var releaseAt = withFrameNanos { it }
+                            while (current(frame) && anchor.triggerMounted &&
+                                (!anchor.restoredDrawn || anchor.restoredDrawReceipt != restoreRequest ||
+                                    !preparation.preparedOriginDrawn(frame.preparation))) {
+                                releaseAt = withFrameNanos { it }
+                            }
+                            if (!current(frame)) return@LaunchedEffect
+                            // Unmounted trigger has no neck to rejoin; otherwise
+                            // only the draw acknowledgment permits this transfer.
+                            originAdmitted = false
+                            anchor.modalPresent = false; anchor.contact.modal = false
+                            anchor.shadowInModal = false
+                            owner.release(token, frame.crossing, releaseAt)
+                        }
+                        null -> error("Held lyrics phase has no ownership gate")
+                    }
+                    frame = owner.frame
+                    continue
+                }
+                if (frame.status == LyricsSourcePhaseController.Status.Settled) {
+                    if (!visible && frame.q == 0f) {
+                        originAdmitted = false
+                        present = false
+                        anchor.hidden = false; anchor.modalPresent = false
+                        anchor.shadowInModal = false; anchor.contact.modal = false
+                    }
+                    return@LaunchedEffect
+                }
+                frame = owner.advance(token, withFrameNanos { it })
+            }
+            return@LaunchedEffect
+        }
         if (!visible && !present) {
             anchor.hidden = false
             originPreparation?.settle(false, reduced, speed)
@@ -364,11 +479,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val panelDark = darkOverride ?: if (panelInk != Color.Unspecified) panelInk.luminance() > .5f else source?.dark == true
     val parentPanels = LocalChildPanels.current
     val childPanels = remember { mutableIntStateOf(0) }
-    DisposableEffect(parentPanels) {
-        parentPanels?.let { it.intValue++ }
-        onDispose { parentPanels?.let { it.intValue-- } }
+    val countsAsPanel = continuousOrigin == null || originAdmitted
+    DisposableEffect(parentPanels, countsAsPanel) {
+        if (countsAsPanel) parentPanels?.let { it.intValue++ }
+        onDispose { if (countsAsPanel) parentPanels?.let { it.intValue-- } }
     }
-    Dialog(onDismissRequest = dismissNow, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost {
+    Dialog(onDismissRequest = { if (continuousOrigin == null || originAdmitted) dismissNow() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
         if (placement == GlassPlacement.Search) PreserveSearchImeState(window)
@@ -380,6 +496,17 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
         DisposableEffect(window) {
             modalWindow = window
+            if (continuousOrigin != null && (!originAdmitted || readyWindow !== window)) {
+                window?.glassInput(false)
+                if (originAdmitted) {
+                    // A replacement window cannot borrow the old window's admission.
+                    // Its old frozen surface is gone; restore the trigger and close.
+                    originAdmitted = false
+                    anchor.hidden = false; anchor.shadowInModal = false
+                    anchor.modalPresent = false; anchor.contact.modal = false
+                    dismissNow()
+                }
+            }
             if (placement == GlassPlacement.Search) searchSlotToken = anchor.searchSlot.renew()
             searchFocusRequest = null
             // We draw our own animated scrim. A zero-alpha native dim layer still
@@ -387,6 +514,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             window?.setWindowAnimations(0)
             onDispose {
+                if (measuredOriginWindow === window) measuredOriginWindow = null
                 if (readyWindow === window) readyWindow = null
                 if (modalWindow === window) {
                     if (placement == GlassPlacement.Search) searchSlotToken = anchor.searchSlot.renew()
@@ -395,10 +523,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }
             }
         }
-        DisposableEffect(window, visible, dismissalAttempt) {
+        DisposableEffect(window, visible, dismissalAttempt, originOwnsInput) {
             // A busy editor may refuse dismissal; Settings Back may only change
             // the page. Reconcile with the actual state after that callback.
-            window?.glassInput(visible)
+            window?.glassInput(visible && (continuousOrigin == null || originAdmitted && anchor.hidden && readyWindow === window))
             onDispose { }
         }
         @Suppress("DEPRECATION")
@@ -422,8 +550,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val p = progress.value.coerceIn(0f, 1f)
         val geometry = glassMorphGeometryProgress(p, anchor.quiet)
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .16f * p))
-            .pointerInput(visible) { detectTapGestures { if (visible) dismissNow() } }) {
+        val admittedDraw = continuousOrigin == null || originAdmitted && readyWindow === window
+        Box(Modifier.fillMaxSize()
+            .then(if (continuousOrigin != null) Modifier
+                .drawWithContent { if (admittedDraw) drawContent() }
+                .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)
+                else Modifier)
+            .background(Color.Black.copy(alpha = .16f * p))
+            .pointerInput(visible, admittedDraw) { detectTapGestures { if (visible && admittedDraw) dismissNow() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
                 val density = LocalDensity.current
                 var windowOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -503,7 +637,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         else (searchHeightLimit.toLong() * 120 / 100).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                     else availableHeight) - margin * 2).roundToInt().coerceAtLeast(1)
                 // Closing follows the restored trigger. Opening keeps the pre-collapse location.
-                val start = (if (visible) origin else anchor.bounds).translate(-windowOrigin)
+                val livePreparedOrigin = continuousOrigin != null
+                val start = (if (visible && !livePreparedOrigin) origin else anchor.bounds).translate(-windowOrigin)
                 val detached = page || (origin == Rect.Zero && anchor.bounds == Rect.Zero)
                 val startWidth = start.width.takeIf { it > 0f } ?: targetWidth.toFloat()
                 val startHeight = start.height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
@@ -564,7 +699,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 }
                     ?: searchMotion.rendered.takeIf { holdImeBack && it.width > 0f }
                     ?: searchPlacement.value.takeIf { placement == GlassPlacement.Search && it.width > 0f })?.translate(-windowOrigin)
-                fun surfaceOpacity() = if (detached) p else
+                fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) p else
                     if (present && window != null && readyWindow === window) 1f else 0f
                 Box(Modifier.fillMaxSize().onGloballyPositioned { windowOrigin = it.backdropPosition(view) }) {
                     Layout(modifier = Modifier.glassShadowOffset {
@@ -589,6 +724,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         else androidx.compose.ui.unit.IntOffset(mix(if (detached) x else start.left, x).roundToInt(),
                             mix(if (detached) y + margin * 2 else start.top, y).roundToInt())
                     }.onGloballyPositioned {
+                        if (continuousOrigin != null && it.size.width > 0 && it.size.height > 0 &&
+                            window != null && modalWindow === window) measuredOriginWindow = window
                         if (placement == GlassPlacement.Search) {
                             val bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
                             searchMotion.rendered = bounds
@@ -604,9 +741,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         // Match the trigger's draw-space deformation. A layout-layer
                         // scale changes global sampling coordinates, causing a small
                         // optical jump when the same body returns to its trigger.
-                        val shape = if (reduced || page) GlassShape() else body.value
-                        scale(shape.scaleX(anchor.contact.vertical), shape.scaleY(anchor.contact.vertical)) {
-                            this@drawWithContent.drawContent()
+                        val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight) else null
+                        val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
+                        val vertical = pose?.vertical ?: anchor.contact.vertical
+                        // Source pivot compensation precedes body scaling too.
+                        translate(left = pose?.horizontalShift ?: 0f) {
+                            scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
+                                this@drawWithContent.drawContent()
+                            }
                         }
                     }
                         .glassShadowOpacity {
@@ -627,9 +769,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
                                     homeSource = anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
-                                    homeBounds = { if (visible) origin else anchor.bounds },
+                                    homeBounds = { if (visible && !livePreparedOrigin) origin else anchor.bounds },
                                     homeFootprint = if (!measuredHome) null else ({
-                                        if (visible) originFootprint
+                                        if (visible && !livePreparedOrigin) originFootprint
                                         else if (anchor.samplingLocation.coordinates?.isAttached == true) anchor.samplingFootprint()
                                         else anchor.lastSamplingFootprint
                                     }),
@@ -639,7 +781,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     // original foreground is rendered separately during its return.
                                     inkOverride = if (dark) Color.White else Color(0xFF202124),
                                     pressFeedback = false, shadow = false,
-                                    body = { body.value },
+                                    body = {
+                                        if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight)?.shape ?: body.value
+                                        else body.value
+                                    },
                                     depthScale = anchor.depthScale,
                                     refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
                             }
@@ -656,7 +801,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 LocalGlassOrigin provides null,
                                 LocalSearchOpeningReady provides reportSearchOpening.takeIf { placement == GlassPlacement.Search },
                                 LocalSearchReturnStart provides (if (placement == GlassPlacement.Search) ::beginSearchReturn else null),
-                                LocalGlassPanelReady provides (visible && (placement == GlassPlacement.Search || p >= .9f))) {
+                                LocalGlassPanelReady provides (visible && admittedDraw && (placement == GlassPlacement.Search || p >= .9f))) {
                                 GlassPanelTheme(dark, content)
                             }
                         }
