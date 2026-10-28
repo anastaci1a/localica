@@ -1,8 +1,13 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.ui.*
@@ -14,18 +19,28 @@ class GlassOriginPreparationTest {
     @get:Rule val compose = createComposeRule()
     private var open by mutableStateOf(false)
     private var mounted by mutableStateOf(true)
+    private var reportOrigin by mutableStateOf(true)
     private lateinit var preparation: GlassOriginPreparation
     private lateinit var anchor: GlassAnchor
     private var popupWindow: android.view.Window? = null
     private var nativeMounts = 0
+    private var preAdmissionFocusLosses = 0
 
     private fun fixture(reduced: Boolean = false) {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
                 preparation = rememberGlassOriginPreparation()
                 anchor = rememberGlassAnchor()
-                Box(Modifier.fillMaxSize()) {
-                    Box(Modifier.padding(24.dp).size(48.dp).glassAnchor(anchor))
+                val sourceView = LocalView.current
+                DisposableEffect(sourceView) {
+                    val listener = android.view.ViewTreeObserver.OnWindowFocusChangeListener { focused ->
+                        if (!focused && open && !anchor.modalPresent) preAdmissionFocusLosses++
+                    }
+                    sourceView.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+                    onDispose { sourceView.viewTreeObserver.removeOnWindowFocusChangeListener(listener) }
+                }
+                Box(Modifier.fillMaxSize().background(Color(0xFF143A5F))) {
+                    Box(Modifier.padding(24.dp).size(48.dp).then(if (reportOrigin) Modifier.preparedOrigin(preparation, preparation.progress) else Modifier).glassAnchor(anchor))
                     if (mounted) GlassMenu(open, anchor, { open = false },
                         originPreparation = preparation) {
                         val view = androidx.compose.ui.platform.LocalView.current
@@ -35,7 +50,7 @@ class GlassOriginPreparationTest {
                             nativeMounts++
                             onDispose { if (popupWindow === window) popupWindow = null }
                         }
-                        Box(Modifier.size(180.dp))
+                        Box(Modifier.size(180.dp).testTag("prepared-menu-content"))
                     }
                 }
             }
@@ -52,7 +67,7 @@ class GlassOriginPreparationTest {
     private fun advanceWithNativeFrames(durationMillis: Long) {
         val start = compose.mainClock.currentTime
         // Only unobserved endpoints may batch: keep the full horizon and yield
-        // for native drawing within four frames (64 ms), below the six-frame fallback.
+        // for native drawing within four frames (64 ms).
         // Frame-sensitive handoffs must continue to use frame() directly.
         while (compose.mainClock.currentTime - start < durationMillis) {
             val remaining = durationMillis - (compose.mainClock.currentTime - start)
@@ -76,9 +91,8 @@ class GlassOriginPreparationTest {
                 assertEquals(1f, preparation.progress, 0f)
                 open = false
             }
-            // Match the existing native-window handoff diagnostic: reopen at the
-            // restored trigger's draw acknowledgement, before the next frame can
-            // dispose the prepared window or begin rejoining the origin shape.
+            // Reverse at the actual restored-trigger acknowledgment; native window reuse
+            // must survive while continuous phase momentum decides surface ownership.
             var acknowledged = false
             for (attempt in 0 until 240) {
                 frame()
@@ -94,14 +108,27 @@ class GlassOriginPreparationTest {
                 compose.runOnIdle {
                     assertSame("Reopen must reuse the ready native window", firstWindow, popupWindow)
                     assertEquals("Preparation cannot allocate a replacement popup", 1, nativeMounts)
-                    assertTrue("Reclaim surface before origin preparation can suspend", anchor.hidden)
-                    assertTrue("Reclaim modal body on the first reopened frame", anchor.modalPresent && anchor.contact.modal)
-                    assertTrue("The same window immediately owns the shadow", anchor.shadowInModal)
-                    assertEquals("Retained origin remains prepared", 1f, preparation.progress, 0f)
+                    // Reversal retains velocity: it may continue toward the trigger before
+                    // turning. Ownership must follow the actual seam, not requested intent.
+                    assertEquals("Modal body and shadow change ownership together", anchor.modalPresent, anchor.contact.modal)
+                    assertEquals("Modal surface and shadow change ownership together", anchor.modalPresent, anchor.shadowInModal)
+                    if (anchor.hidden) assertTrue(anchor.modalPresent)
+                    else {
+                        val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                            android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        assertEquals("Reopened return overlay cannot intercept the restored trigger", flags,
+                            firstWindow.attributes.flags and flags)
+                    }
+                    if (anchor.contact.expansion.value > 0f) assertTrue(anchor.hidden)
                 }
             }
             advanceWithNativeFrames(4000)
-            compose.runOnIdle { open = false }
+            compose.runOnIdle {
+                assertEquals("Reopened flight reaches its menu endpoint", 1f, anchor.contact.expansion.value, 0f)
+                assertEquals(1f, preparation.progress, 0f)
+                assertTrue(anchor.hidden && anchor.modalPresent && anchor.contact.modal && anchor.shadowInModal)
+                open = false
+            }
             advanceWithNativeFrames(4000)
             compose.runOnIdle {
                 assertNull(popupWindow)
@@ -113,28 +140,117 @@ class GlassOriginPreparationTest {
 
     @Test fun preparationPrecedesModalOwnershipAndRejoinsAfterReturn() {
         fixture()
+        var beforeCapture: android.graphics.Bitmap? = null
+        var prewarmCapture: android.graphics.Bitmap? = null
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val directory = nativeEvidenceDirectory("lyrics-premeasurement", instrumentation.targetContext.cacheDir)
+        fun saveCapture(name: String, bitmap: android.graphics.Bitmap?) {
+            bitmap ?: return
+            java.io.File(directory, name).outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
         try {
+            val initialBounds = compose.runOnUiThread { anchor.bounds }
+            assertTrue(initialBounds.width > 0f && initialBounds.height > 0f)
+            // Compose idle does not prove SurfaceFlinger has presented this fixture.
+            // Wait for the actual closed host's known pixels BEFORE starting motion;
+            // never compare premeasurement with a stale previous-window screenshot.
+            compose.waitUntil(5000) {
+                beforeCapture?.recycle()
+                beforeCapture = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+                val shot = requireNotNull(beforeCapture)
+                (1..3).all { iy -> (1..3).all { ix ->
+                    shot.getPixel((initialBounds.left + initialBounds.width * ix / 4).toInt(),
+                        (initialBounds.top + initialBounds.height * iy / 4).toInt()) == 0xFF143A5F.toInt()
+                } }
+            }
+            val before = requireNotNull(beforeCapture)
+            saveCapture("native-before.png", before)
+            var invisiblePixels = false
             compose.runOnIdle { open = true }
-            compose.mainClock.advanceTimeBy(100)
-            compose.runOnIdle {
-                assertTrue(preparation.progress > 0f && preparation.progress < 1f)
-                assertFalse(anchor.modalPresent)
-                assertFalse(anchor.hidden)
+            var preAdmission = false
+            var observedPrewarmWindow = false
+            var openingOverlap = false
+            for (attempt in 0 until 240) {
+                frame()
+                compose.runOnIdle {
+                    if (!anchor.modalPresent && preparation.progress > 0f) {
+                        preAdmission = true
+                        assertFalse(anchor.hidden)
+                        assertFalse(anchor.shadowInModal)
+                        popupWindow?.let { window ->
+                            observedPrewarmWindow = true
+                            val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                            assertEquals("Premeasurement must not intercept input/focus", flags, window.attributes.flags and flags)
+                        }
+                    }
+                    if (anchor.contact.expansion.value > 0f && preparation.progress < 1f) {
+                        openingOverlap = true
+                        assertTrue("Expanding popup owns the separated left surface", anchor.hidden && anchor.modalPresent)
+                        assertTrue("No unsplit pill may be lent to the modal", preparation.progress > .5f)
+                    }
+                }
+                if (!anchor.modalPresent) {
+                    compose.onNodeWithTag("prepared-menu-content").assertDoesNotExist()
+                    if (observedPrewarmWindow && !invisiblePixels) {
+                        val prewarm = requireNotNull(instrumentation.uiAutomation.takeScreenshot()).also { prewarmCapture = it }
+                        saveCapture("native-prewarm.png", prewarm)
+                        val bounds = anchor.bounds
+                        for (iy in 1..3) for (ix in 1..3) {
+                            val x = (bounds.left + bounds.width * ix / 4).toInt()
+                            val y = (bounds.top + bounds.height * iy / 4).toInt()
+                            assertEquals("Premeasurement cannot paint its source surface", before.getPixel(x, y), prewarm.getPixel(x, y))
+                        }
+                        prewarm.recycle()
+                        prewarmCapture = null
+                        invisiblePixels = true
+                    }
+                }
+                if (preparation.progress == 1f && anchor.contact.expansion.value == 1f) break
             }
-            advanceWithNativeFrames(4000)
-            compose.runOnIdle { assertTrue(anchor.modalPresent); assertEquals(1f, preparation.progress, 0f) }
-            compose.runOnIdle { open = false }
-            compose.mainClock.advanceTimeBy(100)
             compose.runOnIdle {
-                assertTrue(anchor.modalPresent)
-                assertEquals("Origin stays prepared throughout modal return", 1f, preparation.progress, 0f)
+                assertTrue("Observe usable origin before modal admission", preAdmission)
+                assertTrue("Actually observe a non-intercepting premeasured window", observedPrewarmWindow)
+                assertTrue("Check native prewarm source pixels", invisiblePixels)
+                assertEquals("Premeasurement cannot steal native focus", 0, preAdmissionFocusLosses)
+                assertTrue("Split and expansion must overlap, not settle sequentially", openingOverlap)
+                assertEquals(1f, anchor.contact.expansion.value, 0f)
+                assertEquals(1f, preparation.progress, 0f)
+                open = false
             }
-            advanceWithNativeFrames(4000)
+            var closingOverlap = false
+            var restored = false
+            for (attempt in 0 until 240) {
+                frame()
+                compose.runOnIdle {
+                    if (anchor.contact.expansion.value > 0f && preparation.progress < 1f) {
+                        closingOverlap = true
+                        assertTrue("Return still owns the left surface until the seam", anchor.modalPresent && anchor.hidden)
+                        assertTrue(preparation.progress > .5f)
+                    }
+                    if (anchor.modalPresent && !anchor.hidden && anchor.restoredDrawn &&
+                        anchor.contact.expansion.value == 0f) restored = true
+                    if (preparation.progress < LyricsSourcePhase.preparation(LyricsSourcePhase.Handoff)) {
+                        assertTrue("Restored draw must precede neck rejoin", restored)
+                    }
+                }
+                if (preparation.progress == 0f && popupWindow == null) break
+            }
             compose.runOnIdle {
+                assertTrue("Return and split preparation must overlap too", closingOverlap)
+                assertTrue("Observe actual restored trigger drawing", restored)
+                assertNull(popupWindow)
                 assertFalse(anchor.modalPresent); assertFalse(anchor.hidden)
                 assertEquals(0f, preparation.progress, 0f)
             }
-        } finally { compose.mainClock.autoAdvance = true }
+        } finally {
+            saveCapture("native-before.png", beforeCapture)
+            saveCapture("native-prewarm.png", prewarmCapture)
+            beforeCapture?.recycle(); prewarmCapture?.recycle()
+            compose.mainClock.autoAdvance = true
+        }
     }
 
     @Test fun cancelledPreparationAndReopenNeverCreateAnEarlyModal() {
@@ -148,8 +264,11 @@ class GlassOriginPreparationTest {
                 assertFalse(anchor.modalPresent)
                 assertFalse(anchor.hidden)
                 assertFalse(anchor.shadowInModal)
-                assertNull("Cancelled origin preparation must not mount a native window", popupWindow)
-                assertEquals(0, nativeMounts)
+                popupWindow?.let { window ->
+                    val flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    assertEquals("Cancelled premeasurement owns no input or focus", flags, window.attributes.flags and flags)
+                }
                 open = true
             }
             advanceWithNativeFrames(4000)
@@ -159,6 +278,24 @@ class GlassOriginPreparationTest {
             compose.runOnIdle {
                 assertEquals(0f, preparation.progress, 0f)
                 assertFalse(anchor.modalPresent); assertFalse(anchor.hidden)
+                open = false
+                reportOrigin = false
+                mounted = true
+            }
+            frame()
+            compose.runOnIdle { open = true }
+            advanceWithNativeFrames(400)
+            compose.runOnIdle {
+                assertNotNull("Unacknowledged origin still premeasures its window", popupWindow)
+                assertFalse("No guessed frame count may admit an undrawn origin", anchor.modalPresent)
+                assertFalse(anchor.hidden)
+                mounted = false
+            }
+            frame()
+            compose.runOnIdle {
+                assertNull("Disposal retires unready premeasurement", popupWindow)
+                assertEquals(0f, preparation.progress, 0f)
+                assertFalse(anchor.modalPresent || anchor.hidden || anchor.shadowInModal || anchor.contact.modal)
             }
         } finally { compose.mainClock.autoAdvance = true }
     }
@@ -215,3 +352,4 @@ class GlassOriginPreparationTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 }
+

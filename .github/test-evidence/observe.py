@@ -37,6 +37,63 @@ FAILURE = re.compile(
 )
 
 
+# Only the first failure receives a follow-on packet. Never retain arbitrary text.
+CONTEXT_SECONDS = 5.0
+CONTEXT_LINES = 32
+CONTEXT_BYTES = 4096
+EXCEPTION = re.compile(r"^\s+(?:(?:Caused by|Suppressed): )?(?P<type>(?:[A-Za-z_$][\w$]*\.)+(?:[A-Za-z_$][\w$]*)?(?:Error|Exception))(?::.*)?$", re.ASCII)
+FRAME = re.compile(r"^\s+at (?P<frame>(?:[A-Za-z_$][\w$]*\.)+[A-Za-z_$<>][\w$<>]*\((?:[A-Za-z_$][\w$]*\.(?:java|kt):[0-9]{1,7}|Native Method|Unknown Source)\))$", re.ASCII)
+
+
+class FailureContext:
+    """Bounded same-stream first-failure diagnostic; excludes exception messages."""
+    def __init__(self, emit, now=time.monotonic):
+        self.emit, self.now = emit, now
+        self.started = False
+        self.active = None
+
+    def start(self, event):
+        if self.started:
+            return
+        self.started = True
+        self.active = {"event": event, "deadline": self.now() + CONTEXT_SECONDS,
+                       "entries": [], "bytes": 0, "lines": 0}
+
+    def finish(self, reason):
+        state, self.active = self.active, None
+        if state and state["entries"]:
+            self.emit({"event": "test_failure_context", "provisional": True,
+                       "observation_index": state["event"]["observation_index"],
+                       "stream": state["event"]["stream"], "entries": state["entries"],
+                       "end_reason": reason, "messages_omitted": True})
+
+    def tick(self):
+        if self.active and self.now() >= self.active["deadline"]:
+            self.finish("timeout")
+
+    def line(self, raw, stream):
+        self.tick()
+        if not self.active or stream != self.active["event"]["stream"]:
+            return
+        clean = ANSI.sub("", raw.decode("utf-8", errors="replace")).rstrip("\r\n")
+        # Fail closed on unfamiliar output, including log messages between frames.
+        exception, frame = EXCEPTION.fullmatch(clean), FRAME.fullmatch(clean)
+        entry = ({"kind": "exception_type", "value": exception["type"]} if exception else
+                 {"kind": "frame", "value": frame["frame"]} if frame else None)
+        if entry is None:
+            self.finish("boundary")
+            return
+        size = len(entry["value"].encode("utf-8"))
+        if self.active["bytes"] + size > CONTEXT_BYTES:
+            self.finish("limit")
+            return
+        self.active["entries"].append(entry)
+        self.active["bytes"] += size
+        self.active["lines"] += 1
+        if self.active["lines"] >= CONTEXT_LINES:
+            self.finish("limit")
+
+
 def utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
@@ -80,7 +137,8 @@ def signal_child(child, sig):
 
 class LineParser:
     """Bounded per-stream framing. Oversize lines are ignored until their next newline."""
-    def __init__(self, stream, emit):
+    def __init__(self, stream, emit, context=None):
+        self.context = context
         self.stream = stream
         self.emit = emit
         self.pending = bytearray()
@@ -112,9 +170,13 @@ class LineParser:
     def finish_line(self):
         self.line_number += 1
         if not self.discarding:
+            if self.context:
+                self.context.line(bytes(self.pending), self.stream)
             result = parse_failure(bytes(self.pending))
             if result:
                 self.emit(result, self.stream, self.line_number, self.line_offset)
+        if self.discarding and self.context and self.context.active and self.context.active["event"]["stream"] == self.stream:
+            self.context.finish("limit")
         self.pending.clear()
         self.discarding = False
         self.line_offset = self.byte_offset
@@ -163,6 +225,14 @@ def observe(args):
                 selectors.DefaultSelector() as selector:
             annotations = []
 
+            def emit_context(event):
+                event.update({"utc": utc_now(), "command_id": manifest["command_id"],
+                              "sha": args.sha, "api": args.api, "lane": args.lane})
+                events.write(json.dumps(event, ensure_ascii=True) + "\n")
+                events.flush()
+
+            context = FailureContext(emit_context)
+
             def emit(result, stream, line_number, byte_offset):
                 now = utc_now()
                 manifest["observed_failure_lines"] += 1
@@ -176,6 +246,7 @@ def observe(args):
                          "stream_byte_offset": byte_offset, **result}
                 events.write(json.dumps(event, ensure_ascii=True) + "\n")
                 events.flush()
+                context.start(event)
                 annotation = ("::error::Provisional test failure " + result["class"] + " > " +
                               result["display_name"] + " (lane=" + args.lane + ", API=" + args.api +
                               ", command=" + manifest["command_id"] + ")")
@@ -199,11 +270,12 @@ def observe(args):
                 signal_child(child, cancelled)
             for stream, pipe, console in (("stdout", child.stdout, sys.stdout.buffer),
                                           ("stderr", child.stderr, sys.stderr.buffer)):
-                parsers[stream] = LineParser(stream, emit)
+                parsers[stream] = LineParser(stream, emit, context)
                 selector.register(pipe, selectors.EVENT_READ, (stream, console))
             while selector.get_map() or child.poll() is None:
                 if cancelled_at is not None and time.monotonic() - cancelled_at >= CANCEL_GRACE_SECONDS:
                     signal_child(child, signal.SIGKILL)
+                context.tick()
                 for key, _ in selector.select(timeout=0.1):
                     stream, console = key.data
                     data = os.read(key.fd, READ_SIZE)
@@ -211,6 +283,8 @@ def observe(args):
                         selector.unregister(key.fileobj)
                         key.fileobj.close()
                         parsers[stream].finish()
+                        if context.active and context.active["event"]["stream"] == stream:
+                            context.finish("eof")
                         flush_annotations()
                         continue
                     command_log.write(data)
@@ -284,3 +358,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+

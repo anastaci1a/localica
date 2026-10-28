@@ -190,3 +190,82 @@ test('all allowlisted text rejects trailing newlines and other control bytes', (
     }
   }
 });
+
+const diagnostic = () => ({...ids, event: 'test_failure_context', provisional: true,
+  utc: '2026-10-25T18:00:02.000Z', observation_index: 1, stream: 'stdout',
+  messages_omitted: true, end_reason: 'boundary',
+  entries: [{kind: 'exception_type', value: 'java.lang.AssertionError'},
+    {kind: 'frame', value: 'org.junit.Assert.fail(Assert.java:89)'}],
+  raw_message: 'SECRET_DO_NOT_COPY'});
+
+test('first alert precedes separate context packet before command terminates', async t => {
+  const f = await fixture(t); await f.append(event()); let tick = 0;
+  f.options.wait = async () => {
+    if (tick++ === 0) {
+      assert.equal(f.uploads.length, 1);
+      assert.equal(f.uploads[0].packet.failure_contexts, undefined);
+      await f.append(JSON.stringify(diagnostic()) + '\n');
+    } else {
+      assert.equal(f.uploads.length, 2);
+      assert.equal(f.uploads[1].packet.status, 'running');
+      assert.deepEqual(f.uploads[1].packet.failures, []);
+      assert.equal(f.uploads[1].packet.failure_contexts[0].observation_index, 1);
+      assert(!JSON.stringify(f.uploads).includes('SECRET'));
+      await f.done();
+    }
+  };
+  assert.deepEqual(await publish(f.options), {uploadedPackets: 2, observedFailures: 1});
+});
+
+test('untrusted context mismatch, injection, duplicates and oversize degrade without leaking', async t => {
+  for (const mutate of [v => v.observation_index = 2, v => v.stream = 'stderr',
+      v => v.entries[0].value = 'java.lang.AssertionError: SECRET',
+      v => v.entries[1].value = 'org.Test.fail(/SECRET/Assert.java:89)',
+      v => v.entries = Array(33).fill(v.entries[0]), v => v.messages_omitted = false]) {
+    const f = await fixture(t); await f.append(event());
+    const value = diagnostic(); mutate(value); await f.append(JSON.stringify(value) + '\n'); await f.done();
+    await assert.rejects(publish(f.options), /monitoring-degraded/);
+    assert.equal(f.uploads.length, 1);
+    assert(!JSON.stringify(f.uploads).includes('SECRET'));
+  }
+  const f = await fixture(t); await f.append(event());
+  await f.append(JSON.stringify(diagnostic()) + '\n' + JSON.stringify(diagnostic()) + '\n'); await f.done();
+  await assert.rejects(publish(f.options), /monitoring-degraded/);
+  assert.equal(f.uploads.length, 2);
+});
+
+test('follow-on shares hard artifact cap and retains original failure receipt', async t => {
+  const f=await fixture(t); await f.append(event()); await f.append(JSON.stringify(diagnostic())+'\n'); await f.done();
+  await assert.rejects(publish({...f.options,maxArtifacts:1}), /artifact_cap/);
+  assert.equal(f.uploads.length,1);
+  const degraded=JSON.parse(await readFile(path.join(f.stateDir,'monitoring-degraded.json')));
+  assert.equal(degraded.pending_contexts.length,1);
+  assert.equal(degraded.last_observation_index,1);
+});
+
+test('real delayed diagnostics upload after first alert and before exit seven', async t => {
+  const root=await mkdtemp(path.join(os.tmpdir(),'live-context-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const evidenceDir=path.join(root,'observed'), first=path.join(root,'first'), second=path.join(root,'second');
+  const script=fileURLToPath(new URL('../test-evidence/observe.py',import.meta.url));
+  const source=`from pathlib import Path; import time\nprint('example.SomeTest > fails[emulator-5554] FAILED',flush=True)\nwhile not Path(${JSON.stringify(first)}).exists(): time.sleep(.01)\nprint('\\tjava.lang.Exception: SECRET_AUTH\\n\\tat org.junit.Assert.fail(Assert.java:89)\\n',flush=True)\nwhile not Path(${JSON.stringify(second)}).exists(): time.sleep(.01)\nraise SystemExit(7)`;
+  const child=spawn('python3',[script,'--output',evidenceDir,'--sha',ids.sha,'--api','26','--lane','prototype','--','python3','-u','-c',source],{stdio:'ignore'});
+  let ended=false;
+  const result=new Promise((resolve,reject)=>{child.on('error',reject);child.on('exit',code=>{ended=true;resolve(code)});});
+  t.after(()=>{if(!ended)child.kill('SIGTERM')});
+  const controller=new AbortController(), deadline=setTimeout(()=>controller.abort(),5000);
+  t.after(()=>clearTimeout(deadline));
+  let uploads=0;
+  const status=await publish({evidenceDir,stateDir:path.join(root,'publishing'),runId:'123',attempt:'1',signal:controller.signal,pollMs:10,
+    client:{async uploadArtifact(name,files){
+      assert.equal(ended,false);
+      const packet=JSON.parse(await readFile(files[0],'utf8'));
+      assert(!JSON.stringify(packet).includes('SECRET'));
+      if(++uploads===1){assert.equal(packet.failures.length,1);assert.equal(packet.failure_contexts,undefined);await writeFile(first,'go');}
+      else {assert.equal(packet.failure_contexts[0].entries[0].value,'java.lang.Exception');await writeFile(second,'go');}
+      return {id:uploads};
+    }}});
+  assert.equal(await result,7);
+  assert.deepEqual(status,{uploadedPackets:2,observedFailures:1});
+  assert((await readFile(path.join(evidenceDir,'command.log'),'utf8')).includes('SECRET_AUTH')); // original local evidence unchanged
+});

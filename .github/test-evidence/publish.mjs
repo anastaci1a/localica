@@ -11,12 +11,13 @@
  *
  * Six immutable artifacts maximum leaves four of the documented ten/job for other
  * uploads (https://github.com/actions/toolkit/blob/main/packages/artifact/README.md).
- * First failure uploads immediately; subsequent batches <=32 events every 15s.
+ * First failure uploads immediately; one optional first-failure context packet follows.
+ * Both share the six-artifact cap; subsequent batches <=32 failures every 15s.
  * At cap/error, pending packet remains on disk and monitoring-degraded.json records
  * the unread byte offset. Nothing is reported as fully monitored. No blind retry:
  * existing state directories are refused, including uncertain completed uploads.
  * Packets contain only validated identifiers and a reconstructed failure-line
- * context, never argv, environment, raw logs, manifest errors, media or XML verdicts.
+ * context, plus bounded first-failure exception types/frames (no messages), never argv, environment, raw logs, manifest errors, media or XML verdicts.
  */
 import {mkdir, open, readFile, rename, stat} from 'node:fs/promises';
 import path from 'node:path';
@@ -59,6 +60,29 @@ export function validateEvent(value, manifest) {
     // Bounded reconstructed matched-line context, not arbitrary surrounding output.
     context: `${className} > ${display} FAILED`};
 }
+export function validateContext(value, manifest, firstFailure) {
+  check(value?.event === 'test_failure_context' && value.provisional === true);
+  const ids = identity(value);
+  for (const key of Object.keys(ids)) check(ids[key] === manifest[key]);
+  check(firstFailure && value.observation_index === 1 && value.stream === firstFailure.stream);
+  check(value.messages_omitted === true);
+  check(['boundary', 'eof', 'limit', 'timeout'].includes(value.end_reason));
+  check(Array.isArray(value.entries) && value.entries.length > 0 && value.entries.length <= 32);
+  let bytes = 0;
+  const entries = value.entries.map(entry => {
+    check(entry && ['exception_type', 'frame'].includes(entry.kind));
+    const pattern = entry.kind === 'exception_type'
+      ? /^(?:[A-Za-z_$][\w$]*\.)+(?:[A-Za-z_$][\w$]*)?(?:Error|Exception)$/
+      : /^(?:[A-Za-z_$][\w$]*\.)+[A-Za-z_$<>][\w$<>]*\((?:[A-Za-z_$][\w$]*\.(?:java|kt):[0-9]{1,7}|Native Method|Unknown Source)\)$/;
+    const clean = text(entry.value, pattern, 4096);
+    bytes += Buffer.byteLength(clean); check(bytes <= 4096);
+    return {kind: entry.kind, value: clean};
+  });
+  return {...ids, event: value.event, utc: utc(value.utc), provisional: true,
+    observation_index: 1, stream: value.stream, messages_omitted: true,
+    end_reason: value.end_reason, entries};
+}
+
 async function atomicJson(file, value) {
   const temp = `${file}.tmp`;
   const handle = await open(temp, 'wx', 0o600);
@@ -89,19 +113,20 @@ export async function publish({evidenceDir, stateDir, runId, attempt, client,
   // Exclusive ownership is the restart/idempotency policy. Do not remove this guard.
   await mkdir(stateDir, {recursive: false, mode: 0o700});
   let offset = 0, partial = Buffer.alloc(0), sequence = 0, lastIndex = 0;
-  let pending = [], manifest, lastUpload = now(), sourceIdentity;
+  let pending = [], contexts = [], firstFailure, contextSeen = false, manifest, lastUpload = now(), sourceIdentity;
   let reason = 'invalid_evidence';
   const status = extra => ({schema_version: 1, status: 'monitoring_degraded',
     run_id: runId, attempt, uploaded_packets: sequence, read_offset: offset,
     partial_line_bytes: partial.length, last_observation_index: lastIndex, ...extra});
   async function flush() {
-    if (!pending.length) return;
+    if (!pending.length && !contexts.length) return;
     const {observed_failure_lines: snapshotCount, ...manifestIdentityAndTimes} = manifest;
     const packet = {schema_version: 1, run_id: runId, attempt, ...manifestIdentityAndTimes,
       observer_manifest_snapshot_count: snapshotCount,
       publisher_observed_failure_lines: lastIndex,
       observations_provisional: true, test_verdict: 'not_determined',
-      sequence: sequence + 1, failures: pending};
+      sequence: sequence + 1, failures: pending,
+      ...(contexts.length ? {failure_contexts: contexts} : {})};
     const digest = createHash('sha256').update(JSON.stringify(packet, null, 2) + '\n').digest('hex');
     const name = `failure-${runId}-api${manifest.api}-a${attempt}-${manifest.command_id}-${sequence + 1}-${digest.slice(0, 16)}`;
     const file = path.join(stateDir, `packet-${sequence + 1}.json`);
@@ -114,12 +139,23 @@ export async function publish({evidenceDir, stateDir, runId, attempt, client,
     sequence++;
     await atomicJson(path.join(stateDir, `receipt-${sequence}.json`),
       {name, artifact_id: result.id, packet_sha256: digest, sequence});
-    pending = []; lastUpload = now(); reason = 'invalid_evidence';
+    pending = []; contexts = []; lastUpload = now(); reason = 'invalid_evidence';
   }
   async function consume(line) {
     check(line.length > 0 && line.length <= MAX_LINE);
-    const event = validateEvent(JSON.parse(line.toString('utf8')), manifest);
+    const raw = JSON.parse(line.toString('utf8'));
+    if (raw.event === 'test_failure_context') {
+      check(!contextSeen);
+      contexts.push(validateContext(raw, manifest, firstFailure));
+      contextSeen = true;
+      // First alert is already uploaded. A separate immutable context packet follows
+      // promptly, without waiting for test termination or the normal batch interval.
+      await flush();
+      return;
+    }
+    const event = validateEvent(raw, manifest);
     check(event.observation_index === lastIndex + 1);
+    if (!firstFailure) firstFailure = event;
     pending.push(event); lastIndex = event.observation_index;
     if (sequence === 0 || pending.length >= batchSize) await flush();
   }
@@ -187,7 +223,7 @@ export async function publish({evidenceDir, stateDir, runId, attempt, client,
   } catch {
     // No raw exception: SDK/network errors may contain URLs or sensitive headers.
     await atomicJson(path.join(stateDir, 'monitoring-degraded.json'), status({reason,
-      pending_failures: pending, manifest: manifest ?? null}));
+      pending_failures: pending, pending_contexts: contexts, manifest: manifest ?? null}));
     throw new Error(`monitoring-degraded: ${reason}`);
   }
 }
@@ -207,3 +243,4 @@ async function main() {
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   main().catch(() => { console.error('monitoring-degraded: publisher failed; inspect local publisher status, preserve test exit'); process.exitCode = 1; });
 }
+
