@@ -71,9 +71,12 @@ class GlassMorphTest {
             }
         } }
         val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        var lastCenter = -1
+        var lastOutside = -1
+        var referenceCenter = -1
         fun centerRed(): Int {
             val image = requireNotNull(automation.takeScreenshot())
-            try { return android.graphics.Color.red(image.getPixel(anchor.bounds.center.x.toInt(),anchor.bounds.center.y.toInt())) }
+            try { return android.graphics.Color.red(image.getPixel(anchor.bounds.center.x.toInt(),anchor.bounds.center.y.toInt())).also { lastCenter = it } }
             finally { image.recycle() }
         }
         fun shadeDelta(): Int {
@@ -82,6 +85,7 @@ class GlassMorphTest {
                 val y = anchor.bounds.center.y.toInt()
                 val center = android.graphics.Color.red(image.getPixel(anchor.bounds.center.x.toInt(),y))
                 val outside = android.graphics.Color.red(image.getPixel((anchor.bounds.left-16).toInt(),y))
+                lastCenter = center; lastOutside = outside
                 return outside-center // Cancel the modal scrim, measuring only local shading.
             } finally { image.recycle() }
         }
@@ -94,25 +98,45 @@ class GlassMorphTest {
                 file.outputStream().use { assertTrue(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)) }
             } finally { screenshot.recycle() }
         }
+        fun awaitReceiver(stage: String, predicate: () -> Boolean) {
+            android.util.Log.i("GlassWellProbe", "begin=$stage clock=${compose.mainClock.currentTime}")
+            try { compose.waitUntil(5000, predicate) }
+            catch (failure: Throwable) {
+                val state = "stage=$stage hidden=${anchor.hidden} modal=${anchor.modalPresent} " +
+                    "progress=${anchor.contact.expansion.value} running=${anchor.contact.expansion.isRunning} " +
+                    "bounds=${anchor.bounds} reference=$referenceCenter center=$lastCenter outside=$lastOutside " +
+                    "clock=${compose.mainClock.currentTime}"
+                android.util.Log.e("GlassWellProbe", state, failure)
+                try {
+                    saveReceiver("failure-$stage")
+                    val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                    java.io.File(nativeEvidenceDirectory("popup-origin-well", instrumentation.targetContext.getExternalFilesDir(null)),
+                        "failure-$stage.txt").writeText(state)
+                } catch (captureFailure: Throwable) { failure.addSuppressed(captureFailure) }
+                throw failure
+            }
+            android.util.Log.i("GlassWellProbe", "end=$stage clock=${compose.mainClock.currentTime} center=$lastCenter outside=$lastOutside")
+        }
         compose.waitForIdle()
         val original = centerRed()
+        referenceCenter = original
         saveReceiver("closed")
         compose.runOnIdle { open = true }
-        compose.waitUntil(5000) { anchor.hidden && anchor.modalPresent && shadeDelta() > 2 }
-        compose.waitUntil(5000) { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning }
+        awaitReceiver("first-visible-shade") { anchor.hidden && anchor.modalPresent && shadeDelta() > 2 }
+        awaitReceiver("first-settled") { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning }
         val firstShade = shadeDelta()
         saveReceiver("open")
         compose.runOnIdle { open = false }
-        compose.waitUntil(5000) { !anchor.hidden && !anchor.modalPresent && kotlin.math.abs(centerRed()-original) <= 1 }
+        awaitReceiver("first-restored") { !anchor.hidden && !anchor.modalPresent && kotlin.math.abs(centerRed()-original) <= 1 }
         // A second modal lifecycle must reuse the same physical origin, not stack receivers.
         compose.runOnIdle { open = true }
-        compose.waitUntil(5000) { anchor.hidden && anchor.modalPresent && shadeDelta() > 2 }
-        compose.waitUntil(5000) { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning }
+        awaitReceiver("second-visible-shade") { anchor.hidden && anchor.modalPresent && shadeDelta() > 2 }
+        awaitReceiver("second-settled") { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning }
         val second = shadeDelta()
         assertTrue("A single subtle receiver, not cumulative darkening: first=$firstShade second=$second",
             second <= 12 && kotlin.math.abs(second-firstShade) <= 2)
         compose.runOnIdle { open = false }
-        compose.waitUntil(5000) { !anchor.hidden && !anchor.modalPresent && kotlin.math.abs(centerRed()-original) <= 1 }
+        awaitReceiver("second-restored") { !anchor.hidden && !anchor.modalPresent && kotlin.math.abs(centerRed()-original) <= 1 }
     }
 
     @Test fun cancelledShapeClockRetainsItsBodyUntilANewOwnerFinishesNormally() {
