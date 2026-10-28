@@ -32,6 +32,174 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun queuedSkipsPublishEveryVisitBeforeOneSlowDurableCheckpoint() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name) // Await the initial cursor snapshot before installing a disk gate.
+        barrier()
+        lateinit var held: Gate
+        withContext(Dispatchers.Main) {
+            player.seekVisits.clear()
+            held = dao.gateNextSave()
+            queues.next()
+            queues.next()
+            queues.previous(alwaysSong = true)
+        }
+        held.entered.await()
+        withContext(Dispatchers.Main) {
+            assertEquals(listOf("duplicate-1", "duplicate-2", "duplicate-1"), player.seekVisits.toList())
+            assertEquals("Metadata already shows the last ordered press", "duplicate-1",
+                queues.state.value.library.active!!.currentEntryId)
+            assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
+            assertFalse("Paused skips must remain paused", player.playWhenReady)
+        }
+        assertEquals("Checkpoint is still blocked, not silently acknowledged", "duplicate-0", dao.read().active!!.currentEntryId)
+        held.release.complete(Unit)
+        queues.rename(first.id, "Durable")
+        barrier()
+        assertEquals("Final ordered visit becomes durable", "duplicate-1", dao.read().active!!.currentEntryId)
+    }
+
+    @Test fun structuralQueueCommandWaitsBehindTheCombinedSkipCheckpoint() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name) // Await the initial cursor snapshot before installing a disk gate.
+        barrier()
+        lateinit var held: Gate
+        withContext(Dispatchers.Main) {
+            held = dao.gateNextSave()
+            queues.next()
+            queues.next()
+            queues.rename(first.id, "After skips")
+        }
+        held.entered.await()
+        assertEquals("duplicate-2", queues.state.value.library.active!!.currentEntryId)
+        assertEquals("A durable barrier separates cursor and structural work", first.name,
+            queues.state.value.library.active!!.name)
+        held.release.complete(Unit)
+        barrier()
+        assertEquals("After skips", dao.read().active!!.name)
+        assertEquals("duplicate-2", dao.read().active!!.currentEntryId)
+    }
+
+    @Test fun skipsArrivingDuringDiskWaitStillPublishImmediatelyInOrder() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name) // Await the initial cursor snapshot before installing a disk gate.
+        barrier()
+        val savesBefore = dao.saveBases.size
+        lateinit var firstSave: Gate
+        withContext(Dispatchers.Main) {
+            player.seekVisits.clear()
+            firstSave = dao.gateNextSave()
+            queues.next()
+        }
+        firstSave.entered.await()
+        val secondSave = dao.gateNextSave()
+        withContext(Dispatchers.Main) {
+            repeat(35) { queues.next(); queues.previous(alwaysSong = true) }
+            queues.next()
+            assertEquals(listOf("duplicate-1"), player.seekVisits.toList())
+        }
+        awaitMain { player.seekVisits.size == 72 }
+        withContext(Dispatchers.Main) {
+            val expected = listOf("duplicate-1") + List(35) { listOf("duplicate-2", "duplicate-1") }.flatten() + "duplicate-2"
+            assertEquals("Every press survives across multiple 32-command batches", expected, player.seekVisits.toList())
+            assertEquals("duplicate-2", player.currentMediaItem!!.mediaId)
+        }
+        assertFalse("Input progressed while the first disk write is still held", firstSave.release.isCompleted)
+        firstSave.release.complete(Unit)
+        secondSave.entered.await()
+        assertEquals("A held write retains only the latest pending cursor checkpoint", savesBefore + 2, dao.saveBases.size)
+        secondSave.release.complete(Unit)
+        // An awaited rename preserves structural durability and drains previous cursor snapshots.
+        queues.rename(first.id, "Drained")
+        barrier()
+        assertEquals(queues.state.value.library.active!!.journey, dao.read().active!!.journey)
+    }
+
+    @Test fun failedCombinedCheckpointRetriesFromTheLastDurableLibrary() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name) // Await the initial cursor snapshot before installing a disk gate.
+        barrier()
+        val durable = dao.read()
+        lateinit var held: Gate
+        withContext(Dispatchers.Main) {
+            dao.failWrites = true
+            held = dao.gateNextSave()
+            queues.next(); queues.next()
+        }
+        held.entered.await()
+        assertEquals("duplicate-2", queues.state.value.library.active!!.currentEntryId)
+        held.release.complete(Unit)
+        awaitMain { queues.state.value.problem != null }
+        assertEquals(durable, dao.read())
+        val successfulBeforeRetry = dao.successfulSaveBases.size
+        dao.failWrites = false
+        queues.previous(alwaysSong = true)
+        queues.rename(first.id, "Retried")
+        barrier()
+        assertEquals("Retry computes the transaction from last durable state", durable,
+            dao.successfulSaveBases[successfulBeforeRetry])
+        assertEquals("duplicate-1", dao.read().active!!.currentEntryId)
+        assertEquals(queues.state.value.library.active!!.journey, dao.read().active!!.journey)
+    }
+
+    @Test fun blockedCursorStoragePreservesRepeatAndShuffleTraversalInBothDirections() {
+        for (shuffle in listOf(false, true)) fixture(duplicateOccurrences = true) {
+            awaitMain { player.engine.playbackState == Player.STATE_READY }
+            queues.settings { it.copy(shuffle = shuffle, repeat = QueueRepeat.All) }
+            queues.rename(first.id, first.name)
+            barrier()
+            val before = queues.state.value.library.active!!.journey!!
+            val order = before.plans.getValue(before.cycle)
+            val start = order.indexOf(before.current!!.entryId)
+            val expected = (1..40).map { order[(start + it) % order.size] } +
+                (39 downTo 30).map { order[(start + it) % order.size] }
+            lateinit var held: Gate
+            withContext(Dispatchers.Main) {
+                player.seekVisits.clear()
+                held = dao.gateNextSave()
+                queues.next()
+            }
+            held.entered.await()
+            withContext(Dispatchers.Main) {
+                repeat(39) { queues.next() }
+                repeat(10) { queues.previous(alwaysSong = true) }
+            }
+            awaitMain { player.seekVisits.size == expected.size }
+            withContext(Dispatchers.Main) {
+                assertEquals("shuffle=$shuffle retains every real visit", expected, player.seekVisits.toList())
+                assertEquals(expected.last(), player.currentMediaItem!!.mediaId)
+                assertFalse(player.playWhenReady)
+            }
+            assertFalse("No traversal waits for held disk checkpoint", held.release.isCompleted)
+            held.release.complete(Unit)
+            queues.rename(first.id, "Traversal saved")
+            barrier()
+            assertEquals(queues.state.value.library.active!!.journey, dao.read().active!!.journey)
+        }
+    }
+
+    @Test fun delayedCursorFailureCannotEraseANewerRecoveryNotice() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name)
+        barrier()
+        lateinit var held: Gate
+        withContext(Dispatchers.Main) {
+            held = dao.gateNextSave().also { it.fail = true }
+            queues.next()
+        }
+        held.entered.await()
+        readers.publishRecovery(RecoveryAdmission.Pending(track.id))
+        awaitMain { player.engine.mediaItemCount == 0 && queues.state.value.problem != null }
+        val notice = queues.state.value.problem
+        held.release.complete(Unit)
+        // This awaited save is ordered after the failing cursor write. Its normal success
+        // preserves a still-owned recovery notice, exposing any stale-writer ownership loss.
+        queues.rename(first.id, "Recovery retained")
+        barrier()
+        assertEquals(notice, queues.state.value.problem)
+        withContext(Dispatchers.Main) { assertEquals(0, player.engine.mediaItemCount) }
+    }
+
     @Test fun explicitPlayBeforeAttachmentStartsButPassiveRestoreDoesNot() {
         fixture(attach = false) {
             queues.attach(player)
@@ -887,6 +1055,11 @@ class PlaybackIntentTest {
     }
 
     private class RecordingPlayer(val engine: ExoPlayer) : ForwardingPlayer(engine) {
+        val seekVisits = CopyOnWriteArrayList<String>()
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+            seekVisits.add(getMediaItemAt(mediaItemIndex).mediaId)
+            super.seekTo(mediaItemIndex, positionMs)
+        }
         var stateOverride: Int? = null
         var durationOverride: Long? = null
         var rejectSeek = false
@@ -915,6 +1088,7 @@ class PlaybackIntentTest {
     }
 
     private class Gate {
+        @Volatile var fail = false
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         suspend fun await() { entered.complete(Unit); release.await() }
@@ -933,13 +1107,23 @@ class PlaybackIntentTest {
         override suspend fun removeRoot(uri: String) = Unit
         override suspend fun updateMetadata(track: Track) = Unit
     }
-    private class IntentDao(private var saved: QueueLibrary, val restore: Gate?) : QueueDao() {
+    private class IntentDao(@Volatile private var saved: QueueLibrary, val restore: Gate?) : QueueDao() {
         private val nextSave = AtomicReference<Gate?>()
         private val gates = mutableListOf<Gate>()
         fun gateNextSave() = Gate().also { check(nextSave.compareAndSet(null, it)); gates.add(it) }
         fun release() { restore?.release?.complete(Unit); gates.forEach { it.release.complete(Unit) } }
         override suspend fun read(): QueueLibrary { restore?.await(); return saved }
-        override suspend fun save(before: QueueLibrary, after: QueueLibrary) { nextSave.getAndSet(null)?.await(); saved = after }
+        @Volatile var failWrites = false
+        val saveBases = CopyOnWriteArrayList<QueueLibrary>()
+        val successfulSaveBases = CopyOnWriteArrayList<QueueLibrary>()
+        override suspend fun save(before: QueueLibrary, after: QueueLibrary) {
+            saveBases.add(before)
+            val gate = nextSave.getAndSet(null)
+            gate?.await()
+            if (gate?.fail == true || failWrites) throw IOException("Controlled checkpoint failure")
+            successfulSaveBases.add(before)
+            saved = after
+        }
         override suspend fun readQueues(): List<StoredQueue> = error("read overridden")
         override suspend fun readActive(): ActiveQueueRecord? = error("read overridden")
         override suspend fun upsertQueue(queue: QueueRecord): Unit = error("save overridden")
@@ -958,3 +1142,4 @@ class PlaybackIntentTest {
         override suspend fun deleteQueue(id: String): Unit = error("save overridden")
     }
 }
+
