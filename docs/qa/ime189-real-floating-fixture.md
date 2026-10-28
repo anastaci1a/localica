@@ -82,8 +82,14 @@ The official references used were:
 ## Validation status / risks
 
 - XML is well-formed; source/resource whitespace checked.
-- Kotlin compile, AAPT manifest/resource merge, service install/selection,
-  root insets, screenshots and native test: **UNRUN** in this draft workspace.
+- Initial compile/AAPT and service selection succeeded, but a Kotlin service in
+  a standalone test-APK process failed because Kotlin runtime belongs to the target
+  app. The replacement is Android/Java-only; its runtime is not yet validated.
+- Earlier direct-exec command quoting was corrected; all dynamic arguments are
+  validated before mutation, never shell-quoted. Settings restoration readback
+  passed in the second comparison, but service crash left host focus unavailable.
+- Host zero-inset visibility, service draw witnesses and complete native lifecycle
+  remain unproven. No floating-IME compatibility or product fix is claimed.
 - Needs compileSdk36 for the public switcher override; inspected local project
   source uses compileSdk36. Intended runtime is API36, not a claimed API26 fixture.
 - Test-APK component packaging, platform show/caption timing, device navigation
@@ -95,3 +101,5 @@ The official references used were:
 ## Isolated comparison scope
 
 Identical service/test resources are applied to dev74 baseline and the unpromoted IME189 candidate, API36 only. The original mandatory SearchImeMotion, ListSearch and FrostedSurface classes remain selected in full. The host test verifies actual focus loss/refocus with a covering Dialog but does not assert that the IME hid during coverage. Explicit service HIDE cycles separately verify IME-driven editing termination. Five secure settings restore independently after input retirement; final aggregate setting readback is required. The exported receiver package filter is not sender authentication: this APK is restricted to a disposable emulator, never production.
+
+Cleanup now also requires restored native host focus, hidden/nonaccepting input and original-or-absent live IME binding. Historical disconnected mCurIntent does not count as a live binding. Runtime cleanup failures preserve native window dumps/screenshots and the primary failure; no unknown crash window is dismissed.
