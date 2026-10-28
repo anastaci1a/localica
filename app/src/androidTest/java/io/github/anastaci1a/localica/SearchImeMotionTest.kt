@@ -470,7 +470,9 @@ class SearchImeMotionTest {
             verifyOpening(home, reduced)
             compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
             val raised = compose.runOnUiThread { samples.last().bounds }
-            compose.runOnUiThread { nativeReturnProbe?.arm() }
+            if (outside && android.os.Build.VERSION.SDK_INT >= 30) compose.runOnUiThread {
+                requireNotNull(nativeReturnProbe).arm()
+            }
             android.util.Log.i("SearchImeMotionTest", "Native dismissal requested outside=$outside uptime=${SystemClock.uptimeMillis()}")
             if (outside) {
                 val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
