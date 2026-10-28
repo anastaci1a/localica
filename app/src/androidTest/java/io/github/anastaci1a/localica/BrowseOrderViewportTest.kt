@@ -558,16 +558,21 @@ class BrowseOrderViewportTest {
         compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Title }
         assertTop(fixture, "Apply")
         action("Close")
-        list.performScrollToIndex(75)
-        openSort(); action("Randomize")
-        compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Manual }
-        assertTop(fixture, "Randomize")
-        // Keep this popup's opening checkpoint while moving the underlying grid through its semantics action.
-        list.performScrollToIndex(65)
-        action("Revert")
-        compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Title }
-        assertTop(fixture, "Revert")
-        assertEquals("other", fixture.queues!!.state.value.library.activeId)
+        repeat(12) { iteration ->
+            android.util.Log.i("BrowseQueryTrace", "inactive-order-round=$iteration begin")
+            list.performScrollToIndex(75)
+            openSort(); action("Randomize")
+            compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Manual }
+            assertTop(fixture, "Randomize")
+            // Keep this popup's opening checkpoint while moving the underlying grid through its semantics action.
+            list.performScrollToIndex(65)
+            action("Revert")
+            compose.waitUntil(5000) { fixture.queue.order.sort == TrackSort.Title }
+            assertTop(fixture, "Revert")
+            assertEquals("other", fixture.queues!!.state.value.library.activeId)
+            action("Close")
+            android.util.Log.i("BrowseQueryTrace", "inactive-order-round=$iteration complete")
+        }
     }
 
     @Test fun playlistRandomizeWaitsForItsPresentationAndSurvivesClosingThePopup() {
