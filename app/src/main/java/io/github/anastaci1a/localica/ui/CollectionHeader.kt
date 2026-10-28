@@ -69,7 +69,8 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
 
 @Composable
 internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVisual, artist: Boolean,
-    enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, playlist: Boolean = false) {
+    enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, playlist: Boolean = false,
+    pinchHeader: CollectionPinchHeader? = null) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val imageHeight = maxWidth
         Box(Modifier.fillMaxWidth().height(imageHeight + 112.dp)) {
@@ -77,14 +78,35 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
                 subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center) }
-                if (artist || playlist) LiquidGlassSurface(Modifier.height(64.dp)) {
+                val split = artist || playlist
+                val actionOutset = with(androidx.compose.ui.platform.LocalDensity.current) { glassShadowInset().roundToPx() }
+                @Composable fun describeAction() {
+                    val colors = IconButtonDefaults.iconButtonColors()
+                    val foreground = controlStateColor(enabled, colors.contentColor, colors.disabledContentColor,
+                        "Header action presentation availability")
+                    val divider = LocalContentColor.current
+                    SideEffect { pinchHeader?.actionSpec = CollectionHeaderActionSpec(split, foreground, divider, actionOutset) }
+                }
+                // The outer wrapper owns every action pixel, including overflow
+                // shadow. It adds neither a pointer handler nor a semantic action.
+                Box(Modifier.onPlaced {
+                    pinchHeader?.actionCoordinates = it
+                    pinchHeader?.actionPlacedRequest = pinchHeader?.request ?: -1
+                }.drawWithContent {
+                    pinchHeader?.captureRequest
+                    if (pinchHeader?.excludingActionFromCapture != true) drawContent()
+                }) {
+                if (split) LiquidGlassSurface(Modifier.height(64.dp)) {
+                    describeAction()
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ActionIconButton(onPlay, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), if (playlist) "Play playlist" else "Play selected albums", Modifier.size(30.dp)) }
                         GlassPillDivider()
                         ActionIconButton(onShuffle, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_shuffle), if (playlist) "Shuffle playlist" else "Shuffle selected albums", Modifier.size(30.dp)) }
                     }
                 } else LiquidGlassSurface(Modifier.size(64.dp)) {
+                    describeAction()
                     ActionIconButton(onPlay, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), "Play album", Modifier.size(30.dp)) }
+                }
                 }
             }
         }

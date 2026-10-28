@@ -895,7 +895,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     onPlay = { onPlay(result.rows, 0, result.scope) }, onShuffle = {
                                         if (queues != null) queues.randomizedQueue(result.rows.map { it.track }, route.title ?: "Collection", result.rows.map { it.sourcePlaylistId })
                                         else onPlay(result.rows.shuffled(), 0, result.scope)
-                                    }, playlist = playlistDetail)
+                                    }, playlist = playlistDetail, pinchHeader = pinchHeader)
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
                                 if ((artistDetail || playlistDetail) && showSearchPill) Box(Modifier.fillMaxWidth().then(searchSlotLayout)
                                     .onSizeChanged { measuredSearchSlotHeight = it.height }.clipToBounds()) {
@@ -1017,6 +1017,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
             }
+            // Passive draw producer only: do not wrap the grid or install a new
+            // hit path. SelectionViewport supplies the shared clip/overscroll.
+            if (pinchHeader != null) CollectionHeaderActionPresentation(pinchHeader, collectionSource)
             }
             }
             CompositionLocalProvider(LocalFrostedBackdrop provides

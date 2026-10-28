@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.BeyondBoundsLayout
@@ -29,7 +30,9 @@ internal data class CollectionHeaderFrame(val generation: Long, val progress: Fl
     val live: Rect?, val heroTop: Float?, val destinationReady: Boolean, val handoff: Boolean,
     val source: Rect, val destination: Rect?, val drawn: Boolean, val heroProgress: Float?,
     val retainedPart: FrozenBrowsePart?, val anchorPoint: Float?, val anchorExpected: Float, val anchorEdge: Int,
-    val heroArtworkTop: Float?, val heroInset: Float, val parallax: Float)
+    val heroArtworkTop: Float?, val heroInset: Float, val parallax: Float,
+    val actionBounds: Rect?, val liveAction: Boolean, val actionMaterialDraw: BackdropSamplingObservation?,
+    val staticRetainedPart: FrozenBrowsePart?, val sourceActionBounds: Rect?, val displayedHeaderPart: FrozenBrowsePart?)
 internal val LocalCollectionHeaderFrameObserver = staticCompositionLocalOf<((CollectionHeaderFrame) -> Unit)?> { null }
 
 /** Public lazy measurements own geometry; only a completed immutable atlas owns retained pixels. */
@@ -46,6 +49,20 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     var captureRequest by mutableIntStateOf(0)
     var recordedRequest = -1
     var layer: GraphicsLayer? = null
+    var staticLayer: GraphicsLayer? = null
+    // The action presentation is never submitted to the asynchronous atlas read.
+    // Its original LazyGrid subtree remains the only input/semantics owner.
+    var actionCoordinates: LayoutCoordinates? = null
+    var actionPlacedRequest = -1
+    var actionSpec: CollectionHeaderActionSpec? = null
+    var actionPresentation by mutableStateOf<CollectionHeaderActionCapture?>(null)
+        private set
+    var actionLayer: GraphicsLayer? = null
+    var actionRecordedGeneration: Long? = null
+    var actionRecordedRect: Rect? = null
+    var actionMaterialDraw: BackdropSamplingObservation? = null
+    var excludingActionFromCapture = false
+        private set
     var pinnable: PinnableContainer? = null
     private var pin: PinnableContainer.PinnedHandle? = null
     private var generation: Long? = null
@@ -56,6 +73,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     private var target = CompletableDeferred<Unit>()
     private var handed = CompletableDeferred<Unit>()
     private var frozen: FrozenBrowsePart? = null
+    private var frozenStatic: FrozenBrowsePart? = null
     private var verifiedFrame: CollectionHeaderPinch.Frame? = null
     var ordinaryTop: Float? = null
     private var revision by mutableIntStateOf(0)
@@ -75,7 +93,8 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         return Rect(viewport.localPositionOf(coordinates, Offset.Zero), Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
     }
     /** Read inside the callback: its extra placements can disappear immediately on return. */
-    private fun measure(style: BrowseStyle, retain: Boolean = false): Rect {
+    private fun measure(style: BrowseStyle, retain: Boolean = false,
+        copyAction: ((Rect, CollectionHeaderActionSpec) -> Unit)? = null): Rect {
         val ticket = ++request
         val mounted = grid.layoutInfo.visibleItemsInfo.any { it.key == "browser-notice" }
         fun copyPlaced(requireTicket: Boolean): Rect? {
@@ -83,6 +102,17 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
             if (placedStyle != style || placedCoordinates?.isAttached != true ||
                 requireTicket && placedRequest != ticket) return null
             val copied = rect(placedCoordinates)
+            if (copyAction != null) {
+                val action = actionCoordinates
+                val spec = actionSpec
+                if (action?.isAttached != true || spec == null || requireTicket && actionPlacedRequest != ticket) return null
+                val offset = placedCoordinates.localPositionOf(action, Offset.Zero)
+                val bounds = Rect(offset, Size(action.size.width.toFloat(), action.size.height.toFloat()))
+                if (bounds.width <= 0f || bounds.height <= 0f) return null
+                // Copy INSIDE the public callback: these extra placements may
+                // disappear as soon as measure returns, even with a composition pin.
+                copyAction(bounds, spec)
+            }
             if (retain && pin == null) pin = checkNotNull(pinnable) { "Header cannot retain its composed source" }.pin()
             return copied
         }
@@ -103,21 +133,27 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     }
     fun begin(token: Long, source: BrowseStyle, destination: BrowseStyle) {
         check(generation == null)
-        val measured = measure(source, retain = true)
+        var capturedAction: CollectionHeaderActionCapture? = null
+        val measured = measure(source, retain = true) { bounds, spec ->
+            capturedAction = CollectionHeaderActionCapture(token, bounds, spec)
+        }
         ordinaryTop?.let { check(kotlin.math.abs(it - measured.top) <= .5f) { "Source hero/header coordinate is not measured consistently" } }
         check(geometry.begin(token, measured.geometry()))
         generation = token
+        actionRecordedGeneration = null
+        actionMaterialDraw = null
+        actionPresentation = checkNotNull(capturedAction)
         sourceStyle = source; targetStyle = destination; endpointStyle = null
         sourceBounds = measured; targetBounds = null
         target = CompletableDeferred(); handed = CompletableDeferred()
-        frozen = null
+        frozen = null; frozenStatic = null
         verifiedFrame = null
         captureRequest++
         revision++
     }
-    fun freeze(part: FrozenBrowsePart) {
+    fun freeze(part: FrozenBrowsePart, static: FrozenBrowsePart) {
         check(!motion.readbackPending) { "Header pixels cannot replace a pending native lease" }
-        frozen = part
+        frozen = part; frozenStatic = static
         // The completed image now owns the source pixels. Keeping the old live
         // header pinned through reflow suppresses the fresh offscreen placement
         // needed by the destination's public beyond-bounds measurement.
@@ -161,7 +197,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     }
     fun clear() {
         generation?.let { geometry.discard(it) }
-        generation = null; frozen = null; verifiedFrame = null; sourceStyle = null; targetStyle = null; endpointStyle = null
+        generation = null; actionPresentation = null; actionRecordedGeneration = null; actionRecordedRect = null; actionMaterialDraw = null; frozen = null; frozenStatic = null; verifiedFrame = null; sourceStyle = null; targetStyle = null; endpointStyle = null
         target.cancel(); handed.cancel()
         pin?.release(); pin = null
         revision++
@@ -177,6 +213,28 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         val token = generation ?: return null
         val live = coordinates?.takeIf { it.isAttached }?.let(::rect)
         return geometry.frame(token, motion.progress.value, live?.geometry()) ?: verifiedFrame
+    }
+    fun actionReady(): Boolean = actionPresentation?.let {
+        actionRecordedGeneration == it.generation && collectionHeaderActionPlacementMatches(actionRecordedRect, actionStageRect()) &&
+            actionLayer?.let { layer -> !layer.isReleased && layer.size.width > 0 && layer.size.height > 0 } == true
+    } == true
+    fun actionRect(): Rect? {
+        val captured = actionPresentation ?: return null
+        val presented = frame()?.presented?.compose() ?: return null
+        return collectionHeaderActionRect(sourceBounds, presented, captured.bounds)
+    }
+    fun actionPlacedRect(coordinates: LayoutCoordinates?): Rect? = coordinates?.takeIf {
+        it.isAttached && viewport?.isAttached == true
+    }?.let(::rect)
+    fun actionStageRect(): Rect? = actionRect()?.inflate(actionPresentation?.spec?.outsetPx?.toFloat() ?: 0f)
+    fun recordRetainedHeader(full: () -> Unit, static: () -> Unit) {
+        check(!motion.readbackPending)
+        full()
+        if (actionPresentation == null || !motion.capturing) return
+        try {
+            excludingActionFromCapture = true
+            static()
+        } finally { excludingActionFromCapture = false }
     }
     fun presentedTop(): Float? = frame()?.presented?.top
     fun observeHero(top: Float, progress: Float) { heroDrawTop = top; heroDrawProgress = progress }
@@ -194,9 +252,11 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         val frame = frame() ?: return null
         val pixels = frozen ?: return null
         val presented = frame.presented.compose()
-        return presented to pixels
+        // Never expose a hole or throw if a virtualized/offscreen producer has
+        // not drawn this frame. The intact capture is a conservative fallback.
+        return presented to (frozenStatic?.takeIf { actionReady() } ?: pixels)
     }
-    fun reportFrame(drawn: Boolean) {
+    fun reportFrame(drawn: Boolean, liveAction: Boolean = false, displayedPart: FrozenBrowsePart? = null) {
         val observer = observer ?: return
         val frame = frame() ?: return
         val anchor = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == motion.focusKey }
@@ -211,7 +271,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
             coordinates?.takeIf { it.isAttached }?.let(::rect), heroDrawTop, frame.destinationReady, endpointStyle != null,
             sourceBounds, targetBounds, drawn, heroDrawProgress, frozen,
             anchor?.let { it.offset.y + it.size.height * motion.focusFraction }, motion.focusTop.toFloat(), motion.focusEdge,
-            heroArtworkTop, heroInset, parallax))
+            heroArtworkTop, heroInset, parallax, actionRect(), liveAction, actionMaterialDraw, frozenStatic, actionPresentation?.bounds, displayedPart))
     }
     private fun Rect.geometry() = CollectionHeaderPinch.Rect(left, top, right, bottom)
     private fun CollectionHeaderPinch.Rect.compose() = Rect(left, top, right, bottom)
@@ -221,10 +281,11 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
 @Composable
 internal fun Modifier.collectionPinchHeader(owner: CollectionPinchHeader, style: BrowseStyle): Modifier {
     val layer = rememberGraphicsLayer()
+    val staticLayer = rememberGraphicsLayer()
     val pinnable = LocalPinnableContainer.current
-    SideEffect { owner.layer = layer; owner.pinnable = pinnable }
+    SideEffect { owner.layer = layer; owner.staticLayer = staticLayer; owner.pinnable = pinnable }
     DisposableEffect(owner, layer) { onDispose {
-        if (owner.layer === layer) { owner.layer = null; owner.coordinates = null; owner.pinnable = null }
+        if (owner.layer === layer) { owner.layer = null; owner.staticLayer = null; owner.coordinates = null; owner.pinnable = null }
     } }
     return modifierLocalConsumer { ModifierLocalBeyondBoundsLayout.current?.let { owner.beyond = it } }
         .onPlaced { owner.coordinates = it; owner.placedStyle = style; owner.placedRequest = owner.request }
@@ -234,9 +295,13 @@ internal fun Modifier.collectionPinchHeader(owner: CollectionPinchHeader, style:
         }.drawWithContent {
             val request = owner.captureRequest
             if ((!owner.motion.readbackPending && (!owner.motion.capturing || owner.recordedRequest != request)) || layer.size == IntSize.Zero) {
-                layer.record { this@drawWithContent.drawContent() }
+                owner.recordRetainedHeader(
+                    full = { layer.record { this@drawWithContent.drawContent() } },
+                    static = { staticLayer.record { this@drawWithContent.drawContent() } })
                 owner.recordedRequest = request
             }
+            // Preserve the baseline display-list ownership during pending native
+            // capture. Re-entering drawContent could mutate captured descendants.
             if (owner.motion.visualSource == null) drawLayer(layer)
         }
 }
@@ -248,6 +313,10 @@ internal fun Modifier.collectionPinchOverlay(owner: CollectionPinchHeader?): Mod
             drawImage(pixels.image, srcOffset = pixels.origin, srcSize = pixels.size,
                 dstOffset = IntOffset(rect.left.toInt(), rect.top.toInt()),
                 dstSize = IntSize(rect.width.toInt().coerceAtLeast(1), rect.height.toInt().coerceAtLeast(1)))
-            owner.reportFrame(drawn = true)
+            val live = owner.actionReady()
+            if (live) owner.actionStageRect()?.let { action -> owner.actionLayer?.let { layer ->
+                translate(action.left, action.top) { drawLayer(layer) }
+            } }
+            owner.reportFrame(drawn = true, liveAction = live, displayedPart = pixels)
         }
     }
