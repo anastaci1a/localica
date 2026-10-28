@@ -110,8 +110,14 @@ class TextEditingNativeImeTest {
         val stoppedReads = reads.get()
         native.set(false); nativeFrames()
         assertEquals("Inactive scope removes its exact native callback", stoppedReads, reads.get())
+        val inactiveRevision = compose.runOnUiThread { revisionSeen }
         compose.runOnUiThread { active = true }
-        compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+        // Activation publishes its revision from DisposableEffect after the first
+        // composition. Observe the following decision, not a fixed one-frame guess.
+        compose.waitUntil(5000) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnUiThread { revisionSeen > inactiveRevision && !confirmedSeen }
+        }
         assertFalse("Activation reevaluates current native state, not earlier true", compose.runOnUiThread { confirmedSeen })
 
         compose.mainClock.autoAdvance = true
