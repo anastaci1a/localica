@@ -62,16 +62,17 @@ class PlayerExpansionMotionTest {
         var reducedMotion by mutableStateOf(false)
         lateinit var scope: CoroutineScope
         var fingerDown = false
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+        val drawProbe = PlayerExpansionDrawProbe.create(contentTag, { progress.value }, { layout.name })
+        compose.setContent { CompositionLocalProvider(LocalGlassSurfaceDrawObserver provides drawProbe?.observer) { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             DisposableEffect(Unit) {
                 trace("composition-enter:$contentTag")
-                onDispose { trace("composition-dispose:$contentTag") }
+                onDispose { trace("composition-dispose:$contentTag"); drawProbe?.disposed() }
             }
             scope = rememberCoroutineScope()
             PlayerSurface(state.copy(trackId = track.id, trackUri = track.uri), expanded, { expanded = it },
                 InterfaceSettings(artworkLayout = layout, reducedMotion = reducedMotion), progress, {}, {}, {}, {}, {}, {},
                 lyricsOpen = true, track = track, visual = visual) { Text("Album-only action") }
-        } } }
+        } } } }
         try {
             for (artworkLayout in ArtworkLayout.entries) {
                 trace("layout-begin:$contentTag:$artworkLayout")
