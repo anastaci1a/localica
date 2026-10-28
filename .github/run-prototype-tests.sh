@@ -91,21 +91,23 @@ profile_reasons = {
     'DialogChromeLayoutTest#native400x800Font2RetainsSharedChromeAndEveryRepeatControl': 'Requires sufficient display space and actual Android font scale 2',
     'TagEditorChromeLayoutTest#native360x640Font2KeepsSharedChromeAndScrollableFullSizeFields': 'Requires sufficient display space and the requested actual system font scale',
 }
-# These two existing RuntimeShader-path tests assume SDK >= 33. Their exact
-# API26 assumption callsites must be observed; API36 must execute both tests.
+# These existing RuntimeShader-path tests assume SDK >= 33. Their exact
+# API26 assumption callsites must be observed; API36 must execute every selected method.
 selection_sdk33_callsites = {
-    'SelectionLensTest#translatingASelectionReusesItsDistanceField': 303,
-    'SelectionLensTest#translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt': 315,
+    'SelectionLensTest#translatingASelectionReusesItsDistanceField': ('SelectionLensTest.kt', 303, 'got: <false>, expected: is <true>'),
+    'SelectionLensTest#translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt': ('SelectionLensTest.kt', 315, 'got: <false>, expected: is <true>'),
+    'GlassOpticsTest#materialOnlySamplingUsesTheLocalMeanButContentBackdropsKeepDetail': ('GlassOpticsTest.kt', 28, 'got: <false>, expected: is <true>'),
+    'NestedGlassRegistrationTest#scaledMaterialCoverageAveragesOnlyItsVisibleFootprint': ('NestedGlassRegistrationTest.kt', 201, 'Material averaging is the Android 13+ adapter'),
 }
 qualified_skips = []
 def qualify_skip(name, method, skipped, xml_file):
     identity = name+'#'+method
     api = str(observed['api'])
     short_identity = identity.removeprefix(package) if identity.startswith(package) else None
-    sdk33_line = selection_sdk33_callsites.get(short_identity)
+    sdk33_guard = selection_sdk33_callsites.get(short_identity)
     expected = profile_reasons.get(short_identity)
-    if sdk33_line is not None and api == '26':
-        expected = 'got: <false>, expected: is <true>'
+    if sdk33_guard is not None and api == '26':
+        expected = sdk33_guard[2]
     if identity == package+'PlayerBackgroundPolarityTest#nativeBlurRetainsVerifiedInkAsDistinctUnavailableThenRecovers' and api == '26':
         expected = 'got: <false>, expected: is <true>'
     if expected is None or api not in ('26', '36'):
@@ -120,10 +122,11 @@ def qualify_skip(name, method, skipped, xml_file):
     reasons = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
     if reasons != [expected]:
         raise ValueError('Missing, ambiguous or wrong observed skip reason: '+identity)
-    if sdk33_line is not None:
-        callsite = 'at '+name+'.'+method+'(SelectionLensTest.kt:'+str(sdk33_line)+')'
+    if sdk33_guard is not None:
+        sdk33_file, sdk33_line, _ = sdk33_guard
+        callsite = 'at '+name+'.'+method+'('+sdk33_file+':'+str(sdk33_line)+')'
         boundaries = re.findall(r'TestRunner: (started|assumption failed|finished): ([^\r\n]*)', text)
-        callsites = re.findall(r'TestRunner:\s+(at '+re.escape(name+'.'+method)+r'\(SelectionLensTest\.kt:[0-9]+\))', text)
+        callsites = re.findall(r'TestRunner:\s+(at '+re.escape(name+'.'+method)+r'\('+re.escape(sdk33_file)+r':[0-9]+\))', text)
         if boundaries != [('started', marker), ('assumption failed', marker), ('finished', marker)] or callsites != [callsite]:
             raise ValueError('Missing, mixed or ambiguous SDK assumption callsite/terminal: '+identity)
         ordered = ['TestRunner: started: '+marker, 'TestRunner: assumption failed: '+marker,
@@ -140,7 +143,7 @@ def qualify_skip(name, method, skipped, xml_file):
     qualified_skips.append({'id': identity, 'api': api, 'reason': reasons[0], 'evidence': str(logs[0]),
         'evidence_sha256': hashlib.sha256(logs[0].read_bytes()).hexdigest(), 'xml': str(xml_file),
         'qualification': ('Observed API26 SDK>=33 guard; shader path not exercised and API36 must execute'
-                          if sdk33_line is not None else 'Observed assumption only; not a passed profile or optical proof')})
+                          if sdk33_guard is not None else 'Observed assumption only; not a passed profile or optical proof')})
 for file in files:
     tree = ET.parse(file)
     suites = [tree.getroot()] if tree.getroot().tag == 'testsuite' else tree.getroot().findall('.//testsuite')
@@ -168,3 +171,4 @@ result = {'qualified_skips': qualified_skips, 'methods': methods, 'source_invent
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
 assert all(v['passed'] > 0 and v['failed'] == 0 and v['errors'] == 0 for v in counts.values()), 'Required class failed or had no passing tests'
 PYXML
+

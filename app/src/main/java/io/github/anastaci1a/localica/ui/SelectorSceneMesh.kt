@@ -84,8 +84,9 @@ internal class SelectorSceneMesh {
             val ix = (ink?.width ?: 1).toFloat() / inkSize.width.coerceAtLeast(1)
             val iy = (ink?.height ?: 1).toFloat() / inkSize.height.coerceAtLeast(1)
             shellLightVisible = false; shellShineVisible = false; shellShadeVisible = false
+            val sampler = geometry.prepareSampler()
             for (i in 0 until vertices.size / 2) {
-                val sample = geometry.sample(Offset(vertices[i * 2], vertices[i * 2 + 1]) + geometry.selector.bounds.topLeft,
+                val sample = sampler.sample(Offset(vertices[i * 2], vertices[i * 2 + 1]) + geometry.selector.bounds.topLeft,
                     ink != null, extendBoundary = true)
                 backdropUv[i * 2] = (sample.backdrop.x + backdropOffset.x) * sx
                 backdropUv[i * 2 + 1] = (sample.backdrop.y + backdropOffset.y) * sy

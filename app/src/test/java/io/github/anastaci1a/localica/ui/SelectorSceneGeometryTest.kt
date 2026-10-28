@@ -37,7 +37,10 @@ class SelectorSceneGeometryTest {
             val shellField = variant.shell.field(surface)
             val shellRay = if (shellField.distance >= 0f)
                 lensRay(shellField, variant.shell.span, variant.shellDepth, variant.shellFlattening) else null
-            val actual = variant.sample(p, true, extend)
+            val sampler = variant.prepareSampler()
+            val actual = sampler.sample(p, true, extend)
+            assertEquals(variant.sample(p, true, extend), actual)
+            assertEquals(actual, sampler.sample(p, true, extend))
             assertEquals(selectorRay, actual.selectorRay)
             assertEquals(shellRay, actual.shellRay)
             assertEquals(surface + (shellRay?.offset ?: Offset.Zero), actual.backdrop)

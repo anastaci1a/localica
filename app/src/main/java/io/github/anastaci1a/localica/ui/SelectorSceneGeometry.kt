@@ -35,24 +35,32 @@ internal data class SelectorSceneGeometry(
     val shellFlattening: Float = 0f,
     val selectorFlattening: Float = 0f,
 ) {
-    // Each immutable scene prepares material constants once, not twice per mesh vertex.
-    // Data-class copy() reconstructs these when either geometry/material changes.
-    private val shellOptics = LensOpticalProfile.create(shell.span, shellDepth, shellFlattening)
-    private val selectorOptics = LensOpticalProfile.create(selector.span, selectorDepth, selectorFlattening)
+    fun prepareSampler() = Sampler(this)
 
-    fun sample(point: Offset, refractInk: Boolean, extendBoundary: Boolean = false): SelectorSceneSample {
-        val field = selector.field(point)
-        // Boundary triangles can straddle the final clip. Extend their ray instead
-        // of interpolating a zero displacement into the visible rounded edge.
-        val selectorRay = lensRay(if (extendBoundary) field.copy(distance = field.distance.coerceAtLeast(0f)) else field,
-            selectorOptics)
-        val surface = point + selectorRay.offset
-        val shellField = shell.field(surface)
-        val shellRay = if (shellField.distance >= 0f)
-            lensRay(shellField, shellOptics) else null
-        val ink = if (refractInk && shellRay != null)
-            slots.firstOrNull { it.displayed.contains(surface) }?.sourceAt(surface) else null
-        return SelectorSceneSample(surface, surface + (shellRay?.offset ?: Offset.Zero),
-            shellRay, selectorRay, ink, ink != null && selector.field(surface).distance >= 0f)
+    fun sample(point: Offset, refractInk: Boolean, extendBoundary: Boolean = false): SelectorSceneSample =
+        prepareSampler().sample(point, refractInk, extendBoundary)
+
+    /** Bound to one immutable scene; create only when the renderer misses its frame cache. */
+    internal class Sampler(private val geometry: SelectorSceneGeometry) {
+        private val shellOptics = LensOpticalProfile.create(geometry.shell.span,
+            geometry.shellDepth, geometry.shellFlattening)
+        private val selectorOptics = LensOpticalProfile.create(geometry.selector.span,
+            geometry.selectorDepth, geometry.selectorFlattening)
+
+        fun sample(point: Offset, refractInk: Boolean, extendBoundary: Boolean = false): SelectorSceneSample = with(geometry) {
+            val field = selector.field(point)
+            // Boundary triangles can straddle the final clip. Extend their ray instead
+            // of interpolating a zero displacement into the visible rounded edge.
+            val selectorRay = lensRay(if (extendBoundary) field.copy(distance = field.distance.coerceAtLeast(0f)) else field,
+                selectorOptics)
+            val surface = point + selectorRay.offset
+            val shellField = shell.field(surface)
+            val shellRay = if (shellField.distance >= 0f)
+                lensRay(shellField, shellOptics) else null
+            val ink = if (refractInk && shellRay != null)
+                slots.firstOrNull { it.displayed.contains(surface) }?.sourceAt(surface) else null
+            SelectorSceneSample(surface, surface + (shellRay?.offset ?: Offset.Zero),
+                shellRay, selectorRay, ink, ink != null && selector.field(surface).distance >= 0f)
+        }
     }
 }
