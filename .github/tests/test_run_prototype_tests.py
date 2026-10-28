@@ -179,8 +179,8 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
 
-    def test_fifty_four_distinct_affected_classes_are_rejected_before_instrumentation(self):
-        classes = self.distinct_affected_sources(54)
+    def test_fifty_seven_distinct_affected_classes_are_rejected_before_instrumentation(self):
+        classes = self.distinct_affected_sources(57)
         self.run_case(2,AFFECTED_CLASSES=','.join(classes))
         self.assertFalse((self.root/'argv.json').exists())
 
@@ -208,8 +208,8 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
 
-    def test_fifty_three_distinct_affected_classes_keep_every_method_and_sentinel(self):
-        classes = self.distinct_affected_sources(53)
+    def test_fifty_six_distinct_affected_classes_keep_every_method_and_sentinel(self):
+        classes = self.distinct_affected_sources(56)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
@@ -376,7 +376,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_optimized_python_cannot_disable_reconciliation(self):
         self.run_case(1,PYTHONOPTIMIZE='1')
 
-    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*54))
+    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*57))
     def test_too_long(self): self.run_case(2,AFFECTED_CLASSES='x'*4097)
     def test_missing_source(self):
         (self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')).unlink()
@@ -592,6 +592,28 @@ class InsertedWorkflowContract(unittest.TestCase):
         self.assertIn('branches: [test/dev72-inserted-prototype-20261027]',text)
         self.assertIn('release clearance',text)
         self.assertIn('dependent coverage review',text)
+
+    def test_dev73_retains_all_prior_classes_and_adds_complete_quick_scan_coverage(self):
+        import re
+        workflow = ROOT/'.github/workflows'
+        previous = re.findall(r'^      affected_classes: (.+)$', (workflow/'prototype-dev72-inserted.yml').read_text(), re.MULTILINE)
+        text = (workflow/'prototype-dev73-quick-scan.yml').read_text()
+        selected = re.findall(r'^      affected_classes: (.+)$', text, re.MULTILINE)
+        self.assertEqual(1, len(previous))
+        self.assertEqual(1, len(selected))
+        actual = selected[0].split(',')
+        expected = set(previous[0].split(',')) | {
+            'io.github.anastaci1a.localica.IncompleteScanTest',
+            'io.github.anastaci1a.localica.SettingsOptionsTest',
+            'io.github.anastaci1a.localica.StartupMergeTest',
+        }
+        self.assertEqual(56, len(actual))
+        self.assertEqual(expected, set(actual))
+        self.assertFalse({REQUIRED, FOCUS, CONTRAST}.intersection(actual))
+        self.assertTrue(expected.issubset((ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()))
+        self.assertLessEqual(len(','.join(sorted(expected | {REQUIRED, FOCUS, CONTRAST}))), 4096)
+        self.assertIn('uses: ./.github/workflows/prototype.yml', text)
+        self.assertIn('branches: [test/dev73-quick-scan-20261028]', text)
 
     def test_historical_dev71_workflow_remains_byte_identical(self):
         import hashlib
