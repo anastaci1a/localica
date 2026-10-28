@@ -126,8 +126,9 @@ class ListSearchTest {
                     compose.waitUntil(5000) {
                         // Native traversal/semantics can cost hundreds of wall milliseconds.
                         // Pump a bounded 64ms slice, retaining every actual placement callback,
-                        // rather than starving the spring with one virtual frame per poll.
-                        advanceObservedFrame(count = 4)
+                        // rather than synchronizing once per virtual frame.
+                        compose.mainClock.advanceTimeBy(64)
+                        advanceObservedFrame(count = 0)
                         polls++
                         focusedEditors = compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size
                         val ready = focusedEditors == 1
