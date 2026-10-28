@@ -49,6 +49,35 @@ class IncompleteScanTest {
         assertCursorsClosed()
     }
 
+    @Test fun startupQuickThenFullRefreshesKnownFilesAfterAdditiveDiscovery() = fixture {
+        repository.scan(root)
+        repository.scan(other)
+        store.current().tracks.forEach { store.updateMetadata(it.copy(title = "Cached edited title")) }
+        mode("updated")
+        metadataReads = 0
+        val finished = CompletableDeferred<Unit>()
+        val controller = io.github.anastaci1a.localica.scanner.ScanController(
+            InstrumentationRegistry.getInstrumentation().targetContext, repository)
+        try {
+            withContext(Dispatchers.Main) {
+                controller.run(listOf(root, other), newFilesOnly = true, fullAfterQuick = true) { finished.complete(Unit) }
+            }
+            withTimeout(10_000) { finished.await() }
+            assertFalse(controller.state.value.running)
+            assertEquals(4, controller.state.value.completedFolders)
+            assertEquals(4, controller.state.value.totalFolders)
+            assertEquals("One additive read, then three files in each full root scan", 7, metadataReads)
+            val after = store.current()
+            assertEquals(3, after.tracks.size)
+            assertTrue(after.tracks.all { it.locations.size == 2 })
+            assertTrue(after.tracks.none { it.title == "Cached edited title" })
+            assertCursorsClosed()
+        } finally {
+            withContext(Dispatchers.Main) { controller.cancel() }
+            withTimeout(10_000) { finished.await() }
+        }
+    }
+
     @Test fun manualFullRequestSurvivesAnActiveQuickScanForTheSameRoot() = fixture {
         repository.scan(root)
         val original = store.current().tracks
@@ -375,3 +404,4 @@ class IncompleteScanTest {
         }
     }
 }
+

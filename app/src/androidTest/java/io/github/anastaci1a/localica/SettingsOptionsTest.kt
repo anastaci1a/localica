@@ -15,51 +15,94 @@ class SettingsOptionsTest {
     @Test fun settingsSearchIsRootOnlyAndScannerLinksReachSharedFolderPage() {
         compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
         compose.onNode(hasSetTextAction()).performTextInput("scanner")
-        compose.onNodeWithText("Scanner configuration").performClick()
+        compose.onNodeWithText("Scanner").performClick()
         compose.onNodeWithText("Search settings").assertDoesNotExist()
-        compose.onNodeWithText("Scan now").assertDoesNotExist()
+        compose.onNodeWithText("Folders to scan").assertDoesNotExist()
+        compose.onNodeWithText("Metadata read failures").performScrollTo().performClick()
+        compose.onNodeWithText("No metadata read failures.").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithText("Scanner").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithText("Library and tags").assertIsDisplayed()
         compose.onNodeWithText("Folders to scan").performClick()
         compose.onNodeWithText("Choose folder").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back from settings").performClick()
-        compose.onNodeWithText("Scanner configuration").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Back from settings").performClick()
-        compose.onNodeWithText("Library and tags").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNode(hasSetTextAction()).assertTextContains("scanner")
     }
     @Test fun quickScanIsSearchableAndKeepsTheExistingOptInPreference() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = context.getSharedPreferences("scanner", 0)
-        val hadValue = store.contains("on-launch")
-        val original = store.getBoolean("on-launch", false)
+        val keys = listOf("on-launch", "full-on-launch")
+        val previous = keys.associateWith { if (store.contains(it)) store.getBoolean(it, false) else null }
         val preferences = io.github.anastaci1a.localica.scanner.ScanPreferences(context)
         val originalOptions = preferences.read("")
         try {
-            store.edit().remove("on-launch").commit()
-            assertFalse("Quick Scan remains opt-in", preferences.scanOnLaunch)
+            store.edit().remove("on-launch").remove("full-on-launch").commit()
+            assertFalse(preferences.scanOnLaunch)
+            assertFalse(preferences.fullScanOnLaunch)
             compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
-            compose.onNode(hasSetTextAction()).performTextInput("Quick Scan")
-            compose.onNodeWithText("Scanner configuration").performClick()
-            compose.onNodeWithText("Quick Scan").performScrollTo().performClick()
+            compose.onNode(hasSetTextAction()).performTextInput("Quick scan")
+            compose.onNodeWithText("Scanner").performClick()
+            val quick = hasText("Quick scan") and isToggleable()
+            val full = hasText("Full scan") and isToggleable()
+            compose.onNode(quick).performScrollTo().performClick()
+            compose.onNode(full).performScrollTo().performClick()
             compose.runOnIdle {
-                assertTrue(io.github.anastaci1a.localica.scanner.ScanPreferences(context).scanOnLaunch)
-                assertEquals("Enabling Quick Scan cannot change scan rules", originalOptions, preferences.read(""))
-            }
-            compose.onNodeWithText("For changed tags or removed files", substring = true).performScrollTo().assertIsDisplayed()
-            compose.onNodeWithText("Scan now").assertDoesNotExist()
-            compose.onNodeWithText("Quick Scan").performScrollTo().performClick()
-            compose.runOnIdle { assertFalse(preferences.scanOnLaunch) }
-            compose.onNodeWithContentDescription("Back from settings").performClick()
-            compose.onNodeWithText("Scanner configuration").performClick()
-            compose.onNodeWithText("Quick Scan").performScrollTo().assertIsDisplayed()
-            compose.runOnIdle {
-                assertFalse(io.github.anastaci1a.localica.scanner.ScanPreferences(context).scanOnLaunch)
+                assertTrue(preferences.scanOnLaunch)
+                assertTrue(preferences.fullScanOnLaunch)
                 assertEquals(originalOptions, preferences.read(""))
             }
+            compose.onNodeWithText("Enable both", substring = true).performScrollTo().assertIsDisplayed()
+            compose.onNode(quick).performScrollTo().performClick()
+            compose.runOnIdle { assertFalse(preferences.scanOnLaunch); assertTrue(preferences.fullScanOnLaunch) }
+            compose.onNodeWithContentDescription("Back from settings").performClick()
+            compose.onNodeWithText("Scanner").performClick()
+            compose.onNode(quick).performScrollTo().assertIsOff()
+            compose.onNode(full).performScrollTo().assertIsOn()
+            compose.runOnIdle { assertEquals(originalOptions, preferences.read("")) }
         } finally {
-            if (hadValue) store.edit().putBoolean("on-launch", original).commit()
-            else store.edit().remove("on-launch").commit()
+            val edit = store.edit()
+            previous.forEach { (key, value) -> if (value == null) edit.remove(key) else edit.putBoolean(key, value) }
+            edit.commit()
         }
+    }
+    @Test fun scannerShortcutSystemBackReturnsToCallerButHeaderBackVisitsParent() {
+        var dismissed = 0
+        compose.setContent { LocalicaTheme {
+            FolderSettings(LibraryUiState(loading = false), { dismissed++ }, {}, {}, initialCategory = "Scanner")
+        } }
+        compose.onNodeWithText("Metadata read failures").performScrollTo().performClick()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("Scanner").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, dismissed) }
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithText("Library and tags").assertIsDisplayed()
+        compose.onNodeWithText("Scanner").performClick()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.runOnIdle { assertEquals(1, dismissed) }
+    }
+    @Test fun scannerPopupKeepsItsSizeAndSeparatesRepeatableQuickAndFullActions() {
+        val state = androidx.compose.runtime.mutableStateOf(LibraryUiState(
+            snapshot = io.github.anastaci1a.localica.library.LibrarySnapshot(folders = listOf(
+                io.github.anastaci1a.localica.library.FolderSelection("content://music", "Music"))), loading = false))
+        var quick = 0
+        var full = 0
+        compose.setContent { LocalicaTheme { ScannerPopup(state.value, {}, { full++ }, {}, { quick++ }) {} } }
+        compose.onNodeWithText("Quick scan").performScrollTo().performClick()
+        compose.onNodeWithText("Full scan").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, quick); assertEquals(1, full) }
+        val idleBounds = compose.onNodeWithTag("scanner-body").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle { state.value = state.value.copy(scanning = true, scannedCount = 123,
+            scanStatus = io.github.anastaci1a.localica.scanner.ScanState(running = true, totalFolders = 2)) }
+        compose.onNodeWithText("Full scan").assertIsNotEnabled()
+        compose.onNodeWithText("Quick scan").assertIsNotEnabled()
+        assertEquals(idleBounds, compose.onNodeWithTag("scanner-body").fetchSemanticsNode().boundsInRoot)
+        compose.runOnIdle { state.value = state.value.copy(scanning = false,
+            scanStatus = io.github.anastaci1a.localica.scanner.ScanState(message = "Scan complete.")) }
+        compose.onNodeWithText("Quick scan").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(2, quick); assertEquals(1, full) }
+        assertEquals(idleBounds, compose.onNodeWithTag("scanner-body").fetchSemanticsNode().boundsInRoot)
     }
     @Test fun playlistViewChoicesPersistAndOverrideOnlyTheirCollection() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -95,3 +138,4 @@ class SettingsOptionsTest {
         } finally { context.getSharedPreferences("browse-style", 0).edit().clear().commit() }
     }
 }
+

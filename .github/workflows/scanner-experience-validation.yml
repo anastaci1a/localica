@@ -1,0 +1,25 @@
+name: Scanner experience isolated validation (not delivery)
+'on':
+  push:
+    branches: [test/scanner-experience-20261028]
+permissions:
+  contents: read
+jobs:
+  prototype:
+    uses: ./.github/workflows/prototype.yml
+    with:
+      affected_classes: io.github.anastaci1a.localica.SettingsOptionsTest,io.github.anastaci1a.localica.NavigationSettingsTest,io.github.anastaci1a.localica.IncompleteScanTest,io.github.anastaci1a.localica.StartupMergeTest
+      coverage_reason: >-
+        Isolated scanner experience slice: shared glass Full/Quick controls,
+        fixed popup slots, Scanner settings and shortcut Back semantics,
+        independent startup preferences and service-owned Quick then Full phases.
+        Complete affected settings/navigation/scanner classes plus mandatory
+        IME, focus and contrast sentinels. Full JVM, lint and builds retained.
+      known_issues: >-
+        Isolated validation only, not an APK delivery or release certification.
+        Final integration requires combined-candidate checks. No real-phone
+        large-font or narrow-screen visual proof; startup service intent wiring
+        is source reviewed while controller lifecycle has native coverage.
+        No failure, missing method or unqualified skip is waived.
+    secrets:
+      ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
