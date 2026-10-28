@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica.library
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -9,6 +11,106 @@ import org.junit.Test
 import java.io.IOException
 
 class LibraryRepositoryTest {
+    @Test fun `manual scan waits for startup merge then refreshes instead of being lost`() = runTest {
+        val store = MemoryStore(previous)
+        val files = FakeDocuments().apply {
+            entries["root"] = listOf(audio("song", "song.mp3"), audio("new", "new.mp3"))
+            tags["song"] = AudioMetadata(title = "Refreshed manually")
+        }
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var hold = true
+        val source = object : DocumentSource by files {
+            override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
+                if (hold) { hold = false; entered.complete(Unit); release.await() }
+                return files.metadata(uri)
+            }
+        }
+        val repository = LibraryRepository(store, TreeScanner(source), FakePermissions("old"), StandardTestDispatcher(testScheduler))
+        val startup = async { repository.scanNewFiles("old") }
+        entered.await()
+        val manual = async { repository.scan("old") }
+        testScheduler.runCurrent()
+        assertFalse(manual.isCompleted)
+        assertEquals(0, files.metadataReads)
+        assertEquals(previous, store.current())
+        release.complete(Unit)
+        startup.await()
+        manual.await()
+        assertEquals(3, files.metadataReads)
+        assertEquals(2, store.current().tracks.size)
+        assertEquals("Refreshed manually", store.current().tracks.single { it.id == "song" }.title)
+    }
+
+    @Test fun `unchanged startup avoids metadata and database writes while manual scan refreshes`() = runTest {
+        val initial = previous.copy(tracks = previous.tracks.map { it.copy(addedAt = 7L) })
+        val store = MemoryStore(initial)
+        val source = FakeDocuments().apply {
+            entries["root"] = listOf(audio("song", "song.mp3"))
+            tags["song"] = AudioMetadata(title = "Changed")
+        }
+        val repository = LibraryRepository(store, TreeScanner(source), FakePermissions("old"), StandardTestDispatcher(testScheduler))
+        repository.scanNewFiles("old")
+        assertEquals(initial, store.current())
+        assertEquals(0, source.metadataReads)
+        assertEquals(0, store.merges)
+        repository.scan("old")
+        assertEquals(1, source.metadataReads)
+        assertEquals("Changed", store.current().tracks.single().title)
+    }
+
+    @Test fun `startup adds new identities and overlapping memberships without changing old metadata`() = runTest {
+        val initial = previous.copy(folders = previous.folders + FolderSelection("other", "Other"))
+        val store = MemoryStore(initial)
+        val source = FakeDocuments().apply {
+            entries["root"] = listOf(audio("song", "song.mp3"), audio("new", "new.mp3").copy(modifiedAt = 1L))
+            tags["song"] = AudioMetadata(title = "Must not read")
+            tags["new"] = AudioMetadata(title = "New song")
+        }
+        val repository = LibraryRepository(store, TreeScanner(source), FakePermissions("old", "other"), StandardTestDispatcher(testScheduler))
+        repository.scanNewFiles("old")
+        val saved = store.current().tracks.associateBy { it.id }
+        assertEquals(initial.tracks.single(), saved["song"])
+        assertEquals(1, source.metadataReads)
+        repository.scanNewFiles("other")
+        assertEquals(1, source.metadataReads)
+        assertEquals(2, store.current().tracks.size)
+        assertTrue(store.current().tracks.all { it.locations.map { place -> place.folderUri }.toSet() == setOf("old", "other") })
+        assertEquals(saved["new"]?.addedAt, store.current().tracks.single { it.id == "new" }.addedAt)
+    }
+
+    @Test fun `startup empty failed and canceled listings keep cached songs and grants`() = runTest {
+        val store = MemoryStore(previous)
+        val source = FakeDocuments()
+        val permissions = FakePermissions("old")
+        val repository = LibraryRepository(store, TreeScanner(source), permissions, StandardTestDispatcher(testScheduler))
+        repository.scanNewFiles("old")
+        assertEquals(previous, store.current())
+        source.entries["root"] = listOf(audio("new", "new.mp3"), directory("nested"))
+        source.entries["nested"] = emptyList()
+        source.metadataFailure = CancellationException()
+        source.failureUri = "new"
+        try { repository.scanNewFiles("old"); fail("Cancellation must propagate") } catch (_: CancellationException) { }
+        source.metadataFailure = null
+        source.directoryFailure = IOException("Unavailable")
+        try { repository.scanNewFiles("old"); fail("Failure must propagate") } catch (_: IOException) { }
+        assertEquals(previous, store.current())
+        assertEquals(setOf("old"), permissions.granted)
+        assertEquals(0, store.merges)
+    }
+
+    @Test fun `startup never reacquires revoked access or recreates a removed root`() = runTest {
+        val store = MemoryStore(previous)
+        val permissions = FakePermissions()
+        val source = FakeDocuments()
+        val repository = LibraryRepository(store, TreeScanner(source), permissions, StandardTestDispatcher(testScheduler))
+        try { repository.scanNewFiles("old"); fail("Revoked access must fail") } catch (_: IllegalStateException) { }
+        try { repository.scanNewFiles("removed"); fail("Removed roots must fail") } catch (_: IllegalArgumentException) { }
+        assertTrue(permissions.granted.isEmpty())
+        assertTrue(source.queried.isEmpty())
+        assertEquals(previous, store.current())
+    }
+
     private val previous = LibrarySnapshot(listOf(FolderSelection("old", "Old folder")), listOf(
         Track("song", "Existing", fileName = "song.mp3", relativePath = "song.mp3",
             locations = listOf(TrackLocation("old", "song", "song.mp3"))),
@@ -79,6 +181,22 @@ private class MemoryStore(initial: LibrarySnapshot) : LibraryStore {
     override suspend fun updateMetadata(track: Track) { snapshots.value = snapshots.value.copy(tracks = snapshots.value.tracks.map { if (it.id == track.id) track else it }) }
     override val snapshots = MutableStateFlow(initial)
     var failWrites = false
+    var merges = 0
+    override suspend fun mergeRoot(result: ScanResult) {
+        if (failWrites) throw IOException("Disk full")
+        merges++
+        val before = snapshots.value
+        val tracks = before.tracks.associateByTo(linkedMapOf()) { it.id }
+        result.tracks.forEach { track ->
+            val saved = tracks[track.id]
+            val location = TrackLocation(result.folder.uri, track.uri, track.relativePath)
+            tracks[track.id] = (saved ?: track.copy(addedAt = 123L)).let {
+                if (it.locations.any { place -> place.folderUri == result.folder.uri }) it
+                else it.copy(locations = it.locations + location)
+            }
+        }
+        snapshots.value = before.copy(tracks = tracks.values.toList())
+    }
     override suspend fun current() = snapshots.value
     override suspend fun replaceRoot(result: ScanResult) {
         if (failWrites) throw IOException("Disk full")

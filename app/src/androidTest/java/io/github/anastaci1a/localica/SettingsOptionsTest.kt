@@ -27,6 +27,40 @@ class SettingsOptionsTest {
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNode(hasSetTextAction()).assertTextContains("scanner")
     }
+    @Test fun quickScanIsSearchableAndKeepsTheExistingOptInPreference() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = context.getSharedPreferences("scanner", 0)
+        val hadValue = store.contains("on-launch")
+        val original = store.getBoolean("on-launch", false)
+        val preferences = io.github.anastaci1a.localica.scanner.ScanPreferences(context)
+        val originalOptions = preferences.read("")
+        try {
+            store.edit().remove("on-launch").commit()
+            assertFalse("Quick Scan remains opt-in", preferences.scanOnLaunch)
+            compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
+            compose.onNode(hasSetTextAction()).performTextInput("Quick Scan")
+            compose.onNodeWithText("Scanner configuration").performClick()
+            compose.onNodeWithText("Quick Scan").performScrollTo().performClick()
+            compose.runOnIdle {
+                assertTrue(io.github.anastaci1a.localica.scanner.ScanPreferences(context).scanOnLaunch)
+                assertEquals("Enabling Quick Scan cannot change scan rules", originalOptions, preferences.read(""))
+            }
+            compose.onNodeWithText("For changed tags or removed files", substring = true).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Scan now").assertDoesNotExist()
+            compose.onNodeWithText("Quick Scan").performScrollTo().performClick()
+            compose.runOnIdle { assertFalse(preferences.scanOnLaunch) }
+            compose.onNodeWithContentDescription("Back from settings").performClick()
+            compose.onNodeWithText("Scanner configuration").performClick()
+            compose.onNodeWithText("Quick Scan").performScrollTo().assertIsDisplayed()
+            compose.runOnIdle {
+                assertFalse(io.github.anastaci1a.localica.scanner.ScanPreferences(context).scanOnLaunch)
+                assertEquals(originalOptions, preferences.read(""))
+            }
+        } finally {
+            if (hadValue) store.edit().putBoolean("on-launch", original).commit()
+            else store.edit().remove("on-launch").commit()
+        }
+    }
     @Test fun playlistViewChoicesPersistAndOverrideOnlyTheirCollection() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val prefs = BrowsePreferences(context)

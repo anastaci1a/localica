@@ -48,6 +48,7 @@ class ListSearchTest {
         val previous = preferences.read(route)
         preferences.write(route, BrowseStyle(quickSearch = true), false)
         val frames = mutableListOf<SlotFrame>()
+        val openReadiness = mutableListOf<String>()
         val placedFrames = mutableListOf<SearchMorphSample>()
         val rootFrames = mutableListOf<SearchSlotLayoutSample>()
         var slot = 0f
@@ -117,9 +118,30 @@ class ListSearchTest {
                 // The returning face hides its trigger from merged accessibility
                 // semantics while the underlying real pointer target remains owned.
                 compose.onNodeWithTag("list-search-pill", useUnmergedTree = true).performTouchInput { click(center) }
-                compose.waitUntil(5000) {
-                    advanceObservedFrame()
-                    compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size == 1
+                val wallStart = android.os.SystemClock.uptimeMillis()
+                val virtualStart = compose.mainClock.currentTime
+                var polls = 0
+                var focusedEditors = 0
+                try {
+                    compose.waitUntil(5000) {
+                        // Native traversal/semantics can cost hundreds of wall milliseconds.
+                        // Pump a bounded 64ms slice, retaining every actual placement callback,
+                        // rather than synchronizing once per virtual frame.
+                        compose.mainClock.advanceTimeBy(64)
+                        advanceObservedFrame(count = 0)
+                        polls++
+                        focusedEditors = compose.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().size
+                        val ready = focusedEditors == 1
+                        if (compose.mainClock.currentTime - virtualStart > 5000L)
+                            throw AssertionError("Search focus exceeded its 5000ms virtual budget")
+                        ready
+                    }
+                } finally {
+                    val receipt = "open polls=$polls wallMillis=${android.os.SystemClock.uptimeMillis() - wallStart} " +
+                        "virtualMillis=${compose.mainClock.currentTime - virtualStart} focusedEditors=$focusedEditors " +
+                        "last=${compose.runOnUiThread { placedFrames.lastOrNull() }}"
+                    openReadiness += receipt
+                    android.util.Log.i("ListSearchReadiness", receipt)
                 }
             }
             fun beginReturn() {
@@ -217,7 +239,8 @@ class ListSearchTest {
             val output = java.io.File(directory, "${if (reduced) "reduced" else "normal"}-${android.os.SystemClock.elapsedRealtimeNanos()}.txt")
             output.writeText("PLACED CALLBACKS\n" + compose.runOnUiThread { placedFrames.toList() }.joinToString("\n") +
                 "\nROOT LAYOUT OBSERVATIONS\n" + compose.runOnUiThread { rootFrames.toList() }.joinToString("\n") +
-                "\nCROSS-WINDOW CALLBACK OBSERVATIONS\n" + observed.joinToString("\n") { "rowTop=${it.rowTop} ${it.sample}" })
+                "\nCROSS-WINDOW CALLBACK OBSERVATIONS\n" + observed.joinToString("\n") { "rowTop=${it.rowTop} ${it.sample}" } +
+                "\nOPEN READINESS\n" + openReadiness.joinToString("\n"))
             android.util.Log.i("ListSearchSlotFrames", "reduced=$reduced frames=${observed.size} trace=${output.name}")
             observed.takeLast(24).forEach { android.util.Log.i("ListSearchSlotFrames", "rowTop=${it.rowTop} ${it.sample}") }
             compose.mainClock.autoAdvance = true
