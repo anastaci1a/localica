@@ -39,6 +39,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
+    val drawObserver = LocalBackdropSamplingObserver.current
     BackdropLease(source)
     BackdropLease(homeSource?.takeUnless { it === source })
     val layer = rememberGraphicsLayer()
@@ -92,6 +93,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
                 observer(HomeBackdropSamplingFrame(footprint, homeCorners, flatHome, blend))
             }
         }
+        drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
         val flatWeight = (if (flatSource) 1f - blend else 0f) + (if (flatHome) blend else 0f)
         val entirelyFlat = flatWeight >= 1f
         val viewport = size
