@@ -80,8 +80,10 @@ class LyricsHeaderActionsTest {
             capture("held")
             compose.onNodeWithContentDescription("Lyrics sources").performTouchInput { cancel() }
             compose.mainClock.advanceTimeBy(4000)
-            compose.onNodeWithContentDescription("Lyrics sources").performClick()
-            compose.mainClock.advanceTimeBy(100)
+            compose.onNodeWithContentDescription("Lyrics sources").performTouchInput { down(center) }
+            compose.mainClock.advanceTimeBy(32)
+            compose.onNodeWithContentDescription("Lyrics sources").performTouchInput { up() }
+            compose.mainClock.advanceTimeBy(64)
             capture("preparing")
             compose.runOnIdle {
                 assertTrue(preparation.progress > 0f)
@@ -132,7 +134,28 @@ class LyricsHeaderActionsTest {
         try {
             compose.onNodeWithContentDescription("Lyrics sources").performClick()
             compose.mainClock.advanceTimeBy(80)
-            compose.onNodeWithContentDescription("Hide lyrics").performClick()
+            // Route through Android, not a semantic onClick: invisible native
+            // premeasurement must leave the neighboring Hide control usable.
+            val node = compose.onNodeWithContentDescription("Hide lyrics").fetchSemanticsNode()
+            val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+            val location = IntArray(2)
+            compose.runOnUiThread { view.getLocationOnScreen(location) }
+            val point = node.boundsInRoot.center + Offset(location[0].toFloat(), location[1].toFloat())
+            val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+            val down = android.os.SystemClock.uptimeMillis()
+            fun send(action: Int) {
+                val event = android.view.MotionEvent.obtain(down, android.os.SystemClock.uptimeMillis(), action, point.x, point.y, 0)
+                event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                try { assertTrue("Native Hide input reaches underlying window", automation.injectInputEvent(event, true)) }
+                finally { event.recycle() }
+            }
+            var held = false
+            try {
+                send(android.view.MotionEvent.ACTION_DOWN); held = true
+                send(android.view.MotionEvent.ACTION_UP); held = false
+            } finally { if (held) send(android.view.MotionEvent.ACTION_CANCEL) }
+            compose.waitForIdle()
+            compose.runOnIdle { assertFalse("Native Hide remains usable before source admission", open) }
             compose.mainClock.advanceTimeBy(4000)
             compose.runOnIdle {
                 assertFalse(anchor.hidden)
