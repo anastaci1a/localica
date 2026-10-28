@@ -14,7 +14,8 @@ jobs:
         adds actual order quadrants/reopen, loading-only opacity, Compact artwork,
         Playlist detail/canonical covers, Queue Save origin, Search landing/fade,
         Return controls, artist ordering, shared Repeat/TagEditor chrome and the
-        joint raw-background polarity choice. Complete Queue drag/selection and
+        settled player single-backing polarity choice, not transition coverage.
+        Complete Queue drag/selection and
         sixteen-method SelectionLens coverage include the dependent Queue repair.
         Playlist chooser placement is selected in full. Both shared menu viewport
         content and touch classes are added in full without removing prior coverage.
@@ -41,8 +42,9 @@ jobs:
         Queue timings use synthetic
         13000-track/100-entry data, not phone-latency or acoustic proof. Intermittent
         current-occurrence and busy-feedback phone reports are not closed by these
-        contracts.473 unsupported frozen/native-blurred/moving/partial backgrounds
-        remain unavailable; atomic ink/image presentation is unproven. Font2 profile
+        contracts.473 settled single-backing sampling leaves artwork-transitioning,
+        frozen/native-blurred/moving/partial backgrounds unavailable; atomic
+        ink/image presentation is unproven. Font2 profile
         receipts are separate from unconfigured normal-suite assumptions. No blanket
         optical parity, universal fix, release clearance or full native pass is claimed.
         Every selected identity and mandatory sentinel must satisfy strict final
