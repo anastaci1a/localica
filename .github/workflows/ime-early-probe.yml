@@ -1,0 +1,145 @@
+name: IME early probe controlled comparison (not delivery)
+'on':
+  push:
+    branches:
+    - test/ime-early-probe-20261028
+    paths:
+    - .github/workflows/ime-early-probe.yml
+permissions:
+  contents: read
+concurrency:
+  group: ime-early-probe-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      TEST_API: '36'
+      ANDROID_SERIAL: emulator-5554
+      SOURCE_SHA: ${{ matrix.source }}
+      ARM: ${{ matrix.arm }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ matrix.source }}
+        persist-credentials: false
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
+    - name: Install pinned live evidence publisher
+      run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+    - name: Record runner and toolchain identity
+      run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
+    - name: Enable emulator acceleration
+      run: 'echo ''KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"''
+        | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+
+        sudo udevadm control --reload-rules
+
+        sudo udevadm trigger --name-match=kvm
+
+        '
+    - name: Make room for emulator userdata
+      run: '# This Android job does not use the runner''s preinstalled .NET SDKs.
+
+        sudo rm -rf /usr/share/dotnet
+
+        df -h "$HOME"
+
+        '
+    - name: Compile instrumentation APKs before starting emulator
+      run: 'test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+        mkdir evidence
+
+        printf ''source_sha=%s\nharness_sha=%s\narm=%s\nrelease_certified=false\n''
+        "$SOURCE_SHA" "$GITHUB_SHA" "$ARM" > evidence/context.txt
+
+        python3 .github/test-evidence/source_methods.py --classes io.github.anastaci1a.localica.SearchImeMotionTest
+        --output evidence/expected-methods.json
+
+        ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+
+        sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+        > evidence/apks.sha256
+
+        '
+    - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      with:
+        api-level: 36
+        target: default
+        arch: x86_64
+        profile: pixel_2
+        emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
+          -memory 3072
+        disable-animations: false
+        script: 'adb -s emulator-5554 shell wm size 720x1280
+
+          adb -s emulator-5554 shell wm density 280
+
+          sleep 60
+
+          bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+
+          bash -euo pipefail -c ''test "$(adb -s emulator-5554 shell getprop ro.build.version.sdk
+          | tr -d "\r")" = 36; test "$(adb -s emulator-5554 shell getprop ro.kernel.qemu
+          | tr -d "\r")" = 1; test "$(git rev-parse HEAD)" = "$SOURCE_SHA"; source
+          .github/prepare-device-tests.sh; python3 .github/test-evidence/supervise.py
+          --output evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+          --sha "$SOURCE_SHA" --api 36 --lane "ime-early-probe-$ARM" -- ./gradlew
+          connectedDebugAndroidTest --no-daemon --max-workers=2 -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.SearchImeMotionTest''
+
+          '
+        cores: 2
+        emulator-build: '16428233'
+    - name: Reconcile exact class methods without skips
+      run: "python3 - <<'PYXML'\nimport json, pathlib, xml.etree.ElementTree as ET\n\
+        expected=set(json.loads(pathlib.Path('evidence/expected-methods.json').read_text())['runtime_methods'])\n\
+        actual={}\nfor file in pathlib.Path('app/build/outputs/androidTest-results').rglob('*.xml'):\n\
+        \    for case in ET.parse(file).getroot().iter('testcase'):\n        name=case.attrib['classname']+'#'+case.attrib['name']\n\
+        \        if name in actual: raise SystemExit('Duplicate method '+name)\n \
+        \       actual[name]='failed' if any(case.find(tag) is not None for tag in\
+        \ ('failure','error','skipped')) else 'passed'\npathlib.Path('evidence/reconciled-methods.json').write_text(json.dumps(actual,indent=2)+'\\\
+        n')\nif set(actual)!=expected or not actual or any(v!='passed' for v in actual.values()):\
+        \ raise SystemExit('Incomplete or failing exact class')\nPYXML"
+    - name: Capture host diagnostics on emulator failure
+      if: failure()
+      run: 'free -h
+
+        df -h
+
+        sudo dmesg --ctime | tail -100
+
+        '
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: ime-early-probe-${{ matrix.arm }}-${{ github.run_id }}
+        path: 'app/build/outputs/androidTest-results/
+
+          app/build/outputs/connected_android_test_additional_output/
+
+          evidence/
+
+          prototype-runner-environment.txt
+
+          app/src/androidTest/java/io/github/anastaci1a/localica/SearchImeMotionTest.kt'
+        if-no-files-found: error
+        retention-days: 14
+        include-hidden-files: true
+    name: API36 IME early probe ${{ matrix.arm }} (not release evidence)
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+        - arm: baseline
+          source: 2c515ec3c977e009b0b2390aeeaeb2b2ac367439
+        - arm: candidate
+          source: 5c023121315dff2bd4f9ab0bc0d0b6f38da35918
