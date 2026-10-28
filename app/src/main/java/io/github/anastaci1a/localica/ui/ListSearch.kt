@@ -102,10 +102,11 @@ internal fun ListSearchWindow(visible: Boolean, anchor: GlassAnchor, hasQuery: B
         // Register before the editor so ending text input remains the first Back action.
         BackHandler(visible && onBack != null) { onBack?.invoke() }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            Box(Modifier.fillMaxWidth().then(if (hasQuery) Modifier.height(maxHeight * .85f) else Modifier.wrapContentHeight())
+            Box(Modifier.fillMaxWidth().then(if (hasQuery) Modifier.heightIn(max = maxHeight * .85f) else Modifier.wrapContentHeight())
                 .testTag("list-search-popup")) {
                 content()
             }
         }
     }
 }
+

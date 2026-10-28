@@ -5,7 +5,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
-internal enum class ListReturnAction { ScrollTop, ClearFilter, None }
+internal enum class ListReturnAction { ScrollTop, ScrollSongs, ClearFilter, None }
 
 internal fun listReturnAction(scrolled: Boolean, scrolling: Boolean, filtered: Boolean): ListReturnAction = when {
     scrolled || scrolling -> ListReturnAction.ScrollTop

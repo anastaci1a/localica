@@ -55,6 +55,19 @@ class CollectionActionScopeTest {
         assertTrue(albums.all { ArtistAlbumSelection.shownSelected(all, it) })
     }
 
+    @Test fun completingAndReconcilingFullSetsReturnsCanonicalAllWithoutCountingStaleIds() {
+        val albums = listOf("a", "b", "c")
+        assertTrue(ArtistAlbumSelection.toggle(listOf("a", "b"), "c", albums).isEmpty())
+        assertTrue(ArtistAlbumSelection.reconcile(listOf("c", "a", "b", "a", "stale"), albums).isEmpty())
+        assertEquals(listOf("a", "b"), ArtistAlbumSelection.reconcile(listOf("a", "b", "stale"), albums))
+        assertTrue(ArtistAlbumSelection.reconcile(listOf("a", "b"), listOf("b", "a")).isEmpty())
+        assertTrue(ArtistAlbumSelection.reconcile(listOf("stale"), albums).isEmpty())
+        assertTrue(ArtistAlbumSelection.reconcile(listOf("a"), emptyList()).isEmpty())
+        assertTrue(ArtistAlbumSelection.reconcile(emptyList(), albums + "new").isEmpty())
+        assertEquals(listOf("b", "c"), ArtistAlbumSelection.toggle(listOf("a", "b", "c"), "a", albums))
+        assertEquals(listOf("a"), ArtistAlbumSelection.reconcile(listOf("a"), listOf("a")))
+    }
+
     @Test fun singleAlbumExplicitSelectionAndAllRemainDistinctModes() {
         val albums = listOf("only")
         val explicit = ArtistAlbumSelection.only("only")
@@ -76,3 +89,4 @@ class CollectionActionScopeTest {
         }
     }
 }
+
