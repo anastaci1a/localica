@@ -9,10 +9,12 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.*
@@ -20,14 +22,51 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import androidx.test.platform.app.InstrumentationRegistry
+import java.security.MessageDigest
 
 /** Native text shaping, including the 220dp host minus 48dp chrome and 24dp body inset. */
 private data class BrowseFaceProbe(val title: String, val summary: String, val live: @Composable () -> Unit)
+
+/** Same placed-node geometry and node density as Compose 1.8.2 BoundsAssertions. */
+private fun SemanticsNode.faceBounds(): DpRect = with(layoutInfo.density) {
+    assertTrue("A measured settings face must be placed", layoutInfo.isPlaced)
+    val position = positionInRoot
+    DpRect(position.x.toDp(), position.y.toDp(),
+        (position.x + size.width).toDp(), (position.y + size.height).toDp())
+}
+
+/** Optional paired-run evidence, never a substitute for the original assertions. */
+private class BrowseFaceTrace {
+    private val values = StringBuilder()
+    private var count = 0
+    fun add(vararg fields: Any?) {
+        fields.forEach { field ->
+            val value = field.toString()
+            values.append(value.length).append(':').append(value)
+            count++
+        }
+    }
+    fun publish(scale: Float, width: String) {
+        val digest = MessageDigest.getInstance("SHA-256").digest(values.toString().toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        InstrumentationRegistry.getInstrumentation().addResults(android.os.Bundle().apply {
+            putString("browse_face_trace_${scale}_$width", "$scale/$width/$count/$digest")
+        })
+    }
+}
 
 class BrowseOptionsFaceContractTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun everySelectableAndLegacySummaryUsesTheMeasuredFaceWithoutClippedText() {
+        val arguments = InstrumentationRegistry.getArguments()
+        val mode = arguments.getString("browseFaceMode", "cached")
+        require(mode == "original" || mode == "cached")
+        android.util.Log.i("BrowseFaceFixture", "mode=" + mode + ",explicit=" + arguments.containsKey("browseFaceMode"))
+        val recordTrace = arguments.getString("browseFaceTrace", "false").also {
+            require(it == "true" || it == "false")
+        } == "true"
         val declaration = browseOptionsDeclaration(BrowseRoute(MainTab.Library))
         val scoped = browseOptionsDeclaration(BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "fixture")), mutable = true)
         val summaries = declaration.sortSummaries.map { value ->
@@ -72,15 +111,26 @@ class BrowseOptionsFaceContractTest {
         } }
         for (scale in listOf(1f, 1.5f, 2f)) for (w in listOf(148.dp, 280.dp)) {
             compose.runOnIdle { width = w; font = scale }
+            // This phase changes no UI after width/font publication. Use the same
+            // public matchers and both tree policies as the original per-query path.
+            val all = SemanticsMatcher("Every settings-face node") { true }
+            val merged = if (mode == "cached") compose.onAllNodes(all).fetchSemanticsNodes() else null
+            val unmerged = if (mode == "cached") compose.onAllNodes(all, useUnmergedTree = true).fetchSemanticsNodes() else null
+            val trace = if (recordTrace) BrowseFaceTrace() else null
             probes.forEachIndexed { index, probe ->
                 val summary = probe.summary
                 compose.runOnIdle { assertEquals("$summary / $scale / $w", sizes["face-$index"], sizes["live-$index"]); assertNotNull(sizes["live-$index"]) }
+                trace?.add(index, summary, sizes["face-$index"], sizes["live-$index"])
                 for (prefix in listOf("live", "face")) {
-                    val text = compose.onAllNodes(hasText(summary) and hasAnyAncestor(hasTestTag("$prefix-$index")), useUnmergedTree = true)
+                    val matcher = hasText(summary) and hasAnyAncestor(hasTestTag("$prefix-$index"))
+                    val text = compose.onAllNodes(matcher, useUnmergedTree = true)
                     // A summary may equal its title; check every matching text node.
-                    val parent = compose.onNodeWithTag("$prefix-$index").getUnclippedBoundsInRoot()
-                    for ((nodeIndex, node) in text.fetchSemanticsNodes().withIndex()) {
-                        val bounds = text[nodeIndex].getUnclippedBoundsInRoot()
+                    val parent = merged?.single { hasTestTag("$prefix-$index").matches(it) }?.faceBounds()
+                        ?: compose.onNodeWithTag("$prefix-$index").getUnclippedBoundsInRoot()
+                    val nodes = unmerged?.filter(matcher::matches) ?: text.fetchSemanticsNodes()
+                    trace?.add(prefix, parent, nodes.size)
+                    for ((nodeIndex, node) in nodes.withIndex()) {
+                        val bounds = if (unmerged != null) node.faceBounds() else text[nodeIndex].getUnclippedBoundsInRoot()
                         assertTrue("Text left containment: $summary", bounds.left >= parent.left)
                         assertTrue("Text right containment: $summary", bounds.right <= parent.right)
                         assertTrue("Text top containment: $summary", bounds.top >= parent.top)
@@ -88,12 +138,14 @@ class BrowseOptionsFaceContractTest {
                         val layouts = mutableListOf<TextLayoutResult>()
                         assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action!!.invoke(layouts))
                         assertTrue(layouts.isNotEmpty())
+                        trace?.add(nodeIndex, bounds, node.size, layouts.size)
                         layouts.forEach { result ->
                             val context = "$summary / $prefix / $scale / $w: node=${node.size} " +
                                 "layout=${result.size} paragraphWidth=${result.multiParagraph.width}"
                             assertEquals("Use the final measured text node: $context", node.size, result.size)
                             assertFalse("No omitted text lines: $context", result.didOverflowHeight)
                             assertTrue("Nonempty native text layout: $context", result.lineCount > 0)
+                            trace?.add(result.size, result.didOverflowHeight, result.lineCount, result.layoutInput.text.text)
                             // A cached paragraph may retain a wider allocation than the final
                             // node (observed 210px paragraph / 124px line and glyphs). Its
                             // didOverflowWidth alone does not establish visible clipping.
@@ -105,6 +157,8 @@ class BrowseOptionsFaceContractTest {
                                 assertTrue("Line right fits: $context", result.getLineRight(line) <= node.size.width)
                                 assertTrue("Line top fits: $context", result.getLineTop(line) >= 0f)
                                 assertTrue("Line bottom fits: $context", result.getLineBottom(line) <= node.size.height)
+                                trace?.add(line, result.isLineEllipsized(line), result.getLineLeft(line),
+                                    result.getLineRight(line), result.getLineTop(line), result.getLineBottom(line))
                             }
                             result.layoutInput.text.forEachIndexed { offset, character ->
                                 // Trailing wrap whitespace has no visible ink.
@@ -114,13 +168,17 @@ class BrowseOptionsFaceContractTest {
                                     assertTrue("Glyph right fits: $context / $offset / $glyph", glyph.right <= node.size.width)
                                     assertTrue("Glyph top fits: $context / $offset / $glyph", glyph.top >= 0f)
                                     assertTrue("Glyph bottom fits: $context / $offset / $glyph", glyph.bottom <= node.size.height)
+                                    trace?.add(offset, glyph)
                                 }
                             }
                         }
                     }
-                    assertTrue(text.fetchSemanticsNodes().isNotEmpty())
+                    val finalNodes = if (unmerged != null) nodes else text.fetchSemanticsNodes()
+                    assertTrue(finalNodes.isNotEmpty())
+                    trace?.add(finalNodes.size)
                 }
             }
+            trace?.publish(scale, w.toString())
         }
     }
 
