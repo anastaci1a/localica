@@ -762,6 +762,22 @@ class InsertedWorkflowContract(unittest.TestCase):
                          text.split('jobs:', 1)[1].split('  prototype:', 1)[0])
         self.assertEqual(before.split('    secrets:', 1)[1], text.split('    secrets:', 1)[1])
 
+    def test_dev77_combined_preserves_canonical_gate_and_requires_new_native_lanes(self):
+        import re
+        workflows = ROOT/'.github/workflows'
+        text = (workflows/'prototype-dev77-combined-ime-artwork.yml').read_text()
+        old = (workflows/'prototype-dev77-artwork-receiver.yml').read_text()
+        self.assertEqual(re.findall(r'^      affected_classes: (.+)$', old, re.M), re.findall(r'^      affected_classes: (.+)$', text, re.M))
+        self.assertIn('    needs:\n    - protocol_contracts\n    - supplemental_26\n    - supplemental_36', text)
+        self.assertIn('    uses: ./.github/workflows/prototype.yml', text)
+        self.assertIn('test/dev77-combined-ime-artwork-20261029', text)
+        self.assertEqual(3, text.count('needs: protocol_contracts') + text.count('- protocol_contracts'))
+        self.assertEqual(2, text.count('bash .github/run-prototype-tests.sh'))
+        self.assertIn('dev77-combined-supplemental-api-26', text)
+        self.assertIn('dev77-combined-supplemental-api-36', text)
+        self.assertNotIn('continue-on-error:', text)
+        self.assertNotIn('|| true', text)
+
     def test_historical_dev71_workflow_remains_byte_identical(self):
         import hashlib
         self.assertEqual('a6b884a815d2703532aa8679678cc2d7e4b67a1a322a7e66f0a29b6e17e3b542',hashlib.sha256((ROOT/'.github/workflows/prototype-dev71-apk1.yml').read_bytes()).hexdigest())

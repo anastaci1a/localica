@@ -243,3 +243,5 @@ io.github.anastaci1a.localica.PlaylistSelectionPlacementTest
 io.github.anastaci1a.localica.StartupMergeTest
 io.github.anastaci1a.localica.PlayerPausedSkipTest
 io.github.anastaci1a.localica.ArtworkWashBorderTest
+io.github.anastaci1a.localica.FloatingImeLifecycleTest
+io.github.anastaci1a.localica.TextEditingNativeImeTest
