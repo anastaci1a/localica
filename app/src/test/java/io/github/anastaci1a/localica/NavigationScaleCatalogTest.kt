@@ -158,8 +158,8 @@ class NavigationScaleCatalogTest {
     }
 
     @Test
-    fun repeatedSyntheticAssetProvenanceAndOperatorPendingLabelsArePinned() {
-        assertTrue(catalog.inputPreferencePending)
+    fun repeatedSyntheticAssetProvenanceIsExplicitAndPinned() {
+        assertTrue(catalog.isSyntheticControl)
         assertEquals("queue-tone.mp3", catalog.repeatedAssetName)
         assertEquals("93b3ad40749d4b57cba6e5bb77ffd697b36c04ba007c04f036ac26a72953f7f2", catalog.repeatedAssetSha256)
         assertEquals("app/src/androidTest/assets/README.txt", catalog.assetProvenancePath)
