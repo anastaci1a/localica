@@ -98,7 +98,8 @@ class ScopedSearchOpticsTest {
         } }
         val pill = compose.onNodeWithTag("list-search-pill")
         compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isNotEmpty() }
-        pill.performScrollTo().assertIsDisplayed()
+        if (!queue) pill.performScrollTo()
+        pill.assertIsDisplayed()
         compose.mainClock.advanceTimeBy(1000)
         val before = pill.captureToImage().toPixelMap()
         val reds = (before.height / 3 until before.height * 2 / 3).flatMap { y ->
