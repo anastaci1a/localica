@@ -94,9 +94,19 @@ class PopupShadowContinuityTest {
         fun advance(time: Long) {
             repeat((time / 16).toInt()) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
         }
+        // Batch only the two unobserved endpoints; native drawing still gets a
+        // yield within four frames. Reversals and draw-ack/disposal stay per-frame.
+        fun advanceEndpoint(time: Long) {
+            val start = compose.mainClock.currentTime
+            while (compose.mainClock.currentTime - start < time) {
+                val remaining = time - (compose.mainClock.currentTime - start)
+                compose.mainClock.advanceTimeBy(minOf(64L, remaining))
+                compose.waitForIdle()
+            }
+        }
         try {
             compose.runOnIdle { open = true }
-            advance(1200)
+            advanceEndpoint(1200)
             val window = popupWindow
             assertNotNull(window)
             verifyField("first-open")
@@ -133,7 +143,7 @@ class PopupShadowContinuityTest {
             assertFalse(anchor.shadowInModal)
             // A complete close/reopen uses a new window, not an old retained shadow.
             compose.runOnIdle { open = true }
-            advance(1200)
+            advanceEndpoint(1200)
             assertNotSame(window, popupWindow)
             verifyField("replacement-window")
         } finally {
