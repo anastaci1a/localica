@@ -67,6 +67,9 @@ class CollectionSelectionTest {
             compose.waitUntil(5000) {
                 compose.onAllNodesWithTag("media-${playlist.entries.first().id}").fetchSemanticsNodes().isNotEmpty()
             }
+            // The real playlist hero can leave only the first occurrence composed.
+            // Arrange the song viewport before checking both selected occurrences.
+            compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.first().id)
             val first = compose.onNodeWithTag("media-${playlist.entries.first().id}")
             val second = compose.onNodeWithTag("media-${playlist.entries.last().id}")
             first.assertIsSelected()
