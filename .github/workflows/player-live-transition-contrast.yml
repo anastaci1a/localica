@@ -89,7 +89,6 @@ jobs:
         if-no-files-found: error
         retention-days: 14
     name: Live transition contrast API26 (required, not release)
-    needs: protocol_contracts
   contrast_36:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -174,4 +173,3 @@ jobs:
         if-no-files-found: error
         retention-days: 14
     name: Live transition contrast API36 (required, not release)
-    needs: protocol_contracts
