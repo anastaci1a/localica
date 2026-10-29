@@ -144,7 +144,9 @@ internal object NavigationRandomCorpusTargetProbe {
     fun failureText(value: String): String = value.take(MAX_FAILURE_TEXT_CHARS)
 
     fun runOwned(instrumentation: Instrumentation) {
-        check(instrumentation is NavigationRandomOwnedSession) { "Real owned operation requires the resident session, not terminal JUnit execution" }
+        check(instrumentation is NavigationRandomOwnedSession && instrumentation.isResidentInvocation) {
+            "Real owned operation requires the resident session, not terminal JUnit execution"
+        }
         val arguments = InstrumentationRegistry.getArguments()
         validateInvocation(arguments.getString(OPT_IN_ARGUMENT), arguments.getString("class"),
             arguments.getString(RUNNER_ACTIVITY_WAIT_ARGUMENT))
