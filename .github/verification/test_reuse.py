@@ -1,4 +1,5 @@
 import hashlib
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -177,6 +178,76 @@ class IdentityAuditTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "literal"):
             self.audit()
         inspect.assert_not_called()
+
+    @patch("reuse.inspect_apk")
+    def test_sibling_bytes_are_disk_observations_not_an_executed_code_fingerprint(self, inspect):
+        bundle = self.root / "sibling-bundle"
+        bundle.mkdir()
+        for name in ("reuse.py", "equivalence.py", "evidence.py", "artifact.py"):
+            (bundle / name).write_bytes(Path(reuse.__file__).with_name(name).read_bytes())
+        replacement = b"# replaced after the audit helpers were imported\n"
+        (bundle / "artifact.py").write_bytes(replacement)
+        inspect.side_effect = self.inspect
+        # Imported helpers still come from the original location, whereas the
+        # sibling observation points at different, subsequently changed bytes.
+        self.assertNotEqual(bundle / "artifact.py", Path(reuse.checked_apk_bytes.__code__.co_filename))
+        with patch("reuse.__file__", str(bundle / "reuse.py")):
+            result = self.audit()
+        self.assertNotIn("audit_policy_sha256", result)
+        self.assertEqual("post_audit_sibling_disk_bytes_not_executed_code",
+                         result["policy_observation_scope"])
+        self.assertEqual(hashlib.sha256(replacement).hexdigest(),
+                         result["post_audit_policy_files_sha256"]["artifact.py"])
+        self.assertIn("immutable_executed_policy_bundle", result["unimplemented_admission_checks"])
+        self.assertFalse(result["eligible_for_reuse"])
+
+    @patch("reuse.inspect_apk")
+    def test_sdk_failure_stays_primary_when_temporary_cleanup_also_fails(self, inspect):
+        temporary = tempfile.TemporaryDirectory(dir=self.root)
+        real_cleanup = temporary.cleanup
+        sdk_failure = subprocess.CalledProcessError(1, ["apksigner"])
+        cleanup_failure = OSError("temporary cleanup failed")
+        inspect.side_effect = sdk_failure
+        try:
+            with patch("reuse.tempfile.TemporaryDirectory", return_value=temporary), \
+                    patch.object(temporary, "cleanup", side_effect=cleanup_failure):
+                with self.assertRaises(subprocess.CalledProcessError) as raised:
+                    self.audit()
+            self.assertIs(sdk_failure, raised.exception)
+            self.assertEqual((cleanup_failure,), raised.exception.localica_cleanup_failures)
+        finally:
+            real_cleanup()
+
+    @patch("reuse.inspect_apk")
+    def test_cleanup_only_failure_prevents_a_success_receipt(self, inspect):
+        temporary = tempfile.TemporaryDirectory(dir=self.root)
+        real_cleanup = temporary.cleanup
+        cleanup_failure = OSError("temporary cleanup failed")
+        inspect.side_effect = self.inspect
+        try:
+            with patch("reuse.tempfile.TemporaryDirectory", return_value=temporary), \
+                    patch.object(temporary, "cleanup", side_effect=cleanup_failure):
+                with self.assertRaises(OSError) as raised:
+                    self.audit()
+            self.assertIs(cleanup_failure, raised.exception)
+        finally:
+            real_cleanup()
+
+    @patch("reuse.inspect_apk")
+    def test_caller_mutation_after_freeze_does_not_change_consumed_metadata_hashes(self, inspect):
+        original = {name: hashlib.sha256(json.dumps(value, sort_keys=True,
+                    separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+                    for name, value in (("run", self.run), ("jobs", self.jobs), ("artifacts", self.artifacts))}
+        def mutate_caller(path, tools, **expected):
+            self.run["head_sha"] = "c" * 40
+            self.jobs["jobs"][0]["conclusion"] = "failure"
+            self.artifacts["artifacts"][0]["digest"] = "sha256:" + "0" * 64
+            return self.inspect(path, tools, **expected)
+        inspect.side_effect = mutate_caller
+        result = self.audit()
+        self.assertEqual(original, result["canonical_metadata_sha256"])
+        self.assertEqual(self.producer, result["metadata"]["producer_commit"])
+        self.assertEqual(self.digest, result["metadata"]["artifact_digest"])
 
 
 if __name__ == "__main__":

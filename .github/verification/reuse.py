@@ -19,6 +19,7 @@ from evidence import eligible_metadata
 
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 PENDING_CHECKS = (
+    "immutable_executed_policy_bundle",
     "complete_original_reports",
     "resolved_toolchain_dependencies_environment",
     "normal_full_policy_bootstrap",
@@ -81,8 +82,10 @@ def audit_identity(repo, producer, release, run, jobs, artifacts, archive, build
     expected_identity = {"package": "io.github.anastaci1a.localica.debug",
                          "version_code": code, "version_name": version,
                          "signer_certificates_sha256": [certificate]}
-    with tempfile.TemporaryDirectory(prefix="localica-identity-audit-") as directory:
-        temporary = Path(directory)
+    directory = tempfile.TemporaryDirectory(prefix="localica-identity-audit-")
+    primary_failure = None
+    try:
+        temporary = Path(directory.name)
         snapshot = temporary / "original.zip"
         snapshot_archive(archive, snapshot)
         apk_bytes, apk_hash = checked_apk_bytes(snapshot, metadata["artifact_digest"])
@@ -94,6 +97,24 @@ def audit_identity(repo, producer, release, run, jobs, artifacts, archive, build
             raise ValueError("SDK-inspected APK bytes changed during the identity audit")
         if identity != expected_identity:
             raise ValueError("SDK identity contradicts the committed expectations")
+    except BaseException as failure:
+        primary_failure = failure
+        raise
+    finally:
+        try:
+            directory.cleanup()
+        except BaseException as cleanup_failure:
+            if primary_failure is None:
+                raise
+            # Preserve the exact SDK/inspection failure and its traceback. The
+            # secondary exception remains machine-readable as well as visible.
+            primary_failure.localica_cleanup_failures = (
+                *getattr(primary_failure, "localica_cleanup_failures", ()), cleanup_failure)
+            if hasattr(primary_failure, "add_note"):
+                primary_failure.add_note("Audit temporary cleanup also failed: " + repr(cleanup_failure))
+    # These bytes are observations of siblings on disk after the audit, not a
+    # fingerprint of imported code. Imports can come from elsewhere or predate
+    # file replacement; immutable executed-bundle admission is still pending.
     policies = {name: sha256(Path(__file__).with_name(name).read_bytes())
                 for name in ("reuse.py", "equivalence.py", "evidence.py", "artifact.py")}
     return {
@@ -106,12 +127,14 @@ def audit_identity(repo, producer, release, run, jobs, artifacts, archive, build
         "equivalence": equivalence,
         "metadata": metadata,
         "canonical_metadata_sha256": {name: sha256(value) for name, value in metadata_bytes.items()},
-        "audit_policy_sha256": policies,
+        "policy_observation_scope": "post_audit_sibling_disk_bytes_not_executed_code",
+        "post_audit_policy_files_sha256": policies,
         "apk_sha256": apk_hash,
         "apk_identity": identity,
         "limits": [
             "Metadata snapshots must be fetched from GitHub by the trusted caller.",
             "Literal committed version expectations are not resolved build-configuration proof.",
+            "Sibling file hashes are post-audit disk observations, not executed-code fingerprints.",
             "No complete report, native tested-APK/overlay or toolchain admission is implemented.",
             "No workflow integration, job skipping, publication or release authorization.",
         ],
