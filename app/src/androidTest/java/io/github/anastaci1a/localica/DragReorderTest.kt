@@ -105,7 +105,16 @@ class DragReorderTest {
                 ForegroundSongDragOverlay(host)
                 }
             } }
-            compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty() }
+            var arranged = false
+            compose.waitUntil(5000) {
+                // The playlist hero is real; arrange the song viewport once before
+                // measuring drag geometry, rather than assuming five rows start onscreen.
+                if (!arranged && compose.onAllNodesWithTag("media-${playlist.entries.first().id}").fetchSemanticsNodes().isNotEmpty()) {
+                    compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.first().id)
+                    arranged = true
+                }
+                compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty()
+            }
             test(controller, playlist)
         } finally { queries.release(); scope.cancel(); db.close() }
     }

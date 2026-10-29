@@ -30,6 +30,8 @@ class BrowseInteractionTest {
         val first = "media-${playlist.entries.first().id}"
         val last = "media-${playlist.entries.last().id}"
         compose.onAllNodes(isToggleable()).assertCountEquals(0)
+        // Arrange both occurrences above the selection panel before contact.
+        compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.first().id)
         compose.onNodeWithTag(last).performClick()
         compose.runOnIdle { assertEquals(1, played); played = null }
         compose.onNodeWithTag(last).performTouchInput { longClick() }
@@ -60,6 +62,7 @@ class BrowseInteractionTest {
                     route, {}, {}, {}, { _, _, _ -> plays++ }, null, null, true, false)
             } } }
             compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for Held").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.single().id)
             val dots = compose.onNodeWithContentDescription("Actions for Held")
             var held = false
             try {
