@@ -296,6 +296,16 @@ class PinchReleaseHandoffTest {
             }
             false
         }
+        // Validation-only comparison on this exact native PixelMap snapshot.
+        val referenceRows = (top until bottom).filter { y ->
+            (if (fullWidth) 0 until pixels.width else pixels.width * 2 / 3 until pixels.width * 3 / 4).count { x ->
+                val color = pixels[x, y]
+                color.red - color.green > .07f && color.blue - color.green > .07f
+            } >= 3
+        }
+        assertEquals("Threshold scan must preserve every qualifying native pixel row", referenceRows, rows)
+        android.util.Log.i("PinchRowEquivalence",
+            "rows=${rows.size} top=$top bottom=$bottom width=${pixels.width} fullWidth=$fullWidth")
         assertTrue("Presented target-row highlight must be visible", rows.isNotEmpty())
         return (rows.first() + rows.last() + 1) / 2f
     }
