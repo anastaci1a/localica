@@ -216,7 +216,7 @@ class NavigationRandomCorpusFilesTest {
     }
 
     private fun withRoot(block: (File) -> Unit) {
-        val cache = InstrumentationRegistry.getInstrumentation().context.cacheDir
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
         val allocated = File.createTempFile("navigation-files-test-", ".owned", cache)
         check(allocated.delete() && allocated.mkdir())
         val root = allocated.canonicalFile
