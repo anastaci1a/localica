@@ -179,8 +179,8 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
 
-    def test_sixty_one_distinct_affected_classes_are_rejected_before_instrumentation(self):
-        classes = self.distinct_affected_sources(61)
+    def test_seventy_distinct_affected_classes_are_rejected_before_instrumentation(self):
+        classes = self.distinct_affected_sources(70)
         self.run_case(2,AFFECTED_CLASSES=','.join(classes))
         self.assertFalse((self.root/'argv.json').exists())
 
@@ -234,6 +234,18 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
     def test_sixty_distinct_affected_classes_keep_every_method_and_sentinel(self):
         classes = self.distinct_affected_sources(60)
+        self.run_case(AFFECTED_CLASSES=','.join(classes))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
+        self.assertEqual(expected,set(evidence['counts']))
+        self.assertEqual({c+'#regression' for c in expected},set(evidence['methods']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST},set(evidence['required_selectors']))
+        self.assertTrue(all(outcome == 'passed' for outcome in evidence['methods'].values()))
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertEqual(expected,set(args[-1].split('=',1)[1].split(',')))
+
+    def test_sixty_nine_distinct_affected_classes_keep_every_method_and_sentinel(self):
+        classes = self.distinct_affected_sources(69)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
@@ -400,7 +412,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_optimized_python_cannot_disable_reconciliation(self):
         self.run_case(1,PYTHONOPTIMIZE='1')
 
-    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*61))
+    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*70))
     def test_too_long(self): self.run_case(2,AFFECTED_CLASSES='x'*4097)
     def test_missing_source(self):
         (self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')).unlink()
@@ -683,6 +695,30 @@ class InsertedWorkflowContract(unittest.TestCase):
         self.assertTrue(set(actual).issubset((ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()))
         self.assertLessEqual(len(','.join(sorted(set(actual) | {REQUIRED, FOCUS, CONTRAST}))), 4096)
         self.assertIn('branches: [test/dev75-feedback-20261028]', text)
+        self.assertIn('needs: protocol_contracts', text)
+        self.assertIn('uses: ./.github/workflows/prototype.yml', text)
+        self.assertNotIn('continue-on-error:', text)
+        self.assertNotIn('|| true', text)
+
+    def test_dev76_preserves_all_sixty_dev75_classes_and_exact_nine_additions(self):
+        import re
+        workflow = ROOT/'.github/workflows'
+        previous = re.findall(r'^      affected_classes: (.+)$', (workflow/'prototype-dev75-feedback.yml').read_text(), re.MULTILINE)[0].split(',')
+        text = (workflow/'prototype-dev76-next-insertion.yml').read_text()
+        actual = re.findall(r'^      affected_classes: (.+)$', text, re.MULTILINE)[0].split(',')
+        added = {'io.github.anastaci1a.localica.' + name for name in (
+            'PlayerPausedSkipTest', 'LargeQueueTransportTest', 'PreviousPlaybackTest',
+            'QueueFileEditTest', 'QueueInitialSaveWorkTest', 'QueueJourneyPersistenceTest',
+            'QueuePersistenceTest', 'QueueRecoveryTest', 'QueueRestoreTest')}
+        self.assertEqual(60, len(previous))
+        self.assertEqual(69, len(actual))
+        self.assertEqual(69, len(set(actual)))
+        self.assertEqual(set(previous) | added, set(actual))
+        self.assertEqual(added, set(actual) - set(previous))
+        self.assertFalse({REQUIRED, FOCUS, CONTRAST}.intersection(actual))
+        self.assertTrue(set(actual).issubset((ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()))
+        self.assertLessEqual(len(','.join(sorted(set(actual) | {REQUIRED, FOCUS, CONTRAST}))), 4096)
+        self.assertIn('branches: [test/dev76-next-insertion-20261028]', text)
         self.assertIn('needs: protocol_contracts', text)
         self.assertIn('uses: ./.github/workflows/prototype.yml', text)
         self.assertNotIn('continue-on-error:', text)
