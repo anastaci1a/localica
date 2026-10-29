@@ -243,8 +243,11 @@ class NavigationRandomCorpusAdmissionTest {
             target.contentResolver.query(uri, null, null, null, null)?.close()
             fail("Expected framework MANAGE_DOCUMENTS denial, not a provider query")
         } catch (failure: SecurityException) {
-            assertTrue("Expected MANAGE_DOCUMENTS permission denial: $failure",
-                failure.message.orEmpty().contains("android.permission.MANAGE_DOCUMENTS"))
+            val message = failure.message.orEmpty()
+            assertTrue("Expected denial opening the registered provider: $failure",
+                message.startsWith("Permission Denial: opening provider ${provider.name} from "))
+            assertTrue("Expected document-access denial for this calling process: $failure",
+                message.endsWith(" (pid=${Process.myPid()}, uid=${Process.myUid()}) requires that you obtain access using ACTION_OPEN_DOCUMENT or related APIs"))
         }
     }
 
