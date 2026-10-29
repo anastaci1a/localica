@@ -92,16 +92,17 @@ class FullPartitionTest(unittest.TestCase):
         folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
         folder.mkdir(parents=True)
         methods = [('ScopedSearchOpticsTest', 'searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
-                   ('FloatingImeLifecycleTest', 'actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30)]
+                   ('FloatingImeLifecycleTest', 'actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
+                   ('GlassRendererSwitchingTest', 'modernSwitchingDoesNotReplaceAnUnavailableRequestedHomeWithThePrimary', 33)]
         for cls, method, minimum in methods:
             (folder/(cls+'.kt')).write_text('package io.github.anastaci1a.localica\nimport org.junit.Test\nclass '+cls+
                 ' { @Test @androidx.test.filters.SdkSuppress(minSdkVersion = '+str(minimum)+') fun '+method+'() {} }')
         legacy = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         modern = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
-        self.assertEqual(2, len(legacy['sdk_omissions']))
+        self.assertEqual(3, len(legacy['sdk_omissions']))
         self.assertEqual(4, len(legacy['expected']))
         self.assertEqual([], modern['sdk_omissions'])
-        self.assertEqual(6, len(modern['expected']))
+        self.assertEqual(7, len(modern['expected']))
         self.assertEqual({row['id'] for row in legacy['sdk_omissions']}, set(modern['expected'])-set(legacy['expected']))
         path = folder/'FloatingImeLifecycleTest.kt'
         original = path.read_text()
@@ -110,6 +111,28 @@ class FullPartitionTest(unittest.TestCase):
             path.write_text(changed)
             with self.assertRaises(ValueError):
                 partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+
+    def test_renderer_sdk_exception_cannot_hide_another_method_or_changed_requirement(self):
+        folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
+        folder.mkdir(parents=True)
+        path = folder/'GlassRendererSwitchingTest.kt'
+        original = ('package io.github.anastaci1a.localica\nimport org.junit.Test\n'
+                    'class GlassRendererSwitchingTest { '
+                    '@Test @androidx.test.filters.SdkSuppress(minSdkVersion = 33) '
+                    'fun modernSwitchingDoesNotReplaceAnUnavailableRequestedHomeWithThePrimary() {} '
+                    '@Test fun legacyStillRuns() {} }')
+        path.write_text(original)
+        for api in ('26', '36'):
+            manifest = partition.plan(self.root, ['example.RiskTest'], api, 'a'*40)
+            self.assertIn('io.github.anastaci1a.localica.GlassRendererSwitchingTest#legacyStillRuns', manifest['expected'])
+        for changed in [original.replace('minSdkVersion = 33', 'minSdkVersion = 34'),
+                        original.replace('fun modernSwitchingDoesNotReplace', 'fun renamedDoesNotReplace'),
+                        original.replace('@Test fun legacyStillRuns',
+                            '@Test @androidx.test.filters.SdkSuppress(minSdkVersion = 33) fun legacyStillRuns')]:
+            path.write_text(changed)
+            for api in ('26', '36'):
+                with self.subTest(api=api, changed=changed), self.assertRaises(ValueError):
+                    partition.plan(self.root, ['example.RiskTest'], api, 'a'*40)
 
     def test_malformed_count_and_xml_entity_fail_closed(self):
         p=self.remaining/'TEST.xml';original=p.read_text()
