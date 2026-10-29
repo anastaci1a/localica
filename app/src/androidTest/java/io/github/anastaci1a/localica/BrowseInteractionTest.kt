@@ -37,6 +37,9 @@ class BrowseInteractionTest {
         compose.onNodeWithTag(last).performTouchInput { longClick() }
         compose.onNodeWithText("Select song").assertDoesNotExist()
         compose.onNodeWithText("1 selected").assertIsDisplayed()
+        // The selection panel changes the available viewport; locate the other
+        // real occurrence before selecting it rather than assuming it stays composed.
+        compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.first().id)
         compose.onNodeWithTag(first).performClick()
         compose.runOnIdle { assertNull(played) }
         compose.onNodeWithText("2 selected").assertIsDisplayed()

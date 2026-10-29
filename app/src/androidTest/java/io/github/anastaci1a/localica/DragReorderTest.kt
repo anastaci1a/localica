@@ -109,7 +109,11 @@ class DragReorderTest {
             compose.waitUntil(5000) {
                 // The playlist hero is real; arrange the song viewport once before
                 // measuring drag geometry, rather than assuming five rows start onscreen.
-                if (!arranged && compose.onAllNodesWithTag("media-${playlist.entries.first().id}").fetchSemanticsNodes().isNotEmpty()) {
+                var sourceReady = false
+                compose.runOnUiThread {
+                    sourceReady = fixtureDragHost.state?.items?.any { it.key == playlist.entries.first().id } == true
+                }
+                if (!arranged && sourceReady) {
                     compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.first().id)
                     arranged = true
                 }
@@ -253,9 +257,28 @@ class DragReorderTest {
                 }
                 compose.mainClock.advanceTimeBy(128)
                 compose.runOnIdle { assertSame(transaction, owner.drag); assertFalse(transaction.dropping) }
+                fun reportDrop(phase: String) {
+                    compose.runOnUiThread {
+                        val current = owner.drag
+                        android.util.Log.i("DragCheckpoint", "phase=$phase virtualMs=" + compose.mainClock.currentTime +
+                            " uptimeMs=" + android.os.SystemClock.uptimeMillis() +
+                            " sameOwner=" + (fixtureDragHost.state === owner) + " sameDrag=" + (current === transaction) +
+                            " dropping=" + current?.dropping + " landing=" + current?.landing?.value +
+                            " landingRunning=" + current?.landing?.isRunning + " handoff=" + current?.handoff?.value +
+                            " handoffRunning=" + current?.handoff?.isRunning + " destinations=" + current?.destinations?.keys +
+                            " pendingQueries=" + queries.pending.size + " queryBlocked=" + queries.blocked +
+                            " savedOrder=" + controller.state.value.playlists.single().entries.map { it.id })
+                    }
+                }
                 list.performTouchInput { up(); held = false }
                 compose.mainClock.autoAdvance = true
-                compose.waitUntil(5000) { owner.drag == null }
+                try { reportDrop("after-up") } catch (_: Throwable) { /* Diagnostic only. */ }
+                try {
+                    compose.waitUntil(5000) { owner.drag == null }
+                } catch (failure: Throwable) {
+                    try { reportDrop("retirement-failure") } catch (diagnostic: Throwable) { failure.addSuppressed(diagnostic) }
+                    throw failure
+                }
                 compose.runOnIdle {
                     assertFalse(selection.active)
                     val saved = controller.state.value.playlists.single().entries.map { it.id }
