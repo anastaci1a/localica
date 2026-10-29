@@ -31,6 +31,7 @@ Settings categories are Interface, Playback and queues, Library and tags, About/
 
 | Control | Range / treatment |
 | --- | --- |
+| Glass renderer | Automatic (default), Modern on Android 13+, or Legacy. Changes apply across glass surfaces without restarting. Unsupported restored Modern stays saved while using Legacy, with an explanation; Cancel preserves the saved choice. Reset returns to Automatic. |
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |
