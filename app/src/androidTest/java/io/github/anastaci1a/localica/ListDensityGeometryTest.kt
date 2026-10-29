@@ -30,7 +30,12 @@ class ListDensityGeometryTest {
         fileName = "song.mp3", relativePath = "song.mp3")
     private val row = SongRow(track.id, track)
     private val item = BrowserItem(MediaRef(MediaKind.Song, track.id), track.title, null, listOf(row), row)
-    private fun bounds(part: String) = compose.onNodeWithTag("browse-$part-${item.key}", true).fetchSemanticsNode().boundsInRoot
+    private fun bounds(part: String): Rect = try {
+        compose.onNodeWithTag("browse-$part-${item.key}", true).fetchSemanticsNode().boundsInRoot
+    } catch (failure: Throwable) {
+        runCatching { android.util.Log.e("DensityMeasureProbe", "Original bounds fetch failed for part=$part", failure) }
+        throw failure
+    }
 
     @Test fun denseRowsKeepTrailingInformationAndRespectNarrowWidthsAndLargeFonts() {
         var size by mutableStateOf(ListSize.Compact)
@@ -38,11 +43,13 @@ class ListDensityGeometryTest {
         var fontScale by mutableFloatStateOf(1f)
         var density = 1f
         var clicks = 0
+        val probe = DensityMeasureProbe()
+        try {
         compose.setContent { LocalicaTheme {
             density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
                 LookaheadScope {
-                    Box(Modifier.width(width.dp).testTag("density-card")) {
+                    Box(Modifier.width(width.dp).then(probe).testTag("density-card")) {
                         BrowseItemLayout(item, BrowseStyle(listSize = size, extraInfo = ExtraInfo.Artist),
                             BrowseCellGeometry(1), this@LookaheadScope, true, menu = { ActionIcon(R.drawable.ic_ellipsis, "Density actions", quiet = true) { clicks++ } })
                     }
@@ -50,10 +57,10 @@ class ListDensityGeometryTest {
             }
         } }
         for (available in listOf(292, 232)) for (scale in listOf(1f, 2f)) {
-            compose.runOnIdle { width = available; fontScale = scale }
+            compose.runOnIdle { probe.phase = "width=$available font=$scale"; width = available; fontScale = scale }
             var previousHeight = Float.POSITIVE_INFINITY
             for (mode in listOf(ListSize.Compact, ListSize.Small, ListSize.Smallest)) {
-                compose.runOnIdle { size = mode }
+                compose.runOnIdle { probe.phase = "width=$available font=$scale mode=$mode virtual=${compose.mainClock.currentTime}"; size = mode }
                 compose.waitForIdle()
                 compose.onNodeWithText("Artist information", substring = true).assertExists()
                 val title = bounds("text"); val info = bounds("info"); val menu = bounds("menu")
@@ -77,6 +84,7 @@ class ListDensityGeometryTest {
                 }
             }
         }
+        } finally { runCatching { probe.report() } }
     }
 
     @Test fun consecutiveCoversUseHalfNormalGapAndFixedCompactPitch() {
@@ -237,4 +245,55 @@ class ListDensityGeometryTest {
         compose.onNodeWithText("1").assertDoesNotExist()
     }
 
+}
+
+/** Diagnostic-only identity layout. No geometry/state/readback mutation; bounded strings only.
+ * An added layout modifier and timestamp/allocation overhead can perturb scheduling. */
+private class DensityMeasureProbe : androidx.compose.ui.layout.LayoutModifier {
+    @Volatile var phase = "initial"
+    private val next = java.util.concurrent.atomic.AtomicInteger()
+    private val active = java.util.concurrent.atomic.AtomicInteger()
+    private val offMain = java.util.concurrent.atomic.AtomicInteger()
+    private val rows = java.util.concurrent.atomic.AtomicReferenceArray<String>(64)
+    private val firstOffMain = java.util.concurrent.atomic.AtomicReference<String?>()
+
+    private fun record(event: String, detail: String = "") {
+        val thread = Thread.currentThread()
+        val main = android.os.Looper.myLooper() == android.os.Looper.getMainLooper()
+        if (!main) {
+            offMain.incrementAndGet()
+            if (firstOffMain.get() == null) firstOffMain.compareAndSet(null,
+                thread.stackTrace.take(24).joinToString("\n"))
+        }
+        val index = next.getAndIncrement()
+        rows.set(index % rows.length(), "index=$index uptime=${android.os.SystemClock.uptimeMillis()} " +
+            "thread=${thread.name}/${thread.id} main=$main active=${active.get()} phase=$phase event=$event $detail")
+    }
+
+    override fun androidx.compose.ui.layout.MeasureScope.measure(
+        measurable: androidx.compose.ui.layout.Measurable,
+        constraints: androidx.compose.ui.unit.Constraints,
+    ): androidx.compose.ui.layout.MeasureResult {
+        active.incrementAndGet()
+        try {
+            record("measure-enter", constraints.toString())
+            val child = measurable.measure(constraints)
+            record("measure-result", "width=${child.width} height=${child.height} lookahead=$isLookingAhead")
+            return layout(child.width, child.height) {
+                record("place-enter")
+                try { child.place(0, 0) } finally { record("place-exit") }
+            }
+        } finally {
+            record("measure-exit")
+            active.decrementAndGet()
+        }
+    }
+
+    fun report() {
+        val end = next.get()
+        android.util.Log.i("DensityMeasureProbe", "post-test non-atomic history; events=$end offMain=${offMain.get()} active=${active.get()} phase=$phase")
+        for (index in maxOf(0, end - rows.length()) until end)
+            rows.get(index % rows.length())?.let { android.util.Log.i("DensityMeasureProbe", it) }
+        firstOffMain.get()?.let { android.util.Log.i("DensityMeasureProbe", "first off-main callback stack: $it") }
+    }
 }
