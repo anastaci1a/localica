@@ -554,7 +554,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             }
         }
         val keyboard = LocalSoftwareKeyboardController.current
-        LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
+        val editingDecisionTrace = LocalTextEditingDecisionTrace.current
+        LaunchedEffect(visible) { if (!visible) {
+            editingDecisionTrace?.invoke("explicitHide reason=glassNotVisible host=${System.identityHashCode(view)}")
+            keyboard?.hide()
+        } }
         val p = progress.value.coerceIn(0f, 1f)
         val geometry = glassMorphGeometryProgress(p, anchor.quiet)
         val admittedDraw = continuousOrigin == null || originAdmitted && readyWindow === window

@@ -46,9 +46,15 @@ class ListSearchTest {
         val tracks = (0..30).map { Track("height:$it", "Song ${it.toString().padStart(3, '0')}",
             fileName = "$it.mp3", relativePath = "$it.mp3") }
         var lastSample: SearchMorphSample? = null
+        val decisions = java.util.Collections.synchronizedList(mutableListOf<String>())
+        fun decision(event: String) {
+            decisions.add("${android.os.SystemClock.uptimeMillis()} $event")
+        }
         try {
             compose.setContent { LocalicaTheme {
-                CompositionLocalProvider(LocalSearchMorphObserver provides { lastSample = it }) {
+                CompositionLocalProvider(
+                    LocalTextEditingDecisionTrace provides { decision("text $it") },
+                    LocalSearchMorphObserver provides { lastSample = it }) {
                     BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("height-root", "Music")),
                         tracks = tracks), loading = false), PlaylistState(), route, {}, {}, {},
                         { _, _, _ -> }, null, null, true, false, queryDispatcher = Dispatchers.Unconfined)
@@ -58,8 +64,10 @@ class ListSearchTest {
             compose.onNodeWithTag("list-search-pill").performClick()
             awaitSearchFocus()
             fun query(text: String) {
+                decision("query-start length=${text.length}")
                 compose.onNode(hasSetTextAction()).performClick()
                 awaitSearchFocus()
+                decision("query-focused")
                 compose.onNode(hasSetTextAction()).performTextReplacement(text)
                 compose.waitUntil(5000) {
                     val first = compose.onAllNodesWithTag("media-height:0").fetchSemanticsNodes().size
@@ -76,6 +84,7 @@ class ListSearchTest {
             }
             fun height() = compose.onNodeWithTag("list-search-popup").fetchSemanticsNode().boundsInRoot.height
             fun commit() {
+                decision("commit-start")
                 compose.awaitSearchImeHandoff { compose.onNode(hasSetTextAction()).performImeAction() }
                 compose.onNode(hasSetTextAction()).assertIsNotFocused()
                 compose.waitForIdle()
@@ -105,6 +114,10 @@ class ListSearchTest {
             compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Song 030"))
             compose.onNodeWithText("Song 030").assertIsDisplayed()
         } finally {
+            // Preserve failure decisions without per-frame logging or an input interceptor.
+            val snapshot = synchronized(decisions) { decisions.toList() }
+            snapshot.forEachIndexed { index, event -> android.util.Log.i("ScopedRefocusDecision", "event=$index $event") }
+            android.util.Log.i("ScopedRefocusDecision", "complete count=${snapshot.size}")
             preferences.write(route, previous, false)
         }
     }

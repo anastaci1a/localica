@@ -1,22 +1,19 @@
-name: Dev77 zero-height baseline comparison (isolated, not delivery)
+name: Dev77 scoped refocus owner (isolated diagnostic, not delivery)
 'on':
   push:
     branches:
-    - test/dev77-zero-height-baseline-20261029
-    - test/dev77-zero-height-candidate-20261029
+    - test/dev77-scoped-refocus-owner-20261029
 permissions:
   contents: read
 concurrency:
-  group: dev77-zero-height-${{ github.ref }}
+  group: dev77-refocus-owner-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   ime_26:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      AFFECTED_CLASSES: ${{ github.ref == 'refs/heads/test/dev77-zero-height-candidate-20261029'
-        && 'io.github.anastaci1a.localica.ScopedSearchHistoryTest,io.github.anastaci1a.localica.TextEditingNativeImeTest'
-        || 'io.github.anastaci1a.localica.ScopedSearchHistoryTest' }}
+      AFFECTED_CLASSES: io.github.anastaci1a.localica.ScopedSearchHistoryTest
       TEST_API: '26'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -84,7 +81,7 @@ jobs:
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
-        name: dev77-zero-height-api-26
+        name: dev77-refocus-owner-api-26
         path: 'app/build/reports/
 
           app/build/test-results/
@@ -98,15 +95,12 @@ jobs:
           prototype-runner-environment.txt'
         if-no-files-found: error
         retention-days: 14
-    name: Zero-height comparison API26 (not delivery)
+    name: Scoped refocus owner API26 (not delivery)
   ime_36:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      AFFECTED_CLASSES: ${{ github.ref == 'refs/heads/test/dev77-zero-height-candidate-20261029'
-        && 'io.github.anastaci1a.localica.ScopedSearchHistoryTest,io.github.anastaci1a.localica.FloatingImeLifecycleTest,io.github.anastaci1a.localica.TextEditingNativeImeTest'
-        || 'io.github.anastaci1a.localica.ScopedSearchHistoryTest,io.github.anastaci1a.localica.FloatingImeLifecycleTest'
-        }}
+      AFFECTED_CLASSES: io.github.anastaci1a.localica.ScopedSearchHistoryTest,io.github.anastaci1a.localica.FloatingImeLifecycleTest
       TEST_API: '36'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -174,7 +168,7 @@ jobs:
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
-        name: dev77-zero-height-api-36
+        name: dev77-refocus-owner-api-36
         path: 'app/build/reports/
 
           app/build/test-results/
@@ -188,4 +182,4 @@ jobs:
           prototype-runner-environment.txt'
         if-no-files-found: error
         retention-days: 14
-    name: Zero-height comparison API36 (not delivery)
+    name: Scoped refocus owner API36 (not delivery)

@@ -61,6 +61,17 @@ internal class TextEditingImeSession {
     }
 }
 
+/** Decision-only sink: no platform input interception, callbacks or native polling. */
+internal val LocalTextEditingDecisionTrace = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+private fun textEditingDecisionHost(view: android.view.View): String {
+    val insets = if (android.os.Build.VERSION.SDK_INT >= 30) view.rootWindowInsets else null
+    val native = if (android.os.Build.VERSION.SDK_INT >= 30)
+        "nativeVisible=${insets?.isVisible(android.view.WindowInsets.Type.ime())} nativeHeight=${insets?.getInsets(android.view.WindowInsets.Type.ime())?.bottom}"
+        else "nativeVisible=unsupported nativeHeight=unsupported"
+    return "host=${System.identityHashCode(view)} attached=${view.isAttachedToWindow} nativeWindow=${view.hasWindowFocus()} $native"
+}
+
 internal val LocalTextEditingObservation = staticCompositionLocalOf<((String) -> Unit)?> { null }
 
 private val textEditingInputIds = AtomicLong()
@@ -131,7 +142,10 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
     val emptySearchBack by rememberUpdatedState(LocalEmptySearchBack.current)
     val beginSearchReturn by rememberUpdatedState(LocalSearchReturnStart.current)
     val observe by rememberUpdatedState(LocalTextEditingObservation.current)
+    val decisionTrace by rememberUpdatedState(LocalTextEditingDecisionTrace.current)
+    val decisionView = androidx.compose.ui.platform.LocalView.current
     fun endEditing(reason: String) {
+        decisionTrace?.invoke("endEditing reason=$reason session=${System.identityHashCode(imeSession)} focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget empty=${emptySearchBack != null} ${textEditingDecisionHost(decisionView)}")
         observe?.invoke("endEditing reason=$reason focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
         if (emptySearchBack != null) beginSearchReturn?.invoke()
         restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
@@ -141,13 +155,14 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
         val end = imeSession.shouldEnd(focused, windowFocused, keyboardVisible, keyboardHeight,
             keyboardSource, keyboardTarget, endAtHideStart = emptySearchBack != null)
         observe?.invoke("imeDecision end=$end focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
+        decisionTrace?.invoke("imeDecision end=$end session=${System.identityHashCode(imeSession)} focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget empty=${emptySearchBack != null} ${textEditingDecisionHost(decisionView)}")
         if (end) {
             // IME-owned Back announces its zero target before its last visible
             // frame. Empty search returns home immediately, independently of it.
             endEditing("imeObservation")
         }
     }
-    return onFocusChanged { focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
+    return onFocusChanged { decisionTrace?.invoke("focusChanged session=${System.identityHashCode(imeSession)} old=$focused new=${it.isFocused}"); focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
         if (focused && event.key == Key.Back) {
             if (event.type == KeyEventType.KeyUp) endEditing("backKey")
             true

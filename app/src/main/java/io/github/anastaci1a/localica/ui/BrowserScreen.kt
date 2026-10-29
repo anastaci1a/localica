@@ -132,6 +132,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val routeFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val focus = scopedEditor?.focus ?: routeFocus
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val editingDecisionTrace = LocalTextEditingDecisionTrace.current
     val resultsFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
     var focusedRequest by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(-1) }
@@ -140,6 +141,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (scopedEditor != null && !scopedEditor.active) return
         // Cancel a pending frame-delayed focus request before ending this input session.
         focusedOnce = true; focusedRequest = focusRequest; inputCompletion++
+        editingDecisionTrace?.invoke("explicitHide reason=submitSearch key=${route.key.hashCode()} committed=${route.queryCommitted} textLength=${route.text.length}")
         onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
     }
     val panelReady = LocalGlassPanelReady.current
@@ -165,6 +167,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             // requestFocus. Back restores results, so explicitly end that input session.
             withFrameNanos { }
             if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
+            editingDecisionTrace?.invoke("explicitHide reason=restoreResultsFocus key=${route.key.hashCode()} committed=${route.queryCommitted} editorFocused=${scopedEditor?.focused}")
             resultsFocus.requestFocus(); keyboard?.hide()
             restoreResultsFocus = false
             reportSearchOpening?.invoke(false)
