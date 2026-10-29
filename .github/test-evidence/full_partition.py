@@ -57,19 +57,28 @@ def plan(root, risks, api, sha, run_id='0', attempt='0'):
     inv = discover(root)
     require(set(risks) <= set(inv['selectors']), 'Risk class outside complete source inventory')
     omissions = []
-    # This is the sole existing source-level SDK exclusion, not a missing-ID waiver.
-    # Reject any changed declaration or additional SDK filter until reviewed.
-    sdk_path = 'app/src/androidTest/java/io/github/anastaci1a/localica/ScopedSearchOpticsTest.kt'
-    sdk_id = 'io.github.anastaci1a.localica.ScopedSearchOpticsTest#searchLensRedrawsWhenItsListBackdropArrivesLater'
+    # Reviewed API-specific contracts, not missing-ID waivers. Keep exact
+    # file/method/annotation guards; every other SDK filter fails closed.
+    sdk_contracts = {
+        'ScopedSearchOpticsTest': ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
+        'FloatingImeLifecycleTest': ('actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
+    }
     for path in inv['all_source_sha256']:
         text = (root/path).read_text()
         if 'SdkSuppress' in text:
-            require(path == sdk_path, 'Unreviewed SDK-filtered source')
-            require(re.search(r'@Test\s+@androidx\.test\.filters\.SdkSuppress\(minSdkVersion = 33\)\s+fun searchLensRedrawsWhenItsListBackdropArrivesLater\(', text), 'Changed SDK exclusion declaration')
+            cls = Path(path).stem
+            require(cls in sdk_contracts and path == 'app/src/androidTest/java/io/github/anastaci1a/localica/' + cls + '.kt',
+                    'Unreviewed SDK-filtered source')
+            method, minimum = sdk_contracts[cls]
+            declaration = (r'@Test\s+@androidx\.test\.filters\.SdkSuppress\(minSdkVersion = ' +
+                           str(minimum) + r'\)\s+fun ' + re.escape(method) + r'\(')
+            require(re.search(declaration, text), 'Changed SDK exclusion declaration')
             require(text.count('SdkSuppress') == 1, 'Additional SDK exclusions require review')
-            if api == '26':
-                require(sdk_id in inv['runtime_methods'], 'SDK exclusion lacks source method')
-                omissions.append({'id': sdk_id, 'reason': 'Existing minSdkVersion=33 annotation', 'source': path, 'source_sha256': inv['all_source_sha256'][path]})
+            sdk_id = 'io.github.anastaci1a.localica.' + cls + '#' + method
+            require(sdk_id in inv['runtime_methods'], 'SDK exclusion lacks source method')
+            if int(api) < minimum:
+                omissions.append({'id': sdk_id, 'reason': 'Reviewed minSdkVersion=' + str(minimum) + ' annotation',
+                                  'source': path, 'source_sha256': inv['all_source_sha256'][path]})
     expected = set(inv['runtime_methods']) - {x['id'] for x in omissions}
     preflight = {x for x in expected if x.split('#')[0] in risks}
     remaining = expected - preflight
