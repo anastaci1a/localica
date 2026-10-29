@@ -96,7 +96,7 @@ class PopupShadowContinuityTest {
         }
         try {
             compose.runOnIdle { open = true }
-            advance(1200)
+            measureNativeSuiteCost("popup-endpoint") { advance(1200) }
             val window = popupWindow
             assertNotNull(window)
             verifyField("first-open")
@@ -133,7 +133,7 @@ class PopupShadowContinuityTest {
             assertFalse(anchor.shadowInModal)
             // A complete close/reopen uses a new window, not an old retained shadow.
             compose.runOnIdle { open = true }
-            advance(1200)
+            measureNativeSuiteCost("popup-endpoint") { advance(1200) }
             assertNotSame(window, popupWindow)
             verifyField("replacement-window")
         } finally {
@@ -325,24 +325,28 @@ class PopupShadowContinuityTest {
                 }
             assertTrue("The swept exterior must include a measurable shadow", exteriorCount > 20)
             File(output, "profiles.txt").appendText("$name sweptCount=$exteriorCount sweptMean=${exteriorError/exteriorCount} sweptMax=$exteriorMaximum\n")
-            // Save the entire synthetic popup region so off-axis trails are reviewable.
-            val fullLeft = sweptBounds.left.roundToInt().coerceIn(0, on.width-1)
-            val fullTop = sweptBounds.top.roundToInt().coerceIn(0, on.height-1)
-            val fullWidth = (sweptBounds.right.roundToInt()-fullLeft).coerceIn(1, on.width-fullLeft)
-            val fullHeight = (sweptBounds.bottom.roundToInt()-fullTop).coerceIn(1, on.height-fullTop)
-            val fullCrop = Bitmap.createBitmap(on, fullLeft, fullTop, fullWidth, fullHeight)
-            try { File(output, "$name-field.png").outputStream().use { fullCrop.compress(Bitmap.CompressFormat.PNG, 100, it) } }
-            finally { fullCrop.recycle() }
+            measureNativeSuiteCost("popup-field-encode") {
+                // Save the entire synthetic popup region so off-axis trails are reviewable.
+                val fullLeft = sweptBounds.left.roundToInt().coerceIn(0, on.width-1)
+                val fullTop = sweptBounds.top.roundToInt().coerceIn(0, on.height-1)
+                val fullWidth = (sweptBounds.right.roundToInt()-fullLeft).coerceIn(1, on.width-fullLeft)
+                val fullHeight = (sweptBounds.bottom.roundToInt()-fullTop).coerceIn(1, on.height-fullTop)
+                val fullCrop = Bitmap.createBitmap(on, fullLeft, fullTop, fullWidth, fullHeight)
+                try { File(output, "$name-field.png").outputStream().use { fullCrop.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+                finally { fullCrop.recycle() }
+            }
             assertTrue("$name must not leave an old shadow or material silhouette anywhere outside the current outline: max=$exteriorMaximum mean=${exteriorError/exteriorCount}",
                 exteriorMaximum < .055f && exteriorError/exteriorCount < .015f)
-            // Keep a complete perpendicular shadow profile as well.
-            val left = (right + 2*d*sx).roundToInt().coerceIn(0, on.width - 1)
-            val top = (screen.center.y - 8*d*sy).roundToInt().coerceIn(0, on.height - 1)
-            val width = (38*d*sx).roundToInt().coerceIn(1, on.width - left)
-            val height = (16*d*sy).roundToInt().coerceIn(1, on.height - top)
-            val crop = Bitmap.createBitmap(on, left, top, width, height)
-            try { File(output, "$name.png").outputStream().use { crop.compress(Bitmap.CompressFormat.PNG, 100, it) } }
-            finally { crop.recycle() }
+            measureNativeSuiteCost("popup-profile-encode") {
+                // Keep a complete perpendicular shadow profile as well.
+                val left = (right + 2*d*sx).roundToInt().coerceIn(0, on.width - 1)
+                val top = (screen.center.y - 8*d*sy).roundToInt().coerceIn(0, on.height - 1)
+                val width = (38*d*sx).roundToInt().coerceIn(1, on.width - left)
+                val height = (16*d*sy).roundToInt().coerceIn(1, on.height - top)
+                val crop = Bitmap.createBitmap(on, left, top, width, height)
+                try { File(output, "$name.png").outputStream().use { crop.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+                finally { crop.recycle() }
+            }
             File(output, "profiles.txt").appendText("$name progress=$p scale=$sx,$sy expected=${expectedTotal/count} actual=${actualTotal/count} maximumError=$maximumError\n")
             assertTrue("$name must retain one complete shadow field: expected=${expectedTotal/count}, actual=${actualTotal/count}, max=$maximumError",
                 maximumError < .035f && abs(actualTotal - expectedTotal) / count < .015f)

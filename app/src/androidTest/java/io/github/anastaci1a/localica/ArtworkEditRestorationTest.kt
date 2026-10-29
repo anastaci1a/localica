@@ -30,8 +30,10 @@ class ArtworkEditRestorationTest {
         val existing = crops.listFiles()?.toSet().orEmpty()
         try {
             Bitmap.createBitmap(600, 300, Bitmap.Config.ARGB_8888).let { bitmap ->
-                for (x in 0 until bitmap.width) for (y in 0 until bitmap.height)
-                    bitmap.setPixel(x, y, android.graphics.Color.rgb(x * 255 / 600, y * 255 / 300, 80))
+                measureNativeSuiteCost("artwork-pixel-initialization") {
+                    for (x in 0 until bitmap.width) for (y in 0 until bitmap.height)
+                        bitmap.setPixel(x, y, android.graphics.Color.rgb(x * 255 / 600, y * 255 / 300, 80))
+                }
                 input.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
                 bitmap.recycle()
             }
