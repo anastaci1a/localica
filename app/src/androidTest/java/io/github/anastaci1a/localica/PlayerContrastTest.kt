@@ -7,6 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
@@ -73,15 +74,26 @@ class PlayerContrastTest {
     @Test fun fullPlayerAndItsPopupFollowArtworkChanges() {
         var lightArtwork by mutableStateOf(false)
         var popup by mutableStateOf(false)
+        // Actual artwork is required: a palette-only placeholder is deliberately
+        // unavailable to the background sampler when the controls overlap its face.
+        val visuals = listOf(Color.Black, Color.White).mapIndexed { index, color ->
+            val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(if (index == 0) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+            }
+            PlayerVisual(bitmap.asImageBitmap(), PlayerPalette(color, color, color))
+        }
+        val polarity = PlayerBackgroundPolarityState()
+        var composedInk: PlayerInkComposition? = null
         var playerInk = Color.Unspecified
         var popupInk = Color.Unspecified
         var popupSecondary = Color.Unspecified
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
-            val color = if (lightArtwork) Color.White else Color.Black
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(
+            LocalPlayerInkCompositionObserver provides { composedInk = it }) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
             PlayerSurface(io.github.anastaci1a.localica.playback.PlaybackState(title = "Contrast"), true, {},
                 io.github.anastaci1a.localica.navigation.InterfaceSettings(reducedMotion = true),
                 remember { androidx.compose.animation.core.Animatable(1f) }, {}, {}, {}, {}, {}, {},
-                visual = PlayerVisual(palette = PlayerPalette(color, color, color))) {
+                visual = visuals[if (lightArtwork) 1 else 0], backgroundPolarity = polarity) {
                 playerInk = MaterialTheme.colorScheme.onSurface
                 if (popup) GlassDialog({ popup = false }) {
                     popupInk = LocalContentColor.current
@@ -89,10 +101,26 @@ class PlayerContrastTest {
                     Box(Modifier.size(80.dp))
                 }
             }
-        } } }
+        } } } }
         for (light in listOf(false, true)) {
             compose.runOnIdle { lightArtwork = light; popup = true }
-            compose.waitForIdle()
+            // UI idle does not join the background sampler. Require the current
+            // source decision to reach the real provider; never poll for expected ink.
+            try {
+                compose.waitUntil(5000) {
+                    val frame = polarity.frame
+                    val observed = composedInk
+                    val color = if (light) Color.White else Color.Black
+                    polarity.decision.confidence == PlayerBackgroundConfidence.Current &&
+                        frame != null && frame.roles.isNotEmpty() &&
+                        frame.roles.all { it.visual.palette.top == color } &&
+                        observed != null && observed.decision === polarity.decision && observed.frame === frame
+                }
+            } catch (failure: Throwable) {
+                failure.addSuppressed(AssertionError("Player contrast readiness: decision=" + polarity.decision +
+                    "; frame=" + polarity.frame + "; composed=" + composedInk))
+                throw failure
+            }
             compose.runOnIdle {
                 assertEquals(!light, playerInk.red > .5f)
                 assertEquals(!light, popupInk.red > .5f)
