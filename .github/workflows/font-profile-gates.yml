@@ -1,7 +1,7 @@
 name: Native font profile gates (not delivery)
 'on':
   push:
-    branches: [dev/full-candidate-dev78-20261029]
+    branches: [dev/full-renderer-dev78-20261029]
 permissions:
   contents: read
 jobs:
