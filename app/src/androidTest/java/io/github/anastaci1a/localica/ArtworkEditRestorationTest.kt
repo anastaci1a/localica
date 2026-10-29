@@ -30,8 +30,13 @@ class ArtworkEditRestorationTest {
         val existing = crops.listFiles()?.toSet().orEmpty()
         try {
             Bitmap.createBitmap(600, 300, Bitmap.Config.ARGB_8888).let { bitmap ->
-                for (x in 0 until bitmap.width) for (y in 0 until bitmap.height)
-                    bitmap.setPixel(x, y, android.graphics.Color.rgb(x * 255 / 600, y * 255 / 300, 80))
+                // Preserve every opaque fixture pixel, avoiding per-pixel JNI writes.
+                val pixels = IntArray(bitmap.width * bitmap.height) { index ->
+                    val x = index % bitmap.width
+                    val y = index / bitmap.width
+                    android.graphics.Color.rgb(x * 255 / 600, y * 255 / 300, 80)
+                }
+                bitmap.setPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
                 input.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
                 bitmap.recycle()
             }
