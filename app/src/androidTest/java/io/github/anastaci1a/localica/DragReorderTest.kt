@@ -105,7 +105,20 @@ class DragReorderTest {
                 ForegroundSongDragOverlay(host)
                 }
             } }
-            compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty() }
+            var arranged = false
+            compose.waitUntil(5000) {
+                // The playlist hero is real; arrange the song viewport once before
+                // measuring drag geometry, rather than assuming five rows start onscreen.
+                var sourceReady = false
+                compose.runOnUiThread {
+                    sourceReady = selection.visible.any { it.id == playlist.entries.first().id }
+                }
+                if (!arranged && sourceReady) {
+                    compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.first().id)
+                    arranged = true
+                }
+                compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty()
+            }
             test(controller, playlist)
         } finally { queries.release(); scope.cancel(); db.close() }
     }
@@ -244,9 +257,36 @@ class DragReorderTest {
                 }
                 compose.mainClock.advanceTimeBy(128)
                 compose.runOnIdle { assertSame(transaction, owner.drag); assertFalse(transaction.dropping) }
+                fun reportDrop(phase: String) {
+                    compose.runOnUiThread {
+                        val current = owner.drag
+                        android.util.Log.i("DragCheckpoint", "phase=$phase virtualMs=" + compose.mainClock.currentTime +
+                            " uptimeMs=" + android.os.SystemClock.uptimeMillis() +
+                            " sameOwner=" + (fixtureDragHost.state === owner) + " sameDrag=" + (current === transaction) +
+                            " dropping=" + current?.dropping + " landing=" + current?.landing?.value +
+                            " landingRunning=" + current?.landing?.isRunning + " handoff=" + current?.handoff?.value +
+                            " handoffRunning=" + current?.handoff?.isRunning + " destinations=" + current?.destinations?.keys +
+                            " pendingQueries=" + queries.pending.size + " queryBlocked=" + queries.blocked +
+                            " savedOrder=" + controller.state.value.playlists.single().entries.map { it.id })
+                    }
+                }
                 list.performTouchInput { up(); held = false }
                 compose.mainClock.autoAdvance = true
-                compose.waitUntil(5000) { owner.drag == null }
+                try { reportDrop("after-up") } catch (_: Throwable) { /* Diagnostic only. */ }
+                try {
+                    compose.waitUntil(5000) {
+                        // No contact or intermediate placement oracle remains after UP.
+                        // Batch at most four ordinary frames for this lifecycle endpoint;
+                        // the original wall deadline and exact retirement condition stay.
+                        compose.runOnUiThread {
+                            repeat(4) { if (owner.drag != null) compose.mainClock.advanceTimeByFrame() }
+                        }
+                        owner.drag == null
+                    }
+                } catch (failure: Throwable) {
+                    try { reportDrop("retirement-failure") } catch (diagnostic: Throwable) { failure.addSuppressed(diagnostic) }
+                    throw failure
+                }
                 compose.runOnIdle {
                     assertFalse(selection.active)
                     val saved = controller.state.value.playlists.single().entries.map { it.id }
