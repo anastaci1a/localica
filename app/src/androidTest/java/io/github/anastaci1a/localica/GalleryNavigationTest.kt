@@ -27,44 +27,44 @@ class GalleryNavigationTest {
             Track("song:$n", "Visible song $name", album = "Album $name", fileName = "$n.mp3", relativePath = "$n.mp3")
         }
         try {
-            compose.setContent { LocalicaTheme {
+            compose.fixtureCostPhase("Gallery.mount") { compose.setContent { LocalicaTheme {
                 LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false),
                     PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
                     playlist = PlaylistState(loading = false))
-            } }
+            } } }
             for (n in listOf("000", "005", "030", "061")) {
-                compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
-                compose.scrollToUncoveredItem(hasText("Album $n"))
+                compose.fixtureCostPhase("Gallery.$n.await-list") { compose.waitUntil(5000) { compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() } }
+                compose.fixtureCostPhase("Gallery.$n.scroll") { compose.scrollToUncoveredItem(hasText("Album $n")) }
                 compose.onNodeWithContentDescription("Actions for Album $n").assertDoesNotExist()
-                compose.onNodeWithText("Album $n").performTouchInput { longClick() }
-                compose.waitUntil(3000) { runCatching { compose.onNodeWithText("Select all songs").assertIsDisplayed() }.isSuccess }
+                compose.fixtureCostPhase("Gallery.$n.long-click") { compose.onNodeWithText("Album $n").performTouchInput { longClick() } }
+                compose.fixtureCostPhase("Gallery.$n.await-menu") { compose.waitUntil(3000) { runCatching { compose.onNodeWithText("Select all songs").assertIsDisplayed() }.isSuccess } }
                 try { compose.onNodeWithText("Select all songs").assertIsDisplayed() } catch (error: Throwable) {
                     android.util.Log.e("GalleryProbe", "Album $n: " + compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 20))
                     androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
                         .takeScreenshot(java.io.File(context.getExternalFilesDir(null), "gallery-failure.png"))
                     throw error
                 }
-                pressSystemBack()
-                compose.waitUntil(5000) { compose.onAllNodesWithText("Select all songs").fetchSemanticsNodes().isEmpty() }
-                compose.onNodeWithText("Album $n").performTouchInput { click() }
-                compose.waitUntil(5000) { compose.onAllNodesWithText("Visible song $n").fetchSemanticsNodes().isNotEmpty() }
+                compose.fixtureCostPhase("Gallery.$n.dismiss-menu") { pressSystemBack() }
+                compose.fixtureCostPhase("Gallery.$n.await-dismiss") { compose.waitUntil(5000) { compose.onAllNodesWithText("Select all songs").fetchSemanticsNodes().isEmpty() } }
+                compose.fixtureCostPhase("Gallery.$n.open") { compose.onNodeWithText("Album $n").performTouchInput { click() } }
+                compose.fixtureCostPhase("Gallery.$n.await-detail") { compose.waitUntil(5000) { compose.onAllNodesWithText("Visible song $n").fetchSemanticsNodes().isNotEmpty() } }
                 val song = compose.onNodeWithText("Visible song $n")
                 song.assertIsDisplayed()
                 // Hit targets alone previously passed while the actual pixels remained stale.
-                val image = song.captureToImage().toPixelMap()
+                val image = compose.fixtureCostPhase("Gallery.$n.capture") { song.captureToImage().toPixelMap() }
                 val colors = buildSet { for (y in 0 until image.height) for (x in 0 until image.width) add(image[x, y]) }
                 assertTrue("Song text must actually render for $n", colors.size > 8)
-                compose.onNodeWithContentDescription("Back").performTouchInput { click() }
-                compose.waitUntil(5000) { runCatching {
+                compose.fixtureCostPhase("Gallery.$n.back") { compose.onNodeWithContentDescription("Back").performTouchInput { click() } }
+                compose.fixtureCostPhase("Gallery.$n.await-return") { compose.waitUntil(5000) { runCatching {
                     compose.onNode(hasText("Album $n") and hasClickAction()).assertIsDisplayed()
-                }.isSuccess }
+                }.isSuccess } }
                 compose.onNodeWithText("Album $n").assertIsDisplayed()
-                compose.onNodeWithContentDescription("Search library").performTouchInput { click() }
-                compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(n)
-                compose.onNode(hasSetTextAction()).assertTextContains(n).performImeAction()
-                compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Visible song $n"))
+                compose.fixtureCostPhase("Gallery.$n.search-open") { compose.onNodeWithContentDescription("Search library").performTouchInput { click() } }
+                compose.fixtureCostPhase("Gallery.$n.search-type") { compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(n) }
+                compose.fixtureCostPhase("Gallery.$n.ime-action") { compose.onNode(hasSetTextAction()).assertTextContains(n).performImeAction() }
+                compose.fixtureCostPhase("Gallery.$n.search-scroll") { compose.onNodeWithTag("browser-list").performScrollToNode(hasText("Visible song $n")) }
                 compose.onNodeWithText("Visible song $n").assertIsDisplayed()
-                compose.onNodeWithContentDescription("Library").performTouchInput { click() }
+                compose.fixtureCostPhase("Gallery.$n.reset") { compose.onNodeWithContentDescription("Library").performTouchInput { click() } }
             }
         } finally {
             context.getSharedPreferences("interface", 0).edit().clear().commit()
