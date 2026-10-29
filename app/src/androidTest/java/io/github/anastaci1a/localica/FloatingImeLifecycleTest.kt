@@ -108,7 +108,8 @@ class FloatingImeLifecycleTest {
         return File(root, "floating-ime-lifecycle").apply { mkdirs() }
     }
 
-    @Test fun actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen() {
+    @Test @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
+    fun actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen() {
         check(Build.VERSION.SDK_INT >= 30) { "This isolated real-window contract requires native IME visibility" }
         val testPackage = InstrumentationRegistry.getInstrumentation().context.packageName
         val component = "$testPackage/io.github.anastaci1a.localica.FloatingTestImeService"
