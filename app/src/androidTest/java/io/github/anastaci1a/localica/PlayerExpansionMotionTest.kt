@@ -464,6 +464,7 @@ class PlayerExpansionMotionTest {
         compose.waitForIdle()
         var previous = playerArtworkSizeProgress(.5f, requireNotNull(growth).curve)
         var crossedBelow = false
+        var sawBlendPair = false
         for (factor in listOf(1.05f, .95f, 1.05f, .95f)) {
             compose.runOnIdle { selectedVisual = visual.copy(palette = visual.palette.copy(aspect = aspectAtMiniHeight * factor)) }
             repeat(40) {
@@ -473,13 +474,23 @@ class PlayerExpansionMotionTest {
                 val q = playerArtworkSizeProgress(.5f, observed.curve)
                 assertEquals("Aspect animation cannot switch to quadratic at a 32 dp dimension", previous, q, .05f)
                 assertEquals("Aspect animation preserves held finger progress", .5f, observed.expansion, 0f)
-                val artwork = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
-                assertEquals("Native width uses the continuous extreme-aspect curve", 32f + (observed.fullWidth - 32f) * q, artwork.width.value, 1f)
-                assertEquals("Native height may shrink continuously below mini size", 32f + (observed.fullHeight - 32f) * q, artwork.height.value, 1f)
+                // Aspect changes also crossfade the visual. Unmerged semantics retains
+                // the cleared outgoing tree, so validate every real cover layer rather
+                // than demanding a unique node or silently choosing one of the pair.
+                val artworks = compose.onAllNodesWithTag("player-artwork", true)
+                val artworkCount = artworks.fetchSemanticsNodes().size
+                assertTrue("The actual cover has one settled layer or an outgoing/incoming pair", artworkCount in 1..2)
+                sawBlendPair = sawBlendPair || artworkCount == 2
+                repeat(artworkCount) { index ->
+                    val artwork = artworks[index].getUnclippedBoundsInRoot()
+                    assertEquals("Every native layer uses the continuous extreme-aspect width", 32f + (observed.fullWidth - 32f) * q, artwork.width.value, 1f)
+                    assertEquals("Every native layer may shrink continuously below mini size", 32f + (observed.fullHeight - 32f) * q, artwork.height.value, 1f)
+                }
                 crossedBelow = crossedBelow || observed.fullHeight < 32f
                 previous = q
             }
         }
+        assertTrue("Native fixture observes the outgoing and incoming cover during the actual blend", sawBlendPair)
         assertTrue("Native fixture must actually cross the degeneracy", crossedBelow)
         assertTrue("Reversal restores the other side of mini height", requireNotNull(growth).fullHeight > 32f)
     }
