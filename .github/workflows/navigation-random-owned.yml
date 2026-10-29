@@ -1,7 +1,7 @@
-name: Navigation random corpus owned bridge contracts (not delivery)
+name: Navigation random corpus resident target contracts (not delivery)
 'on':
   push:
-    branches: [test/navigation-random-owned-validation-20261029]
+    branches: [test/navigation-random-owned-session-20261029]
 permissions:
   contents: read
 jobs:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusAdmissionTest#registeredProviderRejectsUngrantableTargetQueryAtFrameworkPermissionBoundary
+      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusTargetProbeTest,io.github.anastaci1a.localica.NavigationRandomOwnedSessionProtocolTest
       TEST_API: '26'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -42,7 +42,9 @@ jobs:
 
         '
     - name: Compile instrumentation APKs before starting emulator
-      run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      run: |
+        ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        ./gradlew :app:dependencyInsight --configuration debugAndroidTestRuntimeClasspath --dependency androidx.test:monitor --no-daemon --max-workers=2 > monitor-dependency.txt
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 26
@@ -85,7 +87,9 @@ jobs:
 
           selection-evidence/
 
-          prototype-runner-environment.txt'
+          prototype-runner-environment.txt
+
+          monitor-dependency.txt'
         if-no-files-found: error
         retention-days: 14
     - name: Retain exact validated APK pair for owned installation review
@@ -105,7 +109,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusAdmissionTest#registeredProviderRejectsUngrantableTargetQueryAtFrameworkPermissionBoundary
+      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusTargetProbeTest,io.github.anastaci1a.localica.NavigationRandomOwnedSessionProtocolTest
       TEST_API: '36'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -138,7 +142,9 @@ jobs:
 
         '
     - name: Compile instrumentation APKs before starting emulator
-      run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      run: |
+        ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        ./gradlew :app:dependencyInsight --configuration debugAndroidTestRuntimeClasspath --dependency androidx.test:monitor --no-daemon --max-workers=2 > monitor-dependency.txt
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 36
@@ -181,7 +187,9 @@ jobs:
 
           selection-evidence/
 
-          prototype-runner-environment.txt'
+          prototype-runner-environment.txt
+
+          monitor-dependency.txt'
         if-no-files-found: error
         retention-days: 14
     name: Navigation random corpus owned bridge API 36 (required, not release)
