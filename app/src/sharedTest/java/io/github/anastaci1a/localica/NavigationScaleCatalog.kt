@@ -26,7 +26,7 @@ internal class NavigationScaleQueueRequest internal constructor(identities: List
 }
 
 /**
- * Platform-free SOURCE-ONLY planning contract. Operator input preference is still pending.
+ * Platform-free SOURCE-ONLY synthetic-control planning contract; not approval to stage inputs.
  * These 13,313 identities are not files, scanned rows, grants or an installed fixture. The authority
  * is supplied by the caller; accepting it does not prove provider or installation ownership.
  *
@@ -39,7 +39,7 @@ internal class NavigationScaleCatalog(val authority: String) {
         require(AUTHORITY.matches(authority)) { "Require a lowercase, unambiguous provider authority" }
     }
 
-    val inputPreferencePending: Boolean = true
+    val isSyntheticControl: Boolean = true
     val repeatedAssetName: String = "queue-tone.mp3"
     val repeatedAssetSha256: String = "93b3ad40749d4b57cba6e5bb77ffd697b36c04ba007c04f036ac26a72953f7f2"
     val assetProvenancePath: String = "app/src/androidTest/assets/README.txt"
