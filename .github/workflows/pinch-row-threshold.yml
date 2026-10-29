@@ -1,0 +1,129 @@
+name: Isolated pinch row threshold comparison (not release)
+'on':
+  push:
+    branches: [test/pinch-row-threshold-20261029]
+permissions:
+  contents: read
+concurrency:
+  group: pinch-row-threshold-20261029
+  cancel-in-progress: false
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: e3ac4f31ed506b55f39e9fa806010106ea0965bd
+          path: reviewed-harness
+      - name: Validate fail-closed pinch contracts
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s controller/.github/pinch-row-threshold -p 'test_*.py' -v
+          python3 -m unittest discover -s reviewed-harness/.github/suite-cost -p 'test_run_paired.py' -v
+          bash -n controller/.github/pinch-row-threshold/run-pinch.sh
+          python3 controller/.github/pinch-row-threshold/run_pinch.py --config controller/.github/pinch-row-threshold/config.json --print-refs
+  native:
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        api: [26, 36]
+    env:
+      TEST_API: ${{ matrix.api }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+      - name: Resolve pinned source references
+        id: refs
+        run: python3 controller/.github/pinch-row-threshold/run_pinch.py --config controller/.github/pinch-row-threshold/config.json --print-refs >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: e3ac4f31ed506b55f39e9fa806010106ea0965bd
+          path: reviewed-harness
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.refs.outputs.baseline_sha }}
+          fetch-depth: 0
+          path: baseline
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.refs.outputs.candidate_sha }}
+          path: candidate
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.refs.outputs.equivalence_sha }}
+          path: equivalence
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Install unchanged supervised evidence publishers
+        run: |
+          for variant in baseline candidate equivalence; do
+            npm ci --prefix "$variant/.github/test-evidence" --ignore-scripts --no-audit --no-fund
+          done
+      - name: Record runner and source identity
+        run: |
+          mkdir runner-evidence
+          (cd controller && git rev-parse HEAD && git rev-parse 'HEAD^{tree}' && sha256sum .github/pinch-row-threshold/run_pinch.py .github/pinch-row-threshold/run-pinch.sh .github/pinch-row-threshold/test_run_pinch.py .github/pinch-row-threshold/config.json .github/workflows/pinch-row-threshold.yml) > runner-evidence/controller.txt
+          (cd baseline && bash .github/test-evidence/environment.sh) > runner-evidence/environment.txt
+          cp baseline/gradle/libs.versions.toml runner-evidence/
+          cp baseline/gradle/wrapper/gradle-wrapper.properties runner-evidence/
+          cp controller/.github/pinch-row-threshold/config.json runner-evidence/config.json
+          for variant in baseline candidate equivalence; do
+            (cd "$variant" && git rev-parse HEAD && sha256sum app/src/androidTest/java/io/github/anastaci1a/localica/PinchReleaseHandoffTest.kt) > "runner-evidence/$variant.txt"
+          done
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Compile exact variants before emulator startup
+        run: |
+          for variant in baseline candidate equivalence; do
+            (cd "$variant" && ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2)
+          done
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.api < 36 }}
+          script: |
+            adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
+            adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
+            sleep 60
+            (cd baseline && bash .github/test-evidence/environment.sh) >> runner-evidence/environment.txt
+            bash controller/.github/pinch-row-threshold/run-pinch.sh "$PWD/baseline" "$PWD/candidate" "$PWD/equivalence" "$PWD/reviewed-harness" "$PWD/controller/.github/pinch-row-threshold/config.json" "$PWD/pinch-evidence" "${{ matrix.api }}"
+      - name: Preserve original native evidence and immutable APKs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pinch-row-threshold-api-${{ matrix.api }}
+          if-no-files-found: error
+          path: |
+            pinch-evidence/
+            runner-evidence/
+            baseline/app/build/outputs/androidTest-results/
+            baseline/app/build/outputs/connected_android_test_additional_output/
+            baseline/app/build/reports/androidTests/
+            candidate/app/build/outputs/androidTest-results/
+            candidate/app/build/outputs/connected_android_test_additional_output/
+            candidate/app/build/reports/androidTests/
+            equivalence/app/build/outputs/androidTest-results/
+            equivalence/app/build/outputs/connected_android_test_additional_output/
+            equivalence/app/build/reports/androidTests/

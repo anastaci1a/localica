@@ -1,0 +1,10 @@
+{
+  "baseline_sha": "39f5b6a4a27fc46c907b2d4c184c2ef5e3a0bb56",
+  "candidate_sha": "1110f738b1fa6d9fb4b931d080acc917b1b6644e",
+  "equivalence_sha": "089b19857d6a7e43c9bcf4dd6ca0e8d88ba59218",
+  "test_sha256": {
+    "baseline": "d3db15e260c809ce6b664b44b39553e25a10d5cc2daed5ebe28e5742093ce2a0",
+    "candidate": "b858cc592af12ddeba4a91f9f6bfa93b3b4030d758a4bfd9ed90da3a78f16810",
+    "equivalence": "59cb330bdb5d6cecd6a45353089548433a06a4122f747112f8a06e1e28c2cceb"
+  }
+}
