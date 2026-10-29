@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
+import org.json.JSONArray
 
 /**
  * One explicitly selected target-UID observation/mutation, not an installation admission authority.
@@ -289,16 +290,34 @@ internal object NavigationRandomCorpusTargetProbe {
                 check(!app.scanner.state.value.running && app.scanner.state.value.folder == null) { "Unexpected scan work appeared" }
             }
             for (tree in TREES) worker.call(COMMAND_TIMEOUT_MS) { runBlocking { app.library.addFolder(tree.toString()) } }
-            val monitor = ScanMonitor()
+            val monitor = ScanMonitor(TREES.map(Uri::toString).toSet())
             val observer = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-            observer.launch(start = CoroutineStart.UNDISPATCHED) { app.scanner.state.collect { monitor.observe(it) } }
+            var scanObservationWritten = false
             try {
-                onMain { app.scanner.start(TREES.map(Uri::toString)) } // Unit, not a successful-scan receipt.
-                val terminal = awaitValue(SCAN_TIMEOUT_MS, "production scan terminal state") { monitor.terminal() }
-                check(terminal.message == "Scan complete." && terminal.completedFolders == 2 && terminal.totalFolders == 2 && terminal.count == 13_413 &&
-                    !monitor.hasUnexpectedRoot() && monitor.observedRoots() == TREES.map(Uri::toString).toSet()) { "Production scan did not observe both successful roots" }
-                journal.append(event("scan_terminal").put("completed_roots", terminal.completedFolders)
-                    .put("inspected_locations", terminal.count).put("message", terminal.message))
+                onMain {
+                    check(normallyForeground()) { "Normal foreground activity was lost" }
+                    // Folder additions suspend. Revalidate AFTER them, immediately before this start.
+                    monitor.arm(app.scanner.state.value)
+                    observer.launch(start = CoroutineStart.UNDISPATCHED) { app.scanner.state.collect { monitor.observe(it) } }
+                    app.scanner.start(TREES.map(Uri::toString)) // Unit, never a success receipt.
+                }
+                awaitValue(SCAN_TIMEOUT_MS, "production scan terminal state") {
+                    monitor.snapshot().takeIf { it.terminal != null || it.invalidReason != null }
+                }
+                val observed = onMain {
+                    val snapshot = monitor.snapshot()
+                    // One Main-turn observation of current state and the coherent monitor snapshot.
+                    snapshot.copy(currentMatchesTerminal = snapshot.terminal == app.scanner.state.value)
+                }
+                journal.append(scanObservation(observed)) // Preserve counters/roots/message even on rejection.
+                scanObservationWritten = true
+                check(observed.accepts(13_413)) { "Production scan did not observe one matching successful cycle" }
+            } catch (failure: Throwable) {
+                if (!scanObservationWritten) {
+                    try { journal.append(scanObservation(monitor.snapshot())) }
+                    catch (recordFailure: Throwable) { if (recordFailure !== failure) failure.addSuppressed(recordFailure) }
+                }
+                throw failure
             } finally { observer.cancel() } // Observation only; NEVER cancel the app's scanner job.
             val snapshot = readLibrary(target, worker, COMMAND_TIMEOUT_MS)
             requireScanned(binding, snapshot)
@@ -464,20 +483,67 @@ internal object NavigationRandomCorpusTargetProbe {
         }
     }
 
-    private class ScanMonitor {
+    internal data class ScanObservation(val started: Boolean, val expectedRoots: Set<String>,
+        val roots: Set<String>, val terminal: ScanState?, val latest: ScanState?,
+        val invalidReason: String?, val currentMatchesTerminal: Boolean = false) {
+        fun accepts(expectedCount: Int): Boolean = started && invalidReason == null &&
+            currentMatchesTerminal && roots == expectedRoots && terminal?.let {
+                !it.running && it.folder == null && it.message == "Scan complete." &&
+                    it.completedFolders == expectedRoots.size && it.totalFolders == expectedRoots.size && it.count == expectedCount
+            } == true
+    }
+
+    /** Observed transitions only, NOT a production run-ID receipt or nonconflating event log. */
+    internal class ScanMonitor(private val expectedRoots: Set<String>) {
+        private var armed = false
         private var started = false
         private val roots = linkedSetOf<String>()
-        private var unexpectedRoot = false
         private var result: ScanState? = null
-        @Synchronized fun observe(state: ScanState) {
-            if (state.running) {
-                started = true
-                state.folder?.let { if (it in TREES.map(Uri::toString)) roots += it else unexpectedRoot = true }
-            } else if (started) result = state
+        private var latest: ScanState? = null
+        private var invalidReason: String? = null
+        @Synchronized fun arm(state: ScanState) {
+            check(!armed && invalidReason == null && expectedRoots.size == 2) { "Scan observer already armed or wrong roots" }
+            check(state == ScanState()) { "Scan state is not fresh idle immediately before start" }
+            armed = true
+            latest = state
         }
-        @Synchronized fun terminal(): ScanState? = result
-        @Synchronized fun observedRoots(): Set<String> = roots.toSet()
-        @Synchronized fun hasUnexpectedRoot(): Boolean = unexpectedRoot
+        @Synchronized fun observe(state: ScanState) {
+            latest = state
+            if (!armed) { invalidReason = "state observed before arm"; return }
+            if (invalidReason != null) return
+            if (state.running) {
+                if (result != null) {
+                    invalidReason = "later running cycle observed"
+                    result = null
+                    return
+                }
+                started = true
+                state.folder?.let {
+                    if (it in expectedRoots) roots += it else invalidReason = "unexpected root observed"
+                }
+            } else if (started) {
+                if (result != null && result != state) invalidReason = "terminal state changed"
+                else result = state
+            } else if (state != ScanState()) invalidReason = "idle changed without observed start"
+        }
+        @Synchronized fun snapshot() = ScanObservation(started, expectedRoots.toSet(), roots.toSet(),
+            result, latest, invalidReason)
+    }
+
+    private fun scanObservation(observed: ScanObservation): JSONObject {
+        fun state(value: ScanState?): Any = value?.let {
+            JSONObject().put("running", it.running).put("count", it.count)
+                .put("folder", it.folder?.take(512) ?: JSONObject.NULL)
+                .put("completed_folders", it.completedFolders).put("total_folders", it.totalFolders)
+                .put("message", it.message?.take(512) ?: JSONObject.NULL)
+        } ?: JSONObject.NULL
+        return event("scan_observation").put("started", observed.started)
+            .put("observed_roots", JSONArray(observed.roots.sorted()))
+            .put("expected_roots", JSONArray(observed.expectedRoots.sorted()))
+            .put("terminal", state(observed.terminal)).put("latest", state(observed.latest))
+            .put("invalid_reason", observed.invalidReason ?: JSONObject.NULL)
+            .put("current_matches_terminal", observed.currentMatchesTerminal)
+            .put("run_id_receipt", false).put("stateflow_may_conflate", true)
     }
 
     private fun requirePersistedReadOnly(context: Context) {
