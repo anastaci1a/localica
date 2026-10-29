@@ -6,7 +6,7 @@ set -euo pipefail
 [[ ! -e selection-evidence && ! -e app/build/outputs/androidTest-results ]]
 source .github/prepare-device-tests.sh
 mkdir selection-evidence
-printf 'sha=%s\nrun=%s\napi=%s\nselectors=%s\nowned_bridge_contracts_only=true\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$TEST_API" "$SELECTORS" > selection-evidence/identity.txt
+printf 'sha=%s\nrun=%s\napi=%s\nselectors=%s\nowned_target_contracts_only=true\nresident_operation_selected=false\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$TEST_API" "$SELECTORS" > selection-evidence/identity.txt
 sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > selection-evidence/input-apks.sha256
 set +e
 python3 .github/test-evidence/supervise.py --output selection-evidence/native --sha "$GITHUB_SHA" --api "$TEST_API" --lane native --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$SELECTORS"

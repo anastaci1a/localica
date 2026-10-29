@@ -71,9 +71,9 @@ import org.json.JSONObject
  * already be resumed. On failure this hook does not clear/revoke/stop app state or its partial
  * report; timeout is NOT evidence that platform or app work terminated. The host owns reconciliation.
  * These warming checks establish neither cold performance nor decoded-payload/artwork validity.
- * AndroidJUnitRunner 1.6.2 still terminates its process at finish: disabling its ActivityFinisher
- * does NOT preserve MainActivity/player beyond invocation. That host lifecycle gate needs separate
- * review before real use; this hook only refrains from teardown during its own lifetime.
+ * AndroidJUnitRunner terminates its process at finish. Real execution requires the dedicated
+ * resident entry point; disabling the ordinary runner's ActivityFinisher is not sufficient.
+ * Resident startup still requires the host's fresh never-launched-target prerequisite.
  */
 internal object NavigationRandomCorpusTargetProbe {
     const val OPT_IN_ARGUMENT = "localicaNavigationRandomOwned"
@@ -144,6 +144,7 @@ internal object NavigationRandomCorpusTargetProbe {
     fun failureText(value: String): String = value.take(MAX_FAILURE_TEXT_CHARS)
 
     fun runOwned(instrumentation: Instrumentation) {
+        check(instrumentation is NavigationRandomOwnedSession) { "Real owned operation requires the resident session, not terminal JUnit execution" }
         val arguments = InstrumentationRegistry.getArguments()
         validateInvocation(arguments.getString(OPT_IN_ARGUMENT), arguments.getString("class"),
             arguments.getString(RUNNER_ACTIVITY_WAIT_ARGUMENT))
@@ -600,8 +601,12 @@ internal object NavigationRandomCorpusTargetProbe {
                 } catch (failure: Throwable) { try { Os.close(descriptor) } catch (closing: Throwable) { failure.addSuppressed(closing) }; throw failure }
             }
             private fun fsyncDirectory(file: File) {
-                val fd = Os.open(file.path, OsConstants.O_RDONLY or OsConstants.O_DIRECTORY or OsConstants.O_NOFOLLOW or OsConstants.O_CLOEXEC, 0)
-                try { Os.fsync(fd) } finally { Os.close(fd) }
+                val fd = Os.open(file.path, OsConstants.O_RDONLY or OsConstants.O_NOFOLLOW or
+                    OsConstants.O_CLOEXEC or OsConstants.O_NONBLOCK, 0)
+                try {
+                    check(OsConstants.S_ISDIR(Os.fstat(fd).st_mode))
+                    Os.fsync(fd)
+                } finally { Os.close(fd) }
             }
         }
     }
@@ -639,8 +644,12 @@ internal object NavigationRandomCorpusTargetProbe {
         finally { if (!task.isDone) { task.cancel(false); handler.removeCallbacks(task) } }
     }
 
-    private fun normallyForeground(): Boolean = ActivityLifecycleMonitorRegistry.getInstance()
-        .getActivitiesInStage(Stage.RESUMED).let { it.size == 1 && it.single() is MainActivity }
+    private fun normallyForeground(): Boolean {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        return if (instrumentation is NavigationRandomOwnedSession) instrumentation.hasResumedMainActivity()
+        else ActivityLifecycleMonitorRegistry.getInstance()
+            .getActivitiesInStage(Stage.RESUMED).let { it.size == 1 && it.single() is MainActivity }
+    }
 
     private class Operation {
         val signal = CancellationSignal()
