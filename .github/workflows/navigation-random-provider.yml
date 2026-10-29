@@ -1,7 +1,7 @@
 name: Navigation random corpus provider contracts (not delivery)
 'on':
   push:
-    branches: [test/navigation-random-provider-validation-20261029]
+    branches: [test/navigation-random-provider-overload-20261029]
 permissions:
   contents: read
 jobs:
@@ -74,7 +74,7 @@ jobs:
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
-        name: navigation-random-provider-api-26
+        name: navigation-random-provider-overload-api-26
         path: 'app/build/reports/
 
           app/build/test-results/
@@ -158,7 +158,7 @@ jobs:
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
-        name: navigation-random-provider-api-36
+        name: navigation-random-provider-overload-api-36
         path: 'app/build/reports/
 
           app/build/test-results/
