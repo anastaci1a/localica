@@ -118,4 +118,161 @@ class TextEditingImeSessionTest {
             assertFalse(session.frame(0, 0, 0, visible = false))
         }
     }
+
+    // API30+ boundary: unknown/false native visibility cannot confirm exposure.
+    // These tests exercise the pure model, not Android root-insets acquisition.
+    private fun TextEditingImeSession.zeroFrame(visible: Boolean, nativeVisible: Boolean?,
+        empty: Boolean, focused: Boolean = true, windowFocused: Boolean = true) =
+        shouldEnd(focused, windowFocused, visible, 0, 0, 0, endAtHideStart = empty,
+            zeroHeightConfirmed = nativeVisible == true)
+
+    @Test fun nonoverlappingNativeThenComposeVisibilityNeverArmsZeroHeight() {
+        for (empty in listOf(false, true)) {
+            val session = TextEditingImeSession()
+            // Exact false-exposure ordering: no sample has both streams visible.
+            assertFalse(session.zeroFrame(false, true, empty))
+            assertFalse(session.zeroFrame(true, false, empty))
+            assertFalse(session.zeroFrame(false, false, empty))
+            assertFalse(session.zeroFrame(false, null, empty))
+        }
+    }
+
+    @Test fun confirmedFloatingExposureArmsInEitherObservationOrderAndEndsOnce() {
+        for (empty in listOf(false, true)) for (nativeFirst in listOf(false, true)) {
+            val session = TextEditingImeSession()
+            assertFalse(session.zeroFrame(visible = !nativeFirst, nativeVisible = nativeFirst, empty = empty))
+            // Compose-first case: ONLY native evidence changes on this sample.
+            // The bridge must reevaluate rather than await a Compose-key change.
+            assertFalse(session.zeroFrame(true, true, empty))
+            assertFalse(session.zeroFrame(true, true, empty))
+            assertTrue(session.zeroFrame(false, false, empty))
+            assertFalse(session.zeroFrame(false, false, empty))
+        }
+    }
+
+    @Test fun falseOrUnknownNativeEvidenceNeverArmsAnUnshownZeroHeightSession() {
+        for (empty in listOf(false, true)) for (native in listOf<Boolean?>(false, null)) {
+            val session = TextEditingImeSession()
+            assertFalse(session.zeroFrame(true, native, empty))
+            assertFalse(session.zeroFrame(true, native, empty))
+            assertFalse(session.zeroFrame(false, native, empty))
+        }
+    }
+
+    @Test fun lostNativeConfirmationDoesNotChangeAnAlreadyArmedDismissal() {
+        for (empty in listOf(false, true)) for (native in listOf<Boolean?>(false, null)) {
+            val session = TextEditingImeSession()
+            assertFalse(session.zeroFrame(true, true, empty))
+            assertFalse(session.zeroFrame(true, native, empty))
+            // Confirmation gates arming only, never an existing falling edge.
+            assertTrue(session.zeroFrame(false, native, empty))
+            assertFalse(session.zeroFrame(false, native, empty))
+        }
+    }
+
+    @Test fun focusOrCoverageResetRequiresFreshSameSampleFloatingConfirmation() {
+        for (empty in listOf(false, true)) for (loseWindow in listOf(false, true)) {
+            val session = TextEditingImeSession()
+            assertFalse(session.zeroFrame(true, true, empty))
+            assertFalse(session.zeroFrame(true, true, empty,
+                focused = loseWindow, windowFocused = !loseWindow))
+            // Returning focus with stale/unknown native data must not re-arm.
+            assertFalse(session.zeroFrame(true, null, empty))
+            assertFalse(session.zeroFrame(false, false, empty))
+            // An already-visible floating keyboard works again when confirmed.
+            assertFalse(session.zeroFrame(true, true, empty))
+            assertTrue(session.zeroFrame(false, false, empty))
+            assertFalse(session.zeroFrame(false, false, empty))
+        }
+    }
+
+    @Test fun unconfirmedZeroHeightDoesNotAlterDockedArmingOrDismissalTiming() {
+        for (empty in listOf(false, true)) {
+            val session = TextEditingImeSession()
+            fun docked(current: Int, source: Int, target: Int, visible: Boolean = true) =
+                session.shouldEnd(true, true, visible, current, source, target,
+                    endAtHideStart = empty, zeroHeightConfirmed = false)
+            assertFalse(docked(300, 300, 300))
+            assertFalse(docked(0, 300, 300, visible = false))
+            assertEquals(empty, docked(280, 300, 0))
+            assertEquals(!empty, docked(0, 0, 0, visible = false))
+            assertFalse(docked(0, 0, 0, visible = false))
+        }
+    }
+
+
+    @Test fun dev77OriginalFalseZeroVisibilityCannotCloseTheResizedOpening() {
+        for (empty in listOf(false, true)) {
+            val session = TextEditingImeSession()
+            // Original run40809324727, same popup view31319365. Shape reached1
+            // and resized98->224px BEFORE these two observations. Native false
+            // at1720921 must not certify Compose visible/all-zero exposure.
+            assertFalse(session.zeroFrame(false, false, empty, focused = false, windowFocused = false))
+            assertFalse(session.zeroFrame(false, false, empty, focused = false))
+            assertFalse(session.zeroFrame(false, false, empty))
+            assertFalse(session.zeroFrame(true, false, empty)) // uptime1720921
+            assertFalse(session.zeroFrame(false, false, empty)) // uptime1721253
+            // A later REAL zero-height show remains usable and hides once.
+            assertFalse(session.zeroFrame(true, true, empty))
+            assertTrue(session.zeroFrame(false, false, empty))
+            assertFalse(session.zeroFrame(false, false, empty))
+        }
+    }
+
+    @Test fun nativeFocusLossInvalidatesFloatingButDoesNotRedefineDockedHidePolicy() {
+        for (empty in listOf(false, true)) {
+            val docked = TextEditingImeSession()
+            assertFalse(docked.shouldEnd(true, true, true, 600, 600, 600, empty, false))
+            // Native focus can lead Compose focus. Preserve baseline docked rules.
+            docked.invalidateZeroHeightExposure()
+            assertEquals(empty, docked.shouldEnd(true, true, true, 580, 600, 0, empty, false))
+            assertEquals(!empty, docked.shouldEnd(true, true, false, 0, 0, 0, empty, false))
+            assertFalse(docked.shouldEnd(true, true, false, 0, 0, 0, empty, false))
+
+            val floating = TextEditingImeSession()
+            assertFalse(floating.zeroFrame(true, true, empty))
+            floating.invalidateZeroHeightExposure()
+            assertFalse(floating.zeroFrame(true, false, empty))
+            assertFalse(floating.zeroFrame(false, false, empty))
+            assertFalse(floating.zeroFrame(true, true, empty))
+            assertTrue(floating.zeroFrame(false, false, empty))
+        }
+    }
+
+    @Test fun nativeWakeupCannotDonateAnEarlierTrueToAFreshFalseOrUnknownDecision() {
+        for (empty in listOf(false, true)) for (fresh in listOf<Boolean?>(false, null)) {
+            val session = TextEditingImeSession()
+            val wakeupObservedVisible = true // Only increments revision; never model input.
+            assertTrue(wakeupObservedVisible)
+            assertFalse(session.zeroFrame(true, fresh, empty))
+            assertFalse(session.zeroFrame(false, false, empty))
+        }
+    }
+
+    @Test fun replacementHostCannotInheritAPreviousFloatingExposure() {
+        for (empty in listOf(false, true)) {
+            val oldHost = TextEditingImeSession()
+            assertFalse(oldHost.zeroFrame(true, true, empty))
+            oldHost.invalidateZeroHeightExposure()
+            val replacementHost = TextEditingImeSession() // remember(view) boundary.
+            assertFalse(replacementHost.zeroFrame(true, null, empty))
+            assertFalse(replacementHost.zeroFrame(false, false, empty))
+            assertFalse(replacementHost.zeroFrame(true, true, empty))
+            assertTrue(replacementHost.zeroFrame(false, false, empty))
+            assertFalse(oldHost.zeroFrame(false, false, empty))
+        }
+    }
+
+    @Test fun genuineIntermediateNativeExposureCanStillArmBetweenRecordedFalseSamples() {
+        for (empty in listOf(false, true)) {
+            val session = TextEditingImeSession()
+            assertFalse(session.zeroFrame(true, false, empty)) // Recorded1720921.
+            // The original trace has no same-host read for the next332ms.
+            // Native-only polling MAY see true there: do not pretend the sparse
+            // original replay rules out this real floating-compatible overlap.
+            assertFalse(session.zeroFrame(true, true, empty))
+            assertTrue(session.zeroFrame(false, false, empty)) // Recorded1721253.
+            assertFalse(session.zeroFrame(false, false, empty))
+        }
+    }
 }
