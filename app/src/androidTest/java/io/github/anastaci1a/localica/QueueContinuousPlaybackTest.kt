@@ -85,6 +85,26 @@ class QueueContinuousPlaybackTest {
 
     @Test fun queueActorValidatesRoundedFastStartMediaRanges() = playSplitPcm(true, "boundary-rounded-streamable.m4a")
 
+    @Test fun writeHistoryRetainsExactLatestObservationsAndClearsWithoutChangingValues() {
+        val history = ContinuityWriteHistory()
+        assertEquals("[]", history.toString())
+        val expected = ArrayDeque<String>()
+        repeat(40) { index ->
+            val time = 9_000_000_000L + index
+            val pts = 1_000_000_023_219L + index * 23_220L
+            val accepted = if (index % 3 == 0) 0 else 896
+            val frames = index * 448L
+            history.add(time, pts, accepted, frames)
+            if (expected.size == 16) expected.removeFirst()
+            expected.addLast("ns=$time pts=$pts accepted=$accepted totalFrames=$frames")
+            assertEquals("Retain exact original chronological failure context at write $index", expected.toString(), history.toString())
+        }
+        history.clear()
+        assertEquals("[]", history.toString())
+        history.add(Long.MAX_VALUE, Long.MIN_VALUE, 0, 0)
+        assertEquals("[ns=9223372036854775807 pts=-9223372036854775808 accepted=0 totalFrames=0]", history.toString())
+    }
+
     @Test fun captureAcceptsEmptyInputAndPassesPcmThroughUnchanged() {
         val capture = ContinuityCapture()
         capture.configure(AudioFormat(SAMPLE_RATE, 1, C.ENCODING_PCM_16BIT))
@@ -304,6 +324,27 @@ class QueueContinuousPlaybackTest {
     private companion object { const val SAMPLE_RATE = 44_100 }
 }
 
+/** Preserve the original last-16 failure context without allocating on the audio feed path. */
+private class ContinuityWriteHistory {
+    private val values = LongArray(16 * 4)
+    private var next = 0
+    private var count = 0
+    fun add(timeNs: Long, pts: Long, accepted: Int, totalFrames: Long) {
+        val offset = next * 4
+        values[offset] = timeNs
+        values[offset + 1] = pts
+        values[offset + 2] = accepted.toLong()
+        values[offset + 3] = totalFrames
+        next = (next + 1) % 16
+        if (count < 16) count++
+    }
+    fun clear() { next = 0; count = 0 }
+    override fun toString(): String = (0 until count).joinToString(prefix = "[", postfix = "]") { index ->
+        val offset = ((next - count + 16 + index) % 16) * 4
+        "ns=${values[offset]} pts=${values[offset + 1]} accepted=${values[offset + 2]} totalFrames=${values[offset + 3]}"
+    }
+}
+
 /** Observe the native provider without changing its configuration, buffers or return values. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class ContinuityOutputProvider(
@@ -316,7 +357,7 @@ private class ContinuityOutputProvider(
             private val identity = System.identityHashCode(output)
             private val frameSize = Util.getPcmFrameSize(config.encoding, Integer.bitCount(config.channelMask))
             private var writtenBytes = 0L
-            private val writes = ArrayDeque<String>()
+            private val writes = ContinuityWriteHistory()
             private fun trace(detail: String) {
                 Log.i("ContinuityOutput", "timeNs=${SystemClock.elapsedRealtimeNanos()} output=$identity $detail")
             }
@@ -344,8 +385,7 @@ private class ContinuityOutputProvider(
                 val result = output.write(buffer, encodedAccessUnitCount, presentationTimeUs)
                 val accepted = buffer.position() - before
                 writtenBytes += accepted
-                if (writes.size == 16) writes.removeFirst()
-                writes.addLast("ns=$timeNs pts=$presentationTimeUs accepted=$accepted totalFrames=${writtenBytes / frameSize}")
+                writes.add(timeNs, presentationTimeUs, accepted, writtenBytes / frameSize)
                 return result
             }
             override fun play() { trace("play writtenFrames=${writtenBytes / frameSize}"); output.play() }
