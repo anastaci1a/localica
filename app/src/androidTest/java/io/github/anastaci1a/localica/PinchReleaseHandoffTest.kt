@@ -284,10 +284,17 @@ class PinchReleaseHandoffTest {
         val top = (expected - radius).toInt().coerceAtLeast(0)
         val bottom = (expected + radius).toInt().coerceAtMost(pixels.height)
         val rows = (top until bottom).filter { y ->
-            (if (fullWidth) 0 until pixels.width else pixels.width * 2 / 3 until pixels.width * 3 / 4).count { x ->
+            val columns = if (fullWidth) 0 until pixels.width else pixels.width * 2 / 3 until pixels.width * 3 / 4
+            var matches = 0
+            for (x in columns) {
                 val color = pixels[x, y]
-                color.red - color.green > .07f && color.blue - color.green > .07f
-            } >= 3
+                if (color.red - color.green > .07f && color.blue - color.green > .07f) {
+                    matches++
+                    // Row membership only needs three matches; keep scanning every row.
+                    if (matches == 3) return@filter true
+                }
+            }
+            false
         }
         assertTrue("Presented target-row highlight must be visible", rows.isNotEmpty())
         return (rows.first() + rows.last() + 1) / 2f
