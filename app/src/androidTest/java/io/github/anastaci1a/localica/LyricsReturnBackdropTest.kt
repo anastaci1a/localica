@@ -475,7 +475,8 @@ class LyricsReturnBackdropTest {
             source.location.coordinates = scene.source.location.coordinates
             source.location.windowOffset = scene.source.location.windowOffset
             source.layer.record(size = source.size) { drawRect(sourceFrame(scene).marker) }
-            source.recorded = true
+            source.recordedSize = source.size
+            source.recordedGeneration = source.rendererGeneration
             scene.recorded(layer, request)
         }
     }

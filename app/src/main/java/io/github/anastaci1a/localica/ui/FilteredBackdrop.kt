@@ -59,8 +59,12 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
         // and returning before drawLayer otherwise installs no dependency.
         if (!source.recorded || source.layer.isReleased || source.layer.size.width <= 0) return@Canvas
         if (size.width <= 0f || size.height <= 0f) return@Canvas
-        val blend = if (homeSource != null && !homeSource.layer.isReleased && homeSource.layer.size.width > 0)
-            homeWeight().coerceIn(0f, 1f) else 0f
+        val blend = if (homeSource != null) homeWeight().coerceIn(0f, 1f) else 0f
+        // A requested home is not interchangeable with the primary during an
+        // epoch handoff. Observe readiness here so its first current record can
+        // invalidate this draw, rather than silently changing the requested mix.
+        if (blend > 0f && (homeSource == null || !homeSource.recorded || homeSource.layer.isReleased ||
+                homeSource.layer.size.width <= 0 || homeSource.layer.size.height <= 0)) return@Canvas
         val sourceToLocal = source.location.registrationTo(location) ?: return@Canvas
         val localToSource = sourceToLocal.inverse() ?: return@Canvas
         val viewportBounds = Rect(Offset.Zero, size)
