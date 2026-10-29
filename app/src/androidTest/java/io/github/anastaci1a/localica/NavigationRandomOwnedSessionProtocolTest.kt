@@ -40,6 +40,21 @@ class NavigationRandomOwnedSessionProtocolTest {
         rejects(valid() + ("ownedSessionId" to "97BB0E9E-BCB9-40B8-8BCC-063D35282A8F"))
     }
 
+    @Test fun hostReadyBindsExactSessionBytes() {
+        val id = valid().getValue("ownedSessionId")
+        NavigationRandomOwnedSessionProtocol.validateHostReady(id.toByteArray(Charsets.US_ASCII), id)
+    }
+
+    @Test fun hostReadyRejectsForeignTruncatedAndExtendedDeclarations() {
+        val id = valid().getValue("ownedSessionId")
+        for (value in listOf("00000000-0000-0000-0000-000000000000", id.dropLast(1), id + "\n", id + "x")) {
+            try {
+                NavigationRandomOwnedSessionProtocol.validateHostReady(value.toByteArray(Charsets.US_ASCII), id)
+                fail("Expected ready declaration rejection")
+            } catch (_: IllegalArgumentException) { }
+        }
+    }
+
     private fun rejects(arguments: Map<String, String>) {
         try {
             NavigationRandomOwnedSessionProtocol.validate(arguments)
