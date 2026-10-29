@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -105,7 +107,7 @@ val prepareStandaloneTestRuntime = tasks.register<Copy>("prepareStandaloneTestRu
     doLast {
         val artifact = standaloneStdlib.get()
         val copied = standaloneRuntimeDirectory.get().file("kotlin-stdlib-standalone.jar").asFile
-        fun digest(file: java.io.File): String = java.security.MessageDigest.getInstance("SHA-256")
+        fun digest(file: java.io.File): String = MessageDigest.getInstance("SHA-256")
             .digest(file.readBytes()).joinToString("") { "%02x".format(it) }
         val originalHash = digest(artifact.file)
         check(digest(copied) == originalHash) { "Standalone stdlib bytes differ from target runtime" }
