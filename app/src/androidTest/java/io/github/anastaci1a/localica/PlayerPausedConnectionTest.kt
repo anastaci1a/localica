@@ -99,9 +99,11 @@ class PlayerPausedConnectionTest {
                     LaunchedEffect(playback) {
                         playback.state.collect { if (observing) publications += it }
                     }
-                    SideEffect { if (observing) presentations += state }
                     BoxWithConstraints(Modifier.fillMaxSize()) {
-                        PlayerSurface(state, expanded, {}, InterfaceSettings(),
+                        // Observe in the same scope that reads and supplies the player state.
+                        val presented = state
+                        SideEffect { if (observing) presentations += presented }
+                        PlayerSurface(presented, expanded, {}, InterfaceSettings(),
                             remember { Animatable(if (expanded) 1f else 0f) },
                             { toggleCalls++; playback.toggle() }, playback::seekTo,
                             { previousCalls++; playback.previous() }, { nextCalls++; playback.next() }, {}, {})
