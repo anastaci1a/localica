@@ -41,7 +41,7 @@ class TagEditorFlowTest {
         compose.onNodeWithContentDescription("Close settings").performClick()
         compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Scan music").performClick()
-        compose.onNodeWithText("Scan now").performClick()
+        compose.onNodeWithText("Full scan").assertIsEnabled().performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("Scan complete.").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Close").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Retrace tab history").fetchSemanticsNodes().isEmpty() }

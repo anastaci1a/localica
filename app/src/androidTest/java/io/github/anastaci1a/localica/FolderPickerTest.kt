@@ -62,7 +62,7 @@ class FolderPickerTest {
         compose.onNodeWithContentDescription("Close settings").performClick()
         compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Scan music").performClick()
-        compose.onNodeWithText("Scan now").performClick()
+        compose.onNodeWithText("Full scan").assertIsEnabled().performClick()
         val app = context.applicationContext as LocalicaApplication
         await { app.scanner.state.value.folder != null }
         compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
