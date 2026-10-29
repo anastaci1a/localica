@@ -33,6 +33,10 @@ internal fun <T> ComposeContentTestRule.fixtureCostPhase(name: String, body: () 
         return body()
     } catch (failure: Throwable) {
         primary = failure
+        try { recordFixtureFailureThreads(name, failure) }
+        catch (diagnosticFailure: Throwable) {
+            if (diagnosticFailure !== failure) failure.addSuppressed(diagnosticFailure)
+        }
         throw failure
     } finally {
         try {
