@@ -51,6 +51,11 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
+            // Seed policy before any backdrop producer or retained dialog host exists.
+            val glassRenderer = androidx.compose.runtime.remember {
+                io.github.anastaci1a.localica.ui.GlassRendererRuntime(
+                    io.github.anastaci1a.localica.navigation.InterfacePreferences(this).read().glass.renderer)
+            }
             val library by model.library.collectAsStateWithLifecycle()
             val playback by model.playback.state.collectAsStateWithLifecycle()
             val queues by model.playback.queues.state.collectAsStateWithLifecycle()
@@ -58,6 +63,8 @@ class MainActivity : ComponentActivity() {
             val picker = rememberLauncherForActivityResult(LocalFolderPicker()) { uri ->
                 uri?.let { model.addFolder(it.toString()) }
             }
+            androidx.compose.runtime.CompositionLocalProvider(
+                io.github.anastaci1a.localica.ui.LocalGlassRendererRuntime provides glassRenderer) {
             LocalicaTheme {
                 io.github.anastaci1a.localica.ui.TagEditorHost((application as LocalicaApplication).tagEditing) {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,
@@ -70,6 +77,7 @@ class MainActivity : ComponentActivity() {
                     onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, onRetryPlayback = model.playback::retry,
                     onSeekRequest = model.playback::requestSeek)
                 }
+            }
             }
         }
     }

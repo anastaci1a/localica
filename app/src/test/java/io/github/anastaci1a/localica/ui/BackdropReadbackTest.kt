@@ -9,6 +9,58 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BackdropReadbackTest {
+    @Test fun rendererRoundTripRejectsQueuedDrawEvidenceFromTheSameBackend() = runTest {
+        val fixture = Fixture()
+        val original = GlassRendererGeneration(GlassBackend.Legacy, 0)
+        fixture.scene = fixture.scene.copy(geometry = listOf("viewport", original))
+        val old = fixture.barrier.begin(9)
+        fixture.ready(9)
+        val modern = nextGlassRendererGeneration(original,
+            io.github.anastaci1a.localica.navigation.GlassRendererMode.Modern, 36)
+        val returned = nextGlassRendererGeneration(modern,
+            io.github.anastaci1a.localica.navigation.GlassRendererMode.Legacy, 36)
+        fixture.scene = fixture.scene.copy(geometry = listOf("viewport", returned))
+        // Even without an intervening sceneChanged callback, a queued completion
+        // rechecks the effective epoch instead of just comparing backend names.
+        fixture.run(0, evenCancelled = true)
+        assertNull(old.awaitDraws())
+        assertFalse(old.isCurrent())
+        val current = fixture.barrier.begin(10)
+        fixture.ready(10)
+        fixture.run(0)
+        assertEquals(10, current.awaitDraws()?.request)
+        assertTrue(current.isCurrent())
+        current.close()
+    }
+
+    @Test fun rendererChangeAfterDrawReadinessCannotPublishOrReleasePendingCompletionEarly() = runTest {
+        val fixture = Fixture()
+        fixture.scene = fixture.scene.copy(geometry = listOf("viewport", GlassRendererGeneration(GlassBackend.Legacy, 0)))
+        val ticket = fixture.barrier.begin(9)
+        fixture.ready(9)
+        fixture.run(0)
+        assertNotNull(ticket.awaitDraws())
+        val completion = ReadbackCompletion()
+        val finish = CompletableDeferred<Unit>()
+        val events = mutableListOf<String>()
+        val copy = launch(start = CoroutineStart.UNDISPATCHED) {
+            completion.capture(acquire = { events += "acquire"; Unit },
+                read = { finish.await(); events += "completed" }, release = { events += "release" })
+            if (ticket.isCurrent()) events += "publish"
+        }
+        fixture.scene = fixture.scene.copy(geometry = listOf("viewport", GlassRendererGeneration(GlassBackend.Modern, 1)))
+        fixture.barrier.sceneChanged()
+        copy.cancel()
+        fixture.run(500, evenCancelled = true)
+        assertFalse(copy.isCompleted)
+        assertEquals(listOf("acquire"), events)
+        finish.complete(Unit)
+        copy.join()
+        assertEquals(listOf("acquire", "completed", "release"), events)
+        assertFalse(ticket.isCurrent())
+        assertTrue(copy.isCancelled)
+    }
+
     private class Fixture {
         data class Task(val delay: Long, val action: () -> Unit, var cancelled: Boolean = false)
         val tasks = mutableListOf<Task>()

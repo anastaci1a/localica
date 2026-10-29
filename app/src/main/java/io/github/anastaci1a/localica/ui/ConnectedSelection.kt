@@ -60,6 +60,8 @@ internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Mo
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
     observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
     content: @Composable () -> Unit) {
+    val renderer = currentGlassRendererGeneration()
+    val modern = renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 33
     val scene = remember { SelectionScene() }
     val contentLayer = rememberGraphicsLayer()
     val transitionLayer = rememberGraphicsLayer()
@@ -79,6 +81,8 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     val recordingDirection = LocalLayoutDirection.current
     CompositionLocalProvider(LocalSelectionScene provides scene) {
         Box(modifier.onPlaced { coordinates = it }.drawWithContent {
+            // Retire only backend-specific effects; selection and layer identities stay mounted.
+            groups.forEach { it.prepare(renderer) }
             // Pager placement also moves unselected rows. Do not subscribe their
             // otherwise reusable display lists to the selection geometry clock.
             if (!hasSelection) {
@@ -114,9 +118,9 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             val local = localLensRegions(regions, origin)
             val path = geometry.path(local, MediaSelectionGap.toPx())
             val components = grouping.get(local, MediaSelectionGap.toPx())
-            while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer())
+            while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer()).also { it.prepare(renderer) }
             val transitioning = visibleEntries.any { it.second < 1f }
-            val recordContent = Build.VERSION.SDK_INT >= 33 || transitioning
+            val recordContent = modern || transitioning
             // Record foreground once for every reader. Settled legacy lenses keep
             // their original direct draw; only a transition needs both complete scenes.
             if (recordContent) {
@@ -124,7 +128,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 contentLayer.record { this@drawWithContent.drawContent() }
             }
             fun DrawScope.selectedScene() {
-                if (Build.VERSION.SDK_INT >= 33) {
+                if (modern) {
                     translate(origin.x, origin.y) { clipPath(path, ClipOp.Difference) {
                         translate(-origin.x, -origin.y) { drawLayer(contentLayer) }
                     } }
@@ -137,10 +141,10 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                     val absolute = origin + groupOrigin
                     val crop = groupPath.getBounds().translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
                     if (crop.isEmpty) return@forEachIndexed
-                    if (Build.VERSION.SDK_INT >= 33) {
+                    if (modern) {
                         val at = Offset(floor(crop.left), floor(crop.top))
                         val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
-                        val source = backing?.takeUnless { it.layer.isReleased }
+                        val source = backing?.takeIf { it.recorded && !it.layer.isReleased }
                         val sourceOffset = at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero)
                         // Only upload pixels this lens can reach. The ray model's bounded
                         // entry/exit projection is below 2.1 spans, including maximum depth.
@@ -179,7 +183,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                         } }
                     }
                 }
-                if (Build.VERSION.SDK_INT < 33) {
+                if (!modern) {
                     if (recordContent) drawLayer(contentLayer) else this@drawWithContent.drawContent()
                     components.forEachIndexed { index, component ->
                         val renderer = groups[index]
@@ -231,7 +235,14 @@ private class SelectionGroupRenderer(val output: androidx.compose.ui.graphics.la
     val path = SelectionPathCache()
     val mesh = LensMeshRenderer()
     val shape = LensSelectionShape()
-    val optics = if (Build.VERSION.SDK_INT >= 33) LensSelectionRenderer() else null
+    // Capability is stable; lazy initialization also supports a Legacy-first mount.
+    val optics by lazy { if (Build.VERSION.SDK_INT >= 33) LensSelectionRenderer() else null }
+    private var generation: GlassRendererGeneration? = null
+    fun prepare(value: GlassRendererGeneration) {
+        if (generation == value) return
+        output.renderEffect = null
+        generation = value
+    }
 }
 
 /** Optical depth belongs to each connected body, never the hull of separated selections. */

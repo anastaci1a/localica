@@ -44,6 +44,7 @@ internal fun magneticTabPosition(raw: Float): Float = magneticChoicePosition(raw
 
 @Composable
 internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, onSelect: (MainTab) -> Unit) {
+    val renderer = currentGlassRendererGeneration()
     val trackActivity = activity ?: rememberSelectorTrackActivity()
     DisposableEffect(trackActivity) { onDispose { trackActivity.clear() } }
     val page = pagePosition()
@@ -90,7 +91,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
     val refractForeground = appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
-    val legacyOverlay = android.os.Build.VERSION.SDK_INT < 33 && appearance.tabStyle == TabLensStyle.Overlay
+    val legacyOverlay = renderer.backend == GlassBackend.Legacy && appearance.tabStyle == TabLensStyle.Overlay
     val recordForeground = refractForeground && !legacyOverlay
     val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
@@ -241,13 +242,16 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                     Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),
                         androidx.compose.foundation.shape.RoundedCornerShape(with(density) { selectorFrame.corner.toDp() })))
                 } else if (legacyOverlay) {
-                    LegacySelectorLens(modifier, source, inkAtlas, appearance,
-                        selectorFrame, LensGeometry(track, radius), shell.value, selectorBody.value,
-                        tabs.indices.map { index -> SelectorInkSlot(
-                            atlasGeometry.slot(index, tabs.size, insets, false, rtl).cell,
-                            geometry.slot(index, tabs.size, insets, false, rtl).cell) },
-                        MaterialTheme.colorScheme.onSurfaceVariant, NavigationAccent,
-                        shellOrigin = { composite.origin - recording.topLeft })
+                    // Retire retained tone/mesh preparation, not selector gesture or motion state.
+                    key(renderer) {
+                        LegacySelectorLens(modifier, source, inkAtlas, appearance,
+                            selectorFrame, LensGeometry(track, radius), shell.value, selectorBody.value,
+                            tabs.indices.map { index -> SelectorInkSlot(
+                                atlasGeometry.slot(index, tabs.size, insets, false, rtl).cell,
+                                geometry.slot(index, tabs.size, insets, false, rtl).cell) },
+                            MaterialTheme.colorScheme.onSurfaceVariant, NavigationAccent,
+                            shellOrigin = { composite.origin - recording.topLeft })
+                    }
                 } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
                     blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
