@@ -228,7 +228,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
-                homeSource?.takeIf { it.recorded }, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint) { extent, resolution, flatWeight ->
+                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint) { extent, resolution, flatWeight ->
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
