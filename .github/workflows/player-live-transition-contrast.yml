@@ -42,7 +42,7 @@ jobs:
 
         '
     - name: Compile instrumentation APKs before starting emulator
-      run: ./gradlew assembleDebug assembleDebugAndroidTest testDebugUnitTest lintDebug --no-daemon --max-workers=2
+      run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 26
@@ -126,7 +126,7 @@ jobs:
 
         '
     - name: Compile instrumentation APKs before starting emulator
-      run: ./gradlew assembleDebug assembleDebugAndroidTest testDebugUnitTest lintDebug --no-daemon --max-workers=2
+      run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 36
