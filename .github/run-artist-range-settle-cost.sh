@@ -5,7 +5,11 @@ if [[ ${1:-} == --trials ]]; then
     mode=${trial##*-}
     mkdir "artist-range-cost/$trial"
     sha256sum --check artist-range-cost/input-apks.sha256 > "artist-range-cost/$trial/integrity-before.txt"
-    adb logcat -c
+    # Android 8 can reject clearing an active main buffer. Delimit our own
+    # disposable trial instead; keep the unmodified raw dump for independent review.
+    trial_marker="trial-start=$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT:$trial"
+    printf '%s\n' "$trial_marker" > "artist-range-cost/$trial/log-marker.txt"
+    adb shell log -t LocalicaArtistRangeCost "$trial_marker"
     command_status=0
     python3 - "$trial" "$mode" <<'PY' || command_status=$?
 import json
@@ -29,7 +33,22 @@ elapsed = time.perf_counter_ns() - started
 sys.exit(result.returncode)
 PY
     log_status=0
-    adb logcat -d > "artist-range-cost/$trial/logcat.txt" || log_status=$?
+    adb logcat -d > "artist-range-cost/$trial/logcat-raw.txt" || log_status=$?
+    if [[ $log_status -eq 0 ]]; then
+      python3 - "$trial" "$trial_marker" <<'PY' || log_status=$?
+from pathlib import Path
+import re
+import sys
+
+trial, marker = sys.argv[1:]
+root = Path('artist-range-cost') / trial
+lines = (root / 'logcat-raw.txt').read_text().splitlines(keepends=True)
+pattern = re.compile(r'LocalicaArtistRangeCost\s*:\s*' + re.escape(marker) + r'\s*$')
+matches = [i for i, line in enumerate(lines) if pattern.search(line)]
+assert len(matches) == 1, 'Require exactly one retained trial-start marker; no inferred log boundary'
+(root / 'logcat.txt').write_text(''.join(lines[matches[0] + 1:]))
+PY
+    fi
     integrity_status=0
     sha256sum --check artist-range-cost/input-apks.sha256 > "artist-range-cost/$trial/integrity-after.txt" || integrity_status=$?
     checker_status=0
