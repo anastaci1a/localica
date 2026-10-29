@@ -36,5 +36,16 @@
             android:permission="android.permission.MANAGE_DOCUMENTS" />
         <activity android:name="io.github.anastaci1a.localica.ArtworkGrantActivity"
             android:exported="true" android:theme="@android:style/Theme.NoDisplay" />
+        <service
+            android:name="io.github.anastaci1a.localica.FloatingTestImeService"
+            android:label="@string/localica_floating_test_ime_label"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true"
+            android:process=":floating_ime_fixture">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data android:name="android.view.im" android:resource="@xml/localica_floating_test_ime" />
+        </service>
     </application>
 </manifest>
