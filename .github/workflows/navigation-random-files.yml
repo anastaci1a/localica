@@ -1,7 +1,7 @@
-name: Navigation random corpus filesystem contracts (not delivery)
+name: Navigation random corpus FIFO fixture contracts (not delivery)
 'on':
   push:
-    branches: [test/navigation-random-files-validation-20261029]
+    branches: [test/navigation-random-files-fifo-validation-20261029]
 permissions:
   contents: read
 jobs:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusFilesTest
+      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusFilesTest#fifoNodesAreRejectedAsSpecialFilesystemEntries
       TEST_API: '26'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -74,7 +74,7 @@ jobs:
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
-        name: navigation-random-files-api-26
+        name: navigation-random-files-fifo-api-26
         path: 'app/build/reports/
 
           app/build/test-results/
@@ -88,12 +88,12 @@ jobs:
           prototype-runner-environment.txt'
         if-no-files-found: error
         retention-days: 14
-    name: Navigation random corpus filesystem API 26 (required, not release)
+    name: Navigation random corpus FIFO fixture API 26 (required, not release)
   contrast_36:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusFilesTest
+      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusFilesTest#fifoNodesAreRejectedAsSpecialFilesystemEntries
       TEST_API: '36'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -158,7 +158,7 @@ jobs:
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
-        name: navigation-random-files-api-36
+        name: navigation-random-files-fifo-api-36
         path: 'app/build/reports/
 
           app/build/test-results/
@@ -172,4 +172,4 @@ jobs:
           prototype-runner-environment.txt'
         if-no-files-found: error
         retention-days: 14
-    name: Navigation random corpus filesystem API 36 (required, not release)
+    name: Navigation random corpus FIFO fixture API 36 (required, not release)

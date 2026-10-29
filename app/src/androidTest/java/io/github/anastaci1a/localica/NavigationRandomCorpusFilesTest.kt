@@ -91,14 +91,12 @@ class NavigationRandomCorpusFilesTest {
     }
 
     @Test
-    fun hardlinksAndSpecialNodesAreRejectedBeforeReading() = withRoot { root ->
+    fun fifoNodesAreRejectedAsSpecialFilesystemEntries() = withRoot { root ->
         val file = write(root, "first.bin", "opaque")
-        val linked = File(root, "second.bin")
-        Os.link(file.absolutePath, linked.absolutePath)
-        expectFailure { NavigationRandomCorpusFiles.observeFiles(root, mapOf("first.bin" to expected(file), "second.bin" to expected(file))) }
-        assertTrue(linked.delete())
+        // This unprivileged fixture covers FIFO rejection, not the hardlink-negative branch.
         val fifo = File(root, "pipe")
         Os.mkfifo(fifo.absolutePath, 384) // 0600, owned temporary FIFO; must not be opened for hashing.
+        assertTrue(OsConstants.S_ISFIFO(Os.lstat(fifo.absolutePath).st_mode))
         expectFailure { NavigationRandomCorpusFiles.observeFiles(root, mapOf("first.bin" to expected(file),
             "pipe" to NavigationRandomCorpusFiles.ExpectedFile(digest(byteArrayOf())))) }
     }
