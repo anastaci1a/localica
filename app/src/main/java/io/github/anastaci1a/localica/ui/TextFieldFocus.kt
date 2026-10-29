@@ -61,6 +61,9 @@ internal class TextEditingImeSession {
     }
 }
 
+/** Decision-only test sink: does not install a platform input interceptor or native listener. */
+internal val LocalTextEditingDecisionTrace = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
 internal val LocalTextEditingObservation = staticCompositionLocalOf<((String) -> Unit)?> { null }
 
 private val textEditingInputIds = AtomicLong()
@@ -131,7 +134,9 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
     val emptySearchBack by rememberUpdatedState(LocalEmptySearchBack.current)
     val beginSearchReturn by rememberUpdatedState(LocalSearchReturnStart.current)
     val observe by rememberUpdatedState(LocalTextEditingObservation.current)
+    val decisionTrace by rememberUpdatedState(LocalTextEditingDecisionTrace.current)
     fun endEditing(reason: String) {
+        decisionTrace?.invoke("endEditing reason=$reason focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
         observe?.invoke("endEditing reason=$reason focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
         if (emptySearchBack != null) beginSearchReturn?.invoke()
         restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
@@ -141,13 +146,14 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
         val end = imeSession.shouldEnd(focused, windowFocused, keyboardVisible, keyboardHeight,
             keyboardSource, keyboardTarget, endAtHideStart = emptySearchBack != null)
         observe?.invoke("imeDecision end=$end focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
+        decisionTrace?.invoke("imeDecision end=$end focused=$focused window=$windowFocused visible=$keyboardVisible current=$keyboardHeight source=$keyboardSource target=$keyboardTarget")
         if (end) {
             // IME-owned Back announces its zero target before its last visible
             // frame. Empty search returns home immediately, independently of it.
             endEditing("imeObservation")
         }
     }
-    return onFocusChanged { focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
+    return onFocusChanged { decisionTrace?.invoke("focusChanged old=$focused new=${it.isFocused}"); focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
         if (focused && event.key == Key.Back) {
             if (event.type == KeyEventType.KeyUp) endEditing("backKey")
             true

@@ -1,12 +1,12 @@
-name: Shared optical profile consolidation (isolated validation)
+name: Scoped refocus decision provenance (isolated diagnostic)
 'on':
   push:
     branches:
-    - test/shared-glass-optics-20261028
+    - test/scoped-refocus-decisions-20261029
 permissions:
   contents: read
 concurrency:
-  group: shared-glass-optics-${{ github.ref }}
+  group: scoped-refocus-decisions-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   indent_26:
